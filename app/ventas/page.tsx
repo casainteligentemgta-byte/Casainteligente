@@ -1004,14 +1004,15 @@ function VentasContent() {
                 {items.length === 0 ? (
                     <div style={{
                         ...glass,
-                        padding: '48px 24px',
+                        padding: '28px 20px',
                         textAlign: 'center',
+                        marginBottom: '20px',
                     }}>
-                        <div style={{ fontSize: '48px', marginBottom: '12px' }}>🛒</div>
-                        <h3 style={{ color: 'var(--label-primary)', fontSize: '18px', fontWeight: 600, marginBottom: '6px' }}>
+                        <div style={{ fontSize: '36px', marginBottom: '8px' }}>🛒</div>
+                        <h3 style={{ color: 'var(--label-primary)', fontSize: '16px', fontWeight: 600, marginBottom: '4px' }}>
                             Presupuesto vacío
                         </h3>
-                        <p style={{ color: 'var(--label-secondary)', fontSize: '14px' }}>
+                        <p style={{ color: 'var(--label-secondary)', fontSize: '13px' }}>
                             Busca y agrega productos usando el buscador de arriba
                         </p>
                     </div>
@@ -1322,78 +1323,72 @@ function VentasContent() {
                     </div>
                 )}
 
-                {/* ── Notes ── */}
-                {items.length > 0 && (
-                    <div style={{ ...glass, padding: '16px', marginBottom: '20px' }}>
-                        <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--label-secondary)', letterSpacing: '0.5px', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>
-                            Notas / Condiciones
-                        </label>
-                        <p style={{ fontSize: '11px', color: 'var(--label-secondary)', opacity: 0.85, marginBottom: '8px', lineHeight: 1.4 }}>
-                            Se envían a la vista previa e impresión. También puedes completar o corregir el texto en la pantalla de <strong>Vista previa</strong> antes de imprimir o compartir.
-                        </p>
-                        <textarea
-                            value={notes}
-                            onChange={e => setNotes(e.target.value)}
-                            placeholder="Condiciones de pago, tiempo de entrega, garantía, detalles del sitio…"
-                            rows={3}
-                            style={{
-                                width: '100%', background: 'transparent', border: 'none', outline: 'none', resize: 'none',
-                                color: 'var(--label-primary)', fontSize: '14px', fontFamily: 'inherit', lineHeight: 1.6,
-                            }}
-                        />
-                    </div>
-                )}
+                {/* ── Notes / Zelle / Resumen: siempre debajo del cuadro de productos ── */}
+                <div style={{ ...glass, padding: '16px', marginBottom: '20px' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--label-secondary)', letterSpacing: '0.5px', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>
+                        Notas / Condiciones
+                    </label>
+                    <p style={{ fontSize: '11px', color: 'var(--label-secondary)', opacity: 0.85, marginBottom: '8px', lineHeight: 1.4 }}>
+                        Se envían a la vista previa e impresión. También puedes completar o corregir el texto en la pantalla de <strong>Vista previa</strong> antes de imprimir o compartir.
+                    </p>
+                    <textarea
+                        value={notes}
+                        onChange={e => setNotes(e.target.value)}
+                        placeholder="Condiciones de pago, tiempo de entrega, garantía, detalles del sitio…"
+                        rows={3}
+                        style={{
+                            width: '100%', background: 'transparent', border: 'none', outline: 'none', resize: 'none',
+                            color: 'var(--label-primary)', fontSize: '14px', fontFamily: 'inherit', lineHeight: 1.6,
+                        }}
+                    />
+                </div>
 
-                {/* ── Payment Options ── */}
-                {items.length > 0 && (
-                    <div style={{ ...glass, padding: '16px', marginBottom: '20px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <div>
-                                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--label-secondary)', letterSpacing: '0.5px', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>
-                                    Información de Pago
-                                </label>
-                                <p style={{ fontSize: '14px', color: 'var(--label-primary)', fontWeight: 500 }}>
-                                    Mostrar datos de Zelle en el presupuesto
-                                </p>
-                            </div>
-                            <button
-                                onClick={() => setShowZelle(!showZelle)}
-                                style={{
-                                    width: '50px',
-                                    height: '26px',
-                                    borderRadius: '13px',
-                                    background: showZelle ? '#34C759' : 'rgba(255,255,255,0.1)',
-                                    border: 'none',
-                                    position: 'relative',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                    padding: '2px',
-                                }}
-                            >
-                                <div style={{
-                                    width: '22px',
-                                    height: '22px',
-                                    borderRadius: '11px',
-                                    background: 'white',
-                                    boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-                                    transform: showZelle ? 'translateX(24px)' : 'translateX(0)',
-                                    transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                }} />
-                            </button>
+                <div style={{ ...glass, padding: '16px', marginBottom: '20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div>
+                            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--label-secondary)', letterSpacing: '0.5px', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>
+                                Información de Pago
+                            </label>
+                            <p style={{ fontSize: '14px', color: 'var(--label-primary)', fontWeight: 500 }}>
+                                Mostrar datos de Zelle en el presupuesto
+                            </p>
                         </div>
+                        <button
+                            type="button"
+                            onClick={() => setShowZelle(!showZelle)}
+                            style={{
+                                width: '50px',
+                                height: '26px',
+                                borderRadius: '13px',
+                                background: showZelle ? '#34C759' : 'rgba(255,255,255,0.1)',
+                                border: 'none',
+                                position: 'relative',
+                                cursor: 'pointer',
+                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                padding: '2px',
+                            }}
+                        >
+                            <div style={{
+                                width: '22px',
+                                height: '22px',
+                                borderRadius: '11px',
+                                background: 'white',
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                                transform: showZelle ? 'translateX(24px)' : 'translateX(0)',
+                                transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                            }} />
+                        </button>
                     </div>
-                )}
+                </div>
 
-                {/* ── Summary Panel ── */}
-                {items.length > 0 && (
-                    <div style={{
-                        ...glass,
-                        padding: '20px',
-                        background: 'rgba(0,0,0,0.4)',
-                    }}>
-                        <h3 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--label-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '16px' }}>
-                            Resumen del Presupuesto
-                        </h3>
+                <div style={{
+                    ...glass,
+                    padding: '20px',
+                    background: 'rgba(0,0,0,0.4)',
+                }}>
+                    <h3 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--label-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '16px' }}>
+                        Resumen del Presupuesto
+                    </h3>
 
                         {/* Stats grid */}
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '20px' }}>
@@ -1535,31 +1530,33 @@ function VentasContent() {
                         </div>
 
                         {/* Clear button */}
-                        <button
-                            onClick={() => {
-                                if (confirm('¿Limpiar el presupuesto?')) {
-                                    setItems([]);
-                                    setShowProductSearch(true);
-                                }
-                            }}
-                            style={{
-                                width: '100%',
-                                marginTop: '10px',
-                                padding: '10px',
-                                borderRadius: '12px',
-                                border: '1px solid rgba(255,59,48,0.2)',
-                                background: 'rgba(255,59,48,0.06)',
-                                color: '#FF3B30',
-                                fontSize: '14px',
-                                fontWeight: 600,
-                                cursor: 'pointer',
-                                fontFamily: 'inherit',
-                            }}
-                        >
-                            Limpiar presupuesto
-                        </button>
+                        {items.length > 0 ? (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (confirm('¿Limpiar el presupuesto?')) {
+                                        setItems([]);
+                                        setShowProductSearch(true);
+                                    }
+                                }}
+                                style={{
+                                    width: '100%',
+                                    marginTop: '10px',
+                                    padding: '10px',
+                                    borderRadius: '12px',
+                                    border: '1px solid rgba(255,59,48,0.2)',
+                                    background: 'rgba(255,59,48,0.06)',
+                                    color: '#FF3B30',
+                                    fontSize: '14px',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    fontFamily: 'inherit',
+                                }}
+                            >
+                                Limpiar presupuesto
+                            </button>
+                        ) : null}
                     </div>
-                )}
             </div>
 
             <style>{`
