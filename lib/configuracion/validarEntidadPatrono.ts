@@ -109,11 +109,17 @@ export function permisologiaDesdeCampos(fields: {
   ivss: string;
   inces: string;
   solvenciaLaboral: string;
+  ivssDocumentoUrl?: string;
+  incesDocumentoUrl?: string;
+  solvenciaDocumentoUrl?: string;
 }): PermisologiaCi {
   return {
     ivss_vence: fields.ivss.trim() || undefined,
     inces_vence: fields.inces.trim() || undefined,
     solvencia_laboral_vence: fields.solvenciaLaboral.trim() || undefined,
+    ivss_documento_url: fields.ivssDocumentoUrl?.trim() || undefined,
+    inces_documento_url: fields.incesDocumentoUrl?.trim() || undefined,
+    solvencia_laboral_documento_url: fields.solvenciaDocumentoUrl?.trim() || undefined,
   };
 }
 

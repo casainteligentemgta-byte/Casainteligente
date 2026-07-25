@@ -213,6 +213,12 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
   const [permIvss, setPermIvss] = useState('');
   const [permInces, setPermInces] = useState('');
   const [permSol, setPermSol] = useState('');
+  const [permIvssDocUrl, setPermIvssDocUrl] = useState('');
+  const [permIncesDocUrl, setPermIncesDocUrl] = useState('');
+  const [permSolDocUrl, setPermSolDocUrl] = useState('');
+  const [permIvssFile, setPermIvssFile] = useState<File | null>(null);
+  const [permIncesFile, setPermIncesFile] = useState<File | null>(null);
+  const [permSolFile, setPermSolFile] = useState<File | null>(null);
 
   const [logoUrl, setLogoUrl] = useState('');
   const [selloUrl, setSelloUrl] = useState('');
@@ -299,6 +305,12 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
     setPermIvss(strField(p, 'ivss_vence'));
     setPermInces(strField(p, 'inces_vence'));
     setPermSol(strField(p, 'solvencia_laboral_vence'));
+    setPermIvssDocUrl(strField(p, 'ivss_documento_url'));
+    setPermIncesDocUrl(strField(p, 'inces_documento_url'));
+    setPermSolDocUrl(strField(p, 'solvencia_laboral_documento_url'));
+    setPermIvssFile(null);
+    setPermIncesFile(null);
+    setPermSolFile(null);
 
     setLogoUrl((e?.logo_url ?? '').trim());
     setSelloUrl((e?.sello_url ?? '').trim());
@@ -380,11 +392,25 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
         });
 
       let registroMercantil = buildRegistro(actasGuardadas, rifDocUrl);
-      const permisologia: PermisologiaCi = permisologiaDesdeCampos({
-        ivss: permIvss,
-        inces: permInces,
-        solvenciaLaboral: permSol,
-      });
+      let ivssDocUrl = permIvssDocUrl.trim();
+      let incesDocUrl = permIncesDocUrl.trim();
+      let solDocUrl = permSolDocUrl.trim();
+
+      const buildPermisologia = (
+        ivssUrl: string,
+        incesUrl: string,
+        solUrl: string,
+      ): PermisologiaCi =>
+        permisologiaDesdeCampos({
+          ivss: permIvss,
+          inces: permInces,
+          solvenciaLaboral: permSol,
+          ivssDocumentoUrl: ivssUrl,
+          incesDocumentoUrl: incesUrl,
+          solvenciaDocumentoUrl: solUrl,
+        });
+
+      let permisologia = buildPermisologia(ivssDocUrl, incesDocUrl, solDocUrl);
 
       const primera = repFilas[0];
       const repLegalNombre = primera?.nombre.trim() || null;
@@ -448,6 +474,7 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
       let nextLogo = logoUrl.trim() || null;
       let nextSello = selloUrl.trim() || null;
       let docsChanged = false;
+      let permDocsChanged = false;
 
       if (logoFile) {
         const up = await uploadEntidadAsset(supabase, id, 'logo', logoFile);
@@ -477,6 +504,31 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
         }
       }
 
+      if (permIvssFile) {
+        const up = await uploadEntidadAsset(supabase, id, 'permiso-ivss', permIvssFile);
+        if (up.error) toast.error(`IVSS: ${up.error}`);
+        else if (up.publicUrl) {
+          ivssDocUrl = up.publicUrl;
+          permDocsChanged = true;
+        }
+      }
+      if (permIncesFile) {
+        const up = await uploadEntidadAsset(supabase, id, 'permiso-inces', permIncesFile);
+        if (up.error) toast.error(`INCES: ${up.error}`);
+        else if (up.publicUrl) {
+          incesDocUrl = up.publicUrl;
+          permDocsChanged = true;
+        }
+      }
+      if (permSolFile) {
+        const up = await uploadEntidadAsset(supabase, id, 'permiso-solvencia', permSolFile);
+        if (up.error) toast.error(`Solvencia: ${up.error}`);
+        else if (up.publicUrl) {
+          solDocUrl = up.publicUrl;
+          permDocsChanged = true;
+        }
+      }
+
       if (docsChanged) {
         registroMercantil = buildRegistro(actasGuardadas, rifDocUrl);
         setRmActas(actasGuardadas);
@@ -484,14 +536,24 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
         setActaFilesPendientes([]);
         setRifDocFile(null);
       }
+      if (permDocsChanged) {
+        permisologia = buildPermisologia(ivssDocUrl, incesDocUrl, solDocUrl);
+        setPermIvssDocUrl(ivssDocUrl);
+        setPermIncesDocUrl(incesDocUrl);
+        setPermSolDocUrl(solDocUrl);
+        setPermIvssFile(null);
+        setPermIncesFile(null);
+        setPermSolFile(null);
+      }
 
-      if (logoFile || selloFile || docsChanged) {
+      if (logoFile || selloFile || docsChanged || permDocsChanged) {
         const { error: upImg } = await supabase
           .from('ci_entidades')
           .update({
             logo_url: nextLogo,
             sello_url: nextSello,
             ...(docsChanged ? { registro_mercantil: registroMercantil } : {}),
+            ...(permDocsChanged ? { permisologia } : {}),
             updated_at: new Date().toISOString(),
           })
           .eq('id', id);
@@ -1039,48 +1101,89 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
               </Tabs.Content>
 
               <Tabs.Content value="permisos" className="space-y-4 outline-none">
-                <p className="text-xs text-zinc-500">
-                  Fechas de vencimiento (YYYY-MM-DD). Si faltan menos de 30 días, el campo se resalta en
-                  naranja. Al guardar, se notifica por <strong className="text-zinc-400">Telegram</strong> al
-                  Departamento Legal y queda visible en{' '}
-                  <a
-                    href="/legal/cumplimiento"
-                    className="font-semibold text-[#FFD60A] underline hover:text-[#FF9500]"
+                {(
+                  [
+                    {
+                      key: 'ivss',
+                      label: 'IVSS — vence',
+                      value: permIvss,
+                      setValue: setPermIvss,
+                      alert: alertIvss,
+                      docUrl: permIvssDocUrl,
+                      setDocUrl: setPermIvssDocUrl,
+                      file: permIvssFile,
+                      setFile: setPermIvssFile,
+                    },
+                    {
+                      key: 'inces',
+                      label: 'INCES — vence',
+                      value: permInces,
+                      setValue: setPermInces,
+                      alert: alertInces,
+                      docUrl: permIncesDocUrl,
+                      setDocUrl: setPermIncesDocUrl,
+                      file: permIncesFile,
+                      setFile: setPermIncesFile,
+                    },
+                    {
+                      key: 'sol',
+                      label: 'Solvencia laboral — vence',
+                      value: permSol,
+                      setValue: setPermSol,
+                      alert: alertSol,
+                      docUrl: permSolDocUrl,
+                      setDocUrl: setPermSolDocUrl,
+                      file: permSolFile,
+                      setFile: setPermSolFile,
+                    },
+                  ] as const
+                ).map((row) => (
+                  <div
+                    key={row.key}
+                    className="space-y-2 rounded-xl border border-white/10 bg-white/[0.03] p-3"
                   >
-                    Legal → Cumplimiento
-                  </a>
-                  .
-                </p>
-                <div>
-                  <label className={labelClass}>IVSS — vence</label>
-                  <input
-                    type="date"
-                    value={permIvss}
-                    onChange={(e) => setPermIvss(e.target.value)}
-                    className={inputPermClass(alertIvss)}
-                    style={{ colorScheme: 'dark' }}
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>INCES — vence</label>
-                  <input
-                    type="date"
-                    value={permInces}
-                    onChange={(e) => setPermInces(e.target.value)}
-                    className={inputPermClass(alertInces)}
-                    style={{ colorScheme: 'dark' }}
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Solvencia laboral — vence</label>
-                  <input
-                    type="date"
-                    value={permSol}
-                    onChange={(e) => setPermSol(e.target.value)}
-                    className={inputPermClass(alertSol)}
-                    style={{ colorScheme: 'dark' }}
-                  />
-                </div>
+                    <label className={labelClass}>{row.label}</label>
+                    <input
+                      type="date"
+                      value={row.value}
+                      onChange={(e) => row.setValue(e.target.value)}
+                      className={inputPermClass(row.alert)}
+                      style={{ colorScheme: 'dark' }}
+                    />
+                    <label className={labelClass}>PDF del permiso</label>
+                    <input
+                      type="file"
+                      accept="application/pdf,image/*"
+                      className="w-full text-xs text-zinc-400 file:mr-3 file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-1.5 file:text-zinc-200"
+                      onChange={(e) => row.setFile(e.target.files?.[0] ?? null)}
+                    />
+                    {row.docUrl ? (
+                      <div className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/20 px-2.5 py-1.5 text-xs">
+                        <a
+                          href={row.docUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="min-w-0 truncate font-semibold text-[#FFD60A] underline hover:text-[#FF9500]"
+                        >
+                          Ver PDF cargado
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            row.setDocUrl('');
+                            row.setFile(null);
+                          }}
+                          className="shrink-0 text-red-300 hover:text-red-200"
+                        >
+                          Quitar
+                        </button>
+                      </div>
+                    ) : null}
+                    {row.file ? (
+                      <p className="text-[11px] text-zinc-400">Nuevo archivo: {row.file.name}</p>
+                    ) : null}
+                  </div>
+                ))}
               </Tabs.Content>
 
               <Tabs.Content value="medios" className="space-y-5 outline-none">

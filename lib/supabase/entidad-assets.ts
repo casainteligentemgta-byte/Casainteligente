@@ -19,10 +19,17 @@ function extOf(file: File): string {
   return 'png';
 }
 
-export type EntidadAssetKind = 'logo' | 'sello' | 'acta' | 'rif';
+export type EntidadAssetKind =
+  | 'logo'
+  | 'sello'
+  | 'acta'
+  | 'rif'
+  | 'permiso-ivss'
+  | 'permiso-inces'
+  | 'permiso-solvencia';
 
 /**
- * Sube logo, sello, acta o RIF del patrono bajo `ci-entidades/{entidadId}/…`.
+ * Sube logo, sello, acta, RIF o PDF de permisología bajo `ci-entidades/{entidadId}/…`.
  * Requiere bucket público (misma cadena que otros módulos).
  */
 export async function uploadEntidadAsset(

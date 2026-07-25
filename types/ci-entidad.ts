@@ -60,6 +60,12 @@ export type PermisologiaCi = {
   ivss_vence?: string;
   inces_vence?: string;
   solvencia_laboral_vence?: string;
+  /** PDF/imagen del comprobante IVSS. */
+  ivss_documento_url?: string;
+  /** PDF/imagen del comprobante INCES. */
+  inces_documento_url?: string;
+  /** PDF/imagen de la solvencia laboral. */
+  solvencia_laboral_documento_url?: string;
 };
 
 /** Fila de `public.ci_entidades` (entidad de trabajo / patrono). */
