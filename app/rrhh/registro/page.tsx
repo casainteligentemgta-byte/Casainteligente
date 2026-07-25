@@ -1,16 +1,14 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Loader2, Save } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
-import { normCedulaToken } from '@/lib/talento/cedulaAuth';
+import { apiUrl } from '@/lib/http/apiUrl';
 
 const inputClass =
   'w-full rounded-xl border border-white/[0.06] bg-black/50 px-4 py-3 text-sm text-white placeholder:text-zinc-600 outline-none focus:border-[#FF9500] focus:ring-1 focus:ring-[#FF9500]/30';
 
 export default function RrhhRegistroFastTrackPage() {
-  const supabase = useMemo(() => createClient(), []);
   const [nombres, setNombres] = useState('');
   const [apellidos, setApellidos] = useState('');
   const [cedula, setCedula] = useState('');
@@ -32,29 +30,38 @@ export default function RrhhRegistroFastTrackPage() {
     }
     setGuardando(true);
     try {
-      const cedulaNorm = normCedulaToken(cedula);
-      const { data, error: err } = await supabase
-        .from('ci_empleados')
-        .insert({
+      const res = await fetch(apiUrl('/api/rrhh/registro-rapido'), {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nombres: nombres.trim(),
+          apellidos: apellidos.trim(),
           nombre_completo: nombreCompleto,
-          cedula: cedulaNorm,
-          documento: cedulaNorm,
-          oficio: oficio.trim() || null,
-          celular: celular.trim() || null,
-          status: 'pendiente',
-          estatus: 'pendiente',
-        } as never)
-        .select('id')
-        .single();
-      if (err) throw err;
-      setOk(`Obrero registrado (${data?.id?.slice(0, 8) ?? 'ok'}).`);
+          cedula: cedula.trim(),
+          oficio: oficio.trim(),
+          celular: celular.trim(),
+        }),
+      });
+      const data = (await res.json()) as { error?: string; hint?: string; id?: string };
+      if (!res.ok) {
+        setError([data.error, data.hint].filter(Boolean).join(' — ') || 'No se pudo guardar');
+        return;
+      }
+      setOk(`Obrero registrado (${data.id?.slice(0, 8) ?? 'ok'}).`);
       setNombres('');
       setApellidos('');
       setCedula('');
       setOficio('');
       setCelular('');
     } catch (ex) {
-      setError(ex instanceof Error ? ex.message : 'No se pudo guardar');
+      const msg =
+        ex instanceof Error
+          ? ex.message
+          : ex && typeof ex === 'object' && 'message' in ex
+            ? String((ex as { message: unknown }).message)
+            : 'No se pudo guardar';
+      setError(msg || 'No se pudo guardar');
     } finally {
       setGuardando(false);
     }
