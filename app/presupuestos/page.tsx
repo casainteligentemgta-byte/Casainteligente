@@ -335,7 +335,12 @@ export default function PresupuestosPage() {
     const [filtroFechaDesde, setFiltroFechaDesde] = useState('');
     const [filtroFechaHasta, setFiltroFechaHasta] = useState('');
     const [stats, setStats] = useState({
-        total: 0,
+        /** Suma $ de presupuestos aceptados (aprobado + cobrado + pagado). */
+        totalAprobado: 0,
+        /** Suma $ ya ingresada (cobrado + pagado). */
+        totalCobrado: 0,
+        /** Suma $ aprobada pendiente de cobro. */
+        totalPorCobrar: 0,
         noEnviado: 0,
         enviado: 0,
         aprobados: 0,
@@ -439,14 +444,26 @@ export default function PresupuestosPage() {
 
             setBudgets(sorted);
 
+            const sumSubtotal = (pred: (b: Budget) => boolean) =>
+                sorted.reduce((acc, b) => (pred(b) ? acc + (Number(b.subtotal) || 0) : acc), 0);
+
             const s = {
-                total: sorted.reduce((acc, b) => acc + b.subtotal, 0),
-                noEnviado: sorted.filter(b => b.status === 'no_enviado').length,
-                enviado: sorted.filter(b => b.status === 'enviado').length,
-                aprobados: sorted.filter(b => b.status === 'aprobado').length,
-                noAprobados: sorted.filter(b => b.status === 'no_aprobado').length,
-                cobrados: sorted.filter(b => b.status === 'cobrado').length,
-                pagados: sorted.filter(b => b.status === 'pagado').length,
+                // Aprobado comercial = aceptado por el cliente (incluye ya cobrados).
+                totalAprobado: sumSubtotal((b) =>
+                    b.status === 'aprobado' || b.status === 'cobrado' || b.status === 'pagado',
+                ),
+                // Cobrado = dinero recibido (cobrado y pagado en el flujo actual).
+                totalCobrado: sumSubtotal(
+                    (b) => b.status === 'cobrado' || b.status === 'pagado',
+                ),
+                // Por cobrar = aprobado aún sin cobro.
+                totalPorCobrar: sumSubtotal((b) => b.status === 'aprobado'),
+                noEnviado: sorted.filter((b) => b.status === 'no_enviado').length,
+                enviado: sorted.filter((b) => b.status === 'enviado').length,
+                aprobados: sorted.filter((b) => b.status === 'aprobado').length,
+                noAprobados: sorted.filter((b) => b.status === 'no_aprobado').length,
+                cobrados: sorted.filter((b) => b.status === 'cobrado').length,
+                pagados: sorted.filter((b) => b.status === 'pagado').length,
             };
             setStats(s);
         }
@@ -580,15 +597,87 @@ export default function PresupuestosPage() {
             </div>
 
             <div style={{ padding: '16px' }}>
-                {/* Statistics Cards */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
-                    <div style={{ ...glass, padding: '16px', background: 'linear-gradient(135deg, rgba(0,122,255,0.1) 0%, rgba(0,0,0,0) 100%)' }}>
-                        <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase' }}>Volumen Total</p>
-                        <p style={{ color: 'white', fontSize: '20px', fontWeight: 800, marginTop: '4px' }}>${formatUSD(stats.total)}</p>
+                {/* KPIs comerciales: aprobado / cobrado / por cobrar */}
+                <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+                    gap: '10px',
+                    marginBottom: '20px',
+                }}>
+                    <div style={{
+                        ...glass,
+                        padding: '12px 10px',
+                        background: 'linear-gradient(135deg, rgba(52,199,89,0.12) 0%, rgba(0,0,0,0) 100%)',
+                    }}>
+                        <p style={{
+                            color: 'rgba(255,255,255,0.45)',
+                            fontSize: '10px',
+                            fontWeight: 700,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.02em',
+                            lineHeight: 1.2,
+                        }}>
+                            Total aprobado
+                        </p>
+                        <p style={{
+                            color: '#34C759',
+                            fontSize: '15px',
+                            fontWeight: 800,
+                            marginTop: '6px',
+                            wordBreak: 'break-word',
+                        }}>
+                            ${formatUSD(stats.totalAprobado)}
+                        </p>
                     </div>
-                    <div style={{ ...glass, padding: '16px', background: 'linear-gradient(135deg, rgba(52,199,89,0.1) 0%, rgba(0,0,0,0) 100%)' }}>
-                        <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase' }}>Pagados</p>
-                        <p style={{ color: '#34C759', fontSize: '20px', fontWeight: 800, marginTop: '4px' }}>{stats.pagados}</p>
+                    <div style={{
+                        ...glass,
+                        padding: '12px 10px',
+                        background: 'linear-gradient(135deg, rgba(245,158,11,0.12) 0%, rgba(0,0,0,0) 100%)',
+                    }}>
+                        <p style={{
+                            color: 'rgba(255,255,255,0.45)',
+                            fontSize: '10px',
+                            fontWeight: 700,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.02em',
+                            lineHeight: 1.2,
+                        }}>
+                            Total cobrado
+                        </p>
+                        <p style={{
+                            color: '#F59E0B',
+                            fontSize: '15px',
+                            fontWeight: 800,
+                            marginTop: '6px',
+                            wordBreak: 'break-word',
+                        }}>
+                            ${formatUSD(stats.totalCobrado)}
+                        </p>
+                    </div>
+                    <div style={{
+                        ...glass,
+                        padding: '12px 10px',
+                        background: 'linear-gradient(135deg, rgba(239,68,68,0.12) 0%, rgba(0,0,0,0) 100%)',
+                    }}>
+                        <p style={{
+                            color: 'rgba(255,255,255,0.45)',
+                            fontSize: '10px',
+                            fontWeight: 700,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.02em',
+                            lineHeight: 1.2,
+                        }}>
+                            Por cobrar
+                        </p>
+                        <p style={{
+                            color: '#EF4444',
+                            fontSize: '15px',
+                            fontWeight: 800,
+                            marginTop: '6px',
+                            wordBreak: 'break-word',
+                        }}>
+                            ${formatUSD(stats.totalPorCobrar)}
+                        </p>
                     </div>
                 </div>
 
