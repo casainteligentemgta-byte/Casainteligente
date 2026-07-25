@@ -219,6 +219,13 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [selloFile, setSelloFile] = useState<File | null>(null);
 
+  /** Actas ya guardadas (URL pública). */
+  const [rmActas, setRmActas] = useState<{ url: string; nombre?: string }[]>([]);
+  /** Archivos de actas pendientes de subir al guardar. */
+  const [actaFilesPendientes, setActaFilesPendientes] = useState<File[]>([]);
+  const [rmRifDocUrl, setRmRifDocUrl] = useState('');
+  const [rifDocFile, setRifDocFile] = useState<File | null>(null);
+
   const resetDesdeEntidad = useCallback(() => {
     const e = entidad;
     setTab('datos');
@@ -237,6 +244,27 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
     setRmNumero(strField(rm, 'numero'));
     setRmFecha(strField(rm, 'fecha'));
     setRmCirc(strField(rm, 'circunscripcion'));
+
+    const actasRaw = rm.actas;
+    if (Array.isArray(actasRaw)) {
+      setRmActas(
+        actasRaw
+          .map((item) => {
+            if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
+            const o = item as Record<string, unknown>;
+            const url = typeof o.url === 'string' ? o.url.trim() : '';
+            if (!url) return null;
+            const nombre = typeof o.nombre === 'string' ? o.nombre.trim() : '';
+            return { url, nombre: nombre || undefined };
+          })
+          .filter((x): x is { url: string; nombre?: string } => Boolean(x)),
+      );
+    } else {
+      setRmActas([]);
+    }
+    setRmRifDocUrl(strField(rm, 'rif_documento_url'));
+    setActaFilesPendientes([]);
+    setRifDocFile(null);
 
     const repsRm = parseRepresentantesRm(rm.representantes);
     if (repsRm.length > 0) {
@@ -330,17 +358,28 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
         };
       });
 
-      const registroMercantil: RegistroMercantilCi = registroMercantilDesdeCampos({
-        domicilioEmpresa: rmDomicilioEmpresa,
-        domicilioEstadoRegistro: rmEstadoRegistro,
-        domicilioMunicipioRegistro: rmMunicipioRegistro,
-        domicilioSectorRegistro: rmSectorRegistro,
-        tomo: rmTomo,
-        numero: rmNumero,
-        fecha: rmFecha,
-        circunscripcion: rmCirc,
-        representantes: representantesPayload,
-      });
+      let actasGuardadas = [...rmActas];
+      let rifDocUrl = rmRifDocUrl.trim();
+
+      const buildRegistro = (
+        actas: { url: string; nombre?: string }[],
+        rifUrl: string,
+      ): RegistroMercantilCi =>
+        registroMercantilDesdeCampos({
+          domicilioEmpresa: rmDomicilioEmpresa,
+          domicilioEstadoRegistro: rmEstadoRegistro,
+          domicilioMunicipioRegistro: rmMunicipioRegistro,
+          domicilioSectorRegistro: rmSectorRegistro,
+          tomo: rmTomo,
+          numero: rmNumero,
+          fecha: rmFecha,
+          circunscripcion: rmCirc,
+          representantes: representantesPayload,
+          actas,
+          rifDocumentoUrl: rifUrl,
+        });
+
+      let registroMercantil = buildRegistro(actasGuardadas, rifDocUrl);
       const permisologia: PermisologiaCi = permisologiaDesdeCampos({
         ivss: permIvss,
         inces: permInces,
@@ -408,6 +447,7 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
 
       let nextLogo = logoUrl.trim() || null;
       let nextSello = selloUrl.trim() || null;
+      let docsChanged = false;
 
       if (logoFile) {
         const up = await uploadEntidadAsset(supabase, id, 'logo', logoFile);
@@ -420,16 +460,42 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
         else if (up.publicUrl) nextSello = up.publicUrl;
       }
 
-      if (logoFile || selloFile) {
+      for (const file of actaFilesPendientes) {
+        const up = await uploadEntidadAsset(supabase, id, 'acta', file);
+        if (up.error) toast.error(`Acta «${file.name}»: ${up.error}`);
+        else if (up.publicUrl) {
+          actasGuardadas = [...actasGuardadas, { url: up.publicUrl, nombre: file.name }];
+          docsChanged = true;
+        }
+      }
+      if (rifDocFile) {
+        const up = await uploadEntidadAsset(supabase, id, 'rif', rifDocFile);
+        if (up.error) toast.error(`RIF: ${up.error}`);
+        else if (up.publicUrl) {
+          rifDocUrl = up.publicUrl;
+          docsChanged = true;
+        }
+      }
+
+      if (docsChanged) {
+        registroMercantil = buildRegistro(actasGuardadas, rifDocUrl);
+        setRmActas(actasGuardadas);
+        setRmRifDocUrl(rifDocUrl);
+        setActaFilesPendientes([]);
+        setRifDocFile(null);
+      }
+
+      if (logoFile || selloFile || docsChanged) {
         const { error: upImg } = await supabase
           .from('ci_entidades')
           .update({
             logo_url: nextLogo,
             sello_url: nextSello,
+            ...(docsChanged ? { registro_mercantil: registroMercantil } : {}),
             updated_at: new Date().toISOString(),
           })
           .eq('id', id);
-        if (upImg) toast.error(upImg.message ?? 'No se pudieron guardar las URLs de imagen.');
+        if (upImg) toast.error(upImg.message ?? 'No se pudieron guardar archivos o URLs.');
       }
 
       toast.success(
@@ -795,6 +861,107 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
               </Tabs.Content>
 
               <Tabs.Content value="mercantil" className="space-y-4 outline-none">
+                <div className="space-y-3 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-[#FFD60A]/80">
+                    Documentos
+                  </p>
+                  <div>
+                    <label className={labelClass}>Actas (constitutiva / asambleas)</label>
+                    <input
+                      type="file"
+                      accept="application/pdf,image/*"
+                      multiple
+                      className="mt-1 w-full text-xs text-zinc-400 file:mr-3 file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-1.5 file:text-zinc-200"
+                      onChange={(e) => {
+                        const list = e.target.files ? Array.from(e.target.files) : [];
+                        if (list.length) {
+                          setActaFilesPendientes((prev) => [...prev, ...list]);
+                        }
+                        e.target.value = '';
+                      }}
+                    />
+                    {rmActas.length > 0 || actaFilesPendientes.length > 0 ? (
+                      <ul className="mt-2 space-y-1.5">
+                        {rmActas.map((a) => (
+                          <li
+                            key={a.url}
+                            className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/20 px-2.5 py-1.5 text-xs"
+                          >
+                            <a
+                              href={a.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="min-w-0 truncate font-semibold text-[#FFD60A] underline hover:text-[#FF9500]"
+                            >
+                              {a.nombre || 'Acta'}
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => setRmActas((prev) => prev.filter((x) => x.url !== a.url))}
+                              className="shrink-0 text-red-300 hover:text-red-200"
+                            >
+                              Quitar
+                            </button>
+                          </li>
+                        ))}
+                        {actaFilesPendientes.map((f, idx) => (
+                          <li
+                            key={`pend-${f.name}-${idx}`}
+                            className="flex items-center justify-between gap-2 rounded-lg border border-dashed border-[#FF9500]/35 bg-[#FF9500]/5 px-2.5 py-1.5 text-xs text-zinc-300"
+                          >
+                            <span className="min-w-0 truncate">{f.name} (pendiente)</span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setActaFilesPendientes((prev) => prev.filter((_, i) => i !== idx))
+                              }
+                              className="shrink-0 text-red-300 hover:text-red-200"
+                            >
+                              Quitar
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="mt-1 text-[11px] text-zinc-500">PDF o imagen. Puede subir varias.</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className={labelClass}>RIF (documento)</label>
+                    <input
+                      type="file"
+                      accept="application/pdf,image/*"
+                      className="mt-1 w-full text-xs text-zinc-400 file:mr-3 file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-1.5 file:text-zinc-200"
+                      onChange={(e) => setRifDocFile(e.target.files?.[0] ?? null)}
+                    />
+                    {rmRifDocUrl ? (
+                      <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/20 px-2.5 py-1.5 text-xs">
+                        <a
+                          href={rmRifDocUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="min-w-0 truncate font-semibold text-[#FFD60A] underline hover:text-[#FF9500]"
+                        >
+                          Ver RIF cargado
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRmRifDocUrl('');
+                            setRifDocFile(null);
+                          }}
+                          className="shrink-0 text-red-300 hover:text-red-200"
+                        >
+                          Quitar
+                        </button>
+                      </div>
+                    ) : null}
+                    {rifDocFile ? (
+                      <p className="mt-1 text-[11px] text-zinc-400">Nuevo archivo: {rifDocFile.name}</p>
+                    ) : null}
+                  </div>
+                </div>
+
                 <div>
                   <label className={labelClass}>Registro</label>
                   <input

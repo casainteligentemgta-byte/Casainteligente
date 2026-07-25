@@ -79,8 +79,17 @@ export function registroMercantilDesdeCampos(fields: {
   fecha: string;
   circunscripcion: string;
   representantes: RepresentanteMercantilCi[];
+  actas?: { url: string; nombre?: string }[];
+  rifDocumentoUrl?: string;
 }): RegistroMercantilCi {
   const reps = (fields.representantes ?? []).map(limpiarRepresentante).filter(Boolean) as RepresentanteMercantilCi[];
+  const actas = (fields.actas ?? [])
+    .map((a) => ({
+      url: (a.url ?? '').trim(),
+      nombre: (a.nombre ?? '').trim() || undefined,
+    }))
+    .filter((a) => a.url);
+  const rifDoc = (fields.rifDocumentoUrl ?? '').trim();
   return {
     domicilio_empresa: fields.domicilioEmpresa.trim() || undefined,
     domicilio_estado_registro: fields.domicilioEstadoRegistro.trim() || undefined,
@@ -91,6 +100,8 @@ export function registroMercantilDesdeCampos(fields: {
     fecha: fields.fecha.trim() || undefined,
     circunscripcion: fields.circunscripcion.trim() || undefined,
     representantes: reps.length ? reps : undefined,
+    actas: actas.length ? actas : undefined,
+    rif_documento_url: rifDoc || undefined,
   };
 }
 

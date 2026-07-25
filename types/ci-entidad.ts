@@ -49,6 +49,10 @@ export type RegistroMercantilCi = {
   circunscripcion?: string;
   /** Uno o varios representantes con datos de identificación para actos y contratos. */
   representantes?: RepresentanteMercantilCi[];
+  /** Actas constitutivas / asambleas (PDF o imagen) en Storage. */
+  actas?: { url: string; nombre?: string }[];
+  /** Escaneo o PDF del RIF de la entidad. */
+  rif_documento_url?: string;
 };
 
 /** Permisología / vencimientos en `ci_entidades.permisologia` (jsonb). */
