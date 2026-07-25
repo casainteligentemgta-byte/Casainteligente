@@ -2,9 +2,9 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   extraerPalabrasClave,
   normalizarPalabrasClave,
-} from '@/lib/talento/pheme/extraerPalabrasClave';
+} from '@/lib/talento/psique/extraerPalabrasClave';
 
-export type PruebaPhemeSugerida = {
+export type PruebaPsiqueSugerida = {
   id_prueba: number;
   nombre_prueba: string;
   categoria: string;
@@ -14,18 +14,18 @@ export type PruebaPhemeSugerida = {
   rol_examen_sugerido: string | null;
 };
 
-export type RolExamenPheme = 'programador' | 'tecnico' | 'obrero' | 'vigilante';
+export type RolExamenPsique = 'programador' | 'tecnico' | 'obrero' | 'vigilante';
 
-export type RecomendacionPhemeResult = {
+export type RecomendacionPsiqueResult = {
   palabras_clave: string[];
-  pruebas: PruebaPhemeSugerida[];
-  rol_examen_sugerido: RolExamenPheme | null;
+  pruebas: PruebaPsiqueSugerida[];
+  rol_examen_sugerido: RolExamenPsique | null;
   fuente: 'rpc' | 'fallback';
   aviso?: string;
 };
 
 /** Catálogo offline si la migración 290 aún no está aplicada. */
-const FALLBACK_TRIGGERS: { palabra: string; prueba: Omit<PruebaPhemeSugerida, 'id_prueba'> & { id: number } }[] =
+const FALLBACK_TRIGGERS: { palabra: string; prueba: Omit<PruebaPsiqueSugerida, 'id_prueba'> & { id: number } }[] =
   [
     {
       palabra: 'tecnico',
@@ -125,21 +125,21 @@ const FALLBACK_TRIGGERS: { palabra: string; prueba: Omit<PruebaPhemeSugerida, 'i
     },
   ];
 
-function esRolExamenPheme(v: string | null | undefined): v is RolExamenPheme {
+function esRolExamenPsique(v: string | null | undefined): v is RolExamenPsique {
   return v === 'programador' || v === 'tecnico' || v === 'obrero' || v === 'vigilante';
 }
 
 /** Prioridad al votar rol sugerido (más específico primero). */
-const PRIORIDAD_ROL: RolExamenPheme[] = ['vigilante', 'programador', 'obrero', 'tecnico'];
+const PRIORIDAD_ROL: RolExamenPsique[] = ['vigilante', 'programador', 'obrero', 'tecnico'];
 
-export function elegirRolExamenSugerido(pruebas: PruebaPhemeSugerida[]): RolExamenPheme | null {
-  const votes = new Map<RolExamenPheme, number>();
+export function elegirRolExamenSugerido(pruebas: PruebaPsiqueSugerida[]): RolExamenPsique | null {
+  const votes = new Map<RolExamenPsique, number>();
   for (const p of pruebas) {
-    if (!esRolExamenPheme(p.rol_examen_sugerido)) continue;
+    if (!esRolExamenPsique(p.rol_examen_sugerido)) continue;
     votes.set(p.rol_examen_sugerido, (votes.get(p.rol_examen_sugerido) ?? 0) + 1);
   }
   if (votes.size === 0) return null;
-  let best: RolExamenPheme | null = null;
+  let best: RolExamenPsique | null = null;
   let bestN = -1;
   for (const rol of PRIORIDAD_ROL) {
     const n = votes.get(rol) ?? 0;
@@ -151,8 +151,8 @@ export function elegirRolExamenSugerido(pruebas: PruebaPhemeSugerida[]): RolExam
   return best;
 }
 
-function fallbackLocal(palabras: string[]): RecomendacionPhemeResult {
-  const byId = new Map<number, PruebaPhemeSugerida>();
+function fallbackLocal(palabras: string[]): RecomendacionPsiqueResult {
+  const byId = new Map<number, PruebaPsiqueSugerida>();
   for (const row of FALLBACK_TRIGGERS) {
     if (!palabras.includes(row.palabra)) continue;
     byId.set(row.prueba.id, {
@@ -172,18 +172,18 @@ function fallbackLocal(palabras: string[]): RecomendacionPhemeResult {
     rol_examen_sugerido: elegirRolExamenSugerido(pruebas),
     fuente: 'fallback',
     aviso:
-      'Catálogo local (migración 290 no disponible o sin coincidencias en BD). Ejecuta 290_ci_pheme_pruebas_triggers.sql en Supabase.',
+      'Catálogo local (migración 290 no disponible o sin coincidencias en BD). Ejecuta 290_ci_psique_pruebas_triggers.sql en Supabase.',
   };
 }
 
 /**
- * Busca en la BD las pruebas Pheme recomendadas según palabras clave
- * (equivalente a `recomendar_pruebas_pheme` del prototipo Python).
+ * Busca en la BD las pruebas Psique recomendadas según palabras clave
+ * (equivalente a `recomendar_pruebas_psique` del prototipo Python).
  */
-export async function recomendarPruebasPheme(
+export async function recomendarPruebasPsique(
   supabase: SupabaseClient,
   opts: { palabrasClave?: string[]; textoSolicitud?: string },
-): Promise<RecomendacionPhemeResult> {
+): Promise<RecomendacionPsiqueResult> {
   const fromTexto = opts.textoSolicitud ? extraerPalabrasClave(opts.textoSolicitud) : [];
   const fromLista = normalizarPalabrasClave(opts.palabrasClave ?? []);
   const palabras = normalizarPalabrasClave([...fromLista, ...fromTexto]);
@@ -197,16 +197,16 @@ export async function recomendarPruebasPheme(
     };
   }
 
-  const { data, error } = await supabase.rpc('ci_recomendar_pruebas_pheme', {
+  const { data, error } = await supabase.rpc('ci_recomendar_pruebas_psique', {
     palabras_clave: palabras,
   });
 
   if (error) {
-    console.warn('[pheme] RPC ci_recomendar_pruebas_pheme:', error.message);
+    console.warn('[psique] RPC ci_recomendar_pruebas_psique:', error.message);
     return fallbackLocal(palabras);
   }
 
-  const pruebas: PruebaPhemeSugerida[] = (Array.isArray(data) ? data : []).map((row) => {
+  const pruebas: PruebaPsiqueSugerida[] = (Array.isArray(data) ? data : []).map((row) => {
     const r = row as Record<string, unknown>;
     const rolRaw = r.rol_examen_sugerido == null ? null : String(r.rol_examen_sugerido);
     return {
@@ -216,7 +216,7 @@ export async function recomendarPruebasPheme(
       descripcion: String(r.descripcion ?? ''),
       objetivo_evaluacion: String(r.objetivo_evaluacion ?? ''),
       es_clinico: Boolean(r.es_clinico),
-      rol_examen_sugerido: esRolExamenPheme(rolRaw) ? rolRaw : null,
+      rol_examen_sugerido: esRolExamenPsique(rolRaw) ? rolRaw : null,
     };
   });
 
@@ -228,8 +228,8 @@ export async function recomendarPruebasPheme(
   };
 }
 
-/** Mapea rol Pheme al `rol_examen` aceptado por generar-link (programador|tecnico). */
-export function rolExamenParaGenerarLink(rol: RolExamenPheme | null): 'programador' | 'tecnico' {
+/** Mapea rol Psique al `rol_examen` aceptado por generar-link (programador|tecnico). */
+export function rolExamenParaGenerarLink(rol: RolExamenPsique | null): 'programador' | 'tecnico' {
   if (rol === 'programador') return 'programador';
   return 'tecnico';
 }

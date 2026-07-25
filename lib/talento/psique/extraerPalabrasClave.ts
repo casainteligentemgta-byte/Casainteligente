@@ -1,4 +1,4 @@
-/** Quita tildes/diacríticos para alinear con triggers Pheme (ASCII). */
+/** Quita tildes/diacríticos para alinear con triggers Psique (ASCII). */
 export function quitarAcentos(texto: string): string {
   return texto.normalize('NFD').replace(/\p{M}/gu, '');
 }

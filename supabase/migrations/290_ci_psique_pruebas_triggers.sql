@@ -1,5 +1,5 @@
--- Pheme: catálogo de pruebas psicológicas / técnicas y triggers por palabra clave.
--- Usado por POST /api/talento/pheme/recomendar y scripts/recomendar_pruebas_pheme.py
+-- Psique: catálogo de pruebas psicológicas / técnicas y triggers por palabra clave.
+-- Usado por POST /api/talento/psique/recomendar y scripts/recomendar_pruebas_psique.py
 
 create table if not exists public.categorias_test (
   id_categoria serial primary key,
@@ -39,9 +39,9 @@ create table if not exists public.triggers_prueba (
 
 create index if not exists idx_triggers_prueba_palabra on public.triggers_prueba (palabra_clave);
 
-comment on table public.categorias_test is 'Categorías del catálogo Pheme (cognitiva, integridad, técnica, etc.).';
-comment on table public.pruebas is 'Batería de pruebas recomendables por cargo/solicitud (Pheme).';
-comment on table public.triggers_prueba is 'Palabras clave que disparan la recomendación de una prueba Pheme.';
+comment on table public.categorias_test is 'Categorías del catálogo Psique (cognitiva, integridad, técnica, etc.).';
+comment on table public.pruebas is 'Batería de pruebas recomendables por cargo/solicitud (Psique).';
+comment on table public.triggers_prueba is 'Palabras clave que disparan la recomendación de una prueba Psique.';
 comment on column public.pruebas.rol_examen_sugerido is
   'Rol de examen CI (programador|tecnico|obrero|vigilante) sugerido al asignar esta prueba.';
 
@@ -49,26 +49,26 @@ alter table public.categorias_test enable row level security;
 alter table public.pruebas enable row level security;
 alter table public.triggers_prueba enable row level security;
 
-drop policy if exists "pheme_cat_select_auth" on public.categorias_test;
-drop policy if exists "pheme_pru_select_auth" on public.pruebas;
-drop policy if exists "pheme_trg_select_auth" on public.triggers_prueba;
-drop policy if exists "pheme_cat_select_anon" on public.categorias_test;
-drop policy if exists "pheme_pru_select_anon" on public.pruebas;
-drop policy if exists "pheme_trg_select_anon" on public.triggers_prueba;
+drop policy if exists "psique_cat_select_auth" on public.categorias_test;
+drop policy if exists "psique_pru_select_auth" on public.pruebas;
+drop policy if exists "psique_trg_select_auth" on public.triggers_prueba;
+drop policy if exists "psique_cat_select_anon" on public.categorias_test;
+drop policy if exists "psique_pru_select_anon" on public.pruebas;
+drop policy if exists "psique_trg_select_anon" on public.triggers_prueba;
 
-create policy "pheme_cat_select_auth" on public.categorias_test
+create policy "psique_cat_select_auth" on public.categorias_test
   for select to authenticated using (true);
-create policy "pheme_pru_select_auth" on public.pruebas
+create policy "psique_pru_select_auth" on public.pruebas
   for select to authenticated using (true);
-create policy "pheme_trg_select_auth" on public.triggers_prueba
+create policy "psique_trg_select_auth" on public.triggers_prueba
   for select to authenticated using (true);
 
 -- Lectura anónima del catálogo (CRM/preview sin sesión); escritura solo service_role / SQL.
-create policy "pheme_cat_select_anon" on public.categorias_test
+create policy "psique_cat_select_anon" on public.categorias_test
   for select to anon using (true);
-create policy "pheme_pru_select_anon" on public.pruebas
+create policy "psique_pru_select_anon" on public.pruebas
   for select to anon using (true);
-create policy "pheme_trg_select_anon" on public.triggers_prueba
+create policy "psique_trg_select_anon" on public.triggers_prueba
   for select to anon using (true);
 
 -- Seed categorías
@@ -212,7 +212,7 @@ where not exists (
 );
 
 -- RPC alineada al prototipo Python (ANY de palabras clave).
-create or replace function public.ci_recomendar_pruebas_pheme(palabras_clave text[])
+create or replace function public.ci_recomendar_pruebas_psique(palabras_clave text[])
 returns table (
   id_prueba integer,
   nombre_prueba text,
@@ -246,9 +246,9 @@ as $$
   order by p.nombre_prueba;
 $$;
 
-comment on function public.ci_recomendar_pruebas_pheme(text[]) is
-  'Recomienda pruebas Pheme según palabras clave detectadas en la solicitud de cargo.';
+comment on function public.ci_recomendar_pruebas_psique(text[]) is
+  'Recomienda pruebas Psique según palabras clave detectadas en la solicitud de cargo.';
 
-grant execute on function public.ci_recomendar_pruebas_pheme(text[]) to anon, authenticated, service_role;
+grant execute on function public.ci_recomendar_pruebas_psique(text[]) to anon, authenticated, service_role;
 
 notify pgrst, 'reload schema';

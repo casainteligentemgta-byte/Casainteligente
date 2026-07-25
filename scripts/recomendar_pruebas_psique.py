@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Recomendación de pruebas Pheme (prototipo / CLI).
+Recomendación de pruebas Psique (prototipo / CLI).
 
-Equivalente en app: POST /api/talento/pheme/recomendar
-y lib/talento/pheme/recomendarPruebasPheme.ts
+Equivalente en app: POST /api/talento/psique/recomendar
+y lib/talento/psique/recomendarPruebasPsique.ts
 
-Requiere migración 290_ci_pheme_pruebas_triggers.sql aplicada.
+Requiere migración 290_ci_psique_pruebas_triggers.sql aplicada.
 Variables: DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT
 (o DATABASE_URL).
 """
@@ -80,7 +80,7 @@ def obtener_conexion():
     )
 
 
-def recomendar_pruebas_pheme(palabras_clave_busqueda: list[str]):
+def recomendar_pruebas_psique(palabras_clave_busqueda: list[str]):
     """
     Busca en la base de datos las pruebas psicológicas recomendadas
     según las palabras clave detectadas en la solicitud.
@@ -93,7 +93,7 @@ def recomendar_pruebas_pheme(palabras_clave_busqueda: list[str]):
     try:
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         cursor.execute(
-            "SELECT * FROM public.ci_recomendar_pruebas_pheme(%s)",
+            "SELECT * FROM public.ci_recomendar_pruebas_psique(%s)",
             (palabras,),
         )
         pruebas_sugeridas = cursor.fetchall()
@@ -104,11 +104,11 @@ def recomendar_pruebas_pheme(palabras_clave_busqueda: list[str]):
 
 
 if __name__ == "__main__":
-    # Simulación: el usuario pide a Pheme evaluar a un "técnico de CCTV"
+    # Simulación: el usuario pide a Psique evaluar a un "técnico de CCTV"
     texto = " ".join(sys.argv[1:]) if len(sys.argv) > 1 else "tecnico de cctv"
     palabras_detectadas = extraer_palabras_clave(texto)
 
-    resultados = recomendar_pruebas_pheme(palabras_detectadas)
+    resultados = recomendar_pruebas_psique(palabras_detectadas)
 
     print(f"--- Batería de Pruebas Recomendadas para {palabras_detectadas} ---")
     print(json.dumps(resultados, indent=2, ensure_ascii=False, default=str))

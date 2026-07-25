@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
-import { recomendarPruebasPheme, rolExamenParaGenerarLink } from '@/lib/talento/pheme/recomendarPruebasPheme';
+import { recomendarPruebasPsique, rolExamenParaGenerarLink } from '@/lib/talento/psique/recomendarPruebasPsique';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
 /**
- * POST /api/talento/pheme/recomendar
+ * POST /api/talento/psique/recomendar
  * Body: { palabras_clave?: string[], texto?: string }
- * Recomienda batería de pruebas Pheme según palabras clave del cargo/solicitud.
+ * Recomienda batería de pruebas Psique según palabras clave del cargo/solicitud.
  */
 export async function POST(req: Request) {
   const admin = supabaseAdminForRoute();
@@ -35,7 +35,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const result = await recomendarPruebasPheme(admin.client, {
+  const result = await recomendarPruebasPsique(admin.client, {
     palabrasClave,
     textoSolicitud: texto,
   });
