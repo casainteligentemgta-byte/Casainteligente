@@ -41,4 +41,5 @@ Export recomendado: MP4 H.264, layout **HSBS**. microSD → Álbum → modo 3D H
 
 ## Migración
 
-`295_ci_obra_tours_video_reconstruccion.sql` → tablas `ci_obra_tour_jobs`, `ci_obra_tours`.
+`296_ci_obra_tours_video_reconstruccion.sql` → tablas `ci_obra_tour_jobs`, `ci_obra_tours`.
+(En main, `295` quedó para Metron; Tours se renumeró a `296`. Si ya aplicaste el SQL de Tours como 295 en el Editor, no hace falta reaplicarlo.)
