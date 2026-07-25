@@ -1,9 +1,10 @@
 'use client';
 
 import * as Tabs from '@radix-ui/react-tabs';
-import { Building2, Calendar, FileText, Plus, ShieldCheck, Trash2, X } from 'lucide-react';
+import { Building2, Calendar, FileText, Plus, ShieldCheck, Trash2, UserCog, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import AsignarRolUsuario from '@/components/configuracion/AsignarRolUsuario';
 import {
   formatRifMascara,
   permisologiaDesdeCampos,
@@ -236,8 +237,9 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
   const inputPermClass = (alert: boolean) =>
     `${inputClass} ${alert ? 'border-orange-500/70 ring-1 ring-orange-500/30' : ''}`;
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function onSubmit(e?: React.FormEvent) {
+    e?.preventDefault();
+    if (tab === 'roles') return;
     const errs = validarEntidadPatrono({ nombreLegal, rif });
     if (Object.keys(errs).length) {
       if (errs.nombre) toast.error(errs.nombre);
@@ -406,10 +408,12 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
             </div>
             <div>
               <h2 id="form-entidad-titulo" className="text-lg font-bold tracking-tight text-white">
-                {esEdicion ? 'Editar patrono' : 'Nueva entidad legal'}
+                {esEdicion ? 'Menú del patrono' : 'Nueva entidad legal'}
               </h2>
               <p className="text-[11px] text-zinc-500">
-                Datos del patrono para contratos, registro mercantil y planilla de empleo (referencia Gaceta).
+                {esEdicion
+                  ? 'Datos del patrono, permisología y asignación de roles.'
+                  : 'Datos del patrono para contratos, registro mercantil y planilla de empleo (referencia Gaceta).'}
               </p>
             </div>
           </div>
@@ -423,7 +427,7 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
           </button>
         </div>
 
-        <form onSubmit={(e) => void onSubmit(e)} className="flex max-h-[calc(92vh-5rem)] flex-col">
+        <div className="flex max-h-[calc(92vh-5rem)] flex-col">
           <Tabs.Root value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
             <Tabs.List className="flex shrink-0 flex-wrap gap-1 border-b border-white/10 bg-white/[0.02] px-3 py-2">
               <Tabs.Trigger value="datos" className={tabTriggerClass}>
@@ -445,6 +449,12 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
               <Tabs.Trigger value="medios" className={tabTriggerClass}>
                 Logo / sello
               </Tabs.Trigger>
+              {esEdicion && entidad?.id ? (
+                <Tabs.Trigger value="roles" className={tabTriggerClass}>
+                  <UserCog className="h-3.5 w-3.5" />
+                  Asignar roles
+                </Tabs.Trigger>
+              ) : null}
             </Tabs.List>
 
             <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
@@ -871,6 +881,12 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
                   />
                 </div>
               </Tabs.Content>
+
+              {esEdicion && entidad?.id ? (
+                <Tabs.Content value="roles" className="outline-none">
+                  <AsignarRolUsuario entidadIdInicial={entidad.id} embebido />
+                </Tabs.Content>
+              ) : null}
             </div>
           </Tabs.Root>
 
@@ -880,17 +896,20 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
               onClick={onClose}
               className="rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-semibold text-zinc-300 hover:bg-white/10"
             >
-              Cancelar
+              {tab === 'roles' ? 'Cerrar' : 'Cancelar'}
             </button>
-            <button
-              type="submit"
-              disabled={guardando}
-              className="rounded-xl bg-gradient-to-r from-orange-500 to-orange-700 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-orange-900/30 hover:opacity-95 disabled:opacity-50"
-            >
-              {guardando ? 'Guardando…' : 'Guardar'}
-            </button>
+            {tab !== 'roles' ? (
+              <button
+                type="button"
+                disabled={guardando}
+                onClick={() => void onSubmit()}
+                className="rounded-xl bg-gradient-to-r from-orange-500 to-orange-700 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-orange-900/30 hover:opacity-95 disabled:opacity-50"
+              >
+                {guardando ? 'Guardando…' : 'Guardar'}
+              </button>
+            ) : null}
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );

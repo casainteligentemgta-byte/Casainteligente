@@ -26,10 +26,17 @@ type Props = {
   className?: string;
   /** Preselecciona entidad al abrir (p. ej. desde fila de patrono). */
   entidadIdInicial?: string;
+  /** Vista embebida (pestaña del menú de entidad): sin Card y sin selector de entidad. */
+  embebido?: boolean;
   onAsignado?: (payload: { usuario_id: string; email: string; registro: unknown }) => void;
 };
 
-export default function AsignarRolUsuario({ className, entidadIdInicial, onAsignado }: Props) {
+export default function AsignarRolUsuario({
+  className,
+  entidadIdInicial,
+  embebido = false,
+  onAsignado,
+}: Props) {
   const supabase = useMemo(() => createClient(), []);
   const [email, setEmail] = useState('');
   const [rol, setRol] = useState<string>(ROLES_EMPRESA[0]?.value ?? 'admin');
@@ -42,6 +49,10 @@ export default function AsignarRolUsuario({ className, entidadIdInicial, onAsign
   const rolEfectivo = rol;
 
   const cargarEntidades = useCallback(async () => {
+    if (embebido) {
+      setCargandoEntidades(false);
+      return;
+    }
     setCargandoEntidades(true);
     const { data, error } = await supabase
       .from('ci_entidades')
@@ -55,7 +66,7 @@ export default function AsignarRolUsuario({ className, entidadIdInicial, onAsign
       setEntidades((data ?? []) as EntidadOpcion[]);
     }
     setCargandoEntidades(false);
-  }, [supabase]);
+  }, [supabase, embebido]);
 
   useEffect(() => {
     void cargarEntidades();
@@ -123,6 +134,135 @@ export default function AsignarRolUsuario({ className, entidadIdInicial, onAsign
     }
   }
 
+  const campos = (
+    <>
+      <div className="space-y-2">
+        <Label htmlFor="asignar-rol-email" className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+          Correo del usuario
+        </Label>
+        <Input
+          id="asignar-rol-email"
+          type="email"
+          autoComplete="email"
+          placeholder="usuario@empresa.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          disabled={enviando}
+          className="h-11 border-white/10 bg-zinc-900/80 text-zinc-100 placeholder:text-zinc-600 focus-visible:ring-[#FF9500]/40"
+        />
+      </div>
+
+      <div className={cn('grid gap-4', embebido ? '' : 'sm:grid-cols-2')}>
+        <div className="space-y-2">
+          <Label htmlFor="asignar-rol-rol" className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            Rol
+          </Label>
+          <select
+            id="asignar-rol-rol"
+            value={rol}
+            onChange={(e) => setRol(e.target.value)}
+            disabled={enviando}
+            className={campoClase}
+          >
+            {ROLES_EMPRESA.map((r) => (
+              <option key={r.value} value={r.value}>
+                {r.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {!embebido ? (
+          <div className="space-y-2">
+            <Label
+              htmlFor="asignar-rol-entidad"
+              className="text-xs font-semibold uppercase tracking-wide text-zinc-500"
+            >
+              Entidad / patrono
+            </Label>
+            <select
+              id="asignar-rol-entidad"
+              value={entidadId}
+              onChange={(e) => setEntidadId(e.target.value)}
+              disabled={enviando || cargandoEntidades}
+              className={campoClase}
+            >
+              <option value="">{cargandoEntidades ? 'Cargando…' : 'Seleccionar entidad'}</option>
+              {entidades.map((en) => (
+                <option key={en.id} value={en.id}>
+                  {en.nombre}
+                  {en.rif ? ` · ${en.rif}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+      </div>
+
+      {ultimoOk ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-emerald-500/25 bg-emerald-950/25 px-3 py-2 text-sm">
+          <ShieldCheck className="h-4 w-4 text-emerald-400" aria-hidden />
+          <span className="text-emerald-100/90">
+            Asignado: <strong className="font-semibold">{ultimoOk.email}</strong>
+          </span>
+          <Badge className="border-emerald-500/30 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/15">
+            {ultimoOk.rol}
+          </Badge>
+        </div>
+      ) : null}
+    </>
+  );
+
+  const acciones = (
+    <>
+      <Button
+        type="submit"
+        variant="elitePrimary"
+        disabled={enviando || (!embebido && cargandoEntidades)}
+        className="min-w-[160px] rounded-xl bg-gradient-to-r from-orange-500 to-orange-700 font-bold shadow-lg shadow-orange-900/20 hover:opacity-95"
+      >
+        {enviando ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Guardando…
+          </>
+        ) : (
+          'Asignar rol'
+        )}
+      </Button>
+      <Button
+        type="button"
+        variant="elite"
+        disabled={enviando}
+        onClick={() => {
+          setEmail('');
+          setRol(ROLES_EMPRESA[0]?.value ?? 'admin');
+          setUltimoOk(null);
+        }}
+        className="rounded-xl border-white/15 text-zinc-300"
+      >
+        Limpiar
+      </Button>
+    </>
+  );
+
+  if (embebido) {
+    return (
+      <div className={cn('space-y-4', className)}>
+        <div>
+          <p className="text-sm font-semibold text-white">Asignar rol a usuario</p>
+          <p className="mt-1 text-xs text-zinc-500">
+            Para usuarios que ya tienen cuenta Auth. El menú de la app se oculta según el rol.
+          </p>
+        </div>
+        <form onSubmit={(ev) => void handleSubmit(ev)} className="space-y-4">
+          {campos}
+          <div className="flex flex-wrap gap-2 border-t border-white/10 pt-4">{acciones}</div>
+        </form>
+      </div>
+    );
+  }
+
   return (
     <Card
       className={cn(
@@ -145,111 +285,8 @@ export default function AsignarRolUsuario({ className, entidadIdInicial, onAsign
       </CardHeader>
 
       <form onSubmit={(ev) => void handleSubmit(ev)}>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="asignar-rol-email" className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-              Correo del usuario
-            </Label>
-            <Input
-              id="asignar-rol-email"
-              type="email"
-              autoComplete="email"
-              placeholder="usuario@empresa.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              disabled={enviando}
-              className="h-11 border-white/10 bg-zinc-900/80 text-zinc-100 placeholder:text-zinc-600 focus-visible:ring-[#FF9500]/40"
-            />
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="asignar-rol-rol" className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                Rol
-              </Label>
-              <select
-                id="asignar-rol-rol"
-                value={rol}
-                onChange={(e) => setRol(e.target.value)}
-                disabled={enviando}
-                className={campoClase}
-              >
-                {ROLES_EMPRESA.map((r) => (
-                  <option key={r.value} value={r.value}>
-                    {r.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-2">
-              <Label
-                htmlFor="asignar-rol-entidad"
-                className="text-xs font-semibold uppercase tracking-wide text-zinc-500"
-              >
-                Entidad / patrono
-              </Label>
-              <select
-                id="asignar-rol-entidad"
-                value={entidadId}
-                onChange={(e) => setEntidadId(e.target.value)}
-                disabled={enviando || cargandoEntidades}
-                className={campoClase}
-              >
-                <option value="">{cargandoEntidades ? 'Cargando…' : 'Seleccionar entidad'}</option>
-                {entidades.map((en) => (
-                  <option key={en.id} value={en.id}>
-                    {en.nombre}
-                    {en.rif ? ` · ${en.rif}` : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {ultimoOk ? (
-            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-emerald-500/25 bg-emerald-950/25 px-3 py-2 text-sm">
-              <ShieldCheck className="h-4 w-4 text-emerald-400" aria-hidden />
-              <span className="text-emerald-100/90">
-                Asignado: <strong className="font-semibold">{ultimoOk.email}</strong>
-              </span>
-              <Badge className="border-emerald-500/30 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/15">
-                {ultimoOk.rol}
-              </Badge>
-            </div>
-          ) : null}
-        </CardContent>
-
-        <CardFooter className="flex flex-wrap gap-2 border-t border-white/5 pt-4">
-          <Button
-            type="submit"
-            variant="elitePrimary"
-            disabled={enviando || cargandoEntidades}
-            className="min-w-[160px] rounded-xl bg-gradient-to-r from-orange-500 to-orange-700 font-bold shadow-lg shadow-orange-900/20 hover:opacity-95"
-          >
-            {enviando ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Guardando…
-              </>
-            ) : (
-              'Asignar rol'
-            )}
-          </Button>
-          <Button
-            type="button"
-            variant="elite"
-            disabled={enviando}
-            onClick={() => {
-              setEmail('');
-              setRol(ROLES_EMPRESA[0]?.value ?? 'admin');
-              setUltimoOk(null);
-            }}
-            className="rounded-xl border-white/15 text-zinc-300"
-          >
-            Limpiar
-          </Button>
-        </CardFooter>
+        <CardContent className="space-y-4">{campos}</CardContent>
+        <CardFooter className="flex flex-wrap gap-2 border-t border-white/5 pt-4">{acciones}</CardFooter>
       </form>
     </Card>
   );
