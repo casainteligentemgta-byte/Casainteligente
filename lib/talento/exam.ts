@@ -507,10 +507,12 @@ export function logicaDelExamen(examen: ExamenAdaptativoResult): PreguntaLogica[
  * - tecnico (obrero en UI): 20 conducta (4 opciones) + 5 lógica de obra
  * - obrero / vigilante: 20 situacionales ABC (`PREGUNTAS_OBRERO`)
  */
-/** Etiqueta visible en UI (el rol interno `tecnico` se muestra como Obrero). */
+/** Etiqueta visible en UI (el rol interno `tecnico` se muestra como Obrero / técnico obra). */
 export function etiquetaRolExamenUI(rol: RolExamen | string): string {
   if (rol === 'programador') return 'Programador';
-  if (rol === 'tecnico') return 'Obrero';
+  if (rol === 'tecnico') return 'Obrero (técnico obra)';
+  if (rol === 'obrero') return 'Obrero (ABC)';
+  if (rol === 'vigilante') return 'Vigilante (ABC)';
   return String(rol);
 }
 

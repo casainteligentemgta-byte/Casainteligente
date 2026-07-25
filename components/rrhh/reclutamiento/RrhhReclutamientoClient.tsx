@@ -33,6 +33,7 @@ import { apiUrl } from '@/lib/http/apiUrl';
 import { hrefListaContratosExpress } from '@/lib/talento/hrefListaContratosExpress';
 import { createClient } from '@/lib/supabase/client';
 import type { RolExamen } from '@/types/talento';
+import type { MapaEvaluacionPsique } from '@/lib/talento/psique/mapaEvaluacion';
 import type { PruebaPsiqueSugerida, RolExamenPsique } from '@/lib/talento/psique/recomendarPruebasPsique';
 import DetalleRespuestasExamenModal from '@/components/rrhh/reclutamiento/DetalleRespuestasExamenModal';
 
@@ -42,9 +43,10 @@ type PsiqueUiState = {
   palabras_clave: string[];
   pruebas: PruebaPsiqueSugerida[];
   rol_examen_sugerido: RolExamenPsique | null;
-  rol_examen_para_enlace: RolExamen | null;
+  rol_examen_para_enlace: RolExamenPsique | null;
   fuente: string;
   aviso?: string;
+  evaluacion?: MapaEvaluacionPsique | null;
 };
 
 function docMostrado(row: { cedula?: string | null; documento?: string | null }): string {
@@ -207,21 +209,29 @@ export default function RrhhReclutamientoClient() {
         toast.error([j.error, j.hint].filter(Boolean).join(' — ') || 'No se pudo consultar Psique');
         return;
       }
+      const rol =
+        j.rol_examen_para_enlace ?? j.rol_examen_sugerido ?? null;
       setPsiqueRec({
         palabras_clave: j.palabras_clave ?? [],
         pruebas: j.pruebas ?? [],
         rol_examen_sugerido: j.rol_examen_sugerido ?? null,
-        rol_examen_para_enlace: j.rol_examen_para_enlace ?? null,
+        rol_examen_para_enlace: rol,
         fuente: j.fuente ?? '',
         aviso: j.aviso,
+        evaluacion: j.evaluacion ?? null,
       });
-      if (j.rol_examen_para_enlace === 'programador' || j.rol_examen_para_enlace === 'tecnico') {
-        setRolPreview(j.rol_examen_para_enlace);
+      // Preview del banco trípode cuando aplica; ABC se muestra en el bloque semáforo.
+      if (rol === 'programador' || rol === 'tecnico') {
+        setRolPreview(rol);
+      } else if (rol === 'obrero' || rol === 'vigilante') {
+        setRolPreview('tecnico');
       }
       if ((j.pruebas ?? []).length === 0) {
         toast.message('Sin pruebas para esas palabras clave');
       } else {
-        toast.success(`${j.pruebas.length} prueba(s) recomendada(s)`);
+        toast.success(
+          `${j.pruebas.length} prueba(s) · ${j.evaluacion?.libro ?? 'libro de evaluación'}`,
+        );
       }
     } catch {
       toast.error('Error de red al consultar Psique');
@@ -260,12 +270,16 @@ export default function RrhhReclutamientoClient() {
 
         const rolBuscado =
           cargoPsique.trim() || (rolPreview === 'tecnico' ? 'Obrero' : 'Programador');
+        const rolAsignar =
+          psiqueRec?.rol_examen_para_enlace ??
+          psiqueRec?.rol_examen_sugerido ??
+          rolPreview;
         const res = await fetch(apiUrl('/api/talento/generar-link'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             nombre: 'Candidato (evaluación)',
-            rol_examen: rolPreview,
+            rol_examen: rolAsignar,
             rol_buscado: rolBuscado,
             public_base_url: typeof window !== 'undefined' ? window.location.origin : undefined,
           }),
@@ -274,7 +288,8 @@ export default function RrhhReclutamientoClient() {
           url?: string;
           error?: string;
           hint?: string;
-          psique?: PsiqueUiState;
+          rol_examen?: string;
+          psique?: PsiqueUiState & { evaluacion?: MapaEvaluacionPsique };
         };
         if (!res.ok) {
           toast.error([j.error, j.hint].filter(Boolean).join(' — ') || 'No se pudo generar el enlace');
@@ -290,9 +305,13 @@ export default function RrhhReclutamientoClient() {
             palabras_clave: j.psique.palabras_clave ?? [],
             pruebas: j.psique.pruebas ?? [],
             rol_examen_sugerido: j.psique.rol_examen_sugerido ?? null,
-            rol_examen_para_enlace: null,
+            rol_examen_para_enlace:
+              (j.rol_examen as RolExamenPsique | undefined) ??
+              j.psique.rol_examen_sugerido ??
+              null,
             fuente: j.psique.fuente ?? '',
             aviso: j.psique.aviso,
+            evaluacion: j.psique.evaluacion ?? null,
           });
         }
         await copiarUrlExamen(url);
@@ -302,7 +321,7 @@ export default function RrhhReclutamientoClient() {
         setInvBusy(false);
       }
     },
-    [cargoPsique, copiarUrlExamen, rolPreview],
+    [cargoPsique, copiarUrlExamen, psiqueRec, rolPreview],
   );
 
   const seleccionarParaEnlace = (r: EmpleadoHojaVidaRow) => {
@@ -447,10 +466,12 @@ export default function RrhhReclutamientoClient() {
             </div>
 
             <div className="mt-5 border-t border-violet-500/20 pt-4">
-              <h3 className="text-sm font-bold text-violet-100">Psique (Ψυχή) — batería recomendada</h3>
+              <h3 className="text-sm font-bold text-violet-100">
+                Psique (Ψυχή) → libro de evaluación → semáforo
+              </h3>
               <p className="mt-1 text-xs text-zinc-500">
-                Agente de tests: detecta palabras clave del cargo y sugiere pruebas psicométricas/técnicas
-                (migración 290). Ejemplo: técnico de CCTV.
+                Fusionado con reclutamiento: el cargo elige la batería, el banco del examen y el semáforo
+                (trípode GMA/integridad/tiempo o ABC). Migraciones 290 + 293.
               </p>
               <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
                 <input
@@ -467,18 +488,35 @@ export default function RrhhReclutamientoClient() {
                   className="inline-flex items-center justify-center gap-2 rounded-lg border border-violet-400/40 bg-violet-500/15 px-3 py-2 text-sm font-semibold text-violet-100 hover:bg-violet-500/25 disabled:opacity-50"
                 >
                   <BookOpen className="h-4 w-4" aria-hidden />
-                  {psiqueBusy ? 'Consultando…' : 'Recomendar pruebas'}
+                  {psiqueBusy ? 'Consultando…' : 'Consultar Psique'}
                 </button>
               </div>
               {psiqueRec ? (
-                <div className="mt-3 space-y-2 text-sm">
+                <div className="mt-3 space-y-3 text-sm">
                   <p className="text-xs text-zinc-500">
                     Claves: {psiqueRec.palabras_clave.join(', ') || '—'}
                     {psiqueRec.rol_examen_sugerido
-                      ? ` · Rol sugerido: ${psiqueRec.rol_examen_sugerido}`
+                      ? ` · Rol: ${etiquetaRolExamenUI(psiqueRec.rol_examen_sugerido)}`
                       : ''}
                     {psiqueRec.fuente === 'fallback' ? ' · (catálogo local)' : ''}
                   </p>
+                  {psiqueRec.evaluacion ? (
+                    <div className="rounded-lg border border-emerald-500/25 bg-emerald-950/30 px-3 py-2">
+                      <p className="text-xs font-bold uppercase tracking-wide text-emerald-300/90">
+                        {psiqueRec.evaluacion.libro}
+                      </p>
+                      <p className="mt-1 text-xs text-zinc-400">
+                        Banco: {psiqueRec.evaluacion.banco} · Motor:{' '}
+                        {psiqueRec.evaluacion.motor === 'tripode' ? 'Trípode' : 'ABC'} ·{' '}
+                        {psiqueRec.evaluacion.duracion_minutos} min
+                      </p>
+                      <ul className="mt-2 list-disc space-y-0.5 pl-4 text-xs text-zinc-300">
+                        {psiqueRec.evaluacion.reglas_semaforo.map((r) => (
+                          <li key={r}>{r}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
                   {psiqueRec.aviso ? (
                     <p className="text-xs text-amber-300/90">{psiqueRec.aviso}</p>
                   ) : null}
@@ -495,7 +533,9 @@ export default function RrhhReclutamientoClient() {
                           <p className="text-[11px] uppercase tracking-wide text-zinc-500">
                             {p.categoria}
                             {p.es_clinico ? ' · clínico' : ''}
-                            {p.rol_examen_sugerido ? ` · ${p.rol_examen_sugerido}` : ''}
+                            {p.rol_examen_sugerido
+                              ? ` · ${etiquetaRolExamenUI(p.rol_examen_sugerido)}`
+                              : ''}
                           </p>
                           <p className="mt-1 text-xs text-zinc-400">{p.objetivo_evaluacion}</p>
                         </li>
@@ -563,8 +603,12 @@ export default function RrhhReclutamientoClient() {
             </h2>
             <p className="mt-2 text-sm text-zinc-400">
               Genera y copia el enlace <code className="text-zinc-500">/talento/examen?token=…</code>. Si elegiste a
-              alguien en «Pendientes» o «Evaluaciones», el enlace va a su expediente; si no, se crea un candidato nuevo
-              con el rol del botón {etiquetaRolExamenUI(rolPreview)} arriba.
+              alguien en «Pendientes» o «Evaluaciones», el enlace va a su expediente; si no, se crea un candidato nuevo.
+              Con Psique consultado, el rol y el semáforo del libro salen de la batería recomendada
+              {psiqueRec?.rol_examen_sugerido
+                ? ` (${etiquetaRolExamenUI(psiqueRec.rol_examen_sugerido)})`
+                : ` (preview: ${etiquetaRolExamenUI(rolPreview)})`}
+              .
             </p>
             <div className="mt-3 rounded-lg border border-white/10 bg-black/25 px-3 py-2 text-sm">
               {destinoEnlace ? (

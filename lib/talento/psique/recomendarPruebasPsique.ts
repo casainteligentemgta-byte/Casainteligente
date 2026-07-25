@@ -228,8 +228,18 @@ export async function recomendarPruebasPsique(
   };
 }
 
-/** Mapea rol Psique al `rol_examen` aceptado por generar-link (programador|tecnico). */
+/**
+ * Rol de examen a persistir en `ci_empleados.rol_examen` (4 bancos del libro).
+ * Default seguro: técnico obra (trípode).
+ */
+export function rolExamenDesdePsique(rol: RolExamenPsique | null): RolExamenPsique {
+  return rol ?? 'tecnico';
+}
+
+/**
+ * @deprecated Preferir `rolExamenDesdePsique`. Solo programador|tecnico para UIs legacy.
+ */
 export function rolExamenParaGenerarLink(rol: RolExamenPsique | null): 'programador' | 'tecnico' {
-  if (rol === 'programador') return 'programador';
-  return 'tecnico';
+  const r = rolExamenDesdePsique(rol);
+  return r === 'programador' ? 'programador' : 'tecnico';
 }

@@ -1,11 +1,15 @@
 import { NextResponse } from 'next/server';
-import { recomendarPruebasPsique, rolExamenParaGenerarLink } from '@/lib/talento/psique/recomendarPruebasPsique';
+import { mapaEvaluacionDesdeRol } from '@/lib/talento/psique/mapaEvaluacion';
+import {
+  recomendarPruebasPsique,
+  rolExamenDesdePsique,
+} from '@/lib/talento/psique/recomendarPruebasPsique';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
 /**
  * POST /api/talento/psique/recomendar
  * Body: { palabras_clave?: string[], texto?: string }
- * Recomienda batería de pruebas Psique según palabras clave del cargo/solicitud.
+ * Recomienda batería Psique + mapa al semáforo del libro de evaluación.
  */
 export async function POST(req: Request) {
   const admin = supabaseAdminForRoute();
@@ -40,8 +44,14 @@ export async function POST(req: Request) {
     textoSolicitud: texto,
   });
 
+  const rol = rolExamenDesdePsique(result.rol_examen_sugerido);
+  const evaluacion = mapaEvaluacionDesdeRol(rol);
+
   return NextResponse.json({
     ...result,
-    rol_examen_para_enlace: rolExamenParaGenerarLink(result.rol_examen_sugerido),
+    rol_examen_sugerido: rol,
+    /** Rol completo para generar-link / captación (4 bancos). */
+    rol_examen_para_enlace: rol,
+    evaluacion,
   });
 }
