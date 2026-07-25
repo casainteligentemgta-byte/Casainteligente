@@ -2,7 +2,7 @@
 
 import { Building2, Menu, Plus, Trash2 } from 'lucide-react';
 import dynamic from 'next/dynamic';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
@@ -22,6 +22,7 @@ const SELECT_ENTIDADES =
   'id,nombre,nombre_comercial,rif,direccion_fiscal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil,permisologia,logo_url,sello_url,notas,created_at,updated_at';
 
 export default function EntidadesPatronoClient() {
+  const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
   const [filas, setFilas] = useState<CiEntidad[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -29,6 +30,14 @@ export default function EntidadesPatronoClient() {
   const [formOpen, setFormOpen] = useState(false);
   const [editando, setEditando] = useState<CiEntidad | null>(null);
   const [borrandoId, setBorrandoId] = useState<string | null>(null);
+
+  const volverAtras = () => {
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      router.back();
+      return;
+    }
+    router.push('/');
+  };
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -86,21 +95,16 @@ export default function EntidadesPatronoClient() {
     <div className="min-h-screen bg-[#0A0A0F] pb-28 pt-4 text-zinc-100">
       <div className="mx-auto max-w-5xl px-4">
         <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <Link href="/" className="text-xs font-semibold text-sky-400/90 hover:text-sky-300">
-              ← Inicio
-            </Link>
-            <div className="mt-3 flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[#FF9500]/35 bg-[#FF9500]/10 backdrop-blur-xl">
-                <Building2 className="h-6 w-6 text-[#FFD60A]" aria-hidden />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold tracking-tight text-white">ENTIDADES</h1>
-                <p className="mt-0.5 text-xs text-zinc-500">
-                  Abre MENÚ en un patrono para datos, permisología y Equipo (roles).
-                </p>
-              </div>
-            </div>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={volverAtras}
+              aria-label="Volver"
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[#FF9500]/35 bg-[#FF9500]/10 backdrop-blur-xl transition hover:bg-[#FF9500]/20"
+            >
+              <Building2 className="h-6 w-6 text-[#FFD60A]" aria-hidden />
+            </button>
+            <h1 className="text-2xl font-bold tracking-tight text-white">ENTIDADES</h1>
           </div>
           <button
             type="button"
