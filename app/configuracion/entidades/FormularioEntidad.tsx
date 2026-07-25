@@ -80,7 +80,7 @@ const SECCIONES_PATRONO: SeccionPatronoItem[] = [
   { id: 'permisos', label: 'Permisología', icon: Calendar },
   { id: 'medios', label: 'Logo / sello', icon: ImageIcon },
   { id: 'maquinaria', label: 'Maquinaria', icon: Truck, soloEdicion: true },
-  { id: 'equipos', label: 'Equipos', icon: Package, soloEdicion: true },
+  { id: 'equipos', label: 'Inventario equipos', icon: Package, soloEdicion: true },
   { id: 'herramientas', label: 'Herramientas', icon: Wrench, soloEdicion: true },
 ];
 
@@ -91,7 +91,7 @@ const LABEL_SECCION: Record<SeccionPatronoId, string> = {
   permisos: 'Permisología',
   medios: 'Logo / sello',
   maquinaria: 'Maquinaria',
-  equipos: 'Equipos',
+  equipos: 'Inventario equipos',
   herramientas: 'Herramientas',
 };
 
