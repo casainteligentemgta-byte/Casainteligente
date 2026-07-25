@@ -9,6 +9,7 @@ import MaquinariaPropiaEntidadPanel from '@/components/configuracion/MaquinariaP
 import {
   edadDesdeFechaNacimiento,
   esCedulaVenezolana,
+  letraCedula,
   nacionalidadDesdeCedula,
 } from '@/lib/configuracion/representanteCedula';
 import {
@@ -637,9 +638,11 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
                     </div>
                     {esCedulaVenezolana(row.cedula) ? (
                       <p className="text-[11px] text-zinc-500">
-                        Nacionalidad (según cédula V): <span className="text-zinc-300">Venezolano</span>
+                        Nacionalidad (cédula V): <span className="text-zinc-300">Venezolano</span>
                       </p>
-                    ) : (
+                    ) : null}
+                    {letraCedula(row.cedula) === 'E' ||
+                    (row.cedula.trim() !== '' && !esCedulaVenezolana(row.cedula) && letraCedula(row.cedula) == null) ? (
                       <div>
                         <label className={labelClass}>Nacionalidad</label>
                         <input
@@ -650,10 +653,10 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
                             )
                           }
                           className={inputClass}
-                          placeholder="Ej. colombiana (cédula E u otra)"
+                          placeholder="Ej. colombiana"
                         />
                       </div>
-                    )}
+                    ) : null}
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div>
                         <label className={labelClass}>Municipio de residencia</label>
