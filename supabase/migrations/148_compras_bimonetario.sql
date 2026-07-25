@@ -24,7 +24,10 @@ set
   moneda_original = coalesce(moneda_original, moneda, 'VES')
 where monto_ves is null or monto_usd is null or moneda_original is null;
 
-create or replace view public.ci_compras as
+-- CREATE OR REPLACE no puede renombrar/reordenar columnas de una vista existente.
+drop view if exists public.ci_compras cascade;
+
+create view public.ci_compras as
 select
   id,
   proyecto_id,

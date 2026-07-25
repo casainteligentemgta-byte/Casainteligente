@@ -58,7 +58,9 @@ create index if not exists idx_contabilidad_compras_imputacion
   where imputacion = 'entidad';
 
 -- Vista valuación AD (219)
-create or replace view public.ci_compras as
+drop view if exists public.ci_compras cascade;
+
+create view public.ci_compras as
 select
   id,
   proyecto_id,
