@@ -59,11 +59,18 @@ function escapeHtml(s: string): string {
     .replace(/>/g, '&gt;');
 }
 
+export type NotificarPermisologiaOpts = {
+  /** Si se indica, solo revisa esa entidad (p. ej. al guardar el menú del patrono). */
+  entidadId?: string;
+};
+
 /**
  * Revisa `ci_entidades.permisologia` y notifica por Telegram al Departamento Legal
  * los vencimientos en ventana ≤ 30 días (dedupe diario por campo / umbral).
  */
-export async function notificarPermisologiaTelegram(): Promise<PermisologiaNotifyResult> {
+export async function notificarPermisologiaTelegram(
+  opts: NotificarPermisologiaOpts = {},
+): Promise<PermisologiaNotifyResult> {
   const result: PermisologiaNotifyResult = {
     revisadas: 0,
     alertas: 0,
@@ -83,10 +90,13 @@ export async function notificarPermisologiaTelegram(): Promise<PermisologiaNotif
   }
 
   const supabase = createSupabaseAdminClient();
-  const { data, error } = await supabase
-    .from('ci_entidades')
-    .select('id,nombre,rif,permisologia')
-    .not('permisologia', 'is', null);
+  let query = supabase.from('ci_entidades').select('id,nombre,rif,permisologia');
+  if (opts.entidadId?.trim()) {
+    query = query.eq('id', opts.entidadId.trim());
+  } else {
+    query = query.not('permisologia', 'is', null);
+  }
+  const { data, error } = await query;
 
   if (error) {
     result.errors.push(error.message);

@@ -12,6 +12,7 @@ import {
   validarEntidadPatrono,
   vencimientoAlertaNaranja,
 } from '@/lib/configuracion/validarEntidadPatrono';
+import { apiUrl } from '@/lib/http/apiUrl';
 import { uploadEntidadAsset } from '@/lib/supabase/entidad-assets';
 import { createClient } from '@/lib/supabase/client';
 import type { CiEntidad, PermisologiaCi, RegistroMercantilCi, RepresentanteMercantilCi } from '@/types/ci-entidad';
@@ -378,6 +379,19 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
           ? 'Entidad actualizada.'
           : 'Entidad registrada. Se creó su catálogo de materiales (vacío).',
       );
+
+      // Avisa a Telegram / Departamento Legal si hay vencimientos en ventana.
+      if (id && (permIvss.trim() || permInces.trim() || permSol.trim())) {
+        void fetch(apiUrl('/api/configuracion/entidades/permisologia/notificar'), {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ entidadId: id }),
+        }).catch(() => {
+          /* no bloquear el guardado */
+        });
+      }
+
       onGuardado();
       onClose();
     } finally {
@@ -807,12 +821,16 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
 
               <Tabs.Content value="permisos" className="space-y-4 outline-none">
                 <p className="text-xs text-zinc-500">
-                  Fechas de vencimiento (YYYY-MM-DD). Si faltan menos de 30 días, el campo se resalta en naranja.
-                  Estos vencimientos se enlazan al{' '}
-                  <a href="/legal/cumplimiento" className="font-semibold text-[#FFD60A] underline hover:text-[#FF9500]">
-                    Departamento Legal → Cumplimiento
-                  </a>{' '}
-                  y generan alertas diarias por Telegram.
+                  Fechas de vencimiento (YYYY-MM-DD). Si faltan menos de 30 días, el campo se resalta en
+                  naranja. Al guardar, se notifica por <strong className="text-zinc-400">Telegram</strong> al
+                  Departamento Legal y queda visible en{' '}
+                  <a
+                    href="/legal/cumplimiento"
+                    className="font-semibold text-[#FFD60A] underline hover:text-[#FF9500]"
+                  >
+                    Legal → Cumplimiento
+                  </a>
+                  .
                 </p>
                 <div>
                   <label className={labelClass}>IVSS — vence</label>
