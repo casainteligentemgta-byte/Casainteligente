@@ -118,41 +118,76 @@ function ProductRow({
             <button
                 onClick={onTap}
                 style={{
-                    width: '100%', padding: '16px', display: 'flex', gap: '14px',
+                    width: '100%', padding: '16px', display: 'flex', gap: '12px',
                     textAlign: 'left', background: 'transparent', border: 'none',
-                    cursor: 'pointer', fontFamily: 'inherit'
+                    cursor: 'pointer', fontFamily: 'inherit',
+                    alignItems: 'flex-start',
+                    boxSizing: 'border-box',
                 }}
             >
                 <ProductAvatar product={product} />
 
-                <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', gap: '6px', marginBottom: '4px' }}>
-                        <span style={{
-                            fontSize: '10px', fontWeight: 800, padding: '2px 8px',
-                            borderRadius: '6px', background: colors.bg, color: colors.text,
-                            textTransform: 'uppercase', letterSpacing: '0.5px'
-                        }}>
-                            {cat}
-                        </span>
-                        {product.marca && (
-                            <span style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>
-                                {product.marca}
+                <div style={{ flex: 1, minWidth: 0, width: '100%' }}>
+                    <div
+                        style={{
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            justifyContent: 'space-between',
+                            gap: '10px',
+                            marginBottom: '4px',
+                        }}
+                    >
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', minWidth: 0, flex: 1 }}>
+                            <span style={{
+                                fontSize: '10px', fontWeight: 800, padding: '2px 8px',
+                                borderRadius: '6px', background: colors.bg, color: colors.text,
+                                textTransform: 'uppercase', letterSpacing: '0.5px'
+                            }}>
+                                {cat}
                             </span>
-                        )}
+                            {product.marca && (
+                                <span style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>
+                                    {product.marca}
+                                </span>
+                            )}
+                        </div>
+                        <div
+                            style={{
+                                color: '#34C759',
+                                fontSize: '17px',
+                                fontWeight: 800,
+                                lineHeight: 1.15,
+                                flexShrink: 0,
+                                textAlign: 'right',
+                                whiteSpace: 'nowrap',
+                            }}
+                        >
+                            ${fmt(product.precio)}
+                        </div>
                     </div>
 
-                    <h3 style={{ color: 'white', fontSize: '16px', fontWeight: 700, lineHeight: 1.2, marginBottom: '2px' }}>
+                    <h3
+                        style={{
+                            color: 'white',
+                            fontSize: '16px',
+                            fontWeight: 700,
+                            lineHeight: 1.25,
+                            margin: '0 0 2px 0',
+                            textAlign: 'justify',
+                            textAlignLast: 'left',
+                            hyphens: 'auto',
+                            width: '100%',
+                            maxWidth: '100%',
+                            boxSizing: 'border-box',
+                            overflowWrap: 'anywhere',
+                            wordBreak: 'break-word',
+                        }}
+                    >
                         {product.nombre}
                     </h3>
-                    <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '13px' }}>
+                    <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '13px', margin: 0 }}>
                         {product.modelo || 'Sin modelo'}
                     </p>
-                </div>
-
-                <div style={{ textAlign: 'right' }}>
-                    <div style={{ color: '#34C759', fontSize: '18px', fontWeight: 800 }}>
-                        ${fmt(product.precio)}
-                    </div>
                 </div>
             </button>
 
