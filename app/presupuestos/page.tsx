@@ -30,7 +30,7 @@ const CLASIFICACION_COLORS: Record<ClasificacionPresupuesto, { bg: string; text:
     enviado: { bg: 'rgba(59,130,246,0.15)', text: '#3B82F6', label: 'Enviado', icon: '📨' },
     aprobado: { bg: 'rgba(52,199,89,0.15)', text: '#34C759', label: 'Aprobado', icon: '✅' },
     no_aprobado: { bg: 'rgba(239,68,68,0.15)', text: '#EF4444', label: 'No aprobado', icon: '⛔' },
-    cobrado: { bg: 'rgba(245,158,11,0.15)', text: '#F59E0B', label: 'Cobrado', icon: '💰' },
+    cobrado: { bg: 'rgba(245,158,11,0.15)', text: '#F59E0B', label: 'Por Pagar', icon: '💰' },
     pagado: { bg: 'rgba(16,185,129,0.15)', text: '#10B981', label: 'Pagado', icon: '💸' },
 };
 
@@ -281,7 +281,7 @@ function TarjetaPresupuesto({
                             padding: '2px 14px 2px 0',
                             outline: 'none',
                             cursor: 'pointer',
-                            maxWidth: '140px',
+                            maxWidth: '160px',
                         }}
                     >
                         {(Object.keys(CLASIFICACION_COLORS) as ClasificacionPresupuesto[]).map((k) => (
