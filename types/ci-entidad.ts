@@ -26,7 +26,7 @@ export type RepresentanteMercantilCi = {
 export type RegistroMercantilCi = {
   /** Domicilio social o de la empresa según consta en el registro (puede coincidir con dirección fiscal). */
   domicilio_empresa?: string;
-  /** Estado (geográfico) del domicilio según registro mercantil. En el formulario se captura antes que municipio y sector. */
+  /** Estado (geográfico) del domicilio según registro mercantil. En el formulario va al final del bloque de domicilio. */
   domicilio_estado_registro?: string;
   /** Municipio del domicilio según RM. */
   domicilio_municipio_registro?: string;

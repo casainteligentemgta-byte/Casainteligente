@@ -724,74 +724,27 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
 
               <Tabs.Content value="mercantil" className="space-y-4 outline-none">
                 <p className="text-xs text-zinc-500">
-                  Objeto <code className="text-zinc-400">registro_mercantil</code> en la base de datos. El{' '}
-                  <strong className="text-zinc-400">domicilio de la empresa</strong> aquí es el que se imprime en la
-                  planilla de empleo; si queda vacío, se usa la dirección fiscal (pestaña Datos). Captura el estado, el
-                  municipio y el sector en ese orden (en el contrato PDF se leen en orden legal: sector, municipio,
-                  estado). La <strong className="text-zinc-400">oficina</strong>,{' '}
-                  <strong className="text-zinc-400">tomo</strong>, <strong className="text-zinc-400">número de inscripción</strong> y{' '}
-                  <strong className="text-zinc-400">fecha de inscripción</strong> son los que usa el{' '}
-                  <strong className="text-zinc-400">contrato laboral PDF</strong> (cláusula del empleador: «constando en
-                  el Tomo …, bajo el Nº …, de fecha …») cuando el proyecto obra enlaza esta entidad en{' '}
-                  <code className="text-zinc-500">ci_proyectos.entidad_id</code>.
+                  Datos del asiento mercantil y domicilio social. El{' '}
+                  <strong className="text-zinc-400">registro</strong>, <strong className="text-zinc-400">tomo</strong>,{' '}
+                  <strong className="text-zinc-400">número</strong> y <strong className="text-zinc-400">fecha</strong> alimentan
+                  el contrato laboral PDF. Si el domicilio queda vacío, se usa la dirección fiscal (pestaña Datos).
                 </p>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="sm:col-span-2">
-                    <label className={labelClass}>Estado (domicilio según registro)</label>
-                    <input
-                      value={rmEstadoRegistro}
-                      onChange={(e) => setRmEstadoRegistro(e.target.value)}
-                      className={inputClass}
-                      placeholder="Estado donde consta el domicilio social"
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className={labelClass}>Municipio (domicilio según registro)</label>
-                    <input
-                      value={rmMunicipioRegistro}
-                      onChange={(e) => setRmMunicipioRegistro(e.target.value)}
-                      className={inputClass}
-                      placeholder="Municipio"
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className={labelClass}>Sector (domicilio según registro)</label>
-                    <input
-                      value={rmSectorRegistro}
-                      onChange={(e) => setRmSectorRegistro(e.target.value)}
-                      className={inputClass}
-                      placeholder="Sector, urbanización o parroquia según asiento"
-                    />
-                  </div>
-                </div>
                 <div>
-                  <label className={labelClass}>Vía / urbanización (domicilio según registro)</label>
-                  <textarea
-                    value={rmDomicilioEmpresa}
-                    onChange={(e) => setRmDomicilioEmpresa(e.target.value)}
-                    rows={3}
-                    className={`${inputClass} resize-y`}
-                    placeholder="Calle, avenida o texto de domicilio que precede a sector, municipio y estado en el documento"
+                  <label className={labelClass}>Registro</label>
+                  <input
+                    value={rmCirc}
+                    onChange={(e) => setRmCirc(e.target.value)}
+                    className={inputClass}
+                    placeholder="Registro Mercantil Segundo de la Circunscripción Judicial del Estado Nueva Esparta"
                   />
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="sm:col-span-2">
-                    <label className={labelClass}>
-                      Oficina de Registro Mercantil (texto completo para el contrato)
-                    </label>
-                    <input
-                      value={rmCirc}
-                      onChange={(e) => setRmCirc(e.target.value)}
-                      className={inputClass}
-                      placeholder="Registro Mercantil Segundo de la Circunscripción Judicial del Estado Nueva Esparta"
-                    />
-                  </div>
                   <div>
-                    <label className={labelClass}>Tomo (libro de comercio)</label>
+                    <label className={labelClass}>Tomo</label>
                     <input value={rmTomo} onChange={(e) => setRmTomo(e.target.value)} className={inputClass} />
                   </div>
                   <div>
-                    <label className={labelClass}>Número de inscripción (Nº en el RM)</label>
+                    <label className={labelClass}>Número</label>
                     <input
                       value={rmNumero}
                       onChange={(e) => setRmNumero(e.target.value)}
@@ -800,7 +753,7 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
                     />
                   </div>
                   <div className="sm:col-span-2">
-                    <label className={labelClass}>Fecha de inscripción o asiento</label>
+                    <label className={labelClass}>Fecha de inscripción</label>
                     <input
                       type="date"
                       value={rmFecha}
@@ -809,6 +762,46 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
                       style={{ colorScheme: 'dark' }}
                     />
                   </div>
+                </div>
+                <p className="pt-1 text-[11px] font-bold uppercase tracking-wide text-[#FFD60A]/80">
+                  Domicilio de la empresa según registro
+                </p>
+                <div>
+                  <label className={labelClass}>Vía / urbanización</label>
+                  <textarea
+                    value={rmDomicilioEmpresa}
+                    onChange={(e) => setRmDomicilioEmpresa(e.target.value)}
+                    rows={3}
+                    className={`${inputClass} resize-y`}
+                    placeholder="Calle, avenida o urbanización"
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Sector</label>
+                  <input
+                    value={rmSectorRegistro}
+                    onChange={(e) => setRmSectorRegistro(e.target.value)}
+                    className={inputClass}
+                    placeholder="Sector, urbanización o parroquia según asiento"
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Municipio</label>
+                  <input
+                    value={rmMunicipioRegistro}
+                    onChange={(e) => setRmMunicipioRegistro(e.target.value)}
+                    className={inputClass}
+                    placeholder="Municipio"
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Estado</label>
+                  <input
+                    value={rmEstadoRegistro}
+                    onChange={(e) => setRmEstadoRegistro(e.target.value)}
+                    className={inputClass}
+                    placeholder="Estado donde consta el domicilio social"
+                  />
                 </div>
               </Tabs.Content>
 
