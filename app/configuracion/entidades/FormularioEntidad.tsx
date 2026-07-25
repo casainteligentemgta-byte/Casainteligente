@@ -275,18 +275,16 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
 
     const actasRaw = rm.actas;
     if (Array.isArray(actasRaw)) {
-      setRmActas(
-        actasRaw
-          .map((item) => {
-            if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
-            const o = item as Record<string, unknown>;
-            const url = typeof o.url === 'string' ? o.url.trim() : '';
-            if (!url) return null;
-            const nombre = typeof o.nombre === 'string' ? o.nombre.trim() : '';
-            return { url, nombre: nombre || undefined };
-          })
-          .filter((x): x is { url: string; nombre?: string } => Boolean(x)),
-      );
+      const actas: { url: string; nombre?: string }[] = [];
+      for (const item of actasRaw) {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+        const o = item as Record<string, unknown>;
+        const url = typeof o.url === 'string' ? o.url.trim() : '';
+        if (!url) continue;
+        const nombre = typeof o.nombre === 'string' ? o.nombre.trim() : '';
+        actas.push(nombre ? { url, nombre } : { url });
+      }
+      setRmActas(actas);
     } else {
       setRmActas([]);
     }
