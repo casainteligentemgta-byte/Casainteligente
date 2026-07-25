@@ -76,7 +76,7 @@ export default function ProyectoEquipoAlertasPanel({ proyectoId }: Props) {
 
   const ingeniero = data?.ingenieroAsignado;
   const sincronizado = Boolean(ingeniero?.telegram_chat_id);
-  const rrhhHref = `/proyectos/modulo/${encodeURIComponent(proyectoId)}?tab=solicitados#ingeniero-residente`;
+  const rrhhHref = `/rrhh/hojas-vida?proyecto_modulo=${encodeURIComponent(proyectoId)}`;
 
   if (loading) {
     return (

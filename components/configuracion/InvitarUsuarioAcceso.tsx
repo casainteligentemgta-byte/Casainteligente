@@ -21,10 +21,17 @@ type EntidadOpcion = { id: string; nombre: string; rif: string | null };
 type Props = {
   className?: string;
   entidadIdInicial?: string;
+  /** Vista embebida en el MENÚ del patrono: sin Card y sin selector de entidad. */
+  embebido?: boolean;
   onListo?: () => void;
 };
 
-export default function InvitarUsuarioAcceso({ className, entidadIdInicial, onListo }: Props) {
+export default function InvitarUsuarioAcceso({
+  className,
+  entidadIdInicial,
+  embebido = false,
+  onListo,
+}: Props) {
   const supabase = useMemo(() => createClient(), []);
   const [email, setEmail] = useState('');
   const [nombre, setNombre] = useState('');
@@ -42,6 +49,10 @@ export default function InvitarUsuarioAcceso({ className, entidadIdInicial, onLi
   const esCcoLectura = rol === 'cco_lectura';
 
   const cargarEntidades = useCallback(async () => {
+    if (embebido) {
+      setCargandoEntidades(false);
+      return;
+    }
     setCargandoEntidades(true);
     const { data, error } = await supabase
       .from('ci_entidades')
@@ -54,7 +65,7 @@ export default function InvitarUsuarioAcceso({ className, entidadIdInicial, onLi
       setEntidades((data ?? []) as EntidadOpcion[]);
     }
     setCargandoEntidades(false);
-  }, [supabase]);
+  }, [supabase, embebido]);
 
   useEffect(() => {
     void cargarEntidades();
@@ -140,6 +151,188 @@ export default function InvitarUsuarioAcceso({ className, entidadIdInicial, onLi
     }
   }
 
+  const campos = (
+    <>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2 sm:col-span-2">
+          <Label htmlFor="invitar-email" className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            Correo *
+          </Label>
+          <Input
+            id="invitar-email"
+            type="email"
+            autoComplete="email"
+            placeholder="usuario@dimaquinas.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            disabled={enviando}
+            className="h-11 border-white/10 bg-zinc-900/80 text-zinc-100"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="invitar-nombre" className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            Nombre
+          </Label>
+          <Input
+            id="invitar-nombre"
+            placeholder="Nombre para mostrar"
+            value={nombre}
+            onChange={(e) => setNombre(e.target.value)}
+            disabled={enviando}
+            className="h-11 border-white/10 bg-zinc-900/80 text-zinc-100"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="invitar-rol" className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            Rol *
+          </Label>
+          <select
+            id="invitar-rol"
+            value={rol}
+            onChange={(e) => setRol(e.target.value)}
+            disabled={enviando}
+            className={campoClase}
+          >
+            {ROLES_EMPRESA.map((r) => (
+              <option key={r.value} value={r.value}>
+                {r.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-2 sm:col-span-2">
+          <Label
+            htmlFor="invitar-password"
+            className="text-xs font-semibold uppercase tracking-wide text-zinc-500"
+          >
+            Contraseña {esCcoLectura ? '*' : '(opcional)'}
+          </Label>
+          <Input
+            id="invitar-password"
+            type="password"
+            autoComplete="new-password"
+            placeholder={
+              esCcoLectura ? 'Clave para entrar en /login' : 'Si la dejas vacía, se envía invitación por correo'
+            }
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            disabled={enviando}
+            className="h-11 border-white/10 bg-zinc-900/80 text-zinc-100"
+          />
+          <p className="text-[10px] text-zinc-600">
+            {esCcoLectura
+              ? 'Crea cuenta lista para usar: solo verá CCO (sin editar ni otros módulos).'
+              : 'Con contraseña se crea el usuario al momento; sin ella se manda invitación por correo.'}
+          </p>
+        </div>
+        {!embebido ? (
+          <div className="space-y-2 sm:col-span-2">
+            <Label htmlFor="invitar-entidad" className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              Entidad / patrono *
+            </Label>
+            <select
+              id="invitar-entidad"
+              value={entidadId}
+              onChange={(e) => setEntidadId(e.target.value)}
+              disabled={enviando || cargandoEntidades}
+              className={campoClase}
+            >
+              <option value="">{cargandoEntidades ? 'Cargando…' : 'Seleccionar entidad'}</option>
+              {entidades.map((en) => (
+                <option key={en.id} value={en.id}>
+                  {en.nombre}
+                  {en.rif ? ` · ${en.rif}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="space-y-3 rounded-xl border border-white/10 bg-white/[0.02] p-4">
+        <label className="flex items-center gap-2 text-sm font-semibold text-zinc-200">
+          <input
+            type="checkbox"
+            checked={conTelegram}
+            onChange={(e) => setConTelegram(e.target.checked)}
+            className="rounded border-zinc-600"
+          />
+          <MessageCircle className="h-4 w-4 text-emerald-400" />
+          También acceso al bot Telegram
+        </label>
+        {conTelegram ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label className="text-xs uppercase text-zinc-500">Chat ID *</Label>
+              <Input
+                placeholder="Ej. 123456789"
+                value={telegramChatId}
+                onChange={(e) => setTelegramChatId(e.target.value)}
+                disabled={enviando}
+                className="h-10 border-white/10 bg-zinc-900/80"
+              />
+              <p className="text-[10px] text-zinc-600">
+                El usuario puede obtenerlo con bots como @userinfobot.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs uppercase text-zinc-500">Cargo (opcional)</Label>
+              <Input
+                placeholder="Comprador, PM…"
+                value={cargo}
+                onChange={(e) => setCargo(e.target.value)}
+                disabled={enviando}
+                className="h-10 border-white/10 bg-zinc-900/80"
+              />
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      {ultimoOk ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-emerald-500/25 bg-emerald-950/25 px-3 py-2 text-sm text-emerald-100/90">
+          <ShieldCheck className="h-4 w-4 text-emerald-400" />
+          {ultimoOk}
+          <Badge className="border-emerald-500/30 bg-emerald-500/15 text-emerald-200">
+            <Mail className="mr-1 h-3 w-3" />
+            Correo
+          </Badge>
+        </div>
+      ) : null}
+    </>
+  );
+
+  const acciones = (
+    <Button
+      type="submit"
+      disabled={enviando || (!embebido && cargandoEntidades)}
+      className="min-w-[180px] rounded-xl bg-gradient-to-r from-orange-500 to-orange-700 font-bold"
+    >
+      {enviando ? (
+        <>
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Invitando…
+        </>
+      ) : (
+        <>
+          <Mail className="h-4 w-4" />
+          Enviar invitación
+        </>
+      )}
+    </Button>
+  );
+
+  if (embebido) {
+    return (
+      <div className={cn('space-y-4', className)}>
+        <form onSubmit={(ev) => void handleSubmit(ev)} className="space-y-4">
+          {campos}
+          <div className="flex flex-wrap gap-2 border-t border-white/10 pt-4">{acciones}</div>
+        </form>
+      </div>
+    );
+  }
+
   return (
     <Card
       className={cn(
@@ -165,170 +358,8 @@ export default function InvitarUsuarioAcceso({ className, entidadIdInicial, onLi
       </CardHeader>
 
       <form onSubmit={(ev) => void handleSubmit(ev)}>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="invitar-email" className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                Correo *
-              </Label>
-              <Input
-                id="invitar-email"
-                type="email"
-                autoComplete="email"
-                placeholder="usuario@dimaquinas.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={enviando}
-                className="h-11 border-white/10 bg-zinc-900/80 text-zinc-100"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="invitar-nombre" className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                Nombre
-              </Label>
-              <Input
-                id="invitar-nombre"
-                placeholder="Nombre para mostrar"
-                value={nombre}
-                onChange={(e) => setNombre(e.target.value)}
-                disabled={enviando}
-                className="h-11 border-white/10 bg-zinc-900/80 text-zinc-100"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="invitar-rol" className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                Rol *
-              </Label>
-              <select
-                id="invitar-rol"
-                value={rol}
-                onChange={(e) => setRol(e.target.value)}
-                disabled={enviando}
-                className={campoClase}
-              >
-                {ROLES_EMPRESA.map((r) => (
-                  <option key={r.value} value={r.value}>
-                    {r.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-2 sm:col-span-2">
-              <Label
-                htmlFor="invitar-password"
-                className="text-xs font-semibold uppercase tracking-wide text-zinc-500"
-              >
-                Contraseña {esCcoLectura ? '*' : '(opcional)'}
-              </Label>
-              <Input
-                id="invitar-password"
-                type="password"
-                autoComplete="new-password"
-                placeholder={esCcoLectura ? 'Clave para entrar en /login' : 'Si la dejas vacía, se envía invitación por correo'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={enviando}
-                className="h-11 border-white/10 bg-zinc-900/80 text-zinc-100"
-              />
-              <p className="text-[10px] text-zinc-600">
-                {esCcoLectura
-                  ? 'Crea cuenta lista para usar: solo verá CCO (sin editar ni otros módulos).'
-                  : 'Con contraseña se crea el usuario al momento; sin ella se manda invitación por correo.'}
-              </p>
-            </div>
-            <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="invitar-entidad" className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                Entidad / patrono *
-              </Label>
-              <select
-                id="invitar-entidad"
-                value={entidadId}
-                onChange={(e) => setEntidadId(e.target.value)}
-                disabled={enviando || cargandoEntidades}
-                className={campoClase}
-              >
-                <option value="">{cargandoEntidades ? 'Cargando…' : 'Seleccionar entidad'}</option>
-                {entidades.map((en) => (
-                  <option key={en.id} value={en.id}>
-                    {en.nombre}
-                    {en.rif ? ` · ${en.rif}` : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 space-y-3">
-            <label className="flex items-center gap-2 text-sm font-semibold text-zinc-200">
-              <input
-                type="checkbox"
-                checked={conTelegram}
-                onChange={(e) => setConTelegram(e.target.checked)}
-                className="rounded border-zinc-600"
-              />
-              <MessageCircle className="h-4 w-4 text-emerald-400" />
-              También acceso al bot Telegram
-            </label>
-            {conTelegram ? (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label className="text-xs uppercase text-zinc-500">Chat ID *</Label>
-                  <Input
-                    placeholder="Ej. 123456789"
-                    value={telegramChatId}
-                    onChange={(e) => setTelegramChatId(e.target.value)}
-                    disabled={enviando}
-                    className="h-10 border-white/10 bg-zinc-900/80"
-                  />
-                  <p className="text-[10px] text-zinc-600">
-                    El usuario puede obtenerlo con bots como @userinfobot.
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs uppercase text-zinc-500">Cargo (opcional)</Label>
-                  <Input
-                    placeholder="Comprador, PM…"
-                    value={cargo}
-                    onChange={(e) => setCargo(e.target.value)}
-                    disabled={enviando}
-                    className="h-10 border-white/10 bg-zinc-900/80"
-                  />
-                </div>
-              </div>
-            ) : null}
-          </div>
-
-          {ultimoOk ? (
-            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-emerald-500/25 bg-emerald-950/25 px-3 py-2 text-sm text-emerald-100/90">
-              <ShieldCheck className="h-4 w-4 text-emerald-400" />
-              {ultimoOk}
-              <Badge className="border-emerald-500/30 bg-emerald-500/15 text-emerald-200">
-                <Mail className="mr-1 h-3 w-3" />
-                Correo
-              </Badge>
-            </div>
-          ) : null}
-        </CardContent>
-
-        <CardFooter className="flex flex-wrap gap-2 border-t border-white/5 pt-4">
-          <Button
-            type="submit"
-            disabled={enviando || cargandoEntidades}
-            className="min-w-[180px] rounded-xl bg-gradient-to-r from-orange-500 to-orange-700 font-bold"
-          >
-            {enviando ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Invitando…
-              </>
-            ) : (
-              <>
-                <Mail className="h-4 w-4" />
-                Enviar invitación
-              </>
-            )}
-          </Button>
-        </CardFooter>
+        <CardContent className="space-y-4">{campos}</CardContent>
+        <CardFooter className="flex flex-wrap gap-2 border-t border-white/5 pt-4">{acciones}</CardFooter>
       </form>
     </Card>
   );

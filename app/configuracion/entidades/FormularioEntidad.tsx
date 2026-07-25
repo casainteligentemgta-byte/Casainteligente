@@ -1,9 +1,11 @@
 'use client';
 
 import * as Tabs from '@radix-ui/react-tabs';
-import { Building2, Calendar, FileText, Plus, ShieldCheck, Trash2, X } from 'lucide-react';
+import { Building2, Calendar, FileText, Plus, ShieldCheck, Trash2, Truck, Users, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import EquipoEntidadPanel from '@/components/configuracion/EquipoEntidadPanel';
+import MaquinariaPropiaEntidadPanel from '@/components/configuracion/MaquinariaPropiaEntidadPanel';
 import {
   formatRifMascara,
   permisologiaDesdeCampos,
@@ -11,6 +13,7 @@ import {
   validarEntidadPatrono,
   vencimientoAlertaNaranja,
 } from '@/lib/configuracion/validarEntidadPatrono';
+import { apiUrl } from '@/lib/http/apiUrl';
 import { uploadEntidadAsset } from '@/lib/supabase/entidad-assets';
 import { createClient } from '@/lib/supabase/client';
 import type { CiEntidad, PermisologiaCi, RegistroMercantilCi, RepresentanteMercantilCi } from '@/types/ci-entidad';
@@ -51,7 +54,7 @@ type RepFormRow = {
   cargo: string;
   domicilio: string;
   profesion: string;
-  /** Comparecencia en contrato PDF: «el ciudadano» vs «la ciudadana». */
+  /** Tratamiento ante el nombre: Sr. (M) / Sra. (F); también alimenta la comparecencia del contrato. */
   genero: 'M' | 'F';
 };
 
@@ -236,8 +239,9 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
   const inputPermClass = (alert: boolean) =>
     `${inputClass} ${alert ? 'border-orange-500/70 ring-1 ring-orange-500/30' : ''}`;
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function onSubmit(e?: React.FormEvent) {
+    e?.preventDefault();
+    if (tab === 'equipo' || tab === 'maquinaria') return;
     const errs = validarEntidadPatrono({ nombreLegal, rif });
     if (Object.keys(errs).length) {
       if (errs.nombre) toast.error(errs.nombre);
@@ -376,6 +380,19 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
           ? 'Entidad actualizada.'
           : 'Entidad registrada. Se creó su catálogo de materiales (vacío).',
       );
+
+      // Avisa a Telegram / Departamento Legal si hay vencimientos en ventana.
+      if (id && (permIvss.trim() || permInces.trim() || permSol.trim())) {
+        void fetch(apiUrl('/api/configuracion/entidades/permisologia/notificar'), {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ entidadId: id }),
+        }).catch(() => {
+          /* no bloquear el guardado */
+        });
+      }
+
       onGuardado();
       onClose();
     } finally {
@@ -406,10 +423,12 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
             </div>
             <div>
               <h2 id="form-entidad-titulo" className="text-lg font-bold tracking-tight text-white">
-                {esEdicion ? 'Editar patrono' : 'Nueva entidad legal'}
+                {esEdicion ? 'Menú del patrono' : 'Nueva entidad legal'}
               </h2>
               <p className="text-[11px] text-zinc-500">
-                Datos del patrono para contratos, registro mercantil y planilla de empleo (referencia Gaceta).
+                {esEdicion
+                  ? 'Datos del patrono, permisología y asignación de roles.'
+                  : 'Datos del patrono para contratos, registro mercantil y planilla de empleo (referencia Gaceta).'}
               </p>
             </div>
           </div>
@@ -423,7 +442,7 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
           </button>
         </div>
 
-        <form onSubmit={(e) => void onSubmit(e)} className="flex max-h-[calc(92vh-5rem)] flex-col">
+        <div className="flex max-h-[calc(92vh-5rem)] flex-col">
           <Tabs.Root value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
             <Tabs.List className="flex shrink-0 flex-wrap gap-1 border-b border-white/10 bg-white/[0.02] px-3 py-2">
               <Tabs.Trigger value="datos" className={tabTriggerClass}>
@@ -445,12 +464,24 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
               <Tabs.Trigger value="medios" className={tabTriggerClass}>
                 Logo / sello
               </Tabs.Trigger>
+              {esEdicion && entidad?.id ? (
+                <Tabs.Trigger value="equipo" className={tabTriggerClass}>
+                  <Users className="h-3.5 w-3.5" />
+                  Equipo
+                </Tabs.Trigger>
+              ) : null}
+              {esEdicion && entidad?.id ? (
+                <Tabs.Trigger value="maquinaria" className={tabTriggerClass}>
+                  <Truck className="h-3.5 w-3.5" />
+                  Maquinaria
+                </Tabs.Trigger>
+              ) : null}
             </Tabs.List>
 
             <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
               <Tabs.Content value="datos" className="space-y-4 outline-none">
                 <div>
-                  <label className={labelClass}>Nombre legal *</label>
+                  <label className={labelClass}>Razón social *</label>
                   <input
                     required
                     value={nombreLegal}
@@ -460,7 +491,7 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
                   />
                 </div>
                 <div>
-                  <label className={labelClass}>Nombre comercial</label>
+                  <label className={labelClass}>Denominación comercial</label>
                   <input
                     value={nombreComercial}
                     onChange={(e) => setNombreComercial(e.target.value)}
@@ -493,7 +524,7 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
               <Tabs.Content value="representante" className="space-y-5 outline-none">
                 <p className="text-xs text-zinc-500">
                   Comparecencia en el contrato obrero (PDF): el <strong className="text-zinc-400">primer representante</strong>{' '}
-                  aporta nombre, leyenda <strong className="text-zinc-400">el ciudadano / la ciudadana</strong>, cédula,{' '}
+                  aporta tratamiento (<strong className="text-zinc-400">Sr. / Sra.</strong>), nombre, cédula,{' '}
                   <strong className="text-zinc-400">nacionalidad</strong> y <strong className="text-zinc-400">estado civil</strong>{' '}
                   (frase «de nacionalidad …, de estado civil …» tras el nombre). Si marca «Es venezolano», la nacionalidad en
                   el contrato será «Venezolano». También alimentan planilla y <code className="text-zinc-400">rep_legal_*</code>{' '}
@@ -521,34 +552,37 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
                         </button>
                       ) : null}
                     </div>
-                    <div>
-                      <label className={labelClass}>Nombre completo</label>
-                      <input
-                        value={row.nombre}
-                        onChange={(e) =>
-                          setRepFilas((prev) =>
-                            prev.map((r) => (r.id === row.id ? { ...r, nombre: e.target.value } : r)),
-                          )
-                        }
-                        className={inputClass}
-                      />
-                    </div>
-                    <div>
-                      <label className={labelClass}>Redacción en contrato (leyenda)</label>
-                      <select
-                        className={inputClass}
-                        value={row.genero}
-                        onChange={(e) =>
-                          setRepFilas((prev) =>
-                            prev.map((r) =>
-                              r.id === row.id ? { ...r, genero: e.target.value === 'F' ? 'F' : 'M' } : r,
-                            ),
-                          )
-                        }
-                      >
-                        <option value="M">El ciudadano (masculino)</option>
-                        <option value="F">La ciudadana (femenino)</option>
-                      </select>
+                    <div className="flex gap-2">
+                      <div className="w-[5.5rem] shrink-0">
+                        <label className={labelClass}>Tratamiento</label>
+                        <select
+                          className={inputClass}
+                          value={row.genero}
+                          aria-label="Tratamiento Sr. o Sra."
+                          onChange={(e) =>
+                            setRepFilas((prev) =>
+                              prev.map((r) =>
+                                r.id === row.id ? { ...r, genero: e.target.value === 'F' ? 'F' : 'M' } : r,
+                              ),
+                            )
+                          }
+                        >
+                          <option value="M">Sr.</option>
+                          <option value="F">Sra.</option>
+                        </select>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <label className={labelClass}>Nombre completo</label>
+                        <input
+                          value={row.nombre}
+                          onChange={(e) =>
+                            setRepFilas((prev) =>
+                              prev.map((r) => (r.id === row.id ? { ...r, nombre: e.target.value } : r)),
+                            )
+                          }
+                          className={inputClass}
+                        />
+                      </div>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-3">
                       <div>
@@ -711,74 +745,27 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
 
               <Tabs.Content value="mercantil" className="space-y-4 outline-none">
                 <p className="text-xs text-zinc-500">
-                  Objeto <code className="text-zinc-400">registro_mercantil</code> en la base de datos. El{' '}
-                  <strong className="text-zinc-400">domicilio de la empresa</strong> aquí es el que se imprime en la
-                  planilla de empleo; si queda vacío, se usa la dirección fiscal (pestaña Datos). Captura el estado, el
-                  municipio y el sector en ese orden (en el contrato PDF se leen en orden legal: sector, municipio,
-                  estado). La <strong className="text-zinc-400">oficina</strong>,{' '}
-                  <strong className="text-zinc-400">tomo</strong>, <strong className="text-zinc-400">número de inscripción</strong> y{' '}
-                  <strong className="text-zinc-400">fecha de inscripción</strong> son los que usa el{' '}
-                  <strong className="text-zinc-400">contrato laboral PDF</strong> (cláusula del empleador: «constando en
-                  el Tomo …, bajo el Nº …, de fecha …») cuando el proyecto obra enlaza esta entidad en{' '}
-                  <code className="text-zinc-500">ci_proyectos.entidad_id</code>.
+                  Datos del asiento mercantil y domicilio social. El{' '}
+                  <strong className="text-zinc-400">registro</strong>, <strong className="text-zinc-400">tomo</strong>,{' '}
+                  <strong className="text-zinc-400">número</strong> y <strong className="text-zinc-400">fecha</strong> alimentan
+                  el contrato laboral PDF. Si el domicilio queda vacío, se usa la dirección fiscal (pestaña Datos).
                 </p>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="sm:col-span-2">
-                    <label className={labelClass}>Estado (domicilio según registro)</label>
-                    <input
-                      value={rmEstadoRegistro}
-                      onChange={(e) => setRmEstadoRegistro(e.target.value)}
-                      className={inputClass}
-                      placeholder="Estado donde consta el domicilio social"
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className={labelClass}>Municipio (domicilio según registro)</label>
-                    <input
-                      value={rmMunicipioRegistro}
-                      onChange={(e) => setRmMunicipioRegistro(e.target.value)}
-                      className={inputClass}
-                      placeholder="Municipio"
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className={labelClass}>Sector (domicilio según registro)</label>
-                    <input
-                      value={rmSectorRegistro}
-                      onChange={(e) => setRmSectorRegistro(e.target.value)}
-                      className={inputClass}
-                      placeholder="Sector, urbanización o parroquia según asiento"
-                    />
-                  </div>
-                </div>
                 <div>
-                  <label className={labelClass}>Vía / urbanización (domicilio según registro)</label>
-                  <textarea
-                    value={rmDomicilioEmpresa}
-                    onChange={(e) => setRmDomicilioEmpresa(e.target.value)}
-                    rows={3}
-                    className={`${inputClass} resize-y`}
-                    placeholder="Calle, avenida o texto de domicilio que precede a sector, municipio y estado en el documento"
+                  <label className={labelClass}>Registro</label>
+                  <input
+                    value={rmCirc}
+                    onChange={(e) => setRmCirc(e.target.value)}
+                    className={inputClass}
+                    placeholder="Registro Mercantil Segundo de la Circunscripción Judicial del Estado Nueva Esparta"
                   />
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="sm:col-span-2">
-                    <label className={labelClass}>
-                      Oficina de Registro Mercantil (texto completo para el contrato)
-                    </label>
-                    <input
-                      value={rmCirc}
-                      onChange={(e) => setRmCirc(e.target.value)}
-                      className={inputClass}
-                      placeholder="Registro Mercantil Segundo de la Circunscripción Judicial del Estado Nueva Esparta"
-                    />
-                  </div>
                   <div>
-                    <label className={labelClass}>Tomo (libro de comercio)</label>
+                    <label className={labelClass}>Tomo</label>
                     <input value={rmTomo} onChange={(e) => setRmTomo(e.target.value)} className={inputClass} />
                   </div>
                   <div>
-                    <label className={labelClass}>Número de inscripción (Nº en el RM)</label>
+                    <label className={labelClass}>Número</label>
                     <input
                       value={rmNumero}
                       onChange={(e) => setRmNumero(e.target.value)}
@@ -787,7 +774,7 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
                     />
                   </div>
                   <div className="sm:col-span-2">
-                    <label className={labelClass}>Fecha de inscripción o asiento</label>
+                    <label className={labelClass}>Fecha de inscripción</label>
                     <input
                       type="date"
                       value={rmFecha}
@@ -797,11 +784,60 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
                     />
                   </div>
                 </div>
+                <p className="pt-1 text-[11px] font-bold uppercase tracking-wide text-[#FFD60A]/80">
+                  Domicilio de la empresa según registro
+                </p>
+                <div>
+                  <label className={labelClass}>Vía / urbanización</label>
+                  <textarea
+                    value={rmDomicilioEmpresa}
+                    onChange={(e) => setRmDomicilioEmpresa(e.target.value)}
+                    rows={3}
+                    className={`${inputClass} resize-y`}
+                    placeholder="Calle, avenida o urbanización"
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Sector</label>
+                  <input
+                    value={rmSectorRegistro}
+                    onChange={(e) => setRmSectorRegistro(e.target.value)}
+                    className={inputClass}
+                    placeholder="Sector, urbanización o parroquia según asiento"
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Municipio</label>
+                  <input
+                    value={rmMunicipioRegistro}
+                    onChange={(e) => setRmMunicipioRegistro(e.target.value)}
+                    className={inputClass}
+                    placeholder="Municipio"
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Estado</label>
+                  <input
+                    value={rmEstadoRegistro}
+                    onChange={(e) => setRmEstadoRegistro(e.target.value)}
+                    className={inputClass}
+                    placeholder="Estado donde consta el domicilio social"
+                  />
+                </div>
               </Tabs.Content>
 
               <Tabs.Content value="permisos" className="space-y-4 outline-none">
                 <p className="text-xs text-zinc-500">
-                  Fechas de vencimiento (YYYY-MM-DD). Si faltan menos de 30 días, el campo se resalta en naranja.
+                  Fechas de vencimiento (YYYY-MM-DD). Si faltan menos de 30 días, el campo se resalta en
+                  naranja. Al guardar, se notifica por <strong className="text-zinc-400">Telegram</strong> al
+                  Departamento Legal y queda visible en{' '}
+                  <a
+                    href="/legal/cumplimiento"
+                    className="font-semibold text-[#FFD60A] underline hover:text-[#FF9500]"
+                  >
+                    Legal → Cumplimiento
+                  </a>
+                  .
                 </p>
                 <div>
                   <label className={labelClass}>IVSS — vence</label>
@@ -871,6 +907,18 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
                   />
                 </div>
               </Tabs.Content>
+
+              {esEdicion && entidad?.id ? (
+                <Tabs.Content value="equipo" className="outline-none">
+                  <EquipoEntidadPanel entidadId={entidad.id} entidadNombre={entidad.nombre} />
+                </Tabs.Content>
+              ) : null}
+
+              {esEdicion && entidad?.id ? (
+                <Tabs.Content value="maquinaria" className="outline-none">
+                  <MaquinariaPropiaEntidadPanel entidadId={entidad.id} entidadNombre={entidad.nombre} />
+                </Tabs.Content>
+              ) : null}
             </div>
           </Tabs.Root>
 
@@ -880,17 +928,20 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
               onClick={onClose}
               className="rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-semibold text-zinc-300 hover:bg-white/10"
             >
-              Cancelar
+              {tab === 'equipo' || tab === 'maquinaria' ? 'Cerrar' : 'Cancelar'}
             </button>
-            <button
-              type="submit"
-              disabled={guardando}
-              className="rounded-xl bg-gradient-to-r from-orange-500 to-orange-700 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-orange-900/30 hover:opacity-95 disabled:opacity-50"
-            >
-              {guardando ? 'Guardando…' : 'Guardar'}
-            </button>
+            {tab !== 'equipo' && tab !== 'maquinaria' ? (
+              <button
+                type="button"
+                disabled={guardando}
+                onClick={() => void onSubmit()}
+                className="rounded-xl bg-gradient-to-r from-orange-500 to-orange-700 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-orange-900/30 hover:opacity-95 disabled:opacity-50"
+              >
+                {guardando ? 'Guardando…' : 'Guardar'}
+              </button>
+            ) : null}
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );

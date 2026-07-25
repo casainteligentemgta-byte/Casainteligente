@@ -89,6 +89,7 @@ export default function LegalHomeClient() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [accionId, setAccionId] = useState<string | null>(null);
+  const [permAlertas, setPermAlertas] = useState(0);
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -120,9 +121,27 @@ export default function LegalHomeClient() {
     }
   }, []);
 
+  const cargarPermisologia = useCallback(async () => {
+    try {
+      const res = await fetch(apiUrl('/api/legal/cumplimiento/permisologia'), {
+        credentials: 'include',
+        cache: 'no-store',
+      });
+      if (!res.ok) {
+        setPermAlertas(0);
+        return;
+      }
+      const data = (await res.json()) as { total_alertas?: number };
+      setPermAlertas(Number(data.total_alertas) || 0);
+    } catch {
+      setPermAlertas(0);
+    }
+  }, []);
+
   useEffect(() => {
     void cargar();
-  }, [cargar]);
+    void cargarPermisologia();
+  }, [cargar, cargarPermisologia]);
 
   const stats = useMemo(() => {
     const abiertos = casos.filter((c) => !ESTADOS_CERRADOS.has(c.estado));
@@ -283,6 +302,22 @@ export default function LegalHomeClient() {
             . Atiéndelos primero en la cola.
           </p>
         </div>
+      ) : null}
+
+      {permAlertas > 0 ? (
+        <Link
+          href="/legal/cumplimiento"
+          className="flex flex-wrap items-start gap-2 rounded-xl border border-orange-500/30 bg-orange-500/10 px-4 py-3 text-sm text-orange-100 transition hover:bg-orange-500/15"
+        >
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <p className="min-w-0 flex-1">
+            <span className="font-semibold">{permAlertas} alerta(s) de permisología</span>
+            {' '}
+            (IVSS / INCES / solvencia) en patronos. Ver en Cumplimiento — también se notifican por
+            Telegram.
+          </p>
+          <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 opacity-80" />
+        </Link>
       ) : null}
 
       <section className="space-y-3">

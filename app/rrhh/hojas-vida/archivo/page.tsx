@@ -353,7 +353,7 @@ export default function RrhhHojasVidaArchivoPage() {
             const pdfHojaVida = `${pdfBase}&tipo=hoja_vida`;
             const pdfHojaEmpleo = `${pdfBase}&tipo=hoja_empleo`;
             const proyectoHref = r.proyecto_modulo_id
-              ? `/proyectos/modulo/${encodeURIComponent(r.proyecto_modulo_id)}?tab=rrhh`
+              ? `/rrhh/hojas-vida?proyecto_modulo=${encodeURIComponent(r.proyecto_modulo_id)}`
               : null;
 
             return (

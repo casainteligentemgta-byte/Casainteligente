@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
-import RegistroMaquinariaIntercompany from '@/components/almacen/RegistroMaquinariaIntercompany';
 import { normalizarProyectoIdCandidato } from '@/lib/proyectos/validarProyectoUuid';
+import MaquinariaControlObraClient from './MaquinariaControlObraClient';
 
 export default function ControlObraMaquinariaPage({ params }: { params: { id: string } }) {
   const proyectoId = normalizarProyectoIdCandidato(params?.id);
@@ -8,12 +8,12 @@ export default function ControlObraMaquinariaPage({ params }: { params: { id: st
   return (
     <Suspense
       fallback={
-        <p className="text-sm text-zinc-500 py-8" role="status">
-          Cargando maquinaria intercompany…
+        <p className="py-8 text-sm text-zinc-500" role="status">
+          Cargando maquinaria…
         </p>
       }
     >
-      <RegistroMaquinariaIntercompany proyectoId={proyectoId} />
+      <MaquinariaControlObraClient proyectoId={proyectoId} />
     </Suspense>
   );
 }

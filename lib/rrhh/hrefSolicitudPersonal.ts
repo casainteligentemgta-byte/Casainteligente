@@ -3,6 +3,13 @@ export type HrefSolicitudPersonalOpts = {
   proyectoObraId?: string | null;
 };
 
+/** Hub único de RRHH (mismo destino que el icono del menú inferior). */
+export function hrefRrhhHub(opts?: { proyectoModuloId?: string | null }): string {
+  const mod = opts?.proyectoModuloId?.trim();
+  if (mod) return `/rrhh/hojas-vida?proyecto_modulo=${encodeURIComponent(mod)}`;
+  return '/rrhh/hojas-vida';
+}
+
 /** Formulario de solicitud de personal obrero (oficio + cantidad, tabulador GOE). */
 export function hrefSolicitudPersonalObrero(opts?: HrefSolicitudPersonalOpts): string {
   const params = new URLSearchParams();

@@ -7,7 +7,6 @@ import {
   Scale,
   FolderOpen,
   LayoutDashboard,
-  ArrowLeft,
   MessageSquareText,
   Calculator,
   Camera,
@@ -56,9 +55,20 @@ export default function LegalShell({ children }: { children: React.ReactNode }) 
       <header className="sticky top-0 z-40 border-b border-amber-500/20 bg-[#0c1018]/95 backdrop-blur-xl">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-500/35 bg-amber-500/10">
-              <Scale className="h-5 w-5 text-amber-300" />
-            </div>
+            {!standalone ? (
+              <Link
+                href="/"
+                aria-label="Volver al CRM"
+                title="Volver al CRM"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-500/35 bg-amber-500/10 transition hover:border-amber-400/50 hover:bg-amber-500/20"
+              >
+                <Scale className="h-5 w-5 text-amber-300" />
+              </Link>
+            ) : (
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-500/35 bg-amber-500/10">
+                <Scale className="h-5 w-5 text-amber-300" />
+              </div>
+            )}
             <div className="min-w-0">
               <p className="truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-500/80">
                 {eyebrow}
@@ -68,25 +78,17 @@ export default function LegalShell({ children }: { children: React.ReactNode }) 
               </h1>
             </div>
           </div>
-          {!standalone ? (
-            <Link
-              href="/"
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-zinc-400 transition hover:border-white/20 hover:text-zinc-200"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" />
-              CRM
-            </Link>
-          ) : (
+          {standalone ? (
             <span className="hidden rounded-lg border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-200/90 sm:inline">
               Solo abogado
             </span>
-          )}
+          ) : null}
         </div>
         <nav
-          className="mx-auto max-w-5xl overflow-x-auto overscroll-x-contain px-4 pb-3 [-ms-overflow-style:none] [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
+          className="mx-auto max-w-5xl px-4 pb-3"
           aria-label="Secciones del departamento legal"
         >
-          <div className="flex w-max min-w-full items-center gap-1 sm:flex-wrap sm:w-auto">
+          <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4 md:grid-cols-5 lg:flex lg:flex-wrap lg:gap-1">
             {NAV.map((item) => {
               const active = item.exact
                 ? pathname === item.href
@@ -97,14 +99,14 @@ export default function LegalShell({ children }: { children: React.ReactNode }) 
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    'inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition sm:px-3 sm:py-2 sm:text-sm',
+                    'inline-flex min-w-0 items-center justify-center gap-1 rounded-lg px-1.5 py-2 text-[10px] font-medium leading-tight transition sm:gap-1.5 sm:px-2.5 sm:text-xs lg:justify-start lg:px-3 lg:py-2 lg:text-sm',
                     active
                       ? 'bg-amber-500/15 text-amber-200'
-                      : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300',
+                      : 'bg-white/[0.03] text-zinc-500 hover:bg-white/5 hover:text-zinc-300 lg:bg-transparent',
                   )}
                 >
-                  <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                  {item.label}
+                  <Icon className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
+                  <span className="truncate">{item.label}</span>
                 </Link>
               );
             })}

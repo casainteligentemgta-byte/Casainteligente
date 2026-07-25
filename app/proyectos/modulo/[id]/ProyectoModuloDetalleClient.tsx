@@ -28,76 +28,20 @@ import ImportarPresupuestoLulo from '@/components/proyectos/ImportarPresupuestoL
 import ControlPlanosObra from '@/components/proyectos/ControlPlanosObra';
 import SeccionTituloHover from '@/components/proyectos/SeccionTituloHover';
 import HorarioObraEditor from '@/components/proyectos/HorarioObraEditor';
+import { hrefRrhhHub } from '@/lib/rrhh/hrefSolicitudPersonal';
 
 const LOAD_TIMEOUT_MS = 45_000;
 
-type RrhhMenuDropdownProps = {
-  irRrhhPanel: () => void;
-  irCuadroSolicitados: () => void;
-};
-
-/** Botón RRHH con menú: panel personal y cuadro de obreros (solicitados). */
-function RrhhMenuDropdown({ irRrhhPanel, irCuadroSolicitados }: RrhhMenuDropdownProps) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [open]);
-
-  const btnClass =
-    'rounded-xl border border-fuchsia-500/45 bg-fuchsia-950/50 px-3 py-2 text-xs font-bold text-fuchsia-100 shadow-sm hover:bg-fuchsia-900/60';
-
+/** Mismo hub RRHH que el icono del menú inferior, con la obra preseleccionada. */
+function RrhhHubLink({ proyectoModuloId }: { proyectoModuloId: string }) {
   return (
-    <div ref={rootRef} className="relative inline-block text-left">
-      <button
-        type="button"
-        className={`${btnClass} inline-flex items-center gap-1.5`}
-        title="RRHH: panel personal y cuadro de obreros"
-        aria-expanded={open}
-        aria-haspopup="menu"
-        onClick={() => setOpen((o) => !o)}
-      >
-        RRHH
-        <span className="text-[10px] font-normal opacity-80" aria-hidden>
-          ▾
-        </span>
-      </button>
-      {open ? (
-        <div
-          role="menu"
-          className="absolute right-0 z-50 mt-1 min-w-[13.5rem] overflow-hidden rounded-xl border border-white/15 bg-zinc-900 py-1 shadow-xl"
-        >
-          <button
-            type="button"
-            role="menuitem"
-            className="block w-full px-3 py-2 text-left text-xs font-semibold text-fuchsia-100 hover:bg-fuchsia-950/60"
-            onClick={() => {
-              irRrhhPanel();
-              setOpen(false);
-            }}
-          >
-            Panel personal
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            className="block w-full px-3 py-2 text-left text-xs font-semibold text-[#FF9500] hover:bg-[#FF9500]/10"
-            onClick={() => {
-              irCuadroSolicitados();
-              setOpen(false);
-            }}
-          >
-            Cuadro de obreros
-          </button>
-        </div>
-      ) : null}
-    </div>
+    <Link
+      href={hrefRrhhHub({ proyectoModuloId })}
+      className="rounded-xl border border-fuchsia-500/45 bg-fuchsia-950/50 px-3 py-2 text-xs font-bold text-fuchsia-100 shadow-sm hover:bg-fuchsia-900/60"
+      title="Abrir RRHH (mismo módulo del menú inferior)"
+    >
+      RRHH
+    </Link>
   );
 }
 
@@ -229,32 +173,19 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
   const [borrandoProyecto, setBorrandoProyecto] = useState(false);
   const rrhhPanelRef = useRef<HTMLDivElement>(null);
 
-  const irRrhhPanel = useCallback(() => {
-    router.replace(`/proyectos/modulo/${id}?tab=rrhh`, { scroll: false });
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        rrhhPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
-    });
-  }, [id, router]);
-
-  const irCuadroSolicitados = useCallback(() => {
-    router.replace(`/proyectos/modulo/${id}?tab=solicitados`, { scroll: false });
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        rrhhPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
-    });
-  }, [id, router]);
-
+  /** Enlaces antiguos ?tab=solicitados|rrhh → hub RRHH unificado. */
   useEffect(() => {
     const t = searchParams.get('tab');
-    if (t !== 'rrhh' && t !== 'talento' && t !== 'solicitados' && t !== 'finanzas') return;
+    if (t === 'solicitados' || t === 'rrhh') {
+      router.replace(hrefRrhhHub({ proyectoModuloId: id }));
+      return;
+    }
+    if (t !== 'talento' && t !== 'finanzas') return;
     const timer = window.setTimeout(() => {
       rrhhPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 120);
     return () => clearTimeout(timer);
-  }, [searchParams, id]);
+  }, [searchParams, id, router]);
 
   const [peNombre, setPeNombre] = useState('');
   const [peEstado, setPeEstado] = useState('');
@@ -789,7 +720,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                 >
                   Nueva vacante
                 </button>
-                <RrhhMenuDropdown irRrhhPanel={irRrhhPanel} irCuadroSolicitados={irCuadroSolicitados} />
+                <RrhhHubLink proyectoModuloId={id} />
                 <Link
                   href="/rrhh/reclutamiento"
                   className="rounded-xl border border-sky-500/40 bg-sky-500/15 px-3 py-2 text-xs font-semibold text-sky-200 hover:bg-sky-500/25"
@@ -813,7 +744,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                 >
                   Nueva vacante
                 </button>
-                <RrhhMenuDropdown irRrhhPanel={irRrhhPanel} irCuadroSolicitados={irCuadroSolicitados} />
+                <RrhhHubLink proyectoModuloId={id} />
                 <Link
                   href="/rrhh/reclutamiento"
                   className="rounded-xl border border-sky-500/40 bg-sky-500/15 px-3 py-2 text-xs font-semibold text-sky-200 hover:bg-sky-500/25"
@@ -832,7 +763,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
         </div>
         {proyecto && tabVistaTalento && !modoEdicion && tabUrl !== 'solicitados' && tabUrl !== 'rrhh' && tabUrl !== 'finanzas' ? (
           <div className="mt-3 flex flex-wrap items-center gap-2 border-b border-white/10 pb-3">
-            <RrhhMenuDropdown irRrhhPanel={irRrhhPanel} irCuadroSolicitados={irCuadroSolicitados} />
+            <RrhhHubLink proyectoModuloId={id} />
             <Link
               href={`/proyectos/modulo/${id}`}
               className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-white/10"
@@ -1081,6 +1012,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                   equipos={equipos}
                   onRefresh={() => void load()}
                   onError={setError}
+                  secciones={['equipo']}
                 />
               </div>
 

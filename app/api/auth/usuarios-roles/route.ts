@@ -15,7 +15,7 @@ export async function GET() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('ci_usuarios_roles')
-    .select('id, rol, entidad_id, created_at, ci_entidades(nombre)')
+    .select('id, rol, entidad_id, usuario_id, created_at, ci_entidades(nombre)')
     .order('created_at', { ascending: false });
 
   if (error) {

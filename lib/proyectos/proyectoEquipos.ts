@@ -11,9 +11,14 @@ export type CategoriaEquipoProyecto = (typeof CATEGORIAS_EQUIPO_PROYECTO)[number
 export const PROYECTO_EQUIPO_SELECT =
   'id,proyecto_id,categoria,nombre_equipo,marca,modelo,serial,cantidad,notas,fecha_asignacion,fecha_arriendo_inicio,fecha_arriendo_fin,arrendatario,arrendatario_rif,costo_arriendo,moneda_arriendo,created_at';
 
+/** Incluye entidad_id (migración 287) para catálogo de maquinaria propia del patrono. */
+export const PROYECTO_EQUIPO_SELECT_ENTIDAD =
+  'id,proyecto_id,entidad_id,categoria,nombre_equipo,marca,modelo,serial,cantidad,notas,fecha_asignacion,fecha_arriendo_inicio,fecha_arriendo_fin,arrendatario,arrendatario_rif,costo_arriendo,moneda_arriendo,created_at';
+
 export type ProyectoEquipoRow = {
   id: string;
-  proyecto_id: string;
+  proyecto_id: string | null;
+  entidad_id?: string | null;
   categoria: string | null;
   nombre_equipo: string;
   marca: string | null;
@@ -83,7 +88,8 @@ export function mapProyectoEquipoRow(raw: Record<string, unknown>): ProyectoEqui
   const costo = raw.costo_arriendo;
   return {
     id: String(raw.id ?? ''),
-    proyecto_id: String(raw.proyecto_id ?? ''),
+    proyecto_id: raw.proyecto_id != null ? String(raw.proyecto_id) : null,
+    entidad_id: raw.entidad_id != null ? String(raw.entidad_id) : null,
     categoria: raw.categoria != null ? String(raw.categoria) : null,
     nombre_equipo: String(raw.nombre_equipo ?? ''),
     marca: raw.marca != null ? String(raw.marca) : null,

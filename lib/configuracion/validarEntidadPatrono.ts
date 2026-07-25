@@ -27,7 +27,7 @@ export function validarEntidadPatrono(input: {
 }): ErroresEntidadForm {
   const out: ErroresEntidadForm = {};
   const nom = input.nombreLegal.trim();
-  if (nom.length < 2) out.nombre = 'Indica el nombre legal (mín. 2 caracteres).';
+  if (nom.length < 2) out.nombre = 'Indica la razón social (mín. 2 caracteres).';
   if (input.rif.trim() && !rifEsValido(input.rif.trim())) {
     out.rif = 'RIF inválido. Use el formato J-12345678-9.';
   }

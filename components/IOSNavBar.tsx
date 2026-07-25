@@ -144,23 +144,6 @@ const navItems: NavItem[] = [
     ),
   },
   {
-    id: 'equipo',
-    href: '/configuracion/equipo',
-    label: 'Equipo',
-    icon: (active: boolean) => (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-        <path
-          d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"
-          stroke={active ? '#38BDF8' : '#8E8E93'}
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <circle cx="9" cy="7" r="4" stroke={active ? '#38BDF8' : '#8E8E93'} strokeWidth="2" />
-      </svg>
-    ),
-  },
-  {
     id: 'proyectos',
     href: '/proyectos/modulo',
     label: 'Proyectos',
@@ -355,10 +338,11 @@ function navItemActive(pathname: string, href: string): boolean {
   if (href === '/') return false;
   if (href === '/rrhh/hojas-vida') return pathname.startsWith('/rrhh');
   if (href === '/configuracion/entidades') {
-    return pathname.startsWith('/configuracion/entidades') || pathname.startsWith('/entidades');
-  }
-  if (href === '/configuracion/equipo') {
-    return pathname.startsWith('/configuracion/equipo');
+    return (
+      pathname.startsWith('/configuracion/entidades') ||
+      pathname.startsWith('/entidades') ||
+      pathname.startsWith('/configuracion/equipo')
+    );
   }
   if (href === '/legal') {
     return pathname === '/legal' || pathname.startsWith('/legal/');
@@ -382,7 +366,6 @@ function colorActivo(label: string): string {
   if (label === 'Proyectos') return '#F59E0B';
   if (label === 'CCTV' || label === 'NetVision' || label === 'Cámaras') return '#06B6D4';
   if (label === 'Entidades') return '#A78BFA';
-  if (label === 'Equipo') return '#38BDF8';
   if (label === 'Legal') return '#FBBF24';
   if (label === 'RRHH') return '#F472B6';
   if (label === 'Ventas') return '#34C759';
