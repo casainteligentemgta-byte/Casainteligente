@@ -16,7 +16,7 @@ Responde ÚNICAMENTE con un objeto JSON con la siguiente estructura exacta:
   "resumen_ejecutivo": "Síntesis breve de 2-3 oraciones sobre la reunión.",
   "puntos_clave": ["Punto 1", "Punto 2"],
   "acuerdos": [
-    {"tarea": "Descripción de la tarea", "responsable": "Nombre", "fecha_limite": "YYYY-MM-DD o N/A"}
+    {"tarea": "Descripción de la tarea", "responsable": "Nombre del participante", "fecha_limite": "YYYY-MM-DD o N/A"}
   ],
   "pendientes_o_alertas": ["Pendiente 1"]
 }

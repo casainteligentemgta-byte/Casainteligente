@@ -25,6 +25,11 @@ function getGeminiClient(): GoogleGenAI {
   return clientSingleton;
 }
 
+/** Cliente Gemini (p. ej. Files API / diarización Pheme). */
+export function getGeminiAiClient(): GoogleGenAI {
+  return getGeminiClient();
+}
+
 export function mapGeminiError(err: unknown, model: string): GeminiGenerateError {
   if (err instanceof ApiError) {
     const message = geminiErrorMessage(err.status, err.message, model);
