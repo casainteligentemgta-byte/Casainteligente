@@ -1,4 +1,5 @@
 import { diasHastaVencimiento } from '@/lib/configuracion/validarEntidadPatrono';
+import { permisosDesdePermisologia } from '@/lib/configuracion/permisologiaItems';
 import type { PermisologiaCi } from '@/types/ci-entidad';
 
 export const PERMISOLOGIA_CAMPOS = [
@@ -7,12 +8,15 @@ export const PERMISOLOGIA_CAMPOS = [
   'solvencia_laboral_vence',
 ] as const;
 
-export type PermisologiaCampo = (typeof PERMISOLOGIA_CAMPOS)[number];
+export type PermisologiaCampo = (typeof PERMISOLOGIA_CAMPOS)[number] | string;
 
-export const PERMISOLOGIA_ETIQUETAS: Record<PermisologiaCampo, string> = {
+export const PERMISOLOGIA_ETIQUETAS: Record<string, string> = {
   ivss_vence: 'IVSS',
   inces_vence: 'INCES',
   solvencia_laboral_vence: 'Solvencia laboral',
+  ivss: 'IVSS',
+  inces: 'INCES',
+  solvencia_laboral: 'Solvencia laboral',
 };
 
 /** Ventanas de alerta (días restantes): 30 / 15 / 5 / 0 (hoy o vencido). */
@@ -22,22 +26,26 @@ export type PermisologiaVencimientoItem = {
   entidad_id: string;
   entidad_nombre: string;
   entidad_rif: string | null;
-  campo: PermisologiaCampo;
+  /** Clave para dedupe de alertas (legado `*_vence` o id del ítem). */
+  campo: string;
   etiqueta: string;
   fecha_vence: string;
   dias_restantes: number;
   alert_days: PermisologiaAlertDays;
   estado: 'vencido' | 'hoy' | 'proximo';
+  documento_url?: string;
 };
 
 export function parsePermisologia(raw: unknown): PermisologiaCi {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const items = permisosDesdePermisologia(raw);
   const o = raw as Record<string, unknown>;
   const pick = (k: string): string | undefined => {
     const v = o[k];
     return typeof v === 'string' && v.trim() ? v.trim().slice(0, 10) : undefined;
   };
   return {
+    items,
     ivss_vence: pick('ivss_vence'),
     inces_vence: pick('inces_vence'),
     solvencia_laboral_vence: pick('solvencia_laboral_vence'),
@@ -58,17 +66,24 @@ export function estadoDesdeDias(dias: number): PermisologiaVencimientoItem['esta
   return 'proximo';
 }
 
+function campoAlertaParaItem(id: string): string {
+  if (id === 'ivss') return 'ivss_vence';
+  if (id === 'inces') return 'inces_vence';
+  if (id === 'solvencia_laboral') return 'solvencia_laboral_vence';
+  return id.slice(0, 80);
+}
+
 export function extraerVencimientosEntidad(params: {
   id: string;
   nombre: string;
   rif: string | null;
   permisologia: unknown;
 }): PermisologiaVencimientoItem[] {
-  const perm = parsePermisologia(params.permisologia);
+  const items = permisosDesdePermisologia(params.permisologia);
   const out: PermisologiaVencimientoItem[] = [];
 
-  for (const campo of PERMISOLOGIA_CAMPOS) {
-    const fecha = perm[campo];
+  for (const it of items) {
+    const fecha = (it.vence ?? '').trim().slice(0, 10);
     if (!fecha) continue;
     const dias = diasHastaVencimiento(fecha);
     if (dias == null) continue;
@@ -78,12 +93,13 @@ export function extraerVencimientosEntidad(params: {
       entidad_id: params.id,
       entidad_nombre: params.nombre,
       entidad_rif: params.rif,
-      campo,
-      etiqueta: PERMISOLOGIA_ETIQUETAS[campo],
+      campo: campoAlertaParaItem(it.id),
+      etiqueta: it.nombre.trim() || PERMISOLOGIA_ETIQUETAS[it.id] || 'Permiso',
       fecha_vence: fecha,
       dias_restantes: dias,
       alert_days,
       estado: estadoDesdeDias(dias),
+      documento_url: it.documento_url,
     });
   }
 

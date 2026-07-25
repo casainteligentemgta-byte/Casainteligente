@@ -49,13 +49,34 @@ export type RegistroMercantilCi = {
   circunscripcion?: string;
   /** Uno o varios representantes con datos de identificación para actos y contratos. */
   representantes?: RepresentanteMercantilCi[];
+  /** Actas constitutivas / asambleas (PDF o imagen) en Storage. */
+  actas?: { url: string; nombre?: string }[];
+  /** Escaneo o PDF del RIF de la entidad. */
+  rif_documento_url?: string;
+};
+
+/** Un permiso del patrono (fijo o creado desde la app). */
+export type PermisoPatronoItem = {
+  id: string;
+  nombre: string;
+  /** Fecha ISO YYYY-MM-DD. */
+  vence?: string;
+  documento_url?: string;
+  /** IVSS / INCES / solvencia predefinidos. */
+  fijo?: boolean;
 };
 
 /** Permisología / vencimientos en `ci_entidades.permisologia` (jsonb). */
 export type PermisologiaCi = {
+  /** Lista canónica (incluye personalizados). */
+  items?: PermisoPatronoItem[];
+  /** Legado / espejo de ítems fijos. */
   ivss_vence?: string;
   inces_vence?: string;
   solvencia_laboral_vence?: string;
+  ivss_documento_url?: string;
+  inces_documento_url?: string;
+  solvencia_laboral_documento_url?: string;
 };
 
 /** Fila de `public.ci_entidades` (entidad de trabajo / patrono). */

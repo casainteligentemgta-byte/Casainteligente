@@ -12,6 +12,7 @@ type FilaRol = {
   rol: string;
   entidad_id: string;
   usuario_id?: string;
+  user_id?: string;
   created_at?: string;
 };
 
@@ -91,14 +92,17 @@ export default function EquipoEntidadPanel({ entidadId, entidadNombre }: Props) 
           <p className="text-sm text-zinc-500">Aún no hay roles asignados a esta entidad.</p>
         ) : (
           <ul className="divide-y divide-white/5 overflow-hidden rounded-xl border border-white/10">
-            {filas.map((f) => (
-              <li key={f.id} className="flex items-center justify-between gap-2 px-3 py-2.5 text-sm">
-                <span className="truncate font-mono text-xs text-zinc-400">
-                  {f.usuario_id ? `${f.usuario_id.slice(0, 8)}…` : f.id.slice(0, 8)}
-                </span>
-                <Badge className="bg-[#FF9500]/15 text-[#FFD60A]">{f.rol}</Badge>
-              </li>
-            ))}
+            {filas.map((f) => {
+              const uid = f.usuario_id ?? f.user_id;
+              return (
+                <li key={f.id} className="flex items-center justify-between gap-2 px-3 py-2.5 text-sm">
+                  <span className="truncate font-mono text-xs text-zinc-400">
+                    {uid ? `${uid.slice(0, 8)}…` : f.id.slice(0, 8)}
+                  </span>
+                  <Badge className="bg-[#FF9500]/15 text-[#FFD60A]">{f.rol}</Badge>
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>
