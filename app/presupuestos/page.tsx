@@ -567,15 +567,6 @@ export default function PresupuestosPage() {
                     ) : null}
                 </button>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifySelf: 'end' }}>
-                    <Link href="/presupuesto/demo" target="_blank" rel="noopener noreferrer">
-                        <button type="button" style={{
-                            background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.12)',
-                            borderRadius: '12px', padding: '10px 14px', fontWeight: 600,
-                            fontSize: '12px', cursor: 'pointer'
-                        }}>
-                            Ver diseño (demo)
-                        </button>
-                    </Link>
                     <Link href="/ventas">
                         <button style={{
                             background: '#007AFF', color: 'white', border: 'none',
