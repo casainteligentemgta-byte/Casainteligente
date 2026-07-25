@@ -425,11 +425,11 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
               <h2 id="form-entidad-titulo" className="text-lg font-bold tracking-tight text-white">
                 {esEdicion ? 'Menú del patrono' : 'Nueva entidad legal'}
               </h2>
-              <p className="text-[11px] text-zinc-500">
-                {esEdicion
-                  ? 'Datos del patrono, permisología y asignación de roles.'
-                  : 'Datos del patrono para contratos, registro mercantil y planilla de empleo (referencia Gaceta).'}
-              </p>
+              {!esEdicion ? (
+                <p className="text-[11px] text-zinc-500">
+                  Datos del patrono para contratos, registro mercantil y planilla de empleo (referencia Gaceta).
+                </p>
+              ) : null}
             </div>
           </div>
           <button
@@ -522,14 +522,6 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
               </Tabs.Content>
 
               <Tabs.Content value="representante" className="space-y-5 outline-none">
-                <p className="text-xs text-zinc-500">
-                  Comparecencia en el contrato obrero (PDF): el <strong className="text-zinc-400">primer representante</strong>{' '}
-                  aporta tratamiento (<strong className="text-zinc-400">Sr. / Sra.</strong>), nombre, cédula,{' '}
-                  <strong className="text-zinc-400">nacionalidad</strong> y <strong className="text-zinc-400">estado civil</strong>{' '}
-                  (frase «de nacionalidad …, de estado civil …» tras el nombre). Si marca «Es venezolano», la nacionalidad en
-                  el contrato será «Venezolano». También alimentan planilla y <code className="text-zinc-400">rep_legal_*</code>{' '}
-                  en base (nombre, cédula y cargo del primero).
-                </p>
                 {repFilas.map((row, idx) => (
                   <div
                     key={row.id}
