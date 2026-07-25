@@ -46,6 +46,12 @@ export {
 /** Tope de unidades OCR (páginas/imágenes) por request para no saturar Vercel/Gemini. */
 export const MAX_UNIDADES_OCR = 15;
 
+/**
+ * Tope del PDF derivado (páginas agrupadas) embebido en JSON como base64.
+ * Respuestas > ~4 MB en Vercel suelen truncarse → HTML → error Safari.
+ */
+export const MAX_ADJUNTO_BASE64_BYTES = 2_800_000;
+
 export type SoporteArchivoInput = {
   id: string;
   buffer: Buffer;
@@ -446,6 +452,22 @@ async function matchDesdePagina(params: {
       ? ` · pág. ${paginas.length === 1 ? paginas[0] : `${paginas[0]}–${paginas[paginas.length - 1]}`}`
       : '';
 
+  // Archivo original (sin #): el cliente ya lo tiene; no hinchar el JSON.
+  // Solo embeber base64 cuando el adjunto es un recorte multipágina derivado.
+  const esDerivado = archivoId.includes('#');
+  const necesitaAdjunto =
+    esDerivado && (decided.decision === 'auto' || decided.decision === 'duda');
+  let adjuntoBase64: string | undefined;
+  let adjuntoError: string | undefined;
+  if (necesitaAdjunto) {
+    if (adjuntoBuffer.byteLength > MAX_ADJUNTO_BASE64_BYTES) {
+      adjuntoError =
+        'El recorte PDF supera el límite de respuesta. Divida el lote o adjunte esa factura a mano.';
+    } else {
+      adjuntoBase64 = adjuntoBuffer.toString('base64');
+    }
+  }
+
   return {
     archivoId,
     fileName,
@@ -461,9 +483,10 @@ async function matchDesdePagina(params: {
       total_amount: factura.total_amount,
     },
     motivo: `${decided.motivo}${paginasNota}`,
+    error: adjuntoError,
     paginas,
-    adjuntoBase64: adjuntoBuffer.toString('base64'),
-    adjuntoMime,
-    adjuntoFileName,
+    adjuntoBase64,
+    adjuntoMime: adjuntoBase64 ? adjuntoMime : undefined,
+    adjuntoFileName: adjuntoBase64 ? adjuntoFileName : undefined,
   };
 }
