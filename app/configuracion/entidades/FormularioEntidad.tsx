@@ -1,10 +1,11 @@
 'use client';
 
 import * as Tabs from '@radix-ui/react-tabs';
-import { Building2, Calendar, FileText, Plus, ShieldCheck, Trash2, Users, X } from 'lucide-react';
+import { Building2, Calendar, FileText, Plus, ShieldCheck, Trash2, Truck, Users, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import EquipoEntidadPanel from '@/components/configuracion/EquipoEntidadPanel';
+import MaquinariaPropiaEntidadPanel from '@/components/configuracion/MaquinariaPropiaEntidadPanel';
 import {
   formatRifMascara,
   permisologiaDesdeCampos,
@@ -240,7 +241,7 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
 
   async function onSubmit(e?: React.FormEvent) {
     e?.preventDefault();
-    if (tab === 'equipo') return;
+    if (tab === 'equipo' || tab === 'maquinaria') return;
     const errs = validarEntidadPatrono({ nombreLegal, rif });
     if (Object.keys(errs).length) {
       if (errs.nombre) toast.error(errs.nombre);
@@ -467,6 +468,12 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
                 <Tabs.Trigger value="equipo" className={tabTriggerClass}>
                   <Users className="h-3.5 w-3.5" />
                   Equipo
+                </Tabs.Trigger>
+              ) : null}
+              {esEdicion && entidad?.id ? (
+                <Tabs.Trigger value="maquinaria" className={tabTriggerClass}>
+                  <Truck className="h-3.5 w-3.5" />
+                  Maquinaria
                 </Tabs.Trigger>
               ) : null}
             </Tabs.List>
@@ -906,6 +913,12 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
                   <EquipoEntidadPanel entidadId={entidad.id} entidadNombre={entidad.nombre} />
                 </Tabs.Content>
               ) : null}
+
+              {esEdicion && entidad?.id ? (
+                <Tabs.Content value="maquinaria" className="outline-none">
+                  <MaquinariaPropiaEntidadPanel entidadId={entidad.id} entidadNombre={entidad.nombre} />
+                </Tabs.Content>
+              ) : null}
             </div>
           </Tabs.Root>
 
@@ -915,9 +928,9 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
               onClick={onClose}
               className="rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-semibold text-zinc-300 hover:bg-white/10"
             >
-              {tab === 'equipo' ? 'Cerrar' : 'Cancelar'}
+              {tab === 'equipo' || tab === 'maquinaria' ? 'Cerrar' : 'Cancelar'}
             </button>
-            {tab !== 'equipo' ? (
+            {tab !== 'equipo' && tab !== 'maquinaria' ? (
               <button
                 type="button"
                 disabled={guardando}

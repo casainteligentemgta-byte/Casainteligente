@@ -22,13 +22,13 @@ export default function ControlObraPage({ params }: { params: { id: string } }) 
       <div className="mt-10 border-t border-white/10 pt-8">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">
-            Maquinaria intercompany
+            Maquinaria (alquiladas e intercompany)
           </p>
           <Link
             href={`/proyectos/modulo/${encodeURIComponent(proyectoId)}/control-obra/maquinaria`}
             className="text-xs font-semibold text-amber-400 hover:text-amber-300"
           >
-            Vista dedicada →
+            Alquiladas + intercompany →
           </Link>
         </div>
         <RegistroMaquinariaIntercompany proyectoId={proyectoId} />

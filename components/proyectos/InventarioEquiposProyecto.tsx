@@ -18,11 +18,18 @@ const inputCls =
 const inputSmCls =
   'rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-white placeholder:text-zinc-500 outline-none focus:border-sky-500/40';
 
+export type SeccionInventarioEquipos = 'equipo' | 'maquinaria_propia' | 'maquinaria_alquilada';
+
 type Props = {
   proyectoId: string;
   equipos: ProyectoEquipoRow[];
   onRefresh: () => void;
   onError?: (msg: string) => void;
+  /**
+   * Qué bloques mostrar.
+   * Por defecto: solo inventario genérico (propias → entidad; alquiladas → control de obras).
+   */
+  secciones?: SeccionInventarioEquipos[];
 };
 
 type EditState = {
@@ -257,11 +264,21 @@ function FormEquipoGenerico({
   );
 }
 
-export default function InventarioEquiposProyecto({ proyectoId, equipos, onRefresh, onError }: Props) {
+export default function InventarioEquiposProyecto({
+  proyectoId,
+  equipos,
+  onRefresh,
+  onError,
+  secciones = ['equipo'],
+}: Props) {
   const supabase = useMemo(() => createClient(), []);
   const [savingCat, setSavingCat] = useState<CategoriaEquipoProyecto | null>(null);
   const [edit, setEdit] = useState<EditState | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+
+  const showEquipo = secciones.includes('equipo');
+  const showPropias = secciones.includes('maquinaria_propia');
+  const showAlquiladas = secciones.includes('maquinaria_alquilada');
 
   const equiposGen = useMemo(() => filtrarEquiposPorCategoria(equipos, 'equipo'), [equipos]);
   const maqPropias = useMemo(() => filtrarEquiposPorCategoria(equipos, 'maquinaria_propia'), [equipos]);
@@ -384,117 +401,128 @@ export default function InventarioEquiposProyecto({ proyectoId, equipos, onRefre
 
   return (
     <div className="space-y-6">
-      <section className="rounded-2xl border border-white/10 bg-zinc-900/70 p-5 shadow-lg backdrop-blur-xl">
-        <h2 className="text-sm font-bold uppercase text-zinc-500">Inventario de equipos</h2>
-        <FormEquipoGenerico
-          categoria="equipo"
-          titulo="Equipo"
-          descripcion="Herramientas y equipos menores del proyecto."
-          saving={savingCat === 'equipo'}
-          onSubmit={(f) => insertar('equipo', f)}
-        />
-        {renderListaSimple(equiposGen, 'equipo')}
-      </section>
-
-      <SeccionTituloHover
-        titulo="Maquinarias propias"
-        tituloClassName="text-emerald-400/90"
-        className="border border-emerald-500/25 bg-emerald-950/15 p-5 shadow-lg backdrop-blur-xl"
-        hint="Pasa el cursor sobre el título para registrar maquinaria propia"
-        descripcion="Maquinaria de la empresa asignada a esta obra."
-        panelOculto={
+      {showEquipo ? (
+        <section className="rounded-2xl border border-white/10 bg-zinc-900/70 p-5 shadow-lg backdrop-blur-xl">
+          <h2 className="text-sm font-bold uppercase text-zinc-500">Inventario de equipos</h2>
           <FormEquipoGenerico
-            categoria="maquinaria_propia"
-            titulo="Maquinaria propia"
-            descripcion="Registra equipo propio con fecha de asignación al proyecto."
-            saving={savingCat === 'maquinaria_propia'}
-            onSubmit={(f) => insertar('maquinaria_propia', f)}
+            categoria="equipo"
+            titulo="Equipo"
+            descripcion="Herramientas y equipos menores del proyecto."
+            saving={savingCat === 'equipo'}
+            onSubmit={(f) => insertar('equipo', f)}
           />
-        }
-      >
-        {renderListaSimple(maqPropias, 'maquinaria_propia')}
-      </SeccionTituloHover>
+          {renderListaSimple(equiposGen, 'equipo')}
+        </section>
+      ) : null}
 
-      <SeccionTituloHover
-        titulo="Maquinarias alquiladas"
-        tituloClassName="text-amber-300/90"
-        className="border border-amber-500/25 bg-amber-950/15 p-5 shadow-lg backdrop-blur-xl"
-        hint="Pasa el cursor sobre el título para registrar un arriendo"
-        descripcion="Listado de arriendos: fechas, arrendatario, RIF y costo."
-        panelOculto={
-          <FormEquipoGenerico
-            categoria="maquinaria_alquilada"
-            titulo="Maquinaria alquilada"
-            descripcion="Cada fila es un arriendo o máquina rentada para la obra."
-            saving={savingCat === 'maquinaria_alquilada'}
-            onSubmit={(f) => insertar('maquinaria_alquilada', f)}
-          />
-        }
-      >
-        {maqAlquiladas.length === 0 ? (
-          <p className="mt-3 text-xs text-zinc-600">Sin maquinarias alquiladas registradas.</p>
-        ) : (
-          <div className="mt-4 overflow-x-auto rounded-xl border border-white/10">
-            <table className="w-full min-w-[720px] text-left text-xs">
-              <thead>
-                <tr className="border-b border-white/10 bg-white/[0.04] text-[10px] font-bold uppercase tracking-wide text-zinc-500">
-                  <th className="px-3 py-2">Maquinaria</th>
-                  <th className="px-3 py-2">Fecha inicio</th>
-                  <th className="px-3 py-2">Fecha fin</th>
-                  <th className="px-3 py-2">Arrendatario</th>
-                  <th className="px-3 py-2">RIF</th>
-                  <th className="px-3 py-2 text-right">Costo</th>
-                  <th className="px-3 py-2 w-24" />
-                </tr>
-              </thead>
-              <tbody>
-                {maqAlquiladas.map((e) =>
-                  edit?.id === e.id && edit ? (
-                    <tr key={e.id} className="border-b border-white/5 bg-amber-950/30">
-                      <td colSpan={7} className="px-3 py-3">
-                        <EditorInline edit={edit} setEdit={setEdit} onSave={() => void guardarEdicion()} onCancel={() => setEdit(null)} />
-                      </td>
-                    </tr>
-                  ) : (
-                    <tr key={e.id} className="border-b border-white/5 hover:bg-white/[0.02]">
-                      <td className="px-3 py-2 font-medium text-white">
-                        {e.nombre_equipo}
-                        <span className="block text-[10px] font-normal text-zinc-500">
-                          {[e.marca, e.modelo, e.serial].filter(Boolean).join(' · ') || '—'}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-zinc-300">
-                        {e.fecha_arriendo_inicio
-                          ? new Date(e.fecha_arriendo_inicio).toLocaleDateString('es-VE')
-                          : '—'}
-                      </td>
-                      <td className="px-3 py-2 text-zinc-300">
-                        {e.fecha_arriendo_fin
-                          ? new Date(e.fecha_arriendo_fin).toLocaleDateString('es-VE')
-                          : '—'}
-                      </td>
-                      <td className="px-3 py-2 text-zinc-200">{e.arrendatario ?? '—'}</td>
-                      <td className="px-3 py-2 font-mono text-zinc-400">{e.arrendatario_rif ?? '—'}</td>
-                      <td className="px-3 py-2 text-right tabular-nums text-amber-200">
-                        {e.costo_arriendo != null
-                          ? `${e.moneda_arriendo ?? 'USD'} ${e.costo_arriendo.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`
-                          : '—'}
-                      </td>
-                      <td className="px-3 py-2">
-                        <Acciones
-                          busy={busyId === e.id}
-                          onEdit={() => setEdit(filaToEdit(e))}
-                          onDelete={() => void borrar(e.id)}
-                        />
-                      </td>
-                    </tr>
-                  ),
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </SeccionTituloHover>
+      {showPropias ? (
+        <SeccionTituloHover
+          titulo="Maquinarias propias"
+          tituloClassName="text-emerald-400/90"
+          className="border border-emerald-500/25 bg-emerald-950/15 p-5 shadow-lg backdrop-blur-xl"
+          hint="Pasa el cursor sobre el título para registrar maquinaria propia"
+          descripcion="Maquinaria de la empresa. El catálogo vive en el MENÚ de la entidad."
+          panelOculto={
+            <FormEquipoGenerico
+              categoria="maquinaria_propia"
+              titulo="Maquinaria propia"
+              descripcion="Registra equipo propio con fecha de asignación."
+              saving={savingCat === 'maquinaria_propia'}
+              onSubmit={(f) => insertar('maquinaria_propia', f)}
+            />
+          }
+        >
+          {renderListaSimple(maqPropias, 'maquinaria_propia')}
+        </SeccionTituloHover>
+      ) : null}
+
+      {showAlquiladas ? (
+        <SeccionTituloHover
+          titulo="Maquinarias alquiladas"
+          tituloClassName="text-amber-300/90"
+          className="border border-amber-500/25 bg-amber-950/15 p-5 shadow-lg backdrop-blur-xl"
+          hint="Pasa el cursor sobre el título para registrar un arriendo"
+          descripcion="Arriendos de la obra (control de obras)."
+          panelOculto={
+            <FormEquipoGenerico
+              categoria="maquinaria_alquilada"
+              titulo="Maquinaria alquilada"
+              descripcion="Cada fila es un arriendo o máquina rentada para la obra."
+              saving={savingCat === 'maquinaria_alquilada'}
+              onSubmit={(f) => insertar('maquinaria_alquilada', f)}
+            />
+          }
+        >
+          {maqAlquiladas.length === 0 ? (
+            <p className="mt-3 text-xs text-zinc-600">Sin maquinarias alquiladas registradas.</p>
+          ) : (
+            <div className="mt-4 overflow-x-auto rounded-xl border border-white/10">
+              <table className="w-full min-w-[720px] text-left text-xs">
+                <thead>
+                  <tr className="border-b border-white/10 bg-white/[0.04] text-[10px] font-bold uppercase tracking-wide text-zinc-500">
+                    <th className="px-3 py-2">Maquinaria</th>
+                    <th className="px-3 py-2">Fecha inicio</th>
+                    <th className="px-3 py-2">Fecha fin</th>
+                    <th className="px-3 py-2">Arrendatario</th>
+                    <th className="px-3 py-2">RIF</th>
+                    <th className="px-3 py-2 text-right">Costo</th>
+                    <th className="px-3 py-2 w-24" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {maqAlquiladas.map((e) =>
+                    edit?.id === e.id && edit ? (
+                      <tr key={e.id} className="border-b border-white/5 bg-amber-950/30">
+                        <td colSpan={7} className="px-3 py-3">
+                          <EditorInline
+                            edit={edit}
+                            setEdit={setEdit}
+                            onSave={() => void guardarEdicion()}
+                            onCancel={() => setEdit(null)}
+                          />
+                        </td>
+                      </tr>
+                    ) : (
+                      <tr key={e.id} className="border-b border-white/5 hover:bg-white/[0.02]">
+                        <td className="px-3 py-2 font-medium text-white">
+                          {e.nombre_equipo}
+                          <span className="block text-[10px] font-normal text-zinc-500">
+                            {[e.marca, e.modelo, e.serial].filter(Boolean).join(' · ') || '—'}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-zinc-300">
+                          {e.fecha_arriendo_inicio
+                            ? new Date(e.fecha_arriendo_inicio).toLocaleDateString('es-VE')
+                            : '—'}
+                        </td>
+                        <td className="px-3 py-2 text-zinc-300">
+                          {e.fecha_arriendo_fin
+                            ? new Date(e.fecha_arriendo_fin).toLocaleDateString('es-VE')
+                            : '—'}
+                        </td>
+                        <td className="px-3 py-2 text-zinc-200">{e.arrendatario ?? '—'}</td>
+                        <td className="px-3 py-2 font-mono text-zinc-400">{e.arrendatario_rif ?? '—'}</td>
+                        <td className="px-3 py-2 text-right tabular-nums text-amber-200">
+                          {e.costo_arriendo != null
+                            ? `${e.moneda_arriendo ?? 'USD'} ${e.costo_arriendo.toLocaleString('es-VE', { minimumFractionDigits: 2 })}`
+                            : '—'}
+                        </td>
+                        <td className="px-3 py-2">
+                          <Acciones
+                            busy={busyId === e.id}
+                            onEdit={() => setEdit(filaToEdit(e))}
+                            onDelete={() => void borrar(e.id)}
+                          />
+                        </td>
+                      </tr>
+                    ),
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </SeccionTituloHover>
+      ) : null}
     </div>
   );
 }

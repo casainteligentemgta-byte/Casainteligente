@@ -1012,6 +1012,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                   equipos={equipos}
                   onRefresh={() => void load()}
                   onError={setError}
+                  secciones={['equipo']}
                 />
               </div>
 
