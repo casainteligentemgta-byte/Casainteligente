@@ -395,16 +395,23 @@ export default function RrhhReclutamientoClient() {
         </div>
       </header>
 
-      <div className="mb-6 grid gap-3 sm:grid-cols-4">
+      <div className="mb-6 grid w-full max-w-full grid-cols-4 gap-1.5 sm:gap-3">
         {[
-          { label: 'En archivo', value: stats.total, tone: 'text-zinc-100' },
-          { label: 'Con evaluación', value: stats.evaluados, tone: 'text-emerald-300' },
-          { label: 'Sin evaluación', value: stats.pendientes, tone: 'text-amber-200' },
-          { label: 'Express sin evaluar', value: stats.expressSin, tone: 'text-orange-200' },
+          { label: 'En archivo', labelShort: 'Archivo', value: stats.total, tone: 'text-zinc-100' },
+          { label: 'Con evaluación', labelShort: 'Con eval.', value: stats.evaluados, tone: 'text-emerald-300' },
+          { label: 'Sin evaluación', labelShort: 'Sin eval.', value: stats.pendientes, tone: 'text-amber-200' },
+          { label: 'Express sin evaluar', labelShort: 'Express', value: stats.expressSin, tone: 'text-orange-200' },
         ].map((s) => (
-          <div key={s.label} className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">{s.label}</p>
-            <p className={`mt-1 text-2xl font-bold tabular-nums ${s.tone}`}>{s.value}</p>
+          <div
+            key={s.label}
+            title={s.label}
+            className="min-w-0 box-border rounded-xl border border-white/10 bg-white/[0.04] px-1.5 py-2 sm:px-4 sm:py-3"
+          >
+            <p className="text-[8px] font-bold uppercase leading-tight tracking-wide text-zinc-500 sm:text-[10px]">
+              <span className="sm:hidden">{s.labelShort}</span>
+              <span className="hidden sm:inline">{s.label}</span>
+            </p>
+            <p className={`mt-0.5 text-lg font-bold tabular-nums sm:mt-1 sm:text-2xl ${s.tone}`}>{s.value}</p>
           </div>
         ))}
       </div>
