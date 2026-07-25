@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 const MIGRATION_HINT =
-  'Ejecute la migración 288_ci_pheme_reuniones.sql en Supabase (tablas reuniones/pheme + bucket reuniones-audio).';
+  'Ejecute la migración 293_ci_pheme_reuniones.sql en Supabase (tablas reuniones/pheme + bucket reuniones-audio).';
 
 /** GET — lista reuniones del usuario autenticado. */
 export async function GET() {

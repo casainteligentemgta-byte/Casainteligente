@@ -1,4 +1,4 @@
--- Verificación post-migración 288 (Pheme). Pegar en SQL Editor y revisar la columna ok.
+-- Verificación post-migración 293 (Pheme). Pegar en SQL Editor y revisar la columna ok.
 select
   check_name,
   ok,

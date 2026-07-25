@@ -46,7 +46,7 @@ export async function POST(req: Request) {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     const hint = msg.includes('match_pheme_embeddings')
-      ? ' Ejecute la migración 288_ci_pheme_reuniones.sql.'
+      ? ' Ejecute la migración 293_ci_pheme_reuniones.sql.'
       : '';
     return NextResponse.json({ error: `${msg}${hint}` }, { status: 500 });
   }
