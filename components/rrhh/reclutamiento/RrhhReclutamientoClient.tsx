@@ -35,6 +35,10 @@ import { createClient } from '@/lib/supabase/client';
 import type { RolExamen } from '@/types/talento';
 import type { MapaEvaluacionPsique } from '@/lib/talento/psique/mapaEvaluacion';
 import type { PruebaPsiqueSugerida, RolExamenPsique } from '@/lib/talento/psique/recomendarPruebasPsique';
+import {
+  ROLES_EXAMEN_UI,
+  ROL_EXAMEN_DEFAULT,
+} from '@/lib/talento/rolesExamenCatalogo';
 import DetalleRespuestasExamenModal from '@/components/rrhh/reclutamiento/DetalleRespuestasExamenModal';
 
 type TabId = 'examen' | 'evaluaciones' | 'pendientes';
@@ -64,7 +68,7 @@ function fechaCorta(iso: string): string {
 export default function RrhhReclutamientoClient() {
   const supabase = useMemo(() => createClient(), []);
   const [tab, setTab] = useState<TabId>('examen');
-  const [rolPreview, setRolPreview] = useState<RolExamen>('tecnico');
+  const [rolPreview, setRolPreview] = useState<RolExamen>(ROL_EXAMEN_DEFAULT);
   const [loading, setLoading] = useState(true);
   const [empleados, setEmpleados] = useState<EmpleadoHojaVidaRow[]>([]);
   const [expressRows, setExpressRows] = useState<ExpressSinEvaluacion[]>([]);
@@ -76,7 +80,7 @@ export default function RrhhReclutamientoClient() {
   const [ultimoEnlace, setUltimoEnlace] = useState<string | null>(null);
   const [detalleEmpleadoId, setDetalleEmpleadoId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [cargoPsique, setCargoPsique] = useState('técnico de CCTV');
+  const [cargoPsique, setCargoPsique] = useState('ayudante de albañil');
   const [psiqueBusy, setPsiqueBusy] = useState(false);
   const [psiqueRec, setPsiqueRec] = useState<PsiqueUiState | null>(null);
 
@@ -269,7 +273,9 @@ export default function RrhhReclutamientoClient() {
         }
 
         const rolBuscado =
-          cargoPsique.trim() || (rolPreview === 'tecnico' ? 'Obrero' : 'Programador');
+          cargoPsique.trim() ||
+          ROLES_EXAMEN_UI.find((r) => r.value === rolPreview)?.label ||
+          etiquetaRolExamenUI(rolPreview);
         const rolAsignar =
           psiqueRec?.rol_examen_para_enlace ??
           psiqueRec?.rol_examen_sugerido ??
@@ -448,28 +454,54 @@ export default function RrhhReclutamientoClient() {
               Banco de preguntas del examen
             </h2>
             <p className="mt-2 text-sm text-zinc-400">
-              Obrero / técnico obra: 20 preguntas (4 opciones) + 5 lógica. Programador: 20 frecuencia + 5 lógica. Duración:
-              15 minutos. Así se ve lo que responde el candidato en{' '}
+              Campo: obrero/vigilante (ABC) o técnico de obra (situacional + lógica). Oficina: empleado o programador
+              (frecuencia + lógica). Duración 15 min. El oficio del tabulador no abre un banco distinto: afina la
+              recomendación Psique. Vista previa en{' '}
               <Link href="/talento/examen" className="text-violet-300 underline hover:text-violet-200" target="_blank">
                 /talento/examen
               </Link>
               .
             </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {(['tecnico', 'programador'] as RolExamen[]).map((rol) => (
-                <button
-                  key={rol}
-                  type="button"
-                  onClick={() => setRolPreview(rol)}
-                  className={`rounded-lg border px-3 py-1.5 text-xs font-bold uppercase tracking-wide ${
-                    rolPreview === rol
-                      ? 'border-violet-400/50 bg-violet-500/20 text-violet-100'
-                      : 'border-white/15 text-zinc-400 hover:bg-white/5'
-                  }`}
-                >
-                  {rol === 'tecnico' ? 'Obrero' : 'Programador'}
-                </button>
-              ))}
+            <div className="mt-4 space-y-2">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Campo / obra</p>
+              <div className="flex flex-wrap gap-2">
+                {ROLES_EXAMEN_UI.filter((r) => r.grupo === 'campo').map((rol) => (
+                  <button
+                    key={rol.value}
+                    type="button"
+                    onClick={() => setRolPreview(rol.value)}
+                    title={rol.resumen}
+                    className={`rounded-lg border px-3 py-1.5 text-xs font-bold tracking-wide ${
+                      rolPreview === rol.value
+                        ? 'border-violet-400/50 bg-violet-500/20 text-violet-100'
+                        : 'border-white/15 text-zinc-400 hover:bg-white/5'
+                    }`}
+                  >
+                    {rol.label}
+                  </button>
+                ))}
+              </div>
+              <p className="pt-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500">Oficina / TI</p>
+              <div className="flex flex-wrap gap-2">
+                {ROLES_EXAMEN_UI.filter((r) => r.grupo === 'oficina').map((rol) => (
+                  <button
+                    key={rol.value}
+                    type="button"
+                    onClick={() => setRolPreview(rol.value)}
+                    title={rol.resumen}
+                    className={`rounded-lg border px-3 py-1.5 text-xs font-bold tracking-wide ${
+                      rolPreview === rol.value
+                        ? 'border-violet-400/50 bg-violet-500/20 text-violet-100'
+                        : 'border-white/15 text-zinc-400 hover:bg-white/5'
+                    }`}
+                  >
+                    {rol.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-zinc-500">
+                {ROLES_EXAMEN_UI.find((r) => r.value === rolPreview)?.resumen}
+              </p>
             </div>
 
             <div className="mt-5 border-t border-violet-500/20 pt-4">
@@ -554,54 +586,80 @@ export default function RrhhReclutamientoClient() {
             </div>
           </section>
 
-          <section className="grid gap-6 lg:grid-cols-2">
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+          {examenPreview.formato === 'abc' ? (
+            <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
               <h3 className="text-sm font-bold text-zinc-200">
-                Conducta / personalidad ({examenPreview.personalidad.length})
+                Situacional ABC — {etiquetaRolExamenUI(rolPreview)} ({examenPreview.abc.length})
               </h3>
-              <ol className="mt-3 max-h-[420px] space-y-2 overflow-y-auto pr-1 text-sm text-zinc-300">
-                {examenPreview.personalidad.map((p, i) => (
+              <ol className="mt-3 max-h-[520px] space-y-2 overflow-y-auto pr-1 text-sm text-zinc-300">
+                {examenPreview.abc.map((p, i) => (
                   <li key={p.id} className="rounded-lg border border-white/5 bg-black/20 px-3 py-2">
-                    <span className="text-[10px] font-bold uppercase text-zinc-500">{p.bloque}</span>
+                    <span className="text-[10px] font-bold uppercase text-zinc-500">{p.categoria}</span>
                     <p className="mt-0.5">
-                      {i + 1}. {p.texto}
+                      {i + 1}. {p.pregunta}
                     </p>
-                    {esPreguntaSituacionalObra(p) ? (
-                      <ul className="mt-2 space-y-0.5 pl-2 text-xs text-zinc-500">
-                        {p.opciones.map((op, j) => (
-                          <li key={op}>
-                            {String.fromCharCode(65 + j)}) {op}
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                  </li>
-                ))}
-              </ol>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-              <h3 className="text-sm font-bold text-zinc-200">
-                Lógica — {etiquetaRolExamenUI(rolPreview)} ({examenPreview.logica.length})
-              </h3>
-              <ol className="mt-3 max-h-[420px] space-y-3 overflow-y-auto pr-1 text-sm text-zinc-300">
-                {examenPreview.logica.map((q, i) => (
-                  <li key={q.id} className="rounded-lg border border-white/5 bg-black/20 px-3 py-2">
-                    <p className="font-medium text-zinc-100">
-                      {i + 1}. {q.texto}
-                    </p>
-                    <ul className="mt-2 space-y-1 pl-3 text-xs text-zinc-500">
-                      {q.opciones.map((op, j) => (
-                        <li key={op} className={j === q.correcta ? 'text-emerald-400/90' : undefined}>
-                          {String.fromCharCode(65 + j)}) {op}
-                          {j === q.correcta ? ' ✓' : ''}
+                    <ul className="mt-2 space-y-0.5 pl-2 text-xs text-zinc-500">
+                      {p.opciones.map((op) => (
+                        <li key={op.valor}>
+                          {op.valor}) {op.texto}
                         </li>
                       ))}
                     </ul>
                   </li>
                 ))}
               </ol>
-            </div>
-          </section>
+            </section>
+          ) : (
+            <section className="grid gap-6 lg:grid-cols-2">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                <h3 className="text-sm font-bold text-zinc-200">
+                  {rolPreview === 'tecnico' ? 'Conducta en obra' : 'Personalidad (frecuencia)'} (
+                  {examenPreview.personalidad.length})
+                </h3>
+                <ol className="mt-3 max-h-[420px] space-y-2 overflow-y-auto pr-1 text-sm text-zinc-300">
+                  {examenPreview.personalidad.map((p, i) => (
+                    <li key={p.id} className="rounded-lg border border-white/5 bg-black/20 px-3 py-2">
+                      <span className="text-[10px] font-bold uppercase text-zinc-500">{p.bloque}</span>
+                      <p className="mt-0.5">
+                        {i + 1}. {p.texto}
+                      </p>
+                      {esPreguntaSituacionalObra(p) ? (
+                        <ul className="mt-2 space-y-0.5 pl-2 text-xs text-zinc-500">
+                          {p.opciones.map((op, j) => (
+                            <li key={op}>
+                              {String.fromCharCode(65 + j)}) {op}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                <h3 className="text-sm font-bold text-zinc-200">
+                  Lógica — {etiquetaRolExamenUI(rolPreview)} ({examenPreview.logica.length})
+                </h3>
+                <ol className="mt-3 max-h-[420px] space-y-3 overflow-y-auto pr-1 text-sm text-zinc-300">
+                  {examenPreview.logica.map((q, i) => (
+                    <li key={q.id} className="rounded-lg border border-white/5 bg-black/20 px-3 py-2">
+                      <p className="font-medium text-zinc-100">
+                        {i + 1}. {q.texto}
+                      </p>
+                      <ul className="mt-2 space-y-1 pl-3 text-xs text-zinc-500">
+                        {q.opciones.map((op, j) => (
+                          <li key={op} className={j === q.correcta ? 'text-emerald-400/90' : undefined}>
+                            {String.fromCharCode(65 + j)}) {op}
+                            {j === q.correcta ? ' ✓' : ''}
+                          </li>
+                        ))}
+                      </ul>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            </section>
+          )}
 
           <section className="rounded-2xl border border-emerald-500/25 bg-emerald-950/20 p-5">
             <h2 className="flex items-center gap-2 text-lg font-bold text-white">

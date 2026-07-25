@@ -15,6 +15,7 @@ import {
   recomendarPruebasPsique,
   rolExamenDesdePsique,
 } from '@/lib/talento/psique/recomendarPruebasPsique';
+import { alinearRolExamenConTipoVacante } from '@/lib/talento/rolesExamenCatalogo';
 import { snapshotPsiqueRecomendacion } from '@/lib/talento/psique/snapshotRecomendacion';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import { friendlyStorageError } from '@/lib/supabase/friendlyStorageError';
@@ -139,17 +140,14 @@ export async function POST(req: Request) {
   );
   const tokenRegistro = randomUUID();
 
-  /** Psique elige banco + semáforo del libro según cargo/vacante (nunca programador en captación gaceta). */
+  /** Psique elige banco; la vacante alinea campo (ABC) vs oficina. */
   const psique = await recomendarPruebasPsique(admin.client, {
     textoSolicitud: `${cargoEtiqueta} ${n.tipo_vacante ?? ''}`.trim(),
   });
-  let rolExamen = rolExamenDesdePsique(psique.rol_examen_sugerido);
-  if (rolExamen === 'programador') rolExamen = 'tecnico';
-  const tipoVac = (n.tipo_vacante ?? '').toLowerCase();
-  if (tipoVac.includes('obrero') && rolExamen === 'tecnico') {
-    // Vacante obrero → libro ABC (salvo que Psique haya marcado vigilante).
-    rolExamen = 'obrero';
-  }
+  const rolExamen = alinearRolExamenConTipoVacante(
+    rolExamenDesdePsique(psique.rol_examen_sugerido),
+    n.tipo_vacante,
+  );
   const psiqueSnap = snapshotPsiqueRecomendacion({
     ...psique,
     rol_examen_sugerido: rolExamen,

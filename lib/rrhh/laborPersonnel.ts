@@ -8,7 +8,8 @@ export function esObreroDisponible(row: {
   estatus?: string | null;
   rol_examen?: string | null;
 }): boolean {
-  if ((row.rol_examen ?? '').trim().toLowerCase() !== 'obrero') return false;
+  const rol = (row.rol_examen ?? '').trim().toLowerCase();
+  if (rol !== 'obrero' && rol !== 'vigilante') return false;
   if ((row.estado ?? '').trim().toLowerCase() !== 'aprobado') return false;
   const es = (row.estatus ?? '').trim().toLowerCase();
   if (es === 'disponible' || es === '') return true;

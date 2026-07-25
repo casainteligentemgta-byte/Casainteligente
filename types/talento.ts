@@ -1,4 +1,10 @@
-export type RolExamen = 'programador' | 'tecnico';
+/** Roles de examen (banco). Ver `lib/talento/rolesExamenCatalogo.ts`. */
+export type RolExamen =
+  | 'programador'
+  | 'tecnico'
+  | 'obrero'
+  | 'vigilante'
+  | 'empleado';
 
 export type SemaforoTalento = 'verde' | 'amarillo' | 'rojo';
 
@@ -10,7 +16,7 @@ export interface PreguntaPersonalidad {
   texto: string;
 }
 
-/** Ítem situacional (4 opciones) para examen obrero / técnico obra. */
+/** Ítem situacional (4 opciones) para examen técnico de obra. */
 export interface PreguntaSituacionalObra {
   id: string;
   bloque: string;
