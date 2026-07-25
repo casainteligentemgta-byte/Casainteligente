@@ -8,14 +8,17 @@ import { apiUrl } from '@/lib/http/apiUrl';
 import type { MinutaPheme } from '@/lib/pheme/types';
 
 type ApiOk = {
+  titulo_reunion?: string;
   minuta: MinutaPheme;
   markdown: string;
   desdeGemini: boolean;
   modelo?: string;
   aviso?: string;
+  reunion_id?: string | null;
 };
 
 export default function PhemeMinutaClient() {
+  const [titulo, setTitulo] = useState('');
   const [texto, setTexto] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ApiOk | null>(null);
@@ -33,7 +36,10 @@ export default function PhemeMinutaClient() {
       const res = await fetch(apiUrl('/api/pheme/minuta'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transcripcion: t }),
+        body: JSON.stringify({
+          titulo_reunion: titulo.trim() || 'Sin título',
+          transcripcion: t,
+        }),
       });
       const j = (await res.json().catch(() => ({}))) as ApiOk & { error?: string };
       if (!res.ok) {
@@ -44,14 +50,14 @@ export default function PhemeMinutaClient() {
       }
       setResult(j);
       if (j.aviso) toast.message(j.aviso);
-      else toast.success('Minuta Pheme lista');
+      else toast.success(j.reunion_id ? 'Minuta guardada' : 'Minuta Pheme lista');
     } catch {
       setError('Error de red');
       toast.error('Error de red');
     } finally {
       setLoading(false);
     }
-  }, [texto]);
+  }, [texto, titulo]);
 
   const copiarMarkdown = useCallback(async () => {
     if (!result?.markdown) return;
@@ -73,8 +79,8 @@ export default function PhemeMinutaClient() {
           Minuta de reunión
         </h1>
         <p className="max-w-2xl text-sm leading-relaxed text-zinc-400">
-          Pega la transcripción. Pheme sintetiza resumen ejecutivo, puntos clave, acuerdos con
-          responsables y alertas pendientes — tono objetivo, sin muletillas.
+          Procesa la transcripción con Gemini, guarda el JSON en Postgres y muestra resumen,
+          puntos clave, acuerdos y pendientes/alertas.
         </p>
         <p className="text-xs text-zinc-600">
           Relacionado:{' '}
@@ -85,6 +91,17 @@ export default function PhemeMinutaClient() {
       </header>
 
       <section className="space-y-3">
+        <label htmlFor="pheme-titulo" className="block text-sm font-medium text-zinc-300">
+          Título de la reunión
+        </label>
+        <input
+          id="pheme-titulo"
+          type="text"
+          value={titulo}
+          onChange={(e) => setTitulo(e.target.value)}
+          placeholder="Ej. Seguimiento CCTV obra Flamboyán"
+          className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-sky-500/40 focus:outline-none focus:ring-1 focus:ring-sky-500/30"
+        />
         <label htmlFor="pheme-transcripcion" className="block text-sm font-medium text-zinc-300">
           Transcripción
         </label>
@@ -108,7 +125,7 @@ export default function PhemeMinutaClient() {
             ) : (
               <Sparkles className="h-4 w-4" aria-hidden />
             )}
-            {loading ? 'Analizando…' : 'Generar minuta'}
+            {loading ? 'Procesando…' : 'Procesar con Pheme'}
           </button>
           {result?.markdown ? (
             <button
@@ -135,12 +152,12 @@ export default function PhemeMinutaClient() {
           {result.aviso ? (
             <p className="text-xs text-amber-300/90">{result.aviso}</p>
           ) : null}
-          {result.modelo ? (
-            <p className="text-[11px] uppercase tracking-wide text-zinc-600">
-              Modelo: {result.modelo}
-              {result.desdeGemini ? '' : ' · sin Gemini'}
-            </p>
-          ) : null}
+          <p className="text-[11px] uppercase tracking-wide text-zinc-600">
+            {result.titulo_reunion ? `${result.titulo_reunion} · ` : ''}
+            {result.modelo ? `Modelo: ${result.modelo}` : null}
+            {result.desdeGemini ? '' : ' · sin Gemini'}
+            {result.reunion_id ? ` · id ${result.reunion_id.slice(0, 8)}…` : ''}
+          </p>
 
           <div>
             <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-500">
@@ -191,7 +208,7 @@ export default function PhemeMinutaClient() {
                       <tr key={`${a.tarea}-${a.responsable}`} className="border-b border-white/5">
                         <td className="py-2.5 pr-3 text-zinc-100">{a.tarea}</td>
                         <td className="py-2.5 pr-3 text-zinc-300">{a.responsable}</td>
-                        <td className="py-2.5 text-zinc-400">{a.fecha_limite ?? '—'}</td>
+                        <td className="py-2.5 text-zinc-400">{a.fecha_limite ?? 'N/A'}</td>
                       </tr>
                     ))
                   )}
@@ -202,13 +219,13 @@ export default function PhemeMinutaClient() {
 
           <div>
             <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-500">
-              4. Alertas o temas pendientes
+              4. Pendientes o alertas
             </h2>
-            {result.minuta.alertas_pendientes.length === 0 ? (
+            {result.minuta.pendientes_o_alertas.length === 0 ? (
               <p className="mt-2 text-sm text-zinc-500">Ninguna alerta crítica.</p>
             ) : (
               <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm text-amber-100/90">
-                {result.minuta.alertas_pendientes.map((a) => (
+                {result.minuta.pendientes_o_alertas.map((a) => (
                   <li key={a}>{a}</li>
                 ))}
               </ul>

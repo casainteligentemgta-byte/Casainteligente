@@ -6,9 +6,9 @@ import {
 } from '@/lib/gemini/client';
 import { GEMINI_PROCUREMENT_DEFAULT_MODEL } from '@/lib/almacen/geminiProcurementModels';
 import {
+  buildPromptUsuarioPheme,
   PHEME_SYSTEM_INSTRUCTION,
   PHEME_USER_PROMPT_AUDIO,
-  PHEME_USER_PROMPT_TEXTO,
 } from '@/lib/pheme/identidad';
 import { formatearMinutaMarkdown } from '@/lib/pheme/formatearMinutaMarkdown';
 import { parseMinutaPhemeJson } from '@/lib/pheme/parseMinuta';
@@ -24,41 +24,49 @@ function phemeModel(): string {
   );
 }
 
-function minutaOfflineSinClave(transcripcion: string): GenerarMinutaPhemeResult {
+function wrapResult(
+  titulo: string,
+  minuta: MinutaPheme,
+  opts: { desdeGemini: boolean; modelo?: string; aviso?: string },
+): GenerarMinutaPhemeResult {
+  return {
+    titulo_reunion: titulo,
+    minuta,
+    markdown: formatearMinutaMarkdown(minuta, titulo),
+    desdeGemini: opts.desdeGemini,
+    modelo: opts.modelo,
+    aviso: opts.aviso,
+  };
+}
+
+function minutaOfflineSinClave(titulo: string, transcripcion: string): GenerarMinutaPhemeResult {
   const preview = transcripcion.trim().slice(0, 280);
   const minuta: MinutaPheme = {
     resumen_ejecutivo:
-      'No se pudo generar la minuta con IA: falta GEMINI_API_KEY. Pegue la transcripción de nuevo tras configurar la clave, o use el modo con Gemini en producción.',
+      'No se pudo generar la minuta con IA: falta GEMINI_API_KEY. Configure la clave y vuelva a procesar la reunión.',
     puntos_clave: preview
       ? ['Transcripción recibida (análisis automático no disponible sin Gemini).']
       : [],
     acuerdos: [],
-    alertas_pendientes: [
+    pendientes_o_alertas: [
       'Configurar GEMINI_API_KEY en el entorno del servidor para activar Pheme.',
     ],
   };
-  return {
-    minuta,
-    markdown: formatearMinutaMarkdown(minuta),
+  return wrapResult(titulo, minuta, {
     desdeGemini: false,
     aviso: 'Modo sin GEMINI_API_KEY — no se llamó a la API.',
-  };
-}
-
-function wrapResult(minuta: MinutaPheme, modelo: string): GenerarMinutaPhemeResult {
-  return {
-    minuta,
-    markdown: formatearMinutaMarkdown(minuta),
-    desdeGemini: true,
-    modelo,
-  };
+  });
 }
 
 /**
- * Genera minuta Pheme a partir de texto de transcripción.
+ * Función principal del agente Pheme (equivalente a `procesar_reunion_con_pheme`).
  */
-export async function generarMinutaDesdeTexto(transcripcion: string): Promise<GenerarMinutaPhemeResult> {
-  const texto = (transcripcion ?? '').trim();
+export async function procesarReunionConPheme(
+  tituloReunion: string,
+  transcripcionTexto: string,
+): Promise<GenerarMinutaPhemeResult> {
+  const titulo = (tituloReunion ?? '').trim() || 'Sin título';
+  const texto = (transcripcionTexto ?? '').trim();
   if (!texto) {
     throw Object.assign(new Error('La transcripción está vacía.'), { status: 400 });
   }
@@ -69,11 +77,11 @@ export async function generarMinutaDesdeTexto(transcripcion: string): Promise<Ge
   }
 
   if (!getGeminiApiKey()) {
-    return minutaOfflineSinClave(texto);
+    return minutaOfflineSinClave(titulo, texto);
   }
 
   const model = phemeModel();
-  const prompt = PHEME_USER_PROMPT_TEXTO.replace('{{TRANSCRIPCION}}', texto);
+  const prompt = buildPromptUsuarioPheme(titulo, texto);
 
   try {
     const raw = await geminiGenerateText({
@@ -84,41 +92,53 @@ export async function generarMinutaDesdeTexto(transcripcion: string): Promise<Ge
       maxOutputTokens: 4096,
       responseMimeType: 'application/json',
     });
+    // Limpiar y parsear (strip ```json … ```)
     const minuta = parseMinutaPhemeJson(raw);
     if (!minuta) {
       throw Object.assign(new Error('Gemini no devolvió una minuta JSON válida.'), {
         retryable: true,
       });
     }
-    return wrapResult(minuta, model);
+    return wrapResult(titulo, minuta, { desdeGemini: true, modelo: model });
   } catch (err) {
     const g = err as GeminiGenerateError;
-    console.error('[pheme generarMinuta texto]', g);
+    console.error('[pheme procesarReunionConPheme]', g);
     throw g;
   }
+}
+
+/** @deprecated Preferir `procesarReunionConPheme`. */
+export async function generarMinutaDesdeTexto(
+  transcripcion: string,
+  tituloReunion = 'Sin título',
+): Promise<GenerarMinutaPhemeResult> {
+  return procesarReunionConPheme(tituloReunion, transcripcion);
 }
 
 /**
  * Genera minuta Pheme a partir de audio (base64 + mime).
  */
 export async function generarMinutaDesdeAudio(opts: {
+  tituloReunion?: string;
   base64: string;
   mimeType: string;
 }): Promise<GenerarMinutaPhemeResult> {
+  const titulo = (opts.tituloReunion ?? '').trim() || 'Sin título';
   const base64 = (opts.base64 ?? '').trim();
   const mimeType = (opts.mimeType ?? '').trim() || 'audio/ogg';
   if (!base64) {
     throw Object.assign(new Error('Audio vacío (base64 requerido).'), { status: 400 });
   }
   if (!getGeminiApiKey()) {
-    return minutaOfflineSinClave('');
+    return minutaOfflineSinClave(titulo, '');
   }
 
   const model = phemeModel();
+  const prompt = PHEME_USER_PROMPT_AUDIO.replace('{{TITULO}}', titulo);
   try {
     const raw = await geminiGenerateWithDocument({
       model,
-      prompt: PHEME_USER_PROMPT_AUDIO,
+      prompt,
       mimeType,
       base64,
       systemInstruction: PHEME_SYSTEM_INSTRUCTION,
@@ -131,7 +151,7 @@ export async function generarMinutaDesdeAudio(opts: {
         retryable: true,
       });
     }
-    return wrapResult(minuta, model);
+    return wrapResult(titulo, minuta, { desdeGemini: true, modelo: model });
   } catch (err) {
     const g = err as GeminiGenerateError;
     console.error('[pheme generarMinuta audio]', g);

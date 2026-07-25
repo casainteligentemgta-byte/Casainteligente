@@ -7,6 +7,15 @@ function asStringArray(v: unknown): string[] {
     .filter(Boolean);
 }
 
+function normalizarFechaLimite(flRaw: unknown): string | null {
+  if (flRaw == null) return null;
+  const s = String(flRaw).trim();
+  if (!s || s.toLowerCase() === 'null' || s.toUpperCase() === 'N/A' || s === '—') {
+    return null;
+  }
+  return s;
+}
+
 function asAcuerdos(v: unknown): AcuerdoPheme[] {
   if (!Array.isArray(v)) return [];
   const out: AcuerdoPheme[] = [];
@@ -16,22 +25,24 @@ function asAcuerdos(v: unknown): AcuerdoPheme[] {
     const tarea = String(r.tarea ?? r.compromiso ?? '').trim();
     if (!tarea) continue;
     const responsable = String(r.responsable ?? '').trim() || 'Sin asignar';
-    const flRaw = r.fecha_limite ?? r.fechaLimite ?? null;
-    const fecha_limite =
-      flRaw == null || String(flRaw).trim() === '' || String(flRaw).toLowerCase() === 'null'
-        ? null
-        : String(flRaw).trim();
-    out.push({ tarea, responsable, fecha_limite });
+    out.push({
+      tarea,
+      responsable,
+      fecha_limite: normalizarFechaLimite(r.fecha_limite ?? r.fechaLimite),
+    });
   }
   return out;
 }
 
+/**
+ * Limpia fences ```json y parsea al schema Pheme
+ * (`pendientes_o_alertas`; acepta alias `alertas_pendientes`).
+ */
 export function parseMinutaPhemeJson(raw: string): MinutaPheme | null {
-  const cleaned = raw
-    .trim()
-    .replace(/^```json\s*/i, '')
-    .replace(/^```\s*/i, '')
-    .replace(/\s*```$/i, '');
+  let cleaned = (raw ?? '').trim();
+  // Equivalente al prototipo: strip("```json").strip("```")
+  cleaned = cleaned.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '');
+  cleaned = cleaned.trim();
 
   let parsed: unknown;
   try {
@@ -52,7 +63,9 @@ export function parseMinutaPhemeJson(raw: string): MinutaPheme | null {
   const resumen = String(o.resumen_ejecutivo ?? o.resumenEjecutivo ?? '').trim();
   const puntos = asStringArray(o.puntos_clave ?? o.puntosClave);
   const acuerdos = asAcuerdos(o.acuerdos);
-  const alertas = asStringArray(o.alertas_pendientes ?? o.alertasPendientes);
+  const alertas = asStringArray(
+    o.pendientes_o_alertas ?? o.pendientesOAlertas ?? o.alertas_pendientes ?? o.alertasPendientes,
+  );
 
   if (!resumen && puntos.length === 0 && acuerdos.length === 0 && alertas.length === 0) {
     return null;
@@ -63,6 +76,6 @@ export function parseMinutaPhemeJson(raw: string): MinutaPheme | null {
       resumen || 'Reunión procesada sin resumen explícito en la respuesta del modelo.',
     puntos_clave: puntos,
     acuerdos,
-    alertas_pendientes: alertas,
+    pendientes_o_alertas: alertas,
   };
 }
