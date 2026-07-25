@@ -22,6 +22,8 @@ const RUTAS_PROTEGIDAS = [
   '/procura',
   '/legal',
   '/agenda',
+  '/pheme',
+  '/metron',
 ];
 
 function esRutaPublica(pathname: string): boolean {
