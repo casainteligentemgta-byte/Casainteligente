@@ -46,32 +46,55 @@ const PAGE_SIZE = 50;
 const inputClass =
   'w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-zinc-600 outline-none focus:border-sky-500/50';
 
-const VISTAS: { id: VistaMovimientoInventario; label: string; icon: typeof Box }[] = [
+const VISTAS_PRINCIPALES: {
+  id: Exclude<VistaMovimientoInventario, 'todos'>;
+  label: string;
+  icon: typeof Box;
+}[] = [
   { id: 'ingresado', label: 'Ingresos', icon: ArrowDownRight },
-  { id: 'despachado', label: 'Salidas', icon: ArrowUpRight },
   { id: 'almacenado', label: 'Stock', icon: Package },
-  { id: 'todos', label: 'Movimientos', icon: Box },
+  { id: 'despachado', label: 'Salidas', icon: ArrowUpRight },
 ];
 
-function clasesBotonVista(id: VistaMovimientoInventario, active: boolean): string {
+function clasesTarjetaVista(
+  id: Exclude<VistaMovimientoInventario, 'todos'>,
+  active: boolean,
+): string {
   const base =
-    'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold border transition-colors';
+    'min-w-0 box-border rounded-xl border p-2.5 sm:p-3 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/60';
   if (!active) {
-    if (id === 'despachado') {
-      return `${base} border-red-500/25 text-red-400/80 hover:border-red-500/45 hover:text-red-300`;
+    switch (id) {
+      case 'ingresado':
+        return `${base} border-emerald-500/20 bg-emerald-950/15 opacity-80 hover:opacity-100`;
+      case 'almacenado':
+        return `${base} border-sky-500/20 bg-sky-950/15 opacity-80 hover:opacity-100`;
+      case 'despachado':
+        return `${base} border-red-500/25 bg-red-950/15 opacity-80 hover:opacity-100`;
     }
-    return `${base} border-white/10 text-zinc-400 hover:text-zinc-200`;
   }
   switch (id) {
     case 'ingresado':
-      return `${base} border-emerald-500/50 bg-emerald-500/15 text-emerald-100`;
+      return `${base} border-emerald-500/55 bg-emerald-950/35 shadow-[0_0_18px_rgba(16,185,129,0.12)]`;
     case 'almacenado':
-      return `${base} border-sky-500/50 bg-sky-500/15 text-sky-100`;
+      return `${base} border-sky-500/55 bg-sky-950/35 shadow-[0_0_18px_rgba(56,189,248,0.12)]`;
     case 'despachado':
-      return `${base} border-red-500/55 bg-red-500/15 text-red-100`;
-    default:
-      return `${base} border-sky-500/50 bg-sky-500/15 text-sky-100`;
+      return `${base} border-red-500/55 bg-red-950/35 shadow-[0_0_18px_rgba(239,68,68,0.12)]`;
   }
+}
+
+function conteoVista(
+  id: Exclude<VistaMovimientoInventario, 'todos'>,
+  resumen: { ingresado: number; despachado: number; almacenado: number },
+): number {
+  if (id === 'ingresado') return resumen.ingresado;
+  if (id === 'despachado') return resumen.despachado;
+  return resumen.almacenado;
+}
+
+function subtituloVista(id: Exclude<VistaMovimientoInventario, 'todos'>): string {
+  if (id === 'ingresado') return 'compras y recepción';
+  if (id === 'despachado') return 'egresos y Telegram';
+  return 'inventario físico';
 }
 
 function badgeTipo(tipo: FilaMovimientoInventario['tipo']) {
@@ -125,7 +148,7 @@ function parseVistaInicial(
   if (v === 'ingresado' || v === 'despachado' || v === 'almacenado' || v === 'todos') {
     return v;
   }
-  return 'todos';
+  return 'ingresado';
 }
 
 const VISTA_LABEL: Record<VistaMovimientoInventario, string> = {
@@ -202,7 +225,7 @@ export default function MovimientosCuadro({
   const [eliminandoId, setEliminandoId] = useState<string | null>(null);
   const [eliminandoBulk, setEliminandoBulk] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [filtrosAbiertos, setFiltrosAbiertos] = useState(false);
+  const [filtrosAbiertos, setFiltrosAbiertos] = useState(true);
   const [exportScope, setExportScope] = useState<MovimientosExportScope>('filtrado');
   const [compartidoOk, setCompartidoOk] = useState(false);
   const selectAllRef = useRef<HTMLInputElement>(null);
@@ -692,133 +715,164 @@ export default function MovimientosCuadro({
         </div>
         ) : null}
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div className="rounded-xl border border-emerald-500/25 bg-emerald-950/20 p-4">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-400/80">Ingresos</p>
-            <p className="text-2xl font-black text-emerald-200">{resumen.ingresado}</p>
-            <p className="text-[11px] text-zinc-500">
-              {resumen.ingresado === 1 ? 'movimiento' : 'movimientos'} · compras, cuarentena y recepción
-            </p>
-          </div>
-          <div className="rounded-xl border border-sky-500/25 bg-sky-950/20 p-4">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-sky-300/80">Stock</p>
-            <p className="text-2xl font-black text-sky-100">{resumen.almacenado}</p>
-            <p className="text-[11px] text-zinc-500">
-              {resumen.almacenado === 1 ? 'material con saldo' : 'materiales con saldo'} · inventario físico
-            </p>
-          </div>
-          <div className="rounded-xl border border-red-500/30 bg-red-950/25 p-4">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-red-400/90">Salidas</p>
-            <p className="text-2xl font-black text-red-100">{resumen.despachado}</p>
-            <p className="text-[11px] text-zinc-500">
-              {resumen.despachado === 1 ? 'egreso' : 'egresos'} · transferencias y Telegram
-            </p>
-          </div>
-        </div>
-
-        {embedded ? (
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => void cargar()}
-              className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-sm text-zinc-300 hover:bg-white/5"
-            >
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-              Actualizar
-            </button>
-          </div>
-        ) : null}
-
-        <div className="flex flex-wrap gap-2">
-          {VISTAS.map((v) => {
+        <div
+          className="grid w-full max-w-full grid-cols-3 gap-1.5 sm:gap-3"
+          role="tablist"
+          aria-label="Vista del cuadro"
+        >
+          {VISTAS_PRINCIPALES.map((v) => {
             const Icon = v.icon;
             const active = vista === v.id;
+            const count = conteoVista(v.id, resumen);
+            const titleClass =
+              v.id === 'ingresado'
+                ? 'text-emerald-400/90'
+                : v.id === 'almacenado'
+                  ? 'text-sky-300/90'
+                  : 'text-red-400/90';
+            const valueClass =
+              v.id === 'ingresado'
+                ? 'text-emerald-200'
+                : v.id === 'almacenado'
+                  ? 'text-sky-100'
+                  : 'text-red-100';
             return (
               <button
                 key={v.id}
                 type="button"
+                role="tab"
+                aria-selected={active}
                 onClick={() => setVista(v.id)}
-                className={clasesBotonVista(v.id, active)}
+                className={clasesTarjetaVista(v.id, active)}
               >
-                <Icon className="h-3.5 w-3.5" />
-                {v.label}
+                <p
+                  className={`flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest sm:text-[10px] ${titleClass}`}
+                >
+                  <Icon className="h-3 w-3 shrink-0 sm:h-3.5 sm:w-3.5" aria-hidden />
+                  <span className="truncate">{v.label}</span>
+                </p>
+                <p className={`mt-0.5 text-xl font-black sm:text-2xl ${valueClass}`}>{count}</p>
+                <p className="hidden text-[10px] leading-snug text-zinc-500 sm:block">
+                  {subtituloVista(v.id)}
+                </p>
               </button>
             );
           })}
         </div>
 
-        {filtrosAbiertos && !embedded ? (
-          <div
-            id="panel-filtros-movimientos"
-            className="rounded-xl border border-white/10 bg-zinc-900/40 p-4 space-y-3"
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => setVista('todos')}
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wide transition-colors ${
+              vista === 'todos'
+                ? 'border-sky-500/50 bg-sky-500/15 text-sky-100'
+                : 'border-white/10 text-zinc-500 hover:text-zinc-300'
+            }`}
           >
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-zinc-400 text-xs font-semibold uppercase tracking-wider">
-                <Search className="h-3.5 w-3.5" />
-                Filtros
-              </div>
+            <Box className="h-3.5 w-3.5" />
+            Todos
+          </button>
+          <button
+            type="button"
+            onClick={() => void cargar()}
+            className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-sm text-zinc-300 hover:bg-white/5"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            Actualizar
+          </button>
+        </div>
+
+        <div
+          id="panel-filtros-movimientos"
+          className="box-border w-full max-w-full overflow-hidden rounded-xl border border-white/10 bg-zinc-900/40 p-2.5 sm:p-3"
+        >
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-zinc-400 text-[10px] font-semibold uppercase tracking-wider">
+              <Search className="h-3.5 w-3.5 shrink-0" />
+              Filtros · {VISTA_LABEL[vista]}
+              {filtrosActivos.length > 0 ? (
+                <span className="min-w-4 h-4 px-1 rounded-full bg-sky-500 text-[9px] font-black leading-4 text-white text-center">
+                  {filtrosActivos.length}
+                </span>
+              ) : null}
+            </div>
+            <div className="flex items-center gap-2">
               {filtrosActivos.length > 0 ? (
                 <button
                   type="button"
                   onClick={limpiarFiltros}
                   className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300"
                 >
-                  Limpiar filtros
+                  Limpiar
+                </button>
+              ) : null}
+              {!embedded ? (
+                <button
+                  type="button"
+                  onClick={() => setFiltrosAbiertos((v) => !v)}
+                  aria-expanded={filtrosAbiertos}
+                  className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300"
+                >
+                  <Filter className="h-3 w-3" />
+                  {filtrosAbiertos ? 'Ocultar' : 'Mostrar'}
                 </button>
               ) : null}
             </div>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <div>
-                <label className="text-[10px] font-bold text-zinc-500 uppercase">Proveedor</label>
+          </div>
+          {(filtrosAbiertos || embedded) ? (
+            <div className="flex w-full max-w-full items-end gap-2 overflow-x-auto pb-0.5 [scrollbar-width:thin]">
+              <label className="block min-w-[140px] flex-1 shrink-0">
+                <span className="text-[9px] font-bold text-zinc-500 uppercase">Proveedor</span>
                 <input
                   type="search"
                   value={proveedorInput}
                   onChange={(e) => setProveedorInput(e.target.value)}
-                  placeholder="Nombre proveedor"
-                  className={`${inputClass} mt-1`}
+                  placeholder="Proveedor"
+                  className={`${inputClass} mt-1 py-1.5 text-xs`}
                 />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold text-zinc-500 uppercase">Destino / obra</label>
+              </label>
+              <label className="block min-w-[140px] flex-1 shrink-0">
+                <span className="text-[9px] font-bold text-zinc-500 uppercase">Destino / obra</span>
                 <input
                   type="search"
                   value={destinoInput}
                   onChange={(e) => setDestinoInput(e.target.value)}
-                  placeholder="Almacén, obra u origen"
-                  className={`${inputClass} mt-1`}
+                  placeholder="Destino"
+                  className={`${inputClass} mt-1 py-1.5 text-xs`}
                 />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold text-zinc-500 uppercase">Material</label>
+              </label>
+              <label className="block min-w-[140px] flex-1 shrink-0">
+                <span className="text-[9px] font-bold text-zinc-500 uppercase">Material</span>
                 <input
                   type="search"
                   value={materialInput}
                   onChange={(e) => setMaterialInput(e.target.value)}
-                  placeholder="Nombre, SAP o N° factura"
-                  className={`${inputClass} mt-1`}
+                  placeholder="Material / SAP"
+                  className={`${inputClass} mt-1 py-1.5 text-xs`}
                 />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold text-zinc-500 uppercase">Desde</label>
+              </label>
+              <label className="block min-w-[120px] shrink-0">
+                <span className="text-[9px] font-bold text-zinc-500 uppercase">Desde</span>
                 <input
                   type="date"
                   value={fechaDesde}
                   onChange={(e) => setFechaDesde(e.target.value)}
-                  className={`${inputClass} mt-1`}
+                  className={`${inputClass} mt-1 py-1.5 text-xs`}
                 />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold text-zinc-500 uppercase">Hasta</label>
+              </label>
+              <label className="block min-w-[120px] shrink-0">
+                <span className="text-[9px] font-bold text-zinc-500 uppercase">Hasta</span>
                 <input
                   type="date"
                   value={fechaHasta}
                   onChange={(e) => setFechaHasta(e.target.value)}
-                  className={`${inputClass} mt-1`}
+                  className={`${inputClass} mt-1 py-1.5 text-xs`}
                 />
-              </div>
+              </label>
             </div>
-          </div>
-        ) : null}
+          ) : null}
+        </div>
 
         {error ? (
           <p className="text-sm text-red-300 rounded-lg border border-red-500/30 bg-red-950/30 p-3">{error}</p>
