@@ -3,6 +3,10 @@ import { NextResponse } from 'next/server';
 import { celularParaInserto } from '@/lib/registro/ciEmpleadosCelular';
 import { nombresLegadoDesdeTextoLibre } from '@/lib/registro/ciEmpleadosNombresLegado';
 import { crearExpedienteToken } from '@/lib/reclutamiento/validarExpedienteToken';
+import {
+  recomendarPruebasPheme,
+  rolExamenParaGenerarLink,
+} from '@/lib/talento/pheme/recomendarPruebasPheme';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import type { RolExamen } from '@/types/talento';
 
@@ -60,8 +64,6 @@ export async function POST(req: Request) {
 
   const nombre = (body.nombre ?? '').trim();
   const whatsapp = (body.whatsapp ?? '').trim();
-  const rolExamen: RolExamen =
-    body.rol_examen === 'programador' || body.rol_examen === 'tecnico' ? body.rol_examen : 'tecnico';
   const rolBuscado = (body.rol_buscado ?? '').trim() || 'Candidato (enlace de invitación)';
   const proyectoModuloId = (body.proyecto_modulo_id ?? '').trim();
 
@@ -82,6 +84,12 @@ export async function POST(req: Request) {
   }
 
   const supabase = admin.client;
+
+  const pheme = await recomendarPruebasPheme(supabase, { textoSolicitud: rolBuscado });
+  const rolExamen: RolExamen =
+    body.rol_examen === 'programador' || body.rol_examen === 'tecnico'
+      ? body.rol_examen
+      : rolExamenParaGenerarLink(pheme.rol_examen_sugerido);
 
   const token = randomUUID();
   /** Ventana amplia: onboarding por WhatsApp puede tardar días; el examen sigue limitado a 15 min en UI al iniciar. */
@@ -157,5 +165,13 @@ export async function POST(req: Request) {
     expira_at: expiraAt,
     empleado_id: row.id,
     token,
+    rol_examen: rolExamen,
+    pheme: {
+      palabras_clave: pheme.palabras_clave,
+      pruebas: pheme.pruebas,
+      rol_examen_sugerido: pheme.rol_examen_sugerido,
+      fuente: pheme.fuente,
+      aviso: pheme.aviso ?? null,
+    },
   });
 }

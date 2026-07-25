@@ -33,9 +33,19 @@ import { apiUrl } from '@/lib/http/apiUrl';
 import { hrefListaContratosExpress } from '@/lib/talento/hrefListaContratosExpress';
 import { createClient } from '@/lib/supabase/client';
 import type { RolExamen } from '@/types/talento';
+import type { PruebaPhemeSugerida, RolExamenPheme } from '@/lib/talento/pheme/recomendarPruebasPheme';
 import DetalleRespuestasExamenModal from '@/components/rrhh/reclutamiento/DetalleRespuestasExamenModal';
 
 type TabId = 'examen' | 'evaluaciones' | 'pendientes';
+
+type PhemeUiState = {
+  palabras_clave: string[];
+  pruebas: PruebaPhemeSugerida[];
+  rol_examen_sugerido: RolExamenPheme | null;
+  rol_examen_para_enlace: RolExamen | null;
+  fuente: string;
+  aviso?: string;
+};
 
 function docMostrado(row: { cedula?: string | null; documento?: string | null }): string {
   return (row.cedula ?? row.documento ?? '').trim() || '—';
@@ -64,6 +74,9 @@ export default function RrhhReclutamientoClient() {
   const [ultimoEnlace, setUltimoEnlace] = useState<string | null>(null);
   const [detalleEmpleadoId, setDetalleEmpleadoId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [cargoPheme, setCargoPheme] = useState('técnico de CCTV');
+  const [phemeBusy, setPhemeBusy] = useState(false);
+  const [phemeRec, setPhemeRec] = useState<PhemeUiState | null>(null);
 
   const examenPreview = useMemo(() => preguntasParaDetalle(rolPreview), [rolPreview]);
 
@@ -173,6 +186,50 @@ export default function RrhhReclutamientoClient() {
     }
   }, []);
 
+  const consultarPheme = useCallback(async () => {
+    const texto = cargoPheme.trim();
+    if (!texto) {
+      toast.error('Escribe el cargo o la solicitud');
+      return;
+    }
+    setPhemeBusy(true);
+    try {
+      const res = await fetch(apiUrl('/api/talento/pheme/recomendar'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texto }),
+      });
+      const j = (await res.json().catch(() => ({}))) as PhemeUiState & {
+        error?: string;
+        hint?: string;
+      };
+      if (!res.ok) {
+        toast.error([j.error, j.hint].filter(Boolean).join(' — ') || 'No se pudo consultar Pheme');
+        return;
+      }
+      setPhemeRec({
+        palabras_clave: j.palabras_clave ?? [],
+        pruebas: j.pruebas ?? [],
+        rol_examen_sugerido: j.rol_examen_sugerido ?? null,
+        rol_examen_para_enlace: j.rol_examen_para_enlace ?? null,
+        fuente: j.fuente ?? '',
+        aviso: j.aviso,
+      });
+      if (j.rol_examen_para_enlace === 'programador' || j.rol_examen_para_enlace === 'tecnico') {
+        setRolPreview(j.rol_examen_para_enlace);
+      }
+      if ((j.pruebas ?? []).length === 0) {
+        toast.message('Sin pruebas para esas palabras clave');
+      } else {
+        toast.success(`${j.pruebas.length} prueba(s) recomendada(s)`);
+      }
+    } catch {
+      toast.error('Error de red al consultar Pheme');
+    } finally {
+      setPhemeBusy(false);
+    }
+  }, [cargoPheme]);
+
   const generarEnlaceExamen = useCallback(
     async (empleadoId?: string) => {
       setInvBusy(true);
@@ -201,13 +258,15 @@ export default function RrhhReclutamientoClient() {
           return;
         }
 
+        const rolBuscado =
+          cargoPheme.trim() || (rolPreview === 'tecnico' ? 'Obrero' : 'Programador');
         const res = await fetch(apiUrl('/api/talento/generar-link'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             nombre: 'Candidato (evaluación)',
             rol_examen: rolPreview,
-            rol_buscado: rolPreview === 'tecnico' ? 'Obrero' : 'Programador',
+            rol_buscado: rolBuscado,
             public_base_url: typeof window !== 'undefined' ? window.location.origin : undefined,
           }),
         });
@@ -215,6 +274,7 @@ export default function RrhhReclutamientoClient() {
           url?: string;
           error?: string;
           hint?: string;
+          pheme?: PhemeUiState;
         };
         if (!res.ok) {
           toast.error([j.error, j.hint].filter(Boolean).join(' — ') || 'No se pudo generar el enlace');
@@ -225,6 +285,16 @@ export default function RrhhReclutamientoClient() {
           toast.error('Respuesta sin URL de examen');
           return;
         }
+        if (j.pheme) {
+          setPhemeRec({
+            palabras_clave: j.pheme.palabras_clave ?? [],
+            pruebas: j.pheme.pruebas ?? [],
+            rol_examen_sugerido: j.pheme.rol_examen_sugerido ?? null,
+            rol_examen_para_enlace: null,
+            fuente: j.pheme.fuente ?? '',
+            aviso: j.pheme.aviso,
+          });
+        }
         await copiarUrlExamen(url);
       } catch {
         toast.error('Error de red');
@@ -232,7 +302,7 @@ export default function RrhhReclutamientoClient() {
         setInvBusy(false);
       }
     },
-    [copiarUrlExamen, rolPreview],
+    [cargoPheme, copiarUrlExamen, rolPreview],
   );
 
   const seleccionarParaEnlace = (r: EmpleadoHojaVidaRow) => {
@@ -374,6 +444,65 @@ export default function RrhhReclutamientoClient() {
                   {rol === 'tecnico' ? 'Obrero' : 'Programador'}
                 </button>
               ))}
+            </div>
+
+            <div className="mt-5 border-t border-violet-500/20 pt-4">
+              <h3 className="text-sm font-bold text-violet-100">Pheme — batería recomendada</h3>
+              <p className="mt-1 text-xs text-zinc-500">
+                Detecta palabras clave del cargo y sugiere pruebas (migración 290). Ejemplo: técnico de CCTV.
+              </p>
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+                <input
+                  type="text"
+                  value={cargoPheme}
+                  onChange={(e) => setCargoPheme(e.target.value)}
+                  placeholder="Cargo o solicitud…"
+                  className="min-w-0 flex-1 rounded-lg border border-white/15 bg-black/30 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600"
+                />
+                <button
+                  type="button"
+                  disabled={phemeBusy}
+                  onClick={() => void consultarPheme()}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-violet-400/40 bg-violet-500/15 px-3 py-2 text-sm font-semibold text-violet-100 hover:bg-violet-500/25 disabled:opacity-50"
+                >
+                  <BookOpen className="h-4 w-4" aria-hidden />
+                  {phemeBusy ? 'Consultando…' : 'Recomendar pruebas'}
+                </button>
+              </div>
+              {phemeRec ? (
+                <div className="mt-3 space-y-2 text-sm">
+                  <p className="text-xs text-zinc-500">
+                    Claves: {phemeRec.palabras_clave.join(', ') || '—'}
+                    {phemeRec.rol_examen_sugerido
+                      ? ` · Rol sugerido: ${phemeRec.rol_examen_sugerido}`
+                      : ''}
+                    {phemeRec.fuente === 'fallback' ? ' · (catálogo local)' : ''}
+                  </p>
+                  {phemeRec.aviso ? (
+                    <p className="text-xs text-amber-300/90">{phemeRec.aviso}</p>
+                  ) : null}
+                  {phemeRec.pruebas.length === 0 ? (
+                    <p className="text-zinc-500">Sin coincidencias en el catálogo.</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {phemeRec.pruebas.map((p) => (
+                        <li
+                          key={p.id_prueba}
+                          className="rounded-lg border border-white/10 bg-black/25 px-3 py-2"
+                        >
+                          <p className="font-semibold text-zinc-100">{p.nombre_prueba}</p>
+                          <p className="text-[11px] uppercase tracking-wide text-zinc-500">
+                            {p.categoria}
+                            {p.es_clinico ? ' · clínico' : ''}
+                            {p.rol_examen_sugerido ? ` · ${p.rol_examen_sugerido}` : ''}
+                          </p>
+                          <p className="mt-1 text-xs text-zinc-400">{p.objetivo_evaluacion}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ) : null}
             </div>
           </section>
 
