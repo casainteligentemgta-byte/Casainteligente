@@ -11,7 +11,9 @@ create index if not exists idx_contabilidad_compras_imputacion
 comment on column public.contabilidad_compras.imputacion is
   'obra = costo directo de proyecto (entra en valuación AD). entidad = gasto del patrono (excluido de AD).';
 
-create or replace view public.ci_compras as
+drop view if exists public.ci_compras cascade;
+
+create view public.ci_compras as
 select
   id,
   proyecto_id,
