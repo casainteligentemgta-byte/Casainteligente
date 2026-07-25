@@ -1,7 +1,20 @@
 'use client';
 
 import * as Tabs from '@radix-ui/react-tabs';
-import { Building2, Calendar, FileText, Plus, ShieldCheck, Trash2, Truck, Users, X } from 'lucide-react';
+import {
+  Building2,
+  Calendar,
+  ChevronLeft,
+  FileText,
+  ImageIcon,
+  Plus,
+  ShieldCheck,
+  Trash2,
+  Truck,
+  Users,
+  X,
+  type LucideIcon,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import EquipoEntidadPanel from '@/components/configuracion/EquipoEntidadPanel';
@@ -29,8 +42,42 @@ const inputClass =
 
 const labelClass = 'block text-[10px] font-bold uppercase tracking-wide text-zinc-500';
 
-const tabTriggerClass =
-  'flex items-center gap-2 rounded-lg border border-transparent px-3 py-2 text-xs font-semibold text-zinc-400 transition data-[state=active]:border-[#FF9500]/40 data-[state=active]:bg-[#FF9500]/10 data-[state=active]:text-[#FFD60A]';
+type SeccionPatronoId =
+  | 'datos'
+  | 'representante'
+  | 'mercantil'
+  | 'permisos'
+  | 'medios'
+  | 'equipo'
+  | 'maquinaria';
+
+type SeccionPatronoItem = {
+  id: SeccionPatronoId;
+  label: string;
+  icon: LucideIcon;
+  soloEdicion?: boolean;
+};
+
+/** Submenús del modal «Ficha del patrono». */
+const SECCIONES_PATRONO: SeccionPatronoItem[] = [
+  { id: 'datos', label: 'Datos', icon: Building2 },
+  { id: 'representante', label: 'Representantes', icon: ShieldCheck },
+  { id: 'mercantil', label: 'Mercantil', icon: FileText },
+  { id: 'permisos', label: 'Permisología', icon: Calendar },
+  { id: 'medios', label: 'Logo / sello', icon: ImageIcon },
+  { id: 'equipo', label: 'Equipo', icon: Users, soloEdicion: true },
+  { id: 'maquinaria', label: 'Maquinaria', icon: Truck, soloEdicion: true },
+];
+
+const LABEL_SECCION: Record<SeccionPatronoId, string> = {
+  datos: 'Datos',
+  representante: 'Representantes',
+  mercantil: 'Mercantil',
+  permisos: 'Permisología',
+  medios: 'Logo / sello',
+  equipo: 'Equipo',
+  maquinaria: 'Maquinaria',
+};
 
 function asRecord(v: unknown): Record<string, unknown> {
   return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
@@ -143,7 +190,9 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
   const supabase = useMemo(() => createClient(), []);
   const esEdicion = Boolean(entidad?.id);
 
-  const [tab, setTab] = useState('datos');
+  const [tab, setTab] = useState<SeccionPatronoId>('datos');
+  /** false = solo lista de submenús; true = contenido de la sección elegida. */
+  const [enSeccion, setEnSeccion] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
   const [nombreLegal, setNombreLegal] = useState('');
@@ -174,6 +223,7 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
   const resetDesdeEntidad = useCallback(() => {
     const e = entidad;
     setTab('datos');
+    setEnSeccion(false);
     setNombreLegal((e?.nombre ?? '').trim());
     setNombreComercial((e?.nombre_comercial ?? '').trim());
     setRif(formatRifMascara((e?.rif ?? '').trim()));
@@ -250,6 +300,7 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
       if (errs.rif) toast.error(errs.rif);
       if (errs.general) toast.error(errs.general);
       setTab('datos');
+      setEnSeccion(true);
       return;
     }
 
@@ -424,18 +475,31 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
         onClick={(ev) => ev.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3 border-b border-white/10 px-5 py-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-[#FF9500]/35 bg-[#FF9500]/10">
-              <Building2 className="h-5 w-5 text-[#FFD60A]" aria-hidden />
-            </div>
-            <div>
-              <h2 id="form-entidad-titulo" className="text-lg font-bold tracking-tight text-white">
-                {esEdicion ? 'Menú del patrono' : 'Nueva entidad legal'}
+          <div className="flex min-w-0 items-center gap-3">
+            {enSeccion ? (
+              <button
+                type="button"
+                onClick={() => setEnSeccion(false)}
+                aria-label="Volver al menú"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#FF9500]/35 bg-[#FF9500]/10 transition hover:bg-[#FF9500]/20"
+              >
+                <ChevronLeft className="h-5 w-5 text-[#FFD60A]" aria-hidden />
+              </button>
+            ) : (
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#FF9500]/35 bg-[#FF9500]/10">
+                <Building2 className="h-5 w-5 text-[#FFD60A]" aria-hidden />
+              </div>
+            )}
+            <div className="min-w-0">
+              <h2 id="form-entidad-titulo" className="truncate text-lg font-bold tracking-tight text-white">
+                {enSeccion
+                  ? LABEL_SECCION[tab]
+                  : esEdicion
+                    ? 'Ficha del patrono'
+                    : 'Nueva entidad'}
               </h2>
-              {!esEdicion ? (
-                <p className="text-[11px] text-zinc-500">
-                  Datos del patrono para contratos, registro mercantil y planilla de empleo (referencia Gaceta).
-                </p>
+              {enSeccion && esEdicion && entidad?.nombre ? (
+                <p className="truncate text-[11px] text-zinc-500">{entidad.nombre}</p>
               ) : null}
             </div>
           </div>
@@ -450,41 +514,37 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
         </div>
 
         <div className="flex max-h-[calc(92vh-5rem)] flex-col">
-          <Tabs.Root value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
-            <Tabs.List className="flex shrink-0 flex-wrap gap-1 border-b border-white/10 bg-white/[0.02] px-3 py-2">
-              <Tabs.Trigger value="datos" className={tabTriggerClass}>
-                <Building2 className="h-3.5 w-3.5" />
-                Datos
-              </Tabs.Trigger>
-              <Tabs.Trigger value="representante" className={tabTriggerClass}>
-                <ShieldCheck className="h-3.5 w-3.5" />
-                Representantes
-              </Tabs.Trigger>
-              <Tabs.Trigger value="mercantil" className={tabTriggerClass}>
-                <FileText className="h-3.5 w-3.5" />
-                Mercantil
-              </Tabs.Trigger>
-              <Tabs.Trigger value="permisos" className={tabTriggerClass}>
-                <Calendar className="h-3.5 w-3.5" />
-                Permisología
-              </Tabs.Trigger>
-              <Tabs.Trigger value="medios" className={tabTriggerClass}>
-                Logo / sello
-              </Tabs.Trigger>
-              {esEdicion && entidad?.id ? (
-                <Tabs.Trigger value="equipo" className={tabTriggerClass}>
-                  <Users className="h-3.5 w-3.5" />
-                  Equipo
-                </Tabs.Trigger>
-              ) : null}
-              {esEdicion && entidad?.id ? (
-                <Tabs.Trigger value="maquinaria" className={tabTriggerClass}>
-                  <Truck className="h-3.5 w-3.5" />
-                  Maquinaria
-                </Tabs.Trigger>
-              ) : null}
-            </Tabs.List>
-
+          {!enSeccion ? (
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+              <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {SECCIONES_PATRONO.filter((s) => !s.soloEdicion || (esEdicion && entidad?.id)).map((s) => {
+                  const Icon = s.icon;
+                  return (
+                    <li key={s.id}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTab(s.id);
+                          setEnSeccion(true);
+                        }}
+                        className="flex w-full flex-col items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-5 text-center transition hover:border-[#FF9500]/40 hover:bg-[#FF9500]/10"
+                      >
+                        <span className="flex h-11 w-11 items-center justify-center rounded-xl border border-[#FF9500]/30 bg-[#FF9500]/10">
+                          <Icon className="h-5 w-5 text-[#FFD60A]" aria-hidden />
+                        </span>
+                        <span className="text-sm font-semibold text-zinc-100">{s.label}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ) : (
+          <Tabs.Root
+            value={tab}
+            onValueChange={(v) => setTab(v as SeccionPatronoId)}
+            className="flex min-h-0 flex-1 flex-col"
+          >
             <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
               <Tabs.Content value="datos" className="space-y-4 outline-none">
                 <div>
@@ -916,25 +976,38 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
               ) : null}
             </div>
           </Tabs.Root>
+          )}
 
           <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-white/10 bg-white/[0.02] px-5 py-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-semibold text-zinc-300 hover:bg-white/10"
-            >
-              {tab === 'equipo' || tab === 'maquinaria' ? 'Cerrar' : 'Cancelar'}
-            </button>
-            {tab !== 'equipo' && tab !== 'maquinaria' ? (
+            {!enSeccion ? (
               <button
                 type="button"
-                disabled={guardando}
-                onClick={() => void onSubmit()}
-                className="rounded-xl bg-gradient-to-r from-orange-500 to-orange-700 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-orange-900/30 hover:opacity-95 disabled:opacity-50"
+                onClick={onClose}
+                className="rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-semibold text-zinc-300 hover:bg-white/10"
               >
-                {guardando ? 'Guardando…' : 'Guardar'}
+                Cerrar
               </button>
-            ) : null}
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setEnSeccion(false)}
+                  className="rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-semibold text-zinc-300 hover:bg-white/10"
+                >
+                  {tab === 'equipo' || tab === 'maquinaria' ? 'Volver' : 'Menú'}
+                </button>
+                {tab !== 'equipo' && tab !== 'maquinaria' ? (
+                  <button
+                    type="button"
+                    disabled={guardando}
+                    onClick={() => void onSubmit()}
+                    className="rounded-xl bg-gradient-to-r from-orange-500 to-orange-700 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-orange-900/30 hover:opacity-95 disabled:opacity-50"
+                  >
+                    {guardando ? 'Guardando…' : 'Guardar'}
+                  </button>
+                ) : null}
+              </>
+            )}
           </div>
         </div>
       </div>
