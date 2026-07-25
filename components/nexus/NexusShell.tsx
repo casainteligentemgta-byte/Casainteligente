@@ -5,7 +5,7 @@ import {
   NexusRightPanelProvider,
   useNexusRightPanelSlot,
 } from '@/components/nexus/NexusRightPanelContext';
-import { Menu, PanelLeftClose, PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { Menu, PanelRightClose, PanelRightOpen, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
@@ -26,20 +26,6 @@ function NexusShellHeader({
   return (
     <header className="sticky top-0 z-40 border-b border-[rgba(255,255,255,0.08)] bg-[rgba(10,11,16,0.85)] px-4 py-3 backdrop-blur-[20px] lg:px-8">
       <div className="flex items-center gap-3">
-        <button
-          type="button"
-          className="rounded-lg p-2 text-[var(--nexus-text-muted)] hover:bg-white/10 hover:text-[var(--nexus-cyan)]"
-          onClick={() => setMenuOpen((v) => !v)}
-          aria-expanded={menuOpen}
-          aria-label={menuOpen ? 'Ocultar menú' : 'Mostrar menú'}
-          title={menuOpen ? 'Ocultar menú' : 'Mostrar menú'}
-        >
-          {menuOpen ? (
-            <PanelLeftClose className="h-6 w-6 stroke-[2]" />
-          ) : (
-            <Menu className="h-6 w-6 stroke-[2]" />
-          )}
-        </button>
         <div className="min-w-0 flex-1">
           <p
             className={cn(
@@ -58,8 +44,8 @@ function NexusShellHeader({
             className="rounded-lg p-2 text-[var(--nexus-text-muted)] hover:bg-white/10 hover:text-[var(--nexus-cyan)]"
             onClick={rightPanel.toggle}
             aria-expanded={rightPanel.open}
-            aria-label={rightPanel.open ? 'Ocultar menú derecho' : 'Mostrar menú derecho'}
-            title={rightPanel.open ? 'Ocultar menú derecho' : 'Mostrar menú derecho'}
+            aria-label={rightPanel.open ? 'Ocultar inspector' : 'Mostrar inspector'}
+            title={rightPanel.open ? 'Ocultar inspector' : 'Mostrar inspector'}
           >
             {rightPanel.open ? (
               <PanelRightClose className="h-6 w-6 stroke-[2]" />
@@ -68,16 +54,30 @@ function NexusShellHeader({
             )}
           </button>
         ) : null}
+        <button
+          type="button"
+          className="rounded-lg p-2 text-[var(--nexus-text-muted)] hover:bg-white/10 hover:text-[var(--nexus-cyan)]"
+          onClick={() => setMenuOpen((v) => !v)}
+          aria-expanded={menuOpen}
+          aria-label={menuOpen ? 'Ocultar menú' : 'Mostrar menú'}
+          title={menuOpen ? 'Ocultar menú' : 'Mostrar menú'}
+        >
+          {menuOpen ? (
+            <X className="h-6 w-6 stroke-[2]" />
+          ) : (
+            <Menu className="h-6 w-6 stroke-[2]" />
+          )}
+        </button>
       </div>
       {isNetVision ? (
-        <div id="netvision-header-nav" className="mt-2 min-w-0 pl-12 sm:pl-[3.25rem]" />
+        <div id="netvision-header-nav" className="mt-2 min-w-0" />
       ) : null}
     </header>
   );
 }
 
 function NexusShellInner({ children }: { children: React.ReactNode }) {
-  /** Menú izquierdo: cerrado en móvil; abierto en desktop por defecto. */
+  /** Menú de módulos: cerrado en móvil; abierto en desktop por defecto. */
   const [menuOpen, setMenuOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
   const menuInicializadoRef = React.useRef(false);
@@ -111,7 +111,12 @@ function NexusShellInner({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-[var(--nexus-bg-base)] text-white">
-      {/* Desktop: sidebar colapsable */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <NexusShellHeader menuOpen={menuOpen} setMenuOpen={setMenuOpen} />
+        <main className="flex-1 p-4 lg:p-8">{children}</main>
+      </div>
+
+      {/* Desktop: sidebar a la derecha */}
       <div
         className={cn(
           'hidden shrink-0 overflow-hidden transition-[width] duration-200 ease-out lg:block',
@@ -131,11 +136,11 @@ function NexusShellInner({ children }: { children: React.ReactNode }) {
         />
       ) : null}
 
-      {/* Drawer móvil */}
+      {/* Drawer móvil: entra desde la derecha */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-[51] w-[min(280px,88vw)] border-r border-[rgba(255,255,255,0.1)] bg-[#12141c]/95 backdrop-blur-[20px] transition-transform lg:hidden',
-          menuOpen ? 'translate-x-0' : '-translate-x-full',
+          'fixed inset-y-0 right-0 z-[51] w-[min(280px,88vw)] border-l border-[rgba(255,255,255,0.1)] bg-[#12141c]/95 backdrop-blur-[20px] transition-transform lg:hidden',
+          menuOpen ? 'translate-x-0' : 'translate-x-full',
         )}
       >
         <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
@@ -148,7 +153,7 @@ function NexusShellInner({ children }: { children: React.ReactNode }) {
             className="rounded-lg p-1.5 text-[var(--nexus-text-muted)] hover:bg-white/10 hover:text-white"
             aria-label="Cerrar menú"
           >
-            <PanelLeftClose className="h-5 w-5" />
+            <X className="h-5 w-5" />
           </button>
         </div>
         <div className="p-4">
@@ -167,11 +172,6 @@ function NexusShellInner({ children }: { children: React.ReactNode }) {
           </ul>
         </div>
       </aside>
-
-      <div className="flex min-w-0 flex-1 flex-col">
-        <NexusShellHeader menuOpen={menuOpen} setMenuOpen={setMenuOpen} />
-        <main className="flex-1 p-4 lg:p-8">{children}</main>
-      </div>
     </div>
   );
 }
