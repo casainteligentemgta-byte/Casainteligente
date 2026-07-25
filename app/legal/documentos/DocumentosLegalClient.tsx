@@ -108,16 +108,18 @@ export default function DocumentosLegalClient() {
           {docs.map((d) => (
             <li
               key={d.id}
-              className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 transition hover:bg-white/[0.03]"
+              className="flex flex-col gap-2 px-4 py-3 transition hover:bg-white/[0.03]"
             >
-              <Link href={`/legal/documentos/${d.id}`} className="min-w-0 flex-1">
-                <p className="font-medium text-zinc-100">{d.titulo}</p>
-                <p className="text-xs text-zinc-500">
+              <Link href={`/legal/documentos/${d.id}`} className="block w-full min-w-0">
+                <p className="w-full text-left text-base font-semibold leading-snug text-zinc-100">
+                  {d.titulo}
+                </p>
+              </Link>
+              <div className="flex w-full flex-wrap items-center gap-2">
+                <p className="mr-auto min-w-0 flex-1 text-xs text-zinc-500">
                   {etiquetaDe(LEGAL_TIPOS_DOCUMENTO, d.tipo)}
                   {d.contraparte ? ` · ${d.contraparte}` : ''}
                 </p>
-              </Link>
-              <div className="flex flex-wrap items-center gap-2">
                 <span className="rounded-lg border border-white/10 px-2 py-1 text-[11px] text-zinc-400">
                   {etiquetaDe(LEGAL_ESTADOS_DOCUMENTO, d.estado)}
                 </span>

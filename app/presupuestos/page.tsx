@@ -34,12 +34,28 @@ const CLASIFICACION_COLORS: Record<ClasificacionPresupuesto, { bg: string; text:
     pagado: { bg: 'rgba(16,185,129,0.15)', text: '#10B981', label: 'Pagado', icon: '💸' },
 };
 
+/** Orden de status para ordenar la lista. */
+const STATUS_SORT_ORDER: Record<ClasificacionPresupuesto, number> = {
+    no_enviado: 0,
+    enviado: 1,
+    aprobado: 2,
+    no_aprobado: 3,
+    cobrado: 4,
+    pagado: 5,
+};
+
 function clasificarPresupuesto(b: Budget): ClasificacionPresupuesto {
     return b.status;
 }
 
 function formatUSD(n: number) {
     return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function formatFechaCorta(iso: string) {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString('es-VE', { day: 'numeric', month: 'short' });
 }
 
 function getPresupuestoNumero(b: Budget, fallback?: number) {
@@ -53,6 +69,18 @@ function getPresupuestoNumero(b: Budget, fallback?: number) {
     if (n != null && !Number.isNaN(n)) return `P-${n}`;
     if (fallback != null && !Number.isNaN(fallback)) return `P-${fallback}`;
     return `P-${b.id.slice(0, 8).toUpperCase()}`;
+}
+
+function getNumeroValor(b: Budget, fallbackById: Record<string, number>) {
+    const raw = b.numero_correlativo;
+    const n =
+        typeof raw === 'number'
+            ? raw
+            : typeof raw === 'string'
+                ? Number(raw)
+                : null;
+    if (n != null && !Number.isNaN(n)) return n;
+    return fallbackById[b.id] ?? 0;
 }
 
 type VistaPresupuestos = 'filas' | 'columnas';
@@ -81,9 +109,8 @@ function TarjetaPresupuesto({
 }) {
     const clasif = clasificarPresupuesto(b);
     const clasifStyle = CLASIFICACION_COLORS[clasif];
-    const fecha = new Date(b.created_at).toLocaleDateString('es-VE');
+    const fecha = formatFechaCorta(b.created_at);
     const numero = getPresupuestoNumero(b, fallbackById[b.id]);
-    const esFilas = vista === 'filas';
     const compacto = vista === 'columnas';
 
     const btnBase: CSSProperties = {
@@ -105,185 +132,192 @@ function TarjetaPresupuesto({
         fontSize: compacto ? '10px' : '11px',
     };
 
-    const btnEstado: CSSProperties = {
-        ...btnBase,
-        padding: compacto ? '5px 6px' : '5px 8px',
-        fontSize: compacto ? '10px' : '10px',
+    const metaChip: CSSProperties = {
+        color: 'rgba(255,255,255,0.55)',
+        fontSize: '11px',
+        fontWeight: 600,
+        margin: 0,
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
     };
 
     return (
         <div
             style={{
                 ...glass,
-                padding: '12px',
-                position: 'relative',
+                padding: compacto ? '10px' : '12px',
                 borderRadius: '14px',
                 display: 'flex',
                 flexDirection: 'column',
+                gap: '10px',
                 height: '100%',
             }}
         >
-            <span
-                style={{
-                    position: 'absolute',
-                    top: '10px',
-                    right: '10px',
-                    color: 'rgba(255,255,255,0.55)',
-                    fontSize: '11px',
-                    fontWeight: 800,
-                    fontFamily: 'monospace',
-                }}
-            >
-                {numero}
-            </span>
-
-            <div style={{ paddingRight: '56px', minHeight: esFilas ? undefined : '44px' }}>
-                <h3
-                    style={{
-                        color: 'white',
-                        fontSize: esFilas ? '16px' : '14px',
-                        fontWeight: 700,
-                        margin: 0,
-                        lineHeight: 1.25,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                    }}
-                >
-                    {b.customer_name}
-                    {b.customer_rif ? (
-                        <span
-                            style={{
-                                color: 'rgba(255,255,255,0.35)',
-                                fontWeight: 500,
-                                fontSize: '0.82em',
-                                marginLeft: '8px',
-                            }}
-                        >
-                            {b.customer_rif}
-                        </span>
-                    ) : null}
-                </h3>
-                <div
-                    style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        flexWrap: 'wrap',
-                        marginTop: '4px',
-                    }}
-                >
-                    <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', margin: 0 }}>
-                        {fecha}
-                    </p>
-                    <div
-                        style={{
-                            ...clasifStyle,
-                            fontSize: '9px',
-                            fontWeight: 700,
-                            padding: '3px 7px',
-                            borderRadius: '6px',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            width: 'fit-content',
-                        }}
-                    >
-                        <span>{clasifStyle.icon}</span>
-                        <span>{clasifStyle.label}</span>
-                    </div>
-                </div>
-            </div>
-
+            {/* Orden móvil: Visualizar → Cliente → Nº → Fecha → Status */}
             <div
                 style={{
-                    marginTop: '6px',
                     display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
+                    alignItems: 'flex-start',
+                    gap: '10px',
                 }}
             >
-                <div
-                    style={{
-                        flex: 1,
-                        minWidth: 0,
-                        display: 'flex',
-                        flexDirection: 'row',
-                        flexWrap: 'nowrap',
-                        gap: '4px',
-                        overflowX: 'auto',
-                        WebkitOverflowScrolling: 'touch',
-                        paddingBottom: '2px',
-                    }}
-                >
-                <button
-                    type="button"
-                    onClick={onEditar}
-                    style={{ ...btnAccion, background: 'rgba(0,122,255,0.12)', color: '#007AFF' }}
-                    title="Editar"
-                >
-                    ✏️{compacto ? '' : ' Editar'}
-                </button>
                 <button
                     type="button"
                     onClick={onPreview}
-                    style={{ ...btnAccion, background: 'rgba(88,86,214,0.12)', color: '#A78BFA' }}
-                    title="Vista previa"
+                    style={{
+                        ...btnBase,
+                        padding: '8px 10px',
+                        fontSize: '11px',
+                        background: 'rgba(0,122,255,0.18)',
+                        color: '#5AC8FA',
+                        border: '1px solid rgba(90,200,250,0.35)',
+                        minHeight: '40px',
+                    }}
+                    title="Visualizar presupuesto"
                 >
-                    📄{compacto ? '' : ' Vista'}
+                    👁{compacto ? '' : ' Visualizar'}
                 </button>
-                <button
-                    type="button"
-                    onClick={onShare}
-                    style={{ ...btnAccion, background: 'rgba(52,199,89,0.1)', color: '#34C759' }}
-                    title="WhatsApp"
-                >
-                    📲{compacto ? '' : ' WA'}
-                </button>
-                <button
-                    type="button"
-                    onClick={onDelete}
-                    style={{ ...btnAccion, background: 'rgba(255,59,48,0.1)', color: '#FF3B30' }}
-                    title="Eliminar"
-                >
-                    🗑️
-                </button>
-                {(Object.keys(CLASIFICACION_COLORS) as ClasificacionPresupuesto[]).map((k) => {
-                    const active = b.status === k;
-                    const c = CLASIFICACION_COLORS[k];
-                    return (
-                        <button
-                            key={k}
-                            type="button"
-                            onClick={() => onUpdateStatus(k)}
-                            style={{
-                                ...btnEstado,
-                                background: active ? c.bg : 'rgba(255,255,255,0.04)',
-                                color: active ? c.text : 'rgba(255,255,255,0.55)',
-                                border: active
-                                    ? `1px solid ${c.text}55`
-                                    : '1px solid rgba(255,255,255,0.06)',
-                            }}
-                            title={c.label}
-                        >
-                            <span>{c.icon}</span>
-                            {!compacto ? <span>{c.label}</span> : null}
-                        </button>
-                    );
-                })}
+
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <h3
+                        style={{
+                            color: 'white',
+                            fontSize: compacto ? '14px' : '15px',
+                            fontWeight: 700,
+                            margin: 0,
+                            lineHeight: 1.25,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                        }}
+                        title={b.customer_name}
+                    >
+                        {b.customer_name || 'Sin cliente'}
+                    </h3>
+                    <div
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            flexWrap: 'wrap',
+                            marginTop: '5px',
+                        }}
+                    >
+                        <p style={metaChip} title="Número de presupuesto">
+                            {numero}
+                        </p>
+                        <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: '10px' }}>·</span>
+                        <p style={{ ...metaChip, fontFamily: 'inherit' }} title="Fecha">
+                            {fecha}
+                        </p>
+                        {b.customer_rif ? (
+                            <>
+                                <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: '10px' }}>·</span>
+                                <p
+                                    style={{
+                                        ...metaChip,
+                                        fontFamily: 'inherit',
+                                        color: 'rgba(255,255,255,0.35)',
+                                        fontWeight: 500,
+                                    }}
+                                    title="Identificación"
+                                >
+                                    {b.customer_rif}
+                                </p>
+                            </>
+                        ) : null}
+                    </div>
                 </div>
+
                 <span
                     style={{
                         color: '#34C759',
-                        fontSize: compacto ? '14px' : '17px',
+                        fontSize: compacto ? '13px' : '15px',
                         fontWeight: 800,
-                        lineHeight: 1,
+                        lineHeight: 1.2,
                         flexShrink: 0,
                         whiteSpace: 'nowrap',
+                        paddingTop: '2px',
                     }}
                 >
                     ${formatUSD(b.subtotal)}
                 </span>
+            </div>
+
+            <div
+                style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    flexWrap: 'wrap',
+                }}
+            >
+                <label
+                    style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        background: clasifStyle.bg,
+                        border: `1px solid ${clasifStyle.text}44`,
+                        borderRadius: '999px',
+                        padding: '4px 6px 4px 8px',
+                        minWidth: 0,
+                    }}
+                >
+                    <span aria-hidden style={{ fontSize: '12px', lineHeight: 1 }}>
+                        {clasifStyle.icon}
+                    </span>
+                    <select
+                        aria-label="Status del presupuesto"
+                        value={b.status}
+                        onChange={(e) => onUpdateStatus(e.target.value as ClasificacionPresupuesto)}
+                        style={{
+                            appearance: 'none',
+                            WebkitAppearance: 'none',
+                            background: 'transparent',
+                            border: 'none',
+                            color: clasifStyle.text,
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            padding: '2px 14px 2px 0',
+                            outline: 'none',
+                            cursor: 'pointer',
+                            maxWidth: '140px',
+                        }}
+                    >
+                        {(Object.keys(CLASIFICACION_COLORS) as ClasificacionPresupuesto[]).map((k) => (
+                            <option key={k} value={k} style={{ color: '#111', background: '#fff' }}>
+                                {CLASIFICACION_COLORS[k].label}
+                            </option>
+                        ))}
+                    </select>
+                </label>
+
+                <div style={{ display: 'flex', gap: '4px', marginLeft: 'auto' }}>
+                    <button
+                        type="button"
+                        onClick={onEditar}
+                        style={{ ...btnAccion, background: 'rgba(0,122,255,0.12)', color: '#007AFF' }}
+                        title="Editar"
+                    >
+                        ✏️{compacto ? '' : ' Editar'}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={onShare}
+                        style={{ ...btnAccion, background: 'rgba(52,199,89,0.1)', color: '#34C759' }}
+                        title="WhatsApp"
+                    >
+                        📲
+                    </button>
+                    <button
+                        type="button"
+                        onClick={onDelete}
+                        style={{ ...btnAccion, background: 'rgba(255,59,48,0.1)', color: '#FF3B30' }}
+                        title="Eliminar"
+                    >
+                        🗑️
+                    </button>
+                </div>
             </div>
         </div>
     );
@@ -294,9 +328,10 @@ export default function PresupuestosPage() {
     const [budgets, setBudgets] = useState<Budget[]>([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<'todos' | ClasificacionPresupuesto>('todos');
-    const [sortBy, setSortBy] = useState<'fecha' | 'nomenclatura'>('fecha');
+    const [sortBy, setSortBy] = useState<'fecha' | 'status' | 'nomenclatura'>('fecha');
     const [filtroNombre, setFiltroNombre] = useState('');
     const [filtroRif, setFiltroRif] = useState('');
+    const [filtroNumero, setFiltroNumero] = useState('');
     const [filtroFechaDesde, setFiltroFechaDesde] = useState('');
     const [filtroFechaHasta, setFiltroFechaHasta] = useState('');
     const [stats, setStats] = useState({
@@ -371,21 +406,33 @@ export default function PresupuestosPage() {
                 setFallbackById(fallbackMap);
             }
 
-            const getNumeroOrden = (b: Budget) => {
-                const raw = b.numero_correlativo;
-                const n =
-                    typeof raw === 'number'
-                        ? raw
-                        : typeof raw === 'string'
-                            ? Number(raw)
-                            : null;
-                if (n != null && !Number.isNaN(n)) return n;
-                return fallbackMap[b.id] ?? 500;
-            };
+            const getNumeroOrden = (b: Budget) => getNumeroValor(b, fallbackMap);
 
-            let sorted = [...data];
+            const numeroQ = filtroNumero.trim().toLowerCase().replace(/^p-/, '');
+            let filtered = [...data] as Budget[];
+            if (numeroQ) {
+                filtered = filtered.filter((b) => {
+                    const label = getPresupuestoNumero(b, fallbackMap[b.id]).toLowerCase();
+                    const valor = String(getNumeroOrden(b));
+                    return (
+                        label.includes(numeroQ) ||
+                        label.includes(`p-${numeroQ}`) ||
+                        valor.includes(numeroQ) ||
+                        b.id.toLowerCase().includes(numeroQ)
+                    );
+                });
+            }
+
+            let sorted = [...filtered];
             if (sortBy === 'fecha') {
                 sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+            } else if (sortBy === 'status') {
+                sorted.sort((a, b) => {
+                    const da = STATUS_SORT_ORDER[a.status] ?? 99;
+                    const db = STATUS_SORT_ORDER[b.status] ?? 99;
+                    if (da !== db) return da - db;
+                    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+                });
             } else {
                 sorted.sort((a, b) => getNumeroOrden(a) - getNumeroOrden(b));
             }
@@ -408,12 +455,13 @@ export default function PresupuestosPage() {
 
     useEffect(() => {
         fetchBudgets();
-    }, [filter, sortBy, filtroNombre, filtroRif, filtroFechaDesde, filtroFechaHasta]);
+    }, [filter, sortBy, filtroNombre, filtroRif, filtroNumero, filtroFechaDesde, filtroFechaHasta]);
 
     const hayFiltrosActivos =
         filter !== 'todos' ||
         filtroNombre.trim() !== '' ||
         filtroRif.trim() !== '' ||
+        filtroNumero.trim() !== '' ||
         filtroFechaDesde !== '' ||
         filtroFechaHasta !== '';
 
@@ -421,6 +469,7 @@ export default function PresupuestosPage() {
         setFilter('todos');
         setFiltroNombre('');
         setFiltroRif('');
+        setFiltroNumero('');
         setFiltroFechaDesde('');
         setFiltroFechaHasta('');
     };
@@ -655,6 +704,17 @@ export default function PresupuestosPage() {
                             </button>
                             <button
                                 type="button"
+                                onClick={() => setSortBy('status')}
+                                style={{
+                                    background: sortBy === 'status' ? 'rgba(255,255,255,0.1)' : 'transparent',
+                                    color: sortBy === 'status' ? 'white' : 'rgba(255,255,255,0.3)',
+                                    border: 'none', borderRadius: '8px', padding: '6px 10px', fontSize: '11px', fontWeight: 600, cursor: 'pointer'
+                                }}
+                            >
+                                Status
+                            </button>
+                            <button
+                                type="button"
                                 onClick={() => setSortBy('nomenclatura')}
                                 style={{
                                     background: sortBy === 'nomenclatura' ? 'rgba(255,255,255,0.1)' : 'transparent',
@@ -678,6 +738,8 @@ export default function PresupuestosPage() {
                     onFiltroNombreChange={setFiltroNombre}
                     filtroRif={filtroRif}
                     onFiltroRifChange={setFiltroRif}
+                    filtroNumero={filtroNumero}
+                    onFiltroNumeroChange={setFiltroNumero}
                     filtroFechaDesde={filtroFechaDesde}
                     onFiltroFechaDesdeChange={setFiltroFechaDesde}
                     filtroFechaHasta={filtroFechaHasta}

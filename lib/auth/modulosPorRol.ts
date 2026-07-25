@@ -5,18 +5,19 @@ import { normalizarRolEmpresa } from '@/lib/auth/permisosCatalogo';
 export type ModuloNavId =
   | 'inicio'
   | 'clientes'
+  | 'productos'
   | 'presupuestos'
   | 'ventas'
-  | 'productos'
+  | 'entidades'
+  | 'equipo'
   | 'proyectos'
   | 'domotica'
-  | 'entidades'
+  | 'nexus'
+  | 'legal'
   | 'rrhh'
   | 'almacen'
   | 'contabilidad'
   | 'cco'
-  | 'equipo'
-  | 'legal'
   | 'agenda';
 
 export type ModuloNavDef = {
@@ -28,33 +29,35 @@ export type ModuloNavDef = {
 /** Orden y rutas del dock (alineado a IOSNavBar). */
 export const MODULOS_NAV: ModuloNavDef[] = [
   { id: 'inicio', href: '/', label: 'Inicio' },
-  { id: 'domotica', href: '/nexus/vision', label: 'CCTV · NetVision' },
   { id: 'clientes', href: '/clientes', label: 'Clientes' },
+  { id: 'productos', href: '/productos', label: 'Productos' },
   { id: 'presupuestos', href: '/presupuestos', label: 'Presupuestos' },
   { id: 'ventas', href: '/ventas', label: 'Ventas' },
-  { id: 'productos', href: '/productos', label: 'Productos' },
-  { id: 'proyectos', href: '/proyectos/modulo', label: 'Proyectos' },
   { id: 'entidades', href: '/configuracion/entidades', label: 'Entidades' },
   /** Equipo se gestiona en el MENÚ de cada entidad; se mantiene el id por compatibilidad de roles. */
   { id: 'equipo', href: '/configuracion/entidades', label: 'Equipo' },
+  { id: 'proyectos', href: '/proyectos/modulo', label: 'Proyectos' },
+  { id: 'domotica', href: '/nexus/vision', label: 'CCTV' },
+  { id: 'nexus', href: '/nexus', label: 'NetVision' },
   { id: 'legal', href: '/legal', label: 'Legal' },
   { id: 'rrhh', href: '/rrhh/hojas-vida', label: 'RRHH' },
   { id: 'almacen', href: '/almacen', label: 'Almacenes' },
   { id: 'contabilidad', href: '/contabilidad', label: 'Conta' },
-  { id: 'cco', href: '/contabilidad/cco', label: 'CCO' },
   { id: 'agenda', href: '/agenda', label: 'Agenda' },
+  { id: 'cco', href: '/contabilidad/cco', label: 'CCO' },
 ];
 
 const MODULOS_POR_ROL: Record<RolEmpresa, ModuloNavId[]> = {
   admin: [
     'inicio',
     'clientes',
+    'productos',
     'presupuestos',
     'ventas',
-    'productos',
+    'entidades',
     'proyectos',
     'domotica',
-    'entidades',
+    'nexus',
     'rrhh',
     'almacen',
     'contabilidad',
@@ -66,6 +69,7 @@ const MODULOS_POR_ROL: Record<RolEmpresa, ModuloNavId[]> = {
     'presupuestos',
     'proyectos',
     'domotica',
+    'nexus',
     'almacen',
     'contabilidad',
     'agenda',
@@ -74,7 +78,7 @@ const MODULOS_POR_ROL: Record<RolEmpresa, ModuloNavId[]> = {
   comprador: ['inicio', 'proyectos', 'almacen', 'contabilidad', 'agenda'],
   almacen_central: ['inicio', 'almacen', 'contabilidad', 'agenda'],
   rrhh: ['inicio', 'rrhh', 'proyectos', 'entidades', 'agenda'],
-  solo_lectura: ['inicio', 'proyectos', 'domotica', 'contabilidad', 'almacen', 'agenda'],
+  solo_lectura: ['inicio', 'proyectos', 'domotica', 'nexus', 'contabilidad', 'almacen', 'agenda'],
   /** Suegro / invitado: solo Control Contable de Obra (lectura). */
   cco_lectura: ['inicio', 'cco'],
 };
