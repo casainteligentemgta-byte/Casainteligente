@@ -1,6 +1,19 @@
 -- Ficha de Recepción de Materiales (FRM) · ingresos provisionales de campo (nota / emergencia).
 -- Nota: el slot 196 está ocupado por 196_compras_entidad_destino.sql.
 
+-- Preview/padre sin 004/008 reaplicados: el FK a empresas exige la tabla.
+create table if not exists public.empresas (
+  id uuid primary key default gen_random_uuid(),
+  nombre text not null,
+  direccion text,
+  telefono text,
+  email text,
+  rif text,
+  notas text,
+  creado_en timestamptz default now(),
+  actualizado_en timestamptz default now()
+);
+
 -- ── Encabezado FRM ───────────────────────────────────────────────────────────
 create table if not exists public.ci_recepciones_campo (
   id uuid primary key default gen_random_uuid(),
