@@ -113,7 +113,7 @@ export default function DashboardPage() {
 
   return (
     <article className="home-inicio flex flex-col overflow-hidden px-4 pt-4 pb-2 sm:pt-5 landscape:pt-3 landscape:px-5 landscape:pb-2">
-      <header className="shrink-0 flex items-center justify-between gap-3 mb-3 landscape:mb-2">
+      <header className="shrink-0 mb-3 landscape:mb-2">
         <div className="min-w-0">
           <p
             suppressHydrationWarning
@@ -125,7 +125,7 @@ export default function DashboardPage() {
             CASA INTELIGENTE
           </h1>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="mt-2.5 flex items-center gap-2 landscape:mt-2">
           <Link
             href="/nexus/vision"
             className="rounded-full px-3 py-1.5 landscape:px-2.5 landscape:py-1 text-[10px] font-bold uppercase tracking-tighter text-[var(--nexus-cyan)] ring-1 ring-[rgba(0,242,254,0.45)] bg-[rgba(0,242,254,0.08)] hover:bg-[rgba(0,242,254,0.16)] transition-all"
