@@ -39,46 +39,6 @@ const navItems: NavItem[] = [
     ),
   },
   {
-    id: 'domotica',
-    href: '/nexus/vision',
-    label: 'CCTV',
-    icon: (active: boolean) => (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-        {/* Cámara CCTV / NetVision */}
-        <rect
-          x="3"
-          y="6"
-          width="12"
-          height="9"
-          rx="2"
-          stroke={active ? '#06B6D4' : '#8E8E93'}
-          strokeWidth="2"
-          fill={active ? 'rgba(6,182,212,0.12)' : 'none'}
-        />
-        <circle
-          cx="9"
-          cy="10.5"
-          r="2.25"
-          stroke={active ? '#06B6D4' : '#8E8E93'}
-          strokeWidth="2"
-        />
-        <path
-          d="M15 9.5l5-2.5v7l-5-2.5v-2z"
-          stroke={active ? '#06B6D4' : '#8E8E93'}
-          strokeWidth="2"
-          strokeLinejoin="round"
-          fill={active ? 'rgba(6,182,212,0.12)' : 'none'}
-        />
-        <path
-          d="M7 18h4"
-          stroke={active ? '#06B6D4' : '#8E8E93'}
-          strokeWidth="2"
-          strokeLinecap="round"
-        />
-      </svg>
-    ),
-  },
-  {
     id: 'clientes',
     href: '/clientes',
     label: 'Clientes',
@@ -99,6 +59,23 @@ const navItems: NavItem[] = [
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
+        />
+      </svg>
+    ),
+  },
+  {
+    id: 'productos',
+    href: '/productos',
+    label: 'Productos',
+    icon: (active: boolean) => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <path
+          d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"
+          stroke={active ? '#FF9500' : '#8E8E93'}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill={active ? 'rgba(255,149,0,0.1)' : 'none'}
         />
       </svg>
     ),
@@ -149,40 +126,6 @@ const navItems: NavItem[] = [
     ),
   },
   {
-    id: 'productos',
-    href: '/productos',
-    label: 'Productos',
-    icon: (active: boolean) => (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-        <path
-          d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"
-          stroke={active ? '#FF9500' : '#8E8E93'}
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          fill={active ? 'rgba(255,149,0,0.1)' : 'none'}
-        />
-      </svg>
-    ),
-  },
-  {
-    id: 'proyectos',
-    href: '/proyectos/modulo',
-    label: 'Proyectos',
-    icon: (active: boolean) => (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-        <path
-          d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"
-          stroke={active ? '#F59E0B' : '#8E8E93'}
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          fill={active ? 'rgba(245,158,11,0.12)' : 'none'}
-        />
-      </svg>
-    ),
-  },
-  {
     id: 'entidades',
     href: '/configuracion/entidades',
     label: 'Entidades',
@@ -214,6 +157,80 @@ const navItems: NavItem[] = [
           strokeLinejoin="round"
         />
         <circle cx="9" cy="7" r="4" stroke={active ? '#38BDF8' : '#8E8E93'} strokeWidth="2" />
+      </svg>
+    ),
+  },
+  {
+    id: 'proyectos',
+    href: '/proyectos/modulo',
+    label: 'Proyectos',
+    icon: (active: boolean) => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <path
+          d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"
+          stroke={active ? '#F59E0B' : '#8E8E93'}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill={active ? 'rgba(245,158,11,0.12)' : 'none'}
+        />
+      </svg>
+    ),
+  },
+  {
+    id: 'domotica',
+    href: '/nexus/vision',
+    label: 'CCTV',
+    icon: (active: boolean) => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        {/* Cámara CCTV / NetVision */}
+        <rect
+          x="3"
+          y="6"
+          width="12"
+          height="9"
+          rx="2"
+          stroke={active ? '#06B6D4' : '#8E8E93'}
+          strokeWidth="2"
+          fill={active ? 'rgba(6,182,212,0.12)' : 'none'}
+        />
+        <circle
+          cx="9"
+          cy="10.5"
+          r="2.25"
+          stroke={active ? '#06B6D4' : '#8E8E93'}
+          strokeWidth="2"
+        />
+        <path
+          d="M15 9.5l5-2.5v7l-5-2.5v-2z"
+          stroke={active ? '#06B6D4' : '#8E8E93'}
+          strokeWidth="2"
+          strokeLinejoin="round"
+          fill={active ? 'rgba(6,182,212,0.12)' : 'none'}
+        />
+        <path
+          d="M7 18h4"
+          stroke={active ? '#06B6D4' : '#8E8E93'}
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
+      </svg>
+    ),
+  },
+  {
+    id: 'nexus',
+    href: '/nexus',
+    label: 'NetVision',
+    icon: (active: boolean) => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <path
+          d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"
+          stroke={active ? '#06B6D4' : '#8E8E93'}
+          strokeWidth="2"
+          strokeLinejoin="round"
+          fill={active ? 'rgba(6,182,212,0.12)' : 'none'}
+        />
+        <circle cx="12" cy="12" r="2.25" fill={active ? '#06B6D4' : '#8E8E93'} />
       </svg>
     ),
   },
@@ -283,29 +300,6 @@ const navItems: NavItem[] = [
     ),
   },
   {
-    id: 'cco',
-    href: '/contabilidad/cco',
-    label: 'CCO',
-    icon: (active: boolean) => (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-        <path
-          d="M4 19V5a2 2 0 012-2h9l5 5v11a2 2 0 01-2 2H6a2 2 0 01-2-2z"
-          stroke={active ? '#5856D6' : '#8E8E93'}
-          strokeWidth="2"
-          strokeLinejoin="round"
-          fill={active ? 'rgba(88,86,214,0.12)' : 'none'}
-        />
-        <path
-          d="M14 3v4h4M8 13h8M8 17h5"
-          stroke={active ? '#5856D6' : '#8E8E93'}
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    ),
-  },
-  {
     id: 'agenda',
     href: '/agenda',
     label: 'Agenda',
@@ -330,6 +324,30 @@ const navItems: NavItem[] = [
       </svg>
     ),
   },
+  {
+    id: 'cco',
+    href: '/contabilidad/cco',
+    label: 'CCO',
+    icon: (active: boolean) => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <path
+          d="M4 19V5a2 2 0 012-2h9l5 5v11a2 2 0 01-2 2H6a2 2 0 01-2-2z"
+          stroke={active ? '#5856D6' : '#8E8E93'}
+          strokeWidth="2"
+          strokeLinejoin="round"
+          fill={active ? 'rgba(88,86,214,0.12)' : 'none'}
+        />
+        <path
+          d="M14 3v4h4M8 13h8M8 17h5"
+          stroke={active ? '#5856D6' : '#8E8E93'}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    ),
+  }
+
 ];
 
 function navItemActive(pathname: string, href: string): boolean {
@@ -347,6 +365,9 @@ function navItemActive(pathname: string, href: string): boolean {
   }
   if (href === '/nexus/vision') {
     return pathname.startsWith('/nexus/vision');
+  }
+  if (href === '/nexus') {
+    return pathname === '/nexus' || (pathname.startsWith('/nexus/') && !pathname.startsWith('/nexus/vision'));
   }
   if (href === '/contabilidad/cco') {
     return pathname === '/contabilidad/cco' || pathname.startsWith('/contabilidad/cco/');
@@ -465,7 +486,7 @@ export default function IOSNavBar() {
 
               return (
                 <Link
-                  key={item.href}
+                  key={item.id}
                   href={item.href}
                   className="flex flex-col items-center gap-1 min-w-[62px] py-1 px-1 transition-all duration-150 active:scale-90"
                   style={{ WebkitTapHighlightColor: 'transparent' }}
