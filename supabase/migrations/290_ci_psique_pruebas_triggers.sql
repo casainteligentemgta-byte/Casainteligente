@@ -89,7 +89,21 @@ create policy "psique_pru_select_anon" on public.pruebas
 create policy "psique_trg_select_anon" on public.triggers_prueba
   for select to anon using (true);
 
--- Seed categorías
+-- Alinear secuencias si las tablas ya tenían filas (evita duplicate key en serial).
+select setval(
+  pg_get_serial_sequence('public.categorias_test', 'id_categoria'),
+  greatest(coalesce((select max(id_categoria) from public.categorias_test), 1), 1)
+);
+select setval(
+  pg_get_serial_sequence('public.pruebas', 'id_prueba'),
+  greatest(coalesce((select max(id_prueba) from public.pruebas), 1), 1)
+);
+select setval(
+  pg_get_serial_sequence('public.triggers_prueba', 'id'),
+  greatest(coalesce((select max(id) from public.triggers_prueba), 1), 1)
+);
+
+-- Seed categorías (idempotente; no choca con filas previas)
 insert into public.categorias_test (nombre) values
   ('Cognitiva / GMA'),
   ('Integridad'),
@@ -98,6 +112,12 @@ insert into public.categorias_test (nombre) values
   ('Seguridad ocupacional'),
   ('Atención y vigilancia')
 on conflict (nombre) do nothing;
+
+-- Re-sincronizar tras posibles inserts
+select setval(
+  pg_get_serial_sequence('public.categorias_test', 'id_categoria'),
+  greatest(coalesce((select max(id_categoria) from public.categorias_test), 1), 1)
+);
 
 -- Seed pruebas (idempotente por nombre)
 insert into public.pruebas (
