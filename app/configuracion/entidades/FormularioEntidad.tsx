@@ -4,7 +4,6 @@ import * as Tabs from '@radix-ui/react-tabs';
 import {
   Building2,
   Calendar,
-  ChevronLeft,
   FileText,
   ImageIcon,
   Plus,
@@ -476,20 +475,17 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
       >
         <div className="flex items-start justify-between gap-3 border-b border-white/10 px-5 py-4">
           <div className="flex min-w-0 items-center gap-3">
-            {enSeccion ? (
-              <button
-                type="button"
-                onClick={() => setEnSeccion(false)}
-                aria-label="Volver al menú"
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#FF9500]/35 bg-[#FF9500]/10 transition hover:bg-[#FF9500]/20"
-              >
-                <ChevronLeft className="h-5 w-5 text-[#FFD60A]" aria-hidden />
-              </button>
-            ) : (
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#FF9500]/35 bg-[#FF9500]/10">
-                <Building2 className="h-5 w-5 text-[#FFD60A]" aria-hidden />
-              </div>
-            )}
+            <button
+              type="button"
+              onClick={() => {
+                if (enSeccion) setEnSeccion(false);
+                else onClose();
+              }}
+              aria-label={enSeccion ? 'Volver a submenús' : 'Salir'}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#FF9500]/35 bg-[#FF9500]/10 transition hover:bg-[#FF9500]/20"
+            >
+              <Building2 className="h-5 w-5 text-[#FFD60A]" aria-hidden />
+            </button>
             <div className="min-w-0">
               <h2 id="form-entidad-titulo" className="truncate text-lg font-bold tracking-tight text-white">
                 {enSeccion
@@ -799,12 +795,6 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
               </Tabs.Content>
 
               <Tabs.Content value="mercantil" className="space-y-4 outline-none">
-                <p className="text-xs text-zinc-500">
-                  Datos del asiento mercantil y domicilio social. El{' '}
-                  <strong className="text-zinc-400">registro</strong>, <strong className="text-zinc-400">tomo</strong>,{' '}
-                  <strong className="text-zinc-400">número</strong> y <strong className="text-zinc-400">fecha</strong> alimentan
-                  el contrato laboral PDF. Si el domicilio queda vacío, se usa la dirección fiscal (pestaña Datos).
-                </p>
                 <div>
                   <label className={labelClass}>Registro</label>
                   <input
