@@ -18,6 +18,10 @@ import {
   type CandidatoScore,
   type DecisionMatch,
 } from '@/lib/contabilidad/cco/emparejarSoportesEgresosScoring';
+import {
+  mensajeErrorEmparejarSoportes,
+  parseRespuestaEmparejarSoportes,
+} from '@/lib/contabilidad/cco/parseRespuestaEmparejarSoportes';
 
 /** Respuesta del API de empareje (espejo tipado en cliente). */
 type MatchSoporteEgreso = {
@@ -231,18 +235,18 @@ export default function EgresoEmparejarSoportesModal({
         method: 'POST',
         body: form,
       });
-      const json = (await res.json()) as {
-        ok?: boolean;
-        error?: string;
-        matches?: MatchSoporteEgreso[];
-        resumen?: { auto: number; duda: number; sin_match: number };
-      };
-      if (!res.ok || !json.ok || !json.matches) {
-        throw new Error(json.error || 'No se pudo emparejar el lote.');
+      // text() + parse defensivo: Safari rompe con res.json() si Vercel
+      // devuelve HTML (timeout/502) → "The string did not match the expected pattern."
+      const raw = await res.text();
+      const json = parseRespuestaEmparejarSoportes(raw, res.status);
+      if (!res.ok || !json.ok || !Array.isArray(json.matches)) {
+        throw new Error(
+          mensajeErrorEmparejarSoportes(json.error || 'No se pudo emparejar el lote.'),
+        );
       }
 
       const byId = new Map(archivos.map((a) => [a.id, a.file]));
-      const enriched: MatchUi[] = json.matches.map((m) => ({
+      const enriched: MatchUi[] = (json.matches as MatchSoporteEgreso[]).map((m) => ({
         ...m,
         file: fileDesdeMatch(m, byId),
       }));
@@ -280,7 +284,7 @@ export default function EgresoEmparejarSoportesModal({
         );
       }
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Error del agente');
+      toast.error(mensajeErrorEmparejarSoportes(e));
     } finally {
       setProcesando(false);
       setAsignando(false);
@@ -370,6 +374,12 @@ export default function EgresoEmparejarSoportesModal({
             </>
           ) : null}
         </p>
+        {sinDoc.length > 800 || archivos.some((a) => a.file.size > 4 * 1024 * 1024) ? (
+          <p style={{ margin: '0 0 12px', fontSize: 12, color: '#9a3412' }}>
+            Tip: con muchos egresos o PDFs pesados (&gt;4&nbsp;MB / muchas páginas) filtre el
+            cuadro o suba facturas sueltas para evitar cortes del servidor.
+          </p>
+        ) : null}
 
         {fase === 'carga' || matches.length === 0 ? (
           <>

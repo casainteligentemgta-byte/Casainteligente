@@ -132,7 +132,15 @@ export async function POST(req: Request) {
       },
     });
   } catch (e) {
-    const message = e instanceof Error ? e.message : 'Error al emparejar soportes.';
+    let message = e instanceof Error ? e.message : 'Error al emparejar soportes.';
+    if (
+      /did not match the expected pattern/i.test(message) ||
+      /JSON Parse error/i.test(message) ||
+      /is not valid JSON/i.test(message)
+    ) {
+      message =
+        'No se pudo procesar el PDF (OCR o respuesta inválida). Pruebe con un PDF más corto o por facturas sueltas.';
+    }
     console.error('[POST cco/emparejar-soportes]', e);
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
