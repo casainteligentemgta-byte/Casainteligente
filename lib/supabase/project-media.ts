@@ -70,7 +70,11 @@ function sanitizeExt(file: File, fallback: string): string {
 export async function uploadProjectAsset(
   supabase: SupabaseClient,
   file: File,
-  opts: { proyectoId: string; category: 'proyecto' | 'plano' | 'visita'; folderHint?: string },
+  opts: {
+    proyectoId: string;
+    category: 'proyecto' | 'plano' | 'visita' | 'tour';
+    folderHint?: string;
+  },
 ): Promise<{ bucket: string | null; path: string | null; publicUrl: string | null; error: string | null }> {
   const ext = sanitizeExt(file, 'bin');
   const folder = opts.folderHint?.trim() || opts.category;

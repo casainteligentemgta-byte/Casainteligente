@@ -590,6 +590,23 @@ export default function ModuloProyectosPage() {
                           Control de obra
                         </button>
                       </Link>
+                      <Link href={`/proyectos/modulo/${r.id}/control-obra/tours`}>
+                        <button
+                          type="button"
+                          style={{
+                            background: 'rgba(14, 165, 233, 0.2)',
+                            color: '#bae6fd',
+                            border: '1px solid rgba(56, 189, 248, 0.55)',
+                            borderRadius: '10px',
+                            padding: '8px 14px',
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Tours 3D
+                        </button>
+                      </Link>
                       <ProyectoAccionesConfigRoles
                         proyectoId={r.id}
                         proyectoNombre={r.nombre}
