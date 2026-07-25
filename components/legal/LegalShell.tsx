@@ -7,7 +7,6 @@ import {
   Scale,
   FolderOpen,
   LayoutDashboard,
-  ArrowLeft,
   MessageSquareText,
   Calculator,
   Camera,
@@ -56,9 +55,20 @@ export default function LegalShell({ children }: { children: React.ReactNode }) 
       <header className="sticky top-0 z-40 border-b border-amber-500/20 bg-[#0c1018]/95 backdrop-blur-xl">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-500/35 bg-amber-500/10">
-              <Scale className="h-5 w-5 text-amber-300" />
-            </div>
+            {!standalone ? (
+              <Link
+                href="/"
+                aria-label="Volver al CRM"
+                title="Volver al CRM"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-500/35 bg-amber-500/10 transition hover:border-amber-400/50 hover:bg-amber-500/20"
+              >
+                <Scale className="h-5 w-5 text-amber-300" />
+              </Link>
+            ) : (
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-500/35 bg-amber-500/10">
+                <Scale className="h-5 w-5 text-amber-300" />
+              </div>
+            )}
             <div className="min-w-0">
               <p className="truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-500/80">
                 {eyebrow}
@@ -68,19 +78,11 @@ export default function LegalShell({ children }: { children: React.ReactNode }) 
               </h1>
             </div>
           </div>
-          {!standalone ? (
-            <Link
-              href="/"
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-zinc-400 transition hover:border-white/20 hover:text-zinc-200"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" />
-              CRM
-            </Link>
-          ) : (
+          {standalone ? (
             <span className="hidden rounded-lg border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-200/90 sm:inline">
               Solo abogado
             </span>
-          )}
+          ) : null}
         </div>
         <nav
           className="mx-auto max-w-5xl px-4 pb-3"
