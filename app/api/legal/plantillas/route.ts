@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAccesoLegal } from '@/lib/legal/requireAccesoLegal';
+import { ensureContratoIndividualObraLegal } from '@/lib/legal/ensureContratoIndividualObraLegal';
 import {
   esTipoDocumentoLegal,
   extraerVariablesDeCuerpo,
@@ -11,12 +12,14 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 const HINT =
-  'Ejecute las migraciones 271 y 273 (plantillas + archivos) en Supabase SQL Editor.';
+  'Ejecute las migraciones 271, 273 y 296 (plantillas + contrato individual obra) en Supabase SQL Editor.';
 
 /** GET — listado de formatos/plantillas del org (+ globales). */
 export async function GET(req: Request) {
   const gate = await requireAccesoLegal();
   if (!gate.ok) return gate.response;
+
+  await ensureContratoIndividualObraLegal(gate.admin);
 
   const url = new URL(req.url);
   const soloOrg = url.searchParams.get('solo_org') === '1';
