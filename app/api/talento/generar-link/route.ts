@@ -3,8 +3,15 @@ import { NextResponse } from 'next/server';
 import { celularParaInserto } from '@/lib/registro/ciEmpleadosCelular';
 import { nombresLegadoDesdeTextoLibre } from '@/lib/registro/ciEmpleadosNombresLegado';
 import { crearExpedienteToken } from '@/lib/reclutamiento/validarExpedienteToken';
+import { esRolExamenCompleto } from '@/lib/talento/psique/mapaEvaluacion';
+import { mapaEvaluacionDesdeRol } from '@/lib/talento/psique/mapaEvaluacion';
+import {
+  recomendarPruebasPsique,
+  rolExamenDesdePsique,
+  type RolExamenPsique,
+} from '@/lib/talento/psique/recomendarPruebasPsique';
+import { snapshotPsiqueRecomendacion } from '@/lib/talento/psique/snapshotRecomendacion';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
-import type { RolExamen } from '@/types/talento';
 
 function trimBase(u: string): string {
   return u.trim().replace(/\/$/, '');
@@ -45,7 +52,8 @@ export async function POST(req: Request) {
   let body: {
     nombre?: string;
     whatsapp?: string;
-    rol_examen?: RolExamen;
+    /** programador | tecnico | obrero | vigilante */
+    rol_examen?: string;
     rol_buscado?: string;
     /** UUID en `ci_proyectos` (módulo integral) para planilla de empleo / PDF. */
     proyecto_modulo_id?: string;
@@ -60,8 +68,6 @@ export async function POST(req: Request) {
 
   const nombre = (body.nombre ?? '').trim();
   const whatsapp = (body.whatsapp ?? '').trim();
-  const rolExamen: RolExamen =
-    body.rol_examen === 'programador' || body.rol_examen === 'tecnico' ? body.rol_examen : 'tecnico';
   const rolBuscado = (body.rol_buscado ?? '').trim() || 'Candidato (enlace de invitación)';
   const proyectoModuloId = (body.proyecto_modulo_id ?? '').trim();
 
@@ -83,6 +89,17 @@ export async function POST(req: Request) {
 
   const supabase = admin.client;
 
+  const psique = await recomendarPruebasPsique(supabase, { textoSolicitud: rolBuscado });
+  const rolBody = esRolExamenCompleto(body.rol_examen ?? '')
+    ? (body.rol_examen as RolExamenPsique)
+    : null;
+  const rolExamen: RolExamenPsique = rolBody ?? rolExamenDesdePsique(psique.rol_examen_sugerido);
+  const mapa = mapaEvaluacionDesdeRol(rolExamen);
+  const psiqueSnap = snapshotPsiqueRecomendacion({
+    ...psique,
+    rol_examen_sugerido: rolExamen,
+  });
+
   const token = randomUUID();
   /** Ventana amplia: onboarding por WhatsApp puede tardar días; el examen sigue limitado a 15 min en UI al iniciar. */
   const expiraAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -98,6 +115,7 @@ export async function POST(req: Request) {
     estado_proceso: 'pendiente_cv',
     rol_examen: rolExamen,
     rol_buscado: rolBuscado,
+    psique_recomendacion: psiqueSnap,
     respuestas_personalidad: {},
     respuestas_logica: {},
   };
@@ -105,16 +123,30 @@ export async function POST(req: Request) {
     insertRow.proyecto_modulo_id = proyectoModuloId;
   }
 
-  const { data: empleado, error: errEmp } = await supabase.from('ci_empleados').insert(insertRow as never)
+  let { data: empleado, error: errEmp } = await supabase.from('ci_empleados').insert(insertRow as never)
     .select('id')
     .single();
+
+  // Si falta migración 293, reintentar sin snapshot Psique.
+  if (
+    errEmp &&
+    ((errEmp.message ?? '').includes('psique_recomendacion') ||
+      (errEmp.message ?? '').includes('schema cache'))
+  ) {
+    delete insertRow.psique_recomendacion;
+    const retry = await supabase.from('ci_empleados').insert(insertRow as never).select('id').single();
+    empleado = retry.data;
+    errEmp = retry.error;
+  }
 
   if (errEmp || !empleado) {
     console.error('[talento generar-link] empleado', errEmp);
     const hint =
       (errEmp?.message ?? '').includes('proyecto_modulo_id') || (errEmp?.message ?? '').includes('schema cache')
         ? 'Si acabas de añadir proyecto al enlace: ejecuta migración 063 (ci_empleados.proyecto_modulo_id) y recarga el esquema en Supabase.'
-        : 'Revisa migraciones 025–029 (ci_empleados, ci_examenes) y columnas de onboarding.';
+        : (errEmp?.message ?? '').includes('psique')
+          ? 'Ejecuta migración 293_ci_empleados_psique_recomendacion.sql y recarga el schema.'
+          : 'Revisa migraciones 025–029 (ci_empleados, ci_examenes) y columnas de onboarding.';
     return NextResponse.json(
       { error: errEmp?.message ?? 'No se pudo crear el empleado', hint },
       { status: 500 },
@@ -157,5 +189,14 @@ export async function POST(req: Request) {
     expira_at: expiraAt,
     empleado_id: row.id,
     token,
+    rol_examen: rolExamen,
+    psique: {
+      palabras_clave: psique.palabras_clave,
+      pruebas: psique.pruebas,
+      rol_examen_sugerido: rolExamen,
+      fuente: psique.fuente,
+      aviso: psique.aviso ?? null,
+      evaluacion: mapa,
+    },
   });
 }

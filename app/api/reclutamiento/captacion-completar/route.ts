@@ -11,6 +11,11 @@ import { hojaVidaDesdeRow, nombreCompletoDesde } from '@/lib/talento/hojaVidaObr
 import { resolvePlanillaPatronoParaEmpleado, resolvePlanillaPatronoPdf } from '@/lib/talento/resolvePlanillaPatronoPdf';
 import { nombresLegadoDesdeGaceta } from '@/lib/registro/ciEmpleadosNombresLegado';
 import { ensureCiExamenInviteForEmpleado } from '@/lib/talento/ensureCiExamenInviteForEmpleado';
+import {
+  recomendarPruebasPsique,
+  rolExamenDesdePsique,
+} from '@/lib/talento/psique/recomendarPruebasPsique';
+import { snapshotPsiqueRecomendacion } from '@/lib/talento/psique/snapshotRecomendacion';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import { friendlyStorageError } from '@/lib/supabase/friendlyStorageError';
 
@@ -134,6 +139,22 @@ export async function POST(req: Request) {
   );
   const tokenRegistro = randomUUID();
 
+  /** Psique elige banco + semáforo del libro según cargo/vacante (nunca programador en captación gaceta). */
+  const psique = await recomendarPruebasPsique(admin.client, {
+    textoSolicitud: `${cargoEtiqueta} ${n.tipo_vacante ?? ''}`.trim(),
+  });
+  let rolExamen = rolExamenDesdePsique(psique.rol_examen_sugerido);
+  if (rolExamen === 'programador') rolExamen = 'tecnico';
+  const tipoVac = (n.tipo_vacante ?? '').toLowerCase();
+  if (tipoVac.includes('obrero') && rolExamen === 'tecnico') {
+    // Vacante obrero → libro ABC (salvo que Psique haya marcado vigilante).
+    rolExamen = 'obrero';
+  }
+  const psiqueSnap = snapshotPsiqueRecomendacion({
+    ...psique,
+    rol_examen_sugerido: rolExamen,
+  });
+
   const insertPayload: Record<string, unknown> = {
     recruitment_need_id: n.id,
     proyecto_modulo_id: n.proyecto_modulo_id,
@@ -149,8 +170,9 @@ export async function POST(req: Request) {
     documento: formState.cedula.trim(),
     cedula: formState.cedula.trim(),
     celular: formState.celular.trim(),
-    rol_examen: 'tecnico',
+    rol_examen: rolExamen,
     rol_buscado: cargoEtiqueta,
+    psique_recomendacion: psiqueSnap,
     respuestas_personalidad: [],
     respuestas_logica: [],
     estado: 'evaluacion_pendiente',
@@ -197,18 +219,33 @@ export async function POST(req: Request) {
     token_registro: tokenRegistro,
   };
 
-  const { data: ins, error: insErr } = await admin.client
+  let { data: ins, error: insErr } = await admin.client
     .from('ci_empleados')
     .insert(insertPayload as never)
     .select('id')
     .single();
+
+  if (
+    insErr &&
+    ((insErr.message ?? '').includes('psique_recomendacion') ||
+      (insErr.message ?? '').includes('schema cache'))
+  ) {
+    delete insertPayload.psique_recomendacion;
+    const retry = await admin.client
+      .from('ci_empleados')
+      .insert(insertPayload as never)
+      .select('id')
+      .single();
+    ins = retry.data;
+    insErr = retry.error;
+  }
 
   if (insErr || !ins) {
     return NextResponse.json(
       {
         error: insErr?.message ?? 'No se pudo guardar el obrero.',
         hint: (insErr?.message ?? '').toLowerCase().includes('column')
-          ? 'Ejecuta migraciones 065+ en Supabase.'
+          ? 'Ejecuta migraciones 065+ / 293 (psique_recomendacion) en Supabase.'
           : undefined,
       },
       { status: 500 },
