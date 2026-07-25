@@ -12,7 +12,48 @@ export type FilaRolUsuario = {
 
 function esErrorColumnaInexistente(message: string | undefined, columna: string): boolean {
   const m = (message ?? '').toLowerCase();
-  return m.includes('could not find') && m.includes(columna.toLowerCase());
+  const col = columna.toLowerCase();
+  if (!m.includes(col)) return false;
+  // PostgREST: "Could not find the 'x' column…"; Postgres: "column …x does not exist"
+  return (
+    m.includes('could not find') ||
+    m.includes('does not exist') ||
+    m.includes('schema cache')
+  );
+}
+
+function normalizarFilaRol(row: FilaRolUsuario): FilaRolUsuario {
+  const usuarioId = row.usuario_id ?? row.user_id;
+  return usuarioId ? { ...row, usuario_id: usuarioId, user_id: usuarioId } : row;
+}
+
+/** Listado global de asignaciones (Equipo / Menú del patrono). Producción: `user_id`. */
+export async function listarAsignacionesRolesEmpresa(
+  supabase: SupabaseClient,
+): Promise<{ data: FilaRolUsuario[]; error: string | null }> {
+  const legacy = await supabase
+    .from('ci_usuarios_roles')
+    .select('id, rol, entidad_id, user_id, created_at, ci_entidades(nombre)')
+    .order('created_at', { ascending: false });
+  if (!legacy.error) {
+    return {
+      data: ((legacy.data ?? []) as FilaRolUsuario[]).map(normalizarFilaRol),
+      error: null,
+    };
+  }
+  if (!esErrorColumnaInexistente(legacy.error.message, 'user_id')) {
+    return { data: [], error: legacy.error.message };
+  }
+
+  const modern = await supabase
+    .from('ci_usuarios_roles')
+    .select('id, rol, entidad_id, usuario_id, created_at, updated_at, ci_entidades(nombre)')
+    .order('created_at', { ascending: false });
+  if (modern.error) return { data: [], error: modern.error.message };
+  return {
+    data: ((modern.data ?? []) as FilaRolUsuario[]).map(normalizarFilaRol),
+    error: null,
+  };
 }
 
 /** Producción usa `user_id` + enum; migración 139 usa `usuario_id` + texto libre. */

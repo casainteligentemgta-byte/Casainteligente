@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { listarAsignacionesRolesEmpresa } from '@/lib/auth/ciUsuariosRolesDb';
 import { requirePermisoWeb } from '@/lib/auth/requirePermisoRoute';
 
 export const dynamic = 'force-dynamic';
@@ -13,14 +14,11 @@ export async function GET() {
   }
 
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from('ci_usuarios_roles')
-    .select('id, rol, entidad_id, usuario_id, created_at, ci_entidades(nombre)')
-    .order('created_at', { ascending: false });
+  const { data, error } = await listarAsignacionesRolesEmpresa(supabase);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, filas: data ?? [] });
+  return NextResponse.json({ ok: true, filas: data });
 }
