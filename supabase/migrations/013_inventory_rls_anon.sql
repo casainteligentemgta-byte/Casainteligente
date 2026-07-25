@@ -88,6 +88,8 @@ create table if not exists public.quality_inspections (
   material_id uuid references public.global_inventory (id) on delete set null,
   status text not null default 'PENDIENTE',
   line_description text,
+  remarks text,
+  inspected_at timestamptz,
   created_at timestamptz default now()
 );
 

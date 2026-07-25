@@ -207,6 +207,12 @@ begin
 end;
 $$;
 
+-- Columnas requeridas por el trigger (pueden faltar en Preview/stubs).
+alter table public.quality_inspections
+  add column if not exists status text not null default 'PENDIENTE',
+  add column if not exists remarks text,
+  add column if not exists inspected_at timestamptz;
+
 drop trigger if exists tr_sync_purchase_detail_estado_logistica on public.quality_inspections;
 create trigger tr_sync_purchase_detail_estado_logistica
   after insert or update of status, remarks, inspected_at on public.quality_inspections
