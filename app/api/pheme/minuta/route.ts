@@ -53,11 +53,16 @@ async function handleMultipart(req: Request) {
       ? Number(durRaw)
       : null;
   const guardar = String(form.get('guardar') ?? 'true') !== 'false';
-  const file = form.get('audio');
+  const file =
+    form.get('archivo_audio') instanceof File
+      ? (form.get('archivo_audio') as File)
+      : form.get('audio') instanceof File
+        ? (form.get('audio') as File)
+        : null;
 
-  if (!(file instanceof File) || file.size === 0) {
+  if (!file || file.size === 0) {
     return NextResponse.json(
-      { error: 'Falta archivo audio en multipart (campo «audio»)' },
+      { error: 'Falta archivo audio (campo «archivo_audio» o «audio»)' },
       { status: 400 },
     );
   }

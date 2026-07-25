@@ -44,9 +44,9 @@ export default function PhemeMinutaClient() {
         }
         const fd = new FormData();
         fd.set('titulo_reunion', titulo.trim() || 'Sin título');
-        fd.set('audio', audioFile);
+        fd.set('archivo_audio', audioFile);
         if (duracion.trim()) fd.set('duracion_minutos', duracion.trim());
-        res = await fetch(apiUrl('/api/pheme/minuta'), { method: 'POST', body: fd });
+        res = await fetch(apiUrl('/api/pheme/procesar-audio'), { method: 'POST', body: fd });
       } else {
         const t = texto.trim();
         if (!t) {
@@ -65,9 +65,13 @@ export default function PhemeMinutaClient() {
         });
       }
 
-      const j = (await res.json().catch(() => ({}))) as ApiOk & { error?: string };
-      if (!res.ok) {
-        const msg = j.error || 'No se pudo generar la minuta';
+      const j = (await res.json().catch(() => ({}))) as ApiOk & {
+        error?: string;
+        detail?: string;
+        status?: string;
+      };
+      if (!res.ok || j.status === 'error') {
+        const msg = j.detail || j.error || 'No se pudo generar la minuta';
         setError(msg);
         toast.error(msg);
         return;
