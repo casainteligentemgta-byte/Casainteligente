@@ -590,6 +590,25 @@ export default function ModuloProyectosPage() {
                           Control de obra
                         </button>
                       </Link>
+                      {r.origen === 'modulo' ? (
+                        <Link href={`/proyectos/modulo/${r.id}/control-obra/equipo`}>
+                          <button
+                            type="button"
+                            style={{
+                              background: 'rgba(99, 102, 241, 0.22)',
+                              color: '#c7d2fe',
+                              border: '1px solid rgba(129, 140, 248, 0.55)',
+                              borderRadius: '10px',
+                              padding: '8px 14px',
+                              fontSize: '12px',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Equipo
+                          </button>
+                        </Link>
+                      ) : null}
                       <ProyectoAccionesConfigRoles
                         proyectoId={r.id}
                         proyectoNombre={r.nombre}

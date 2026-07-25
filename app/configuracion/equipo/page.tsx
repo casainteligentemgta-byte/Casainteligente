@@ -1,11 +1,11 @@
 import { redirect } from 'next/navigation';
 
 export const metadata = {
-  title: 'Equipo y permisos | Casa Inteligente',
-  description: 'El equipo se gestiona desde el MENÚ de cada entidad / patrono.',
+  title: 'Equipo | Casa Inteligente',
+  description: 'El equipo se gestiona dentro de cada proyecto (Control de obra → Equipo).',
 };
 
-/** Equipo vive dentro del MENÚ de Entidades (pestaña Equipo por patrono). */
+/** Equipo vive dentro de cada proyecto: /proyectos/modulo/[id]/control-obra/equipo */
 export default function ConfiguracionEquipoPage() {
-  redirect('/configuracion/entidades');
+  redirect('/proyectos/modulo');
 }

@@ -999,6 +999,12 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                 <div className="mt-4 flex flex-wrap items-start gap-4">
                   <ImportarPresupuestoLulo proyectoId={id} />
                   <Link
+                    href={`/proyectos/modulo/${id}/control-obra/equipo`}
+                    className="rounded-xl border border-indigo-500/40 bg-indigo-950/35 px-4 py-3 text-xs font-semibold text-indigo-100 hover:bg-indigo-900/45"
+                  >
+                    Equipo →
+                  </Link>
+                  <Link
                     href={`/proyectos/modulo/${id}?tab=finanzas`}
                     className="rounded-xl border border-emerald-500/35 bg-emerald-950/30 px-4 py-3 text-xs font-semibold text-emerald-100 hover:bg-emerald-900/40"
                   >
