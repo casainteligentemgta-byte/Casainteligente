@@ -452,16 +452,28 @@ export default function ContabilidadPage() {
                 <h1 style={{ color: 'white', fontSize: '24px', fontWeight: 800 }}>Contabilidad</h1>
             </div>
 
-            <div style={{ padding: '20px' }}>
+            <div
+                style={{
+                    padding: '16px',
+                    width: '100%',
+                    maxWidth: '100%',
+                    boxSizing: 'border-box',
+                    overflowX: 'hidden',
+                }}
+            >
                 <div
                     style={{
                         ...glass,
-                        padding: '24px',
+                        width: '100%',
+                        maxWidth: '100%',
+                        boxSizing: 'border-box',
+                        padding: '16px',
                         marginBottom: '24px',
+                        overflow: 'hidden',
                         background: 'linear-gradient(135deg, rgba(88,86,214,0.1) 0%, rgba(0,0,0,0) 100%)',
                     }}
                 >
-                    <div style={{ marginBottom: '14px' }}>
+                    <div style={{ marginBottom: '14px', minWidth: 0 }}>
                         <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '13px', fontWeight: 600 }}>
                             BALANCE MENSUAL
                         </p>
@@ -486,17 +498,21 @@ export default function ContabilidadPage() {
                             value={obraConsulta}
                             onChange={(e) => onObraConsultaChange(e.target.value)}
                             style={{
+                                display: 'block',
                                 width: '100%',
-                                maxWidth: '420px',
+                                maxWidth: '100%',
+                                boxSizing: 'border-box',
                                 appearance: 'none',
+                                WebkitAppearance: 'none',
                                 background: 'rgba(0,0,0,0.35)',
                                 border: '1px solid rgba(255,255,255,0.14)',
                                 borderRadius: '12px',
                                 color: 'white',
                                 fontSize: '13px',
                                 fontWeight: 600,
-                                padding: '10px 12px',
+                                padding: '10px 36px 10px 12px',
                                 outline: 'none',
+                                minWidth: 0,
                             }}
                         >
                             <option value="">Todas las obras</option>
@@ -514,17 +530,27 @@ export default function ContabilidadPage() {
                             justifyContent: 'space-between',
                             alignItems: 'flex-start',
                             marginBottom: '16px',
-                            gap: '12px',
+                            gap: '10px',
+                            minWidth: 0,
+                            flexWrap: 'wrap',
                         }}
                     >
-                        <div>
+                        <div style={{ minWidth: 0, flex: '1 1 140px' }}>
                             {loadingBalance ? (
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
                                     <Loader2 size={20} color="#5856D6" className="animate-spin" />
                                     <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '14px' }}>Calculando…</span>
                                 </div>
                             ) : (
-                                <h2 style={{ color: 'white', fontSize: '32px', fontWeight: 800, marginTop: '4px' }}>
+                                <h2
+                                    style={{
+                                        color: 'white',
+                                        fontSize: '28px',
+                                        fontWeight: 800,
+                                        marginTop: '4px',
+                                        wordBreak: 'break-word',
+                                    }}
+                                >
                                     {fmtUsd(balanceUsd)}
                                 </h2>
                             )}
@@ -534,12 +560,15 @@ export default function ContabilidadPage() {
                                 style={{
                                     background: balancePositivo ? 'rgba(52,199,89,0.1)' : 'rgba(255,59,48,0.12)',
                                     color: balancePositivo ? '#34C759' : '#FF3B30',
-                                    padding: '6px 12px',
+                                    padding: '6px 10px',
                                     borderRadius: '12px',
                                     fontSize: '11px',
                                     fontWeight: 700,
                                     textAlign: 'right',
                                     lineHeight: 1.4,
+                                    flex: '0 1 auto',
+                                    maxWidth: '100%',
+                                    boxSizing: 'border-box',
                                 }}
                             >
                                 Ingresos − Egresos
@@ -556,7 +585,15 @@ export default function ContabilidadPage() {
                         <p style={{ color: '#FF9500', fontSize: '12px', marginBottom: '12px' }}>{errorBalance}</p>
                     ) : null}
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                    <div
+                        style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
+                            gap: '10px',
+                            width: '100%',
+                            boxSizing: 'border-box',
+                        }}
+                    >
                         <PanelDesglose
                             titulo="INGRESOS"
                             subtitulo={
