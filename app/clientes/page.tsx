@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useState, useEffect, useCallback } from 'react';
 import ClienteCard from '@/components/clientes/ClienteCard';
 import { withTimeout } from '@/lib/http/withTimeout';
@@ -38,11 +39,20 @@ function normalizarStatus(s: string | null | undefined): ClienteStatusCard {
 }
 
 export default function ClientesPage() {
+    const router = useRouter();
     const [search, setSearch] = useState('');
     const [filtro, setFiltro] = useState('Ambos');
     const [lista, setLista] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [fetchError, setFetchError] = useState<string | null>(null);
+
+    const volverAtras = () => {
+        if (typeof window !== 'undefined' && window.history.length > 1) {
+            router.back();
+            return;
+        }
+        router.push('/');
+    };
 
     const fetchClientes = useCallback(async () => {
         setLoading(true);
@@ -245,39 +255,30 @@ export default function ClientesPage() {
                 {/* Title row */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <div style={{
-                            width: '38px', height: '38px', borderRadius: '11px',
-                            background: 'rgba(0,122,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        }}>
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                        <button
+                            type="button"
+                            onClick={volverAtras}
+                            aria-label="Volver"
+                            style={{
+                                width: '38px', height: '38px', borderRadius: '11px',
+                                background: 'rgba(0,122,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                border: 'none', padding: 0, cursor: 'pointer', flexShrink: 0,
+                            }}
+                        >
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
                                 <circle cx="9" cy="7" r="4" stroke="#007AFF" strokeWidth="1.8" />
                                 <path d="M2 21c0-4 3.1-7 7-7s7 3 7 7" stroke="#007AFF" strokeWidth="1.8" strokeLinecap="round" />
                                 <path d="M19 8v6M22 11h-6" stroke="#007AFF" strokeWidth="1.8" strokeLinecap="round" />
                             </svg>
-                        </div>
+                        </button>
                         <div>
                             <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'white', lineHeight: 1 }}>Clientes</h1>
                             <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.45)', marginTop: '2px' }}>
-                                {filtered.length} de {lista.length} registros
-                                {' · '}
                                 {filtro}
                                 {search ? ` · "${search}"` : ''}
                             </p>
                         </div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-                    <Link
-                        href="/clientes/crm"
-                        style={{
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            padding: '0 12px', height: '36px', borderRadius: '18px',
-                            background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)',
-                            color: 'rgba(255,255,255,0.75)', fontSize: '11px', fontWeight: 600,
-                            textDecoration: 'none',
-                        }}
-                    >
-                        Vista CRM
-                    </Link>
                     <Link
                         href="/clientes/nuevo"
                         style={{
@@ -286,12 +287,12 @@ export default function ClientesPage() {
                             background: '#007AFF', boxShadow: '0 4px 12px rgba(0,122,255,0.4)',
                             textDecoration: 'none', flexShrink: 0,
                         }}
+                        aria-label="Nuevo cliente"
                     >
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                             <path d="M8 2v12M2 8h12" stroke="white" strokeWidth="2" strokeLinecap="round" />
                         </svg>
                     </Link>
-                    </div>
                 </div>
 
                 {/* Search */}
