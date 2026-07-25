@@ -84,7 +84,6 @@ function getNumeroValor(b: Budget, fallbackById: Record<string, number>) {
 }
 
 type VistaPresupuestos = 'filas' | 'columnas';
-const VISTA_PRESUPUESTOS_KEY = 'ci-presupuestos-vista-v1';
 
 function TarjetaPresupuesto({
     b,
@@ -350,34 +349,9 @@ export default function PresupuestosPage() {
     });
     const [fallbackById, setFallbackById] = useState<Record<string, number>>({});
     const [filtrosAbiertos, setFiltrosAbiertos] = useState(false);
-    const [vista, setVista] = useState<VistaPresupuestos>('filas');
-    const [pantallaAncha, setPantallaAncha] = useState(true);
-
-    useEffect(() => {
-        try {
-            const saved = localStorage.getItem(VISTA_PRESUPUESTOS_KEY);
-            if (saved === 'filas' || saved === 'columnas') setVista(saved);
-        } catch {
-            /* SSR / privado */
-        }
-    }, []);
-
-    useEffect(() => {
-        const mq = window.matchMedia('(min-width: 900px)');
-        const actualizar = () => setPantallaAncha(mq.matches);
-        actualizar();
-        mq.addEventListener('change', actualizar);
-        return () => mq.removeEventListener('change', actualizar);
-    }, []);
-
-    const cambiarVista = (v: VistaPresupuestos) => {
-        setVista(v);
-        try {
-            localStorage.setItem(VISTA_PRESUPUESTOS_KEY, v);
-        } catch {
-            /* ignore */
-        }
-    };
+    const [statusMenuAbierto, setStatusMenuAbierto] = useState(false);
+    /** Lista siempre en filas; se eliminó el selector 1 filas / 3 cols. */
+    const vista: VistaPresupuestos = 'filas';
 
     const fetchBudgets = async () => {
         setLoading(true);
@@ -554,29 +528,29 @@ export default function PresupuestosPage() {
                     style={{
                         display: 'inline-flex',
                         alignItems: 'center',
-                        gap: '8px',
+                        gap: '5px',
                         background: hayFiltrosActivos ? 'rgba(0,122,255,0.15)' : 'rgba(255,255,255,0.06)',
                         color: hayFiltrosActivos ? '#007AFF' : 'rgba(255,255,255,0.85)',
                         border: hayFiltrosActivos ? '1px solid rgba(0,122,255,0.35)' : '1px solid rgba(255,255,255,0.1)',
-                        borderRadius: '12px',
-                        padding: '10px 20px',
-                        fontSize: '13px',
+                        borderRadius: '9px',
+                        padding: '6px 10px',
+                        fontSize: '11px',
                         fontWeight: 700,
                         cursor: 'pointer',
                         justifySelf: 'center',
                     }}
                 >
-                    <span aria-hidden>🔍</span>
+                    <span aria-hidden style={{ fontSize: '12px' }}>🔍</span>
                     Filtrar
                     {hayFiltrosActivos ? (
                         <span style={{
                             background: '#007AFF',
                             color: 'white',
-                            fontSize: '10px',
+                            fontSize: '9px',
                             fontWeight: 800,
                             borderRadius: '999px',
-                            padding: '2px 7px',
-                            minWidth: '18px',
+                            padding: '1px 5px',
+                            minWidth: '14px',
                             textAlign: 'center',
                         }}>
                             ●
@@ -587,8 +561,8 @@ export default function PresupuestosPage() {
                     <Link href="/ventas">
                         <button style={{
                             background: '#007AFF', color: 'white', border: 'none',
-                            borderRadius: '12px', padding: '10px 16px', fontWeight: 700,
-                            fontSize: '14px', cursor: 'pointer'
+                            borderRadius: '9px', padding: '6px 10px', fontWeight: 700,
+                            fontSize: '11px', cursor: 'pointer'
                         }}>
                             + Nuevo
                         </button>
@@ -681,131 +655,175 @@ export default function PresupuestosPage() {
                     </div>
                 </div>
 
-                {/* Filtro por estado */}
-                <div style={{ overflowX: 'auto', marginBottom: '16px', paddingBottom: '2px' }}>
-                    <div style={{ display: 'flex', gap: '7px', width: 'max-content' }}>
-                        {(['todos', 'no_enviado', 'enviado', 'aprobado', 'no_aprobado', 'cobrado', 'pagado'] as const).map((f) => {
-                            const active = filter === f;
-                            const chipStyle =
-                                f !== 'todos' && active
-                                    ? {
-                                          bg: CLASIFICACION_COLORS[f].bg,
-                                          text: CLASIFICACION_COLORS[f].text,
-                                          border: `1px solid ${CLASIFICACION_COLORS[f].text}55`,
-                                      }
-                                    : {
-                                          bg: active ? 'rgba(0,122,255,0.15)' : 'rgba(255,255,255,0.04)',
-                                          text: active ? '#007AFF' : 'rgba(255,255,255,0.55)',
-                                          border: active ? '1px solid rgba(0,122,255,0.35)' : '1px solid rgba(255,255,255,0.08)',
-                                      };
-                            return (
+                {/* Filtro por estado: un botón abre el menú con todos los status */}
+                <div style={{ marginBottom: '16px', position: 'relative' }}>
+                    {(() => {
+                        const statusOptions = [
+                            'todos',
+                            'no_enviado',
+                            'enviado',
+                            'aprobado',
+                            'no_aprobado',
+                            'cobrado',
+                            'pagado',
+                        ] as const;
+                        const labelActual =
+                            filter === 'todos' ? 'Todos' : CLASIFICACION_COLORS[filter].label;
+                        const iconActual =
+                            filter === 'todos' ? '📋' : CLASIFICACION_COLORS[filter].icon;
+                        const triggerBg =
+                            filter !== 'todos'
+                                ? CLASIFICACION_COLORS[filter].bg
+                                : statusMenuAbierto
+                                  ? 'rgba(0,122,255,0.15)'
+                                  : 'rgba(255,255,255,0.06)';
+                        const triggerText =
+                            filter !== 'todos'
+                                ? CLASIFICACION_COLORS[filter].text
+                                : statusMenuAbierto
+                                  ? '#007AFF'
+                                  : 'rgba(255,255,255,0.85)';
+                        const triggerBorder =
+                            filter !== 'todos'
+                                ? `1px solid ${CLASIFICACION_COLORS[filter].text}55`
+                                : statusMenuAbierto
+                                  ? '1px solid rgba(0,122,255,0.35)'
+                                  : '1px solid rgba(255,255,255,0.1)';
+                        return (
+                            <>
                                 <button
-                                    key={f}
                                     type="button"
-                                    onClick={() => setFilter(f)}
+                                    onClick={() => setStatusMenuAbierto((v) => !v)}
+                                    aria-expanded={statusMenuAbierto}
+                                    aria-haspopup="listbox"
                                     style={{
-                                        background: chipStyle.bg,
-                                        color: chipStyle.text,
-                                        border: chipStyle.border,
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        background: triggerBg,
+                                        color: triggerText,
+                                        border: triggerBorder,
                                         borderRadius: '999px',
                                         padding: '7px 12px',
                                         fontSize: '11px',
                                         fontWeight: 700,
                                         cursor: 'pointer',
-                                        whiteSpace: 'nowrap',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '5px',
                                     }}
                                 >
-                                    {f !== 'todos' ? <span aria-hidden>{CLASIFICACION_COLORS[f].icon}</span> : null}
-                                    {f === 'todos' ? 'Todos' : CLASIFICACION_COLORS[f].label}
+                                    <span aria-hidden>{iconActual}</span>
+                                    Status: {labelActual}
+                                    <span aria-hidden style={{ opacity: 0.7, fontSize: '10px' }}>
+                                        {statusMenuAbierto ? '▴' : '▾'}
+                                    </span>
                                 </button>
-                            );
-                        })}
-                    </div>
+                                {statusMenuAbierto ? (
+                                    <div
+                                        role="listbox"
+                                        style={{
+                                            ...glass,
+                                            position: 'absolute',
+                                            left: 0,
+                                            top: 'calc(100% + 6px)',
+                                            zIndex: 40,
+                                            minWidth: '200px',
+                                            padding: '6px',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            gap: '2px',
+                                            boxShadow: '0 12px 32px rgba(0,0,0,0.45)',
+                                        }}
+                                    >
+                                        {statusOptions.map((f) => {
+                                            const active = filter === f;
+                                            const text =
+                                                f !== 'todos' && active
+                                                    ? CLASIFICACION_COLORS[f].text
+                                                    : active
+                                                      ? '#007AFF'
+                                                      : 'rgba(255,255,255,0.8)';
+                                            const bg =
+                                                f !== 'todos' && active
+                                                    ? CLASIFICACION_COLORS[f].bg
+                                                    : active
+                                                      ? 'rgba(0,122,255,0.15)'
+                                                      : 'transparent';
+                                            return (
+                                                <button
+                                                    key={f}
+                                                    type="button"
+                                                    role="option"
+                                                    aria-selected={active}
+                                                    onClick={() => {
+                                                        setFilter(f);
+                                                        setStatusMenuAbierto(false);
+                                                    }}
+                                                    style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '8px',
+                                                        width: '100%',
+                                                        textAlign: 'left',
+                                                        background: bg,
+                                                        color: text,
+                                                        border: 'none',
+                                                        borderRadius: '10px',
+                                                        padding: '9px 12px',
+                                                        fontSize: '12px',
+                                                        fontWeight: 600,
+                                                        cursor: 'pointer',
+                                                    }}
+                                                >
+                                                    <span aria-hidden>
+                                                        {f === 'todos' ? '📋' : CLASIFICACION_COLORS[f].icon}
+                                                    </span>
+                                                    {f === 'todos' ? 'Todos' : CLASIFICACION_COLORS[f].label}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                ) : null}
+                            </>
+                        );
+                    })()}
                 </div>
 
-                {/* Barra: vista + orden */}
-                <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '11px', margin: 0 }}>Vista</p>
-                            <div style={{ display: 'flex', gap: '4px', background: 'rgba(255,255,255,0.05)', padding: '4px', borderRadius: '10px' }}>
-                                <button
-                                    type="button"
-                                    onClick={() => cambiarVista('filas')}
-                                    style={{
-                                        background: vista === 'filas' ? 'rgba(255,255,255,0.1)' : 'transparent',
-                                        color: vista === 'filas' ? 'white' : 'rgba(255,255,255,0.3)',
-                                        border: 'none',
-                                        borderRadius: '8px',
-                                        padding: '6px 10px',
-                                        fontSize: '11px',
-                                        fontWeight: 600,
-                                        cursor: 'pointer',
-                                    }}
-                                    title="Un presupuesto por fila, botones apilados"
-                                >
-                                    ☰ Filas
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => cambiarVista('columnas')}
-                                    style={{
-                                        background: vista === 'columnas' ? 'rgba(255,255,255,0.1)' : 'transparent',
-                                        color: vista === 'columnas' ? 'white' : 'rgba(255,255,255,0.3)',
-                                        border: 'none',
-                                        borderRadius: '8px',
-                                        padding: '6px 10px',
-                                        fontSize: '11px',
-                                        fontWeight: 600,
-                                        cursor: 'pointer',
-                                    }}
-                                    title="Tres presupuestos por fila, todos los botones visibles"
-                                >
-                                    ⊞ 3 cols
-                                </button>
-                            </div>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '11px', margin: 0 }}>Ordenar</p>
-                        <div style={{ display: 'flex', gap: '4px', background: 'rgba(255,255,255,0.05)', padding: '4px', borderRadius: '10px' }}>
-                            <button
-                                type="button"
-                                onClick={() => setSortBy('fecha')}
-                                style={{
-                                    background: sortBy === 'fecha' ? 'rgba(255,255,255,0.1)' : 'transparent',
-                                    color: sortBy === 'fecha' ? 'white' : 'rgba(255,255,255,0.3)',
-                                    border: 'none', borderRadius: '8px', padding: '6px 10px', fontSize: '11px', fontWeight: 600, cursor: 'pointer'
-                                }}
-                            >
-                                Fecha
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setSortBy('status')}
-                                style={{
-                                    background: sortBy === 'status' ? 'rgba(255,255,255,0.1)' : 'transparent',
-                                    color: sortBy === 'status' ? 'white' : 'rgba(255,255,255,0.3)',
-                                    border: 'none', borderRadius: '8px', padding: '6px 10px', fontSize: '11px', fontWeight: 600, cursor: 'pointer'
-                                }}
-                            >
-                                Status
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setSortBy('nomenclatura')}
-                                style={{
-                                    background: sortBy === 'nomenclatura' ? 'rgba(255,255,255,0.1)' : 'transparent',
-                                    color: sortBy === 'nomenclatura' ? 'white' : 'rgba(255,255,255,0.3)',
-                                    border: 'none', borderRadius: '8px', padding: '6px 10px', fontSize: '11px', fontWeight: 600, cursor: 'pointer'
-                                }}
-                            >
-                                Nro
-                            </button>
-                        </div>
-                        </div>
+                {/* Ordenar */}
+                <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '8px' }}>
+                    <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '11px', margin: 0 }}>Ordenar</p>
+                    <div style={{ display: 'flex', gap: '4px', background: 'rgba(255,255,255,0.05)', padding: '4px', borderRadius: '10px' }}>
+                        <button
+                            type="button"
+                            onClick={() => setSortBy('fecha')}
+                            style={{
+                                background: sortBy === 'fecha' ? 'rgba(255,255,255,0.1)' : 'transparent',
+                                color: sortBy === 'fecha' ? 'white' : 'rgba(255,255,255,0.3)',
+                                border: 'none', borderRadius: '8px', padding: '6px 10px', fontSize: '11px', fontWeight: 600, cursor: 'pointer'
+                            }}
+                        >
+                            Fecha
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setSortBy('status')}
+                            style={{
+                                background: sortBy === 'status' ? 'rgba(255,255,255,0.1)' : 'transparent',
+                                color: sortBy === 'status' ? 'white' : 'rgba(255,255,255,0.3)',
+                                border: 'none', borderRadius: '8px', padding: '6px 10px', fontSize: '11px', fontWeight: 600, cursor: 'pointer'
+                            }}
+                        >
+                            Status
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setSortBy('nomenclatura')}
+                            style={{
+                                background: sortBy === 'nomenclatura' ? 'rgba(255,255,255,0.1)' : 'transparent',
+                                color: sortBy === 'nomenclatura' ? 'white' : 'rgba(255,255,255,0.3)',
+                                border: 'none', borderRadius: '8px', padding: '6px 10px', fontSize: '11px', fontWeight: 600, cursor: 'pointer'
+                            }}
+                        >
+                            Nro
+                        </button>
                     </div>
                 </div>
 
@@ -843,13 +861,8 @@ export default function PresupuestosPage() {
                     <div
                         style={{
                             display: 'grid',
-                            gridTemplateColumns:
-                                vista === 'filas'
-                                    ? '1fr'
-                                    : pantallaAncha
-                                      ? 'repeat(3, minmax(0, 1fr))'
-                                      : '1fr',
-                            gap: vista === 'filas' ? '8px' : '10px',
+                            gridTemplateColumns: '1fr',
+                            gap: '8px',
                         }}
                     >
                         {budgets.map((b) => (
