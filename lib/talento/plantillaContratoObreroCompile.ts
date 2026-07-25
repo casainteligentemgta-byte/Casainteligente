@@ -42,7 +42,7 @@ const ETIQUETAS: Record<string, { etiqueta: string; ayuda: string }> = {
     ayuda: 'Opcional; complete en overrides si no está modelado en entidad.',
   },
   REP_LEGAL_CARGO: { etiqueta: 'Cargo del representante legal', ayuda: '`rep_legal_cargo` en entidad o RM.' },
-  REP_LEGAL_ARTICULO_CIUDADANO: { etiqueta: 'Tratamiento (el/la Ciudadano/a)', ayuda: 'Según género del representante en RM.' },
+  REP_LEGAL_ARTICULO_CIUDADANO: { etiqueta: 'Tratamiento (Sr./Sra.)', ayuda: 'Según tratamiento del representante en RM.' },
   PATRON_INSCRIPCION_RM: {
     etiqueta: 'Inscripción en Registro Mercantil',
     ayuda: 'Tomo, número y fecha desde `ci_entidades.registro_mercantil`.',
@@ -291,7 +291,7 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
   const repCed = str(f.patron.rep_legal_cedula);
   const repCedFmt = repCed ? cedulaVenezuelaGuion(repCed) : '_______________';
   const repCargo = str(f.patron.rep_legal_cargo) || 'Representante Legal';
-  const repArticulo = f.patron.rep_legal_femenino ? 'la Ciudadana' : 'el Ciudadano';
+  const repArticulo = f.patron.rep_legal_femenino ? 'Sra.' : 'Sr.';
 
   const salMensualEst =
     Number.isFinite(salNum) && salNum > 0 ? salNum * DIAS_MES_REF_SALARIO_PLANTILLA : null;

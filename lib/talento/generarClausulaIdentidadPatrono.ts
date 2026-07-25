@@ -122,6 +122,7 @@ export function generarClausulaIdentidadPatrono(entidad: EntidadPatronoClausulaI
   const bloqueRep = repNombre ? repNombre.toUpperCase() : '[REPRESENTANTE NO REGISTRADO]';
   const bloqueCi = repCedula || '[CÉDULA NO REGISTRADA]';
   const bloqueCargo = repCargo || 'Presidente';
+  const bloqueTratamiento = repRm?.genero === 'F' ? 'Sra.' : 'Sr.';
   const bloqueNac = repNacionalidad || 'venezolano(a)';
   const fragEstadoCivil = repEstadoCivil ? `, de estado civil ${repEstadoCivil}` : '';
   const fragDomicilioRep = repDomicilio ? `, con domicilio en ${repDomicilio}` : '';
@@ -136,7 +137,7 @@ export function generarClausulaIdentidadPatrono(entidad: EntidadPatronoClausulaI
     domiciliada en ${bloqueDom}${tailUbicEmpresaRm},
     inscrita por ante la Oficina de ${bloqueCirc}, constando en el Tomo ${bloqueTomo}, bajo el Nro. ${bloqueNum},
     de fecha ${fechaRegistro}, titular del Registro de Información Fiscal (RIF) Nro. ${bloqueRif},
-    representada en este acto por su ${bloqueCargo}, ciudadano ${bloqueRep},
+    representada en este acto por su ${bloqueCargo}, ${bloqueTratamiento} ${bloqueRep},
     de nacionalidad ${bloqueNac}${fragEdadRep}${fragEstadoCivil}, titular de la cédula de identidad Nro. ${bloqueCi}${fragDomicilioRep}${fragResidenciaRep}${fragProfesion},
     quien a los efectos de este contrato se denominará "EL EMPLEADOR".
   `.replace(/\s+/g, ' ').trim();

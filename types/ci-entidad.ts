@@ -15,7 +15,7 @@ export type RepresentanteMercantilCi = {
   /** Estado donde reside el representante. */
   estado_residencia?: string;
   profesion?: string;
-  /** Redacción «el ciudadano» / «la ciudadana» en contrato PDF. */
+  /** Tratamiento Sr. (M) / Sra. (F); también define la redacción en el contrato PDF. */
   genero?: 'M' | 'F';
 };
 

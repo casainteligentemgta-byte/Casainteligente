@@ -133,7 +133,7 @@ export type EntidadContratoPdf = {
   rm_fecha?: string | null;
   rm_numero?: string | null;
   rm_tomo?: string | null;
-  /** Si true, «la ciudadana» en comparecencia; si false/undefined, «el ciudadano». */
+  /** Si true, «Sra.» en comparecencia; si false/undefined, «Sr.». */
   rep_legal_femenino?: boolean | null;
 };
 
@@ -521,7 +521,7 @@ export function ContratoObreroPDF({
   );
   const repCedulaGuion = cedulaConGuion(entidad.rep_legal_cedula);
   const repCargoLinea = str(entidad.rep_legal_cargo, 'Representante Legal');
-  const repArticuloLinea = entidad.rep_legal_femenino ? 'la Ciudadana' : 'el Ciudadano';
+  const repArticuloLinea = entidad.rep_legal_femenino ? 'Sra.' : 'Sr.';
   const inscripcionRmLinea = (() => {
     const oficina = oficinaRegistroMercantilComparecencia(entidad.rm_oficina);
     const fecha = fechaLargaRegistroMercantilContratoVe(entidad.rm_fecha) ?? '___';

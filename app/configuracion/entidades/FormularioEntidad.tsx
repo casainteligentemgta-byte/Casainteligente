@@ -52,7 +52,7 @@ type RepFormRow = {
   cargo: string;
   domicilio: string;
   profesion: string;
-  /** Comparecencia en contrato PDF: «el ciudadano» vs «la ciudadana». */
+  /** Tratamiento ante el nombre: Sr. (M) / Sra. (F); también alimenta la comparecencia del contrato. */
   genero: 'M' | 'F';
 };
 
@@ -503,7 +503,7 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
               <Tabs.Content value="representante" className="space-y-5 outline-none">
                 <p className="text-xs text-zinc-500">
                   Comparecencia en el contrato obrero (PDF): el <strong className="text-zinc-400">primer representante</strong>{' '}
-                  aporta nombre, leyenda <strong className="text-zinc-400">el ciudadano / la ciudadana</strong>, cédula,{' '}
+                  aporta tratamiento (<strong className="text-zinc-400">Sr. / Sra.</strong>), nombre, cédula,{' '}
                   <strong className="text-zinc-400">nacionalidad</strong> y <strong className="text-zinc-400">estado civil</strong>{' '}
                   (frase «de nacionalidad …, de estado civil …» tras el nombre). Si marca «Es venezolano», la nacionalidad en
                   el contrato será «Venezolano». También alimentan planilla y <code className="text-zinc-400">rep_legal_*</code>{' '}
@@ -531,34 +531,37 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
                         </button>
                       ) : null}
                     </div>
-                    <div>
-                      <label className={labelClass}>Nombre completo</label>
-                      <input
-                        value={row.nombre}
-                        onChange={(e) =>
-                          setRepFilas((prev) =>
-                            prev.map((r) => (r.id === row.id ? { ...r, nombre: e.target.value } : r)),
-                          )
-                        }
-                        className={inputClass}
-                      />
-                    </div>
-                    <div>
-                      <label className={labelClass}>Redacción en contrato (leyenda)</label>
-                      <select
-                        className={inputClass}
-                        value={row.genero}
-                        onChange={(e) =>
-                          setRepFilas((prev) =>
-                            prev.map((r) =>
-                              r.id === row.id ? { ...r, genero: e.target.value === 'F' ? 'F' : 'M' } : r,
-                            ),
-                          )
-                        }
-                      >
-                        <option value="M">El ciudadano (masculino)</option>
-                        <option value="F">La ciudadana (femenino)</option>
-                      </select>
+                    <div className="flex gap-2">
+                      <div className="w-[5.5rem] shrink-0">
+                        <label className={labelClass}>Tratamiento</label>
+                        <select
+                          className={inputClass}
+                          value={row.genero}
+                          aria-label="Tratamiento Sr. o Sra."
+                          onChange={(e) =>
+                            setRepFilas((prev) =>
+                              prev.map((r) =>
+                                r.id === row.id ? { ...r, genero: e.target.value === 'F' ? 'F' : 'M' } : r,
+                              ),
+                            )
+                          }
+                        >
+                          <option value="M">Sr.</option>
+                          <option value="F">Sra.</option>
+                        </select>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <label className={labelClass}>Nombre completo</label>
+                        <input
+                          value={row.nombre}
+                          onChange={(e) =>
+                            setRepFilas((prev) =>
+                              prev.map((r) => (r.id === row.id ? { ...r, nombre: e.target.value } : r)),
+                            )
+                          }
+                          className={inputClass}
+                        />
+                      </div>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-3">
                       <div>
