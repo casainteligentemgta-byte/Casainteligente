@@ -7,6 +7,11 @@ import { toast } from 'sonner';
 import EquipoEntidadPanel from '@/components/configuracion/EquipoEntidadPanel';
 import MaquinariaPropiaEntidadPanel from '@/components/configuracion/MaquinariaPropiaEntidadPanel';
 import {
+  edadDesdeFechaNacimiento,
+  esCedulaVenezolana,
+  nacionalidadDesdeCedula,
+} from '@/lib/configuracion/representanteCedula';
+import {
   formatRifMascara,
   permisologiaDesdeCampos,
   registroMercantilDesdeCampos,
@@ -44,11 +49,11 @@ type RepFormRow = {
   id: string;
   nombre: string;
   cedula: string;
-  edad: string;
+  /** ISO YYYY-MM-DD */
+  fecha_nacimiento: string;
   estado_civil: string;
-  esVenezolano: boolean;
+  /** Solo si la cédula no es V (extranjero u otro). */
   nacionalidadOtro: string;
-  nacionalidad: string;
   municipio_residencia: string;
   estado_residencia: string;
   cargo: string;
@@ -63,11 +68,9 @@ function emptyRepFormRow(): RepFormRow {
     id: newRepRowId(),
     nombre: '',
     cedula: '',
-    edad: '',
+    fecha_nacimiento: '',
     estado_civil: '',
-    esVenezolano: true,
     nacionalidadOtro: '',
-    nacionalidad: '',
     municipio_residencia: '',
     estado_residencia: '',
     cargo: '',
@@ -78,17 +81,16 @@ function emptyRepFormRow(): RepFormRow {
 }
 
 function repFormDesdeMercantil(r: RepresentanteMercantilCi): RepFormRow {
+  const cedula = (r.cedula ?? '').trim();
   const nat = (r.nacionalidad ?? '').trim();
-  const esVen = !nat || /^venezol/i.test(nat);
+  const esVen = esCedulaVenezolana(cedula) || (!cedula && (!nat || /^venezol/i.test(nat)));
   return {
     id: newRepRowId(),
     nombre: (r.nombre ?? '').trim(),
-    cedula: (r.cedula ?? '').trim(),
-    edad: (r.edad ?? '').trim(),
+    cedula,
+    fecha_nacimiento: (r.fecha_nacimiento ?? '').trim().slice(0, 10),
     estado_civil: (r.estado_civil ?? '').trim(),
-    esVenezolano: esVen,
     nacionalidadOtro: esVen ? '' : nat,
-    nacionalidad: esVen ? 'Venezolano' : nat,
     municipio_residencia: (r.municipio_residencia ?? '').trim(),
     estado_residencia: (r.estado_residencia ?? '').trim(),
     cargo: (r.cargo ?? '').trim(),
@@ -113,6 +115,7 @@ function parseRepresentantesRm(raw: unknown): RepresentanteMercantilCi[] {
     out.push({
       nombre: typeof o.nombre === 'string' ? o.nombre : undefined,
       cedula: typeof o.cedula === 'string' ? o.cedula : undefined,
+      fecha_nacimiento: typeof o.fecha_nacimiento === 'string' ? o.fecha_nacimiento : undefined,
       edad: typeof o.edad === 'string' ? o.edad : undefined,
       estado_civil: typeof o.estado_civil === 'string' ? o.estado_civil : undefined,
       nacionalidad: typeof o.nacionalidad === 'string' ? o.nacionalidad : undefined,
@@ -198,11 +201,9 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
             id: newRepRowId(),
             nombre: nom,
             cedula: ced,
-            edad: '',
+            fecha_nacimiento: '',
             estado_civil: '',
-            esVenezolano: true,
             nacionalidadOtro: '',
-            nacionalidad: '',
             municipio_residencia: '',
             estado_residencia: '',
             cargo: car,
@@ -254,14 +255,19 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
     setGuardando(true);
     try {
       const representantesPayload: RepresentanteMercantilCi[] = repFilas.map((row) => {
+        const cedula = row.cedula.trim();
+        const fechaNac = row.fecha_nacimiento.trim().slice(0, 10);
+        const nacionalidadAuto = nacionalidadDesdeCedula(cedula);
         const nacionalidad =
-          row.esVenezolano
-            ? 'Venezolano'
-            : row.nacionalidadOtro.trim() || row.nacionalidad.trim() || undefined;
+          nacionalidadAuto ??
+          (row.nacionalidadOtro.trim() || undefined);
+        const edad =
+          edadDesdeFechaNacimiento(fechaNac) || undefined;
         return {
           nombre: row.nombre.trim() || undefined,
-          cedula: row.cedula.trim() || undefined,
-          edad: row.edad.trim() || undefined,
+          cedula: cedula || undefined,
+          fecha_nacimiento: fechaNac || undefined,
+          edad,
           estado_civil: row.estado_civil.trim() || undefined,
           nacionalidad,
           cargo: row.cargo.trim() || undefined,
@@ -583,24 +589,36 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
                           value={row.cedula}
                           onChange={(e) =>
                             setRepFilas((prev) =>
-                              prev.map((r) => (r.id === row.id ? { ...r, cedula: e.target.value } : r)),
+                              prev.map((r) =>
+                                r.id === row.id
+                                  ? {
+                                      ...r,
+                                      cedula: e.target.value,
+                                      nacionalidadOtro: esCedulaVenezolana(e.target.value)
+                                        ? ''
+                                        : r.nacionalidadOtro,
+                                    }
+                                  : r,
+                              ),
                             )
                           }
                           className={inputClass}
+                          placeholder="V-12345678 o E-…"
                         />
                       </div>
                       <div>
-                        <label className={labelClass}>Edad (años)</label>
+                        <label className={labelClass}>Fecha de nacimiento</label>
                         <input
-                          value={row.edad}
+                          type="date"
+                          value={row.fecha_nacimiento}
                           onChange={(e) =>
                             setRepFilas((prev) =>
-                              prev.map((r) => (r.id === row.id ? { ...r, edad: e.target.value } : r)),
+                              prev.map((r) =>
+                                r.id === row.id ? { ...r, fecha_nacimiento: e.target.value } : r,
+                              ),
                             )
                           }
                           className={inputClass}
-                          inputMode="numeric"
-                          placeholder="Ej. 42"
                         />
                       </div>
                       <div>
@@ -617,29 +635,11 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
                         />
                       </div>
                     </div>
-                    <label className="flex items-center gap-2 text-sm text-zinc-300">
-                      <input
-                        type="checkbox"
-                        checked={row.esVenezolano}
-                        onChange={(e) =>
-                          setRepFilas((prev) =>
-                            prev.map((r) =>
-                              r.id === row.id
-                                ? { ...r, esVenezolano: e.target.checked, nacionalidadOtro: e.target.checked ? '' : r.nacionalidadOtro }
-                                : r,
-                            ),
-                          )
-                        }
-                        className="rounded border-zinc-500"
-                      />
-                      Es venezolano
-                    </label>
-                    {row.esVenezolano ? (
+                    {esCedulaVenezolana(row.cedula) ? (
                       <p className="text-[11px] text-zinc-500">
-                        Nacionalidad en contrato y registro: <span className="text-zinc-300">Venezolano</span>
+                        Nacionalidad (según cédula V): <span className="text-zinc-300">Venezolano</span>
                       </p>
-                    ) : null}
-                    {!row.esVenezolano ? (
+                    ) : (
                       <div>
                         <label className={labelClass}>Nacionalidad</label>
                         <input
@@ -650,10 +650,10 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
                             )
                           }
                           className={inputClass}
-                          placeholder="Ej. colombiana"
+                          placeholder="Ej. colombiana (cédula E u otra)"
                         />
                       </div>
-                    ) : null}
+                    )}
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div>
                         <label className={labelClass}>Municipio de residencia</label>

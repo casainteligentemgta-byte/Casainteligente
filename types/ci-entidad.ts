@@ -2,10 +2,17 @@
 export type RepresentanteMercantilCi = {
   nombre?: string;
   cedula?: string;
-  /** Edad en años (planilla de empleo / Gaceta). */
+  /** Fecha de nacimiento ISO `YYYY-MM-DD` (UI del menú del patrono). */
+  fecha_nacimiento?: string;
+  /**
+   * Edad en años (planilla / cláusulas). Preferir derivarla de `fecha_nacimiento`;
+   * se mantiene por compatibilidad con datos ya guardados.
+   */
   edad?: string;
   estado_civil?: string;
-  /** Ej. «Venezolano» o la nacionalidad indicada si no es venezolano. */
+  /**
+   * Ej. «Venezolano» si la cédula inicia en V; si es E u otra, texto libre.
+   */
   nacionalidad?: string;
   cargo?: string;
   /** Vía / urbanización del domicilio del representante (comparecencia). */
