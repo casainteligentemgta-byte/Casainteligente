@@ -19,6 +19,11 @@ import { toast } from 'sonner';
 import EquipoEntidadPanel from '@/components/configuracion/EquipoEntidadPanel';
 import MaquinariaPropiaEntidadPanel from '@/components/configuracion/MaquinariaPropiaEntidadPanel';
 import {
+  nuevoPermisoPersonalizado,
+  permisologiaDesdeItems,
+  permisosDesdePermisologia,
+} from '@/lib/configuracion/permisologiaItems';
+import {
   edadDesdeFechaNacimiento,
   esCedulaVenezolana,
   letraCedula,
@@ -26,7 +31,6 @@ import {
 } from '@/lib/configuracion/representanteCedula';
 import {
   formatRifMascara,
-  permisologiaDesdeCampos,
   registroMercantilDesdeCampos,
   validarEntidadPatrono,
   vencimientoAlertaNaranja,
@@ -34,7 +38,15 @@ import {
 import { apiUrl } from '@/lib/http/apiUrl';
 import { uploadEntidadAsset } from '@/lib/supabase/entidad-assets';
 import { createClient } from '@/lib/supabase/client';
-import type { CiEntidad, PermisologiaCi, RegistroMercantilCi, RepresentanteMercantilCi } from '@/types/ci-entidad';
+import type {
+  CiEntidad,
+  PermisoPatronoItem,
+  PermisologiaCi,
+  RegistroMercantilCi,
+  RepresentanteMercantilCi,
+} from '@/types/ci-entidad';
+
+type PermFormRow = PermisoPatronoItem & { file: File | null };
 
 const inputClass =
   'mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 outline-none transition focus:border-orange-500 focus:ring-1 focus:ring-orange-500/40';
@@ -210,15 +222,10 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
   const [rmFecha, setRmFecha] = useState('');
   const [rmCirc, setRmCirc] = useState('');
 
-  const [permIvss, setPermIvss] = useState('');
-  const [permInces, setPermInces] = useState('');
-  const [permSol, setPermSol] = useState('');
-  const [permIvssDocUrl, setPermIvssDocUrl] = useState('');
-  const [permIncesDocUrl, setPermIncesDocUrl] = useState('');
-  const [permSolDocUrl, setPermSolDocUrl] = useState('');
-  const [permIvssFile, setPermIvssFile] = useState<File | null>(null);
-  const [permIncesFile, setPermIncesFile] = useState<File | null>(null);
-  const [permSolFile, setPermSolFile] = useState<File | null>(null);
+  const [permFilas, setPermFilas] = useState<PermFormRow[]>(() =>
+    permisosDesdePermisologia({}).map((p) => ({ ...p, file: null })),
+  );
+  const [nuevoPermisoNombre, setNuevoPermisoNombre] = useState('');
 
   const [logoUrl, setLogoUrl] = useState('');
   const [selloUrl, setSelloUrl] = useState('');
@@ -301,16 +308,10 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
       }
     }
 
-    const p = asRecord(e?.permisologia ?? null);
-    setPermIvss(strField(p, 'ivss_vence'));
-    setPermInces(strField(p, 'inces_vence'));
-    setPermSol(strField(p, 'solvencia_laboral_vence'));
-    setPermIvssDocUrl(strField(p, 'ivss_documento_url'));
-    setPermIncesDocUrl(strField(p, 'inces_documento_url'));
-    setPermSolDocUrl(strField(p, 'solvencia_laboral_documento_url'));
-    setPermIvssFile(null);
-    setPermIncesFile(null);
-    setPermSolFile(null);
+    setPermFilas(
+      permisosDesdePermisologia(e?.permisologia ?? null).map((p) => ({ ...p, file: null })),
+    );
+    setNuevoPermisoNombre('');
 
     setLogoUrl((e?.logo_url ?? '').trim());
     setSelloUrl((e?.sello_url ?? '').trim());
@@ -322,10 +323,6 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
     if (!open) return;
     resetDesdeEntidad();
   }, [open, resetDesdeEntidad]);
-
-  const alertIvss = permIvss.trim() ? vencimientoAlertaNaranja(permIvss.trim()) : false;
-  const alertInces = permInces.trim() ? vencimientoAlertaNaranja(permInces.trim()) : false;
-  const alertSol = permSol.trim() ? vencimientoAlertaNaranja(permSol.trim()) : false;
 
   const inputPermClass = (alert: boolean) =>
     `${inputClass} ${alert ? 'border-orange-500/70 ring-1 ring-orange-500/30' : ''}`;
@@ -392,25 +389,15 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
         });
 
       let registroMercantil = buildRegistro(actasGuardadas, rifDocUrl);
-      let ivssDocUrl = permIvssDocUrl.trim();
-      let incesDocUrl = permIncesDocUrl.trim();
-      let solDocUrl = permSolDocUrl.trim();
 
-      const buildPermisologia = (
-        ivssUrl: string,
-        incesUrl: string,
-        solUrl: string,
-      ): PermisologiaCi =>
-        permisologiaDesdeCampos({
-          ivss: permIvss,
-          inces: permInces,
-          solvenciaLaboral: permSol,
-          ivssDocumentoUrl: ivssUrl,
-          incesDocumentoUrl: incesUrl,
-          solvenciaDocumentoUrl: solUrl,
-        });
-
-      let permisologia = buildPermisologia(ivssDocUrl, incesDocUrl, solDocUrl);
+      let permItems: PermisoPatronoItem[] = permFilas.map((row) => ({
+        id: row.id,
+        nombre: row.nombre.trim() || 'Permiso',
+        vence: (row.vence ?? '').trim().slice(0, 10) || undefined,
+        documento_url: (row.documento_url ?? '').trim() || undefined,
+        fijo: row.fijo,
+      }));
+      let permisologia: PermisologiaCi = permisologiaDesdeItems(permItems);
 
       const primera = repFilas[0];
       const repLegalNombre = primera?.nombre.trim() || null;
@@ -504,29 +491,29 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
         }
       }
 
-      if (permIvssFile) {
-        const up = await uploadEntidadAsset(supabase, id, 'permiso-ivss', permIvssFile);
-        if (up.error) toast.error(`IVSS: ${up.error}`);
-        else if (up.publicUrl) {
-          ivssDocUrl = up.publicUrl;
-          permDocsChanged = true;
+      const nextPermFilas: PermFormRow[] = [];
+      for (const row of permFilas) {
+        let docUrl = (row.documento_url ?? '').trim();
+        if (row.file) {
+          const up = await uploadEntidadAsset(supabase, id, `permiso-${row.id}`, row.file);
+          if (up.error) toast.error(`${row.nombre}: ${up.error}`);
+          else if (up.publicUrl) {
+            docUrl = up.publicUrl;
+            permDocsChanged = true;
+          }
         }
+        nextPermFilas.push({ ...row, documento_url: docUrl || undefined, file: null });
       }
-      if (permIncesFile) {
-        const up = await uploadEntidadAsset(supabase, id, 'permiso-inces', permIncesFile);
-        if (up.error) toast.error(`INCES: ${up.error}`);
-        else if (up.publicUrl) {
-          incesDocUrl = up.publicUrl;
-          permDocsChanged = true;
-        }
-      }
-      if (permSolFile) {
-        const up = await uploadEntidadAsset(supabase, id, 'permiso-solvencia', permSolFile);
-        if (up.error) toast.error(`Solvencia: ${up.error}`);
-        else if (up.publicUrl) {
-          solDocUrl = up.publicUrl;
-          permDocsChanged = true;
-        }
+      if (permDocsChanged) {
+        permItems = nextPermFilas.map((row) => ({
+          id: row.id,
+          nombre: row.nombre.trim() || 'Permiso',
+          vence: (row.vence ?? '').trim().slice(0, 10) || undefined,
+          documento_url: (row.documento_url ?? '').trim() || undefined,
+          fijo: row.fijo,
+        }));
+        permisologia = permisologiaDesdeItems(permItems);
+        setPermFilas(nextPermFilas);
       }
 
       if (docsChanged) {
@@ -535,15 +522,6 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
         setRmRifDocUrl(rifDocUrl);
         setActaFilesPendientes([]);
         setRifDocFile(null);
-      }
-      if (permDocsChanged) {
-        permisologia = buildPermisologia(ivssDocUrl, incesDocUrl, solDocUrl);
-        setPermIvssDocUrl(ivssDocUrl);
-        setPermIncesDocUrl(incesDocUrl);
-        setPermSolDocUrl(solDocUrl);
-        setPermIvssFile(null);
-        setPermIncesFile(null);
-        setPermSolFile(null);
       }
 
       if (logoFile || selloFile || docsChanged || permDocsChanged) {
@@ -567,7 +545,7 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
       );
 
       // Avisa a Telegram / Departamento Legal si hay vencimientos en ventana.
-      if (id && (permIvss.trim() || permInces.trim() || permSol.trim())) {
+      if (id && permItems.some((p) => (p.vence ?? '').trim())) {
         void fetch(apiUrl('/api/configuracion/entidades/permisologia/notificar'), {
           method: 'POST',
           credentials: 'include',
@@ -1101,89 +1079,143 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
               </Tabs.Content>
 
               <Tabs.Content value="permisos" className="space-y-4 outline-none">
-                {(
-                  [
-                    {
-                      key: 'ivss',
-                      label: 'IVSS — vence',
-                      value: permIvss,
-                      setValue: setPermIvss,
-                      alert: alertIvss,
-                      docUrl: permIvssDocUrl,
-                      setDocUrl: setPermIvssDocUrl,
-                      file: permIvssFile,
-                      setFile: setPermIvssFile,
-                    },
-                    {
-                      key: 'inces',
-                      label: 'INCES — vence',
-                      value: permInces,
-                      setValue: setPermInces,
-                      alert: alertInces,
-                      docUrl: permIncesDocUrl,
-                      setDocUrl: setPermIncesDocUrl,
-                      file: permIncesFile,
-                      setFile: setPermIncesFile,
-                    },
-                    {
-                      key: 'sol',
-                      label: 'Solvencia laboral — vence',
-                      value: permSol,
-                      setValue: setPermSol,
-                      alert: alertSol,
-                      docUrl: permSolDocUrl,
-                      setDocUrl: setPermSolDocUrl,
-                      file: permSolFile,
-                      setFile: setPermSolFile,
-                    },
-                  ] as const
-                ).map((row) => (
-                  <div
-                    key={row.key}
-                    className="space-y-2 rounded-xl border border-white/10 bg-white/[0.03] p-3"
-                  >
-                    <label className={labelClass}>{row.label}</label>
-                    <input
-                      type="date"
-                      value={row.value}
-                      onChange={(e) => row.setValue(e.target.value)}
-                      className={inputPermClass(row.alert)}
-                      style={{ colorScheme: 'dark' }}
-                    />
-                    <label className={labelClass}>PDF del permiso</label>
-                    <input
-                      type="file"
-                      accept="application/pdf,image/*"
-                      className="w-full text-xs text-zinc-400 file:mr-3 file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-1.5 file:text-zinc-200"
-                      onChange={(e) => row.setFile(e.target.files?.[0] ?? null)}
-                    />
-                    {row.docUrl ? (
-                      <div className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/20 px-2.5 py-1.5 text-xs">
-                        <a
-                          href={row.docUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="min-w-0 truncate font-semibold text-[#FFD60A] underline hover:text-[#FF9500]"
-                        >
-                          Ver PDF cargado
-                        </a>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            row.setDocUrl('');
-                            row.setFile(null);
-                          }}
-                          className="shrink-0 text-red-300 hover:text-red-200"
-                        >
-                          Quitar
-                        </button>
+                {permFilas.map((row) => {
+                  const alert = row.vence?.trim()
+                    ? vencimientoAlertaNaranja(row.vence.trim())
+                    : false;
+                  return (
+                    <div
+                      key={row.id}
+                      className="space-y-2 rounded-xl border border-white/10 bg-white/[0.03] p-3"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        {row.fijo ? (
+                          <p className="text-[11px] font-bold uppercase tracking-wide text-[#FFD60A]/80">
+                            {row.nombre}
+                          </p>
+                        ) : (
+                          <div className="min-w-0 flex-1">
+                            <label className={labelClass}>Nombre del permiso</label>
+                            <input
+                              value={row.nombre}
+                              onChange={(e) =>
+                                setPermFilas((prev) =>
+                                  prev.map((r) =>
+                                    r.id === row.id ? { ...r, nombre: e.target.value } : r,
+                                  ),
+                                )
+                              }
+                              className={inputClass}
+                              placeholder="Ej. Bomberos, SENIAT…"
+                            />
+                          </div>
+                        )}
+                        {!row.fijo ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPermFilas((prev) => prev.filter((r) => r.id !== row.id))
+                            }
+                            className="mt-5 inline-flex items-center gap-1 rounded-lg border border-red-500/30 bg-red-950/30 px-2 py-1 text-[11px] font-semibold text-red-200 hover:bg-red-950/45"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                            Quitar
+                          </button>
+                        ) : null}
                       </div>
-                    ) : null}
-                    {row.file ? (
-                      <p className="text-[11px] text-zinc-400">Nuevo archivo: {row.file.name}</p>
-                    ) : null}
+                      <label className={labelClass}>Vence</label>
+                      <input
+                        type="date"
+                        value={row.vence ?? ''}
+                        onChange={(e) =>
+                          setPermFilas((prev) =>
+                            prev.map((r) =>
+                              r.id === row.id ? { ...r, vence: e.target.value } : r,
+                            ),
+                          )
+                        }
+                        className={inputPermClass(alert)}
+                        style={{ colorScheme: 'dark' }}
+                      />
+                      <label className={labelClass}>PDF del permiso</label>
+                      <input
+                        type="file"
+                        accept="application/pdf,image/*"
+                        className="w-full text-xs text-zinc-400 file:mr-3 file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-1.5 file:text-zinc-200"
+                        onChange={(e) =>
+                          setPermFilas((prev) =>
+                            prev.map((r) =>
+                              r.id === row.id
+                                ? { ...r, file: e.target.files?.[0] ?? null }
+                                : r,
+                            ),
+                          )
+                        }
+                      />
+                      {row.documento_url ? (
+                        <div className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/20 px-2.5 py-1.5 text-xs">
+                          <a
+                            href={row.documento_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="min-w-0 truncate font-semibold text-[#FFD60A] underline hover:text-[#FF9500]"
+                          >
+                            Ver PDF cargado
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPermFilas((prev) =>
+                                prev.map((r) =>
+                                  r.id === row.id
+                                    ? { ...r, documento_url: undefined, file: null }
+                                    : r,
+                                ),
+                              )
+                            }
+                            className="shrink-0 text-red-300 hover:text-red-200"
+                          >
+                            Quitar
+                          </button>
+                        </div>
+                      ) : null}
+                      {row.file ? (
+                        <p className="text-[11px] text-zinc-400">Nuevo archivo: {row.file.name}</p>
+                      ) : null}
+                    </div>
+                  );
+                })}
+
+                <div className="rounded-xl border border-dashed border-white/20 bg-white/[0.02] p-3">
+                  <label className={labelClass}>Nuevo permiso</label>
+                  <div className="mt-1 flex gap-2">
+                    <input
+                      value={nuevoPermisoNombre}
+                      onChange={(e) => setNuevoPermisoNombre(e.target.value)}
+                      className={inputClass}
+                      placeholder="Nombre (ej. Bomberos)"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const n = nuevoPermisoNombre.trim();
+                        if (!n) {
+                          toast.error('Indica el nombre del permiso.');
+                          return;
+                        }
+                        setPermFilas((prev) => [
+                          ...prev,
+                          { ...nuevoPermisoPersonalizado(n), file: null },
+                        ]);
+                        setNuevoPermisoNombre('');
+                      }}
+                      className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-[#FF9500]/40 bg-[#FF9500]/15 px-3 py-2 text-xs font-bold text-[#FFD60A] hover:bg-[#FF9500]/25"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Añadir
+                    </button>
                   </div>
-                ))}
+                </div>
               </Tabs.Content>
 
               <Tabs.Content value="medios" className="space-y-5 outline-none">

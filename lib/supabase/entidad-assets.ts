@@ -19,14 +19,8 @@ function extOf(file: File): string {
   return 'png';
 }
 
-export type EntidadAssetKind =
-  | 'logo'
-  | 'sello'
-  | 'acta'
-  | 'rif'
-  | 'permiso-ivss'
-  | 'permiso-inces'
-  | 'permiso-solvencia';
+/** kind: logo | sello | acta | rif | permiso-<id> */
+export type EntidadAssetKind = string;
 
 /**
  * Sube logo, sello, acta, RIF o PDF de permisología bajo `ci-entidades/{entidadId}/…`.
@@ -39,7 +33,8 @@ export async function uploadEntidadAsset(
   file: File,
 ): Promise<{ publicUrl: string | null; error: string | null }> {
   const ext = extOf(file);
-  const path = `ci-entidades/${entidadId}/${kind}-${crypto.randomUUID()}.${ext}`;
+  const safeKind = (kind || 'doc').replace(/[^a-z0-9_-]/gi, '').slice(0, 48) || 'doc';
+  const path = `ci-entidades/${entidadId}/${safeKind}-${crypto.randomUUID()}.${ext}`;
   let last = '';
   for (const bucket of bucketsChain()) {
     const { error } = await supabase.storage.from(bucket).upload(path, file, {

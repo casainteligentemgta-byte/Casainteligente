@@ -55,16 +55,27 @@ export type RegistroMercantilCi = {
   rif_documento_url?: string;
 };
 
+/** Un permiso del patrono (fijo o creado desde la app). */
+export type PermisoPatronoItem = {
+  id: string;
+  nombre: string;
+  /** Fecha ISO YYYY-MM-DD. */
+  vence?: string;
+  documento_url?: string;
+  /** IVSS / INCES / solvencia predefinidos. */
+  fijo?: boolean;
+};
+
 /** Permisología / vencimientos en `ci_entidades.permisologia` (jsonb). */
 export type PermisologiaCi = {
+  /** Lista canónica (incluye personalizados). */
+  items?: PermisoPatronoItem[];
+  /** Legado / espejo de ítems fijos. */
   ivss_vence?: string;
   inces_vence?: string;
   solvencia_laboral_vence?: string;
-  /** PDF/imagen del comprobante IVSS. */
   ivss_documento_url?: string;
-  /** PDF/imagen del comprobante INCES. */
   inces_documento_url?: string;
-  /** PDF/imagen de la solvencia laboral. */
   solvencia_laboral_documento_url?: string;
 };
 
