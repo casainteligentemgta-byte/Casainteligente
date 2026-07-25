@@ -5,7 +5,7 @@ Recomendación de pruebas Psique (prototipo / CLI).
 Equivalente en app: POST /api/talento/psique/recomendar
 y lib/talento/psique/recomendarPruebasPsique.ts
 
-Requiere migración 290_ci_psique_pruebas_triggers.sql aplicada.
+Requiere migración 294_ci_psique_catalogo_aislado.sql (tablas ci_psique_*).
 Variables: DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT
 (o DATABASE_URL).
 """

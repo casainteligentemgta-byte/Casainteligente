@@ -172,7 +172,7 @@ function fallbackLocal(palabras: string[]): RecomendacionPsiqueResult {
     rol_examen_sugerido: elegirRolExamenSugerido(pruebas),
     fuente: 'fallback',
     aviso:
-      'Catálogo local (migración 290 no disponible o sin coincidencias en BD). Ejecuta 290_ci_psique_pruebas_triggers.sql en Supabase.',
+      'Catálogo local (migración 294 no disponible). Ejecuta 294_ci_psique_catalogo_aislado.sql en Supabase.',
   };
 }
 

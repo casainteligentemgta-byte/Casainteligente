@@ -1,128 +1,77 @@
--- Psique: catálogo de pruebas psicológicas / técnicas y triggers por palabra clave.
--- Usado por POST /api/talento/psique/recomendar y scripts/recomendar_pruebas_psique.py
+-- Psique: catálogo propio (ci_psique_*), sin tocar tablas legacy `pruebas` / `categorias_test`.
+-- La RPC ci_recomendar_pruebas_psique lee SOLO estas tablas.
 
-create table if not exists public.categorias_test (
+create table if not exists public.ci_psique_categorias (
   id_categoria serial primary key,
   nombre text not null unique,
   created_at timestamptz not null default now()
 );
 
-create table if not exists public.pruebas (
+create table if not exists public.ci_psique_pruebas (
   id_prueba serial primary key,
-  nombre_prueba text not null,
-  id_categoria integer not null references public.categorias_test (id_categoria) on delete restrict,
+  nombre_prueba text not null unique,
+  id_categoria integer not null
+    references public.ci_psique_categorias (id_categoria) on delete restrict,
   descripcion text not null default '',
   objetivo_evaluacion text not null default '',
   es_clinico boolean not null default false,
-  -- Banco de examen Casa Inteligente asociado (opcional).
-  rol_examen_sugerido text null,
+  rol_examen_sugerido text null
+    check (
+      rol_examen_sugerido is null
+      or rol_examen_sugerido in ('programador', 'tecnico', 'obrero', 'vigilante')
+    ),
   activa boolean not null default true,
   created_at timestamptz not null default now()
 );
 
--- Si `pruebas` ya existía (CREATE TABLE IF NOT EXISTS no añade columnas), completar schema.
-alter table public.pruebas
-  add column if not exists descripcion text not null default '';
-alter table public.pruebas
-  add column if not exists objetivo_evaluacion text not null default '';
-alter table public.pruebas
-  add column if not exists es_clinico boolean not null default false;
-alter table public.pruebas
-  add column if not exists rol_examen_sugerido text null;
-alter table public.pruebas
-  add column if not exists activa boolean not null default true;
-alter table public.pruebas
-  add column if not exists created_at timestamptz not null default now();
-
-alter table public.pruebas drop constraint if exists pruebas_rol_examen_sugerido_check;
-alter table public.pruebas
-  add constraint pruebas_rol_examen_sugerido_check
-  check (
-    rol_examen_sugerido is null
-    or rol_examen_sugerido in ('programador', 'tecnico', 'obrero', 'vigilante')
-  );
-
-create index if not exists idx_pruebas_categoria on public.pruebas (id_categoria);
-create index if not exists idx_pruebas_rol_examen on public.pruebas (rol_examen_sugerido)
+create index if not exists idx_ci_psique_pruebas_categoria
+  on public.ci_psique_pruebas (id_categoria);
+create index if not exists idx_ci_psique_pruebas_rol
+  on public.ci_psique_pruebas (rol_examen_sugerido)
   where rol_examen_sugerido is not null;
 
-create table if not exists public.triggers_prueba (
+create table if not exists public.ci_psique_triggers (
   id serial primary key,
-  id_prueba integer not null references public.pruebas (id_prueba) on delete cascade,
+  id_prueba integer not null
+    references public.ci_psique_pruebas (id_prueba) on delete cascade,
   palabra_clave text not null,
   created_at timestamptz not null default now(),
-  constraint triggers_prueba_palabra_clave_chk check (palabra_clave = lower(btrim(palabra_clave))),
-  constraint triggers_prueba_unica unique (id_prueba, palabra_clave)
+  constraint ci_psique_triggers_palabra_chk check (palabra_clave = lower(btrim(palabra_clave))),
+  constraint ci_psique_triggers_unica unique (id_prueba, palabra_clave)
 );
 
-create index if not exists idx_triggers_prueba_palabra on public.triggers_prueba (palabra_clave);
+create index if not exists idx_ci_psique_triggers_palabra
+  on public.ci_psique_triggers (palabra_clave);
 
-comment on table public.categorias_test is 'Categorías del catálogo Psique (cognitiva, integridad, técnica, etc.).';
-comment on table public.pruebas is 'Batería de pruebas recomendables por cargo/solicitud (Psique).';
-comment on table public.triggers_prueba is 'Palabras clave que disparan la recomendación de una prueba Psique.';
-comment on column public.pruebas.rol_examen_sugerido is
-  'Rol de examen CI (programador|tecnico|obrero|vigilante) sugerido al asignar esta prueba.';
+comment on table public.ci_psique_categorias is 'Categorías del catálogo Psique.';
+comment on table public.ci_psique_pruebas is 'Pruebas recomendables por cargo (agente Psique).';
+comment on table public.ci_psique_triggers is 'Palabras clave → prueba Psique.';
 
-alter table public.categorias_test enable row level security;
-alter table public.pruebas enable row level security;
-alter table public.triggers_prueba enable row level security;
+alter table public.ci_psique_categorias enable row level security;
+alter table public.ci_psique_pruebas enable row level security;
+alter table public.ci_psique_triggers enable row level security;
 
-drop policy if exists "psique_cat_select_auth" on public.categorias_test;
-drop policy if exists "psique_pru_select_auth" on public.pruebas;
-drop policy if exists "psique_trg_select_auth" on public.triggers_prueba;
-drop policy if exists "psique_cat_select_anon" on public.categorias_test;
-drop policy if exists "psique_pru_select_anon" on public.pruebas;
-drop policy if exists "psique_trg_select_anon" on public.triggers_prueba;
+drop policy if exists "ci_psique_cat_select_auth" on public.ci_psique_categorias;
+drop policy if exists "ci_psique_pru_select_auth" on public.ci_psique_pruebas;
+drop policy if exists "ci_psique_trg_select_auth" on public.ci_psique_triggers;
+drop policy if exists "ci_psique_cat_select_anon" on public.ci_psique_categorias;
+drop policy if exists "ci_psique_pru_select_anon" on public.ci_psique_pruebas;
+drop policy if exists "ci_psique_trg_select_anon" on public.ci_psique_triggers;
 
-create policy "psique_cat_select_auth" on public.categorias_test
+create policy "ci_psique_cat_select_auth" on public.ci_psique_categorias
   for select to authenticated using (true);
-create policy "psique_pru_select_auth" on public.pruebas
+create policy "ci_psique_pru_select_auth" on public.ci_psique_pruebas
   for select to authenticated using (true);
-create policy "psique_trg_select_auth" on public.triggers_prueba
+create policy "ci_psique_trg_select_auth" on public.ci_psique_triggers
   for select to authenticated using (true);
-
--- Lectura anónima del catálogo (CRM/preview sin sesión); escritura solo service_role / SQL.
-create policy "psique_cat_select_anon" on public.categorias_test
+create policy "ci_psique_cat_select_anon" on public.ci_psique_categorias
   for select to anon using (true);
-create policy "psique_pru_select_anon" on public.pruebas
+create policy "ci_psique_pru_select_anon" on public.ci_psique_pruebas
   for select to anon using (true);
-create policy "psique_trg_select_anon" on public.triggers_prueba
+create policy "ci_psique_trg_select_anon" on public.ci_psique_triggers
   for select to anon using (true);
 
--- Alinear secuencias serial (solo si la columna es entera; evita error text/integer).
-do $$
-declare
-  seq text;
-  col_type text;
-  mx bigint;
-begin
-  -- categorias_test.id_categoria
-  seq := pg_get_serial_sequence('public.categorias_test', 'id_categoria');
-  if seq is not null then
-    select coalesce(max(id_categoria), 0) into mx from public.categorias_test;
-    perform setval(seq, greatest(mx, 1));
-  end if;
-
-  -- pruebas.id_prueba (omitir si la tabla legacy tiene id text/uuid)
-  select data_type into col_type
-  from information_schema.columns
-  where table_schema = 'public' and table_name = 'pruebas' and column_name = 'id_prueba';
-  seq := pg_get_serial_sequence('public.pruebas', 'id_prueba');
-  if seq is not null and col_type in ('integer', 'bigint', 'smallint') then
-    execute 'select coalesce(max(id_prueba), 0) from public.pruebas' into mx;
-    perform setval(seq, greatest(mx, 1));
-  end if;
-
-  -- triggers_prueba.id
-  seq := pg_get_serial_sequence('public.triggers_prueba', 'id');
-  if seq is not null then
-    select coalesce(max(id), 0) into mx from public.triggers_prueba;
-    perform setval(seq, greatest(mx, 1));
-  end if;
-end $$;
-
--- Seed categorías (idempotente; no choca con filas previas)
-insert into public.categorias_test (nombre) values
+insert into public.ci_psique_categorias (nombre) values
   ('Cognitiva / GMA'),
   ('Integridad'),
   ('Personalidad'),
@@ -131,21 +80,7 @@ insert into public.categorias_test (nombre) values
   ('Atención y vigilancia')
 on conflict (nombre) do nothing;
 
--- Re-sincronizar categorias tras posibles inserts
-do $$
-declare
-  seq text;
-  mx bigint;
-begin
-  seq := pg_get_serial_sequence('public.categorias_test', 'id_categoria');
-  if seq is not null then
-    select coalesce(max(id_categoria), 0) into mx from public.categorias_test;
-    perform setval(seq, greatest(mx, 1));
-  end if;
-end $$;
-
--- Seed pruebas (idempotente por nombre)
-insert into public.pruebas (
+insert into public.ci_psique_pruebas (
   nombre_prueba, id_categoria, descripcion, objetivo_evaluacion, es_clinico, rol_examen_sugerido
 )
 select v.nombre_prueba, c.id_categoria, v.descripcion, v.objetivo_evaluacion, v.es_clinico, v.rol_examen_sugerido
@@ -216,14 +151,12 @@ from (
       'obrero'
     )
 ) as v(nombre_prueba, categoria, descripcion, objetivo_evaluacion, es_clinico, rol_examen_sugerido)
-join public.categorias_test c on c.nombre = v.categoria
+join public.ci_psique_categorias c on c.nombre = v.categoria
 where not exists (
-  select 1 from public.pruebas p where p.nombre_prueba = v.nombre_prueba
+  select 1 from public.ci_psique_pruebas p where p.nombre_prueba = v.nombre_prueba
 );
 
--- Seed triggers (palabra_clave → prueba)
--- Palabras clave sin tildes (normalizar en app con quitarAcentos).
-insert into public.triggers_prueba (id_prueba, palabra_clave)
+insert into public.ci_psique_triggers (id_prueba, palabra_clave)
 select p.id_prueba, lower(btrim(t.palabra_clave))
 from (
   values
@@ -266,15 +199,14 @@ from (
     ('Seguridad en altura y EPP', 'epp'),
     ('Seguridad en altura y EPP', 'tecnico')
 ) as t(nombre_prueba, palabra_clave)
-join public.pruebas p on p.nombre_prueba = t.nombre_prueba
+join public.ci_psique_pruebas p on p.nombre_prueba = t.nombre_prueba
 where not exists (
   select 1
-  from public.triggers_prueba tr
+  from public.ci_psique_triggers tr
   where tr.id_prueba = p.id_prueba
     and tr.palabra_clave = lower(btrim(t.palabra_clave))
 );
 
--- RPC alineada al prototipo Python (ANY de palabras clave).
 create or replace function public.ci_recomendar_pruebas_psique(palabras_clave text[])
 returns table (
   id_prueba integer,
@@ -298,9 +230,9 @@ as $$
     p.objetivo_evaluacion,
     p.es_clinico,
     p.rol_examen_sugerido
-  from public.pruebas p
-  join public.categorias_test c on p.id_categoria = c.id_categoria
-  join public.triggers_prueba t on p.id_prueba = t.id_prueba
+  from public.ci_psique_pruebas p
+  join public.ci_psique_categorias c on p.id_categoria = c.id_categoria
+  join public.ci_psique_triggers t on p.id_prueba = t.id_prueba
   where p.activa = true
     and t.palabra_clave = any (
       select lower(btrim(x)) from unnest(coalesce(palabras_clave, array[]::text[])) as x
@@ -310,7 +242,7 @@ as $$
 $$;
 
 comment on function public.ci_recomendar_pruebas_psique(text[]) is
-  'Recomienda pruebas Psique según palabras clave detectadas en la solicitud de cargo.';
+  'Recomienda pruebas Psique (catálogo ci_psique_*) según palabras clave del cargo.';
 
 grant execute on function public.ci_recomendar_pruebas_psique(text[]) to anon, authenticated, service_role;
 
