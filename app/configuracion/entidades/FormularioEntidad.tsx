@@ -6,17 +6,21 @@ import {
   Calendar,
   FileText,
   ImageIcon,
+  Package,
   Plus,
   ShieldCheck,
   Trash2,
   Truck,
   Users,
+  Wrench,
   X,
   type LucideIcon,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import EquipoEntidadPanel from '@/components/configuracion/EquipoEntidadPanel';
+import EquiposEntidadPanel from '@/components/configuracion/EquiposEntidadPanel';
+import HerramientasEntidadPanel from '@/components/configuracion/HerramientasEntidadPanel';
 import MaquinariaPropiaEntidadPanel from '@/components/configuracion/MaquinariaPropiaEntidadPanel';
 import {
   nuevoPermisoPersonalizado,
@@ -60,7 +64,9 @@ type SeccionPatronoId =
   | 'permisos'
   | 'medios'
   | 'equipo'
-  | 'maquinaria';
+  | 'maquinaria'
+  | 'equipos'
+  | 'herramientas';
 
 type SeccionPatronoItem = {
   id: SeccionPatronoId;
@@ -78,6 +84,8 @@ const SECCIONES_PATRONO: SeccionPatronoItem[] = [
   { id: 'medios', label: 'Logo / sello', icon: ImageIcon },
   { id: 'equipo', label: 'Equipo', icon: Users, soloEdicion: true },
   { id: 'maquinaria', label: 'Maquinaria', icon: Truck, soloEdicion: true },
+  { id: 'equipos', label: 'Equipos', icon: Package, soloEdicion: true },
+  { id: 'herramientas', label: 'Herramientas', icon: Wrench, soloEdicion: true },
 ];
 
 const LABEL_SECCION: Record<SeccionPatronoId, string> = {
@@ -88,7 +96,14 @@ const LABEL_SECCION: Record<SeccionPatronoId, string> = {
   medios: 'Logo / sello',
   equipo: 'Equipo',
   maquinaria: 'Maquinaria',
+  equipos: 'Equipos',
+  herramientas: 'Herramientas',
 };
+
+/** Pestañas embebidas (sin Guardar del formulario de entidad). */
+function esTabPanelEmbebido(tab: SeccionPatronoId): boolean {
+  return tab === 'equipo' || tab === 'maquinaria' || tab === 'equipos' || tab === 'herramientas';
+}
 
 function asRecord(v: unknown): Record<string, unknown> {
   return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
@@ -329,7 +344,7 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
 
   async function onSubmit(e?: React.FormEvent) {
     e?.preventDefault();
-    if (tab === 'equipo' || tab === 'maquinaria') return;
+    if (esTabPanelEmbebido(tab)) return;
     const errs = validarEntidadPatrono({ nombreLegal, rif });
     if (Object.keys(errs).length) {
       if (errs.nombre) toast.error(errs.nombre);
@@ -1266,6 +1281,18 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
                   <MaquinariaPropiaEntidadPanel entidadId={entidad.id} entidadNombre={entidad.nombre} />
                 </Tabs.Content>
               ) : null}
+
+              {esEdicion && entidad?.id ? (
+                <Tabs.Content value="equipos" className="outline-none">
+                  <EquiposEntidadPanel entidadId={entidad.id} entidadNombre={entidad.nombre} />
+                </Tabs.Content>
+              ) : null}
+
+              {esEdicion && entidad?.id ? (
+                <Tabs.Content value="herramientas" className="outline-none">
+                  <HerramientasEntidadPanel entidadId={entidad.id} entidadNombre={entidad.nombre} />
+                </Tabs.Content>
+              ) : null}
             </div>
           </Tabs.Root>
           )}
@@ -1286,9 +1313,9 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
                   onClick={() => setEnSeccion(false)}
                   className="rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-semibold text-zinc-300 hover:bg-white/10"
                 >
-                  {tab === 'equipo' || tab === 'maquinaria' ? 'Volver' : 'Menú'}
+                  {esTabPanelEmbebido(tab) ? 'Volver' : 'Menú'}
                 </button>
-                {tab !== 'equipo' && tab !== 'maquinaria' ? (
+                {!esTabPanelEmbebido(tab) ? (
                   <button
                     type="button"
                     disabled={guardando}
