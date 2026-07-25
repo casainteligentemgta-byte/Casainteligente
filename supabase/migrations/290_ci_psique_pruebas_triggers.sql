@@ -89,19 +89,37 @@ create policy "psique_pru_select_anon" on public.pruebas
 create policy "psique_trg_select_anon" on public.triggers_prueba
   for select to anon using (true);
 
--- Alinear secuencias si las tablas ya tenían filas (evita duplicate key en serial).
-select setval(
-  pg_get_serial_sequence('public.categorias_test', 'id_categoria'),
-  greatest(coalesce((select max(id_categoria) from public.categorias_test), 1), 1)
-);
-select setval(
-  pg_get_serial_sequence('public.pruebas', 'id_prueba'),
-  greatest(coalesce((select max(id_prueba) from public.pruebas), 1), 1)
-);
-select setval(
-  pg_get_serial_sequence('public.triggers_prueba', 'id'),
-  greatest(coalesce((select max(id) from public.triggers_prueba), 1), 1)
-);
+-- Alinear secuencias serial (solo si la columna es entera; evita error text/integer).
+do $$
+declare
+  seq text;
+  col_type text;
+  mx bigint;
+begin
+  -- categorias_test.id_categoria
+  seq := pg_get_serial_sequence('public.categorias_test', 'id_categoria');
+  if seq is not null then
+    select coalesce(max(id_categoria), 0) into mx from public.categorias_test;
+    perform setval(seq, greatest(mx, 1));
+  end if;
+
+  -- pruebas.id_prueba (omitir si la tabla legacy tiene id text/uuid)
+  select data_type into col_type
+  from information_schema.columns
+  where table_schema = 'public' and table_name = 'pruebas' and column_name = 'id_prueba';
+  seq := pg_get_serial_sequence('public.pruebas', 'id_prueba');
+  if seq is not null and col_type in ('integer', 'bigint', 'smallint') then
+    execute 'select coalesce(max(id_prueba), 0) from public.pruebas' into mx;
+    perform setval(seq, greatest(mx, 1));
+  end if;
+
+  -- triggers_prueba.id
+  seq := pg_get_serial_sequence('public.triggers_prueba', 'id');
+  if seq is not null then
+    select coalesce(max(id), 0) into mx from public.triggers_prueba;
+    perform setval(seq, greatest(mx, 1));
+  end if;
+end $$;
 
 -- Seed categorías (idempotente; no choca con filas previas)
 insert into public.categorias_test (nombre) values
