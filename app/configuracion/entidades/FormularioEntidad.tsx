@@ -632,8 +632,8 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
 
         <div className="flex max-h-[calc(92vh-5rem)] flex-col">
           {!enSeccion ? (
-            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
-              <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+              <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {SECCIONES_PATRONO.filter((s) => !s.soloEdicion || (esEdicion && entidad?.id)).map((s) => {
                   const Icon = s.icon;
                   return (
@@ -644,12 +644,12 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
                           setTab(s.id);
                           setEnSeccion(true);
                         }}
-                        className="flex w-full flex-col items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-5 text-center transition hover:border-[#FF9500]/40 hover:bg-[#FF9500]/10"
+                        className="flex w-full flex-col items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.04] px-2 py-2.5 text-center transition hover:border-[#FF9500]/40 hover:bg-[#FF9500]/10"
                       >
-                        <span className="flex h-11 w-11 items-center justify-center rounded-xl border border-[#FF9500]/30 bg-[#FF9500]/10">
-                          <Icon className="h-5 w-5 text-[#FFD60A]" aria-hidden />
+                        <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#FF9500]/30 bg-[#FF9500]/10">
+                          <Icon className="h-4 w-4 text-[#FFD60A]" aria-hidden />
                         </span>
-                        <span className="text-sm font-semibold text-zinc-100">{s.label}</span>
+                        <span className="text-xs font-semibold leading-tight text-zinc-100">{s.label}</span>
                       </button>
                     </li>
                   );
