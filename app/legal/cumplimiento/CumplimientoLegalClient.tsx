@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import Link from 'next/link';
+import { useCallback, useEffect, useState } from 'react';
 import {
   AlertTriangle,
   Building2,
@@ -15,6 +16,8 @@ import { toast } from 'sonner';
 import { apiUrl } from '@/lib/http/apiUrl';
 import type { LocaptemValidacion } from '@/lib/legal/locaptemValidator';
 import type { VerificacionBanavih, VerificacionVehiculo } from '@/lib/legal/complianceRules';
+import type { PermisologiaVencimientoItem } from '@/lib/legal/permisologiaVencimientos';
+import { textoDiasRestantes } from '@/lib/legal/permisologiaVencimientos';
 import type { TsjSearchHit } from '@/lib/legal/tsjSearch';
 
 const campo =
@@ -27,7 +30,47 @@ function money(n: number) {
   });
 }
 
+function badgePerm(estado: PermisologiaVencimientoItem['estado']): string {
+  if (estado === 'vencido') return 'border-red-500/40 bg-red-950/40 text-red-200';
+  if (estado === 'hoy') return 'border-orange-500/40 bg-orange-950/40 text-orange-100';
+  return 'border-amber-500/35 bg-amber-950/30 text-amber-100';
+}
+
 export default function CumplimientoLegalClient() {
+  const [permLoading, setPermLoading] = useState(true);
+  const [permError, setPermError] = useState<string | null>(null);
+  const [permAlertas, setPermAlertas] = useState<PermisologiaVencimientoItem[]>([]);
+
+  const cargarPermisologia = useCallback(async () => {
+    setPermLoading(true);
+    setPermError(null);
+    try {
+      const res = await fetch(apiUrl('/api/legal/cumplimiento/permisologia'), {
+        credentials: 'include',
+        cache: 'no-store',
+      });
+      const data = (await res.json()) as {
+        error?: string;
+        alertas?: PermisologiaVencimientoItem[];
+      };
+      if (!res.ok) {
+        setPermError(data.error || 'No se pudo cargar permisología');
+        setPermAlertas([]);
+        return;
+      }
+      setPermAlertas(data.alertas ?? []);
+    } catch {
+      setPermError('Error de red al cargar permisología');
+      setPermAlertas([]);
+    } finally {
+      setPermLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void cargarPermisologia();
+  }, [cargarPermisologia]);
+
   // LOCAPTEM
   const [juridica, setJuridica] = useState(true);
   const [monto, setMonto] = useState('');
@@ -170,10 +213,68 @@ export default function CumplimientoLegalClient() {
       <div>
         <h2 className="text-xl font-bold text-white">Cumplimiento regulatorio</h2>
         <p className="mt-1 text-sm text-zinc-500">
-          LOCAPTEM, SAREN/INTT, BANAVIH y búsqueda de causas TSJ. No altera plantillas ni cálculos
-          LOTTT.
+          Permisología de patronos (Telegram), LOCAPTEM, SAREN/INTT, BANAVIH y causas TSJ.
         </p>
       </div>
+
+      <section className="space-y-3 rounded-2xl border border-[#FF9500]/25 bg-[#FF9500]/[0.04] p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="flex items-center gap-2 text-sm font-bold text-white">
+              <Building2 className="h-4 w-4 text-[#FFD60A]" />
+              Permisología de entidades (patronos)
+            </h3>
+            <p className="mt-1 text-xs text-zinc-500">
+              IVSS, INCES y solvencia laboral desde Configuración → Entidades. El cron diario notifica
+              por Telegram al Departamento Legal (≤ 30 días o vencidos).
+            </p>
+          </div>
+          <Link
+            href="/configuracion/entidades"
+            className="rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-semibold text-zinc-200 hover:bg-white/10"
+          >
+            Editar en Entidades
+          </Link>
+        </div>
+
+        {permLoading ? (
+          <p className="flex items-center gap-2 text-sm text-zinc-500">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Cargando permisología…
+          </p>
+        ) : permError ? (
+          <p className="rounded-lg border border-red-500/30 bg-red-950/25 px-3 py-2 text-sm text-red-200">
+            {permError}
+          </p>
+        ) : permAlertas.length === 0 ? (
+          <p className="flex items-center gap-2 text-sm text-emerald-200/90">
+            <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+            Sin vencimientos en los próximos 30 días.
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {permAlertas.map((a) => (
+              <li
+                key={`${a.entidad_id}-${a.campo}`}
+                className={`flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-sm ${badgePerm(a.estado)}`}
+              >
+                <div className="min-w-0">
+                  <p className="font-semibold">
+                    {a.etiqueta} · {a.entidad_nombre}
+                  </p>
+                  <p className="text-xs opacity-80">
+                    {a.entidad_rif ? `${a.entidad_rif} · ` : ''}
+                    {a.fecha_vence} · {textoDiasRestantes(a.dias_restantes)}
+                  </p>
+                </div>
+                <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide opacity-80">
+                  {a.estado}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <section className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.02] p-5">
         <h3 className="flex items-center gap-2 text-sm font-bold text-white">

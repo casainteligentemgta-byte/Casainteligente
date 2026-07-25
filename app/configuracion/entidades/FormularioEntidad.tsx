@@ -808,6 +808,11 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
               <Tabs.Content value="permisos" className="space-y-4 outline-none">
                 <p className="text-xs text-zinc-500">
                   Fechas de vencimiento (YYYY-MM-DD). Si faltan menos de 30 días, el campo se resalta en naranja.
+                  Estos vencimientos se enlazan al{' '}
+                  <a href="/legal/cumplimiento" className="font-semibold text-[#FFD60A] underline hover:text-[#FF9500]">
+                    Departamento Legal → Cumplimiento
+                  </a>{' '}
+                  y generan alertas diarias por Telegram.
                 </p>
                 <div>
                   <label className={labelClass}>IVSS — vence</label>
