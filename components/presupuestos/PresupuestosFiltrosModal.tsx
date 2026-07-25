@@ -15,7 +15,7 @@ const CLASIFICACION_LABELS: Record<ClasificacionPresupuesto, string> = {
     enviado: 'Enviado',
     aprobado: 'Aprobado',
     no_aprobado: 'No aprobado',
-    cobrado: 'Cobrado',
+    cobrado: 'Por Pagar',
     pagado: 'Pagado',
 };
 
