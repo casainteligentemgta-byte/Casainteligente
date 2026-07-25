@@ -545,7 +545,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
           La composición ideal de cuadrilla (DISC + fase de obra) está en RRHH.
         </p>
         <Link
-          href={hrefRrhhHub({ proyectoModuloId: id })}
+          href={`${hrefRrhhHub({ proyectoModuloId: id })}#equipo-recomendado`}
           className="mt-3 inline-flex rounded-xl border border-violet-400/40 bg-violet-600/30 px-3 py-2 text-xs font-bold text-violet-50 hover:bg-violet-600/45"
         >
           Abrir en RRHH →
