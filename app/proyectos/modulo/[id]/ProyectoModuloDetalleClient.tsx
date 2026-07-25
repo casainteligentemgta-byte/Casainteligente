@@ -26,6 +26,7 @@ import DashboardUtilidadReal from '@/components/finanzas/DashboardUtilidadReal';
 import CuadroNominaContratados from '@/components/nomina/CuadroNominaContratados';
 import ImportarPresupuestoLulo from '@/components/proyectos/ImportarPresupuestoLulo';
 import ControlPlanosObra from '@/components/proyectos/ControlPlanosObra';
+import MetronPlanosClient from '@/components/metron/MetronPlanosClient';
 import SeccionTituloHover from '@/components/proyectos/SeccionTituloHover';
 import HorarioObraEditor from '@/components/proyectos/HorarioObraEditor';
 import { hrefRrhhHub } from '@/lib/rrhh/hrefSolicitudPersonal';
@@ -608,6 +609,11 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
           </Link>
           <ImportarPresupuestoLulo proyectoId={id} onSuccess={() => void load()} />
           <ControlPlanosObra proyectoId={id} />
+          <MetronPlanosClient
+            proyectoId={id}
+            nombreObra={proyecto.nombre}
+            className="mt-4"
+          />
           <CuadroNominaContratados proyectoModuloId={id} titulo="Contratados — nómina del proyecto" />
           <DashboardUtilidadReal proyectoId={id} className="" />
         </div>
@@ -1071,6 +1077,11 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
               </section>
 
               <ControlPlanosObra proyectoId={id} className="mb-6" />
+              <MetronPlanosClient
+                proyectoId={id}
+                nombreObra={proyecto?.nombre}
+                className="mb-6"
+              />
 
               <SeccionTituloHover
                 className="border border-white/10 bg-zinc-900/70 p-5 shadow-lg backdrop-blur-xl"

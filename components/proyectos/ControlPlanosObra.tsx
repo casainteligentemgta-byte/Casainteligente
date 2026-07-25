@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import {
   FileCode,
   FileText,
@@ -8,6 +9,7 @@ import {
   CheckCircle2,
   UploadCloud,
   Loader2,
+  Ruler,
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -349,6 +351,15 @@ export default function ControlPlanosObra({ proyectoId, className = '' }: PlanoP
                 </span>
 
                 <div className="flex items-center gap-1.5">
+                  {plano.pdfUrl ? (
+                    <Link
+                      href={`/metron?proyectoId=${encodeURIComponent(proyectoId)}&planoId=${encodeURIComponent(plano.id)}`}
+                      className="p-1.5 hover:bg-amber-500/10 rounded text-amber-400/90 hover:text-amber-300 transition-colors"
+                      title="Analizar con Metron (cómputo / prepresupuesto)"
+                    >
+                      <Ruler className="h-4 w-4" />
+                    </Link>
+                  ) : null}
                   {plano.cadUrl ? (
                     <a
                       href={plano.cadUrl}
