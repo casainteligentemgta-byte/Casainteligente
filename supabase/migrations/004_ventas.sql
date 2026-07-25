@@ -1,5 +1,20 @@
 -- Tablas de ventas para Casa Inteligente
 -- Ejecuta en Supabase: SQL Editor → New query → Pegar → Run
+--
+-- Preview/fresh DB: empresas debe existir ANTES del FK de ventas.
+-- (008_empresas.sql es posterior en el orden lexicográfico; aquí se crea el stub.)
+
+create table if not exists public.empresas (
+  id uuid primary key default gen_random_uuid(),
+  nombre text not null,
+  direccion text,
+  telefono text,
+  email text,
+  rif text,
+  notas text,
+  creado_en timestamptz default now(),
+  actualizado_en timestamptz default now()
+);
 
 -- Cabecera de venta
 create table if not exists public.ventas (
