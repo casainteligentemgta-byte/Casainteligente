@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  Calculator,
   CalendarRange,
   Droplets,
   FileText,
@@ -24,7 +23,6 @@ function tabs(proyectoId: string): Tab[] {
   const base = `/proyectos/modulo/${encodeURIComponent(proyectoId)}/control-obra`;
   return [
     { id: 'presupuesto', href: base, label: 'Presupuesto Lulo', icon: Layers },
-    { id: 'apu', href: `${base}/apu`, label: 'Análisis APU', icon: Calculator },
     { id: 'agua', href: `${base}/agua`, label: 'Registro de agua', icon: Droplets },
     { id: 'maquinaria', href: `${base}/maquinaria`, label: 'Maquinaria intercompany', icon: Truck },
     { id: 'informes', href: `${base}/informes`, label: 'Informes ingeniero', icon: FileText },
@@ -36,11 +34,12 @@ function tabs(proyectoId: string): Tab[] {
 
 function tabActivo(pathname: string, tab: Tab): boolean {
   if (tab.id === 'presupuesto') {
+    // Vista APU vive dentro de Presupuesto Lulo (botón «Vista APU»).
+    if (pathname.includes('/control-obra/apu')) return true;
     return (
       pathname.endsWith('/control-obra') ||
       (pathname.includes('/control-obra') &&
         !pathname.includes('/agua') &&
-        !pathname.includes('/apu') &&
         !pathname.includes('/informes') &&
         !pathname.includes('/cronograma') &&
         !pathname.includes('/equipo') &&

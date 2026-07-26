@@ -127,9 +127,10 @@ export default function PresupuestosLuloPanel({ proyectoId, onChanged }: Props) 
         <div className="flex items-center gap-2">
           <Link
             href={apuHref}
-            className="inline-flex items-center gap-1 rounded-lg border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[10px] font-semibold text-amber-200 hover:bg-amber-500/20"
+            className="inline-flex items-center gap-1 rounded-lg border border-amber-500/40 bg-amber-500/10 px-2.5 py-1.5 text-[11px] font-semibold text-amber-200 hover:bg-amber-500/20"
+            title="Capítulos, partidas y análisis APU"
           >
-            <ExternalLink className="h-3 w-3" />
+            <ExternalLink className="h-3.5 w-3.5" />
             Vista APU
           </Link>
           <button

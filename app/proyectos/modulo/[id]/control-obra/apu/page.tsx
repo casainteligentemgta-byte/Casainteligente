@@ -10,7 +10,7 @@ export default function ControlObraApuPage({ params }: { params: { id: string } 
     <Suspense
       fallback={
         <p className="text-sm text-zinc-500 py-8" role="status">
-          Cargando análisis APU…
+          Cargando vista APU…
         </p>
       }
     >

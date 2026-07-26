@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-/** Catálogo alineado con Control de obra → Análisis APU (sidebar Lulo). */
+/** Catálogo alineado con Control de obra → Vista APU (Presupuesto Lulo). */
 export const CAPITULOS_PROCURA_APU = [
   { codigo: '01', nombre: 'Demolición y obras provisionales' },
   { codigo: '02', nombre: 'Estructura' },
