@@ -6,7 +6,6 @@ import {
   Calendar,
   FileText,
   ImageIcon,
-  Package,
   Plus,
   ShieldCheck,
   Trash2,
@@ -17,7 +16,6 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import EquiposEntidadPanel from '@/components/configuracion/EquiposEntidadPanel';
 import HerramientasEntidadPanel from '@/components/configuracion/HerramientasEntidadPanel';
 import MaquinariaPropiaEntidadPanel from '@/components/configuracion/MaquinariaPropiaEntidadPanel';
 import {
@@ -62,7 +60,6 @@ type SeccionPatronoId =
   | 'permisos'
   | 'medios'
   | 'maquinaria'
-  | 'equipos'
   | 'herramientas';
 
 type SeccionPatronoItem = {
@@ -80,7 +77,6 @@ const SECCIONES_PATRONO: SeccionPatronoItem[] = [
   { id: 'permisos', label: 'Permisología', icon: Calendar },
   { id: 'medios', label: 'Logo / sello', icon: ImageIcon },
   { id: 'maquinaria', label: 'Maquinaria', icon: Truck, soloEdicion: true },
-  { id: 'equipos', label: 'Inventario equipos', icon: Package, soloEdicion: true },
   { id: 'herramientas', label: 'Herramientas', icon: Wrench, soloEdicion: true },
 ];
 
@@ -91,13 +87,12 @@ const LABEL_SECCION: Record<SeccionPatronoId, string> = {
   permisos: 'Permisología',
   medios: 'Logo / sello',
   maquinaria: 'Maquinaria',
-  equipos: 'Inventario equipos',
   herramientas: 'Herramientas',
 };
 
 /** Pestañas embebidas (sin Guardar del formulario de entidad). */
 function esTabPanelEmbebido(tab: SeccionPatronoId): boolean {
-  return tab === 'maquinaria' || tab === 'equipos' || tab === 'herramientas';
+  return tab === 'maquinaria' || tab === 'herramientas';
 }
 
 function asRecord(v: unknown): Record<string, unknown> {
@@ -1266,12 +1261,6 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
               {esEdicion && entidad?.id ? (
                 <Tabs.Content value="maquinaria" className="outline-none">
                   <MaquinariaPropiaEntidadPanel entidadId={entidad.id} entidadNombre={entidad.nombre} />
-                </Tabs.Content>
-              ) : null}
-
-              {esEdicion && entidad?.id ? (
-                <Tabs.Content value="equipos" className="outline-none">
-                  <EquiposEntidadPanel entidadId={entidad.id} entidadNombre={entidad.nombre} />
                 </Tabs.Content>
               ) : null}
 
