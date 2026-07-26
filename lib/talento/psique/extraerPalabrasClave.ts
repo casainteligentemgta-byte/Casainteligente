@@ -1,6 +1,7 @@
 /** Quita tildes/diacríticos para alinear con triggers Psique (ASCII). */
 export function quitarAcentos(texto: string): string {
-  return texto.normalize('NFD').replace(/\p{M}/gu, '');
+  // Compatible con target ES5 (evitar \p{M} / unicode property escapes).
+  return texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
 const STOPWORDS = new Set([
