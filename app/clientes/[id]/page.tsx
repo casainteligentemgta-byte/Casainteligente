@@ -7,29 +7,16 @@ import ClienteContextoObraPatrono from '@/components/clientes/ClienteContextoObr
 import CustomerLoyaltyCard from '@/components/clientes/CustomerLoyaltyCard';
 import { useCustomerLoyaltyScore } from '@/hooks/useCustomerLoyaltyScore';
 import {
+  cargarClienteDetalle,
+  type CustomerDetail,
+} from '@/lib/clientes/cargarClienteDetalle';
+import {
   agruparPatronosDesdeObras,
   etiquetaEstadoObraLegible,
   hrefProyectoObra,
   montoObraUsd,
 } from '@/lib/clientes/proyectosClienteDisplay';
 import { createClient } from '@/lib/supabase/client';
-
-type CustomerDetail = {
-  id: string;
-  nombre: string | null;
-  customer_type: 'natural' | 'juridico' | null;
-  cedula: string | null;
-  rif: string | null;
-  razon_social: string | null;
-  representante_legal: string | null;
-  genero: string | null;
-  estado_civil: string | null;
-  profesion: string | null;
-  direccion: string | null;
-  email: string | null;
-  telefono: string | null;
-  created_at: string | null;
-};
 
 type ObraVinculada = {
   id: string;
@@ -78,51 +65,14 @@ export default function ClienteDetallePage() {
     (async () => {
       setLoading(true);
       setError(null);
-      const { data, error: err } = await supabase
-        .from('customers')
-        .select(
-          'id,nombre,customer_type,cedula,rif,razon_social,representante_legal,genero,estado_civil,profesion,direccion,email,telefono,created_at',
-        )
-        .eq('id', id)
-        .maybeSingle();
+      const { data, error: err } = await cargarClienteDetalle(supabase, id);
       if (!alive) return;
+      setLoading(false);
       if (err) {
-        const schemaMissing =
-          /Could not find the '\w+' column of 'customers'/i.test(err.message) ||
-          (/customers/i.test(err.message) &&
-            (/schema cache/i.test(err.message) || /column/i.test(err.message) || /does not exist/i.test(err.message)));
-        if (!schemaMissing) {
-          setLoading(false);
-          setError(err.message);
-          return;
-        }
-        // Migración 301 pendiente: reintentar sin columnas de contrato.
-        const fallback = await supabase
-          .from('customers')
-          .select('id,nombre,customer_type,cedula,rif,razon_social,representante_legal,direccion,email,telefono,created_at')
-          .eq('id', id)
-          .maybeSingle();
-        if (!alive) return;
-        setLoading(false);
-        if (fallback.error) {
-          setError(fallback.error.message);
-          return;
-        }
-        setCliente(
-          fallback.data
-            ? ({
-                ...fallback.data,
-                genero: null,
-                estado_civil: null,
-                profesion: null,
-                direccion: (fallback.data as { direccion?: string | null }).direccion ?? null,
-              } as CustomerDetail)
-            : null,
-        );
+        setError(err);
         return;
       }
-      setLoading(false);
-      setCliente((data as CustomerDetail | null) ?? null);
+      setCliente(data);
     })();
     return () => {
       alive = false;
