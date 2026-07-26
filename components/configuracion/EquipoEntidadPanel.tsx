@@ -21,7 +21,7 @@ type Props = {
   entidadNombre?: string;
 };
 
-/** Equipo y permisos de una entidad, embebido en el MENÚ del patrono. */
+/** Equipo y permisos del patrono; se usa desde Equipo de cada proyecto. */
 export default function EquipoEntidadPanel({ entidadId, entidadNombre }: Props) {
   const [filas, setFilas] = useState<FilaRol[]>([]);
   const [cargando, setCargando] = useState(true);

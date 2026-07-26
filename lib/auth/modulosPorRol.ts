@@ -34,8 +34,8 @@ export const MODULOS_NAV: ModuloNavDef[] = [
   { id: 'presupuestos', href: '/presupuestos', label: 'Presupuestos' },
   { id: 'ventas', href: '/ventas', label: 'Ventas' },
   { id: 'entidades', href: '/configuracion/entidades', label: 'Entidades' },
-  /** Equipo se gestiona en el MENÚ de cada entidad; se mantiene el id por compatibilidad de roles. */
-  { id: 'equipo', href: '/configuracion/entidades', label: 'Equipo' },
+  /** Equipo vive en cada proyecto (Control de obra → Equipo); el id se mantiene por roles. */
+  { id: 'equipo', href: '/proyectos/modulo', label: 'Equipo' },
   { id: 'proyectos', href: '/proyectos/modulo', label: 'Proyectos' },
   { id: 'domotica', href: '/nexus/vision', label: 'CCTV' },
   { id: 'nexus', href: '/nexus', label: 'NetVision' },
@@ -156,9 +156,14 @@ const GATES_POR_RUTA: Array<{ modulo: ModuloNavId; match: (pathname: string) => 
       p.startsWith('/configuracion/entidades') ||
       p === '/entidades' ||
       p.startsWith('/entidades/') ||
-      p.startsWith('/configuracion/equipo') ||
       p.startsWith('/configuracion/telegram') ||
       p === '/configuracion',
+  },
+  {
+    modulo: 'equipo',
+    match: (p) =>
+      p.startsWith('/configuracion/equipo') ||
+      /\/proyectos\/modulo\/[^/]+\/control-obra\/equipo/.test(p),
   },
   {
     modulo: 'rrhh',

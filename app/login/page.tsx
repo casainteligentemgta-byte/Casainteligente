@@ -141,7 +141,7 @@ function LoginForm() {
         </GlassCard>
 
         <p className="mt-6 text-center text-xs text-zinc-600">
-          Si no tienes usuario, pide acceso al administrador en Configuración → Equipo.
+          Si no tienes usuario, pide acceso al administrador en el Equipo del proyecto.
         </p>
       </div>
     </div>
