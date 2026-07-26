@@ -3,6 +3,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { Package } from 'lucide-react';
+import ModuloPageTitle from '@/components/ui/ModuloPageTitle';
 import { createClient } from '@/lib/supabase/client';
 
 interface Product {
@@ -394,10 +396,14 @@ export default function ProductosPage() {
                 position: 'sticky', top: 0, zIndex: 100,
                 background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(20px)',
                 padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.1)',
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px'
             }}>
-                <h1 style={{ color: 'white', fontSize: '24px', fontWeight: 800 }}>Catálogo</h1>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <ModuloPageTitle
+                    title="Catálogo"
+                    icon={Package}
+                    iconClassName="text-orange-400"
+                />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
                     {cart.length > 0 ? (
                         <button
                             type="button"
