@@ -53,6 +53,57 @@ where customer_type is null
 alter table public.customers
   alter column customer_type set default 'natural'::public.customer_category;
 
+-- Placeholders tipo "V-" / "J-" rompen el índice único; se anulan.
+update public.customers
+set rif = null
+where rif is not null
+  and (
+    btrim(rif) = ''
+    or length(regexp_replace(btrim(rif), '[^0-9]', '', 'g')) < 4
+    or lower(btrim(rif)) in ('v-', 'j-', 'e-', 'g-', 'p-', 'c-')
+  );
+
+update public.customers
+set cedula = null
+where cedula is not null
+  and (
+    btrim(cedula) = ''
+    or length(regexp_replace(btrim(cedula), '[^0-9]', '', 'g')) < 4
+  );
+
+-- Si hay RIF/cédula reales duplicados, deja el más antiguo y anula el resto.
+with dups as (
+  select id,
+    row_number() over (
+      partition by lower(btrim(rif))
+      order by created_at nulls last, id
+    ) as rn
+  from public.customers
+  where rif is not null
+    and btrim(rif) <> ''
+    and length(regexp_replace(btrim(rif), '[^0-9]', '', 'g')) >= 4
+)
+update public.customers c
+set rif = null
+from dups d
+where c.id = d.id and d.rn > 1;
+
+with dups as (
+  select id,
+    row_number() over (
+      partition by lower(btrim(cedula))
+      order by created_at nulls last, id
+    ) as rn
+  from public.customers
+  where cedula is not null
+    and btrim(cedula) <> ''
+    and length(regexp_replace(btrim(cedula), '[^0-9]', '', 'g')) >= 4
+)
+update public.customers c
+set cedula = null
+from dups d
+where c.id = d.id and d.rn > 1;
+
 do $$
 begin
   if not exists (
@@ -67,13 +118,20 @@ begin
   end if;
 end $$;
 
-create unique index if not exists uq_customers_rif
-  on public.customers (lower(rif))
-  where rif is not null and btrim(rif) <> '';
+drop index if exists public.uq_customers_rif;
+drop index if exists public.uq_customers_cedula;
 
-create unique index if not exists uq_customers_cedula
+create unique index uq_customers_rif
+  on public.customers (lower(rif))
+  where rif is not null
+    and btrim(rif) <> ''
+    and length(regexp_replace(btrim(rif), '[^0-9]', '', 'g')) >= 4;
+
+create unique index uq_customers_cedula
   on public.customers (lower(cedula))
-  where cedula is not null and btrim(cedula) <> '';
+  where cedula is not null
+    and btrim(cedula) <> ''
+    and length(regexp_replace(btrim(cedula), '[^0-9]', '', 'g')) >= 4;
 
 comment on column public.customers.customer_type is
   'natural | juridico — unificación CRM clientes.';
