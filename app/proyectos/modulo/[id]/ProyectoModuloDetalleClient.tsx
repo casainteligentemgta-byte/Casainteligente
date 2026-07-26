@@ -30,6 +30,7 @@ import MetronPlanosClient from '@/components/metron/MetronPlanosClient';
 import SeccionTituloHover from '@/components/proyectos/SeccionTituloHover';
 import HorarioObraEditor from '@/components/proyectos/HorarioObraEditor';
 import { hrefRrhhHub } from '@/lib/rrhh/hrefSolicitudPersonal';
+import { hrefCcoProyecto } from '@/lib/contabilidad/cco/hrefCcoProyecto';
 
 const LOAD_TIMEOUT_MS = 45_000;
 
@@ -174,14 +175,18 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
   const [borrandoProyecto, setBorrandoProyecto] = useState(false);
   const rrhhPanelRef = useRef<HTMLDivElement>(null);
 
-  /** Enlaces antiguos ?tab=solicitados|rrhh → hub RRHH unificado. */
+  /** RRHH → hub; finanzas → CCO de esta obra. */
   useEffect(() => {
     const t = searchParams.get('tab');
     if (t === 'solicitados' || t === 'rrhh') {
       router.replace(hrefRrhhHub({ proyectoModuloId: id }));
       return;
     }
-    if (t !== 'talento' && t !== 'finanzas') return;
+    if (t === 'finanzas') {
+      router.replace(hrefCcoProyecto(id));
+      return;
+    }
+    if (t !== 'talento') return;
     const timer = window.setTimeout(() => {
       rrhhPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 120);
@@ -999,10 +1004,11 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                 <div className="mt-4 flex flex-wrap items-start gap-4">
                   <ImportarPresupuestoLulo proyectoId={id} />
                   <Link
-                    href={`/proyectos/modulo/${id}?tab=finanzas`}
+                    href={hrefCcoProyecto(id)}
                     className="rounded-xl border border-emerald-500/35 bg-emerald-950/30 px-4 py-3 text-xs font-semibold text-emerald-100 hover:bg-emerald-900/40"
+                    title="Control Contable de Obra (CCO)"
                   >
-                    Utilidad real y finanzas del módulo →
+                    Finanzas · CCO de esta obra →
                   </Link>
                 </div>
               </>

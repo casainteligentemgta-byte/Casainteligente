@@ -8,6 +8,7 @@ import type {
     FilaIngresoEntidad,
     ResumenBalanceContabilidad,
 } from '@/lib/contabilidad/resumenBalanceContabilidad';
+import { hrefCcoProyecto } from '@/lib/contabilidad/cco/hrefCcoProyecto';
 
 const OBRA_CONSULTA_LS = 'ci-contabilidad-obra-consulta-v1';
 
@@ -248,9 +249,7 @@ export default function ContabilidadPage() {
         }
     };
 
-    const hrefCco = obraConsulta
-        ? `/contabilidad/cco?proyecto=${encodeURIComponent(obraConsulta)}`
-        : '/contabilidad/cco';
+    const hrefCco = hrefCcoProyecto(obraConsulta || null);
 
     const modules: ModuloContabilidad[] = [
         {
