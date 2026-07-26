@@ -1,7 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, type ComponentType } from 'react';
-import { Loader2, MapPin } from 'lucide-react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentType,
+} from 'react';
+import { ChevronLeft, ChevronRight, Loader2, MapPin, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import FotosCostadosActivo, {
   type FotoCostadoLocal,
@@ -12,6 +19,7 @@ import {
 } from '@/lib/almacen/ubicacionesInventario';
 import {
   COSTADOS_ACTIVO,
+  ETIQUETA_COSTADO,
   type CostadoActivo,
   subirFotosCostadosPendientes,
 } from '@/lib/proyectos/activoFotosCostados';
@@ -81,6 +89,62 @@ export default function ActivoCatalogoEntidadPanel({
   const [fotosLocales, setFotosLocales] = useState<
     Partial<Record<CostadoActivo, FotoCostadoLocal | null>>
   >({});
+  const [visor, setVisor] = useState<{
+    titulo: string;
+    items: { url: string; label: string }[];
+    index: number;
+  } | null>(null);
+  const lastTapRef = useRef<{ key: string; at: number } | null>(null);
+
+  const abrirVisor = useCallback(
+    (titulo: string, items: { url: string; label: string }[], index: number) => {
+      if (!items.length) return;
+      setVisor({ titulo, items, index: Math.max(0, Math.min(index, items.length - 1)) });
+    },
+    [],
+  );
+
+  /** Doble clic (escritorio) o doble toque (móvil) sobre la miniatura. */
+  const onFotoActivate = useCallback(
+    (
+      key: string,
+      titulo: string,
+      items: { url: string; label: string }[],
+      index: number,
+      kind: 'dblclick' | 'touch',
+    ) => {
+      if (kind === 'dblclick') {
+        abrirVisor(titulo, items, index);
+        return;
+      }
+      const now = Date.now();
+      const prev = lastTapRef.current;
+      if (prev && prev.key === key && now - prev.at < 320) {
+        lastTapRef.current = null;
+        abrirVisor(titulo, items, index);
+        return;
+      }
+      lastTapRef.current = { key, at: now };
+    },
+    [abrirVisor],
+  );
+
+  useEffect(() => {
+    if (!visor) return;
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === 'Escape') setVisor(null);
+      if (ev.key === 'ArrowLeft') {
+        setVisor((v) =>
+          v ? { ...v, index: (v.index - 1 + v.items.length) % v.items.length } : v,
+        );
+      }
+      if (ev.key === 'ArrowRight') {
+        setVisor((v) => (v ? { ...v, index: (v.index + 1) % v.items.length } : v));
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [visor]);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -375,9 +439,11 @@ export default function ActivoCatalogoEntidadPanel({
       ) : (
         <ul className="space-y-2">
           {filas.map((e) => {
-            const thumbs = COSTADOS_ACTIVO.map((lado) => e.fotos_costados?.[lado]?.url).filter(
-              Boolean,
-            ) as string[];
+            const fotoItems = COSTADOS_ACTIVO.map((lado) => {
+              const url = e.fotos_costados?.[lado]?.url?.trim();
+              if (!url) return null;
+              return { url, label: ETIQUETA_COSTADO[lado] };
+            }).filter(Boolean) as { url: string; label: string }[];
             return (
               <li
                 key={e.id}
@@ -401,9 +467,11 @@ export default function ActivoCatalogoEntidadPanel({
                   <button
                     type="button"
                     onClick={() => void borrar(e.id)}
-                    className="rounded-lg border border-red-500/30 px-2 py-1 text-xs text-red-300 hover:bg-red-950/40"
+                    title="Eliminar"
+                    aria-label={`Eliminar ${e.nombre_equipo}`}
+                    className="shrink-0 p-1 text-zinc-500 transition hover:text-red-400"
                   >
-                    Eliminar
+                    <Trash2 className="h-3.5 w-3.5" aria-hidden />
                   </button>
                 </div>
 
@@ -429,17 +497,48 @@ export default function ActivoCatalogoEntidadPanel({
                   </select>
                 </div>
 
-                {thumbs.length > 0 ? (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {thumbs.map((url) => (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        key={url}
-                        src={url}
-                        alt=""
-                        className="h-12 w-12 rounded-lg border border-white/10 object-cover"
-                      />
-                    ))}
+                {fotoItems.length > 0 ? (
+                  <div className="mt-2">
+                    <p className="mb-1 text-[10px] text-zinc-600">
+                      Doble toque / doble clic para ampliar
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {fotoItems.map((item, idx) => (
+                        <button
+                          key={`${e.id}-${item.label}-${idx}`}
+                          type="button"
+                          title={`${item.label} · doble toque para ampliar`}
+                          aria-label={`Foto ${item.label}. Doble toque para ampliar`}
+                          onDoubleClick={() =>
+                            onFotoActivate(
+                              `${e.id}-${idx}`,
+                              e.nombre_equipo,
+                              fotoItems,
+                              idx,
+                              'dblclick',
+                            )
+                          }
+                          onTouchEnd={() =>
+                            onFotoActivate(
+                              `${e.id}-${idx}`,
+                              e.nombre_equipo,
+                              fotoItems,
+                              idx,
+                              'touch',
+                            )
+                          }
+                          className="overflow-hidden rounded-lg border border-white/10 bg-black/30 p-0 transition hover:border-white/25 focus:outline-none focus:ring-1 focus:ring-emerald-500/40"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={item.url}
+                            alt={item.label}
+                            className="h-12 w-12 object-cover"
+                            draggable={false}
+                          />
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 ) : null}
               </li>
@@ -447,6 +546,80 @@ export default function ActivoCatalogoEntidadPanel({
           })}
         </ul>
       )}
+
+      {visor ? (
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/85 p-3"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Fotos de ${visor.titulo}`}
+          onClick={() => setVisor(null)}
+        >
+          <div
+            className="relative flex w-full max-w-lg flex-col gap-3"
+            onClick={(ev) => ev.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-2 px-0.5">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-white">{visor.titulo}</p>
+                <p className="text-xs text-zinc-400">
+                  {visor.items[visor.index]?.label} · {visor.index + 1}/{visor.items.length}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setVisor(null)}
+                className="rounded-full p-2 text-zinc-400 hover:bg-white/10 hover:text-white"
+                aria-label="Cerrar"
+              >
+                <X className="h-5 w-5" aria-hidden />
+              </button>
+            </div>
+
+            <div className="relative overflow-hidden rounded-2xl border border-white/15 bg-black">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={visor.items[visor.index]?.url}
+                alt={visor.items[visor.index]?.label ?? 'Foto'}
+                className="max-h-[70vh] w-full object-contain"
+              />
+              {visor.items.length > 1 ? (
+                <>
+                  <button
+                    type="button"
+                    aria-label="Foto anterior"
+                    onClick={() =>
+                      setVisor((v) =>
+                        v
+                          ? {
+                              ...v,
+                              index: (v.index - 1 + v.items.length) % v.items.length,
+                            }
+                          : v,
+                      )
+                    }
+                    className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-black/55 p-2 text-white hover:bg-black/75"
+                  >
+                    <ChevronLeft className="h-5 w-5" aria-hidden />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Foto siguiente"
+                    onClick={() =>
+                      setVisor((v) =>
+                        v ? { ...v, index: (v.index + 1) % v.items.length } : v,
+                      )
+                    }
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-black/55 p-2 text-white hover:bg-black/75"
+                  >
+                    <ChevronRight className="h-5 w-5" aria-hidden />
+                  </button>
+                </>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
