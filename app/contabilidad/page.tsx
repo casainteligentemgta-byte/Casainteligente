@@ -8,6 +8,7 @@ import type {
     FilaIngresoEntidad,
     ResumenBalanceContabilidad,
 } from '@/lib/contabilidad/resumenBalanceContabilidad';
+import { hrefCcoProyecto } from '@/lib/contabilidad/cco/hrefCcoProyecto';
 
 const OBRA_CONSULTA_LS = 'ci-contabilidad-obra-consulta-v1';
 
