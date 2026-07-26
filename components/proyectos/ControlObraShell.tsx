@@ -25,7 +25,14 @@ export default function ControlObraShell({ proyectoId, children }: Props) {
     <div className="max-w-[1600px] mx-auto space-y-5 text-white">
       <header className="space-y-1">
         <div className="flex items-center gap-2.5">
-          <Construction className="h-7 w-7 text-amber-400 shrink-0" aria-hidden />
+          <Link
+            href={`/proyectos/modulo/${pid}`}
+            className="rounded-md text-amber-400 transition hover:text-amber-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/50"
+            aria-label="Volver a la ficha del proyecto"
+            title="Volver a la ficha del proyecto"
+          >
+            <Construction className="h-7 w-7 shrink-0" aria-hidden />
+          </Link>
           <h1 className="text-xl font-bold tracking-tight uppercase">Control de obra</h1>
         </div>
         <p className="text-sm text-zinc-500 pl-[2.375rem]">
