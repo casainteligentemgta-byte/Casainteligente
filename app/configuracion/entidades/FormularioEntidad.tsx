@@ -11,14 +11,12 @@ import {
   ShieldCheck,
   Trash2,
   Truck,
-  Wrench,
   X,
   type LucideIcon,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import EquiposEntidadPanel from '@/components/configuracion/EquiposEntidadPanel';
-import HerramientasEntidadPanel from '@/components/configuracion/HerramientasEntidadPanel';
 import MaquinariaPropiaEntidadPanel from '@/components/configuracion/MaquinariaPropiaEntidadPanel';
 import {
   nuevoPermisoPersonalizado,
@@ -62,8 +60,7 @@ type SeccionPatronoId =
   | 'permisos'
   | 'medios'
   | 'maquinaria'
-  | 'equipos'
-  | 'herramientas';
+  | 'equipos';
 
 type SeccionPatronoItem = {
   id: SeccionPatronoId;
@@ -80,8 +77,7 @@ const SECCIONES_PATRONO: SeccionPatronoItem[] = [
   { id: 'permisos', label: 'Permisología', icon: Calendar },
   { id: 'medios', label: 'Logo / sello', icon: ImageIcon },
   { id: 'maquinaria', label: 'Maquinaria', icon: Truck, soloEdicion: true },
-  { id: 'equipos', label: 'Inventario equipos', icon: Package, soloEdicion: true },
-  { id: 'herramientas', label: 'Herramientas', icon: Wrench, soloEdicion: true },
+  { id: 'equipos', label: 'Equipos y herramientas', icon: Package, soloEdicion: true },
 ];
 
 const LABEL_SECCION: Record<SeccionPatronoId, string> = {
@@ -91,13 +87,12 @@ const LABEL_SECCION: Record<SeccionPatronoId, string> = {
   permisos: 'Permisología',
   medios: 'Logo / sello',
   maquinaria: 'Maquinaria',
-  equipos: 'Inventario equipos',
-  herramientas: 'Herramientas',
+  equipos: 'Equipos y herramientas',
 };
 
 /** Pestañas embebidas (sin Guardar del formulario de entidad). */
 function esTabPanelEmbebido(tab: SeccionPatronoId): boolean {
-  return tab === 'maquinaria' || tab === 'equipos' || tab === 'herramientas';
+  return tab === 'maquinaria' || tab === 'equipos';
 }
 
 function asRecord(v: unknown): Record<string, unknown> {
@@ -1272,12 +1267,6 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
               {esEdicion && entidad?.id ? (
                 <Tabs.Content value="equipos" className="outline-none">
                   <EquiposEntidadPanel entidadId={entidad.id} entidadNombre={entidad.nombre} />
-                </Tabs.Content>
-              ) : null}
-
-              {esEdicion && entidad?.id ? (
-                <Tabs.Content value="herramientas" className="outline-none">
-                  <HerramientasEntidadPanel entidadId={entidad.id} entidadNombre={entidad.nombre} />
                 </Tabs.Content>
               ) : null}
             </div>
