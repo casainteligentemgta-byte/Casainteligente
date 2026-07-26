@@ -215,10 +215,10 @@ export async function emparejarSoportesConEgresos(params: {
   // Oleadas: un PDF puede tener muchas facturas (1 por página); no fallar a las 15.
   for (let wave = 0; wave < unidades.length; wave += MAX_UNIDADES_OCR) {
     const slice = unidades.slice(wave, wave + MAX_UNIDADES_OCR);
-    let i = 0;
-    async function worker() {
-      while (i < slice.length) {
-        const local = i++;
+    let cursor = 0;
+    const worker = async () => {
+      while (cursor < slice.length) {
+        const local = cursor++;
         const idx = wave + local;
         const u = slice[local]!;
         try {
@@ -257,7 +257,7 @@ export async function emparejarSoportesConEgresos(params: {
           };
         }
       }
-    }
+    };
     await Promise.all(
       Array.from({ length: Math.min(concurrency, slice.length) }, () => worker()),
     );

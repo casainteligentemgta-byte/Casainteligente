@@ -34,7 +34,7 @@ export async function extraerRangoPdf(
   for (let p = from; p <= to; p++) indices.push(p - 1);
   const copied = await out.copyPages(src, indices);
   for (const page of copied) out.addPage(page);
-  const saved = await out.save();
+  const saved = new Uint8Array(await out.save());
   const name = file.name.replace(/\.pdf$/i, '') || 'factura';
   return new File([saved], `${name}_p${from}-${to}.pdf`, {
     type: 'application/pdf',
@@ -58,7 +58,7 @@ export async function unirPdfsCliente(files: File[], fileName: string): Promise<
     const copied = await out.copyPages(src, src.getPageIndices());
     for (const p of copied) out.addPage(p);
   }
-  const saved = await out.save();
+  const saved = new Uint8Array(await out.save());
   return new File([saved], fileName, { type: 'application/pdf' });
 }
 

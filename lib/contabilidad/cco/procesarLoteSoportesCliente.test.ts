@@ -18,7 +18,7 @@ async function pdfFileConPaginas(n: number): Promise<File> {
     const page = doc.addPage([200, 200]);
     page.drawText(`P${i + 1}`, { x: 40, y: 100, size: 18, color: rgb(0, 0, 0) });
   }
-  const bytes = await doc.save();
+  const bytes = new Uint8Array(await doc.save());
   return new File([bytes], 'lote-facturas.pdf', { type: 'application/pdf' });
 }
 
