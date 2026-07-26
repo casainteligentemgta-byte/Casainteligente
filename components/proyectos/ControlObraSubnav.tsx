@@ -29,7 +29,7 @@ function tabs(proyectoId: string): Tab[] {
     { id: 'maquinaria', href: `${base}/maquinaria`, label: 'Maquinaria intercompany', icon: Truck },
     { id: 'informes', href: `${base}/informes`, label: 'Informes ingeniero', icon: FileText },
     { id: 'cronograma', href: `${base}/cronograma`, label: 'Cronograma', icon: CalendarRange },
-    { id: 'equipo', href: `${base}/equipo`, label: 'Equipo y alertas', icon: HardHat },
+    { id: 'equipo', href: `${base}/equipo`, label: 'Equipo', icon: HardHat },
     { id: 'tours', href: `${base}/tours`, label: 'Tours 3D', icon: Video },
   ];
 }

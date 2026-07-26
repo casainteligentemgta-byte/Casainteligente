@@ -103,7 +103,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: 'Empleado no encontrado' }, { status: 404 });
       }
       const emp = empRow as { rol_examen: string; rol_buscado: string | null };
-      const rolesPermitidos = ['programador', 'tecnico', 'obrero', 'vigilante'];
+      const rolesPermitidos = ['programador', 'tecnico', 'obrero', 'vigilante', 'empleado'];
       if (!rolesPermitidos.includes(emp.rol_examen)) {
         return NextResponse.json({ error: 'Rol de examen inválido en invitación' }, { status: 500 });
       }
@@ -117,7 +117,7 @@ export async function POST(req: Request) {
       empleadoIdUpdate = inviteEmpId;
       examenTokenMark = inviteTok;
     } else {
-      const rolesPermitidos = ['programador', 'tecnico', 'obrero', 'vigilante'];
+      const rolesPermitidos = ['programador', 'tecnico', 'obrero', 'vigilante', 'empleado'];
       if (!rolesPermitidos.includes(body.rol_examen as string)) {
         return NextResponse.json({ error: 'nombre y rol_examen válidos requeridos' }, { status: 400 });
       }

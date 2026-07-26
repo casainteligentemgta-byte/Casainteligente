@@ -9,10 +9,9 @@ import { createClient } from '@/lib/supabase/client';
 
 const CUSTOMERS_LOAD_TIMEOUT_MS = 22_000;
 
-// En clientes solo mostramos clasificación por tipo:
-// - Personas naturales
-// - Personas jurídicas (empresas)
-const FILTERS = ['Ambos', 'Personas', 'Empresas'];
+// Clasificación por tipo (sin chip «Ambos»: sin filtro = todos).
+const FILTERS = ['Personas', 'Empresas'] as const;
+type FiltroCliente = '' | (typeof FILTERS)[number];
 
 type ClienteTipoCard = 'V' | 'J' | 'E';
 type ClienteStatusCard = 'activo' | 'inactivo' | 'pendiente';
@@ -41,7 +40,7 @@ function normalizarStatus(s: string | null | undefined): ClienteStatusCard {
 export default function ClientesPage() {
     const router = useRouter();
     const [search, setSearch] = useState('');
-    const [filtro, setFiltro] = useState('Ambos');
+    const [filtro, setFiltro] = useState<FiltroCliente>('');
     const [lista, setLista] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [fetchError, setFetchError] = useState<string | null>(null);
@@ -176,7 +175,7 @@ export default function ClientesPage() {
             (c.movil && String(c.movil).includes(search));
 
         const matchFiltro =
-            filtro === 'Ambos'
+            !filtro
                 ? true
                 : filtro === 'Personas'
                   ? c.categoria === 'personal'
@@ -274,7 +273,7 @@ export default function ClientesPage() {
                         <div>
                             <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'white', lineHeight: 1 }}>Clientes</h1>
                             <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.45)', marginTop: '2px' }}>
-                                {filtro}
+                                {filtro || 'Todos'}
                                 {search ? ` · "${search}"` : ''}
                             </p>
                         </div>
@@ -336,7 +335,8 @@ export default function ClientesPage() {
                             return (
                                 <button
                                     key={f}
-                                    onClick={() => setFiltro(f)}
+                                    type="button"
+                                    onClick={() => setFiltro(active ? '' : f)}
                                     style={{
                                         padding: '6px 13px', borderRadius: '20px', whiteSpace: 'nowrap',
                                         border: active ? '1.5px solid #007AFF' : '1px solid rgba(255,255,255,0.1)',
@@ -394,12 +394,12 @@ export default function ClientesPage() {
                                 <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '13px', marginTop: '4px' }}>
                                     Hay {lista.length} en total; prueba otro término o filtro.
                                 </p>
-                                {(search || filtro !== 'Ambos') && (
+                                {(search || filtro) && (
                                     <button
                                         type="button"
                                         onClick={() => {
                                             setSearch('');
-                                            setFiltro('Ambos');
+                                            setFiltro('');
                                         }}
                                         style={{
                                             marginTop: '16px', padding: '10px 20px', borderRadius: '12px',

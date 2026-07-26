@@ -11,14 +11,12 @@ import {
   ShieldCheck,
   Trash2,
   Truck,
-  Users,
   Wrench,
   X,
   type LucideIcon,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import EquipoEntidadPanel from '@/components/configuracion/EquipoEntidadPanel';
 import EquiposEntidadPanel from '@/components/configuracion/EquiposEntidadPanel';
 import HerramientasEntidadPanel from '@/components/configuracion/HerramientasEntidadPanel';
 import MaquinariaPropiaEntidadPanel from '@/components/configuracion/MaquinariaPropiaEntidadPanel';
@@ -63,7 +61,6 @@ type SeccionPatronoId =
   | 'mercantil'
   | 'permisos'
   | 'medios'
-  | 'equipo'
   | 'maquinaria'
   | 'equipos'
   | 'herramientas';
@@ -82,9 +79,8 @@ const SECCIONES_PATRONO: SeccionPatronoItem[] = [
   { id: 'mercantil', label: 'Mercantil', icon: FileText },
   { id: 'permisos', label: 'Permisología', icon: Calendar },
   { id: 'medios', label: 'Logo / sello', icon: ImageIcon },
-  { id: 'equipo', label: 'Equipo', icon: Users, soloEdicion: true },
   { id: 'maquinaria', label: 'Maquinaria', icon: Truck, soloEdicion: true },
-  { id: 'equipos', label: 'Equipos', icon: Package, soloEdicion: true },
+  { id: 'equipos', label: 'Inventario equipos', icon: Package, soloEdicion: true },
   { id: 'herramientas', label: 'Herramientas', icon: Wrench, soloEdicion: true },
 ];
 
@@ -94,15 +90,14 @@ const LABEL_SECCION: Record<SeccionPatronoId, string> = {
   mercantil: 'Mercantil',
   permisos: 'Permisología',
   medios: 'Logo / sello',
-  equipo: 'Equipo',
   maquinaria: 'Maquinaria',
-  equipos: 'Equipos',
+  equipos: 'Inventario equipos',
   herramientas: 'Herramientas',
 };
 
 /** Pestañas embebidas (sin Guardar del formulario de entidad). */
 function esTabPanelEmbebido(tab: SeccionPatronoId): boolean {
-  return tab === 'equipo' || tab === 'maquinaria' || tab === 'equipos' || tab === 'herramientas';
+  return tab === 'maquinaria' || tab === 'equipos' || tab === 'herramientas';
 }
 
 function asRecord(v: unknown): Record<string, unknown> {
@@ -1269,12 +1264,6 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
                   />
                 </div>
               </Tabs.Content>
-
-              {esEdicion && entidad?.id ? (
-                <Tabs.Content value="equipo" className="outline-none">
-                  <EquipoEntidadPanel entidadId={entidad.id} entidadNombre={entidad.nombre} />
-                </Tabs.Content>
-              ) : null}
 
               {esEdicion && entidad?.id ? (
                 <Tabs.Content value="maquinaria" className="outline-none">

@@ -14,7 +14,12 @@ export type PruebaPsiqueSugerida = {
   rol_examen_sugerido: string | null;
 };
 
-export type RolExamenPsique = 'programador' | 'tecnico' | 'obrero' | 'vigilante';
+export type RolExamenPsique =
+  | 'programador'
+  | 'tecnico'
+  | 'obrero'
+  | 'vigilante'
+  | 'empleado';
 
 export type RecomendacionPsiqueResult = {
   palabras_clave: string[];
@@ -123,14 +128,50 @@ const FALLBACK_TRIGGERS: { palabra: string; prueba: Omit<PruebaPsiqueSugerida, '
         rol_examen_sugerido: 'vigilante',
       },
     },
+    {
+      palabra: 'empleado',
+      prueba: {
+        id: 4,
+        nombre_prueba: 'DISC / perfil conductual',
+        categoria: 'Personalidad',
+        descripcion: 'Perfil de estilo de trabajo (oficina).',
+        objetivo_evaluacion: 'Encaje de equipo y supervisión en oficina.',
+        es_clinico: false,
+        rol_examen_sugerido: 'empleado',
+      },
+    },
+    {
+      palabra: 'oficina',
+      prueba: {
+        id: 4,
+        nombre_prueba: 'DISC / perfil conductual',
+        categoria: 'Personalidad',
+        descripcion: 'Perfil de estilo de trabajo (oficina).',
+        objetivo_evaluacion: 'Encaje de equipo y supervisión en oficina.',
+        es_clinico: false,
+        rol_examen_sugerido: 'empleado',
+      },
+    },
   ];
 
 function esRolExamenPsique(v: string | null | undefined): v is RolExamenPsique {
-  return v === 'programador' || v === 'tecnico' || v === 'obrero' || v === 'vigilante';
+  return (
+    v === 'programador' ||
+    v === 'tecnico' ||
+    v === 'obrero' ||
+    v === 'vigilante' ||
+    v === 'empleado'
+  );
 }
 
 /** Prioridad al votar rol sugerido (más específico primero). */
-const PRIORIDAD_ROL: RolExamenPsique[] = ['vigilante', 'programador', 'obrero', 'tecnico'];
+const PRIORIDAD_ROL: RolExamenPsique[] = [
+  'vigilante',
+  'programador',
+  'empleado',
+  'obrero',
+  'tecnico',
+];
 
 export function elegirRolExamenSugerido(pruebas: PruebaPsiqueSugerida[]): RolExamenPsique | null {
   const votes = new Map<RolExamenPsique, number>();
@@ -229,17 +270,16 @@ export async function recomendarPruebasPsique(
 }
 
 /**
- * Rol de examen a persistir en `ci_empleados.rol_examen` (4 bancos del libro).
- * Default seguro: técnico obra (trípode).
+ * Rol de examen a persistir en `ci_empleados.rol_examen`.
+ * Default de producto: obrero de campo (ABC).
  */
 export function rolExamenDesdePsique(rol: RolExamenPsique | null): RolExamenPsique {
-  return rol ?? 'tecnico';
+  return rol ?? 'obrero';
 }
 
 /**
- * @deprecated Preferir `rolExamenDesdePsique`. Solo programador|tecnico para UIs legacy.
+ * @deprecated Preferir `rolExamenDesdePsique` (todos los roles canónicos).
  */
-export function rolExamenParaGenerarLink(rol: RolExamenPsique | null): 'programador' | 'tecnico' {
-  const r = rolExamenDesdePsique(rol);
-  return r === 'programador' ? 'programador' : 'tecnico';
+export function rolExamenParaGenerarLink(rol: RolExamenPsique | null): RolExamenPsique {
+  return rolExamenDesdePsique(rol);
 }
