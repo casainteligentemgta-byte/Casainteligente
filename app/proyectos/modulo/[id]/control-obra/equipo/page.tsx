@@ -1,5 +1,3 @@
-import { Suspense } from 'react';
-import RegistroMaquinariaIntercompany from '@/components/almacen/RegistroMaquinariaIntercompany';
 import ProyectoEquipoAlertasPanel from '@/components/proyectos/ProyectoEquipoAlertasPanel';
 import ProyectoDepositarioTelegramPanel from '@/components/proyectos/ProyectoDepositarioTelegramPanel';
 import ProyectoEquipoAccesoPanel from '@/components/proyectos/ProyectoEquipoAccesoPanel';
@@ -27,15 +25,6 @@ export default function ControlObraEquipoPage({ params }: Props) {
       <ProyectoNominaRolesPanel proyectoId={proyectoId} />
       <ProyectoEquipoAlertasPanel proyectoId={proyectoId} />
       <ProyectoDepositarioTelegramPanel proyectoId={proyectoId} />
-      <Suspense
-        fallback={
-          <p className="text-sm text-zinc-500 py-8" role="status">
-            Cargando maquinaria intercompany…
-          </p>
-        }
-      >
-        <RegistroMaquinariaIntercompany proyectoId={proyectoId} />
-      </Suspense>
     </div>
   );
 }
