@@ -71,7 +71,7 @@ function RubroPieLabel({
   name = '',
   fill = '#334155',
 }: PieLabelProps) {
-  if (percent < PIE_LABEL_MIN_PCT) return null;
+  if (percent < PIE_LABEL_MIN_PCT) return <g />;
 
   const RADIAN = Math.PI / 180;
   const radius = outerRadius + 22;
@@ -113,7 +113,7 @@ function RubroPieLabelLine({
   midAngle = 0,
   outerRadius = 0,
 }: PieLabelLineProps) {
-  if (percent < PIE_LABEL_MIN_PCT) return null;
+  if (percent < PIE_LABEL_MIN_PCT) return <g />;
 
   const RADIAN = Math.PI / 180;
   const start =
