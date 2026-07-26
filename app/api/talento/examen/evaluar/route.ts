@@ -97,11 +97,11 @@ export async function POST(req: Request) {
         );
       }
 
-      if (rolToken === 'programador' || rolToken === 'tecnico') {
+      if (rolToken === 'programador' || rolToken === 'tecnico' || rolToken === 'empleado') {
         return NextResponse.json(
           {
             error:
-              'Programador y técnico deben completar el examen de personalidad + lógica en /talento/examen (submit).',
+              'Programador, empleado y técnico deben completar el examen de personalidad + lógica en /talento/examen (submit).',
           },
           { status: 400 },
         );

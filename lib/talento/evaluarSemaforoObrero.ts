@@ -10,10 +10,11 @@ export type ResultadoSemaforoObrero = {
 };
 
 export const ROLES_EVALUACION_EXAMEN = [
-  'programador',
-  'tecnico',
   'obrero',
   'vigilante',
+  'tecnico',
+  'empleado',
+  'programador',
 ] as const;
 
 export type RolEvaluacionExamen = (typeof ROLES_EVALUACION_EXAMEN)[number];

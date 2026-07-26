@@ -480,8 +480,8 @@ export function personalidadExamenTecnicoObra(): ItemPersonalidadExamen[] {
   return PREGUNTAS_SITUACIONALES_OBRA;
 }
 
-function obtenerPreguntasTech(rol: RolExamen): ExamenGenerado {
-  const logica = rol === 'programador' ? LOGICA_PROGRAMADOR : LOGICA_TECNICO;
+function obtenerPreguntasTech(rol: Extract<RolExamen, 'programador' | 'tecnico' | 'empleado'>): ExamenGenerado {
+  const logica = rol === 'tecnico' ? LOGICA_TECNICO : LOGICA_PROGRAMADOR;
   const personalidad =
     rol === 'tecnico' ? personalidadExamenTecnicoObra() : PREGUNTAS_PERSONALIDAD;
   return {
@@ -503,22 +503,24 @@ export function logicaDelExamen(examen: ExamenAdaptativoResult): PreguntaLogica[
 
 /**
  * Genera el banco de preguntas según rol.
- * - programador: 20 personalidad (frecuencia) + 5 lógica
- * - tecnico (obrero en UI): 20 conducta (4 opciones) + 5 lógica de obra
  * - obrero / vigilante: 20 situacionales ABC (`PREGUNTAS_OBRERO`)
+ * - tecnico: 20 conducta obra (4 opciones) + 5 lógica de campo
+ * - empleado / programador: 20 frecuencia + 5 lógica (TI / razonamiento)
  */
-/** Etiqueta visible en UI (el rol interno `tecnico` se muestra como Obrero / técnico obra). */
+/** Etiqueta visible en UI — ver también `rolesExamenCatalogo`. */
 export function etiquetaRolExamenUI(rol: RolExamen | string): string {
-  if (rol === 'programador') return 'Programador';
-  if (rol === 'tecnico') return 'Obrero (técnico obra)';
-  if (rol === 'obrero') return 'Obrero (ABC)';
-  if (rol === 'vigilante') return 'Vigilante (ABC)';
+  if (rol === 'programador') return 'Programador / TI';
+  if (rol === 'empleado') return 'Empleado (oficina)';
+  if (rol === 'tecnico') return 'Técnico de obra';
+  if (rol === 'obrero') return 'Obrero (campo)';
+  if (rol === 'vigilante') return 'Vigilante';
   return String(rol);
 }
 
 export function generarExamenAdaptativo(rol: string): ExamenAdaptativoResult {
   switch (rol) {
     case 'programador':
+    case 'empleado':
     case 'tecnico':
       return obtenerPreguntasTech(rol);
     case 'obrero':
@@ -592,7 +594,7 @@ export function puntajeLogica(
   rol: RolExamen,
   respuestas: Record<string, number>,
 ): { puntaje: number; correctas: number; gma0a5: number } {
-  const qs = rol === 'programador' ? LOGICA_PROGRAMADOR : LOGICA_TECNICO;
+  const qs = rol === 'tecnico' ? LOGICA_TECNICO : LOGICA_PROGRAMADOR;
   let correctas = 0;
   for (const q of qs) {
     const r = respuestas[q.id];

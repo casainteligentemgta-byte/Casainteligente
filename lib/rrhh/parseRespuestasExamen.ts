@@ -1,4 +1,9 @@
-import { esExamenObrero, generarExamenAdaptativo } from '@/lib/talento/exam';
+import {
+  esExamenObrero,
+  generarExamenAdaptativo,
+  type PreguntaObrero,
+} from '@/lib/talento/exam';
+import { esRolExamenCanonico, ROL_EXAMEN_DEFAULT } from '@/lib/talento/rolesExamenCatalogo';
 import type { ItemPersonalidadExamen, PreguntaLogica, RolExamen } from '@/types/talento';
 
 export type RespuestasMap = Record<string, number>;
@@ -70,7 +75,7 @@ export function parseRespuestasMap(raw: unknown): RespuestasMap {
 
 export function rolExamenDesdeRow(rol: unknown): RolExamen {
   const r = String(rol ?? '').trim();
-  return r === 'programador' ? 'programador' : 'tecnico';
+  return esRolExamenCanonico(r) ? r : ROL_EXAMEN_DEFAULT;
 }
 
 export function construirDetalleDesdeFilas(params: {
@@ -157,13 +162,17 @@ export {
 export function preguntasParaDetalle(rol: RolExamen): {
   personalidad: ItemPersonalidadExamen[];
   logica: PreguntaLogica[];
+  abc: PreguntaObrero[];
+  formato: 'tripode' | 'abc';
 } {
   const examen = generarExamenAdaptativo(rol);
   if (esExamenObrero(examen)) {
-    return { personalidad: [], logica: [] };
+    return { personalidad: [], logica: [], abc: examen, formato: 'abc' };
   }
   return {
     personalidad: examen.personalidad,
     logica: examen.logica,
+    abc: [],
+    formato: 'tripode',
   };
 }

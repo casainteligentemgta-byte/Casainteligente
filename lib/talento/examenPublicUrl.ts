@@ -3,6 +3,6 @@
  */
 export function rutaExamenTalentoPublica(token: string, rolExamen?: string | null): string {
   const enc = encodeURIComponent(token);
-  if (rolExamen === 'obrero') return `/talento/examen/${enc}`;
+  if (rolExamen === 'obrero' || rolExamen === 'vigilante') return `/talento/examen/${enc}`;
   return `/talento/examen?token=${enc}`;
 }

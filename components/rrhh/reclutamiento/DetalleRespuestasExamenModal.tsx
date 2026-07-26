@@ -92,6 +92,7 @@ export default function DetalleRespuestasExamenModal({ open, onClose, empleadoId
   const preguntas = detalle ? preguntasParaDetalle(detalle.rolExamen) : null;
   const sinRespuestas =
     detalle &&
+    preguntas?.formato !== 'abc' &&
     Object.keys(detalle.respuestasPersonalidad).length === 0 &&
     Object.keys(detalle.respuestasLogica).length === 0;
 
@@ -172,7 +173,36 @@ export default function DetalleRespuestasExamenModal({ open, onClose, empleadoId
                 </p>
               ) : null}
 
-              {preguntas && Object.keys(detalle.respuestasPersonalidad).length > 0 ? (
+              {preguntas?.formato === 'abc' && preguntas.abc.length > 0 ? (
+                <section>
+                  <h3 className="text-sm font-bold text-violet-200">
+                    Situacional ABC — {etiquetaRolExamenUI(detalle.rolExamen)} ({preguntas.abc.length})
+                  </h3>
+                  <ol className="mt-2 space-y-2">
+                    {preguntas.abc.map((p, i) => (
+                      <li
+                        key={p.id}
+                        className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm"
+                      >
+                        <span className="text-[10px] font-bold uppercase text-zinc-500">{p.categoria}</span>
+                        <p className="mt-0.5 text-zinc-200">
+                          {i + 1}. {p.pregunta}
+                        </p>
+                        <ul className="mt-1 space-y-0.5 pl-2 text-xs text-zinc-500">
+                          {p.opciones.map((op) => (
+                            <li key={op.valor}>
+                              {op.valor}) {op.texto}
+                            </li>
+                          ))}
+                        </ul>
+                      </li>
+                    ))}
+                  </ol>
+                </section>
+              ) : null}
+
+              {preguntas?.formato === 'tripode' &&
+              Object.keys(detalle.respuestasPersonalidad).length > 0 ? (
                 <section>
                   <h3 className="text-sm font-bold text-violet-200">
                     {detalle.rolExamen === 'tecnico'

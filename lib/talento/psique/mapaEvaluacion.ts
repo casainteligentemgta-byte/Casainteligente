@@ -23,12 +23,15 @@ export type MapaEvaluacionPsique = {
  * - ABC (libro obrero/vigilante): conteo A/B/C → `evaluarSemaforoObrero`
  */
 export function mapaEvaluacionDesdeRol(rol: RolExamenPsique | null): MapaEvaluacionPsique {
-  const r: RolExamenPsique = rol ?? 'tecnico';
+  const r: RolExamenPsique = rol ?? 'obrero';
 
-  if (r === 'programador') {
+  if (r === 'programador' || r === 'empleado') {
     return {
-      rol_examen: 'programador',
-      banco: 'Personalidad (frecuencia) + lógica TI',
+      rol_examen: r,
+      banco:
+        r === 'programador'
+          ? 'Personalidad (frecuencia) + lógica TI'
+          : 'Personalidad (frecuencia) + lógica / razonamiento',
       motor: 'tripode',
       libro: 'Libro de evaluación — Trípode (GMA · Integridad · Tiempo)',
       ejes: ['gma_0_5', 'nivel_integridad_riesgo', 'completo_en_tiempo', 'semaforo'],
@@ -58,7 +61,7 @@ export function mapaEvaluacionDesdeRol(rol: RolExamenPsique | null): MapaEvaluac
     };
   }
 
-  // tecnico (UI: Obrero / técnico obra)
+  // tecnico — técnico de obra (no confundir con obrero de campo ABC)
   return {
     rol_examen: 'tecnico',
     banco: 'Conducta situacional obra + lógica de campo',
@@ -76,5 +79,11 @@ export function mapaEvaluacionDesdeRol(rol: RolExamenPsique | null): MapaEvaluac
 }
 
 export function esRolExamenCompleto(v: string | null | undefined): v is RolExamenPsique {
-  return v === 'programador' || v === 'tecnico' || v === 'obrero' || v === 'vigilante';
+  return (
+    v === 'programador' ||
+    v === 'tecnico' ||
+    v === 'obrero' ||
+    v === 'vigilante' ||
+    v === 'empleado'
+  );
 }
