@@ -248,9 +248,7 @@ export default function ContabilidadPage() {
         }
     };
 
-    const hrefCco = obraConsulta
-        ? `/contabilidad/cco?proyecto=${encodeURIComponent(obraConsulta)}`
-        : '/contabilidad/cco';
+    const hrefCco = hrefCcoProyecto(obraConsulta || null);
 
     const modules: ModuloContabilidad[] = [
         {

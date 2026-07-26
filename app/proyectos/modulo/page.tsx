@@ -14,6 +14,7 @@ import {
 import { etiquetaFuenteProyecto } from '@/lib/proyectos/proyectosUnificados';
 import { withTimeout } from '@/lib/http/withTimeout';
 import ProyectoAccionesConfigRoles from '@/components/proyectos/ProyectoAccionesConfigRoles';
+import { hrefCcoProyecto } from '@/lib/contabilidad/cco/hrefCcoProyecto';
 
 /** `modulo` = ci_proyectos integral; `obra_talento` = misma tabla con tipo_proyecto = talento (ex ci_obras). */
 type ProyectoOrigen = 'modulo' | 'obra_talento';
@@ -555,7 +556,10 @@ export default function ModuloProyectosPage() {
                         </Link>
                       ) : null}
                       {r.origen === 'modulo' ? (
-                        <Link href={`/proyectos/modulo/${r.id}?tab=finanzas`}>
+                        <Link
+                          href={hrefCcoProyecto(r.id)}
+                          title="Control Contable de Obra (CCO) de este proyecto"
+                        >
                           <button
                             type="button"
                             style={{
