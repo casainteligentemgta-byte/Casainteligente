@@ -5,7 +5,10 @@ import Link from 'next/link';
 import { AlertTriangle, ClipboardCopy, Loader2, Mic, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiUrl } from '@/lib/http/apiUrl';
+import { MAX_MINUTA_AUDIO_BYTES } from '@/lib/pheme/constants';
+import { parseProcesarAudioError } from '@/lib/pheme/parseProcesarAudioError';
 import type { MinutaPheme } from '@/lib/pheme/types';
+import { createClient } from '@/lib/supabase/client';
 
 type ApiOk = {
   titulo_reunion?: string;
@@ -21,6 +24,65 @@ type ApiOk = {
 
 type Modo = 'texto' | 'audio';
 
+type UploadUrlOk = {
+  status?: string;
+  bucket: string;
+  path: string;
+  token: string;
+  mime_type?: string;
+  file_name?: string;
+  detail?: string;
+  error?: string;
+};
+
+async function subirAudioViaStorage(file: File): Promise<{
+  bucket: string;
+  path: string;
+  mimeType: string;
+  fileName: string;
+}> {
+  const intentRes = await fetch(apiUrl('/api/pheme/audio-upload-url'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      file_name: file.name,
+      mime_type: file.type || undefined,
+      file_size: file.size,
+    }),
+  });
+  const intentText = await intentRes.text();
+  let intentJson: UploadUrlOk = {} as UploadUrlOk;
+  try {
+    intentJson = JSON.parse(intentText) as UploadUrlOk;
+  } catch {
+    /* vacío */
+  }
+  if (!intentRes.ok || intentJson.status === 'error' || !intentJson.path || !intentJson.token) {
+    throw new Error(
+      parseProcesarAudioError(intentText, intentRes.status, intentJson),
+    );
+  }
+
+  const supabase = createClient();
+  const { error: upErr } = await supabase.storage
+    .from(intentJson.bucket)
+    .uploadToSignedUrl(intentJson.path, intentJson.token, file, {
+      contentType: intentJson.mime_type || file.type || 'audio/mpeg',
+      upsert: false,
+    });
+
+  if (upErr) {
+    throw new Error(upErr.message || 'No se pudo subir el audio a Storage');
+  }
+
+  return {
+    bucket: intentJson.bucket,
+    path: intentJson.path,
+    mimeType: intentJson.mime_type || file.type || 'audio/mpeg',
+    fileName: intentJson.file_name || file.name,
+  };
+}
+
 export default function PhemeMinutaClient() {
   const [modo, setModo] = useState<Modo>('texto');
   const [titulo, setTitulo] = useState('');
@@ -28,6 +90,7 @@ export default function PhemeMinutaClient() {
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [duracion, setDuracion] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadingLabel, setLoadingLabel] = useState('Procesando…');
   const [result, setResult] = useState<ApiOk | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,17 +99,39 @@ export default function PhemeMinutaClient() {
     setError(null);
     try {
       let res: Response;
+      let bodyText = '';
       if (modo === 'audio') {
         if (!audioFile) {
           toast.error('Selecciona un archivo de audio');
           setLoading(false);
           return;
         }
-        const fd = new FormData();
-        fd.set('titulo_reunion', titulo.trim() || 'Sin título');
-        fd.set('archivo_audio', audioFile);
-        if (duracion.trim()) fd.set('duracion_minutos', duracion.trim());
-        res = await fetch(apiUrl('/api/pheme/procesar-audio'), { method: 'POST', body: fd });
+        if (audioFile.size > MAX_MINUTA_AUDIO_BYTES) {
+          const msg = `El audio supera el límite de ${Math.round(MAX_MINUTA_AUDIO_BYTES / (1024 * 1024))} MB`;
+          setError(msg);
+          toast.error(msg);
+          setLoading(false);
+          return;
+        }
+
+        // Subida directa a Supabase (bypass del body ~4.5 MB de Vercel).
+        setLoadingLabel('Subiendo audio…');
+        const uploaded = await subirAudioViaStorage(audioFile);
+
+        setLoadingLabel('Transcribiendo y analizando…');
+        res = await fetch(apiUrl('/api/pheme/procesar-audio'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            titulo_reunion: titulo.trim() || 'Sin título',
+            audio_path: uploaded.path,
+            bucket: uploaded.bucket,
+            mime_type: uploaded.mimeType,
+            file_name: uploaded.fileName,
+            duracion_minutos: duracion.trim() ? Number(duracion) : null,
+          }),
+        });
+        bodyText = await res.text();
       } else {
         const t = texto.trim();
         if (!t) {
@@ -54,6 +139,7 @@ export default function PhemeMinutaClient() {
           setLoading(false);
           return;
         }
+        setLoadingLabel('Procesando…');
         res = await fetch(apiUrl('/api/pheme/minuta'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -63,20 +149,27 @@ export default function PhemeMinutaClient() {
             duracion_minutos: duracion.trim() ? Number(duracion) : null,
           }),
         });
+        bodyText = await res.text();
       }
 
-      const j = (await res.json().catch(() => ({}))) as ApiOk & {
-        error?: string;
-        detail?: string;
-        status?: string;
-      };
+      const j = (() => {
+        try {
+          return JSON.parse(bodyText) as ApiOk & {
+            error?: string;
+            detail?: string;
+            status?: string;
+          };
+        } catch {
+          return {} as ApiOk & { error?: string; detail?: string; status?: string };
+        }
+      })();
+
       if (!res.ok || j.status === 'error') {
-        const msg = j.detail || j.error || 'No se pudo generar la minuta';
+        const msg = parseProcesarAudioError(bodyText, res.status, j);
         setError(msg);
         toast.error(msg);
         return;
       }
-      // Si la API no anida `minuta`, reconstruir desde campos planos del prototipo.
       if (!j.minuta && (j as unknown as MinutaPheme).resumen_ejecutivo) {
         const flat = j as unknown as MinutaPheme;
         j.minuta = {
@@ -90,11 +183,13 @@ export default function PhemeMinutaClient() {
       if (j.transcripcion) setTexto(j.transcripcion);
       if (j.aviso) toast.message(j.aviso);
       else toast.success(j.id_reunion != null ? `Reunión #${j.id_reunion} guardada` : 'Minuta lista');
-    } catch {
-      setError('Error de red');
-      toast.error('Error de red');
+    } catch (err) {
+      const msg = err instanceof Error && err.message ? err.message : 'Error de red';
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
+      setLoadingLabel('Procesando…');
     }
   }, [audioFile, duracion, modo, texto, titulo]);
 
@@ -118,7 +213,7 @@ export default function PhemeMinutaClient() {
           Minuta de reunión
         </h1>
         <p className="max-w-2xl text-sm leading-relaxed text-zinc-400">
-          Audio → transcripción con hablantes → minuta JSON → Postgres (
+          Audio → Storage → transcripción con hablantes → minuta JSON → Postgres (
           <code className="text-zinc-500">reuniones_pheme</code>).
         </p>
         <p className="text-xs text-zinc-600">
@@ -191,8 +286,18 @@ export default function PhemeMinutaClient() {
             {audioFile ? (
               <p className="text-xs text-zinc-500">
                 {audioFile.name} · {(audioFile.size / 1024 / 1024).toFixed(2)} MB
+                {audioFile.size > MAX_MINUTA_AUDIO_BYTES ? (
+                  <span className="ml-1 text-rose-300">
+                    (máx. {Math.round(MAX_MINUTA_AUDIO_BYTES / (1024 * 1024))} MB)
+                  </span>
+                ) : null}
               </p>
-            ) : null}
+            ) : (
+              <p className="text-xs text-zinc-600">
+                Hasta {Math.round(MAX_MINUTA_AUDIO_BYTES / (1024 * 1024))} MB. El archivo se sube a
+                Storage (no pasa por el límite del servidor web).
+              </p>
+            )}
           </>
         ) : (
           <>
@@ -224,11 +329,7 @@ export default function PhemeMinutaClient() {
             ) : (
               <Sparkles className="h-4 w-4" aria-hidden />
             )}
-            {loading
-              ? modo === 'audio'
-                ? 'Transcribiendo y analizando…'
-                : 'Procesando…'
-              : 'Procesar con Pheme'}
+            {loading ? loadingLabel : 'Procesar con Pheme'}
           </button>
           {result?.markdown ? (
             <button
