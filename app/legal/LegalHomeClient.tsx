@@ -5,10 +5,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   ArrowRight,
+  Brain,
   CheckCircle2,
   Clock3,
   FolderOpen,
   Loader2,
+  Mic,
   Plus,
   Scale,
   Sparkles,
@@ -319,6 +321,45 @@ export default function LegalHomeClient() {
           <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 opacity-80" />
         </Link>
       ) : null}
+
+      <section className="space-y-3">
+        <h3 className="flex items-center gap-2 text-sm font-bold text-white">
+          <Sparkles className="h-4 w-4 text-violet-400" />
+          Agentes
+        </h3>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Link
+            href="/legal/pheme"
+            className="group rounded-xl border border-violet-500/25 bg-violet-950/20 p-4 transition hover:border-violet-400/40 hover:bg-violet-950/35"
+          >
+            <p className="flex items-center gap-2 text-sm font-bold text-violet-100">
+              <Mic className="h-4 w-4 text-violet-300" />
+              Pheme
+            </p>
+            <p className="mt-1 text-xs text-zinc-500">
+              Minutas y análisis de reuniones: acuerdos, responsables y pendientes.
+            </p>
+            <p className="mt-3 text-[11px] font-semibold text-violet-300 group-hover:text-violet-200">
+              Abrir Pheme →
+            </p>
+          </Link>
+          <Link
+            href="/legal/psique"
+            className="group rounded-xl border border-violet-500/25 bg-violet-950/20 p-4 transition hover:border-violet-400/40 hover:bg-violet-950/35"
+          >
+            <p className="flex items-center gap-2 text-sm font-bold text-violet-100">
+              <Brain className="h-4 w-4 text-violet-300" />
+              Psique
+            </p>
+            <p className="mt-1 text-xs text-zinc-500">
+              Recomienda pruebas psicométricas y rol de examen según el cargo.
+            </p>
+            <p className="mt-3 text-[11px] font-semibold text-violet-300 group-hover:text-violet-200">
+              Abrir Psique →
+            </p>
+          </Link>
+        </div>
+      </section>
 
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">

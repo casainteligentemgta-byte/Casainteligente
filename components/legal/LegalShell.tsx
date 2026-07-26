@@ -14,6 +14,8 @@ import {
   FileUp,
   Inbox,
   ShieldCheck,
+  Mic,
+  Brain,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAccesoLegal } from '@/lib/legal/AccesoLegalContext';
@@ -27,6 +29,8 @@ const NAV_BASE = [
   { href: '/legal/inspecciones', label: 'IurisVigía', icon: Camera, exact: false },
   { href: '/legal/calculos', label: 'Cálculos', icon: Calculator, exact: false },
   { href: '/legal/cumplimiento', label: 'Cumplimiento', icon: ShieldCheck, exact: false },
+  { href: '/legal/pheme', label: 'Pheme', icon: Mic, exact: false },
+  { href: '/legal/psique', label: 'Psique', icon: Brain, exact: false },
 ];
 
 export default function LegalShell({ children }: { children: React.ReactNode }) {
