@@ -206,7 +206,9 @@ function fallbackLocal(palabras: string[]): RecomendacionPsiqueResult {
       rol_examen_sugerido: row.prueba.rol_examen_sugerido,
     });
   }
-  const pruebas = [...byId.values()].sort((a, b) => a.nombre_prueba.localeCompare(b.nombre_prueba, 'es'));
+  const pruebas = Array.from(byId.values()).sort((a, b) =>
+    a.nombre_prueba.localeCompare(b.nombre_prueba, 'es'),
+  );
   return {
     palabras_clave: palabras,
     pruebas,
