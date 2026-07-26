@@ -150,6 +150,43 @@ export async function asegurarPresupuestoLuloParaImport(
   });
 }
 
+/**
+ * Elimina una obra/presupuesto Lulo adicional (no principal).
+ * Capítulos y partidas con `presupuesto_lulo_id` caen en cascada por FK.
+ */
+export async function eliminarPresupuestoLuloAdicional(
+  supabase: SupabaseClient,
+  proyectoId: string,
+  presupuestoId: string,
+): Promise<void> {
+  const pid = proyectoId.trim();
+  const id = presupuestoId.trim();
+  if (!pid || !id) throw new Error('proyecto_id y presupuesto_id son obligatorios.');
+
+  const { data: row, error: fetchErr } = await supabase
+    .from('ci_proyecto_presupuestos_lulo')
+    .select('id, proyecto_id, es_principal')
+    .eq('id', id)
+    .eq('proyecto_id', pid)
+    .maybeSingle();
+  if (fetchErr) {
+    if (fetchErr.code === '42P01') throw new Error('Tabla de presupuestos Lulo no disponible.');
+    throw new Error(formatErrorMessage(fetchErr));
+  }
+  if (!row) throw new Error('Presupuesto Lulo no encontrado.');
+  if (row.es_principal) {
+    throw new Error('No se puede borrar el presupuesto principal. Solo obras adicionales.');
+  }
+
+  const { error: delErr } = await supabase
+    .from('ci_proyecto_presupuestos_lulo')
+    .delete()
+    .eq('id', id)
+    .eq('proyecto_id', pid)
+    .eq('es_principal', false);
+  if (delErr) throw new Error(formatErrorMessage(delErr));
+}
+
 /** Elimina presupuestos Lulo del proyecto (cascada capítulos/APU) y partidas Lulo en ci_presupuesto. */
 export async function eliminarTodosPresupuestosLuloProyecto(
   supabase: SupabaseClient,

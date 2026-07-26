@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Layers, Plus, RefreshCw, ExternalLink } from 'lucide-react';
+import { Layers, Plus, RefreshCw, ExternalLink, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import ImportarPresupuestoLulo from '@/components/proyectos/ImportarPresupuestoLulo';
 import { formatErrorMessage } from '@/lib/utils/formatErrorMessage';
@@ -22,6 +22,7 @@ export default function PresupuestosLuloPanel({ proyectoId, onChanged }: Props) 
   const [codigo, setCodigo] = useState('');
   const [nombre, setNombre] = useState('');
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -86,6 +87,34 @@ export default function PresupuestosLuloPanel({ proyectoId, onChanged }: Props) 
     }
   }
 
+  async function borrarAdicional(p: PresupuestoLuloRow) {
+    if (p.es_principal) {
+      toast.error('No se puede borrar el presupuesto principal.');
+      return;
+    }
+    const ok = window.confirm(
+      `¿Borrar la obra adicional «${p.nombre}» (${p.codigo_obr})? Se eliminarán sus capítulos y partidas asociadas.`,
+    );
+    if (!ok) return;
+    setDeletingId(p.id);
+    try {
+      const res = await fetch(
+        `/api/proyectos/${encodeURIComponent(proyectoId)}/presupuestos-lulo?id=${encodeURIComponent(p.id)}`,
+        { method: 'DELETE' },
+      );
+      const data = await parseFetchJson<{ error?: string }>(res);
+      if (!res.ok) throw new Error(data.error);
+      toast.success('Obra adicional eliminada.');
+      await load();
+      onChanged?.();
+      router.refresh();
+    } catch (err) {
+      toast.error(formatErrorMessage(err));
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   const apuHref = `/proyectos/modulo/${encodeURIComponent(proyectoId)}/control-obra/apu`;
 
   return (
@@ -98,9 +127,10 @@ export default function PresupuestosLuloPanel({ proyectoId, onChanged }: Props) 
         <div className="flex items-center gap-2">
           <Link
             href={apuHref}
-            className="inline-flex items-center gap-1 rounded-lg border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[10px] font-semibold text-amber-200 hover:bg-amber-500/20"
+            className="inline-flex items-center gap-1 rounded-lg border border-amber-500/40 bg-amber-500/10 px-2.5 py-1.5 text-[11px] font-semibold text-amber-200 hover:bg-amber-500/20"
+            title="Capítulos, partidas y análisis APU"
           >
-            <ExternalLink className="h-3 w-3" />
+            <ExternalLink className="h-3.5 w-3.5" />
             Vista APU
           </Link>
           <button
@@ -134,9 +164,25 @@ export default function PresupuestosLuloPanel({ proyectoId, onChanged }: Props) 
                   <span className="ml-2 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] text-amber-200">
                     Principal
                   </span>
-                ) : null}
+                ) : (
+                  <span className="ml-2 rounded bg-zinc-500/20 px-1.5 py-0.5 text-[10px] text-zinc-300">
+                    Adicional
+                  </span>
+                )}
                 <p className="text-zinc-400 mt-0.5">{p.nombre}</p>
               </div>
+              {!p.es_principal ? (
+                <button
+                  type="button"
+                  onClick={() => void borrarAdicional(p)}
+                  disabled={deletingId === p.id}
+                  className="inline-flex items-center gap-1 rounded-lg border border-red-500/35 bg-red-950/30 px-2 py-1.5 text-[10px] font-semibold text-red-200 hover:bg-red-900/40 disabled:opacity-50"
+                  title="Borrar obra adicional"
+                >
+                  <Trash2 className="h-3 w-3" />
+                  {deletingId === p.id ? 'Borrando…' : 'Borrar'}
+                </button>
+              ) : null}
             </li>
           ))}
         </ul>
