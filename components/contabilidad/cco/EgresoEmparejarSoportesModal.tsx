@@ -19,32 +19,11 @@ import {
   type DecisionMatch,
 } from '@/lib/contabilidad/cco/emparejarSoportesEgresosScoring';
 import {
-  mensajeErrorEmparejarSoportes,
-  parseRespuestaEmparejarSoportes,
-} from '@/lib/contabilidad/cco/parseRespuestaEmparejarSoportes';
-
-/** Respuesta del API de empareje (espejo tipado en cliente). */
-type MatchSoporteEgreso = {
-  archivoId: string;
-  fileName: string;
-  decision: DecisionMatch;
-  egresoId: string | null;
-  confianza: number;
-  candidatos: CandidatoScore[];
-  leido: {
-    invoice_number: string;
-    supplier_name: string;
-    supplier_rif: string;
-    fecha: string;
-    total_amount: number | null;
-  };
-  motivo: string;
-  error?: string;
-  paginas?: number[];
-  adjuntoBase64?: string;
-  adjuntoMime?: string;
-  adjuntoFileName?: string;
-};
+  egresosDesdeFilasSinDoc,
+  procesarLoteSoportesCliente,
+  type MatchSoporteConArchivo,
+} from '@/lib/contabilidad/cco/procesarLoteSoportesCliente';
+import { mensajeErrorEmparejarSoportes } from '@/lib/contabilidad/cco/parseRespuestaEmparejarSoportes';
 
 type FilaEgreso = CcoLibroFila & { _agrupada?: boolean };
 
@@ -55,15 +34,7 @@ type Props = {
   onAdjuntado: (compraId: string, fileName: string) => void;
 };
 
-type ArchivoLocal = {
-  id: string;
-  file: File;
-};
-
-type MatchUi = MatchSoporteEgreso & {
-  file?: File;
-  asignado?: boolean;
-};
+type MatchUi = MatchSoporteConArchivo & { asignado?: boolean };
 
 function fmtMonto(n: number | null | undefined): string {
   if (n == null || !Number.isFinite(n)) return '—';
@@ -76,29 +47,9 @@ function labelEgreso(f: FilaEgreso | undefined, id: string | null): string {
   return `#${f.display_id} · ${f.proveedor} · ${fecha} · ${fmtMonto(f.monto_orig)} ${f.moneda}`;
 }
 
-function fileDesdeMatch(
-  m: MatchSoporteEgreso,
-  byId: Map<string, File>,
-): File | undefined {
-  if (m.adjuntoBase64 && m.adjuntoFileName) {
-    try {
-      const bin = Uint8Array.from(atob(m.adjuntoBase64), (c) => c.charCodeAt(0));
-      return new File([bin], m.adjuntoFileName, {
-        type: m.adjuntoMime || 'application/pdf',
-      });
-    } catch {
-      /* fallback abajo */
-    }
-  }
-  if (byId.has(m.archivoId)) return byId.get(m.archivoId);
-  const origen = m.archivoId.split('#')[0];
-  if (origen && byId.has(origen)) return byId.get(origen);
-  return undefined;
-}
-
 /**
- * Agente: sube PDFs/imágenes (carpeta local o sincronizada de Drive),
- * OCR + match por proveedor/fecha/monto → auto o popup humano.
+ * Flujo simple: elegir PDFs → OCR + enlace automático.
+ * Dudas se confirman en popup.
  */
 export default function EgresoEmparejarSoportesModal({
   open,
@@ -108,6 +59,7 @@ export default function EgresoEmparejarSoportesModal({
 }: Props) {
   const inputFilesRef = useRef<HTMLInputElement>(null);
   const inputFolderRef = useRef<HTMLInputElement>(null);
+  const runIdRef = useRef(0);
 
   useEffect(() => {
     const el = inputFolderRef.current;
@@ -131,7 +83,6 @@ export default function EgresoEmparejarSoportesModal({
     return m;
   }, [filas]);
 
-  const [archivos, setArchivos] = useState<ArchivoLocal[]>([]);
   const [procesando, setProcesando] = useState(false);
   const [asignando, setAsignando] = useState(false);
   const [matches, setMatches] = useState<MatchUi[]>([]);
@@ -143,45 +94,9 @@ export default function EgresoEmparejarSoportesModal({
   const [dudaQueue, setDudaQueue] = useState<MatchUi[]>([]);
   const [dudaActual, setDudaActual] = useState<MatchUi | null>(null);
   const [egresoElegido, setEgresoElegido] = useState('');
-  const [fase, setFase] = useState<'carga' | 'resultado'>('carga');
+  const [progreso, setProgreso] = useState<string | null>(null);
 
   if (!open) return null;
-
-  const agregarFiles = (list: FileList | null) => {
-    if (!list?.length) return;
-    const next: ArchivoLocal[] = [];
-    for (let i = 0; i < list.length; i++) {
-      const file = list[i]!;
-      const mime = (file.type || '').toLowerCase();
-      const ok =
-        mime === 'application/pdf' ||
-        mime.startsWith('image/') ||
-        /\.(pdf|jpe?g|png|webp|gif|heic)$/i.test(file.name);
-      if (!ok) continue;
-      next.push({ id: `local-${Date.now()}-${i}-${file.name}`, file });
-    }
-    if (next.length === 0) {
-      toast.error('No hay PDF o imágenes válidas en la selección.');
-      return;
-    }
-    setArchivos((prev) => {
-      const merged = [...prev, ...next];
-      if (merged.length > MAX_SOPORTES_POR_REQUEST) {
-        toast.message(
-          `Se tomarán los primeros ${MAX_SOPORTES_POR_REQUEST} (máx. por lote).`,
-        );
-        return merged.slice(0, MAX_SOPORTES_POR_REQUEST);
-      }
-      return merged;
-    });
-    setFase('carga');
-    setMatches([]);
-    setResumen(null);
-  };
-
-  const quitarArchivo = (id: string) => {
-    setArchivos((prev) => prev.filter((a) => a.id !== id));
-  };
 
   const adjuntarA = async (compraId: string, file: File): Promise<boolean> => {
     const data = await adjuntarFacturaConOcr(compraId, file, { ocr: false });
@@ -193,68 +108,60 @@ export default function EgresoEmparejarSoportesModal({
     return true;
   };
 
-  const correrAgente = async () => {
+  const procesarArchivos = async (list: FileList | null) => {
+    if (!list?.length) return;
     if (sinDoc.length === 0) {
       toast.error('No hay egresos sin factura en el cuadro filtrado.');
       return;
     }
+
+    const archivos: { id: string; file: File }[] = [];
+    for (let i = 0; i < list.length; i++) {
+      const file = list[i]!;
+      const mime = (file.type || '').toLowerCase();
+      const ok =
+        mime === 'application/pdf' ||
+        mime.startsWith('image/') ||
+        /\.(pdf|jpe?g|png|webp|gif|heic)$/i.test(file.name);
+      if (!ok) continue;
+      archivos.push({ id: `local-${Date.now()}-${i}-${file.name}`, file });
+    }
     if (archivos.length === 0) {
-      toast.error('Seleccione PDFs o imágenes (o una carpeta).');
+      toast.error('No hay PDF o imágenes válidas en la selección.');
       return;
     }
+    if (archivos.length > MAX_SOPORTES_POR_REQUEST) {
+      toast.message(
+        `Se procesarán los primeros ${MAX_SOPORTES_POR_REQUEST} (máx. por lote).`,
+      );
+      archivos.splice(MAX_SOPORTES_POR_REQUEST);
+    }
 
+    const runId = ++runIdRef.current;
     setProcesando(true);
     setMatches([]);
     setResumen(null);
     setDudaQueue([]);
     setDudaActual(null);
+    setProgreso('Preparando…');
 
     try {
-      const form = new FormData();
-      const egresosPayload = sinDoc.map((f) => ({
-        id: f.id,
-        proveedor: f.proveedor,
-        fecha: f.fecha,
-        moneda: f.moneda,
-        monto_orig: f.monto_orig,
-        monto_base_usd: f.monto_base_usd,
-        tasa: f.tasa,
-        invoice_number: f.invoice_number,
-        display_id: f.display_id,
-      }));
-      form.append('egresos', JSON.stringify(egresosPayload));
-      form.append(
-        'soporte_ids',
-        JSON.stringify(archivos.map((a) => a.id)),
-      );
-      for (const a of archivos) {
-        form.append('soporte', a.file, a.file.name);
-      }
+      const { matches: matched, resumen: resumenLocal } =
+        await procesarLoteSoportesCliente({
+          archivos,
+          egresos: egresosDesdeFilasSinDoc(sinDoc),
+          onProgreso: (msg) => {
+            if (runIdRef.current === runId) setProgreso(msg);
+          },
+        });
 
-      const res = await fetch('/api/contabilidad/cco/emparejar-soportes', {
-        method: 'POST',
-        body: form,
-      });
-      // text() + parse defensivo: Safari rompe con res.json() si Vercel
-      // devuelve HTML (timeout/502) → "The string did not match the expected pattern."
-      const raw = await res.text();
-      const json = parseRespuestaEmparejarSoportes(raw, res.status);
-      if (!res.ok || !json.ok || !Array.isArray(json.matches)) {
-        throw new Error(
-          mensajeErrorEmparejarSoportes(json.error || 'No se pudo emparejar el lote.'),
-        );
-      }
+      if (runIdRef.current !== runId) return;
 
-      const byId = new Map(archivos.map((a) => [a.id, a.file]));
-      const enriched: MatchUi[] = (json.matches as MatchSoporteEgreso[]).map((m) => ({
-        ...m,
-        file: fileDesdeMatch(m, byId),
-      }));
+      const enriched: MatchUi[] = matched.map((m) => ({ ...m }));
       setMatches(enriched);
-      setResumen(json.resumen ?? null);
-      setFase('resultado');
+      setResumen(resumenLocal);
+      setProgreso(null);
 
-      // Auto-asignar matches claros (adjunta el PDF de la página/grupo, no el lote entero)
       setAsignando(true);
       let autoOk = 0;
       for (const m of enriched) {
@@ -274,20 +181,25 @@ export default function EgresoEmparejarSoportesModal({
         setDudaActual(dudas[0]!);
         setEgresoElegido(dudas[0]!.egresoId || dudas[0]!.candidatos[0]?.egresoId || '');
         toast.message(
-          `${autoOk} factura(s) auto-asignada(s). ${dudas.length} requieren su revisión.`,
+          `${autoOk} factura(s) enlazada(s). ${dudas.length} para confirmar.`,
         );
       } else {
         toast.success(
           autoOk > 0
-            ? `${autoOk} factura(s) enlazada(s) automáticamente.`
-            : 'Lote analizado. Sin matches automáticos.',
+            ? `${autoOk} factura(s) enlazada(s).`
+            : 'Sin coincidencias claras. Revise el resultado o adjunte a mano.',
         );
       }
     } catch (e) {
-      toast.error(mensajeErrorEmparejarSoportes(e));
+      if (runIdRef.current === runId) {
+        toast.error(mensajeErrorEmparejarSoportes(e));
+      }
     } finally {
-      setProcesando(false);
-      setAsignando(false);
+      if (runIdRef.current === runId) {
+        setProcesando(false);
+        setAsignando(false);
+        setProgreso(null);
+      }
     }
   };
 
@@ -333,14 +245,16 @@ export default function EgresoEmparejarSoportesModal({
 
   const cerrarTodo = () => {
     if (procesando || asignando) return;
-    setArchivos([]);
+    runIdRef.current += 1;
     setMatches([]);
     setResumen(null);
     setDudaActual(null);
     setDudaQueue([]);
-    setFase('carga');
+    setProgreso(null);
     onClose();
   };
+
+  const enResultado = Boolean(resumen);
 
   return (
     <div style={overlay} role="dialog" aria-modal="true" aria-labelledby="emparejar-soportes-title">
@@ -349,7 +263,7 @@ export default function EgresoEmparejarSoportesModal({
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <Sparkles size={20} color="#1D4ED8" />
             <h2 id="emparejar-soportes-title" style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>
-              Agente: enlazar facturas a egresos
+              Enlazar facturas
             </h2>
           </div>
           <button type="button" onClick={cerrarTodo} style={btnIcon} aria-label="Cerrar">
@@ -358,30 +272,12 @@ export default function EgresoEmparejarSoportesModal({
         </div>
 
         <p style={hint}>
-          Lote: suba un PDF con varias facturas (o varios PDF/fotos). Se parte por página,
-          se agrupan las de la misma factura y cada una se enlaza al egreso que coincida en
-          proveedor, fecha y monto. Match claro → automático; si hay duda → popup para
-          confirmar. Para una sola factura también puede usar <strong>Adjuntar</strong> en la
-          columna LINK FACTURA.
+          Un PDF puede traer <strong>varias facturas</strong>: se parte por página, se agrupan
+          las de la misma factura y cada una se enlaza por proveedor, fecha y monto. Si hay
+          duda, confirma usted. {sinDoc.length} egreso(s) sin factura en vista.
         </p>
 
-        <p style={{ margin: '0 0 12px', fontSize: 13, color: '#334155' }}>
-          Egresos sin factura en vista: <strong>{sinDoc.length}</strong>
-          {archivos.length > 0 ? (
-            <>
-              {' '}
-              · Archivos en lote: <strong>{archivos.length}</strong> / {MAX_SOPORTES_POR_REQUEST}
-            </>
-          ) : null}
-        </p>
-        {sinDoc.length > 800 || archivos.some((a) => a.file.size > 4 * 1024 * 1024) ? (
-          <p style={{ margin: '0 0 12px', fontSize: 12, color: '#9a3412' }}>
-            Tip: con muchos egresos o PDFs pesados (&gt;4&nbsp;MB / muchas páginas) filtre el
-            cuadro o suba facturas sueltas para evitar cortes del servidor.
-          </p>
-        ) : null}
-
-        {fase === 'carga' || matches.length === 0 ? (
+        {!enResultado ? (
           <>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
               <input
@@ -391,7 +287,7 @@ export default function EgresoEmparejarSoportesModal({
                 multiple
                 style={{ display: 'none' }}
                 onChange={(e) => {
-                  agregarFiles(e.target.files);
+                  void procesarArchivos(e.target.files);
                   e.target.value = '';
                 }}
               />
@@ -401,68 +297,51 @@ export default function EgresoEmparejarSoportesModal({
                 multiple
                 style={{ display: 'none' }}
                 onChange={(e) => {
-                  agregarFiles(e.target.files);
+                  void procesarArchivos(e.target.files);
                   e.target.value = '';
                 }}
               />
               <button
                 type="button"
                 style={btnPrimary}
-                disabled={procesando}
+                disabled={procesando || sinDoc.length === 0}
                 onClick={() => inputFilesRef.current?.click()}
               >
-                Elegir PDFs / imágenes
+                {procesando ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" /> Procesando…
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={14} /> Elegir PDFs / imágenes
+                  </>
+                )}
               </button>
               <button
                 type="button"
                 style={btnSecondary}
-                disabled={procesando}
+                disabled={procesando || sinDoc.length === 0}
                 onClick={() => inputFolderRef.current?.click()}
               >
-                <FolderOpen size={14} /> Carpeta (Drive sync)
-              </button>
-              <button
-                type="button"
-                style={btnAccent}
-                disabled={procesando || archivos.length === 0 || sinDoc.length === 0}
-                onClick={() => void correrAgente()}
-              >
-                {procesando ? (
-                  <>
-                    <Loader2 size={14} className="animate-spin" /> Analizando…
-                  </>
-                ) : (
-                  <>
-                    <Sparkles size={14} /> Emparejar y asignar
-                  </>
-                )}
+                <FolderOpen size={14} /> Carpeta
               </button>
             </div>
-
-            {archivos.length > 0 ? (
-              <ul style={listBox}>
-                {archivos.map((a) => (
-                  <li key={a.id} style={listItem}>
-                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {a.file.name}
-                    </span>
-                    <button type="button" style={btnIcon} onClick={() => quitarArchivo(a.id)}>
-                      <X size={14} />
-                    </button>
-                  </li>
-                ))}
-              </ul>
+            {progreso ? (
+              <p style={progressLine}>
+                <Loader2 size={14} className="animate-spin" />
+                {progreso}
+              </p>
             ) : (
-              <p style={muted}>Ningún archivo aún. Puede arrastrar desde una carpeta de Drive ya sincronizada.</p>
+              <p style={muted}>Al elegir archivos empieza el enlace. No hace falta otro botón.</p>
             )}
           </>
         ) : null}
 
-        {fase === 'resultado' && resumen ? (
-          <div style={{ marginTop: 8 }}>
+        {enResultado && resumen ? (
+          <div style={{ marginTop: 4 }}>
             <div style={kpiRow}>
               <Kpi label="Auto" value={resumen.auto} color="#166534" icon={<CheckCircle2 size={14} />} />
-              <Kpi label="Duda (humano)" value={resumen.duda} color="#92400E" icon={<HelpCircle size={14} />} />
+              <Kpi label="Duda" value={resumen.duda} color="#92400E" icon={<HelpCircle size={14} />} />
               <Kpi label="Sin match" value={resumen.sin_match} color="#64748B" icon={<XCircle size={14} />} />
             </div>
             {asignando ? (
@@ -472,7 +351,10 @@ export default function EgresoEmparejarSoportesModal({
             ) : null}
             <ul style={{ ...listBox, maxHeight: 280 }}>
               {matches.map((m) => (
-                <li key={m.archivoId} style={{ ...listItem, flexDirection: 'column', alignItems: 'stretch', gap: 4 }}>
+                <li
+                  key={m.archivoId}
+                  style={{ ...listItem, flexDirection: 'column', alignItems: 'stretch', gap: 4 }}
+                >
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
                     <strong style={{ fontSize: 13 }}>{m.fileName}</strong>
                     <BadgeDecision decision={m.decision} asignado={m.asignado} />
@@ -499,14 +381,15 @@ export default function EgresoEmparejarSoportesModal({
               <button
                 type="button"
                 style={btnSecondary}
+                disabled={procesando || asignando}
                 onClick={() => {
-                  setFase('carga');
                   setMatches([]);
                   setResumen(null);
-                  setArchivos([]);
+                  setDudaActual(null);
+                  setDudaQueue([]);
                 }}
               >
-                Nuevo lote
+                Otro lote
               </button>
               <button type="button" style={btnPrimary} onClick={cerrarTodo}>
                 Cerrar
@@ -523,7 +406,7 @@ export default function EgresoEmparejarSoportesModal({
               ¿Asignar esta factura?
             </h3>
             <p style={{ margin: '0 0 10px', fontSize: 13, color: '#334155', lineHeight: 1.45 }}>
-              El agente no está seguro. Revise el OCR y elija el egreso correcto, o omita.
+              No hay un match claro. Revise el OCR y elija el egreso, o omita.
             </p>
             <div style={ocrBox}>
               <div>
@@ -535,7 +418,7 @@ export default function EgresoEmparejarSoportesModal({
                 </div>
               ) : null}
               <div>
-                <strong>Proveedor leído:</strong> {dudaActual.leido.supplier_name || '—'}
+                <strong>Proveedor:</strong> {dudaActual.leido.supplier_name || '—'}
               </div>
               <div>
                 <strong>Fecha:</strong> {dudaActual.leido.fecha || '—'}
@@ -558,12 +441,17 @@ export default function EgresoEmparejarSoportesModal({
               style={selectStyle}
             >
               <option value="">— Seleccione —</option>
-              {candidatosOptions(dudaActual.candidatos, porId, sinDoc).map((opt) => (
+              {candidatosOptions(dudaActual.candidatos, porId).map((opt) => (
                 <option key={opt.id} value={opt.id}>
                   {opt.label} ({opt.score})
                 </option>
               ))}
             </select>
+            {dudaActual.candidatos.length === 0 ? (
+              <p style={{ ...muted, marginTop: 8 }}>
+                Sin candidatos claros. Omita y use Adjuntar en la fila del egreso.
+              </p>
+            ) : null}
 
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 14 }}>
               <button
@@ -591,10 +479,10 @@ export default function EgresoEmparejarSoportesModal({
   );
 }
 
+/** Solo los mejores candidatos del OCR (no los miles del cuadro). */
 function candidatosOptions(
   candidatos: CandidatoScore[],
   porId: Map<string, FilaEgreso>,
-  sinDoc: FilaEgreso[],
 ): { id: string; label: string; score: number }[] {
   const seen = new Set<string>();
   const out: { id: string; label: string; score: number }[] = [];
@@ -606,11 +494,6 @@ function candidatosOptions(
       label: labelEgreso(porId.get(c.egresoId), c.egresoId),
       score: c.score,
     });
-  }
-  for (const f of sinDoc) {
-    if (seen.has(f.id)) continue;
-    seen.add(f.id);
-    out.push({ id: f.id, label: labelEgreso(f, f.id), score: 0 });
   }
   return out;
 }
@@ -687,7 +570,7 @@ const overlay: CSSProperties = {
 };
 
 const panel: CSSProperties = {
-  width: 'min(720px, 100%)',
+  width: 'min(640px, 100%)',
   maxHeight: '90vh',
   overflow: 'auto',
   background: '#fff',
@@ -717,6 +600,15 @@ const hint: CSSProperties = {
 };
 
 const muted: CSSProperties = { margin: 0, fontSize: 13, color: '#64748B' };
+
+const progressLine: CSSProperties = {
+  margin: 0,
+  fontSize: 13,
+  color: '#0F766E',
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+};
 
 const listBox: CSSProperties = {
   listStyle: 'none',

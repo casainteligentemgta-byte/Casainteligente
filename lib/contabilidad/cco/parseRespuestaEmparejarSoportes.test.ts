@@ -35,6 +35,21 @@ describe('parseRespuestaEmparejarSoportes', () => {
       /cortó la carga|502/i,
     );
   });
+
+  it('explica HTTP 413 con mensaje accionable', () => {
+    assert.throws(
+      () => parseRespuestaEmparejarSoportes('', 413),
+      /413|límite|liviano/i,
+    );
+    assert.throws(
+      () =>
+        parseRespuestaEmparejarSoportes(
+          JSON.stringify({ ok: false, error: 'PDF supera 12 MB' }),
+          413,
+        ),
+      /12 MB/i,
+    );
+  });
 });
 
 describe('mensajeErrorEmparejarSoportes', () => {
