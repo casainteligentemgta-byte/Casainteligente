@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import BotonCompartirDocumento from '@/components/configuracion/BotonCompartirDocumento';
 import EquiposEntidadPanel from '@/components/configuracion/EquiposEntidadPanel';
 import MaquinariaPropiaEntidadPanel from '@/components/configuracion/MaquinariaPropiaEntidadPanel';
 import {
@@ -938,13 +939,20 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
                             >
                               {a.nombre || 'Acta'}
                             </a>
-                            <button
-                              type="button"
-                              onClick={() => setRmActas((prev) => prev.filter((x) => x.url !== a.url))}
-                              className="shrink-0 text-red-300 hover:text-red-200"
-                            >
-                              Quitar
-                            </button>
+                            <div className="flex shrink-0 items-center gap-2">
+                              <BotonCompartirDocumento
+                                url={a.url}
+                                titulo={a.nombre || 'Acta mercantil'}
+                                texto={`Acta mercantil — ${a.nombre || 'documento'}`}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setRmActas((prev) => prev.filter((x) => x.url !== a.url))}
+                                className="text-red-300 hover:text-red-200"
+                              >
+                                Quitar
+                              </button>
+                            </div>
                           </li>
                         ))}
                         {actaFilesPendientes.map((f, idx) => (
@@ -953,15 +961,22 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
                             className="flex items-center justify-between gap-2 rounded-lg border border-dashed border-[#FF9500]/35 bg-[#FF9500]/5 px-2.5 py-1.5 text-xs text-zinc-300"
                           >
                             <span className="min-w-0 truncate">{f.name} (pendiente)</span>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setActaFilesPendientes((prev) => prev.filter((_, i) => i !== idx))
-                              }
-                              className="shrink-0 text-red-300 hover:text-red-200"
-                            >
-                              Quitar
-                            </button>
+                            <div className="flex shrink-0 items-center gap-2">
+                              <BotonCompartirDocumento
+                                file={f}
+                                titulo={f.name || 'Acta mercantil'}
+                                texto={`Acta mercantil — ${f.name}`}
+                              />
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setActaFilesPendientes((prev) => prev.filter((_, i) => i !== idx))
+                                }
+                                className="text-red-300 hover:text-red-200"
+                              >
+                                Quitar
+                              </button>
+                            </div>
                           </li>
                         ))}
                       </ul>
@@ -987,20 +1002,35 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
                         >
                           Ver RIF cargado
                         </a>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setRmRifDocUrl('');
-                            setRifDocFile(null);
-                          }}
-                          className="shrink-0 text-red-300 hover:text-red-200"
-                        >
-                          Quitar
-                        </button>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <BotonCompartirDocumento
+                            url={rmRifDocUrl}
+                            file={rifDocFile}
+                            titulo={rifDocFile?.name || 'RIF'}
+                            texto="Documento RIF del patrono"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setRmRifDocUrl('');
+                              setRifDocFile(null);
+                            }}
+                            className="text-red-300 hover:text-red-200"
+                          >
+                            Quitar
+                          </button>
+                        </div>
                       </div>
                     ) : null}
-                    {rifDocFile ? (
-                      <p className="mt-1 text-[11px] text-zinc-400">Nuevo archivo: {rifDocFile.name}</p>
+                    {rifDocFile && !rmRifDocUrl ? (
+                      <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-dashed border-[#FF9500]/35 bg-[#FF9500]/5 px-2.5 py-1.5 text-xs text-zinc-300">
+                        <span className="min-w-0 truncate">Nuevo archivo: {rifDocFile.name}</span>
+                        <BotonCompartirDocumento
+                          file={rifDocFile}
+                          titulo={rifDocFile.name || 'RIF'}
+                          texto="Documento RIF del patrono"
+                        />
+                      </div>
                     ) : null}
                   </div>
                 </div>
@@ -1165,21 +1195,29 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
                           >
                             Ver PDF cargado
                           </a>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setPermFilas((prev) =>
-                                prev.map((r) =>
-                                  r.id === row.id
-                                    ? { ...r, documento_url: undefined, file: null }
-                                    : r,
-                                ),
-                              )
-                            }
-                            className="shrink-0 text-red-300 hover:text-red-200"
-                          >
-                            Quitar
-                          </button>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <BotonCompartirDocumento
+                              url={row.documento_url}
+                              file={row.file}
+                              titulo={row.nombre?.trim() || 'Permiso'}
+                              texto={`Permiso — ${row.nombre?.trim() || 'documento'}`}
+                            />
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setPermFilas((prev) =>
+                                  prev.map((r) =>
+                                    r.id === row.id
+                                      ? { ...r, documento_url: undefined, file: null }
+                                      : r,
+                                  ),
+                                )
+                              }
+                              className="text-red-300 hover:text-red-200"
+                            >
+                              Quitar
+                            </button>
+                          </div>
                         </div>
                       ) : null}
                       {row.file ? (
