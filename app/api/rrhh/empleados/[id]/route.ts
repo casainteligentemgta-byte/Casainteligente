@@ -6,15 +6,12 @@ import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-type Ctx = { params: Promise<{ id: string }> };
-
 /**
  * DELETE /api/rrhh/empleados/[id]
  * Borra contratos/asignaciones hijas (RESTRICT) y luego `ci_empleados`.
  */
-export async function DELETE(_req: Request, ctx: Ctx) {
-  const { id: rawId } = await ctx.params;
-  const id = decodeURIComponent(rawId ?? '').trim();
+export async function DELETE(_req: Request, context: { params: { id: string } }) {
+  const id = decodeURIComponent(context.params?.id ?? '').trim();
   if (!id) {
     return NextResponse.json({ error: 'id requerido' }, { status: 400 });
   }
