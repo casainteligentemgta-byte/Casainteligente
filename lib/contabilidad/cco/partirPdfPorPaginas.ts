@@ -4,7 +4,8 @@
 
 import { PDFDocument } from 'pdf-lib';
 
-export const MAX_PAGINAS_POR_PDF = 20;
+/** Tope servidor por request; el cliente suele trocear PDFs grandes antes. */
+export const MAX_PAGINAS_POR_PDF = 40;
 
 export type PdfPagina = {
   /** Índice 0-based en el PDF original. */

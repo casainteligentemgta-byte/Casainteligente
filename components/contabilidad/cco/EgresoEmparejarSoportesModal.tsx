@@ -272,8 +272,9 @@ export default function EgresoEmparejarSoportesModal({
         </div>
 
         <p style={hint}>
-          Elija PDFs o fotos: se leen solas y se enlazan al egreso por proveedor, fecha y monto.
-          Si hay duda, confirma usted. {sinDoc.length} egreso(s) sin factura en vista.
+          Un PDF puede traer <strong>varias facturas</strong>: se parte por página, se agrupan
+          las de la misma factura y cada una se enlaza por proveedor, fecha y monto. Si hay
+          duda, confirma usted. {sinDoc.length} egreso(s) sin factura en vista.
         </p>
 
         {!enResultado ? (

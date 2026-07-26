@@ -29,7 +29,8 @@ function jsonError(message: string, status: number) {
  *  - files "soporte" (repetido)
  *  - soporte_ids (JSON array alineado, opcional)
  *
- * PDF multipágina: parte por página, OCR cabecera, agrupa misma factura.
+ * PDF multipágina / varias facturas: parte por página (por_pagina=1 en OCR).
+ * El cliente agrupa páginas de la misma factura y empareja en el navegador.
  * Con modo=ocr no envía los miles de egresos → evita HTTP 413 en Vercel.
  */
 export async function POST(req: Request) {
@@ -49,6 +50,10 @@ export async function POST(req: Request) {
       (typeof modoRaw === 'string' && modoRaw.trim().toLowerCase() === 'ocr') ||
       form.get('solo_ocr') === '1' ||
       form.get('solo_ocr') === 'true';
+    const porPagina =
+      form.get('por_pagina') === '1' ||
+      form.get('por_pagina') === 'true' ||
+      (soloOcr && form.get('por_pagina') !== '0');
 
     const egresosRaw = form.get('egresos');
     let egresos: EgresoCandidatoSoporte[] = [];
@@ -133,8 +138,9 @@ export async function POST(req: Request) {
     const { matches, modelHint } = await emparejarSoportesConEgresos({
       egresos,
       archivos,
-      concurrency: soloOcr ? 2 : 2,
+      concurrency: 2,
       soloOcr,
+      porPagina,
     });
 
     return NextResponse.json({
@@ -142,6 +148,7 @@ export async function POST(req: Request) {
       matches,
       modelHint,
       soloOcr,
+      porPagina,
       resumen: {
         auto: matches.filter((m) => m.decision === 'auto').length,
         duda: matches.filter((m) => m.decision === 'duda').length,

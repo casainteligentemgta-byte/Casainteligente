@@ -48,8 +48,8 @@ export {
   type MatchSoporteEgresoCliente,
 } from '@/lib/contabilidad/cco/emparejarSoportesEgresosScoring';
 
-/** Tope de unidades OCR (páginas/imágenes) por request para no saturar Vercel/Gemini. */
-export const MAX_UNIDADES_OCR = 15;
+/** Tope de páginas/imágenes OCR en paralelo por oleada (Gemini/Vercel). */
+export const MAX_UNIDADES_OCR = 8;
 
 /**
  * Tope del PDF derivado (páginas agrupadas) embebido en JSON como base64.
@@ -159,12 +159,6 @@ export async function expandirSoportesAUnidades(
     }
   }
 
-  if (unidades.length > MAX_UNIDADES_OCR) {
-    throw new Error(
-      `Tras partir PDFs hay ${unidades.length} páginas/archivos (máx. ${MAX_UNIDADES_OCR} por lote). Suba menos archivos o PDFs más cortos.`,
-    );
-  }
-
   return unidades;
 }
 
@@ -176,6 +170,7 @@ function baseName(name: string): string {
  * OCR (+ matching opcional). PDFs multipágina se parten y agrupan.
  * Con `soloOcr: true` (o egresos vacíos) no empareja: el cliente hace el match
  * local contra miles de egresos sin inflar el body del POST (HTTP 413 en Vercel).
+ * Con `porPagina: true` no agrupa: una fila OCR por página (varias facturas en un PDF).
  */
 export async function emparejarSoportesConEgresos(params: {
   egresos: EgresoCandidatoSoporte[];
@@ -183,9 +178,12 @@ export async function emparejarSoportesConEgresos(params: {
   concurrency?: number;
   /** Solo leer facturas; matching en el navegador. */
   soloOcr?: boolean;
+  /** Devuelve una entrada por página (sin agrupar misma factura). */
+  porPagina?: boolean;
 }): Promise<{ matches: MatchSoporteEgreso[]; modelHint: string }> {
   const { egresos, archivos } = params;
   const soloOcr = Boolean(params.soloOcr) || egresos.length === 0;
+  const porPagina = Boolean(params.porPagina);
   if (archivos.length === 0) {
     throw new Error('Envíe al menos un PDF o imagen de factura.');
   }
@@ -211,55 +209,59 @@ export async function emparejarSoportesConEgresos(params: {
     error?: string;
   };
 
-  const leidas: PaginaLeida[] = [];
-  let i = 0;
+  const leidas: PaginaLeida[] = new Array(unidades.length);
   let modelHint = 'gemini';
 
-  async function worker() {
-    while (i < unidades.length) {
-      const idx = i++;
-      const u = unidades[idx]!;
-      try {
-        const { data, modelUsed } = await leerCabeceraUnidad(u);
-        modelHint = modelUsed;
-        const pageNumber = u.paginas?.[0] ?? 1;
-        const pageIndex = pageNumber - 1;
-        leidas[idx] = {
-          unidad: u,
-          modelUsed,
-          cabecera: {
-            pageIndex,
-            pageNumber,
-            invoice_number: data.invoice_number || '',
-            supplier_name: data.supplier_name || '',
-            supplier_rif: data.supplier_rif || '',
-            date: data.date || '',
-            total_amount: data.total_amount,
-          },
-        };
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        leidas[idx] = {
-          unidad: u,
-          modelUsed: '',
-          cabecera: {
-            pageIndex: (u.paginas?.[0] ?? 1) - 1,
-            pageNumber: u.paginas?.[0] ?? 1,
-            invoice_number: '',
-            supplier_name: '',
-            supplier_rif: '',
-            date: '',
-            total_amount: null,
-          },
-          error: msg.slice(0, 220),
-        };
+  // Oleadas: un PDF puede tener muchas facturas (1 por página); no fallar a las 15.
+  for (let wave = 0; wave < unidades.length; wave += MAX_UNIDADES_OCR) {
+    const slice = unidades.slice(wave, wave + MAX_UNIDADES_OCR);
+    let i = 0;
+    async function worker() {
+      while (i < slice.length) {
+        const local = i++;
+        const idx = wave + local;
+        const u = slice[local]!;
+        try {
+          const { data, modelUsed } = await leerCabeceraUnidad(u);
+          modelHint = modelUsed;
+          const pageNumber = u.paginas?.[0] ?? 1;
+          const pageIndex = pageNumber - 1;
+          leidas[idx] = {
+            unidad: u,
+            modelUsed,
+            cabecera: {
+              pageIndex,
+              pageNumber,
+              invoice_number: data.invoice_number || '',
+              supplier_name: data.supplier_name || '',
+              supplier_rif: data.supplier_rif || '',
+              date: data.date || '',
+              total_amount: data.total_amount,
+            },
+          };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          leidas[idx] = {
+            unidad: u,
+            modelUsed: '',
+            cabecera: {
+              pageIndex: (u.paginas?.[0] ?? 1) - 1,
+              pageNumber: u.paginas?.[0] ?? 1,
+              invoice_number: '',
+              supplier_name: '',
+              supplier_rif: '',
+              date: '',
+              total_amount: null,
+            },
+            error: msg.slice(0, 220),
+          };
+        }
       }
     }
+    await Promise.all(
+      Array.from({ length: Math.min(concurrency, slice.length) }, () => worker()),
+    );
   }
-
-  await Promise.all(
-    Array.from({ length: Math.min(concurrency, unidades.length) }, () => worker()),
-  );
 
   // Agrupar por archivo origen (PDF multipágina) o 1:1 imágenes
   const porOrigen = new Map<string, PaginaLeida[]>();
@@ -281,21 +283,27 @@ export async function emparejarSoportesConEgresos(params: {
     const esPdfMulti =
       esPdfMime(archivo.mimeType, archivo.fileName) && paginasArchivo.length > 1;
 
-    if (!esPdfMulti) {
-      const L = paginasArchivo[0]!;
-      matches.push(
-        await matchDesdePagina({
-          L,
-          egresos,
-          soloOcr,
-          adjuntoBuffer: L.unidad.buffer,
-          adjuntoMime: L.unidad.mimeType,
-          adjuntoFileName: L.unidad.fileName,
-          archivoId: archivo.id,
-          fileName: archivo.fileName,
-          paginas: L.unidad.paginas,
-        }),
-      );
+    // porPagina / 1 página: una factura candidata por página (PDF con varias facturas).
+    if (porPagina || !esPdfMulti) {
+      for (const L of paginasArchivo) {
+        const pageNum = L.cabecera.pageNumber;
+        const multi = paginasArchivo.length > 1 || porPagina;
+        matches.push(
+          await matchDesdePagina({
+            L,
+            egresos,
+            soloOcr,
+            adjuntoBuffer: L.unidad.buffer,
+            adjuntoMime: L.unidad.mimeType,
+            adjuntoFileName: multi
+              ? `${baseName(archivo.fileName)}_p${pageNum}.pdf`
+              : L.unidad.fileName,
+            archivoId: multi ? `${archivo.id}#p${pageNum}` : archivo.id,
+            fileName: multi ? `${archivo.fileName} · p.${pageNum}` : archivo.fileName,
+            paginas: [pageNum],
+          }),
+        );
+      }
       continue;
     }
 
