@@ -182,10 +182,12 @@ export default function ClientesPage() {
 
     const filtered = lista.filter(c => {
         const nombreLc = (c.nombre || '').toLowerCase();
+        const q = search.toLowerCase();
         const matchSearch = search.trim() === '' ||
-            nombreLc.includes(search.toLowerCase()) ||
-            (c.rif && String(c.rif).toLowerCase().includes(search.toLowerCase())) ||
-            (c.email && String(c.email).toLowerCase().includes(search.toLowerCase())) ||
+            nombreLc.includes(q) ||
+            (c.rif && String(c.rif).toLowerCase().includes(q)) ||
+            (c.cedula && String(c.cedula).toLowerCase().includes(q)) ||
+            (c.email && String(c.email).toLowerCase().includes(q)) ||
             (c.movil && String(c.movil).includes(search));
 
         const matchFiltro =
