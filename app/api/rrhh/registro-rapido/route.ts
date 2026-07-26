@@ -62,8 +62,9 @@ export async function POST(req: Request) {
     );
   }
 
-  const admin = supabaseAdminForRoute();
-  if (!admin.ok) return admin.response;
+  const adminGate = supabaseAdminForRoute();
+  if (!adminGate.ok) return adminGate.response;
+  const admin = adminGate.client;
 
   const cargo = oficio || 'Por definir';
   const celular = celularParaInserto(celularRaw);
@@ -100,7 +101,7 @@ export async function POST(req: Request) {
   };
 
   async function insertCon(row: Record<string, unknown>) {
-    return admin.client.from('ci_empleados').insert(row as never).select('id').single();
+    return admin.from('ci_empleados').insert(row as never).select('id').single();
   }
 
   let { data, error } = await insertCon(baseRow);
