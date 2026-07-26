@@ -43,16 +43,15 @@ export default function ProyectoAdLogisticaBanner({
                 onClick={onAbrirContratoAd}
                 className="rounded-lg border border-amber-500/50 bg-amber-500/15 px-3 py-2 text-xs font-bold text-amber-100 hover:bg-amber-500/25"
               >
-                Generar Contrato AD
+                Generar contrato AD
               </button>
-            ) : (
-              <Link
-                href={`/proyectos/modulo/${encodeURIComponent(proyectoId)}`}
-                className="rounded-lg border border-amber-500/50 bg-amber-500/15 px-3 py-2 text-xs font-bold text-amber-100 hover:bg-amber-500/25"
-              >
-                Ir a ficha del proyecto
-              </Link>
-            )}
+            ) : null}
+            <Link
+              href={`/proyectos/modulo/${encodeURIComponent(proyectoId)}`}
+              className="rounded-lg border border-white/15 bg-black/20 px-3 py-2 text-xs font-bold text-zinc-300 hover:bg-white/5"
+            >
+              Ir a ficha del proyecto
+            </Link>
           </div>
         </div>
       </div>
