@@ -14,6 +14,8 @@ import {
 import { toast } from 'sonner';
 import { apiUrl } from '@/lib/http/apiUrl';
 import { METRON_NOMBRE, METRON_TAGLINE } from '@/lib/metron/identidad';
+import { isValidProyectoUuid } from '@/lib/proyectos/validarProyectoUuid';
+import { createClient } from '@/lib/supabase/client';
 import type { MetronAnalisisRow, MetronComputoRow, MetronDisciplina } from '@/types/metron';
 
 type Props = {
@@ -21,6 +23,11 @@ type Props = {
   nombreObra?: string;
   planoArchivoIdInicial?: string | null;
   className?: string;
+};
+
+type PlanoOption = {
+  id: string;
+  label: string;
 };
 
 const DISCIPLINAS: Array<{ id: MetronDisciplina | 'auto'; label: string }> = [
@@ -53,12 +60,16 @@ export default function MetronPlanosClient({
 }: Props) {
   const [disciplina, setDisciplina] = useState<MetronDisciplina | 'auto'>('auto');
   const [file, setFile] = useState<File | null>(null);
-  const [planoId, setPlanoId] = useState(planoArchivoIdInicial ?? '');
+  const [planoId, setPlanoId] = useState(() =>
+    isValidProyectoUuid(planoArchivoIdInicial) ? String(planoArchivoIdInicial).trim() : '',
+  );
+  const [planosRegistrados, setPlanosRegistrados] = useState<PlanoOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [aplicando, setAplicando] = useState(false);
   const [historial, setHistorial] = useState<MetronAnalisisRow[]>([]);
   const [analisis, setAnalisis] = useState<MetronAnalisisRow | null>(null);
   const [computos, setComputos] = useState<MetronComputoRow[]>([]);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const totalEstimado = useMemo(
     () => computos.filter((c) => c.aprobado).reduce((s, c) => s + (c.monto_estimado || 0), 0),
@@ -81,12 +92,45 @@ export default function MetronPlanosClient({
     }
   }, [proyectoId]);
 
-  useEffect(() => {
-    void loadHistorial();
-  }, [loadHistorial]);
+  const loadPlanosRegistrados = useCallback(async () => {
+    if (!isValidProyectoUuid(proyectoId)) {
+      setPlanosRegistrados([]);
+      return;
+    }
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from('ci_proyecto_archivos')
+        .select('id, titulo, codigo_plano')
+        .eq('proyecto_id', proyectoId)
+        .eq('tipo', 'plano')
+        .order('codigo_plano', { ascending: true })
+        .limit(100);
+      if (error) {
+        setPlanosRegistrados([]);
+        return;
+      }
+      setPlanosRegistrados(
+        (data ?? []).map((r) => {
+          const codigo = String(r.codigo_plano ?? '').trim() || 'S/C';
+          const titulo = String(r.titulo ?? '').trim() || 'Sin nombre';
+          return { id: String(r.id), label: `${codigo} · ${titulo}` };
+        }),
+      );
+    } catch {
+      setPlanosRegistrados([]);
+    }
+  }, [proyectoId]);
 
   useEffect(() => {
-    if (planoArchivoIdInicial) setPlanoId(planoArchivoIdInicial);
+    void loadHistorial();
+    void loadPlanosRegistrados();
+  }, [loadHistorial, loadPlanosRegistrados]);
+
+  useEffect(() => {
+    if (isValidProyectoUuid(planoArchivoIdInicial)) {
+      setPlanoId(String(planoArchivoIdInicial).trim());
+    }
   }, [planoArchivoIdInicial]);
 
   const seleccionarAnalisis = useCallback(async (id: string) => {
@@ -109,12 +153,26 @@ export default function MetronPlanosClient({
   }, []);
 
   const analizar = useCallback(async () => {
+    setFormError(null);
     if (!proyectoId.trim()) {
-      toast.error('Falta proyecto');
+      const msg = 'Falta proyecto';
+      setFormError(msg);
+      toast.error(msg);
       return;
     }
-    if (!file && !planoId.trim()) {
-      toast.error('Sube un PDF/imagen o indica un plano registrado');
+    const planoIdOk = isValidProyectoUuid(planoId) ? planoId.trim() : '';
+    if (planoId.trim() && !planoIdOk) {
+      const msg =
+        'Plano registrado inválido. Elige uno de la lista o déjalo vacío y sube el PDF/imagen.';
+      setFormError(msg);
+      toast.error(msg);
+      setPlanoId('');
+      return;
+    }
+    if (!file && !planoIdOk) {
+      const msg = 'Sube un PDF/imagen o elige un plano registrado';
+      setFormError(msg);
+      toast.error(msg);
       return;
     }
 
@@ -127,7 +185,7 @@ export default function MetronPlanosClient({
         fd.set('archivo', file);
         fd.set('disciplina', disciplina);
         if (nombreObra) fd.set('nombre_obra', nombreObra);
-        if (planoId.trim()) fd.set('plano_archivo_id', planoId.trim());
+        if (planoIdOk) fd.set('plano_archivo_id', planoIdOk);
         res = await fetch(apiUrl('/api/metron/analizar'), { method: 'POST', body: fd });
       } else {
         res = await fetch(apiUrl('/api/metron/analizar'), {
@@ -135,7 +193,7 @@ export default function MetronPlanosClient({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             proyecto_id: proyectoId,
-            plano_archivo_id: planoId.trim(),
+            plano_archivo_id: planoIdOk,
             disciplina,
             nombre_obra: nombreObra || undefined,
           }),
@@ -148,9 +206,12 @@ export default function MetronPlanosClient({
         total_computos?: number;
       };
       if (!res.ok || !j.analisis) {
-        toast.error(j.error || 'Metron no pudo analizar el plano');
+        const msg = j.error || 'Metron no pudo analizar el plano';
+        setFormError(msg);
+        toast.error(msg);
         return;
       }
+      setFormError(null);
       setAnalisis(j.analisis);
       setComputos(j.analisis.computos ?? []);
       toast.success(
@@ -158,7 +219,9 @@ export default function MetronPlanosClient({
       );
       void loadHistorial();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Error de red');
+      const msg = err instanceof Error ? err.message : 'Error de red';
+      setFormError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -263,6 +326,12 @@ export default function MetronPlanosClient({
         </Link>
       </div>
 
+      {formError ? (
+        <p className="mb-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+          {formError}
+        </p>
+      ) : null}
+
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-zinc-500">
@@ -289,12 +358,24 @@ export default function MetronPlanosClient({
           <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-zinc-500">
             Plano registrado (opcional)
           </label>
-          <input
+          <select
             value={planoId}
-            onChange={(e) => setPlanoId(e.target.value)}
-            placeholder="UUID del plano en control de planos"
-            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white placeholder:text-zinc-600 outline-none focus:border-amber-500/40"
-          />
+            onChange={(e) => {
+              setPlanoId(e.target.value);
+              setFormError(null);
+            }}
+            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white outline-none focus:border-amber-500/40"
+          >
+            <option value="">Ninguno — usar PDF/imagen</option>
+            {planosRegistrados.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-[10px] text-zinc-600">
+            Si ya subiste el PDF abajo, puedes dejar esto vacío.
+          </p>
         </div>
       </div>
 

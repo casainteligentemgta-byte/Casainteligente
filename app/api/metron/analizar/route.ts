@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { analizarPlanoMetron, METRON_MAX_BYTES, assertMetronMime } from '@/lib/metron/analizarPlano';
 import { persistirAnalisisMetron } from '@/lib/metron/persistirAnalisis';
+import { normalizarPlanoArchivoId } from '@/lib/metron/normalizarPlanoArchivoId';
+import { isValidProyectoUuid } from '@/lib/proyectos/validarProyectoUuid';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import type { MetronDisciplina } from '@/types/metron';
 
@@ -20,7 +22,7 @@ export async function POST(req: Request) {
   try {
     const contentType = req.headers.get('content-type') || '';
     let proyectoId = '';
-    let planoArchivoId: string | null = null;
+    let planoArchivoIdRaw = '';
     let disciplinaPreferida: MetronDisciplina | 'auto' = 'auto';
     let buffer: Buffer | null = null;
     let mimeType = 'application/pdf';
@@ -33,7 +35,7 @@ export async function POST(req: Request) {
     if (contentType.includes('multipart/form-data')) {
       const form = await req.formData();
       proyectoId = String(form.get('proyecto_id') ?? '').trim();
-      planoArchivoId = String(form.get('plano_archivo_id') ?? '').trim() || null;
+      planoArchivoIdRaw = String(form.get('plano_archivo_id') ?? '').trim();
       const disc = String(form.get('disciplina') ?? 'auto').trim().toLowerCase();
       disciplinaPreferida = (disc || 'auto') as MetronDisciplina | 'auto';
       nombreObra = String(form.get('nombre_obra') ?? '').trim();
@@ -66,7 +68,7 @@ export async function POST(req: Request) {
         nombre_obra?: string;
       };
       proyectoId = String(body.proyecto_id ?? '').trim();
-      planoArchivoId = String(body.plano_archivo_id ?? '').trim() || null;
+      planoArchivoIdRaw = String(body.plano_archivo_id ?? '').trim();
       const disc = String(body.disciplina ?? 'auto').trim().toLowerCase();
       disciplinaPreferida = (disc || 'auto') as MetronDisciplina | 'auto';
       nombreObra = String(body.nombre_obra ?? '').trim();
@@ -75,8 +77,29 @@ export async function POST(req: Request) {
     if (!proyectoId) {
       return NextResponse.json({ error: 'proyecto_id es requerido' }, { status: 400 });
     }
+    if (!isValidProyectoUuid(proyectoId)) {
+      return NextResponse.json(
+        { error: `proyecto_id no es un UUID válido: «${proyectoId}».` },
+        { status: 400 },
+      );
+    }
 
-    if (planoArchivoId && (!buffer || !nombrePlano)) {
+    /** Vacío u omitido = null. Valor basura (p. ej. "1") no debe llegar a Postgres. */
+    const planoNorm = normalizarPlanoArchivoId(planoArchivoIdRaw);
+    let planoArchivoId: string | null = null;
+    if (planoNorm.ok) {
+      planoArchivoId = planoNorm.id;
+    } else if (!buffer) {
+      return NextResponse.json(
+        {
+          error: `plano_archivo_id inválido: «${planoNorm.recibido}». Elige un plano de la lista o sube un PDF/imagen.`,
+        },
+        { status: 400 },
+      );
+    }
+    // Con archivo adjunto: ignoramos el id inválido y analizamos el PDF subido.
+
+    if (planoArchivoId && (!buffer || !nombrePlano || !codigoPlano)) {
       const { data: planoRaw, error: pErr } = await admin.client
         .from('ci_proyecto_archivos')
         .select('id, titulo, codigo_plano, public_url, mime_type, proyecto_id')
