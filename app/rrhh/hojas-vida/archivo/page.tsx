@@ -189,22 +189,31 @@ export default function RrhhHojasVidaArchivoPage() {
       const nombre = (r.nombre_completo ?? '').trim() || 'este registro';
       if (
         !window.confirm(
-          `¿Eliminar a «${nombre}» de la base de datos?\n\nSe borrará el expediente (ci_empleados). Esta acción no se puede deshacer.`,
+          `¿Eliminar a «${nombre}» de la base de datos?\n\nSe borrarán también contratos y asignaciones vinculados. Esta acción no se puede deshacer.`,
         )
       ) {
         return;
       }
       setDeletingId(r.id);
       setError(null);
-      const { error: delErr } = await supabase.from('ci_empleados').delete().eq('id', r.id);
-      setDeletingId(null);
-      if (delErr) {
-        setError(delErr.message);
-        return;
+      try {
+        const res = await fetch(apiUrl(`/api/rrhh/empleados/${encodeURIComponent(r.id)}`), {
+          method: 'DELETE',
+        });
+        const j = (await res.json().catch(() => ({}))) as { error?: string; detail?: string };
+        if (!res.ok) {
+          setError(j.error || j.detail || 'No se pudo eliminar el expediente');
+          return;
+        }
+        setRows((prev) => prev.filter((x) => x.id !== r.id));
+        toast.success('Expediente eliminado');
+      } catch {
+        setError('Error de red al eliminar');
+      } finally {
+        setDeletingId(null);
       }
-      setRows((prev) => prev.filter((x) => x.id !== r.id));
     },
-    [supabase],
+    [],
   );
 
   const validarYAbrirContrato = useCallback(async (r: EmpleadoRow) => {
