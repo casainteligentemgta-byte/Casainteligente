@@ -30,6 +30,7 @@ import MetronPlanosClient from '@/components/metron/MetronPlanosClient';
 import SeccionTituloHover from '@/components/proyectos/SeccionTituloHover';
 import HorarioObraEditor from '@/components/proyectos/HorarioObraEditor';
 import { hrefRrhhHub } from '@/lib/rrhh/hrefSolicitudPersonal';
+import { guardarProyectoRrhhContexto } from '@/lib/rrhh/proyectoRrhhContexto';
 
 const LOAD_TIMEOUT_MS = 45_000;
 
@@ -40,6 +41,7 @@ function RrhhHubLink({ proyectoModuloId }: { proyectoModuloId: string }) {
       href={hrefRrhhHub({ proyectoModuloId })}
       className="rounded-xl border border-fuchsia-500/45 bg-fuchsia-950/50 px-3 py-2 text-xs font-bold text-fuchsia-100 shadow-sm hover:bg-fuchsia-900/60"
       title="Abrir RRHH (mismo módulo del menú inferior)"
+      onClick={() => guardarProyectoRrhhContexto(proyectoModuloId)}
     >
       RRHH
     </Link>
@@ -174,8 +176,9 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
   const [borrandoProyecto, setBorrandoProyecto] = useState(false);
   const rrhhPanelRef = useRef<HTMLDivElement>(null);
 
-  /** Enlaces antiguos ?tab=solicitados|rrhh → hub RRHH unificado. */
+  /** Enlaces antiguos ?tab=solicitados|rrhh → hub RRHH unificado (menú inferior). */
   useEffect(() => {
+    guardarProyectoRrhhContexto(id);
     const t = searchParams.get('tab');
     if (t === 'solicitados' || t === 'rrhh') {
       router.replace(hrefRrhhHub({ proyectoModuloId: id }));

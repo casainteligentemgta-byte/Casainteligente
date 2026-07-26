@@ -13,6 +13,7 @@ import {
   loadProyectosSmartRrhhHojasVida,
   type ProyectoModuloIntegral,
 } from '@/lib/proyectos/proyectosUnificados';
+import { guardarProyectoRrhhContexto } from '@/lib/rrhh/proyectoRrhhContexto';
 import { createClient } from '@/lib/supabase/client';
 
 /** '' = todos los proyectos de la misma entidad de trabajo; uuid = una obra concreta. */
@@ -89,6 +90,7 @@ export default function RrhhHojasVidaClient() {
   /** Mantener la URL alineada con el selector (deep-link desde proyectos / menú inferior). */
   useEffect(() => {
     if (cargandoProyectos) return;
+    guardarProyectoRrhhContexto(alcanceObra || null);
     const actual = (searchParams.get('proyecto_modulo') ?? '').trim();
     if (alcanceObra === actual) return;
     const params = new URLSearchParams(searchParams.toString());
