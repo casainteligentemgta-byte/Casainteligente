@@ -45,11 +45,7 @@ export default function ClientesPage() {
     const [loading, setLoading] = useState(true);
     const [fetchError, setFetchError] = useState<string | null>(null);
 
-    const volverAtras = () => {
-        if (typeof window !== 'undefined' && window.history.length > 1) {
-            router.back();
-            return;
-        }
+    const irAlMenuInicio = () => {
         router.push('/');
     };
 
@@ -132,20 +128,38 @@ export default function ClientesPage() {
                 const initials =
                     partes.map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() || '??';
                 const tipoStr = typeof c.tipo === 'string' ? c.tipo : '';
-                const categoria = tipoStr.toLowerCase() === 'empresa' ? 'empresa' : 'personal';
+                const customerType = typeof c.customer_type === 'string' ? c.customer_type.toLowerCase() : '';
+                const esEmpresa =
+                    customerType === 'juridico' ||
+                    /jurid|empresa/i.test(tipoStr) ||
+                    tipoStr.trim().toUpperCase() === 'J';
+                const categoria = esEmpresa ? 'empresa' : 'personal';
                 const tipoLetra = normalizarTipo(tipoStr, categoria);
                 const idStr = String(c.id ?? '');
+
+                const cedula = typeof c.cedula === 'string' ? c.cedula.trim() : '';
+                const rif = typeof c.rif === 'string' ? c.rif.trim() : '';
+                const documentoLabel = esEmpresa
+                    ? rif
+                        ? `RIF: ${rif}`
+                        : ''
+                    : cedula
+                      ? `Cédula: ${cedula}`
+                      : rif
+                        ? `RIF: ${rif}`
+                        : '';
 
                 return {
                     ...c,
                     nombre: nombreSafe,
-                    rif: typeof c.rif === 'string' ? c.rif : '',
+                    rif: documentoLabel || rif,
+                    cedula,
                     email: typeof c.email === 'string' ? c.email : '',
                     tipo: tipoLetra,
                     categoria,
                     status: normalizarStatus(typeof c.status === 'string' ? c.status : undefined),
-                    telefono: typeof c.movil === 'string' ? c.movil : '',
-                    movil: typeof c.movil === 'string' ? c.movil : undefined,
+                    telefono: typeof c.movil === 'string' ? c.movil : typeof c.telefono === 'string' ? c.telefono : '',
+                    movil: typeof c.movil === 'string' ? c.movil : typeof c.telefono === 'string' ? c.telefono : undefined,
                     direccion: typeof c.direccion === 'string' ? c.direccion : '',
                     imagen: c.imagen || null,
                     initials,
@@ -256,8 +270,8 @@ export default function ClientesPage() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                         <button
                             type="button"
-                            onClick={volverAtras}
-                            aria-label="Volver"
+                            onClick={irAlMenuInicio}
+                            aria-label="Ir al menú de inicio"
                             style={{
                                 width: '38px', height: '38px', borderRadius: '11px',
                                 background: 'rgba(0,122,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -272,10 +286,6 @@ export default function ClientesPage() {
                         </button>
                         <div>
                             <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'white', lineHeight: 1 }}>Clientes</h1>
-                            <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.45)', marginTop: '2px' }}>
-                                {filtro || 'Todos'}
-                                {search ? ` · "${search}"` : ''}
-                            </p>
                         </div>
                     </div>
                     <Link

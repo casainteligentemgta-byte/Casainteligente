@@ -116,7 +116,16 @@ function ClienteModal({ cliente, onClose }: { cliente: Cliente; onClose: () => v
                             </span>
                         </div>
                         <h2 style={{ color: 'white', fontSize: '18px', fontWeight: 700, lineHeight: 1.2 }}>{cliente.nombre}</h2>
-                        <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '13px', marginTop: '2px' }}>{cliente.rif}</p>
+                        {cliente.rif ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+                                    <rect x="2" y="5" width="20" height="14" rx="2.5" stroke="rgba(255,255,255,0.45)" strokeWidth="1.8" />
+                                    <circle cx="8.5" cy="11" r="2.2" stroke="rgba(255,255,255,0.45)" strokeWidth="1.5" />
+                                    <path d="M13.5 9.5h5M13.5 12.5h4M13.5 15.5h3" stroke="rgba(255,255,255,0.45)" strokeWidth="1.5" strokeLinecap="round" />
+                                </svg>
+                                <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '13px' }}>{cliente.rif}</p>
+                            </div>
+                        ) : null}
                     </div>
                     <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
@@ -231,9 +240,19 @@ export default function ClienteCard({ cliente, onDelete }: { cliente: Cliente; o
                                     style={{ fontSize: '16px', color: 'var(--label-primary)', letterSpacing: '-0.02em', lineHeight: 1.3 }}>
                                     {cliente.nombre}
                                 </h3>
-                                <p className="text-sm mt-0.5 font-medium" style={{ color: 'var(--label-secondary)', fontSize: '13px' }}>
-                                    {cliente.rif}
-                                </p>
+                                {cliente.rif ? (
+                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                        {/* Carnet / DNI */}
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }} aria-hidden>
+                                            <rect x="2" y="5" width="20" height="14" rx="2.5" stroke="#8E8E93" strokeWidth="1.8" />
+                                            <circle cx="8.5" cy="11" r="2.2" stroke="#8E8E93" strokeWidth="1.5" />
+                                            <path d="M13.5 9.5h5M13.5 12.5h4M13.5 15.5h3" stroke="#8E8E93" strokeWidth="1.5" strokeLinecap="round" />
+                                        </svg>
+                                        <p className="text-sm font-medium truncate" style={{ color: 'var(--label-secondary)', fontSize: '13px' }}>
+                                            {cliente.rif}
+                                        </p>
+                                    </div>
+                                ) : null}
                                 {cliente.email && (
                                     <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--label-tertiary)', fontSize: '12px' }}>
                                         {cliente.email}
