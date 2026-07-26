@@ -94,7 +94,9 @@ export function alinearRolExamenConTipoVacante(
   }
 
   if (tipo.includes('empleado')) {
-    if (rol === 'obrero' || rol === 'tecnico') rol = 'empleado';
+    // Oficina: permite empleado, programador y técnico (dibujante / ingeniero).
+    // Solo corrige bancos de campo puro.
+    if (rol === 'obrero' || rol === 'vigilante') rol = 'empleado';
     return rol;
   }
 

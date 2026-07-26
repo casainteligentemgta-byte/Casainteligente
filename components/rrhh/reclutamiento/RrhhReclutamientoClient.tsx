@@ -33,25 +33,16 @@ import { apiUrl } from '@/lib/http/apiUrl';
 import { hrefListaContratosExpress } from '@/lib/talento/hrefListaContratosExpress';
 import { createClient } from '@/lib/supabase/client';
 import type { RolExamen } from '@/types/talento';
-import type { MapaEvaluacionPsique } from '@/lib/talento/psique/mapaEvaluacion';
-import type { PruebaPsiqueSugerida, RolExamenPsique } from '@/lib/talento/psique/recomendarPruebasPsique';
 import {
   ROLES_EXAMEN_UI,
   ROL_EXAMEN_DEFAULT,
 } from '@/lib/talento/rolesExamenCatalogo';
 import DetalleRespuestasExamenModal from '@/components/rrhh/reclutamiento/DetalleRespuestasExamenModal';
+import PsiqueCargoPanel, {
+  type PsiqueRecUi,
+} from '@/components/rrhh/reclutamiento/PsiqueCargoPanel';
 
 type TabId = 'examen' | 'evaluaciones' | 'pendientes';
-
-type PsiqueUiState = {
-  palabras_clave: string[];
-  pruebas: PruebaPsiqueSugerida[];
-  rol_examen_sugerido: RolExamenPsique | null;
-  rol_examen_para_enlace: RolExamenPsique | null;
-  fuente: string;
-  aviso?: string;
-  evaluacion?: MapaEvaluacionPsique | null;
-};
 
 function docMostrado(row: { cedula?: string | null; documento?: string | null }): string {
   return (row.cedula ?? row.documento ?? '').trim() || '—';
@@ -80,9 +71,7 @@ export default function RrhhReclutamientoClient() {
   const [ultimoEnlace, setUltimoEnlace] = useState<string | null>(null);
   const [detalleEmpleadoId, setDetalleEmpleadoId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [cargoPsique, setCargoPsique] = useState('ayudante de albañil');
-  const [psiqueBusy, setPsiqueBusy] = useState(false);
-  const [psiqueRec, setPsiqueRec] = useState<PsiqueUiState | null>(null);
+  const [psiqueRec, setPsiqueRec] = useState<PsiqueRecUi | null>(null);
 
   const examenPreview = useMemo(() => preguntasParaDetalle(rolPreview), [rolPreview]);
 
@@ -192,57 +181,11 @@ export default function RrhhReclutamientoClient() {
     }
   }, []);
 
-  const consultarPsique = useCallback(async () => {
-    const texto = cargoPsique.trim();
-    if (!texto) {
-      toast.error('Escribe el cargo o la solicitud');
-      return;
-    }
-    setPsiqueBusy(true);
-    try {
-      const res = await fetch(apiUrl('/api/talento/psique/recomendar'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ texto }),
-      });
-      const j = (await res.json().catch(() => ({}))) as PsiqueUiState & {
-        error?: string;
-        hint?: string;
-      };
-      if (!res.ok) {
-        toast.error([j.error, j.hint].filter(Boolean).join(' — ') || 'No se pudo consultar Psique');
-        return;
-      }
-      const rol =
-        j.rol_examen_para_enlace ?? j.rol_examen_sugerido ?? null;
-      setPsiqueRec({
-        palabras_clave: j.palabras_clave ?? [],
-        pruebas: j.pruebas ?? [],
-        rol_examen_sugerido: j.rol_examen_sugerido ?? null,
-        rol_examen_para_enlace: rol,
-        fuente: j.fuente ?? '',
-        aviso: j.aviso,
-        evaluacion: j.evaluacion ?? null,
-      });
-      // Preview del banco trípode cuando aplica; ABC se muestra en el bloque semáforo.
-      if (rol === 'programador' || rol === 'tecnico') {
-        setRolPreview(rol);
-      } else if (rol === 'obrero' || rol === 'vigilante') {
-        setRolPreview('tecnico');
-      }
-      if ((j.pruebas ?? []).length === 0) {
-        toast.message('Sin pruebas para esas palabras clave');
-      } else {
-        toast.success(
-          `${j.pruebas.length} prueba(s) · ${j.evaluacion?.libro ?? 'libro de evaluación'}`,
-        );
-      }
-    } catch {
-      toast.error('Error de red al consultar Psique');
-    } finally {
-      setPsiqueBusy(false);
-    }
-  }, [cargoPsique]);
+  const onPsiqueRec = useCallback((rec: PsiqueRecUi) => {
+    setPsiqueRec(rec);
+    const rol = rec.rol_examen_para_enlace ?? rec.rol_examen_sugerido;
+    if (rol) setRolPreview(rol);
+  }, []);
 
   const generarEnlaceExamen = useCallback(
     async (empleadoId?: string) => {
@@ -273,7 +216,6 @@ export default function RrhhReclutamientoClient() {
         }
 
         const rolBuscado =
-          cargoPsique.trim() ||
           ROLES_EXAMEN_UI.find((r) => r.value === rolPreview)?.label ||
           etiquetaRolExamenUI(rolPreview);
         const rolAsignar =
@@ -295,7 +237,7 @@ export default function RrhhReclutamientoClient() {
           error?: string;
           hint?: string;
           rol_examen?: string;
-          psique?: PsiqueUiState & { evaluacion?: MapaEvaluacionPsique };
+          psique?: PsiqueRecUi;
         };
         if (!res.ok) {
           toast.error([j.error, j.hint].filter(Boolean).join(' — ') || 'No se pudo generar el enlace');
@@ -312,7 +254,7 @@ export default function RrhhReclutamientoClient() {
             pruebas: j.psique.pruebas ?? [],
             rol_examen_sugerido: j.psique.rol_examen_sugerido ?? null,
             rol_examen_para_enlace:
-              (j.rol_examen as RolExamenPsique | undefined) ??
+              j.psique.rol_examen_para_enlace ??
               j.psique.rol_examen_sugerido ??
               null,
             fuente: j.psique.fuente ?? '',
@@ -327,7 +269,7 @@ export default function RrhhReclutamientoClient() {
         setInvBusy(false);
       }
     },
-    [cargoPsique, copiarUrlExamen, psiqueRec, rolPreview],
+    [copiarUrlExamen, psiqueRec, rolPreview],
   );
 
   const seleccionarParaEnlace = (r: EmpleadoHojaVidaRow) => {
@@ -454,36 +396,28 @@ export default function RrhhReclutamientoClient() {
               Banco de preguntas del examen
             </h2>
             <p className="mt-2 text-sm text-zinc-400">
-              Campo: obrero/vigilante (ABC) o técnico de obra (situacional + lógica). Oficina: empleado o programador
-              (frecuencia + lógica). Duración 15 min. El oficio del tabulador no abre un banco distinto: afina la
-              recomendación Psique. Vista previa en{' '}
+              Primero elige el cargo (lista de oficios del tabulador o cargos de empleado). Psique recomienda la
+              batería y el banco. Vista previa en{' '}
               <Link href="/talento/examen" className="text-violet-300 underline hover:text-violet-200" target="_blank">
                 /talento/examen
               </Link>
               .
             </p>
-            <div className="mt-4 space-y-2">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Campo / obra</p>
+
+            <PsiqueCargoPanel
+              className="mt-5 border-t border-violet-500/20 pt-4"
+              onRecomendacion={onPsiqueRec}
+            />
+
+            <div className="mt-5 space-y-2 border-t border-violet-500/20 pt-4">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+                Banco del examen (preview)
+              </p>
+              <p className="text-xs text-zinc-500">
+                Se actualiza solo con Psique. También puedes forzar un banco:
+              </p>
               <div className="flex flex-wrap gap-2">
-                {ROLES_EXAMEN_UI.filter((r) => r.grupo === 'campo').map((rol) => (
-                  <button
-                    key={rol.value}
-                    type="button"
-                    onClick={() => setRolPreview(rol.value)}
-                    title={rol.resumen}
-                    className={`rounded-lg border px-3 py-1.5 text-xs font-bold tracking-wide ${
-                      rolPreview === rol.value
-                        ? 'border-violet-400/50 bg-violet-500/20 text-violet-100'
-                        : 'border-white/15 text-zinc-400 hover:bg-white/5'
-                    }`}
-                  >
-                    {rol.label}
-                  </button>
-                ))}
-              </div>
-              <p className="pt-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500">Oficina / TI</p>
-              <div className="flex flex-wrap gap-2">
-                {ROLES_EXAMEN_UI.filter((r) => r.grupo === 'oficina').map((rol) => (
+                {ROLES_EXAMEN_UI.map((rol) => (
                   <button
                     key={rol.value}
                     type="button"
@@ -502,87 +436,6 @@ export default function RrhhReclutamientoClient() {
               <p className="text-xs text-zinc-500">
                 {ROLES_EXAMEN_UI.find((r) => r.value === rolPreview)?.resumen}
               </p>
-            </div>
-
-            <div className="mt-5 border-t border-violet-500/20 pt-4">
-              <h3 className="text-sm font-bold text-violet-100">
-                Psique (Ψυχή) → libro de evaluación → semáforo
-              </h3>
-              <p className="mt-1 text-xs text-zinc-500">
-                Fusionado con reclutamiento: el cargo elige la batería, el banco del examen y el semáforo
-                (trípode GMA/integridad/tiempo o ABC). Migraciones 290 + 293.
-              </p>
-              <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-                <input
-                  type="text"
-                  value={cargoPsique}
-                  onChange={(e) => setCargoPsique(e.target.value)}
-                  placeholder="Cargo o solicitud…"
-                  className="min-w-0 flex-1 rounded-lg border border-white/15 bg-black/30 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600"
-                />
-                <button
-                  type="button"
-                  disabled={psiqueBusy}
-                  onClick={() => void consultarPsique()}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-violet-400/40 bg-violet-500/15 px-3 py-2 text-sm font-semibold text-violet-100 hover:bg-violet-500/25 disabled:opacity-50"
-                >
-                  <BookOpen className="h-4 w-4" aria-hidden />
-                  {psiqueBusy ? 'Consultando…' : 'Consultar Psique'}
-                </button>
-              </div>
-              {psiqueRec ? (
-                <div className="mt-3 space-y-3 text-sm">
-                  <p className="text-xs text-zinc-500">
-                    Claves: {psiqueRec.palabras_clave.join(', ') || '—'}
-                    {psiqueRec.rol_examen_sugerido
-                      ? ` · Rol: ${etiquetaRolExamenUI(psiqueRec.rol_examen_sugerido)}`
-                      : ''}
-                    {psiqueRec.fuente === 'fallback' ? ' · (catálogo local)' : ''}
-                  </p>
-                  {psiqueRec.evaluacion ? (
-                    <div className="rounded-lg border border-emerald-500/25 bg-emerald-950/30 px-3 py-2">
-                      <p className="text-xs font-bold uppercase tracking-wide text-emerald-300/90">
-                        {psiqueRec.evaluacion.libro}
-                      </p>
-                      <p className="mt-1 text-xs text-zinc-400">
-                        Banco: {psiqueRec.evaluacion.banco} · Motor:{' '}
-                        {psiqueRec.evaluacion.motor === 'tripode' ? 'Trípode' : 'ABC'} ·{' '}
-                        {psiqueRec.evaluacion.duracion_minutos} min
-                      </p>
-                      <ul className="mt-2 list-disc space-y-0.5 pl-4 text-xs text-zinc-300">
-                        {psiqueRec.evaluacion.reglas_semaforo.map((r) => (
-                          <li key={r}>{r}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : null}
-                  {psiqueRec.aviso ? (
-                    <p className="text-xs text-amber-300/90">{psiqueRec.aviso}</p>
-                  ) : null}
-                  {psiqueRec.pruebas.length === 0 ? (
-                    <p className="text-zinc-500">Sin coincidencias en el catálogo.</p>
-                  ) : (
-                    <ul className="space-y-2">
-                      {psiqueRec.pruebas.map((p) => (
-                        <li
-                          key={p.id_prueba}
-                          className="rounded-lg border border-white/10 bg-black/25 px-3 py-2"
-                        >
-                          <p className="font-semibold text-zinc-100">{p.nombre_prueba}</p>
-                          <p className="text-[11px] uppercase tracking-wide text-zinc-500">
-                            {p.categoria}
-                            {p.es_clinico ? ' · clínico' : ''}
-                            {p.rol_examen_sugerido
-                              ? ` · ${etiquetaRolExamenUI(p.rol_examen_sugerido)}`
-                              : ''}
-                          </p>
-                          <p className="mt-1 text-xs text-zinc-400">{p.objetivo_evaluacion}</p>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              ) : null}
             </div>
           </section>
 
