@@ -240,10 +240,16 @@ export function decidirMatchFacturaEgresos(
   candidatos: CandidatoScore[];
   motivo: string;
 } {
-  const ranked = egresos
-    .map((e) => puntuarEgresoContraFactura(factura, e))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 5);
+  let scored = egresos.map((e) => puntuarEgresoContraFactura(factura, e));
+  // Cuadros grandes: quedarse con señales reales reduce ruido en el top-5.
+  if (scored.length > 300) {
+    const conSenal = scored.filter(
+      (s) =>
+        s.desglose.proveedor >= 8 || s.desglose.fecha >= 8 || s.desglose.monto >= 6,
+    );
+    if (conSenal.length > 0) scored = conSenal;
+  }
+  const ranked = scored.sort((a, b) => b.score - a.score).slice(0, 5);
 
   const { decision, egresoId, motivo } = clasificarDecision(ranked);
   return {
