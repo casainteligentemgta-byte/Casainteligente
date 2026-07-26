@@ -3,7 +3,7 @@ export type HrefSolicitudPersonalOpts = {
   proyectoObraId?: string | null;
 };
 
-/** Hub único de RRHH (mismo destino que el icono del menú inferior). */
+/** RRHH unificado (menú inferior + obra): vacantes, cuadro, reclutamiento y nómina. */
 export function hrefRrhhHub(opts?: { proyectoModuloId?: string | null }): string {
   const mod = opts?.proyectoModuloId?.trim();
   if (mod) return `/rrhh/hojas-vida?proyecto_modulo=${encodeURIComponent(mod)}`;

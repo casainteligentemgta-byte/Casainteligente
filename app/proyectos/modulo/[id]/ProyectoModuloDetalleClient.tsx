@@ -6,7 +6,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { uploadProjectAsset } from '@/lib/supabase/project-media';
 
-import ResumenObrerosProyectoModulo from '@/components/proyectos/ResumenObrerosProyectoModulo';
 import InventarioEquiposProyecto from '@/components/proyectos/InventarioEquiposProyecto';
 import {
   PROYECTO_EQUIPO_SELECT,
@@ -17,13 +16,10 @@ import {
   normalizarCategoriaEquipo,
   type ProyectoEquipoRow,
 } from '@/lib/proyectos/proyectoEquipos';
-import ModalNuevaVacante from './components/ModalNuevaVacante';
 import GenerarContratoDelegadoModal from '@/components/proyectos/GenerarContratoDelegadoModal';
 import ProyectoAdLogisticaBanner from '@/components/proyectos/ProyectoAdLogisticaBanner';
 import { useContratoAdProyecto } from '@/hooks/useContratoAdProyecto';
-import SugerenciaCuadrilla from '@/components/proyectos/SugerenciaCuadrilla';
 import DashboardUtilidadReal from '@/components/finanzas/DashboardUtilidadReal';
-import CuadroNominaContratados from '@/components/nomina/CuadroNominaContratados';
 import ImportarPresupuestoLulo from '@/components/proyectos/ImportarPresupuestoLulo';
 import ControlPlanosObra from '@/components/proyectos/ControlPlanosObra';
 import MetronPlanosClient from '@/components/metron/MetronPlanosClient';
@@ -33,20 +29,6 @@ import { hrefRrhhHub } from '@/lib/rrhh/hrefSolicitudPersonal';
 import { guardarProyectoRrhhContexto } from '@/lib/rrhh/proyectoRrhhContexto';
 
 const LOAD_TIMEOUT_MS = 45_000;
-
-/** Mismo hub RRHH que el icono del menú inferior, con la obra preseleccionada. */
-function RrhhHubLink({ proyectoModuloId }: { proyectoModuloId: string }) {
-  return (
-    <Link
-      href={hrefRrhhHub({ proyectoModuloId })}
-      className="rounded-xl border border-fuchsia-500/45 bg-fuchsia-950/50 px-3 py-2 text-xs font-bold text-fuchsia-100 shadow-sm hover:bg-fuchsia-900/60"
-      title="Abrir RRHH (mismo módulo del menú inferior)"
-      onClick={() => guardarProyectoRrhhContexto(proyectoModuloId)}
-    >
-      RRHH
-    </Link>
-  );
-}
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -164,7 +146,6 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
   const [generandoSugerencias, setGenerandoSugerencias] = useState(false);
   const [sugerenciasIA, setSugerenciasIA] = useState<string | null>(null);
   const [sugerenciasDesdeGemini, setSugerenciasDesdeGemini] = useState(false);
-  const [vacanteModalOpen, setVacanteModalOpen] = useState(false);
   const [contratoAdModalOpen, setContratoAdModalOpen] = useState(false);
   const {
     autorizado: logisticaAutorizada,
@@ -172,21 +153,20 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
     contrato: contratoAd,
     refrescar: refrescarContratoAd,
   } = useContratoAdProyecto(id);
-  const [rrhhVacantesTick, setRrhhVacantesTick] = useState(0);
   const [borrandoProyecto, setBorrandoProyecto] = useState(false);
-  const rrhhPanelRef = useRef<HTMLDivElement>(null);
+  const finanzasPanelRef = useRef<HTMLDivElement>(null);
 
-  /** Enlaces antiguos ?tab=solicitados|rrhh → hub RRHH unificado (menú inferior). */
+  /** RRHH del proyecto vive en el hub unificado (`/rrhh/hojas-vida`); finanzas queda en el módulo. */
   useEffect(() => {
     guardarProyectoRrhhContexto(id);
     const t = searchParams.get('tab');
-    if (t === 'solicitados' || t === 'rrhh') {
+    if (t === 'solicitados' || t === 'rrhh' || t === 'talento') {
       router.replace(hrefRrhhHub({ proyectoModuloId: id }));
       return;
     }
-    if (t !== 'talento' && t !== 'finanzas') return;
+    if (t !== 'finanzas') return;
     const timer = window.setTimeout(() => {
-      rrhhPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      finanzasPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 120);
     return () => clearTimeout(timer);
   }, [searchParams, id, router]);
@@ -576,75 +556,38 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
     return row?.nombre?.trim() || null;
   }, [proyecto?.entidad_id, entidades]);
 
-  /** Enlace directo ?tab=rrhh|talento|solicitados|finanzas: vistas compactas / cuadro RRHH / utilidad real. */
-  const tabVistaTalento =
-    searchParams.get('tab') === 'rrhh' ||
-    searchParams.get('tab') === 'talento' ||
-    searchParams.get('tab') === 'solicitados' ||
-    searchParams.get('tab') === 'finanzas';
-  const tabSolicitados = searchParams.get('tab') === 'solicitados';
-  /** rrhh/talento/solicitados/finanzas: sin barra superior de acciones (modificar, vacante, enlaces RRHH, etc.). */
-  const tabCabeceraMinimaSinAcciones =
-    searchParams.get('tab') === 'rrhh' ||
-    searchParams.get('tab') === 'talento' ||
-    searchParams.get('tab') === 'solicitados' ||
-    searchParams.get('tab') === 'finanzas';
+  /** Solo finanzas queda embebida; RRHH/talento/solicitados van al hub unificado. */
+  const tabVistaFinanzas = searchParams.get('tab') === 'finanzas';
+  const tabCabeceraMinimaSinAcciones = tabVistaFinanzas;
   const tabUrl = searchParams.get('tab') ?? '';
-  /** Ficha normal del módulo (sin ?tab=): sin vacante, RRHH, reclutamiento, gestión laboral ni «Terminar». */
   const fichaModuloSinPestaña = tabUrl === '';
 
-  const panelRrhhModulo = useMemo(() => {
-    if (!proyecto) return null;
-    /** `tab=finanzas` o `tab=rrhh`: consolidado de utilidad real (mismo dashboard). */
-    if (tabUrl === 'finanzas' || tabUrl === 'rrhh') {
-      return (
-        <div className="space-y-6">
-          <Link
-            href={`/proyectos/modulo/${encodeURIComponent(id)}/lulo?tab=presupuesto`}
-            className="flex items-center justify-between gap-3 rounded-2xl border border-sky-500/35 bg-gradient-to-r from-sky-950/50 to-zinc-900/80 px-4 py-3 hover:border-sky-400/50 transition-colors"
-          >
-            <span className="text-sm font-semibold text-sky-100">
-              Módulo Lulo · importar MDB, presupuesto y explorar tablas Access
-            </span>
-            <span className="text-[11px] font-bold uppercase tracking-wider text-sky-400/90 shrink-0">
-              Abrir Lulo →
-            </span>
-          </Link>
-          <ImportarPresupuestoLulo proyectoId={id} onSuccess={() => void load()} />
-          <ControlPlanosObra proyectoId={id} />
-          <MetronPlanosClient
-            proyectoId={id}
-            nombreObra={proyecto.nombre}
-            className="mt-4"
-          />
-          <CuadroNominaContratados proyectoModuloId={id} titulo="Contratados — nómina del proyecto" />
-          <DashboardUtilidadReal proyectoId={id} className="" />
-        </div>
-      );
-    }
-    if (tabSolicitados) {
-      return (
-        <div className="space-y-4">
-          <ResumenObrerosProyectoModulo
-            proyectoModuloId={id}
-            listaRefresco={rrhhVacantesTick}
-            tabUrl={tabUrl}
-            demoListasObrero={searchParams.get('demo_listas') === '1'}
-          />
-        </div>
-      );
-    }
+  const panelFinanzasModulo = useMemo(() => {
+    if (!proyecto || tabUrl !== 'finanzas') return null;
     return (
-      <>
-
-        <SugerenciaCuadrilla
+      <div className="space-y-6">
+        <Link
+          href={`/proyectos/modulo/${encodeURIComponent(id)}/lulo?tab=presupuesto`}
+          className="flex items-center justify-between gap-3 rounded-2xl border border-sky-500/35 bg-gradient-to-r from-sky-950/50 to-zinc-900/80 px-4 py-3 hover:border-sky-400/50 transition-colors"
+        >
+          <span className="text-sm font-semibold text-sky-100">
+            Módulo Lulo · importar MDB, presupuesto y explorar tablas Access
+          </span>
+          <span className="text-[11px] font-bold uppercase tracking-wider text-sky-400/90 shrink-0">
+            Abrir Lulo →
+          </span>
+        </Link>
+        <ImportarPresupuestoLulo proyectoId={id} />
+        <ControlPlanosObra proyectoId={id} />
+        <MetronPlanosClient
+          proyectoId={id}
           nombreObra={proyecto.nombre}
-          ubicacionObra={proyecto.ubicacion_texto}
-          proyectoModuloId={id}
+          className="mt-4"
         />
-      </>
+        <DashboardUtilidadReal proyectoId={id} className="" />
+      </div>
     );
-  }, [proyecto, id, rrhhVacantesTick, tabUrl, tabSolicitados]);
+  }, [proyecto, id, tabUrl]);
 
   async function generarSugerenciasIA() {
     if (!proyecto) return;
@@ -720,59 +663,27 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                 )}
               </>
             ) : null}
-            {modoEdicion && proyecto && !tabCabeceraMinimaSinAcciones && !fichaModuloSinPestaña ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setVacanteModalOpen(true)}
-                  className="rounded-xl border border-[#FF9500]/45 bg-gradient-to-r from-[#FFD60A]/15 to-[#FF9500]/15 px-3 py-2 text-xs font-semibold text-[#FFD60A] hover:from-[#FFD60A]/25 hover:to-[#FF9500]/25"
-                >
-                  Nueva vacante
-                </button>
-                <RrhhHubLink proyectoModuloId={id} />
-                <Link
-                  href="/rrhh/reclutamiento"
-                  className="rounded-xl border border-sky-500/40 bg-sky-500/15 px-3 py-2 text-xs font-semibold text-sky-200 hover:bg-sky-500/25"
-                >
-                  Reclutamiento
-                </Link>
-                <Link
-                  href={`/rrhh/gestion-personal?solo=pendientes&proyecto_modulo=${encodeURIComponent(id)}`}
-                  className="rounded-xl border border-violet-500/40 bg-violet-950/40 px-3 py-2 text-xs font-semibold text-violet-100 hover:bg-violet-900/55"
-                >
-                  Gestión laboral
-                </Link>
-              </>
-            ) : null}
-            {!tabCabeceraMinimaSinAcciones && !modoEdicion && !fichaModuloSinPestaña ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setVacanteModalOpen(true)}
-                  className="rounded-xl border border-[#FF9500]/45 bg-gradient-to-r from-[#FFD60A]/15 to-[#FF9500]/15 px-3 py-2 text-xs font-semibold text-[#FFD60A] hover:from-[#FFD60A]/25 hover:to-[#FF9500]/25"
-                >
-                  Nueva vacante
-                </button>
-                <RrhhHubLink proyectoModuloId={id} />
-                <Link
-                  href="/rrhh/reclutamiento"
-                  className="rounded-xl border border-sky-500/40 bg-sky-500/15 px-3 py-2 text-xs font-semibold text-sky-200 hover:bg-sky-500/25"
-                >
-                  Reclutamiento
-                </Link>
-                <Link
-                  href={`/rrhh/gestion-personal?solo=pendientes&proyecto_modulo=${encodeURIComponent(id)}`}
-                  className="rounded-xl border border-violet-500/40 bg-violet-950/40 px-3 py-2 text-xs font-semibold text-violet-100 hover:bg-violet-900/55"
-                >
-                  Gestión laboral
-                </Link>
-              </>
+            {proyecto && !tabCabeceraMinimaSinAcciones && !fichaModuloSinPestaña ? (
+              <Link
+                href={hrefRrhhHub({ proyectoModuloId: id })}
+                onClick={() => guardarProyectoRrhhContexto(id)}
+                className="rounded-xl border border-fuchsia-500/45 bg-fuchsia-950/50 px-3 py-2 text-xs font-bold text-fuchsia-100 shadow-sm hover:bg-fuchsia-900/60"
+                title="RRHH del proyecto (vacantes, cuadro, reclutamiento, nómina)"
+              >
+                RRHH
+              </Link>
             ) : null}
           </div>
         </div>
-        {proyecto && tabVistaTalento && !modoEdicion && tabUrl !== 'solicitados' && tabUrl !== 'rrhh' && tabUrl !== 'finanzas' ? (
+        {proyecto && tabVistaFinanzas && !modoEdicion ? (
           <div className="mt-3 flex flex-wrap items-center gap-2 border-b border-white/10 pb-3">
-            <RrhhHubLink proyectoModuloId={id} />
+            <Link
+              href={hrefRrhhHub({ proyectoModuloId: id })}
+              onClick={() => guardarProyectoRrhhContexto(id)}
+              className="rounded-xl border border-fuchsia-500/45 bg-fuchsia-950/50 px-3 py-2 text-xs font-bold text-fuchsia-100 hover:bg-fuchsia-900/60"
+            >
+              RRHH
+            </Link>
             <Link
               href={`/proyectos/modulo/${id}`}
               className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-white/10"
@@ -967,12 +878,12 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                 </button>
               </form>
             ) : null}
-            {modoEdicion && panelRrhhModulo ? (
-              <div ref={rrhhPanelRef} className="mt-6 scroll-mt-24 space-y-4">
-                {panelRrhhModulo}
+            {modoEdicion && panelFinanzasModulo ? (
+              <div ref={finanzasPanelRef} className="mt-6 scroll-mt-24 space-y-4">
+                {panelFinanzasModulo}
               </div>
             ) : null}
-            {!modoEdicion && !tabVistaTalento ? (
+            {!modoEdicion && !tabVistaFinanzas ? (
               <>
                 <div className="mt-4 rounded-2xl border border-white/10 bg-zinc-900/70 p-5 shadow-lg backdrop-blur-xl">
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1011,8 +922,8 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
               </>
             ) : null}
 
-            <div className={`space-y-4 ${tabVistaTalento && !modoEdicion ? 'mt-2' : 'mt-4'}`}>
-              {modoEdicion || !tabVistaTalento ? (
+            <div className={`space-y-4 ${tabVistaFinanzas && !modoEdicion ? 'mt-2' : 'mt-4'}`}>
+              {modoEdicion || !tabVistaFinanzas ? (
               <>
             <div className="mt-6 grid gap-6 lg:grid-cols-2">
               <div className="lg:col-span-2">
@@ -1278,9 +1189,9 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
             </SeccionTituloHover>
               </>
               ) : null}
-              {!modoEdicion && panelRrhhModulo ? (
-                <div ref={rrhhPanelRef} className={!tabVistaTalento ? 'mt-8 space-y-4' : 'space-y-4'}>
-                  {panelRrhhModulo}
+              {!modoEdicion && panelFinanzasModulo ? (
+                <div ref={finanzasPanelRef} className={!tabVistaFinanzas ? 'mt-8 space-y-4' : 'space-y-4'}>
+                  {panelFinanzasModulo}
                 </div>
               ) : null}
             </div>
@@ -1288,13 +1199,6 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
         ) : null}
       </div>
 
-      <ModalNuevaVacante
-        open={vacanteModalOpen}
-        onClose={() => setVacanteModalOpen(false)}
-        proyectoModuloId={id}
-        proyectoNombre={proyecto?.nombre ?? null}
-        onVacanteCreada={() => setRrhhVacantesTick((n) => n + 1)}
-      />
       <GenerarContratoDelegadoModal
         open={contratoAdModalOpen}
         onClose={() => setContratoAdModalOpen(false)}

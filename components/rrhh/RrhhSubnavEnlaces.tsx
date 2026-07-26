@@ -1,17 +1,25 @@
 import Link from 'next/link';
-import { ClipboardList, FileText, ScrollText, UserRound, Users } from 'lucide-react';
+import { ClipboardList, FileText, ScrollText, UserCog, UserRound, Users } from 'lucide-react';
 import { hrefListaContratosExpress } from '@/lib/talento/hrefListaContratosExpress';
-import { hrefSolicitudPersonalObrero } from '@/lib/rrhh/hrefSolicitudPersonal';
+import {
+  hrefGestionPersonalSolicitados,
+  hrefSolicitudPersonalObrero,
+} from '@/lib/rrhh/hrefSolicitudPersonal';
 
 type Props = {
   proyectoModuloId?: string | null;
   className?: string;
 };
 
-/** Enlaces rápidos RRHH (una sola fila en hub y subpáginas). */
+/** Enlaces rápidos del RRHH unificado (menú inferior + obra). */
 export default function RrhhSubnavEnlaces({ proyectoModuloId = null, className = '' }: Props) {
+  const mod = proyectoModuloId?.trim() || null;
   const hrefSolicitud = hrefSolicitudPersonalObrero({
-    proyectoModuloId: proyectoModuloId?.trim() || null,
+    proyectoModuloId: mod,
+  });
+  const hrefGestion = hrefGestionPersonalSolicitados({
+    proyectoModuloId: mod,
+    todosLosProyectos: !mod,
   });
 
   return (
@@ -27,8 +35,15 @@ export default function RrhhSubnavEnlaces({ proyectoModuloId = null, className =
         Solicitud de personal obrero
       </Link>
       <Link
-        href="/rrhh/reclutamiento"
+        href={hrefGestion}
         className="inline-flex items-center gap-2 rounded-xl border border-violet-500/40 bg-violet-950/45 px-3 py-2 text-sm font-semibold text-violet-100 transition hover:bg-violet-900/55"
+      >
+        <UserCog className="h-4 w-4 shrink-0" aria-hidden />
+        Gestión laboral
+      </Link>
+      <Link
+        href="/rrhh/reclutamiento"
+        className="inline-flex items-center gap-2 rounded-xl border border-sky-500/40 bg-sky-950/45 px-3 py-2 text-sm font-semibold text-sky-100 transition hover:bg-sky-900/55"
       >
         <Users className="h-4 w-4 shrink-0" aria-hidden />
         Reclutamiento
