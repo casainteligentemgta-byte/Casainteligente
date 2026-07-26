@@ -155,24 +155,24 @@ export default function InvitarUsuarioAcceso({
     }
   }
 
-  const campos = (
-    <>
-      <div className="grid gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="invitar-email" className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-            Correo Usuario
-          </Label>
-          <Input
-            id="invitar-email"
-            type="email"
-            autoComplete="email"
-            placeholder="usuario@dimaquinas.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            disabled={enviando}
-            className="h-11 border-white/10 bg-zinc-900/80 text-zinc-100"
-          />
-        </div>
+  const camposEsenciales = (
+    <div className="grid gap-4">
+      <div className="space-y-2">
+        <Label htmlFor="invitar-email" className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+          Correo Usuario
+        </Label>
+        <Input
+          id="invitar-email"
+          type="email"
+          autoComplete="email"
+          placeholder="usuario@dimaquinas.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          disabled={enviando}
+          className="h-11 border-white/10 bg-zinc-900/80 text-zinc-100"
+        />
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="invitar-nombre" className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
             Nombre
@@ -199,28 +199,59 @@ export default function InvitarUsuarioAcceso({
             className="h-11 border-white/10 bg-zinc-900/80 text-zinc-100"
           />
         </div>
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="invitar-rol" className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+          Rol
+        </Label>
+        <select
+          id="invitar-rol"
+          value={rol}
+          onChange={(e) => setRol(e.target.value)}
+          disabled={enviando}
+          className={campoClase}
+        >
+          {ROLES_EMPRESA.map((r) => (
+            <option key={r.value} value={r.value}>
+              {r.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      {!embebido ? (
         <div className="space-y-2">
-          <Label htmlFor="invitar-rol" className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-            Rol
+          <Label htmlFor="invitar-entidad" className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            Entidad / patrono *
           </Label>
           <select
-            id="invitar-rol"
-            value={rol}
-            onChange={(e) => setRol(e.target.value)}
-            disabled={enviando}
+            id="invitar-entidad"
+            value={entidadId}
+            onChange={(e) => setEntidadId(e.target.value)}
+            disabled={enviando || cargandoEntidades}
             className={campoClase}
           >
-            {ROLES_EMPRESA.map((r) => (
-              <option key={r.value} value={r.value}>
-                {r.label}
+            <option value="">{cargandoEntidades ? 'Cargando…' : 'Seleccionar entidad'}</option>
+            {entidades.map((en) => (
+              <option key={en.id} value={en.id}>
+                {en.nombre}
+                {en.rif ? ` · ${en.rif}` : ''}
               </option>
             ))}
           </select>
-          <p className="text-[10px] text-zinc-600">
-            Si el correo ya tiene cuenta autorizada, al reingresarlo aquí o en otra obra se
-            redefine el rol de esta entidad.
-          </p>
         </div>
+      ) : null}
+    </div>
+  );
+
+  const opcionesAvanzadas = (
+    <details
+      className="rounded-xl border border-white/10 bg-white/[0.02] open:pb-3"
+      open={esCcoLectura || undefined}
+    >
+      <summary className="cursor-pointer list-none px-4 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-500 marker:content-none [&::-webkit-details-marker]:hidden">
+        Opciones (contraseña / Telegram)
+      </summary>
+      <div className="space-y-4 border-t border-white/10 px-4 pt-4">
         <div className="space-y-2">
           <Label
             htmlFor="invitar-password"
@@ -233,83 +264,61 @@ export default function InvitarUsuarioAcceso({
             type="password"
             autoComplete="new-password"
             placeholder={
-              esCcoLectura ? 'Clave para entrar en /login' : 'Si la dejas vacía, se envía invitación por correo'
+              esCcoLectura
+                ? 'Clave para entrar en /login'
+                : 'Vacío = invitación por correo (si el usuario es nuevo)'
             }
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             disabled={enviando}
             className="h-11 border-white/10 bg-zinc-900/80 text-zinc-100"
           />
-          <p className="text-[10px] text-zinc-600">
-            {esCcoLectura
-              ? 'Crea cuenta lista para usar: solo verá CCO (sin editar ni otros módulos).'
-              : 'Con contraseña se crea el usuario al momento; sin ella se manda invitación por correo (solo si aún no existe).'}
-          </p>
         </div>
-        {!embebido ? (
-          <div className="space-y-2">
-            <Label htmlFor="invitar-entidad" className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-              Entidad / patrono *
-            </Label>
-            <select
-              id="invitar-entidad"
-              value={entidadId}
-              onChange={(e) => setEntidadId(e.target.value)}
-              disabled={enviando || cargandoEntidades}
-              className={campoClase}
-            >
-              <option value="">{cargandoEntidades ? 'Cargando…' : 'Seleccionar entidad'}</option>
-              {entidades.map((en) => (
-                <option key={en.id} value={en.id}>
-                  {en.nombre}
-                  {en.rif ? ` · ${en.rif}` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-        ) : null}
-      </div>
 
-      <div className="space-y-3 rounded-xl border border-white/10 bg-white/[0.02] p-4">
-        <label className="flex items-center gap-2 text-sm font-semibold text-zinc-200">
-          <input
-            type="checkbox"
-            checked={conTelegram}
-            onChange={(e) => setConTelegram(e.target.checked)}
-            className="rounded border-zinc-600"
-          />
-          <MessageCircle className="h-4 w-4 text-emerald-400" />
-          También acceso al bot Telegram
-        </label>
-        {conTelegram ? (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label className="text-xs uppercase text-zinc-500">Chat ID *</Label>
-              <Input
-                placeholder="Ej. 123456789"
-                value={telegramChatId}
-                onChange={(e) => setTelegramChatId(e.target.value)}
-                disabled={enviando}
-                className="h-10 border-white/10 bg-zinc-900/80"
-              />
-              <p className="text-[10px] text-zinc-600">
-                El usuario puede obtenerlo con bots como @userinfobot.
-              </p>
+        <div className="space-y-3">
+          <label className="flex items-center gap-2 text-sm font-semibold text-zinc-200">
+            <input
+              type="checkbox"
+              checked={conTelegram}
+              onChange={(e) => setConTelegram(e.target.checked)}
+              className="rounded border-zinc-600"
+            />
+            <MessageCircle className="h-4 w-4 text-emerald-400" />
+            Acceso al bot Telegram
+          </label>
+          {conTelegram ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label className="text-xs uppercase text-zinc-500">Chat ID *</Label>
+                <Input
+                  placeholder="Ej. 123456789"
+                  value={telegramChatId}
+                  onChange={(e) => setTelegramChatId(e.target.value)}
+                  disabled={enviando}
+                  className="h-10 border-white/10 bg-zinc-900/80"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs uppercase text-zinc-500">Cargo (opcional)</Label>
+                <Input
+                  placeholder="Comprador, PM…"
+                  value={cargo}
+                  onChange={(e) => setCargo(e.target.value)}
+                  disabled={enviando}
+                  className="h-10 border-white/10 bg-zinc-900/80"
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label className="text-xs uppercase text-zinc-500">Cargo (opcional)</Label>
-              <Input
-                placeholder="Comprador, PM…"
-                value={cargo}
-                onChange={(e) => setCargo(e.target.value)}
-                disabled={enviando}
-                className="h-10 border-white/10 bg-zinc-900/80"
-              />
-            </div>
-          </div>
-        ) : null}
+          ) : null}
+        </div>
       </div>
+    </details>
+  );
 
+  const campos = (
+    <>
+      {camposEsenciales}
+      {opcionesAvanzadas}
       {ultimoOk ? (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-emerald-500/25 bg-emerald-950/25 px-3 py-2 text-sm text-emerald-100/90">
           <ShieldCheck className="h-4 w-4 text-emerald-400" />
@@ -369,7 +378,7 @@ export default function InvitarUsuarioAcceso({
           <div>
             <CardTitle className="text-lg font-bold tracking-tight text-white">Correo</CardTitle>
             <CardDescription className="mt-1 text-zinc-500">
-              Correo usuario, nombre, apellido y rol. Si ya tiene cuenta, se redefine el acceso.
+              Correo, nombre, apellido y rol. Si ya tiene cuenta, se redefine el acceso.
             </CardDescription>
           </div>
         </div>

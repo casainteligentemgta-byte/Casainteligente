@@ -85,8 +85,8 @@ export default function EquipoEntidadPanel({ entidadId, entidadNombre }: Props) 
               const uid = f.usuario_id ?? f.user_id;
               return (
                 <li key={f.id} className="flex items-center justify-between gap-2 px-3 py-2.5 text-sm">
-                  <span className="truncate font-mono text-xs text-zinc-400">
-                    {uid ? `${uid.slice(0, 8)}…` : f.id.slice(0, 8)}
+                  <span className="truncate text-xs text-zinc-400" title={uid ?? f.id}>
+                    {uid ? `Usuario ${uid.slice(0, 8)}…` : `Asignación ${f.id.slice(0, 8)}`}
                   </span>
                   <Badge className="bg-[#FF9500]/15 text-[#FFD60A]">{f.rol}</Badge>
                 </li>
