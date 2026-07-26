@@ -103,7 +103,7 @@ export async function uploadMeetingAudio(
     if (createError || !created?.id) {
       throw new Error(
         createError?.message ||
-          'No se pudo crear el registro en reuniones (¿migración 297 aplicada?)',
+          'No se pudo crear el registro en reuniones (¿migración 299 aplicada?)',
       );
     }
     reunionId = created.id as string;

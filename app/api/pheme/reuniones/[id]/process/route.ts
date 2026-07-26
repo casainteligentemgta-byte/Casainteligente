@@ -67,7 +67,7 @@ export async function POST(req: Request, context: RouteContext) {
       msg.includes('OPENAI_API_KEY') || msg.includes('GROQ_API_KEY')
         ? ' Configure las claves de API en el entorno.'
         : msg.includes('migración') || msg.includes('reuniones')
-          ? ' Ejecute la migración 297_ci_pheme_pipeline_embeddings.sql.'
+          ? ' Ejecute la migración 299_ci_pheme_pipeline_embeddings.sql.'
           : '';
     return NextResponse.json({ error: `${msg}${hint}` }, { status: 500 });
   }

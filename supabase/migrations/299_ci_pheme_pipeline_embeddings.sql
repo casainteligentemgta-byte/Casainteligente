@@ -1,4 +1,4 @@
--- Migración 297 (antes 293 en PR #166; 293 ya es psique en main).
+-- Migración 299 (pipeline Pheme embeddings; 297/298 ya ocupadas en main).
 -- Pheme: reuniones, análisis estructurado y embeddings (pgvector).
 -- Bucket privado: reuniones-audio
 -- Embedding model: OpenAI text-embedding-3-small (1536 dims)
