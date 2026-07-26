@@ -14,8 +14,6 @@ export default function ControlObraEquipoPage({ params }: Props) {
 
   return (
     <div className="space-y-8">
-      <p className="text-sm text-zinc-500">Asigna roles.</p>
-
       <ProyectoEquipoAccesoPanel proyectoId={proyectoId} />
       <ProyectoNominaRolesPanel proyectoId={proyectoId} />
       <ProyectoEquipoAlertasPanel proyectoId={proyectoId} />

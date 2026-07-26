@@ -35,6 +35,7 @@ export default function InvitarUsuarioAcceso({
   const supabase = useMemo(() => createClient(), []);
   const [email, setEmail] = useState('');
   const [nombre, setNombre] = useState('');
+  const [apellido, setApellido] = useState('');
   const [rol, setRol] = useState<string>('comprador');
   const [password, setPassword] = useState('');
   const [entidadId, setEntidadId] = useState(entidadIdInicial ?? '');
@@ -113,6 +114,7 @@ export default function InvitarUsuarioAcceso({
         body: JSON.stringify({
           email: emailTrim,
           nombre: nombre.trim() || undefined,
+          apellido: apellido.trim() || undefined,
           rol,
           entidadId,
           invitar_web: !password.trim(),
@@ -127,10 +129,11 @@ export default function InvitarUsuarioAcceso({
         ok?: boolean;
         mensaje?: string;
         invite_enviado?: boolean;
+        ya_existia?: boolean;
       };
 
       if (!res.ok) {
-        toast.error(data.error || 'No se pudo invitar al usuario');
+        toast.error(data.error || 'No se pudo guardar el acceso');
         return;
       }
 
@@ -140,12 +143,13 @@ export default function InvitarUsuarioAcceso({
       setUltimoOk(data.mensaje || `Listo: ${emailTrim}`);
       setEmail('');
       setNombre('');
+      setApellido('');
       setPassword('');
       setTelegramChatId('');
       setCargo('');
       onListo?.();
     } catch {
-      toast.error('Error de red al invitar');
+      toast.error('Error de red al guardar el acceso');
     } finally {
       setEnviando(false);
     }
@@ -153,10 +157,10 @@ export default function InvitarUsuarioAcceso({
 
   const campos = (
     <>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2 sm:col-span-2">
+      <div className="grid gap-4">
+        <div className="space-y-2">
           <Label htmlFor="invitar-email" className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-            Correo *
+            Correo Usuario
           </Label>
           <Input
             id="invitar-email"
@@ -175,7 +179,7 @@ export default function InvitarUsuarioAcceso({
           </Label>
           <Input
             id="invitar-nombre"
-            placeholder="Nombre para mostrar"
+            placeholder="Nombre"
             value={nombre}
             onChange={(e) => setNombre(e.target.value)}
             disabled={enviando}
@@ -183,8 +187,21 @@ export default function InvitarUsuarioAcceso({
           />
         </div>
         <div className="space-y-2">
+          <Label htmlFor="invitar-apellido" className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            Apellido
+          </Label>
+          <Input
+            id="invitar-apellido"
+            placeholder="Apellido"
+            value={apellido}
+            onChange={(e) => setApellido(e.target.value)}
+            disabled={enviando}
+            className="h-11 border-white/10 bg-zinc-900/80 text-zinc-100"
+          />
+        </div>
+        <div className="space-y-2">
           <Label htmlFor="invitar-rol" className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-            Rol *
+            Rol
           </Label>
           <select
             id="invitar-rol"
@@ -199,8 +216,12 @@ export default function InvitarUsuarioAcceso({
               </option>
             ))}
           </select>
+          <p className="text-[10px] text-zinc-600">
+            Si el correo ya tiene cuenta autorizada, al reingresarlo aquí o en otra obra se
+            redefine el rol de esta entidad.
+          </p>
         </div>
-        <div className="space-y-2 sm:col-span-2">
+        <div className="space-y-2">
           <Label
             htmlFor="invitar-password"
             className="text-xs font-semibold uppercase tracking-wide text-zinc-500"
@@ -222,11 +243,11 @@ export default function InvitarUsuarioAcceso({
           <p className="text-[10px] text-zinc-600">
             {esCcoLectura
               ? 'Crea cuenta lista para usar: solo verá CCO (sin editar ni otros módulos).'
-              : 'Con contraseña se crea el usuario al momento; sin ella se manda invitación por correo.'}
+              : 'Con contraseña se crea el usuario al momento; sin ella se manda invitación por correo (solo si aún no existe).'}
           </p>
         </div>
         {!embebido ? (
-          <div className="space-y-2 sm:col-span-2">
+          <div className="space-y-2">
             <Label htmlFor="invitar-entidad" className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
               Entidad / patrono *
             </Label>
@@ -311,12 +332,12 @@ export default function InvitarUsuarioAcceso({
       {enviando ? (
         <>
           <Loader2 className="h-4 w-4 animate-spin" />
-          Invitando…
+          Guardando…
         </>
       ) : (
         <>
           <Mail className="h-4 w-4" />
-          Enviar invitación
+          Guardar acceso
         </>
       )}
     </Button>
@@ -346,12 +367,9 @@ export default function InvitarUsuarioAcceso({
             <UserPlus className="h-5 w-5 text-[#FFD60A]" aria-hidden />
           </div>
           <div>
-            <CardTitle className="text-lg font-bold tracking-tight text-white">
-              Invitar usuario (web + bot)
-            </CardTitle>
+            <CardTitle className="text-lg font-bold tracking-tight text-white">Correo</CardTitle>
             <CardDescription className="mt-1 text-zinc-500">
-              Invita por correo o crea login/contraseña (p. ej. rol «CCO solo visualización»), asigna
-              entidad y opcionalmente Telegram.
+              Correo usuario, nombre, apellido y rol. Si ya tiene cuenta, se redefine el acceso.
             </CardDescription>
           </div>
         </div>

@@ -10,7 +10,6 @@ import {
   Users,
   UserCog,
 } from 'lucide-react';
-import AsignarRolUsuario from '@/components/configuracion/AsignarRolUsuario';
 import InvitarUsuarioAcceso from '@/components/configuracion/InvitarUsuarioAcceso';
 import { Badge } from '@/components/ui/badge';
 import { PERMISOS, ROLES_EMPRESA } from '@/lib/auth/permisosCatalogo';
@@ -148,17 +147,9 @@ export default function EquipoPermisosClient() {
             <section>
               <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-white">
                 <Users size={16} />
-                Invitar y dar acceso
+                Correo
               </h2>
               <InvitarUsuarioAcceso onListo={() => void cargar()} />
-            </section>
-
-            <section>
-              <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-white">
-                <UserCog size={16} />
-                Solo asignar rol (usuario ya en Auth)
-              </h2>
-              <AsignarRolUsuario onAsignado={() => void cargar()} />
             </section>
 
             {filasRoles.length > 0 ? (
