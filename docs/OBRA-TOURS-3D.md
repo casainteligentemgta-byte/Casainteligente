@@ -6,20 +6,33 @@ Video (celular/dron) → reconstrucción 3D → **modo piloto (joystick)** o **e
 
 `/proyectos/modulo/[id]/control-obra/tours`
 
-## Variables de entorno
+## Variables de entorno (app)
 
 | Variable | Uso |
 |----------|-----|
-| `OBRA_TOURS_WORKER_URL` | Base del worker GPU (`POST /v1/reconstruct`) |
+| `OBRA_TOURS_WORKER_URL` | Base del worker (`POST /v1/reconstruct`, `GET /health`) |
 | `OBRA_TOURS_WORKER_TOKEN` | Bearer opcional hacia el worker |
 | `ALLOW_OBRA_TOURS_SIMULAR=1` | Permite simular modelo sin worker |
 | `NEXT_PUBLIC_APP_URL` | Origen para `callback_url` del worker |
 
 Sin worker, el job queda en `encolado` con `worker_payload.stub=true` y la UI ofrece **Simular modelo**.
 
+Diagnóstico: `GET /api/proyectos/tours/worker-health`.
+
+## Worker real
+
+Código: `workers/obra-tours/` (ver su README).
+
+1. Levanta el worker (`npm run obra-tours:worker` o Docker).
+2. Configura en la app `OBRA_TOURS_WORKER_URL` + token.
+3. El worker necesita Supabase (`NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`) para subir el `.glb`.
+4. El worker debe poder llamar al callback público de la app.
+
+Pipeline por defecto: `frames_glb` (ffmpeg + GLB + Storage). Opcional: `OBRA_TOURS_PIPELINE=colmap` en máquina con COLMAP/CUDA.
+
 ## Contrato worker
 
-`POST {OBRA_TOURS_WORKER_URL}/v1/reconstruct`
+`POST {OBRA_TOURS_WORKER_URL}/v1/reconstruct` → `202 Accepted`
 
 ```json
 {
@@ -34,6 +47,10 @@ Sin worker, el job queda en `encolado` con `worker_payload.stub=true` y la UI of
 ```
 
 Callback: `POST /api/proyectos/tours/worker-callback` con header `X-Obra-Tours-Token`.
+
+Estados de callback: `procesando` | `modelo_listo` | `error`.
+
+Al aceptar el job, la app marca el registro como `procesando` (progreso ~5%) hasta que el worker reporta avances.
 
 ## DJI Goggles
 

@@ -38,6 +38,9 @@
     "clientes:backfill-customer": "node scripts/backfill-proyectos-customer-id.mjs",
     "verify:ci-empleados": "node scripts/verify-ci-empleados.mjs",
     "cco:import-onedrive": "npx tsx scripts/cco-import-onedrive.ts",
+    "obra-tours:worker": "npm --prefix workers/obra-tours run start",
+    "obra-tours:worker:dev": "npm --prefix workers/obra-tours run dev",
+    "obra-tours:worker:test": "npm --prefix workers/obra-tours test",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio"
