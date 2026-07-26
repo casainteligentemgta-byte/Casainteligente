@@ -1,7 +1,7 @@
 import Link from 'next/link';
-import { ClipboardList, FileText, ScrollText, UserRound, Users } from 'lucide-react';
+import { ClipboardList, FileText, HardHat, ScrollText, UserRound, Users } from 'lucide-react';
 import { hrefListaContratosExpress } from '@/lib/talento/hrefListaContratosExpress';
-import { hrefSolicitudPersonalObrero } from '@/lib/rrhh/hrefSolicitudPersonal';
+import { hrefRrhhHub, hrefSolicitudPersonalObrero } from '@/lib/rrhh/hrefSolicitudPersonal';
 
 type Props = {
   proyectoModuloId?: string | null;
@@ -10,9 +10,11 @@ type Props = {
 
 /** Enlaces rápidos RRHH (una sola fila en hub y subpáginas). */
 export default function RrhhSubnavEnlaces({ proyectoModuloId = null, className = '' }: Props) {
+  const pid = proyectoModuloId?.trim() || null;
   const hrefSolicitud = hrefSolicitudPersonalObrero({
-    proyectoModuloId: proyectoModuloId?.trim() || null,
+    proyectoModuloId: pid,
   });
+  const hrefEquipoRec = `${hrefRrhhHub({ proyectoModuloId: pid })}#equipo-recomendado`;
 
   return (
     <nav
@@ -25,6 +27,13 @@ export default function RrhhSubnavEnlaces({ proyectoModuloId = null, className =
       >
         <ClipboardList className="h-4 w-4" aria-hidden />
         Solicitud de personal obrero
+      </Link>
+      <Link
+        href={hrefEquipoRec}
+        className="inline-flex items-center gap-2 rounded-xl border border-sky-500/40 bg-sky-950/45 px-3 py-2 text-sm font-semibold text-sky-100 transition hover:bg-sky-900/55"
+      >
+        <HardHat className="h-4 w-4 shrink-0" aria-hidden />
+        Equipo recomendado
       </Link>
       <Link
         href="/rrhh/reclutamiento"

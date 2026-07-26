@@ -84,13 +84,18 @@ function CascosIdeal({ ideal }: { ideal: Record<PerfilDisc, number> }) {
 }
 
 export type SugerenciaCuadrillaProps = {
-  nombreObra: string;
-  ubicacionObra: string;
+  nombreObra?: string;
+  ubicacionObra?: string;
   /** UUID módulo (reservado para futuros filtros por asignación). */
   proyectoModuloId?: string;
+  className?: string;
 };
 
-export default function SugerenciaCuadrilla({ nombreObra, ubicacionObra }: SugerenciaCuadrillaProps) {
+export default function SugerenciaCuadrilla({
+  nombreObra = 'Obra',
+  ubicacionObra = '',
+  className = '',
+}: SugerenciaCuadrillaProps) {
   const supabase = useMemo(() => createClient(), []);
   const [fase, setFase] = useState<FaseObra>('acabados');
   const [pool, setPool] = useState<EmpleadoRow[]>([]);
@@ -155,7 +160,7 @@ export default function SugerenciaCuadrilla({ nombreObra, ubicacionObra }: Suger
 
   return (
     <section
-      className="rounded-2xl border border-white/10 bg-gradient-to-b from-zinc-900/90 to-black/40 p-5 shadow-[0_0_40px_rgba(0,122,255,0.06)] backdrop-blur-xl"
+      className={`rounded-2xl border border-white/10 bg-gradient-to-b from-zinc-900/90 to-black/40 p-5 shadow-[0_0_40px_rgba(0,122,255,0.06)] backdrop-blur-xl ${className}`.trim()}
       aria-labelledby="sugerencia-cuadrilla-titulo"
     >
       <div className="flex flex-wrap items-start justify-between gap-4 border-b border-white/10 pb-4">

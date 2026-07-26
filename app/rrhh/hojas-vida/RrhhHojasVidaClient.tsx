@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from 'react';
 import ListaEmpleosHojasVida from '@/app/rrhh/hojas-vida/components/ListaEmpleosHojasVida';
 import RrhhSubnavEnlaces from '@/components/rrhh/RrhhSubnavEnlaces';
 import ResumenObrerosProyectoModulo from '@/components/proyectos/ResumenObrerosProyectoModulo';
+import SugerenciaCuadrilla from '@/components/proyectos/SugerenciaCuadrilla';
 import {
   entidadIdPredominante,
   loadProyectosModuloIntegralPorEntidad,
@@ -30,6 +31,7 @@ export default function RrhhHojasVidaClient() {
   const [entidadIdAlcance, setEntidadIdAlcance] = useState<string | null>(null);
   const [entidadNombreAlcance, setEntidadNombreAlcance] = useState<string | null>(null);
   const [proyectoIdsEntidadTodos, setProyectoIdsEntidadTodos] = useState<string[]>([]);
+  const [ubicacionObraActiva, setUbicacionObraActiva] = useState('');
 
   const mostrarOpcionTodos = proyectosModulo.length > 1;
 
@@ -133,6 +135,34 @@ export default function RrhhHojasVidaClient() {
   const proyectoEmpleosId = alcanceObra || proyectoModuloIdPrincipal;
   const mostrarListaEmpleos = Boolean(proyectoEmpleosId) && proyectoModuloIdsActivos.length <= 1;
 
+  const proyectoActivo = useMemo(
+    () => proyectosModulo.find((p) => p.id === proyectoEmpleosId) ?? proyectosModulo[0] ?? null,
+    [proyectosModulo, proyectoEmpleosId],
+  );
+
+  useEffect(() => {
+    const pid = proyectoEmpleosId?.trim();
+    if (!pid) {
+      setUbicacionObraActiva('');
+      return;
+    }
+    let alive = true;
+    void (async () => {
+      const { data } = await supabase
+        .from('ci_proyectos')
+        .select('ubicacion_texto')
+        .eq('id', pid)
+        .maybeSingle();
+      if (!alive) return;
+      setUbicacionObraActiva(
+        String((data as { ubicacion_texto?: string | null } | null)?.ubicacion_texto ?? '').trim(),
+      );
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [supabase, proyectoEmpleosId]);
+
   return (
     <div className="mx-auto max-w-6xl px-4 pb-28 pt-6">
       <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Casa Inteligente</p>
@@ -190,6 +220,14 @@ export default function RrhhHojasVidaClient() {
               etiquetaTodos: etiquetaTodosSelector,
             }}
           />
+
+          <div id="equipo-recomendado" className="mt-8 scroll-mt-24">
+            <SugerenciaCuadrilla
+              nombreObra={proyectoActivo?.nombre ?? 'Obra'}
+              ubicacionObra={ubicacionObraActiva}
+              proyectoModuloId={proyectoEmpleosId || undefined}
+            />
+          </div>
         </div>
       ) : (
         <p className="mb-8 rounded-xl border border-amber-500/25 bg-amber-950/20 px-4 py-3 text-sm text-amber-100/90">
