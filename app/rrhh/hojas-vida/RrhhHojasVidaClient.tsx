@@ -3,10 +3,10 @@
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import { Briefcase, UserCog } from 'lucide-react';
+import { Briefcase } from 'lucide-react';
 import ListaEmpleosHojasVida from '@/app/rrhh/hojas-vida/components/ListaEmpleosHojasVida';
 import ModalNuevaVacante from '@/app/proyectos/modulo/[id]/components/ModalNuevaVacante';
-import RrhhSubnavEnlaces from '@/components/rrhh/RrhhSubnavEnlaces';
+import RrhhSubnavEnlaces, { rrhhSubnavBtnClass } from '@/components/rrhh/RrhhSubnavEnlaces';
 import ResumenObrerosProyectoModulo from '@/components/proyectos/ResumenObrerosProyectoModulo';
 import SugerenciaCuadrilla from '@/components/proyectos/SugerenciaCuadrilla';
 import CuadroNominaContratados from '@/components/nomina/CuadroNominaContratados';
@@ -16,7 +16,7 @@ import {
   loadProyectosSmartRrhhHojasVida,
   type ProyectoModuloIntegral,
 } from '@/lib/proyectos/proyectosUnificados';
-import { hrefGestionPersonalSolicitados, hrefSolicitudPersonalObrero } from '@/lib/rrhh/hrefSolicitudPersonal';
+import { hrefSolicitudPersonalObrero } from '@/lib/rrhh/hrefSolicitudPersonal';
 import { guardarProyectoRrhhContexto } from '@/lib/rrhh/proyectoRrhhContexto';
 import { createClient } from '@/lib/supabase/client';
 
@@ -157,37 +157,32 @@ export default function RrhhHojasVidaClient() {
         Personal de obra: vacantes, cuadro, reclutamiento y nómina del proyecto seleccionado.
       </p>
 
-      <header className="mb-6 mt-6 space-y-3">
+      <header className="mb-6 mt-6">
         <RrhhSubnavEnlaces
           proyectoModuloId={proyectoModuloIdFiltroEnlaces ?? (proyectoModuloIdPrincipal || null)}
+          accionesObra={
+            puedeAccionesObra ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setVacanteOpen(true)}
+                  className={`${rrhhSubnavBtnClass} border-[#FF9500]/45 bg-gradient-to-r from-[#FFD60A]/15 to-[#FF9500]/15 text-[#FFD60A] hover:from-[#FFD60A]/25 hover:to-[#FF9500]/25`}
+                >
+                  <Briefcase className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  <span className="truncate">Nueva vacante</span>
+                </button>
+                {obraSeleccionada ? (
+                  <Link
+                    href={`/proyectos/modulo/${encodeURIComponent(obraUnicaId)}`}
+                    className={`${rrhhSubnavBtnClass} border-white/15 bg-white/5 text-zinc-300 hover:bg-white/10`}
+                  >
+                    <span className="truncate">Ficha del proyecto</span>
+                  </Link>
+                ) : null}
+              </>
+            ) : null
+          }
         />
-        {puedeAccionesObra ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setVacanteOpen(true)}
-              className="inline-flex items-center gap-2 rounded-xl border border-[#FF9500]/45 bg-gradient-to-r from-[#FFD60A]/15 to-[#FF9500]/15 px-3 py-2 text-xs font-semibold text-[#FFD60A] hover:from-[#FFD60A]/25 hover:to-[#FF9500]/25"
-            >
-              <Briefcase className="h-3.5 w-3.5" aria-hidden />
-              Nueva vacante
-            </button>
-            <Link
-              href={hrefGestionPersonalSolicitados({ proyectoModuloId: obraUnicaId })}
-              className="inline-flex items-center gap-2 rounded-xl border border-violet-500/40 bg-violet-950/40 px-3 py-2 text-xs font-semibold text-violet-100 hover:bg-violet-900/55"
-            >
-              <UserCog className="h-3.5 w-3.5" aria-hidden />
-              Gestión laboral
-            </Link>
-            {obraSeleccionada ? (
-              <Link
-                href={`/proyectos/modulo/${encodeURIComponent(obraUnicaId)}`}
-                className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-white/10"
-              >
-                Ficha del proyecto
-              </Link>
-            ) : null}
-          </div>
-        ) : null}
       </header>
 
       {cargandoProyectos ? (
