@@ -8,6 +8,7 @@ const BUCKET_MIGRATIONS: Record<string, string> = {
   'ci-proyectos-media': '038_ci_proyectos_storage_media.sql',
   'product-media': '012_products_manual_storage.sql',
   productos: '018_storage_bucket_productos.sql',
+  'reuniones-audio': '299_ci_pheme_pipeline_embeddings.sql',
 };
 
 /**
