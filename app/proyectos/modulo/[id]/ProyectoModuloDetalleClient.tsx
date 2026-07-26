@@ -7,16 +7,6 @@ import { createClient } from '@/lib/supabase/client';
 import { uploadProjectAsset } from '@/lib/supabase/project-media';
 
 import ResumenObrerosProyectoModulo from '@/components/proyectos/ResumenObrerosProyectoModulo';
-import InventarioEquiposProyecto from '@/components/proyectos/InventarioEquiposProyecto';
-import {
-  PROYECTO_EQUIPO_SELECT,
-  PROYECTO_EQUIPO_SELECT_LEGACY,
-  etiquetaCategoriaEquipo,
-  isMaquinariaColumnMissing,
-  mapProyectoEquipoRow,
-  normalizarCategoriaEquipo,
-  type ProyectoEquipoRow,
-} from '@/lib/proyectos/proyectoEquipos';
 import ModalNuevaVacante from './components/ModalNuevaVacante';
 import GenerarContratoDelegadoModal from '@/components/proyectos/GenerarContratoDelegadoModal';
 import ProyectoAdLogisticaBanner from '@/components/proyectos/ProyectoAdLogisticaBanner';
@@ -95,8 +85,6 @@ type EntidadOpt = {
   registro_mercantil?: unknown;
 };
 
-type Equipo = ProyectoEquipoRow;
-
 type Archivo = {
   id: string;
   tipo: string;
@@ -132,7 +120,6 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [proyecto, setProyecto] = useState<Proyecto | null>(null);
-  const [equipos, setEquipos] = useState<Equipo[]>([]);
   const [archivos, setArchivos] = useState<Archivo[]>([]);
   const [visitas, setVisitas] = useState<Visita[]>([]);
 
@@ -157,12 +144,6 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
 
   const [eaTitulo, setEaTitulo] = useState('');
   const [eaTipo, setEaTipo] = useState('foto_proyecto');
-  const [trabajadorNombre, setTrabajadorNombre] = useState('');
-  const [trabajadorTelefono, setTrabajadorTelefono] = useState('');
-  const [copiedKit, setCopiedKit] = useState(false);
-  const [generandoSugerencias, setGenerandoSugerencias] = useState(false);
-  const [sugerenciasIA, setSugerenciasIA] = useState<string | null>(null);
-  const [sugerenciasDesdeGemini, setSugerenciasDesdeGemini] = useState(false);
   const [vacanteModalOpen, setVacanteModalOpen] = useState(false);
   const [contratoAdModalOpen, setContratoAdModalOpen] = useState(false);
   const {
@@ -227,14 +208,9 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
     setLoading(true);
     setError(null);
     try {
-      const [p, e0, a, v] = await withTimeout(
+      const [p, a, v] = await withTimeout(
         Promise.all([
           supabase.from('ci_proyectos').select('*').eq('id', id).maybeSingle(),
-          supabase
-            .from('ci_proyecto_equipos')
-            .select(PROYECTO_EQUIPO_SELECT)
-            .eq('proyecto_id', id)
-            .order('created_at', { ascending: false }),
           supabase
             .from('ci_proyecto_archivos')
             .select('id,tipo,titulo,public_url,created_at')
@@ -248,35 +224,20 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
         ]),
         LOAD_TIMEOUT_MS,
       );
-      let equiposData: unknown[] | null = e0.data;
-      let equiposErr = e0.error;
-      if (equiposErr && isMaquinariaColumnMissing(equiposErr.message)) {
-        const legacy = await supabase
-          .from('ci_proyecto_equipos')
-          .select(PROYECTO_EQUIPO_SELECT_LEGACY)
-          .eq('proyecto_id', id)
-          .order('created_at', { ascending: false });
-        equiposData = legacy.data;
-        equiposErr = legacy.error;
-      }
       if (p.error || !p.data) {
         setProyecto(null);
-        setEquipos([]);
         setArchivos([]);
         setVisitas([]);
         setError(p.error?.message ?? 'Proyecto no encontrado.');
         return;
       }
       setProyecto(p.data as Proyecto);
-      setEquipos((equiposData ?? []).map((r) => mapProyectoEquipoRow(r as Record<string, unknown>)));
       setArchivos((a.data ?? []) as Archivo[]);
       setVisitas((v.data ?? []) as Visita[]);
-      if (equiposErr?.message) setError((prev) => prev ?? equiposErr.message);
       if (a.error?.message) setError((prev) => prev ?? a.error.message);
       if (v.error?.message) setError((prev) => prev ?? v.error.message);
     } catch (err) {
       setProyecto(null);
-      setEquipos([]);
       setArchivos([]);
       setVisitas([]);
       setError(err instanceof Error ? err.message : 'Error cargando el proyecto.');
@@ -386,7 +347,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
   async function borrarProyectoActual() {
     if (!proyecto) return;
     const ok = window.confirm(
-      `¿Eliminar permanentemente el proyecto «${proyecto.nombre}»?\n\nEsta acción no se puede deshacer. Se eliminan equipos, archivos y visitas vinculados.`,
+      `¿Eliminar permanentemente el proyecto «${proyecto.nombre}»?\n\nEsta acción no se puede deshacer. Se eliminan archivos y visitas vinculados.`,
     );
     if (!ok) return;
     setBorrandoProyecto(true);
@@ -518,59 +479,6 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
     void load();
   }
 
-  const textoKitRecoleccion = useMemo(() => {
-    if (!proyecto) return '';
-    const encabezado = [
-      `Orden de recoleccion de herramientas`,
-      `Proyecto: ${proyecto.nombre}`,
-      `Ubicacion: ${proyecto.ubicacion_texto}`,
-      trabajadorNombre.trim() ? `Trabajador asignado: ${trabajadorNombre.trim()}` : null,
-      '',
-      'Lista de inventario a recolectar:',
-    ]
-      .filter(Boolean)
-      .join('\n');
-
-    const items = equipos.length
-      ? equipos
-          .map((e, idx) => {
-            const cat = etiquetaCategoriaEquipo(e.categoria);
-            const detalle = [e.marca, e.modelo].filter(Boolean).join(' ');
-            let extra = '';
-            if (normalizarCategoriaEquipo(e.categoria) === 'maquinaria_alquilada') {
-              const partes = [
-                e.arrendatario ? `Arrendatario: ${e.arrendatario}` : null,
-                e.arrendatario_rif ? `RIF: ${e.arrendatario_rif}` : null,
-                e.fecha_arriendo_inicio ? `Desde: ${e.fecha_arriendo_inicio}` : null,
-                e.costo_arriendo != null ? `Costo: ${e.moneda_arriendo ?? 'USD'} ${e.costo_arriendo}` : null,
-              ].filter(Boolean);
-              if (partes.length) extra = ` · ${partes.join(' · ')}`;
-            }
-            return `${idx + 1}. [${cat}] ${e.nombre_equipo} - Cantidad: ${e.cantidad}${detalle ? ` (${detalle})` : ''}${e.serial ? ` - Serial: ${e.serial}` : ''}${extra}`;
-          })
-          .join('\n')
-      : 'Sin equipos cargados.';
-
-    return `${encabezado}\n${items}\n\nConfirmar disponibilidad y salida de almacen.`;
-  }, [proyecto, equipos, trabajadorNombre]);
-
-  async function copiarKit() {
-    if (!textoKitRecoleccion) return;
-    try {
-      await navigator.clipboard.writeText(textoKitRecoleccion);
-      setCopiedKit(true);
-      setTimeout(() => setCopiedKit(false), 1800);
-    } catch {
-      setError('No se pudo copiar la orden al portapapeles.');
-    }
-  }
-
-  const waLink = useMemo(() => {
-    const telefono = trabajadorTelefono.replace(/\D+/g, '');
-    if (!telefono || !textoKitRecoleccion) return null;
-    return `https://wa.me/${telefono}?text=${encodeURIComponent(textoKitRecoleccion)}`;
-  }, [trabajadorTelefono, textoKitRecoleccion]);
-
   const nombrePatronoVista = useMemo(() => {
     const eid = proyecto?.entidad_id;
     if (!eid) return null;
@@ -647,45 +555,6 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
       </>
     );
   }, [proyecto, id, rrhhVacantesTick, tabUrl, tabSolicitados]);
-
-  async function generarSugerenciasIA() {
-    if (!proyecto) return;
-    setGenerandoSugerencias(true);
-    setSugerenciasIA(null);
-    try {
-      const res = await fetch('/api/proyectos/sugerir-kit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          proyecto: {
-            nombre: proyecto.nombre,
-            ubicacion: proyecto.ubicacion_texto,
-            observaciones: proyecto.observaciones,
-          },
-          inventarioActual: equipos.map((e) => ({
-            nombre: e.nombre_equipo,
-            categoria: normalizarCategoriaEquipo(e.categoria),
-            marca: e.marca,
-            modelo: e.modelo,
-            cantidad: e.cantidad,
-            arrendatario: e.arrendatario,
-            costo_arriendo: e.costo_arriendo,
-          })),
-        }),
-      });
-      const data = (await res.json()) as { texto?: string; desdeGemini?: boolean; error?: string };
-      if (!res.ok) {
-        setError(data.error ?? 'No se pudieron generar sugerencias.');
-        return;
-      }
-      setSugerenciasIA(data.texto ?? 'Sin contenido.');
-      setSugerenciasDesdeGemini(Boolean(data.desdeGemini));
-    } catch {
-      setError('Error de red al consultar sugerencias.');
-    } finally {
-      setGenerandoSugerencias(false);
-    }
-  }
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] px-4 pb-28 pt-4">
@@ -1025,81 +894,19 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
               <>
             <div className="mt-6 grid gap-6 lg:grid-cols-2">
               <div className="lg:col-span-2">
-                <InventarioEquiposProyecto
-                  proyectoId={id}
-                  equipos={equipos}
-                  onRefresh={() => void load()}
-                  onError={setError}
-                  secciones={['equipo']}
-                />
+                <ControlPlanosObra proyectoId={id} className="mb-2" />
               </div>
-
-              <section className="rounded-2xl border border-white/10 bg-zinc-900/70 p-5 shadow-lg backdrop-blur-xl lg:col-span-2">
-                <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
-                  <p className="text-xs font-bold uppercase text-zinc-400">Transmision al trabajador</p>
-                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                    <input
-                      value={trabajadorNombre}
-                      onChange={(e) => setTrabajadorNombre(e.target.value)}
-                      placeholder="Nombre del trabajador"
-                      className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-sky-500/40"
-                    />
-                    <input
-                      value={trabajadorTelefono}
-                      onChange={(e) => setTrabajadorTelefono(e.target.value)}
-                      placeholder="WhatsApp (ej: 58412...)"
-                      className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-sky-500/40"
-                    />
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button onClick={() => void copiarKit()} className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-white/10">
-                      {copiedKit ? 'Copiado' : 'Copiar orden de recoleccion'}
-                    </button>
-                    <a
-                      href={waLink ?? '#'}
-                      target="_blank"
-                      rel="noreferrer"
-                      className={`rounded-xl px-3 py-2 text-xs font-semibold text-white ${waLink ? 'bg-emerald-600 hover:bg-emerald-500' : 'pointer-events-none bg-zinc-600'}`}
-                    >
-                      Enviar por WhatsApp
-                    </a>
-                    <button
-                      onClick={() => void generarSugerenciasIA()}
-                      disabled={generandoSugerencias}
-                      className="rounded-xl bg-indigo-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
-                    >
-                      {generandoSugerencias ? 'Analizando...' : 'Sugerir herramientas e insumos (IA)'}
-                    </button>
-                  </div>
-                  <textarea
-                    value={textoKitRecoleccion}
-                    readOnly
-                    rows={7}
-                    className="mt-3 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-zinc-300"
-                  />
-                  {sugerenciasIA ? (
-                    <div className="mt-3 rounded-xl border border-indigo-500/25 bg-indigo-950/40 p-3">
-                      <p className="text-xs font-semibold text-indigo-300">
-                        Sugerencia inteligente ({sugerenciasDesdeGemini ? 'Gemini' : 'modo local'})
-                      </p>
-                      <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-200">{sugerenciasIA}</p>
-                    </div>
-                  ) : null}
-                </div>
-              </section>
-
-              <ControlPlanosObra proyectoId={id} className="mb-6" />
               <MetronPlanosClient
                 proyectoId={id}
                 nombreObra={proyecto?.nombre}
-                className="mb-6"
+                className="mb-6 lg:col-span-2"
               />
 
               <SeccionTituloHover
-                className="border border-white/10 bg-zinc-900/70 p-5 shadow-lg backdrop-blur-xl"
-                titulo="Fotos / planos"
+                className="border border-white/10 bg-zinc-900/70 p-5 shadow-lg backdrop-blur-xl lg:col-span-2"
+                titulo="Fotos de obra"
                 hint="Pasa el cursor sobre el título para subir foto o archivo"
-                descripcion="Fotos de obra, planos sueltos y documentos del proyecto."
+                descripcion="Fotos y documentos de campo. Los planos técnicos van en Planos y especificaciones."
                 panelOculto={
                   <form onSubmit={(e) => void addArchivo(e)} className="grid gap-2">
                     <select
@@ -1109,7 +916,6 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                       className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-sky-500/40"
                     >
                       <option value="foto_proyecto">Foto de proyecto</option>
-                      <option value="plano">Plano</option>
                       <option value="documento">Documento</option>
                       <option value="otro">Otro</option>
                     </select>
@@ -1142,7 +948,6 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                             className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-white"
                           >
                             <option value="foto_proyecto">foto_proyecto</option>
-                            <option value="plano">plano</option>
                             <option value="documento">documento</option>
                             <option value="otro">otro</option>
                           </select>

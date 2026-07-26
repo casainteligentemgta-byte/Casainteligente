@@ -16,6 +16,12 @@ import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import { uploadProjectAsset } from '@/lib/supabase/project-media';
 import SeccionTituloHover from '@/components/proyectos/SeccionTituloHover';
+import {
+  DISCIPLINAS_PLANO,
+  etiquetaDisciplinaPlano,
+  inferirDisciplinaDesdeCodigo,
+  type DisciplinaPlanoId,
+} from '@/lib/proyectos/disciplinasPlano';
 
 type EstatusPlano = 'revision' | 'aprobado_construccion' | 'obsoleto';
 
@@ -25,6 +31,7 @@ type PlanoRow = {
   nombre: string;
   version: number;
   estatus: EstatusPlano;
+  disciplina: DisciplinaPlanoId;
   fecha: string;
   pdfUrl: string | null;
   cadUrl: string | null;
@@ -66,6 +73,8 @@ export default function ControlPlanosObra({ proyectoId, className = '' }: PlanoP
   const [nombre, setNombre] = useState('');
   const [version, setVersion] = useState('1');
   const [estatus, setEstatus] = useState<EstatusPlano>('revision');
+  const [disciplina, setDisciplina] = useState<DisciplinaPlanoId>('arquitectonico');
+  const [filtroDisciplina, setFiltroDisciplina] = useState<DisciplinaPlanoId | ''>('');
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [cadFile, setCadFile] = useState<File | null>(null);
 
@@ -95,12 +104,14 @@ export default function ControlPlanosObra({ proyectoId, className = '' }: PlanoP
 
     const rows: PlanoRow[] = (data ?? []).map((r) => {
       const est = (r.estatus_plano as EstatusPlano) || 'revision';
+      const codigoPlano = (r.codigo_plano as string)?.trim() || 'S/C';
       return {
         id: r.id,
-        codigo: (r.codigo_plano as string)?.trim() || 'S/C',
+        codigo: codigoPlano,
         nombre: (r.titulo as string)?.trim() || 'Sin nombre',
         version: Number(r.version_plano ?? 1),
         estatus: est === 'aprobado_construccion' || est === 'obsoleto' ? est : 'revision',
+        disciplina: inferirDisciplinaDesdeCodigo(codigoPlano),
         fecha: fmtFecha((r.updated_at as string) || (r.created_at as string)),
         pdfUrl: (r.public_url as string) || null,
         cadUrl: (r.cad_public_url as string) || null,
@@ -109,6 +120,11 @@ export default function ControlPlanosObra({ proyectoId, className = '' }: PlanoP
     setPlanos(rows);
     setLoading(false);
   }, [proyectoId, supabase]);
+
+  const planosFiltrados = useMemo(
+    () => (filtroDisciplina ? planos.filter((p) => p.disciplina === filtroDisciplina) : planos),
+    [planos, filtroDisciplina],
+  );
 
   useEffect(() => {
     void load();
@@ -119,8 +135,19 @@ export default function ControlPlanosObra({ proyectoId, className = '' }: PlanoP
     setNombre('');
     setVersion('1');
     setEstatus('revision');
+    setDisciplina('arquitectonico');
     setPdfFile(null);
     setCadFile(null);
+  };
+
+  const onDisciplinaChange = (next: DisciplinaPlanoId) => {
+    setDisciplina(next);
+    const prefijo = DISCIPLINAS_PLANO.find((d) => d.id === next)?.prefijo ?? 'OTR';
+    const raw = codigo.trim().toUpperCase();
+    if (!raw || /^[A-Z]{2,4}[-_\s]/.test(raw) || DISCIPLINAS_PLANO.some((d) => d.prefijo === raw)) {
+      const n = raw.replace(/^[A-Z]{2,4}[-_\s]?/, '') || '01';
+      setCodigo(`${prefijo}-${n}`);
+    }
   };
 
   const sugerirVersion = (cod: string) => {
@@ -233,12 +260,29 @@ export default function ControlPlanosObra({ proyectoId, className = '' }: PlanoP
               <X className="h-4 w-4" />
             </button>
           </div>
+          <div>
+            <label className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-zinc-500">
+              Disciplina / especialidad
+            </label>
+            <select
+              value={disciplina}
+              onChange={(e) => onDisciplinaChange(e.target.value as DisciplinaPlanoId)}
+              style={{ colorScheme: 'dark' }}
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white outline-none"
+            >
+              {DISCIPLINAS_PLANO.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.label}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <input
               value={codigo}
               onChange={(e) => setCodigo(e.target.value.toUpperCase())}
               onBlur={() => sugerirVersion(codigo)}
-              placeholder="Código (ARQ-01)"
+              placeholder="Código (ARQ-01, EST-02…)"
               className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white placeholder:text-zinc-500 outline-none"
             />
             <input
@@ -253,7 +297,7 @@ export default function ControlPlanosObra({ proyectoId, className = '' }: PlanoP
           <input
             value={nombre}
             onChange={(e) => setNombre(e.target.value)}
-            placeholder="Nombre del plano"
+            placeholder="Nombre del plano / especificación"
             className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white placeholder:text-zinc-500 outline-none"
           />
           <select
@@ -300,22 +344,53 @@ export default function ControlPlanosObra({ proyectoId, className = '' }: PlanoP
       className={`bg-[#0A0A0F] border border-white/10 rounded-xl p-5 text-white w-full ${className}`.trim()}
     >
       <SeccionTituloHover
-        titulo="Planos y especificaciones técnicas"
+        titulo="Planos y especificaciones"
         tituloClassName="text-sky-300/90"
         hint="Pasa el cursor sobre el título para subir una revisión"
-        descripcion="Control de versiones de ingeniería y arquitectura."
+        descripcion="Carga planos arquitectónicos, estructurales, eléctricos, sanitarios, bomberos y especificaciones técnicas."
         panelOculto={panelSubir}
       >
+      <div className="mb-3 flex flex-wrap gap-1.5">
+        <button
+          type="button"
+          onClick={() => setFiltroDisciplina('')}
+          className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${
+            !filtroDisciplina
+              ? 'border-sky-500/45 bg-sky-950/40 text-sky-100'
+              : 'border-white/10 text-zinc-500 hover:text-zinc-300'
+          }`}
+        >
+          Todas
+        </button>
+        {DISCIPLINAS_PLANO.filter((d) => d.id !== 'otro').map((d) => (
+          <button
+            key={d.id}
+            type="button"
+            onClick={() => setFiltroDisciplina(d.id)}
+            className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${
+              filtroDisciplina === d.id
+                ? 'border-sky-500/45 bg-sky-950/40 text-sky-100'
+                : 'border-white/10 text-zinc-500 hover:text-zinc-300'
+            }`}
+          >
+            {d.label}
+          </button>
+        ))}
+      </div>
       {loading ? (
         <p className="text-xs text-zinc-500 flex items-center gap-2">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
           Cargando planos…
         </p>
-      ) : planos.length === 0 ? (
-        <p className="text-xs text-zinc-500">No hay planos registrados. Sube la primera revisión.</p>
+      ) : planosFiltrados.length === 0 ? (
+        <p className="text-xs text-zinc-500">
+          {planos.length === 0
+            ? 'No hay planos registrados. Sube arquitectónicos, estructurales, eléctricos, sanitarios, bomberos, etc.'
+            : 'No hay planos en esta disciplina.'}
+        </p>
       ) : (
         <div className="space-y-2">
-          {planos.map((plano) => (
+          {planosFiltrados.map((plano) => (
             <div
               key={plano.id}
               className="flex flex-wrap items-center justify-between gap-3 p-3 bg-white/[0.02] border border-white/5 rounded-lg text-xs"
@@ -327,7 +402,8 @@ export default function ControlPlanosObra({ proyectoId, className = '' }: PlanoP
                 <div className="min-w-0">
                   <div className="font-medium text-zinc-200 truncate">{plano.nombre}</div>
                   <div className="text-zinc-500 mt-0.5">
-                    Versión {plano.version} · Actualizado el {plano.fecha}
+                    {etiquetaDisciplinaPlano(plano.disciplina)} · Versión {plano.version} ·{' '}
+                    {plano.fecha}
                   </div>
                 </div>
               </div>
