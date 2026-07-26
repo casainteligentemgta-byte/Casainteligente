@@ -286,29 +286,37 @@ export default function RrhhReclutamientoClient() {
       const nombre = (r.nombre_completo ?? '').trim() || 'este trabajador';
       if (
         !window.confirm(
-          `¿Eliminar a «${nombre}» de la lista?\n\nSe borrará el expediente (ci_empleados). Esta acción no se puede deshacer.`,
+          `¿Eliminar a «${nombre}» de la lista?\n\nSe borrarán también contratos y asignaciones vinculados. Esta acción no se puede deshacer.`,
         )
       ) {
         return;
       }
       setDeletingId(r.id);
-      const { error: delErr } = await supabase.from('ci_empleados').delete().eq('id', r.id);
-      setDeletingId(null);
-      if (delErr) {
-        toast.error(delErr.message ?? 'No se pudo eliminar el trabajador.');
-        return;
+      try {
+        const res = await fetch(apiUrl(`/api/rrhh/empleados/${encodeURIComponent(r.id)}`), {
+          method: 'DELETE',
+        });
+        const j = (await res.json().catch(() => ({}))) as { error?: string; detail?: string };
+        if (!res.ok) {
+          toast.error(j.error || j.detail || 'No se pudo eliminar el trabajador.');
+          return;
+        }
+        toast.success('Trabajador eliminado.');
+        setEmpleados((prev) => prev.filter((x) => x.id !== r.id));
+        setExpressRows((prev) =>
+          prev.map((x) =>
+            x.empleado_id === r.id
+              ? { ...x, empleado_id: null, empleado_tiene_evaluacion: false }
+              : x,
+          ),
+        );
+      } catch {
+        toast.error('Error de red al eliminar.');
+      } finally {
+        setDeletingId(null);
       }
-      toast.success('Trabajador eliminado.');
-      setEmpleados((prev) => prev.filter((x) => x.id !== r.id));
-      setExpressRows((prev) =>
-        prev.map((x) =>
-          x.empleado_id === r.id
-            ? { ...x, empleado_id: null, empleado_tiene_evaluacion: false }
-            : x,
-        ),
-      );
     },
-    [supabase],
+    [],
   );
 
   return (
