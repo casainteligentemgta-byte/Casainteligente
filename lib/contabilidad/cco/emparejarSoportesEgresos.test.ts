@@ -6,7 +6,9 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   decidirMatchFacturaEgresos,
+  emparejarOcrContraEgresosLocal,
   puntuarEgresoContraFactura,
+  resolverColisionesAutoMatch,
   type EgresoCandidatoSoporte,
 } from './emparejarSoportesEgresosScoring';
 
@@ -76,5 +78,55 @@ describe('emparejarSoportesEgresos scoring', () => {
       [baseEgreso()],
     );
     assert.equal(r.decision, 'sin_match');
+  });
+
+  it('empareja OCR local contra muchos egresos (flujo anti-413)', () => {
+    const egresos = Array.from({ length: 50 }, (_, i) =>
+      baseEgreso({
+        id: `e-${i}`,
+        proveedor: i === 7 ? 'FERRETERIA EL CLAVO C.A.' : `Proveedor ${i}`,
+        monto_orig: i === 7 ? 15000 : 1000 + i,
+      }),
+    );
+    const matched = emparejarOcrContraEgresosLocal(
+      [
+        {
+          archivoId: 'f1',
+          fileName: 'factura.pdf',
+          leido: {
+            invoice_number: '00-1234',
+            supplier_name: 'Ferreteria El Clavo C.A.',
+            supplier_rif: '',
+            fecha: '2025-03-15',
+            total_amount: 15000,
+          },
+        },
+      ],
+      egresos,
+    );
+    assert.equal(matched.length, 1);
+    assert.equal(matched[0]!.decision, 'auto');
+    assert.equal(matched[0]!.egresoId, 'e-7');
+  });
+
+  it('resuelve colisiones auto dejando solo el de mayor confianza', () => {
+    const res = resolverColisionesAutoMatch([
+      {
+        archivoId: 'a',
+        egresoId: 'e1',
+        decision: 'auto' as const,
+        confianza: 80,
+        motivo: 'm1',
+      },
+      {
+        archivoId: 'b',
+        egresoId: 'e1',
+        decision: 'auto' as const,
+        confianza: 90,
+        motivo: 'm2',
+      },
+    ]);
+    assert.equal(res[0]!.decision, 'duda');
+    assert.equal(res[1]!.decision, 'auto');
   });
 });

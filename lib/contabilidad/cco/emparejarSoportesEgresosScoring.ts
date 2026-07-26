@@ -254,3 +254,102 @@ export function decidirMatchFacturaEgresos(
     motivo,
   };
 }
+
+/** Resultado OCR listo para emparejar en cliente (sin Gemini). */
+export type OcrSoporteParaMatch = {
+  archivoId: string;
+  fileName: string;
+  leido: {
+    invoice_number: string;
+    supplier_name: string;
+    supplier_rif: string;
+    fecha: string;
+    total_amount: number | null;
+  };
+  motivo?: string;
+  error?: string;
+  paginas?: number[];
+  adjuntoBase64?: string;
+  adjuntoMime?: string;
+  adjuntoFileName?: string;
+};
+
+export type MatchSoporteEgresoCliente = OcrSoporteParaMatch & {
+  decision: DecisionMatch;
+  egresoId: string | null;
+  confianza: number;
+  candidatos: CandidatoScore[];
+  motivo: string;
+};
+
+/**
+ * Empareja cabeceras OCR contra el cuadro local (puede ser miles de egresos
+ * sin hinchar el POST a Vercel → evita HTTP 413).
+ */
+export function emparejarOcrContraEgresosLocal(
+  ocrs: OcrSoporteParaMatch[],
+  egresos: EgresoCandidatoSoporte[],
+): MatchSoporteEgresoCliente[] {
+  const matches: MatchSoporteEgresoCliente[] = ocrs.map((o) => {
+    if (o.error && !o.leido.supplier_name && o.leido.total_amount == null) {
+      return {
+        ...o,
+        decision: 'sin_match' as const,
+        egresoId: null,
+        confianza: 0,
+        candidatos: [],
+        motivo: o.motivo || 'Error OCR',
+      };
+    }
+    const decided = decidirMatchFacturaEgresos(
+      {
+        invoice_number: o.leido.invoice_number,
+        supplier_name: o.leido.supplier_name,
+        date: o.leido.fecha,
+        total_amount: o.leido.total_amount,
+      },
+      egresos,
+    );
+    const paginasNota =
+      o.paginas && o.paginas.length > 0
+        ? ` · pág. ${o.paginas.length === 1 ? o.paginas[0] : `${o.paginas[0]}–${o.paginas[o.paginas.length - 1]}`}`
+        : '';
+    return {
+      ...o,
+      decision: decided.decision,
+      egresoId: decided.egresoId,
+      confianza: decided.confianza,
+      candidatos: decided.candidatos,
+      motivo: `${decided.motivo}${paginasNota}`,
+    };
+  });
+
+  return resolverColisionesAutoMatch(matches);
+}
+
+/** Un egreso solo recibe el soporte auto de mayor confianza. */
+export function resolverColisionesAutoMatch<
+  T extends { archivoId: string; egresoId: string | null; decision: DecisionMatch; confianza: number; motivo: string },
+>(matches: T[]): T[] {
+  const porEgreso = new Map<string, T>();
+  for (const m of matches) {
+    if (m.decision !== 'auto' || !m.egresoId) continue;
+    const prev = porEgreso.get(m.egresoId);
+    if (!prev || m.confianza > prev.confianza) {
+      porEgreso.set(m.egresoId, m);
+    }
+  }
+  const ganadores = new Set(
+    Array.from(porEgreso.values()).map((m) => `${m.archivoId}::${m.egresoId}`),
+  );
+
+  return matches.map((m) => {
+    if (m.decision !== 'auto' || !m.egresoId) return m;
+    if (ganadores.has(`${m.archivoId}::${m.egresoId}`)) return m;
+    return {
+      ...m,
+      decision: 'duda' as const,
+      motivo: `${m.motivo} · Otro archivo/página también apunta a este egreso; confirme manualmente.`,
+    };
+  });
+}

@@ -17,6 +17,7 @@ import {
   decidirMatchFacturaEgresos,
   MAX_BYTES_SOPORTE,
   MAX_SOPORTES_POR_REQUEST,
+  resolverColisionesAutoMatch,
   type CandidatoScore,
   type DecisionMatch,
   type EgresoCandidatoSoporte,
@@ -36,11 +37,15 @@ export {
   MAX_BYTES_SOPORTE,
   decidirMatchFacturaEgresos,
   puntuarEgresoContraFactura,
+  emparejarOcrContraEgresosLocal,
+  resolverColisionesAutoMatch,
   type EgresoCandidatoSoporte,
   type CandidatoScore,
   type DecisionMatch,
   type DesgloseMatch,
   type FacturaCabeceraMatch,
+  type OcrSoporteParaMatch,
+  type MatchSoporteEgresoCliente,
 } from '@/lib/contabilidad/cco/emparejarSoportesEgresosScoring';
 
 /** Tope de unidades OCR (páginas/imágenes) por request para no saturar Vercel/Gemini. */
@@ -168,17 +173,19 @@ function baseName(name: string): string {
 }
 
 /**
- * OCR + matching. PDFs multipágina se parten, se agrupan por misma factura y se emparejan.
+ * OCR (+ matching opcional). PDFs multipágina se parten y agrupan.
+ * Con `soloOcr: true` (o egresos vacíos) no empareja: el cliente hace el match
+ * local contra miles de egresos sin inflar el body del POST (HTTP 413 en Vercel).
  */
 export async function emparejarSoportesConEgresos(params: {
   egresos: EgresoCandidatoSoporte[];
   archivos: SoporteArchivoInput[];
   concurrency?: number;
+  /** Solo leer facturas; matching en el navegador. */
+  soloOcr?: boolean;
 }): Promise<{ matches: MatchSoporteEgreso[]; modelHint: string }> {
   const { egresos, archivos } = params;
-  if (egresos.length === 0) {
-    throw new Error('No hay egresos sin soporte para emparejar.');
-  }
+  const soloOcr = Boolean(params.soloOcr) || egresos.length === 0;
   if (archivos.length === 0) {
     throw new Error('Envíe al menos un PDF o imagen de factura.');
   }
@@ -280,6 +287,7 @@ export async function emparejarSoportesConEgresos(params: {
         await matchDesdePagina({
           L,
           egresos,
+          soloOcr,
           adjuntoBuffer: L.unidad.buffer,
           adjuntoMime: L.unidad.mimeType,
           adjuntoFileName: L.unidad.fileName,
@@ -339,6 +347,7 @@ export async function emparejarSoportesConEgresos(params: {
             cabecera: g.cabecera,
           },
           egresos,
+          soloOcr,
           adjuntoBuffer,
           adjuntoMime: 'application/pdf',
           adjuntoFileName: `${baseName(archivo.fileName)}_${etiquetaPaginas.replace(/[–.]/g, '_')}.pdf`,
@@ -350,30 +359,11 @@ export async function emparejarSoportesConEgresos(params: {
     }
   }
 
-  // Colisiones auto: un egreso solo recibe el soporte de mayor confianza
-  const porEgreso = new Map<string, MatchSoporteEgreso>();
-  for (const m of matches) {
-    if (m.decision !== 'auto' || !m.egresoId) continue;
-    const prev = porEgreso.get(m.egresoId);
-    if (!prev || m.confianza > prev.confianza) {
-      porEgreso.set(m.egresoId, m);
-    }
+  if (soloOcr) {
+    return { matches, modelHint };
   }
-  const ganadores = new Set(
-    Array.from(porEgreso.values()).map((m) => `${m.archivoId}::${m.egresoId}`),
-  );
 
-  const resueltos = matches.map((m) => {
-    if (m.decision !== 'auto' || !m.egresoId) return m;
-    if (ganadores.has(`${m.archivoId}::${m.egresoId}`)) return m;
-    return {
-      ...m,
-      decision: 'duda' as const,
-      motivo: `${m.motivo} · Otro archivo/página también apunta a este egreso; confirme manualmente.`,
-    };
-  });
-
-  return { matches: resueltos, modelHint };
+  return { matches: resolverColisionesAutoMatch(matches), modelHint };
 }
 
 async function leerCabeceraUnidad(
@@ -406,6 +396,7 @@ async function matchDesdePagina(params: {
     error?: string;
   };
   egresos: EgresoCandidatoSoporte[];
+  soloOcr?: boolean;
   adjuntoBuffer: Buffer;
   adjuntoMime: string;
   adjuntoFileName: string;
@@ -413,8 +404,17 @@ async function matchDesdePagina(params: {
   fileName: string;
   paginas?: number[];
 }): Promise<MatchSoporteEgreso> {
-  const { L, egresos, adjuntoBuffer, adjuntoMime, adjuntoFileName, archivoId, fileName, paginas } =
-    params;
+  const {
+    L,
+    egresos,
+    soloOcr,
+    adjuntoBuffer,
+    adjuntoMime,
+    adjuntoFileName,
+    archivoId,
+    fileName,
+    paginas,
+  } = params;
 
   if (L.error) {
     return {
@@ -446,17 +446,27 @@ async function matchDesdePagina(params: {
     items: [],
   };
 
-  const decided = decidirMatchFacturaEgresos(factura, egresos);
   const paginasNota =
     paginas && paginas.length > 0
       ? ` · pág. ${paginas.length === 1 ? paginas[0] : `${paginas[0]}–${paginas[paginas.length - 1]}`}`
       : '';
 
+  const decided = soloOcr
+    ? {
+        decision: 'sin_match' as const,
+        egresoId: null as string | null,
+        confianza: 0,
+        candidatos: [] as CandidatoScore[],
+        motivo: 'OCR listo (match en cliente)',
+      }
+    : decidirMatchFacturaEgresos(factura, egresos);
+
   // Archivo original (sin #): el cliente ya lo tiene; no hinchar el JSON.
-  // Solo embeber base64 cuando el adjunto es un recorte multipágina derivado.
+  // En soloOcr embeber recortes derivados para que el cliente pueda adjuntar.
   const esDerivado = archivoId.includes('#');
   const necesitaAdjunto =
-    esDerivado && (decided.decision === 'auto' || decided.decision === 'duda');
+    esDerivado &&
+    (soloOcr || decided.decision === 'auto' || decided.decision === 'duda');
   let adjuntoBase64: string | undefined;
   let adjuntoError: string | undefined;
   if (necesitaAdjunto) {

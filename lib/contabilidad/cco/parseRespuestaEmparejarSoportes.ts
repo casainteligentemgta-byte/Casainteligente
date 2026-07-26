@@ -53,9 +53,23 @@ export function parseRespuestaEmparejarSoportes(
 
   if (!t) {
     throw new Error(
-      status === 413 || status === 502 || status === 504
-        ? `El servidor cortó la carga (HTTP ${status}). ${MSG_TIMEOUT}`
-        : `Respuesta vacía del servidor (HTTP ${status}). ${MSG_TIMEOUT}`,
+      status === 413
+        ? 'La carga supera el límite del servidor (HTTP 413). El agente ahora envía un archivo a la vez; si persiste, use un PDF más liviano o facturas sueltas.'
+        : status === 502 || status === 504
+          ? `El servidor cortó la carga (HTTP ${status}). ${MSG_TIMEOUT}`
+          : `Respuesta vacía del servidor (HTTP ${status}). ${MSG_TIMEOUT}`,
+    );
+  }
+
+  if (status === 413) {
+    try {
+      const j = JSON.parse(t) as { error?: string };
+      if (j?.error) throw new Error(j.error);
+    } catch (e) {
+      if (e instanceof Error && e.message && !/JSON|Unexpected/i.test(e.message)) throw e;
+    }
+    throw new Error(
+      'La carga supera el límite del servidor (HTTP 413). Suba un archivo más liviano o facturas sueltas.',
     );
   }
 

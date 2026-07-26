@@ -15,8 +15,11 @@ import { adjuntarFacturaConOcr } from '@/lib/contabilidad/adjuntarFacturaConOcrC
 import type { CcoLibroFila } from '@/lib/contabilidad/cco/types';
 import {
   MAX_SOPORTES_POR_REQUEST,
+  emparejarOcrContraEgresosLocal,
   type CandidatoScore,
   type DecisionMatch,
+  type EgresoCandidatoSoporte,
+  type OcrSoporteParaMatch,
 } from '@/lib/contabilidad/cco/emparejarSoportesEgresosScoring';
 import {
   mensajeErrorEmparejarSoportes,
@@ -77,7 +80,10 @@ function labelEgreso(f: FilaEgreso | undefined, id: string | null): string {
 }
 
 function fileDesdeMatch(
-  m: MatchSoporteEgreso,
+  m: Pick<
+    MatchSoporteEgreso,
+    'archivoId' | 'adjuntoBase64' | 'adjuntoFileName' | 'adjuntoMime'
+  >,
   byId: Map<string, File>,
 ): File | undefined {
   if (m.adjuntoBase64 && m.adjuntoFileName) {
@@ -144,6 +150,7 @@ export default function EgresoEmparejarSoportesModal({
   const [dudaActual, setDudaActual] = useState<MatchUi | null>(null);
   const [egresoElegido, setEgresoElegido] = useState('');
   const [fase, setFase] = useState<'carga' | 'resultado'>('carga');
+  const [progreso, setProgreso] = useState<string | null>(null);
 
   if (!open) return null;
 
@@ -208,10 +215,12 @@ export default function EgresoEmparejarSoportesModal({
     setResumen(null);
     setDudaQueue([]);
     setDudaActual(null);
+    setProgreso(null);
 
     try {
-      const form = new FormData();
-      const egresosPayload = sinDoc.map((f) => ({
+      // Matching local: no enviamos los miles de egresos en el POST (HTTP 413 en Vercel).
+      // OCR de a 1 archivo para no superar el límite de body (~4,5 MB).
+      const egresosLocal: EgresoCandidatoSoporte[] = sinDoc.map((f) => ({
         id: f.id,
         proveedor: f.proveedor,
         fecha: f.fecha,
@@ -222,37 +231,66 @@ export default function EgresoEmparejarSoportesModal({
         invoice_number: f.invoice_number,
         display_id: f.display_id,
       }));
-      form.append('egresos', JSON.stringify(egresosPayload));
-      form.append(
-        'soporte_ids',
-        JSON.stringify(archivos.map((a) => a.id)),
-      );
-      for (const a of archivos) {
-        form.append('soporte', a.file, a.file.name);
-      }
 
-      const res = await fetch('/api/contabilidad/cco/emparejar-soportes', {
-        method: 'POST',
-        body: form,
-      });
-      // text() + parse defensivo: Safari rompe con res.json() si Vercel
-      // devuelve HTML (timeout/502) → "The string did not match the expected pattern."
-      const raw = await res.text();
-      const json = parseRespuestaEmparejarSoportes(raw, res.status);
-      if (!res.ok || !json.ok || !Array.isArray(json.matches)) {
-        throw new Error(
-          mensajeErrorEmparejarSoportes(json.error || 'No se pudo emparejar el lote.'),
-        );
-      }
-
+      const ocrAcumulado: OcrSoporteParaMatch[] = [];
       const byId = new Map(archivos.map((a) => [a.id, a.file]));
-      const enriched: MatchUi[] = (json.matches as MatchSoporteEgreso[]).map((m) => ({
+
+      for (let i = 0; i < archivos.length; i++) {
+        const a = archivos[i]!;
+        setProgreso(`OCR ${i + 1}/${archivos.length}: ${a.file.name}`);
+
+        const form = new FormData();
+        form.append('modo', 'ocr');
+        form.append('soporte_ids', JSON.stringify([a.id]));
+        form.append('soporte', a.file, a.file.name);
+
+        const res = await fetch('/api/contabilidad/cco/emparejar-soportes', {
+          method: 'POST',
+          body: form,
+        });
+        // text() + parse defensivo: Safari rompe con res.json() si Vercel
+        // devuelve HTML (timeout/502) → "The string did not match the expected pattern."
+        const raw = await res.text();
+        const json = parseRespuestaEmparejarSoportes(raw, res.status);
+        if (!res.ok || !json.ok || !Array.isArray(json.matches)) {
+          throw new Error(
+            mensajeErrorEmparejarSoportes(
+              json.error || `No se pudo leer «${a.file.name}».`,
+            ),
+          );
+        }
+
+        for (const m of json.matches as MatchSoporteEgreso[]) {
+          ocrAcumulado.push({
+            archivoId: m.archivoId,
+            fileName: m.fileName,
+            leido: m.leido,
+            motivo: m.motivo,
+            error: m.error,
+            paginas: m.paginas,
+            adjuntoBase64: m.adjuntoBase64,
+            adjuntoMime: m.adjuntoMime,
+            adjuntoFileName: m.adjuntoFileName,
+          });
+        }
+      }
+
+      setProgreso(`Emparejando contra ${egresosLocal.length} egresos…`);
+      const matched = emparejarOcrContraEgresosLocal(ocrAcumulado, egresosLocal);
+
+      const enriched: MatchUi[] = matched.map((m) => ({
         ...m,
         file: fileDesdeMatch(m, byId),
       }));
+      const resumenLocal = {
+        auto: enriched.filter((m) => m.decision === 'auto').length,
+        duda: enriched.filter((m) => m.decision === 'duda').length,
+        sin_match: enriched.filter((m) => m.decision === 'sin_match').length,
+      };
       setMatches(enriched);
-      setResumen(json.resumen ?? null);
+      setResumen(resumenLocal);
       setFase('resultado');
+      setProgreso(null);
 
       // Auto-asignar matches claros (adjunta el PDF de la página/grupo, no el lote entero)
       setAsignando(true);
@@ -288,6 +326,7 @@ export default function EgresoEmparejarSoportesModal({
     } finally {
       setProcesando(false);
       setAsignando(false);
+      setProgreso(null);
     }
   };
 
@@ -374,10 +413,25 @@ export default function EgresoEmparejarSoportesModal({
             </>
           ) : null}
         </p>
-        {sinDoc.length > 800 || archivos.some((a) => a.file.size > 4 * 1024 * 1024) ? (
+        {archivos.some((a) => a.file.size > 4 * 1024 * 1024) ? (
           <p style={{ margin: '0 0 12px', fontSize: 12, color: '#9a3412' }}>
-            Tip: con muchos egresos o PDFs pesados (&gt;4&nbsp;MB / muchas páginas) filtre el
-            cuadro o suba facturas sueltas para evitar cortes del servidor.
+            Tip: PDFs pesados (&gt;4&nbsp;MB / muchas páginas) se procesan de a uno. Si falla,
+            divida el PDF o suba facturas sueltas.
+          </p>
+        ) : null}
+        {progreso ? (
+          <p
+            style={{
+              margin: '0 0 12px',
+              fontSize: 12,
+              color: '#0F766E',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
+            <Loader2 size={14} className="animate-spin" />
+            {progreso}
           </p>
         ) : null}
 
