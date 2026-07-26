@@ -1,6 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import { Suspense } from 'react';
 import ReactQueryProvider from '@/components/providers/ReactQueryProvider';
 import ModulosRutaGuard from '@/components/auth/ModulosRutaGuard';
 import IOSNavBar from '@/components/IOSNavBar';
@@ -51,7 +52,11 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
         {/* Dock inferior auto-oculto: poco padding; el menú no reserva espacio fijo */}
         <div className={chromeMinimal ? 'min-h-screen' : 'min-h-screen pb-8'}>{children}</div>
       </ReactQueryProvider>
-      {!chromeMinimal ? <IOSNavBar /> : null}
+      {!chromeMinimal ? (
+        <Suspense fallback={null}>
+          <IOSNavBar />
+        </Suspense>
+      ) : null}
       <Toaster
         theme="dark"
         position="top-center"

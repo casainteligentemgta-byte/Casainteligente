@@ -20,6 +20,7 @@ import SeccionTituloHover from '@/components/proyectos/SeccionTituloHover';
 import HorarioObraEditor from '@/components/proyectos/HorarioObraEditor';
 import { hrefRrhhHub } from '@/lib/rrhh/hrefSolicitudPersonal';
 import { hrefCcoProyecto } from '@/lib/contabilidad/cco/hrefCcoProyecto';
+import { guardarProyectoRrhhContexto } from '@/lib/rrhh/proyectoRrhhContexto';
 
 const LOAD_TIMEOUT_MS = 45_000;
 
@@ -155,10 +156,11 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
   const [borrandoProyecto, setBorrandoProyecto] = useState(false);
   const rrhhPanelRef = useRef<HTMLDivElement>(null);
 
-  /** RRHH → hub; finanzas → CCO de esta obra. */
+  /** RRHH/talento/solicitados → hub unificado; finanzas → CCO de esta obra. */
   useEffect(() => {
+    guardarProyectoRrhhContexto(id);
     const t = searchParams.get('tab');
-    if (t === 'solicitados' || t === 'rrhh') {
+    if (t === 'solicitados' || t === 'rrhh' || t === 'talento') {
       router.replace(hrefRrhhHub({ proyectoModuloId: id }));
       return;
     }
@@ -166,11 +168,6 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
       router.replace(hrefCcoProyecto(id));
       return;
     }
-    if (t !== 'talento') return;
-    const timer = window.setTimeout(() => {
-      rrhhPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 120);
-    return () => clearTimeout(timer);
   }, [searchParams, id, router]);
 
   const [peNombre, setPeNombre] = useState('');

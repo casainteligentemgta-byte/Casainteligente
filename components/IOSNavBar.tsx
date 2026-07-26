@@ -1,10 +1,17 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { usePathname, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useModulosNavPermitidos } from '@/hooks/useModulosNavPermitidos';
 import type { ModuloNavId } from '@/lib/auth/modulosPorRol';
+import {
+  esRutaRrhhActiva,
+  guardarProyectoRrhhContexto,
+  hrefRrhhMenuInferior,
+  proyectoModuloIdDesdePathname,
+} from '@/lib/rrhh/proyectoRrhhContexto';
+import { hrefRrhhHub } from '@/lib/rrhh/hrefSolicitudPersonal';
 
 type NavItem = {
   id: ModuloNavId;
@@ -333,10 +340,10 @@ const navItems: NavItem[] = [
 
 ];
 
-function navItemActive(pathname: string, href: string): boolean {
+function navItemActive(pathname: string, href: string, tabQuery?: string | null): boolean {
   if (pathname === href) return true;
   if (href === '/') return false;
-  if (href === '/rrhh/hojas-vida') return pathname.startsWith('/rrhh');
+  if (href.startsWith('/rrhh')) return esRutaRrhhActiva(pathname, tabQuery);
   if (href === '/configuracion/entidades') {
     return (
       pathname.startsWith('/configuracion/entidades') ||
@@ -376,9 +383,27 @@ const HIDE_DELAY_MS = 900;
 
 export default function IOSNavBar() {
   const pathname = usePathname() ?? '';
+  const searchParams = useSearchParams();
+  const tabQuery = searchParams.get('tab');
   const acceso = useModulosNavPermitidos();
   const [visible, setVisible] = useState(false);
+  const [hrefRrhh, setHrefRrhh] = useState(() => hrefRrhhHub());
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /** Sincroniza el botón RRHH con la obra actual / última usada. */
+  useEffect(() => {
+    const fromPath = proyectoModuloIdDesdePathname(pathname);
+    if (fromPath) guardarProyectoRrhhContexto(fromPath);
+    setHrefRrhh(hrefRrhhMenuInferior(pathname));
+  }, [pathname]);
+
+  const itemsBase = useMemo(
+    () =>
+      navItems.map((item) =>
+        item.id === 'rrhh' ? { ...item, href: hrefRrhh } : item,
+      ),
+    [hrefRrhh],
+  );
 
   const clearHideTimer = useCallback(() => {
     if (hideTimer.current) {
@@ -399,18 +424,18 @@ export default function IOSNavBar() {
 
   useEffect(() => () => clearHideTimer(), [clearHideTimer]);
 
-  let items = navItems;
+  let items = itemsBase;
   if (pathname.startsWith('/registro')) {
-    items = navItems.filter((i) => i.href !== '/');
+    items = itemsBase.filter((i) => i.id !== 'inicio');
   } else if (pathname.startsWith('/login') || pathname.startsWith('/auth')) {
-    items = navItems.filter((i) => i.id === 'inicio');
+    items = itemsBase.filter((i) => i.id === 'inicio');
   } else if (acceso.status === 'ready') {
-    items = navItems.filter((i) => acceso.modulos.has(i.id));
+    items = itemsBase.filter((i) => acceso.modulos.has(i.id));
   } else if (acceso.status === 'anon') {
-    items = navItems.filter((i) => i.id === 'inicio');
+    items = itemsBase.filter((i) => i.id === 'inicio');
   } else {
     // loading: barra casi completa, sin Legal (solo dueño / entitlement)
-    items = navItems.filter((i) => i.id !== 'legal');
+    items = itemsBase.filter((i) => i.id !== 'legal');
   }
 
   return (
@@ -464,7 +489,7 @@ export default function IOSNavBar() {
         <div className="overflow-x-auto scrollbar-hide">
           <div className="flex min-w-max items-center gap-0.5 px-1 pb-1.5 pt-2">
             {items.map((item) => {
-              const isActive = navItemActive(pathname, item.href);
+              const isActive = navItemActive(pathname, item.href, tabQuery);
               const activeColor = colorActivo(item.label);
 
               return (
@@ -473,7 +498,13 @@ export default function IOSNavBar() {
                   href={item.href}
                   className="flex flex-col items-center gap-1 min-w-[62px] py-1 px-1 transition-all duration-150 active:scale-90"
                   style={{ WebkitTapHighlightColor: 'transparent' }}
-                  onClick={() => scheduleHide()}
+                  onClick={() => {
+                    if (item.id === 'rrhh') {
+                      const pid = proyectoModuloIdDesdePathname(pathname);
+                      if (pid) guardarProyectoRrhhContexto(pid);
+                    }
+                    scheduleHide();
+                  }}
                 >
                   <div className="transition-transform duration-150">{item.icon(isActive)}</div>
                   <span
