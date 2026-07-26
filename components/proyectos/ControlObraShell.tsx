@@ -6,6 +6,7 @@ import { Construction, Package, ShoppingCart } from 'lucide-react';
 import ControlObraSubnav from '@/components/proyectos/ControlObraSubnav';
 import GenerarContratoDelegadoModal from '@/components/proyectos/GenerarContratoDelegadoModal';
 import ProyectoAdLogisticaBanner from '@/components/proyectos/ProyectoAdLogisticaBanner';
+import ModuloPageTitle from '@/components/ui/ModuloPageTitle';
 import { useContratoAdProyecto } from '@/hooks/useContratoAdProyecto';
 
 type Props = {
@@ -21,10 +22,12 @@ export default function ControlObraShell({ proyectoId, children }: Props) {
   return (
     <div className="max-w-[1600px] mx-auto space-y-5 text-white">
       <header className="space-y-1">
-        <div className="flex items-center gap-2.5">
-          <Construction className="h-7 w-7 text-amber-400 shrink-0" aria-hidden />
-          <h1 className="text-xl font-bold tracking-tight uppercase">Control de obra</h1>
-        </div>
+        <ModuloPageTitle
+          title="Control de obra"
+          icon={Construction}
+          iconClassName="text-amber-400"
+          uppercase
+        />
         <p className="text-sm text-zinc-500 pl-[2.375rem]">
           Presupuesto, equipo, agua, maquinaria, informes, cronograma y tours 3D
         </p>
