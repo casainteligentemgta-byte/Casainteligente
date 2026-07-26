@@ -6,14 +6,44 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
 type CustomerType = 'natural' | 'juridico';
+type GeneroContrato = 'M' | 'F';
+
+const ESTADOS_CIVILES = [
+  'soltero',
+  'soltera',
+  'casado',
+  'casada',
+  'divorciado',
+  'divorciada',
+  'viudo',
+  'viuda',
+  'unión estable de hecho',
+] as const;
+
+const optionalEmail = z.string().email('Email inválido.').optional().or(z.literal(''));
+const optionalRif = z
+  .string()
+  .trim()
+  .refine((v) => v === '' || v.length >= 4, 'RIF inválido.')
+  .optional()
+  .or(z.literal(''));
+
+const contratoFields = {
+  genero: z.enum(['M', 'F'], { required_error: 'Indique Señor o Señora.' }),
+  estado_civil: z.string().min(2, 'El estado civil es obligatorio.'),
+  profesion: z.string().min(2, 'La profesión es obligatoria.'),
+  domicilio: z.string().min(5, 'El domicilio es obligatorio.'),
+};
 
 const naturalSchema = z.object({
   customerType: z.literal('natural'),
   cedula: z.string().min(4, 'La cédula es obligatoria.'),
+  rif: optionalRif,
   nombre: z.string().min(2, 'El nombre es obligatorio.'),
   apellido: z.string().min(2, 'El apellido es obligatorio.'),
-  email: z.string().email('Email inválido.').optional().or(z.literal('')),
+  email: optionalEmail,
   telefono: z.string().min(7, 'El teléfono es obligatorio.'),
+  ...contratoFields,
 });
 
 const juridicoSchema = z.object({
@@ -21,8 +51,9 @@ const juridicoSchema = z.object({
   rif: z.string().min(4, 'El RIF es obligatorio.'),
   razon_social: z.string().min(2, 'La razón social es obligatoria.'),
   representante_legal: z.string().min(2, 'El representante legal es obligatorio.'),
-  email: z.string().email('Email inválido.').optional().or(z.literal('')),
+  email: optionalEmail,
   telefono: z.string().min(7, 'El teléfono es obligatorio.'),
+  ...contratoFields,
 });
 
 const customerSchema = z.discriminatedUnion('customerType', [naturalSchema, juridicoSchema]);
@@ -51,12 +82,23 @@ function esErrorSchemaColumnaCustomers(message: string): boolean {
 
 /** Último recurso: solo columnas del modelo original 009 (sin cedula/apellido/customer_type). */
 function payloadSoloEsquema009(validated: CustomerValidated): Record<string, unknown> {
+  const domicilioNote = validated.domicilio.trim();
   if (validated.customerType === 'natural') {
+    const extras = [
+      `CI ${validated.cedula}`,
+      validated.rif ? `RIF ${validated.rif}` : null,
+      validated.genero === 'F' ? 'Sra.' : 'Sr.',
+      validated.estado_civil,
+      validated.profesion,
+    ]
+      .filter(Boolean)
+      .join(' · ');
     return {
-      nombre: `${validated.nombre} ${validated.apellido} — CI ${validated.cedula}`.trim(),
-      rif: null,
+      nombre: `${validated.nombre} ${validated.apellido} — ${extras}`.trim(),
+      rif: validated.rif || null,
       movil: validated.telefono,
       email: validated.email || null,
+      direccion: domicilioNote || null,
       tipo: 'Natural',
       status: 'activo',
     };
@@ -66,6 +108,7 @@ function payloadSoloEsquema009(validated: CustomerValidated): Record<string, unk
     rif: validated.rif,
     movil: validated.telefono,
     email: validated.email || null,
+    direccion: domicilioNote || null,
     tipo: 'Juridico',
     status: 'activo',
   };
@@ -81,6 +124,21 @@ function payloadSinColumnaCustomers(
 ): Record<string, unknown> {
   const next: Record<string, unknown> = { ...data };
   delete next[columna];
+
+  if (columna === 'direccion') {
+    return next;
+  }
+
+  if (columna === 'genero' || columna === 'estado_civil' || columna === 'profesion') {
+    const notas: string[] = [];
+    if (columna === 'genero') notas.push(validated.genero === 'F' ? 'Sra.' : 'Sr.');
+    if (columna === 'estado_civil') notas.push(`Estado civil: ${validated.estado_civil}`);
+    if (columna === 'profesion') notas.push(`Profesión: ${validated.profesion}`);
+    const note = notas.join(' | ');
+    const prev = String(next.direccion ?? validated.domicilio ?? '').trim();
+    next.direccion = prev ? `${prev} | ${note}` : note;
+    return next;
+  }
 
   if (validated.customerType === 'natural') {
     if (columna === 'apellido') {
@@ -128,13 +186,27 @@ function Field({
   );
 }
 
+const controlClass =
+  'w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-[#007AFF]/70 focus:ring-2 focus:ring-[#007AFF]/20';
+
 function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  return (
-    <input
-      {...props}
-      className={`w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-[#007AFF]/70 focus:ring-2 focus:ring-[#007AFF]/20 ${props.className ?? ''}`}
-    />
-  );
+  return <input {...props} className={`${controlClass} ${props.className ?? ''}`} />;
+}
+
+function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  return <select {...props} className={`${controlClass} ${props.className ?? ''}`} />;
+}
+
+function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return <textarea {...props} className={`${controlClass} resize-y ${props.className ?? ''}`} />;
+}
+
+function normalizarGenero(value: unknown): GeneroContrato {
+  const t = String(value ?? '')
+    .trim()
+    .toUpperCase();
+  if (t === 'F' || t === 'FEMENINO' || t === 'FEMENINA' || t === 'SRA' || t === 'SRA.') return 'F';
+  return 'M';
 }
 
 export default function NuevoClienteForm({ initialData, isEditing }: { initialData?: any; isEditing?: boolean }) {
@@ -152,6 +224,10 @@ export default function NuevoClienteForm({ initialData, isEditing }: { initialDa
   const [representanteLegal, setRepresentanteLegal] = useState(initialData?.representante_legal ?? '');
   const [email, setEmail] = useState(initialData?.email ?? '');
   const [telefono, setTelefono] = useState(initialData?.telefono ?? initialData?.movil ?? '');
+  const [genero, setGenero] = useState<GeneroContrato>(normalizarGenero(initialData?.genero));
+  const [estadoCivil, setEstadoCivil] = useState(initialData?.estado_civil ?? '');
+  const [profesion, setProfesion] = useState(initialData?.profesion ?? '');
+  const [domicilio, setDomicilio] = useState(initialData?.direccion ?? '');
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
 
@@ -161,10 +237,15 @@ export default function NuevoClienteForm({ initialData, isEditing }: { initialDa
         ? {
             customerType,
             cedula: cedula.trim(),
+            rif: rif.trim(),
             nombre: nombre.trim(),
             apellido: apellido.trim(),
             email: email.trim(),
             telefono: telefono.trim(),
+            genero,
+            estado_civil: estadoCivil.trim(),
+            profesion: profesion.trim(),
+            domicilio: domicilio.trim(),
           }
         : {
             customerType,
@@ -173,6 +254,10 @@ export default function NuevoClienteForm({ initialData, isEditing }: { initialDa
             representante_legal: representanteLegal.trim(),
             email: email.trim(),
             telefono: telefono.trim(),
+            genero,
+            estado_civil: estadoCivil.trim(),
+            profesion: profesion.trim(),
+            domicilio: domicilio.trim(),
           };
 
     const parsed = customerSchema.safeParse(payload);
@@ -191,6 +276,12 @@ export default function NuevoClienteForm({ initialData, isEditing }: { initialDa
 
     try {
       const validated = parsed.data;
+      const contratoPayload = {
+        genero: validated.genero,
+        estado_civil: validated.estado_civil,
+        profesion: validated.profesion,
+        direccion: validated.domicilio,
+      };
       const insertData =
         validated.customerType === 'natural'
           ? {
@@ -199,12 +290,13 @@ export default function NuevoClienteForm({ initialData, isEditing }: { initialDa
               nombre: validated.nombre,
               apellido: validated.apellido,
               cedula: validated.cedula,
-              rif: null,
+              rif: validated.rif?.trim() ? validated.rif.trim() : null,
               razon_social: null,
               representante_legal: null,
               email: validated.email || null,
               telefono: validated.telefono,
               movil: validated.telefono,
+              ...contratoPayload,
             }
           : {
               customer_type: 'juridico',
@@ -218,6 +310,7 @@ export default function NuevoClienteForm({ initialData, isEditing }: { initialDa
               email: validated.email || null,
               telefono: validated.telefono,
               movil: validated.telefono,
+              ...contratoPayload,
             };
 
       const runSave = async (payload: Record<string, unknown>) =>
@@ -250,6 +343,11 @@ export default function NuevoClienteForm({ initialData, isEditing }: { initialDa
       setSaving(false);
     }
   };
+
+  const etiquetaContrato =
+    customerType === 'juridico'
+      ? 'Datos del representante para contrato'
+      : 'Datos para contrato';
 
   return (
     <div className="min-h-screen bg-[#0A0A0F] px-4 pb-24 pt-6">
@@ -284,9 +382,29 @@ export default function NuevoClienteForm({ initialData, isEditing }: { initialDa
         <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 space-y-4">
           {customerType === 'natural' ? (
             <>
-              <Field label="C.I." required error={errors.cedula}>
-                <Input placeholder="V-12345678 o 12345678" value={cedula} onChange={(e) => setCedula(e.target.value)} />
-              </Field>
+              <div className="flex gap-3">
+                <div className="w-[5.5rem] shrink-0">
+                  <Field label="Tratamiento" required error={errors.genero}>
+                    <Select
+                      value={genero}
+                      aria-label="Señor o Señora"
+                      onChange={(e) => setGenero(e.target.value === 'F' ? 'F' : 'M')}
+                    >
+                      <option value="M">Sr.</option>
+                      <option value="F">Sra.</option>
+                    </Select>
+                  </Field>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <Field label="C.I." required error={errors.cedula}>
+                    <Input
+                      placeholder="V-12345678 o 12345678"
+                      value={cedula}
+                      onChange={(e) => setCedula(e.target.value)}
+                    />
+                  </Field>
+                </div>
+              </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field label="Nombre" required error={errors.nombre}>
                   <Input placeholder="Ej: Carlos" value={nombre} onChange={(e) => setNombre(e.target.value)} />
@@ -295,6 +413,13 @@ export default function NuevoClienteForm({ initialData, isEditing }: { initialDa
                   <Input placeholder="Ej: Pérez" value={apellido} onChange={(e) => setApellido(e.target.value)} />
                 </Field>
               </div>
+              <Field label="RIF" error={errors.rif}>
+                <Input
+                  placeholder="V-12345678-9 (si aplica)"
+                  value={rif}
+                  onChange={(e) => setRif(e.target.value)}
+                />
+              </Field>
             </>
           ) : (
             <>
@@ -308,24 +433,87 @@ export default function NuevoClienteForm({ initialData, isEditing }: { initialDa
                   onChange={(e) => setRazonSocial(e.target.value)}
                 />
               </Field>
-              <Field label="Representante Legal" required error={errors.representante_legal}>
-                <Input
-                  placeholder="Ej: Luis Mata"
-                  value={representanteLegal}
-                  onChange={(e) => setRepresentanteLegal(e.target.value)}
-                />
-              </Field>
+              <div className="flex gap-3">
+                <div className="w-[5.5rem] shrink-0">
+                  <Field label="Tratamiento" required error={errors.genero}>
+                    <Select
+                      value={genero}
+                      aria-label="Señor o Señora del representante"
+                      onChange={(e) => setGenero(e.target.value === 'F' ? 'F' : 'M')}
+                    >
+                      <option value="M">Sr.</option>
+                      <option value="F">Sra.</option>
+                    </Select>
+                  </Field>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <Field label="Representante Legal" required error={errors.representante_legal}>
+                    <Input
+                      placeholder="Ej: Luis Mata"
+                      value={representanteLegal}
+                      onChange={(e) => setRepresentanteLegal(e.target.value)}
+                    />
+                  </Field>
+                </div>
+              </div>
             </>
           )}
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Email" error={errors.email}>
-              <Input placeholder="correo@dominio.com" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+              <Input
+                placeholder="correo@dominio.com"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
             </Field>
             <Field label="Teléfono" required error={errors.telefono}>
               <Input placeholder="+58 412..." value={telefono} onChange={(e) => setTelefono(e.target.value)} />
             </Field>
           </div>
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 space-y-4">
+          <div>
+            <h2 className="text-sm font-semibold text-zinc-100">{etiquetaContrato}</h2>
+            <p className="mt-1 text-xs text-zinc-500">
+              Datos de comparecencia para firmar contratos (cédula/RIF, tratamiento, profesión, domicilio y estado
+              civil).
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="Estado civil" required error={errors.estado_civil}>
+              <Input
+                list="estados-civiles-cliente"
+                placeholder="Ej: casado"
+                value={estadoCivil}
+                onChange={(e) => setEstadoCivil(e.target.value)}
+              />
+              <datalist id="estados-civiles-cliente">
+                {ESTADOS_CIVILES.map((ec) => (
+                  <option key={ec} value={ec} />
+                ))}
+              </datalist>
+            </Field>
+            <Field label="Profesión" required error={errors.profesion}>
+              <Input
+                placeholder="Ej: ingeniero, comerciante"
+                value={profesion}
+                onChange={(e) => setProfesion(e.target.value)}
+              />
+            </Field>
+          </div>
+
+          <Field label="Domicilio" required error={errors.domicilio}>
+            <Textarea
+              rows={2}
+              placeholder="Urbanización, calle, ciudad, estado"
+              value={domicilio}
+              onChange={(e) => setDomicilio(e.target.value)}
+            />
+          </Field>
         </div>
 
         <button

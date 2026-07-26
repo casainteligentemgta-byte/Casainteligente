@@ -22,6 +22,10 @@ type CustomerDetail = {
   rif: string | null;
   razon_social: string | null;
   representante_legal: string | null;
+  genero: string | null;
+  estado_civil: string | null;
+  profesion: string | null;
+  direccion: string | null;
   email: string | null;
   telefono: string | null;
   created_at: string | null;
@@ -76,15 +80,48 @@ export default function ClienteDetallePage() {
       setError(null);
       const { data, error: err } = await supabase
         .from('customers')
-        .select('id,nombre,customer_type,cedula,rif,razon_social,representante_legal,email,telefono,created_at')
+        .select(
+          'id,nombre,customer_type,cedula,rif,razon_social,representante_legal,genero,estado_civil,profesion,direccion,email,telefono,created_at',
+        )
         .eq('id', id)
         .maybeSingle();
       if (!alive) return;
-      setLoading(false);
       if (err) {
-        setError(err.message);
+        const schemaMissing =
+          /Could not find the '\w+' column of 'customers'/i.test(err.message) ||
+          (/customers/i.test(err.message) &&
+            (/schema cache/i.test(err.message) || /column/i.test(err.message) || /does not exist/i.test(err.message)));
+        if (!schemaMissing) {
+          setLoading(false);
+          setError(err.message);
+          return;
+        }
+        // Migración 301 pendiente: reintentar sin columnas de contrato.
+        const fallback = await supabase
+          .from('customers')
+          .select('id,nombre,customer_type,cedula,rif,razon_social,representante_legal,direccion,email,telefono,created_at')
+          .eq('id', id)
+          .maybeSingle();
+        if (!alive) return;
+        setLoading(false);
+        if (fallback.error) {
+          setError(fallback.error.message);
+          return;
+        }
+        setCliente(
+          fallback.data
+            ? ({
+                ...fallback.data,
+                genero: null,
+                estado_civil: null,
+                profesion: null,
+                direccion: (fallback.data as { direccion?: string | null }).direccion ?? null,
+              } as CustomerDetail)
+            : null,
+        );
         return;
       }
+      setLoading(false);
       setCliente((data as CustomerDetail | null) ?? null);
     })();
     return () => {
@@ -150,11 +187,18 @@ export default function ClienteDetallePage() {
                 {cliente.customer_type === 'juridico' ? 'Persona Jurídica' : 'Persona Natural'}
               </p>
               <div className="mt-3 grid grid-cols-1 gap-2 text-sm text-zinc-300 sm:grid-cols-2">
+                <p>
+                  Tratamiento:{' '}
+                  {cliente.genero === 'F' ? 'Sra.' : cliente.genero === 'M' ? 'Sr.' : '—'}
+                </p>
                 <p>Cédula: {cliente.cedula ?? '—'}</p>
                 <p>RIF: {cliente.rif ?? '—'}</p>
+                <p>Estado civil: {cliente.estado_civil ?? '—'}</p>
+                <p>Profesión: {cliente.profesion ?? '—'}</p>
                 <p>Email: {cliente.email ?? '—'}</p>
                 <p>Teléfono: {cliente.telefono ?? '—'}</p>
                 <p>Representante legal: {cliente.representante_legal ?? '—'}</p>
+                <p className="sm:col-span-2">Domicilio: {cliente.direccion ?? '—'}</p>
                 <p>
                   Alta:{' '}
                   {cliente.created_at ? new Date(cliente.created_at).toLocaleDateString('es-VE', { dateStyle: 'medium' }) : '—'}

@@ -59,11 +59,16 @@ export const customers = pgTable('customers', {
   customerType: customerCategory('customer_type').default('natural').notNull(),
   cedula: text('cedula'),
   rif: text('rif'),
+  /** Tratamiento Sr./Sra. en contratos: M | F */
+  genero: text('genero'),
+  estadoCivil: text('estado_civil'),
+  profesion: text('profesion'),
   email: text('email'),
   telefono: text('telefono'),
   movil: text('movil'),
   tipo: text('tipo'),
   status: text('status'),
+  /** Domicilio para comparecencia / contratos */
   direccion: text('direccion'),
   imagen: text('imagen'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
