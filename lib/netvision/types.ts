@@ -44,8 +44,18 @@ export type DesignCamera = {
   /** Orientación en grados (0 = este; en canvas Y-down crece en sentido horario) */
   yawDeg: number
   mountHeightM: number
-  /** Apertura FOV en grados (override del catálogo). Si falta, usa el modelo. */
+  /** Apertura FOV total en grados (override del catálogo). Si faltan lados, se reparte 50/50. */
   fovDeg?: number
+  /**
+   * Medio FOV izquierdo (grados desde el yaw hacia la izquierda del cono).
+   * Independiente del derecho; si falta, se usa fovDeg/2 o catálogo/2.
+   */
+  fovLeftDeg?: number
+  /**
+   * Medio FOV derecho (grados desde el yaw hacia la derecha del cono).
+   * Independiente del izquierdo.
+   */
+  fovRightDeg?: number
   /** Alcance de visión en metros (override día/noche del catálogo). */
   rangeM?: number
 }

@@ -58,10 +58,16 @@ export type CameraPlacementToolProps = {
   showStructures?: boolean
   onAddAt: (normX: number, normY: number) => void
   onMove: (id: string, normX: number, normY: number) => void
-  /** Ajuste interactivo de óptica (yaw / FOV / alcance) desde el plano. */
+  /** Ajuste interactivo de óptica (yaw / FOV por lado / alcance) desde el plano. */
   onAdjustCameraVision?: (
     id: string,
-    patch: { yawDeg?: number; fovDeg?: number; rangeM?: number },
+    patch: {
+      yawDeg?: number
+      fovDeg?: number
+      fovLeftDeg?: number
+      fovRightDeg?: number
+      rangeM?: number
+    },
   ) => void
   metersPerNormX?: number
   metersPerNormY?: number
@@ -1091,16 +1097,30 @@ export default function CameraPlacementTool({
                 const radiusNorm =
                   sector?.radiusNorm ?? vision.rangeM / avgMPerNorm
                 const midAng = degToRad(vision.yawDeg)
-                const half = degToRad(vision.fovDeg / 2)
+                const leftHalf = degToRad(vision.fovLeftDeg)
+                const rightHalf = degToRad(vision.fovRightDeg)
                 const tipX = offsetX + (cam.x + Math.cos(midAng) * radiusNorm) * drawW
                 const tipY = offsetY + (cam.y + Math.sin(midAng) * radiusNorm) * drawH
-                const leftAng = midAng - half
-                const rightAng = midAng + half
+                const leftAng = midAng - leftHalf
+                const rightAng = midAng + rightHalf
                 const wingR = radiusNorm * 0.72
+                const midLabelR = radiusNorm * 0.48
                 const leftX = offsetX + (cam.x + Math.cos(leftAng) * wingR) * drawW
                 const leftY = offsetY + (cam.y + Math.sin(leftAng) * wingR) * drawH
                 const rightX = offsetX + (cam.x + Math.cos(rightAng) * wingR) * drawW
                 const rightY = offsetY + (cam.y + Math.sin(rightAng) * wingR) * drawH
+                const midLabelX = offsetX + (cam.x + Math.cos(midAng) * midLabelR) * drawW
+                const midLabelY = offsetY + (cam.y + Math.sin(midAng) * midLabelR) * drawH
+                const leftLabelR = radiusNorm * 0.4
+                const rightLabelR = radiusNorm * 0.4
+                const leftLabelX =
+                  offsetX + (cam.x + Math.cos(midAng - leftHalf * 0.55) * leftLabelR) * drawW
+                const leftLabelY =
+                  offsetY + (cam.y + Math.sin(midAng - leftHalf * 0.55) * leftLabelR) * drawH
+                const rightLabelX =
+                  offsetX + (cam.x + Math.cos(midAng + rightHalf * 0.55) * rightLabelR) * drawW
+                const rightLabelY =
+                  offsetY + (cam.y + Math.sin(midAng + rightHalf * 0.55) * rightLabelR) * drawH
                 const cx = offsetX + cam.x * drawW
                 const cy = offsetY + cam.y * drawH
 
@@ -1128,9 +1148,25 @@ export default function CameraPlacementTool({
                   let delta = ang - vision.yawDeg
                   while (delta > 180) delta -= 360
                   while (delta < -180) delta += 360
-                  const halfFov = Math.min(85, Math.max(10, Math.abs(delta)))
+                  if (mode === 'left') {
+                    // Izquierda del yaw: delta negativo en sentido horario canvas
+                    const half = Math.min(85, Math.max(10, Math.abs(Math.min(0, delta))))
+                    const left = Math.round(half)
+                    const right = Math.round(vision.fovRightDeg)
+                    onAdjustCameraVision(cam.id, {
+                      fovLeftDeg: left,
+                      fovRightDeg: right,
+                      fovDeg: left + right,
+                    })
+                    return
+                  }
+                  const half = Math.min(85, Math.max(10, Math.abs(Math.max(0, delta))))
+                  const left = Math.round(vision.fovLeftDeg)
+                  const right = Math.round(half)
                   onAdjustCameraVision(cam.id, {
-                    fovDeg: Math.round(halfFov * 2),
+                    fovLeftDeg: left,
+                    fovRightDeg: right,
+                    fovDeg: left + right,
                   })
                 }
 
@@ -1161,6 +1197,60 @@ export default function CameraPlacementTool({
                       stroke="rgba(165,243,252,0.9)"
                       strokeWidth={2}
                       dash={[5, 4]}
+                      listening={false}
+                    />
+                    <Line
+                      points={[cx, cy, leftX, leftY]}
+                      stroke="rgba(103,232,249,0.45)"
+                      strokeWidth={1.5}
+                      dash={[3, 4]}
+                      listening={false}
+                    />
+                    <Line
+                      points={[cx, cy, rightX, rightY]}
+                      stroke="rgba(103,232,249,0.45)"
+                      strokeWidth={1.5}
+                      dash={[3, 4]}
+                      listening={false}
+                    />
+                    {/* Grados en el medio del espectro (eje de orientación) */}
+                    <Text
+                      x={midLabelX - 22}
+                      y={midLabelY - 8}
+                      width={44}
+                      align="center"
+                      text={`${Math.round(vision.fovDeg)}°`}
+                      fontSize={13}
+                      fontStyle="bold"
+                      fill="#ecfeff"
+                      stroke="#0f172a"
+                      strokeWidth={0.6}
+                      listening={false}
+                    />
+                    <Text
+                      x={leftLabelX - 16}
+                      y={leftLabelY - 7}
+                      width={32}
+                      align="center"
+                      text={`${Math.round(vision.fovLeftDeg)}°`}
+                      fontSize={11}
+                      fontStyle="bold"
+                      fill="#a5f3fc"
+                      stroke="#0f172a"
+                      strokeWidth={0.5}
+                      listening={false}
+                    />
+                    <Text
+                      x={rightLabelX - 16}
+                      y={rightLabelY - 7}
+                      width={32}
+                      align="center"
+                      text={`${Math.round(vision.fovRightDeg)}°`}
+                      fontSize={11}
+                      fontStyle="bold"
+                      fill="#a5f3fc"
+                      stroke="#0f172a"
+                      strokeWidth={0.5}
                       listening={false}
                     />
                     <Circle

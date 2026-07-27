@@ -83,7 +83,11 @@ export function buildCoverageSectors(
         scale.metersPerNormX,
         scale.metersPerNormY,
       )
-      const { startAngleRad, endAngleRad } = fovSectorAngles(lens.yawDeg, lens.fovDeg)
+      const { startAngleRad, endAngleRad } = fovSectorAngles(
+        lens.yawDeg,
+        lens.fovLeftDeg,
+        lens.fovRightDeg,
+      )
       // Siempre polígono: recorta contra muros opacos (drywall/bloque/concreto)
       const polygon = buildFovPolygon(
         cam.x,
@@ -133,7 +137,11 @@ export function buildVisionSpectrum(
         scale.metersPerNormX,
         scale.metersPerNormY,
       )
-      const { startAngleRad, endAngleRad } = fovSectorAngles(lens.yawDeg, lens.fovDeg)
+      const { startAngleRad, endAngleRad } = fovSectorAngles(
+        lens.yawDeg,
+        lens.fovLeftDeg,
+        lens.fovRightDeg,
+      )
       const polygon = buildFovPolygon(
         cam.x,
         cam.y,

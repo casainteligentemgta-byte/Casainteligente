@@ -411,6 +411,14 @@ function normalizeCamera(c: Partial<DesignCamera> & { label?: string }): DesignC
     typeof c.fovDeg === 'number' && Number.isFinite(c.fovDeg)
       ? Math.min(170, Math.max(20, c.fovDeg))
       : undefined
+  const fovLeftDeg =
+    typeof c.fovLeftDeg === 'number' && Number.isFinite(c.fovLeftDeg)
+      ? Math.min(85, Math.max(10, c.fovLeftDeg))
+      : undefined
+  const fovRightDeg =
+    typeof c.fovRightDeg === 'number' && Number.isFinite(c.fovRightDeg)
+      ? Math.min(85, Math.max(10, c.fovRightDeg))
+      : undefined
   const rangeM =
     typeof c.rangeM === 'number' && Number.isFinite(c.rangeM)
       ? Math.min(120, Math.max(2, c.rangeM))
@@ -424,6 +432,8 @@ function normalizeCamera(c: Partial<DesignCamera> & { label?: string }): DesignC
     yawDeg: typeof c.yawDeg === 'number' ? c.yawDeg : 0,
     mountHeightM: typeof c.mountHeightM === 'number' ? c.mountHeightM : 2.8,
     ...(fovDeg != null ? { fovDeg } : {}),
+    ...(fovLeftDeg != null ? { fovLeftDeg } : {}),
+    ...(fovRightDeg != null ? { fovRightDeg } : {}),
     ...(rangeM != null ? { rangeM } : {}),
   }
 }

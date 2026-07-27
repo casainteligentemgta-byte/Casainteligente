@@ -47,15 +47,33 @@ export function metersToNormRadius(
 /**
  * Yaw en grados: 0 = derecha (+X), 90 = abajo (+Y) en canvas.
  * Devuelve ángulos de sector para Konva (radianes, 0 = este, sentido horario en canvas).
+ * Si se pasa `fovRightDeg`, `fovDegOrLeft` es el medio izquierdo (asimétrico).
+ * Si no, `fovDegOrLeft` es el FOV total simétrico.
  */
-export function fovSectorAngles(yawDeg: number, fovDeg: number): {
+export function fovSectorAngles(
+  yawDeg: number,
+  fovDegOrLeft: number,
+  fovRightDeg?: number,
+): {
   startAngleRad: number
   endAngleRad: number
 } {
-  const half = fovDeg / 2
-  const start = degToRad(yawDeg - half)
-  const end = degToRad(yawDeg + half)
+  const left =
+    typeof fovRightDeg === 'number' && Number.isFinite(fovRightDeg)
+      ? fovDegOrLeft
+      : fovDegOrLeft / 2
+  const right =
+    typeof fovRightDeg === 'number' && Number.isFinite(fovRightDeg)
+      ? fovRightDeg
+      : fovDegOrLeft / 2
+  const start = degToRad(yawDeg - left)
+  const end = degToRad(yawDeg + right)
   return { startAngleRad: start, endAngleRad: end }
+}
+
+/** Medio FOV por lado (grados), con clamp práctico para asas del plano. */
+export function clampFovHalf(deg: number): number {
+  return Math.min(85, Math.max(10, deg))
 }
 
 /** Punto de muestra en polar (canvas: ángulo desde +X, horario). */

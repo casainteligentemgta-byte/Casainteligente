@@ -929,6 +929,8 @@ export default function NexusVisionArchitectClient() {
         if (c.id !== id) return c
         const next: DesignCamera = { ...c, ...patch }
         if ('fovDeg' in patch && patch.fovDeg === undefined) delete next.fovDeg
+        if ('fovLeftDeg' in patch && patch.fovLeftDeg === undefined) delete next.fovLeftDeg
+        if ('fovRightDeg' in patch && patch.fovRightDeg === undefined) delete next.fovRightDeg
         if ('rangeM' in patch && patch.rangeM === undefined) delete next.rangeM
         return next
       }),
@@ -942,7 +944,13 @@ export default function NexusVisionArchitectClient() {
 
   const adjustCameraVision = (
     id: string,
-    patch: { yawDeg?: number; fovDeg?: number; rangeM?: number },
+    patch: {
+      yawDeg?: number
+      fovDeg?: number
+      fovLeftDeg?: number
+      fovRightDeg?: number
+      rangeM?: number
+    },
   ) => {
     patchCamera(id, patch)
   }
@@ -1063,6 +1071,8 @@ export default function NexusVisionArchitectClient() {
                 updateSelectedCam({
                   modelId: id,
                   fovDeg: undefined,
+                  fovLeftDeg: undefined,
+                  fovRightDeg: undefined,
                   rangeM: undefined,
                 })
               } else {
@@ -1995,6 +2005,8 @@ export default function NexusVisionArchitectClient() {
                         updateSelectedCam({
                           modelId: e.target.value,
                           fovDeg: undefined,
+                          fovLeftDeg: undefined,
+                          fovRightDeg: undefined,
                           rangeM: undefined,
                         })
                       }
@@ -2101,21 +2113,75 @@ export default function NexusVisionArchitectClient() {
                         </label>
                         <label className="block">
                           <span className="text-[var(--nexus-text-dim)]">
-                            Apertura FOV {vision.fovDeg}°
+                            Apertura total {vision.fovDeg}°
                             {isDual ? ' · gran angular' : ''}
-                            {selectedCam.fovDeg == null ? ' · catálogo' : ''}
+                            {selectedCam.fovDeg == null &&
+                            selectedCam.fovLeftDeg == null &&
+                            selectedCam.fovRightDeg == null
+                              ? ' · catálogo'
+                              : ''}
                           </span>
                           <input
                             type="range"
                             min={20}
                             max={170}
                             value={vision.fovDeg}
-                            onChange={(e) =>
-                              updateSelectedCam({ fovDeg: Number(e.target.value) })
-                            }
+                            onChange={(e) => {
+                              const total = Number(e.target.value)
+                              const half = Math.round(total / 2)
+                              updateSelectedCam({
+                                fovDeg: total,
+                                fovLeftDeg: half,
+                                fovRightDeg: total - half,
+                              })
+                            }}
                             className="mt-1 w-full"
                           />
                         </label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <label className="block">
+                            <span className="text-[var(--nexus-text-dim)]">
+                              Lado izq. {vision.fovLeftDeg}°
+                            </span>
+                            <input
+                              type="range"
+                              min={10}
+                              max={85}
+                              value={vision.fovLeftDeg}
+                              onChange={(e) => {
+                                const left = Number(e.target.value)
+                                const right = vision.fovRightDeg
+                                updateSelectedCam({
+                                  fovLeftDeg: left,
+                                  fovRightDeg: right,
+                                  fovDeg: left + right,
+                                })
+                              }}
+                              className="mt-1 w-full"
+                            />
+                          </label>
+                          <label className="block">
+                            <span className="text-[var(--nexus-text-dim)]">
+                              Lado der. {vision.fovRightDeg}°
+                            </span>
+                            <input
+                              type="range"
+                              min={10}
+                              max={85}
+                              value={vision.fovRightDeg}
+                              onChange={(e) => {
+                                const right = Number(e.target.value)
+                                const left = vision.fovLeftDeg
+                                updateSelectedCam({
+                                  fovLeftDeg: left,
+                                  fovRightDeg: right,
+                                  fovDeg: left + right,
+                                })
+                              }}
+                              className="mt-1 w-full"
+                            />
+                          </label>
+                        </div>
                         <label className="block">
                           <span className="text-[var(--nexus-text-dim)]">
                             Alcance{' '}
@@ -2140,14 +2206,20 @@ export default function NexusVisionArchitectClient() {
                           type="button"
                           className="text-[10px] text-[var(--nexus-text-muted)] underline"
                           onClick={() =>
-                            updateSelectedCam({ fovDeg: undefined, rangeM: undefined })
+                            updateSelectedCam({
+                              fovDeg: undefined,
+                              fovLeftDeg: undefined,
+                              fovRightDeg: undefined,
+                              rangeM: undefined,
+                            })
                           }
                         >
                           Restaurar FOV/alcance del modelo ({model.fovDeg}° /{' '}
                           {nightMode ? model.rangeNightM : model.rangeDayM} m)
                         </button>
                         <p className="text-[10px] text-[var(--nexus-text-dim)]">
-                          En el plano: punto cyan = orientación/alcance; laterales = apertura.
+                          En el plano: punto cyan = orientación/alcance; laterales = apertura de
+                          cada lado (independiente). Grados en el centro del espectro.
                           {isDual
                             ? ' Dual: cono cyan (angular) + naranja (tele).'
                             : ''}
