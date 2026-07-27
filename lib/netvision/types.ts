@@ -95,6 +95,11 @@ export type DesignNetworkNode = {
   modelId: string
   x: number
   y: number
+  /**
+   * Mitad del icono en el plano como fracción del ancho del plano (0–1).
+   * Permite escalar switch/AP/NVR al tamaño deseado según el plano.
+   */
+  planSizeNorm?: number
   /** Canal WiFi asignado (AP) */
   wifiChannel?: number
   /** IDs de cámaras asignadas a este switch/injector (PoE) */

@@ -54,6 +54,14 @@ import {
   networkCatalogByKind,
 } from '@/lib/netvision/catalog/network'
 import {
+  defaultNetworkPlanSize,
+  networkPlanSizePct,
+  NETWORK_PLAN_SIZE_MAX,
+  NETWORK_PLAN_SIZE_MIN,
+  planSizeNormFromPct,
+  resolveNetworkPlanSize,
+} from '@/lib/netvision/utils/networkNodeSize'
+import {
   buildCoverageSectors,
   buildVisionSpectrum,
   defaultScale,
@@ -697,6 +705,7 @@ export default function NexusVisionArchitectClient() {
       label: `${prefix}-${String(count).padStart(2, '0')}`,
       kind,
       modelId: defaultNetModels[kind],
+      planSizeNorm: defaultNetworkPlanSize(kind),
       linkedCameraIds: [],
       wifiChannel: kind === 'ap' ? 36 : undefined,
     }
@@ -982,6 +991,15 @@ export default function NexusVisionArchitectClient() {
       ...p,
       networkNodes: p.networkNodes.map((n) =>
         n.id === selectedId ? { ...n, ...patch } : n,
+      ),
+    }))
+  }
+
+  const patchNetworkNode = (id: string, patch: Partial<DesignNetworkNode>) => {
+    setProject((p) => ({
+      ...p,
+      networkNodes: p.networkNodes.map((n) =>
+        n.id === id ? { ...n, ...patch } : n,
       ),
     }))
   }
@@ -1786,6 +1804,9 @@ export default function NexusVisionArchitectClient() {
                     onCableWaypointInsert={insertBreakOnRoute}
                     onCableWaypointRemove={removeBreakOnRoute}
                     onStructureMove={onStructureMove}
+                    onNetworkSizeChange={(id, planSizeNorm) =>
+                      patchNetworkNode(id, { planSizeNorm })
+                    }
                     stageRef={stageRef}
                     showZoomOverlay={false}
                     zoomControlsRef={zoomControlsRef}
@@ -2316,6 +2337,42 @@ export default function NexusVisionArchitectClient() {
                       return `${m.poeBudgetW} W PoE · ${m.poePorts} puertos · $${m.priceUsd}`
                     })()}
                   </p>
+                  <label className="block">
+                    <span className="flex items-center justify-between text-[var(--nexus-text-dim)]">
+                      <span>Tamaño en plano</span>
+                      <span className="tabular-nums text-white">
+                        {networkPlanSizePct(resolveNetworkPlanSize(selectedNet))}%
+                        del ancho
+                      </span>
+                    </span>
+                    <input
+                      type="range"
+                      min={networkPlanSizePct(NETWORK_PLAN_SIZE_MIN)}
+                      max={networkPlanSizePct(NETWORK_PLAN_SIZE_MAX)}
+                      step={0.1}
+                      value={networkPlanSizePct(resolveNetworkPlanSize(selectedNet))}
+                      onChange={(e) =>
+                        updateSelectedNet({
+                          planSizeNorm: planSizeNormFromPct(Number(e.target.value)),
+                        })
+                      }
+                      className="mt-1 w-full accent-[var(--nexus-cyan)]"
+                    />
+                    <span className="mt-0.5 flex justify-between text-[9px] text-[var(--nexus-text-dim)]">
+                      <button
+                        type="button"
+                        className="underline-offset-2 hover:underline"
+                        onClick={() =>
+                          updateSelectedNet({
+                            planSizeNorm: defaultNetworkPlanSize(selectedNet.kind),
+                          })
+                        }
+                      >
+                        Predeterminado
+                      </button>
+                      <span>Arrastra la esquina en el plano</span>
+                    </span>
+                  </label>
                   <Button
                     type="button"
                     variant="glass"
