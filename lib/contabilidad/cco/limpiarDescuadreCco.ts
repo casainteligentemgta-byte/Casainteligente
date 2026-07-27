@@ -12,7 +12,10 @@ import {
   type GastoGemeloPar,
 } from '@/lib/contabilidad/cco/detectarGastosGemelos';
 import { normalizarDevaluacionConfig } from '@/lib/contabilidad/cco/tasas';
-import { idsIngresosGemelosAEliminar } from '@/lib/contabilidad/cco/dedupeIngresosGemelos';
+import {
+  previewIngresosGemelos,
+  type IngresoGemeloParPreview,
+} from '@/lib/contabilidad/cco/dedupeIngresosGemelos';
 
 export type { GastoGemeloPar };
 
@@ -20,6 +23,8 @@ export type LimpiezaDescuadreResult = {
   auditoriaEliminada: number;
   duplicadosEliminados: number;
   ingresosGemelosEliminados: number;
+  ingresosGemelosMontoUsd: number;
+  ingresosGemelosPares: IngresoGemeloParPreview[];
   devaluacionAntes: number | null;
   devaluacionDespues: number | null;
   devaluacionCorregida: boolean;
@@ -27,6 +32,13 @@ export type LimpiezaDescuadreResult = {
   /** Pares gemelos detectados (dry-run o tras marcar a borrar). */
   gastosGemelos: GastoGemeloPar[];
   errores: string[];
+};
+
+export type LimpiarDescuadreOpts = {
+  proyectoId: string;
+  dryRun?: boolean;
+  /** Solo revisa/borra ingresos gemelos (LUIS · ABONO); no toca gastos ni devaluación. */
+  soloIngresosGemelos?: boolean;
 };
 
 function num(v: unknown): number {
@@ -78,16 +90,75 @@ async function borrarCompraContableSuave(
   if (error) throw error;
 }
 
+async function limpiarIngresosGemelosProyecto(
+  supabase: SupabaseClient,
+  proyectoId: string,
+  dryRun: boolean,
+  result: LimpiezaDescuadreResult,
+): Promise<void> {
+  try {
+    const pageSize = 1000;
+    const inyecciones: Array<{
+      id: string;
+      fecha_ingreso?: string | null;
+      monto_usd?: number | null;
+      origen_fondo?: string | null;
+      creado_al?: string | null;
+    }> = [];
+    let from = 0;
+    for (let guard = 0; guard < 40; guard += 1) {
+      const { data, error } = await supabase
+        .from('ci_inyecciones_capital')
+        .select('id,fecha_ingreso,monto_usd,origen_fondo,creado_al')
+        .eq('proyecto_id', proyectoId)
+        .eq('creado_por', 'cco_v4_import')
+        .order('fecha_ingreso', { ascending: true })
+        .range(from, from + pageSize - 1);
+      if (error) throw error;
+      const batch = data ?? [];
+      inyecciones.push(...batch);
+      if (batch.length < pageSize) break;
+      from += pageSize;
+    }
+
+    const preview = previewIngresosGemelos(inyecciones);
+    result.ingresosGemelosPares = preview.pares;
+    result.ingresosGemelosMontoUsd = preview.montoUsdALiberar;
+
+    if (dryRun) {
+      result.ingresosGemelosEliminados = preview.cantidadEliminar;
+      result.idsEliminados.push(...preview.idsEliminar);
+      return;
+    }
+
+    for (const id of preview.idsEliminar) {
+      const { error } = await supabase.from('ci_inyecciones_capital').delete().eq('id', id);
+      if (error) result.errores.push(`ingreso gemelo ${id}: ${error.message}`);
+      else {
+        result.ingresosGemelosEliminados += 1;
+        result.idsEliminados.push(id);
+      }
+    }
+  } catch (e) {
+    result.errores.push(
+      `ingresos gemelos: ${e instanceof Error ? e.message : String(e)}`,
+    );
+  }
+}
+
 export async function limpiarDescuadreCco(
   supabase: SupabaseClient,
-  opts: { proyectoId: string; dryRun?: boolean },
+  opts: LimpiarDescuadreOpts,
 ): Promise<LimpiezaDescuadreResult> {
   const proyectoId = opts.proyectoId.trim();
   const dryRun = Boolean(opts.dryRun);
+  const soloIngresosGemelos = Boolean(opts.soloIngresosGemelos);
   const result: LimpiezaDescuadreResult = {
     auditoriaEliminada: 0,
     duplicadosEliminados: 0,
     ingresosGemelosEliminados: 0,
+    ingresosGemelosMontoUsd: 0,
+    ingresosGemelosPares: [],
     devaluacionAntes: null,
     devaluacionDespues: null,
     devaluacionCorregida: false,
@@ -95,6 +166,11 @@ export async function limpiarDescuadreCco(
     gastosGemelos: [],
     errores: [],
   };
+
+  if (soloIngresosGemelos) {
+    await limpiarIngresosGemelosProyecto(supabase, proyectoId, dryRun, result);
+    return result;
+  }
 
   const compras = await fetchAllComprasProyecto(supabase, proyectoId);
 
@@ -192,49 +268,7 @@ export async function limpiarDescuadreCco(
   }
 
   // Ingresos gemelos (mismo abono/fecha/monto; uno con operador LUIS y otro limpio)
-  try {
-    const pageSize = 1000;
-    const inyecciones: Array<{
-      id: string;
-      fecha_ingreso?: string | null;
-      monto_usd?: number | null;
-      origen_fondo?: string | null;
-      creado_al?: string | null;
-    }> = [];
-    let from = 0;
-    for (let guard = 0; guard < 40; guard += 1) {
-      const { data, error } = await supabase
-        .from('ci_inyecciones_capital')
-        .select('id,fecha_ingreso,monto_usd,origen_fondo,creado_al')
-        .eq('proyecto_id', proyectoId)
-        .eq('creado_por', 'cco_v4_import')
-        .order('fecha_ingreso', { ascending: true })
-        .range(from, from + pageSize - 1);
-      if (error) throw error;
-      const batch = data ?? [];
-      inyecciones.push(...batch);
-      if (batch.length < pageSize) break;
-      from += pageSize;
-    }
-    const idsIngresos = idsIngresosGemelosAEliminar(inyecciones);
-    if (dryRun) {
-      result.ingresosGemelosEliminados = idsIngresos.length;
-      result.idsEliminados.push(...idsIngresos);
-    } else {
-      for (const id of idsIngresos) {
-        const { error } = await supabase.from('ci_inyecciones_capital').delete().eq('id', id);
-        if (error) result.errores.push(`ingreso gemelo ${id}: ${error.message}`);
-        else {
-          result.ingresosGemelosEliminados += 1;
-          result.idsEliminados.push(id);
-        }
-      }
-    }
-  } catch (e) {
-    result.errores.push(
-      `ingresos gemelos: ${e instanceof Error ? e.message : String(e)}`,
-    );
-  }
+  await limpiarIngresosGemelosProyecto(supabase, proyectoId, dryRun, result);
 
   return result;
 }
