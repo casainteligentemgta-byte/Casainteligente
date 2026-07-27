@@ -34,6 +34,7 @@ import { hrefListaContratosExpress } from '@/lib/talento/hrefListaContratosExpre
 import { createClient } from '@/lib/supabase/client';
 import type { RolExamen } from '@/types/talento';
 import DetalleRespuestasExamenModal from '@/components/rrhh/reclutamiento/DetalleRespuestasExamenModal';
+import ModalTestsPsicologicos from '@/components/rrhh/reclutamiento/ModalTestsPsicologicos';
 
 type TabId = 'examen' | 'evaluaciones' | 'pendientes';
 
@@ -64,6 +65,9 @@ export default function RrhhReclutamientoClient() {
   const [ultimoEnlace, setUltimoEnlace] = useState<string | null>(null);
   const [detalleEmpleadoId, setDetalleEmpleadoId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  
+  const [testsPsicologicosEmpleadoId, setTestsPsicologicosEmpleadoId] = useState<string | null>(null);
+  const [testsPsicologicosNombre, setTestsPsicologicosNombre] = useState<string | null>(null);
 
   const examenPreview = useMemo(() => preguntasParaDetalle(rolPreview), [rolPreview]);
 
@@ -550,6 +554,16 @@ export default function RrhhReclutamientoClient() {
                     </p>
                   </div>
                   <div className="flex shrink-0 flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTestsPsicologicosEmpleadoId(r.id);
+                        setTestsPsicologicosNombre((r.nombre_completo ?? '').trim() || 'Sin nombre');
+                      }}
+                      className="rounded-lg border border-sky-500/35 bg-sky-950/30 px-3 py-2 text-xs font-semibold text-sky-200 hover:bg-sky-900/40"
+                    >
+                      Tests Psicológicos
+                    </button>
                     {(est === 'evaluado' || est === 'en_curso') && (
                       <button
                         type="button"
@@ -616,27 +630,39 @@ export default function RrhhReclutamientoClient() {
                         {docMostrado(r)} · {etiquetaEstadoEvaluacion(r)}
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        seleccionarParaEnlace(r);
-                        void generarEnlaceExamen(r.id);
-                      }}
-                      className="rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-2 text-xs font-bold text-emerald-100"
-                    >
-                      Generar enlace examen
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void borrarEmpleado(r)}
-                      disabled={deletingId === r.id}
-                      title="Eliminar trabajador de la lista"
-                      aria-label={`Eliminar a ${(r.nombre_completo ?? '').trim() || 'trabajador'}`}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-950/25 px-3 py-2 text-xs font-semibold text-red-300 transition hover:border-red-400/50 hover:bg-red-950/40 disabled:opacity-50"
-                    >
-                      <Trash2 className={`h-3.5 w-3.5 ${deletingId === r.id ? 'animate-pulse' : ''}`} aria-hidden />
-                      Eliminar
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTestsPsicologicosEmpleadoId(r.id);
+                          setTestsPsicologicosNombre((r.nombre_completo ?? '').trim() || 'Sin nombre');
+                        }}
+                        className="rounded-lg border border-sky-500/35 bg-sky-950/30 px-3 py-2 text-xs font-semibold text-sky-200 hover:bg-sky-900/40"
+                      >
+                        Tests Psicológicos
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          seleccionarParaEnlace(r);
+                          void generarEnlaceExamen(r.id);
+                        }}
+                        className="rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-2 text-xs font-bold text-emerald-100"
+                      >
+                        Generar enlace examen
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void borrarEmpleado(r)}
+                        disabled={deletingId === r.id}
+                        title="Eliminar trabajador de la lista"
+                        aria-label={`Eliminar a ${(r.nombre_completo ?? '').trim() || 'trabajador'}`}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-950/25 px-3 py-2 text-xs font-semibold text-red-300 transition hover:border-red-400/50 hover:bg-red-950/40 disabled:opacity-50"
+                      >
+                        <Trash2 className={`h-3.5 w-3.5 ${deletingId === r.id ? 'animate-pulse' : ''}`} aria-hidden />
+                        Eliminar
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -668,6 +694,16 @@ export default function RrhhReclutamientoClient() {
                     <div className="flex flex-wrap gap-2">
                       {x.empleado_id ? (
                         <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setTestsPsicologicosEmpleadoId(x.empleado_id!);
+                              setTestsPsicologicosNombre(x.obrero_nombre || 'Sin nombre');
+                            }}
+                            className="rounded-lg border border-sky-500/35 bg-sky-950/30 px-3 py-2 text-xs font-semibold text-sky-200 hover:bg-sky-900/40"
+                          >
+                            Tests Psicológicos
+                          </button>
                           <button
                             type="button"
                             onClick={() => setDetalleEmpleadoId(x.empleado_id!)}
@@ -710,6 +746,16 @@ export default function RrhhReclutamientoClient() {
         open={detalleEmpleadoId != null}
         empleadoId={detalleEmpleadoId}
         onClose={() => setDetalleEmpleadoId(null)}
+      />
+
+      <ModalTestsPsicologicos
+        open={testsPsicologicosEmpleadoId != null}
+        empleadoId={testsPsicologicosEmpleadoId}
+        empleadoNombre={testsPsicologicosNombre}
+        onClose={() => {
+          setTestsPsicologicosEmpleadoId(null);
+          setTestsPsicologicosNombre(null);
+        }}
       />
     </div>
   );

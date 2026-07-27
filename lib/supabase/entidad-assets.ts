@@ -16,7 +16,7 @@ function bucketNotFound(msg: string): boolean {
 function extOf(file: File): string {
   const n = file.name.split('.').pop()?.toLowerCase();
   if (n && /^[a-z0-9]+$/.test(n)) return n;
-  return 'png';
+  return 'bin';
 }
 
 /**
@@ -26,7 +26,7 @@ function extOf(file: File): string {
 export async function uploadEntidadAsset(
   supabase: SupabaseClient,
   entidadId: string,
-  kind: 'logo' | 'sello',
+  kind: 'logo' | 'sello' | 'documento',
   file: File,
 ): Promise<{ publicUrl: string | null; error: string | null }> {
   const ext = extOf(file);

@@ -129,6 +129,18 @@ function RrhhHubInner() {
           >
             Reclutamiento
           </button>
+          <Link
+            href="/rrhh/nomina"
+            className="px-4 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider border border-white/[0.06] bg-white/[0.04] text-sky-400 hover:bg-sky-950/30 hover:border-sky-500/30 transition-all"
+          >
+            Nómina
+          </Link>
+          <Link
+            href="/rrhh/parafiscales"
+            className="px-4 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider border border-white/[0.06] bg-white/[0.04] text-emerald-400 hover:bg-emerald-950/30 hover:border-emerald-500/30 transition-all"
+          >
+            Parafiscales
+          </Link>
         </nav>
 
         {error ? <p className="text-sm text-amber-400">{error}</p> : null}

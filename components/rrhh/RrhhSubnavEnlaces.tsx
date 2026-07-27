@@ -34,6 +34,13 @@ export default function RrhhSubnavEnlaces({ proyectoModuloId = null, className =
         Reclutamiento
       </Link>
       <Link
+        href="/rrhh/banca"
+        className="inline-flex items-center gap-2 rounded-xl border border-teal-500/40 bg-teal-950/45 px-3 py-2 text-sm font-semibold text-teal-100 transition hover:bg-teal-900/55"
+      >
+        <Users className="h-4 w-4 shrink-0" aria-hidden />
+        Banca Obreros
+      </Link>
+      <Link
         href="/rrhh/trabajadores"
         className="inline-flex items-center gap-2 rounded-xl border border-fuchsia-500/40 bg-fuchsia-950/45 px-3 py-2 text-sm font-semibold text-fuchsia-100 transition hover:bg-fuchsia-900/55"
       >

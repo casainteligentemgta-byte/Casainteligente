@@ -154,6 +154,8 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
   const [rmNumero, setRmNumero] = useState('');
   const [rmFecha, setRmFecha] = useState('');
   const [rmCirc, setRmCirc] = useState('');
+  const [rmDocumentos, setRmDocumentos] = useState<NonNullable<RegistroMercantilCi['documentos']>>([]);
+  const [rmNuevosArchivos, setRmNuevosArchivos] = useState<File[]>([]);
 
   const [permIvss, setPermIvss] = useState('');
   const [permInces, setPermInces] = useState('');
@@ -181,6 +183,8 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
     setRmNumero(strField(rm, 'numero'));
     setRmFecha(strField(rm, 'fecha'));
     setRmCirc(strField(rm, 'circunscripcion'));
+    setRmDocumentos(Array.isArray(rm.documentos) ? (rm.documentos as NonNullable<RegistroMercantilCi['documentos']>) : []);
+    setRmNuevosArchivos([]);
 
     const repsRm = parseRepresentantesRm(rm.representantes);
     if (repsRm.length > 0) {
@@ -279,6 +283,7 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
         fecha: rmFecha,
         circunscripcion: rmCirc,
         representantes: representantesPayload,
+        documentos: rmDocumentos,
       });
       const permisologia: PermisologiaCi = permisologiaDesdeCampos({
         ivss: permIvss,
@@ -371,16 +376,41 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
         else if (up.publicUrl) nextSello = up.publicUrl;
       }
 
-      if (logoFile || selloFile) {
+      const subidos: NonNullable<RegistroMercantilCi['documentos']> = [];
+      for (const f of rmNuevosArchivos) {
+        const up = await uploadEntidadAsset(supabase, id, 'documento', f);
+        if (up.error) {
+          toast.error(`Documento ${f.name}: ${up.error}`);
+        } else if (up.publicUrl) {
+          subidos.push({
+            id: newRepRowId(),
+            nombre: f.name,
+            url: up.publicUrl,
+            size: f.size,
+            tipo: f.type || 'archivo',
+          });
+        }
+      }
+
+      const finalDocumentos = [...rmDocumentos, ...subidos];
+      let didUpdateRmDocs = false;
+      let currentRm = registroMercantil;
+      if (subidos.length > 0 || rmDocumentos.length !== (asRecord(entidad?.registro_mercantil ?? null)?.documentos as unknown[])?.length) {
+        currentRm = { ...registroMercantil, documentos: finalDocumentos.length > 0 ? finalDocumentos : undefined };
+        didUpdateRmDocs = true;
+      }
+
+      if (logoFile || selloFile || didUpdateRmDocs) {
         const { error: upImg } = await supabase
           .from('ci_entidades')
           .update({
             logo_url: nextLogo,
             sello_url: nextSello,
+            registro_mercantil: currentRm as never,
             updated_at: new Date().toISOString(),
           })
           .eq('id', id);
-        if (upImg) toast.error(upImg.message ?? 'No se pudieron guardar las URLs de imagen.');
+        if (upImg) toast.error(upImg.message ?? 'No se pudieron guardar los adjuntos.');
       }
 
       toast.success(
@@ -808,6 +838,101 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
                       style={{ colorScheme: 'dark' }}
                     />
                   </div>
+                </div>
+
+                <div className="mt-6 border-t border-white/10 pt-6">
+                  <div className="mb-4">
+                    <h3 className="text-sm font-bold text-white">Documentos / Archivos</h3>
+                    <p className="text-xs text-zinc-500">
+                      Sube las copias del Acta Constitutiva, asambleas u otros documentos mercantiles. Podrás compartirlos o verlos desde cualquier dispositivo.
+                    </p>
+                  </div>
+                  
+                  {rmDocumentos.length > 0 ? (
+                    <ul className="mb-4 space-y-2">
+                      {rmDocumentos.map((doc) => (
+                        <li key={doc.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/5 p-3">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <FileText className="h-5 w-5 shrink-0 text-zinc-400" />
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium text-zinc-200">{doc.nombre}</p>
+                              {doc.size ? <p className="text-[10px] text-zinc-500">{(doc.size / 1024).toFixed(1)} KB</p> : null}
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (navigator.share) {
+                                  navigator.share({ title: doc.nombre, url: doc.url }).catch(console.error);
+                                } else {
+                                  navigator.clipboard.writeText(doc.url);
+                                  toast.success('Enlace copiado al portapapeles');
+                                }
+                              }}
+                              className="rounded bg-white/10 px-2 py-1 text-xs font-semibold text-zinc-300 hover:bg-white/20"
+                            >
+                              Compartir
+                            </button>
+                            <a
+                              href={doc.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="rounded bg-white/10 px-2 py-1 text-xs font-semibold text-zinc-300 hover:bg-white/20"
+                            >
+                              Ver
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (window.confirm('¿Quitar este documento?')) {
+                                  setRmDocumentos((prev) => prev.filter((d) => d.id !== doc.id));
+                                }
+                              }}
+                              className="rounded bg-red-500/20 px-2 py-1 text-xs font-semibold text-red-400 hover:bg-red-500/40"
+                            >
+                              Quitar
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+
+                  {rmNuevosArchivos.length > 0 ? (
+                    <div className="mb-4">
+                      <p className="mb-2 text-xs font-semibold text-[#FFD60A]">Por subir al guardar:</p>
+                      <ul className="space-y-1">
+                        {rmNuevosArchivos.map((f, i) => (
+                          <li key={i} className="flex items-center justify-between text-xs text-zinc-400">
+                            <span className="truncate">{f.name} ({(f.size / 1024).toFixed(1)} KB)</span>
+                            <button
+                              type="button"
+                              onClick={() => setRmNuevosArchivos((prev) => prev.filter((_, idx) => idx !== i))}
+                              className="text-red-400 hover:text-red-300"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+
+                  <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-white/20 bg-white/[0.02] py-4 text-sm font-medium text-zinc-400 hover:border-[#FF9500]/40 hover:text-[#FFD60A]">
+                    <Plus className="h-4 w-4" />
+                    Subir nuevos documentos
+                    <input
+                      type="file"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => {
+                        if (e.target.files) {
+                          setRmNuevosArchivos((prev) => [...prev, ...Array.from(e.target.files!)]);
+                        }
+                      }}
+                    />
+                  </label>
                 </div>
               </Tabs.Content>
 

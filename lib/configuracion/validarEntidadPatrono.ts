@@ -71,6 +71,7 @@ export function registroMercantilDesdeCampos(fields: {
   fecha: string;
   circunscripcion: string;
   representantes: RepresentanteMercantilCi[];
+  documentos?: { id: string; nombre: string; url: string; size?: number; tipo?: string }[];
 }): RegistroMercantilCi {
   const reps = (fields.representantes ?? []).map(limpiarRepresentante).filter(Boolean) as RepresentanteMercantilCi[];
   return {
@@ -83,6 +84,7 @@ export function registroMercantilDesdeCampos(fields: {
     fecha: fields.fecha.trim() || undefined,
     circunscripcion: fields.circunscripcion.trim() || undefined,
     representantes: reps.length ? reps : undefined,
+    documentos: fields.documentos?.length ? fields.documentos : undefined,
   };
 }
 

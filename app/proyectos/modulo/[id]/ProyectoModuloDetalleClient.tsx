@@ -802,6 +802,12 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                 >
                   Gestión laboral
                 </Link>
+                <Link
+                  href={`/proyectos/modulo/${encodeURIComponent(id)}/nomina`}
+                  className="rounded-xl border border-teal-500/40 bg-teal-950/40 px-3 py-2 text-xs font-semibold text-teal-100 hover:bg-teal-900/55"
+                >
+                  Nómina y Asistencia
+                </Link>
               </>
             ) : null}
             {!tabCabeceraMinimaSinAcciones && !modoEdicion && !fichaModuloSinPestaña ? (
@@ -825,6 +831,12 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                   className="rounded-xl border border-violet-500/40 bg-violet-950/40 px-3 py-2 text-xs font-semibold text-violet-100 hover:bg-violet-900/55"
                 >
                   Gestión laboral
+                </Link>
+                <Link
+                  href={`/proyectos/modulo/${encodeURIComponent(id)}/nomina`}
+                  className="rounded-xl border border-teal-500/40 bg-teal-950/40 px-3 py-2 text-xs font-semibold text-teal-100 hover:bg-teal-900/55"
+                >
+                  Nómina y Asistencia
                 </Link>
               </>
             ) : null}
