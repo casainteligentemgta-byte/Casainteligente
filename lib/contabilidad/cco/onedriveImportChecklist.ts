@@ -5,7 +5,7 @@ export const CHECKLIST_EXPORT_SUEGRO = [
     id: 'export',
     titulo: 'Exportar en el programa CCO',
     detalle:
-      'Generar el maestro completo (GASTO, INGRESO, CONTRATO, PRESUPUESTO). El archivo debe incluir la columna ID (la misma del SQLite).',
+      'Generar el maestro completo (GASTO, INGRESO, CONTRATO, PRESUPUESTO). El archivo debe incluir la columna ID (la misma del SQLite). Prompt Antigravity: docs/PROMPT-ANTIGRAVITY-EXPORT-MAESTRO-CCO.md',
   },
   {
     id: 'id',
@@ -40,6 +40,10 @@ export const CHECKLIST_EXPORT_SUEGRO = [
 
 export const COMANDO_IMPORT_ONEDRIVE =
   'npm run cco:import-onedrive -- --dir "C:\\\\Users\\\\…\\\\OneDrive\\\\CasaInteligente\\\\CCO" --proyecto-id <UUID>';
+
+/** Ruta del prompt para pegar en Antigravity (programa del suegro). */
+export const PROMPT_ANTIGRAVITY_EXPORT_DOC =
+  'docs/PROMPT-ANTIGRAVITY-EXPORT-MAESTRO-CCO.md';
 
 /** Cobertura de IDs explícitos del CSV (0–1). */
 export function coberturaIdsExplicitos(conIdExplicit: number, total: number): number {
