@@ -593,6 +593,25 @@ export default function CameraPlacementTool({
           {showWifi &&
             wifiSpectrum.length === 0 &&
             wifiCircles.map((c) => {
+              const poly = c.polygon
+              if (poly && poly.length >= 3) {
+                const pts: number[] = []
+                for (const p of poly) {
+                  pts.push(offsetX + p.x * drawW, offsetY + p.y * drawH)
+                }
+                return (
+                  <Line
+                    key={`wifi-${c.nodeId}`}
+                    points={pts}
+                    closed
+                    fill="rgba(52,211,153,0.12)"
+                    stroke="rgba(52,211,153,0.55)"
+                    strokeWidth={1}
+                    dash={[6, 4]}
+                    listening={false}
+                  />
+                )
+              }
               const cx = offsetX + c.cx * drawW
               const cy = offsetY + c.cy * drawH
               const radius = Math.max(8, c.radiusNorm * avg)

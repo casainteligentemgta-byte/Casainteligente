@@ -300,8 +300,8 @@ export default function NexusVisionArchitectClient() {
   )
 
   const wifiCircles = useMemo(
-    () => buildWifiCoverage(project.networkNodes, project.scale),
-    [project.networkNodes, project.scale],
+    () => buildWifiCoverage(project.networkNodes, project.scale, structures),
+    [project.networkNodes, project.scale, structures],
   )
 
   const wifiSpectrum = useMemo(

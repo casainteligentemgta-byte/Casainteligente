@@ -21,7 +21,7 @@ export const NETVISION_LAYER_HELP: LayerHelpItem[] = [
     id: 'wifi',
     label: 'WiFi',
     blurb:
-      'Espectro WiFi de los APs. Los muros atenúan la señal (bloque más que drywall; vidrio poco).',
+      'Espectro WiFi de los APs. Drywall, bloque y concreto cortan la cobertura; vidrio, ventana y puerta solo atenúan.',
   },
   {
     id: 'sound',
