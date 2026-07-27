@@ -169,3 +169,38 @@ export function isDualCameraModel(modelId: string): boolean {
   const model = getCameraModel(modelId)
   return (model?.lenses?.length ?? 0) >= 2
 }
+
+/**
+ * FOV / alcance del catálogo para precargar al elegir marca·modelo.
+ * Dual: usa la lente primaria (gran angular).
+ */
+export function catalogVisionDefaults(
+  modelId: string,
+  mode: 'day' | 'night' = 'day',
+): {
+  fovDeg: number
+  fovLeftDeg: number
+  fovRightDeg: number
+  rangeM: number
+} {
+  const model = getCameraModelOrDefault(modelId)
+  const primaryFov =
+    model.lenses && model.lenses.length >= 2
+      ? model.lenses[0]!.fovDeg
+      : model.fovDeg
+  const halves = resolveFovHalves({}, primaryFov)
+  const primaryRange =
+    model.lenses && model.lenses.length >= 2
+      ? mode === 'night'
+        ? model.lenses[0]!.rangeNightM
+        : model.lenses[0]!.rangeDayM
+      : mode === 'night'
+        ? model.rangeNightM
+        : model.rangeDayM
+  return {
+    fovDeg: halves.total,
+    fovLeftDeg: halves.left,
+    fovRightDeg: halves.right,
+    rangeM: clampRange(primaryRange),
+  }
+}

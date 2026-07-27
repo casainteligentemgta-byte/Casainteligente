@@ -41,6 +41,7 @@ import {
   cameraCatalogGrouped,
   effectiveCameraLenses,
   effectiveCameraVision,
+  catalogVisionDefaults,
   getCameraModelOrDefault,
 } from '@/lib/netvision/catalog/cameras'
 import {
@@ -131,6 +132,7 @@ import type {
   NetworkNodeKind,
   StructureMaterialId,
 } from '@/lib/netvision/types'
+import { snapOrtho90 } from '@/lib/netvision/utils/structureDraw'
 import { downloadDataUrl } from '@/lib/netvision/utils/exporters'
 import { downloadNetVisionPlanPdf } from '@/lib/netvision/utils/exportPlanPdf'
 import type { NetVisionZoomControls } from '@/components/netvision/CameraPlacementTool'
@@ -259,6 +261,19 @@ export default function NexusVisionArchitectClient() {
     if (!hydrated) return
     setCalibMeters(defaultCalibrationInput(project.unitSystem ?? 'metric'))
   }, [project.unitSystem, hydrated])
+
+  /** Escape termina el trazo de muro en curso. */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      if (structureDraft) {
+        setStructureDraft(null)
+        e.preventDefault()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [structureDraft])
 
   const structures = project.structures ?? []
 
@@ -598,6 +613,7 @@ export default function NexusVisionArchitectClient() {
   const addCameraAt = (normX: number, normY: number) => {
     if (!project.planoUrl) return
     const n = project.cameras.length + 1
+    const vision = catalogVisionDefaults(defaultModelId, nightMode ? 'night' : 'day')
     const pin: DesignCamera = {
       id: uid(),
       x: Math.round(normX * 1000) / 1000,
@@ -606,6 +622,7 @@ export default function NexusVisionArchitectClient() {
       modelId: defaultModelId,
       yawDeg: 0,
       mountHeightM: 2.8,
+      ...vision,
     }
     setError(null)
     setProject((p) => ({ ...p, cameras: [...p.cameras, pin] }))
@@ -874,9 +891,11 @@ export default function NexusVisionArchitectClient() {
         setStructureDraft({ x: normX, y: normY })
         return
       }
-      const dx = Math.abs(structureDraft.x - normX)
-      const dy = Math.abs(structureDraft.y - normY)
-      if (dx + dy < 0.01) {
+      // Snap a 90° (horizontal o vertical) para esquinas ortogonales.
+      const snapped = snapOrtho90(structureDraft, { x: normX, y: normY })
+      const dx = Math.abs(structureDraft.x - snapped.x)
+      const dy = Math.abs(structureDraft.y - snapped.y)
+      if (dx + dy < 0.008) {
         setError('El segmento es demasiado corto; elige otro punto.')
         return
       }
@@ -884,10 +903,12 @@ export default function NexusVisionArchitectClient() {
         drawStructureMaterial,
         structureDraft.x,
         structureDraft.y,
-        normX,
-        normY,
+        snapped.x,
+        snapped.y,
       )
-      setStructureDraft(null)
+      // Continuar dibujando desde la esquina (muro polilínea con tramos H/V).
+      setStructureDraft({ x: snapped.x, y: snapped.y })
+      setError(null)
     }
   }
 
@@ -1068,12 +1089,10 @@ export default function NexusVisionArchitectClient() {
             onChange={(e) => {
               const id = e.target.value
               if (selectedCam) {
+                const vision = catalogVisionDefaults(id, nightMode ? 'night' : 'day')
                 updateSelectedCam({
                   modelId: id,
-                  fovDeg: undefined,
-                  fovLeftDeg: undefined,
-                  fovRightDeg: undefined,
-                  rangeM: undefined,
+                  ...vision,
                 })
               } else {
                 setDefaultModelId(id)
@@ -1823,6 +1842,7 @@ export default function NexusVisionArchitectClient() {
               }}
               onSelect={setSelectedId}
               onRemove={quitar}
+              onFinishDraft={() => setStructureDraft(null)}
             />
           ) : sideTab === 'norm' ? (
             <ComplianceValidatorPanel
@@ -2001,15 +2021,14 @@ export default function NexusVisionArchitectClient() {
                     <span className="text-[var(--nexus-text-dim)]">Modelo</span>
                     <select
                       value={selectedCam.modelId}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        const id = e.target.value
+                        const vision = catalogVisionDefaults(id, nightMode ? 'night' : 'day')
                         updateSelectedCam({
-                          modelId: e.target.value,
-                          fovDeg: undefined,
-                          fovLeftDeg: undefined,
-                          fovRightDeg: undefined,
-                          rangeM: undefined,
+                          modelId: id,
+                          ...vision,
                         })
-                      }
+                      }}
                       className="mt-0.5 w-full rounded border border-white/10 bg-black/40 px-2 py-1 text-white"
                     >
                       {cameraCatalogGrouped().map((g) => (
@@ -2205,14 +2224,13 @@ export default function NexusVisionArchitectClient() {
                         <button
                           type="button"
                           className="text-[10px] text-[var(--nexus-text-muted)] underline"
-                          onClick={() =>
-                            updateSelectedCam({
-                              fovDeg: undefined,
-                              fovLeftDeg: undefined,
-                              fovRightDeg: undefined,
-                              rangeM: undefined,
-                            })
-                          }
+                          onClick={() => {
+                            const vision = catalogVisionDefaults(
+                              selectedCam.modelId,
+                              nightMode ? 'night' : 'day',
+                            )
+                            updateSelectedCam(vision)
+                          }}
                         >
                           Restaurar FOV/alcance del modelo ({model.fovDeg}° /{' '}
                           {nightMode ? model.rangeNightM : model.rangeDayM} m)

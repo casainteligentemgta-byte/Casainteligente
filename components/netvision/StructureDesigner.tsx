@@ -17,6 +17,8 @@ type Props = {
   showOnPlan?: boolean
   onShowOnPlan?: (visible: boolean) => void
   onDrawMaterial: (id: StructureMaterialId | null) => void
+  /** Termina la polilínea actual (deja de continuar desde la esquina). */
+  onFinishDraft?: () => void
   onSelect: (id: string) => void
   onRemove: (id: string) => void
 }
@@ -29,6 +31,7 @@ export default function StructureDesigner({
   showOnPlan = true,
   onShowOnPlan,
   onDrawMaterial,
+  onFinishDraft,
   onSelect,
   onRemove,
 }: Props) {
@@ -39,8 +42,9 @@ export default function StructureDesigner({
           Muros · vidrio · puertas
         </h2>
         <p className="text-[11px] text-[var(--nexus-text-dim)]">
-          Dibuja con 2 toques. Arrastra segmento o extremos para mover. Drywall,
-          bloque y concreto cortan el FOV; vidrio, ventana y puerta dejan ver.
+          Toca puntos en el plano: cada tramo se ajusta a 90° (H/V) y puedes seguir desde la
+          esquina. Pulsa «Terminar» al cerrar el muro. Arrastra el segmento o los extremos para
+          mover.
         </p>
       </div>
 
@@ -81,14 +85,26 @@ export default function StructureDesigner({
       </div>
 
       {drawMaterialId ? (
-        <p className="rounded-lg border border-[rgba(0,242,254,0.25)] bg-[rgba(0,242,254,0.08)] px-2 py-1.5 text-[11px] text-[var(--nexus-cyan)]">
-          {draftPoint
-            ? `Toca el segundo punto (${getStructureMaterialOrDefault(drawMaterialId).label}).`
-            : `Toca el primer punto en el plano (${getStructureMaterialOrDefault(drawMaterialId).label}).`}
-        </p>
+        <div className="space-y-1.5">
+          <p className="rounded-lg border border-[rgba(0,242,254,0.25)] bg-[rgba(0,242,254,0.08)] px-2 py-1.5 text-[11px] text-[var(--nexus-cyan)]">
+            {draftPoint
+              ? `Siguiente esquina (${getStructureMaterialOrDefault(drawMaterialId).label}) — tramo a 90°.`
+              : `Toca el primer punto (${getStructureMaterialOrDefault(drawMaterialId).label}).`}
+          </p>
+          {draftPoint && onFinishDraft ? (
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={onFinishDraft}
+              className="w-full rounded-lg border border-white/20 bg-white/5 px-2 py-1.5 text-[11px] font-semibold text-white hover:bg-white/10 disabled:opacity-40"
+            >
+              Terminar muro
+            </button>
+          ) : null}
+        </div>
       ) : (
         <p className="text-[10px] text-[var(--nexus-text-dim)]">
-          Elige un material y marca 2 puntos en el plano.
+          Elige un material y traza el muro por puntos (esquinas a 90°).
         </p>
       )}
 

@@ -26,6 +26,7 @@ import type {
 import { effectiveCameraVision } from '@/lib/netvision/catalog/cameras'
 import { getStructureMaterialOrDefault } from '@/lib/netvision/catalog/materials'
 import { degToRad, radToDeg } from '@/lib/netvision/utils/geometryHelpers'
+import { snapOrtho90 } from '@/lib/netvision/utils/structureDraw'
 import type { WifiCoverageCircle } from '@/lib/netvision/services/wifiPredictor'
 import type { AccessChamber, UndergroundRun } from '@/lib/netvision/services/canalizationCalculator'
 import { nearestSegmentOnRoute, MANUAL_CABLE_TO_ID } from '@/lib/netvision/services/cableRoutingEngine'
@@ -753,10 +754,11 @@ export default function CameraPlacementTool({
                         key={`str-${s.id}-${h.end}`}
                         x={h.x}
                         y={h.y}
-                        radius={6}
+                        radius={2.5}
                         fill={mat.color}
                         stroke="#fff"
-                        strokeWidth={1.5}
+                        strokeWidth={1}
+                        hitStrokeWidth={14}
                         draggable
                         onClick={(e) => {
                           e.cancelBubble = true
@@ -777,18 +779,20 @@ export default function CameraPlacementTool({
                           const node = e.target as Konva.Circle
                           const n = toNorm(node.x(), node.y())
                           if (h.end === 'a') {
+                            const snapped = snapOrtho90({ x: s.x2, y: s.y2 }, n)
                             onStructureMove(s.id, {
-                              x1: n.x,
-                              y1: n.y,
+                              x1: snapped.x,
+                              y1: snapped.y,
                               x2: s.x2,
                               y2: s.y2,
                             })
                           } else {
+                            const snapped = snapOrtho90({ x: s.x1, y: s.y1 }, n)
                             onStructureMove(s.id, {
                               x1: s.x1,
                               y1: s.y1,
-                              x2: n.x,
-                              y2: n.y,
+                              x2: snapped.x,
+                              y2: snapped.y,
                             })
                           }
                         }}
@@ -798,18 +802,20 @@ export default function CameraPlacementTool({
                           const node = e.target as Konva.Circle
                           const n = toNorm(node.x(), node.y())
                           if (h.end === 'a') {
+                            const snapped = snapOrtho90({ x: s.x2, y: s.y2 }, n)
                             onStructureMove(s.id, {
-                              x1: n.x,
-                              y1: n.y,
+                              x1: snapped.x,
+                              y1: snapped.y,
                               x2: s.x2,
                               y2: s.y2,
                             })
                           } else {
+                            const snapped = snapOrtho90({ x: s.x1, y: s.y1 }, n)
                             onStructureMove(s.id, {
                               x1: s.x1,
                               y1: s.y1,
-                              x2: n.x,
-                              y2: n.y,
+                              x2: snapped.x,
+                              y2: snapped.y,
                             })
                           }
                           resumeStageDrag(e.target.getStage())
@@ -825,7 +831,7 @@ export default function CameraPlacementTool({
             <Circle
               x={offsetX + draftPoint.x * drawW}
               y={offsetY + draftPoint.y * drawH}
-              radius={6}
+              radius={2.5}
               fill={draftColor}
               stroke="#fff"
               strokeWidth={1}
