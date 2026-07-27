@@ -82,8 +82,22 @@ export async function PATCH(req: Request) {
         continue;
       }
 
+      const { data: prev } = await db
+        .from('cco_presupuestos_capitulo')
+        .select('id,capitulo,subcapitulo,descripcion,estimado_usd,area_m2')
+        .eq('id', id)
+        .eq('proyecto_id', proyectoId)
+        .maybeSingle();
+      const prevR = (prev ?? {}) as Record<string, unknown>;
+      const cambiosFila: string[] = [];
+
       const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
-      if (c.capitulo != null) patch.capitulo = String(c.capitulo).trim();
+      if (c.capitulo != null) {
+        patch.capitulo = String(c.capitulo).trim();
+        if (String(prevR.capitulo ?? '') !== String(patch.capitulo)) {
+          cambiosFila.push(`capítulo: «${prevR.capitulo ?? ''}» → «${patch.capitulo}»`);
+        }
+      }
       if (c.subcapitulo !== undefined) {
         patch.subcapitulo = c.subcapitulo ? String(c.subcapitulo).trim() : null;
         if (String(prevR.subcapitulo ?? '') !== String(patch.subcapitulo ?? '')) {
@@ -106,7 +120,7 @@ export async function PATCH(req: Request) {
         }
         patch.estimado_usd = Math.round(n * 100) / 100;
         if (Number(prevR.estimado_usd) !== Number(patch.estimado_usd)) {
-          cambiosFila.push(`estimado: $${prevR.estimado_usd} → $${patch.estimado_usd}`);
+          cambiosFila.push(`estimado: $${prevR.estimado_usd ?? 0} → $${patch.estimado_usd}`);
         }
       }
       let areaVal: number | undefined;
@@ -118,6 +132,9 @@ export async function PATCH(req: Request) {
         }
         areaVal = Math.round(n * 100) / 100;
         patch.area_m2 = areaVal;
+        if (Number(prevR.area_m2 ?? NaN) !== areaVal) {
+          cambiosFila.push(`área: ${prevR.area_m2 ?? '—'} → ${areaVal} m²`);
+        }
       }
 
       if (id.startsWith('exec-')) {
@@ -153,6 +170,16 @@ export async function PATCH(req: Request) {
           continue;
         }
         updated += 1;
+        resúmenes.push({
+          id,
+          etiqueta: capitulo.slice(0, 40),
+          cambios: cambiosFila.length ? cambiosFila : ['fila creada'],
+        });
+        continue;
+      }
+
+      if (!prev) {
+        errores.push(`${id}: no encontrado`);
         continue;
       }
 

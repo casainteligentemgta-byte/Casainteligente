@@ -610,27 +610,35 @@ export default function ResumenObrerosProyectoModulo({
         const contrMap = new Map<string, string[]>();
         const filasContratoPorEmpleado = new Map<string, FilaContratoObra[]>();
         if (empIdsParaContratosObra.length > 0) {
-          let ctr = await supabase
+          type FilaCtr = {
+            empleado_id?: unknown;
+            estado_contrato?: unknown;
+            obra_id?: unknown;
+            proyecto_id?: unknown;
+          };
+          let filasCtr: FilaCtr[] = [];
+          const ctrConObra = await supabase
             .from('ci_contratos_empleado_obra')
             .select('empleado_id,estado_contrato,obra_id,proyecto_id')
             .in('empleado_id', empIdsParaContratosObra);
           if (
-            ctr.error &&
-            /obra_id/i.test(ctr.error.message) &&
-            /(does not exist|could not find|schema cache)/i.test(ctr.error.message)
+            ctrConObra.error &&
+            /obra_id/i.test(ctrConObra.error.message) &&
+            /(does not exist|could not find|schema cache)/i.test(ctrConObra.error.message)
           ) {
-            ctr = await supabase
+            const ctrSinObra = await supabase
               .from('ci_contratos_empleado_obra')
               .select('empleado_id,estado_contrato,proyecto_id')
               .in('empleado_id', empIdsParaContratosObra);
+            filasCtr = (ctrSinObra.data ?? []) as FilaCtr[];
+          } else {
+            filasCtr = (ctrConObra.data ?? []) as FilaCtr[];
           }
           if (!alive) return;
-          for (const row of ctr.data ?? []) {
-            const eid = String((row as { empleado_id?: unknown }).empleado_id ?? '');
-            const st = String((row as { estado_contrato?: unknown }).estado_contrato ?? '');
-            const oidRaw =
-              (row as { obra_id?: unknown }).obra_id ??
-              (row as { proyecto_id?: unknown }).proyecto_id;
+          for (const row of filasCtr) {
+            const eid = String(row.empleado_id ?? '');
+            const st = String(row.estado_contrato ?? '');
+            const oidRaw = row.obra_id ?? row.proyecto_id;
             const obra_id = typeof oidRaw === 'string' && oidRaw ? oidRaw : null;
             if (!eid) continue;
             const arr = contrMap.get(eid) ?? [];
