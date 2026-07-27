@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { Construction, Package, ShoppingCart } from 'lucide-react';
 import ControlObraSubnav from '@/components/proyectos/ControlObraSubnav';
 import GenerarContratoDelegadoModal from '@/components/proyectos/GenerarContratoDelegadoModal';
@@ -15,6 +16,8 @@ type Props = {
 };
 
 export default function ControlObraShell({ proyectoId, children }: Props) {
+  const pathname = usePathname() ?? '';
+  const esSeccionEquipo = pathname.includes('/control-obra/equipo');
   const pid = encodeURIComponent(proyectoId);
   const { autorizado, loading, refrescar } = useContratoAdProyecto(proyectoId);
   const [contratoAdModalOpen, setContratoAdModalOpen] = useState(false);
@@ -35,13 +38,15 @@ export default function ControlObraShell({ proyectoId, children }: Props) {
 
       <ControlObraSubnav proyectoId={proyectoId} />
 
-      <ProyectoAdLogisticaBanner
-        proyectoId={proyectoId}
-        autorizado={autorizado}
-        loading={loading}
-        onAbrirContratoAd={() => setContratoAdModalOpen(true)}
-        className="mb-1"
-      />
+      {!esSeccionEquipo ? (
+        <ProyectoAdLogisticaBanner
+          proyectoId={proyectoId}
+          autorizado={autorizado}
+          loading={loading}
+          onAbrirContratoAd={() => setContratoAdModalOpen(true)}
+          className="mb-1"
+        />
+      ) : null}
 
       {children}
 
