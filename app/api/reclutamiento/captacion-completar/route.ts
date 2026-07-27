@@ -1,14 +1,11 @@
 import { randomUUID } from 'crypto';
-import { createElement } from 'react';
-import { pdf } from '@react-pdf/renderer';
 import { NextResponse } from 'next/server';
 import { antecedentesPenalesJson, buildHojaVidaFromGacetaForm } from '@/lib/registro/buildHojaVidaFromGacetaForm';
 import { captacionCompletarBodySchema } from '@/lib/registro/captacionPlanillaSchema';
 import type { GacetaPostulacionFormState } from '@/lib/registro/gacetaPostulacionTypes';
-import { PlanillaAnexo1PdfDocument } from '@/lib/talento/PlanillaAnexo1Pdf';
-import type { HojaVidaLegalPdfMeta } from '@/lib/talento/hojaVidaPdfLegal';
 import { hojaVidaDesdeRow, nombreCompletoDesde } from '@/lib/talento/hojaVidaObreroCompleta';
-import { resolvePlanillaPatronoParaEmpleado, resolvePlanillaPatronoPdf } from '@/lib/talento/resolvePlanillaPatronoPdf';
+import { persistirPdfHojaLegalEmpleado } from '@/lib/talento/persistirPdfHojaLegalEmpleado';
+import { resolvePlanillaPatronoPdf } from '@/lib/talento/resolvePlanillaPatronoPdf';
 import { nombresLegadoDesdeGaceta } from '@/lib/registro/ciEmpleadosNombresLegado';
 import { ensureCiExamenInviteForEmpleado } from '@/lib/talento/ensureCiExamenInviteForEmpleado';
 import {
@@ -39,7 +36,8 @@ function publicBaseFromReq(req: Request): string {
 }
 
 /**
- * POST — Cierra captación automática: persiste obrero, PDF Anexo I (firma en blanco), Storage, notificación CEO.
+ * POST — Cierra captación: persiste obrero + fotos, genera PDF hoja de vida (no empleo),
+ * Storage, invitación a examen y notificación. La hoja de empleo se genera al contratar.
  */
 export async function POST(req: Request) {
   const admin = supabaseAdminForRoute();
@@ -266,38 +264,11 @@ export async function POST(req: Request) {
   }
 
   const row = empFull as Record<string, unknown>;
-  const str = (k: string) => String(row[k] ?? '').trim();
   const completa = hojaVidaDesdeRow(row);
-  const emitidoEn = new Date().toLocaleString('es-VE', { dateStyle: 'long', timeStyle: 'short' });
-  const planillaPatrono = await resolvePlanillaPatronoParaEmpleado(admin.client, row);
 
-  const meta: HojaVidaLegalPdfMeta = {
-    emitidoEn,
-    estadoProceso: str('estado_proceso'),
-    rolBuscadoSistema: str('rol_buscado'),
-    cargoCodigo: str('cargo_codigo'),
-    cargoNombre: str('cargo_nombre'),
-    planillaPatrono,
-    firmaTrabajador: undefined,
-    documentVariant: 'hoja_empleo',
-  };
-
-  try {
-    const pdfNode = createElement(PlanillaAnexo1PdfDocument, { data: completa, meta });
-    const blob = await pdf(pdfNode as Parameters<typeof pdf>[0]).toBlob();
-    const buf = Buffer.from(await blob.arrayBuffer());
-    const path = `captacion/${empleadoId}/planilla-anexo-1.pdf`;
-    const { error: upSt } = await admin.client.storage.from('contratos_obreros').upload(path, buf, {
-      contentType: 'application/pdf',
-      upsert: true,
-    });
-    if (upSt) {
-      console.error('[captacion-completar] contratos_obreros', friendlyStorageError('contratos_obreros', upSt.message));
-    } else {
-      await admin.client.from('ci_empleados').update({ planilla_captacion_pdf_url: path } as never).eq('id', empleadoId);
-    }
-  } catch (e) {
-    console.error('[captacion-completar] pdf', e);
+  const pdfHv = await persistirPdfHojaLegalEmpleado(admin.client, empleadoId, 'hoja_vida');
+  if (!pdfHv.ok) {
+    console.error('[captacion-completar] hoja_vida pdf', pdfHv.error);
   }
 
   if (firma?.dataUrl && firma.eventId && firma.capturedAtIso) {
@@ -339,7 +310,7 @@ export async function POST(req: Request) {
     const nom = nombreCompletoDesde(completa) || nombreCompleto || 'Postulante';
     await admin.client.from('ci_notificaciones').insert({
       proyecto_id: pid,
-      mensaje: `Captación automática: ${nom} — planilla PDF lista. Firma / revisión pendiente (CEO / RRHH).`,
+      mensaje: `Captación: ${nom} envió hoja de vida${pdfHv.ok ? ' (PDF listo)' : ''}. Hoja de empleo al contratar. Revisión RRHH pendiente.`,
       tipo: 'captacion_firma_pendiente',
       empleado_id: empleadoId,
     } as never);

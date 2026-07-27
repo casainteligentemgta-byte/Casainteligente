@@ -303,6 +303,14 @@ export function ModalGenerarContrato({
         return;
       }
 
+      // Hoja de empleo a partir de la hoja de vida ya enviada (patrono/obra del proyecto).
+      void fetch(apiUrl('/api/talento/hoja-legal/generar'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ empleadoId: oid, variante: 'hoja_empleo' }),
+      }).catch(() => undefined);
+
       const tipoApi = parsed.data.tipoPlazo === 'determinado' ? 'DETERMINADO' : 'INDETERMINADO';
 
       const body = {

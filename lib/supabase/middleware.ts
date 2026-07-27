@@ -7,7 +7,11 @@ const RUTAS_PUBLICAS = [
   '/login',
   '/auth',
   '/rrhh/registro',
+  '/registro',
   '/reclutamiento',
+  '/onboarding',
+  '/talento/examen',
+  '/talento/evaluacion-obrero',
   '/nexus',
   '/abogado',
 ];

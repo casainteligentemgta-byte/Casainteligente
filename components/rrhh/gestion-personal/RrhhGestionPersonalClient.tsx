@@ -127,7 +127,7 @@ function hrefFormatoHojaVidaLabor(projectId: string, codigoOficio: string): stri
 
 function mensajeWhatsAppPlanilla(link: string, specialtyNombre: string | null, codigo: string): string {
   const cargo = (specialtyNombre ?? '').trim() || codigo.trim();
-  return `Hola, Casa Inteligente te invita a completar la hoja de vida / planilla para el oficio «${cargo}». Enlace:\n${link}`;
+  return `Hola, Casa Inteligente te invita a completar tu hoja de vida para el oficio «${cargo}». Con esos datos se arma la hoja de empleo al contratarte. Enlace:\n${link}`;
 }
 
 type RrhhGestionPersonalClientProps = {

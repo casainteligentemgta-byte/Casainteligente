@@ -475,5 +475,13 @@ export async function archivarContratoRrhh(
     } as never)
     .eq('id', c.empleado_id);
 
+  try {
+    const { persistirPdfHojaLegalEmpleado } = await import('@/lib/talento/persistirPdfHojaLegalEmpleado');
+    const pdfEmp = await persistirPdfHojaLegalEmpleado(admin, c.empleado_id, 'hoja_empleo');
+    if (!pdfEmp.ok) console.warn('[rrhhContratoFlow] hoja_empleo pdf', pdfEmp.error);
+  } catch (e) {
+    console.warn('[rrhhContratoFlow] hoja_empleo pdf', e);
+  }
+
   return { ok: true, empleadoId: c.empleado_id };
 }

@@ -63,11 +63,17 @@ const nextConfig = {
       // Solo el dashboard legacy de staff → hub RRHH.
       // NO redirigir /reclutamiento ni /reclutamiento/*: ahí viven
       // postulación pública (?need=), onboarding y hoja de vida.
+      // NO redirigir /registro ni /registro/*: captación pública, planilla PDF
+      // y contrato laboral del obrero (alta rápida staff está en /rrhh/registro).
       { source: '/reclutamiento/dashboard', destination: '/rrhh/reclutamiento', permanent: true },
-      { source: '/registro', destination: '/rrhh/registro', permanent: false },
-      { source: '/registro/:path*', destination: '/rrhh/registro', permanent: false },
+      // Enlace legacy de CV genérico → onboarding legal (hoja_vida_obrero).
+      { source: '/onboarding/hoja-de-vida/:token', destination: '/reclutamiento/onboarding/:token', permanent: false },
+      // Hub talento → RRHH; mantener públicas /talento/examen y evaluación obrero.
       { source: '/talento', destination: '/rrhh/hojas-vida', permanent: false },
-      { source: '/talento/:path*', destination: '/rrhh/hojas-vida', permanent: false },
+      { source: '/talento/admin', destination: '/rrhh/hojas-vida', permanent: false },
+      { source: '/talento/admin/:path*', destination: '/rrhh/hojas-vida', permanent: false },
+      { source: '/talento/obras', destination: '/rrhh/hojas-vida', permanent: false },
+      { source: '/talento/obras/:path*', destination: '/rrhh/hojas-vida', permanent: false },
       { source: '/rrhh', destination: '/rrhh/hojas-vida', permanent: false },
       { source: '/operaciones/inventario', destination: '/almacen?cuadro=inventario', permanent: true },
       { source: '/almacen/movimientos', destination: '/almacen?cuadro=movimientos', permanent: true },

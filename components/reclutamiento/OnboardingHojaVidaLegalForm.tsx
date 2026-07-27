@@ -85,8 +85,9 @@ export default function OnboardingHojaVidaLegalForm({ value, onChange }: Props) 
   return (
     <div className="space-y-3 text-slate-900">
       <p className="text-xs text-slate-600">
-        Planilla de empleo / identificación del trabajador (formato tipo expediente de la rama construcción, alineado a la
-        convención colectiva 2023). Completa lo que puedas; los vacíos salen como «—» en el PDF.
+        Hoja de vida del trabajador (formato legal rama construcción, Convención Colectiva 2023). Rellénala una sola vez:
+        al contratarte, esos datos alimentan automáticamente la hoja de empleo y RRHH solo completa patrono, obra y lo que
+        falte. Los vacíos salen como «—» en el PDF.
       </p>
 
       <Sec title="Datos personales del trabajador">
