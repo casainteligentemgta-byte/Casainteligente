@@ -33,6 +33,7 @@ import NetVisionLayerHelp, {
 } from '@/components/netvision/NetVisionLayerHelp'
 import StructureDesigner from '@/components/netvision/StructureDesigner'
 import UndergroundCanalizationTool from '@/components/netvision/UndergroundCanalizationTool'
+import NetVisionSelectedProps from '@/components/netvision/NetVisionSelectedProps'
 import ComplianceValidatorPanel from '@/components/netvision/ComplianceValidator'
 import ValidationEngine from '@/components/netvision/ValidationEngine'
 import {
@@ -49,17 +50,11 @@ import {
   DEFAULT_INJECTOR_ID,
   DEFAULT_NVR_ID,
   DEFAULT_SWITCH_ID,
-  getNetworkModelOrDefault,
   labelPrefixForKind,
   networkCatalogByKind,
 } from '@/lib/netvision/catalog/network'
 import {
   defaultNetworkPlanSize,
-  networkPlanSizePct,
-  NETWORK_PLAN_SIZE_MAX,
-  NETWORK_PLAN_SIZE_MIN,
-  planSizeNormFromPct,
-  resolveNetworkPlanSize,
 } from '@/lib/netvision/utils/networkNodeSize'
 import {
   buildCoverageSectors,
@@ -81,7 +76,7 @@ import {
   buildWifiSpectrum,
 } from '@/lib/netvision/services/wifiPredictor'
 import { buildSoundSpectrum } from '@/lib/netvision/services/soundPredictor'
-import { getStructureMaterialOrDefault, STRUCTURE_MATERIALS } from '@/lib/netvision/catalog/materials'
+import { STRUCTURE_MATERIALS } from '@/lib/netvision/catalog/materials'
 import {
   buildCableRoutes,
   cableRouteKey,
@@ -611,6 +606,17 @@ export default function NexusVisionArchitectClient() {
   const selectedNet = project.networkNodes.find((n) => n.id === selectedId) ?? null
   const selectedStructure =
     structures.find((s) => s.id === selectedId) ?? null
+  const selectedManualCable =
+    (project.cableSegments ?? []).find((s) => s.id === selectedId) ?? null
+  const selectedUnderground =
+    (project.undergroundSegments ?? []).find((s) => s.id === selectedId) ?? null
+  const hasSelection = !!(
+    selectedCam ||
+    selectedNet ||
+    selectedStructure ||
+    selectedManualCable ||
+    selectedUnderground
+  )
 
   const onFile = useCallback(async (file: File | null) => {
     if (!file) return
@@ -1065,21 +1071,29 @@ export default function NexusVisionArchitectClient() {
     patchCamera(id, patch)
   }
 
-  const updateSelectedNet = (patch: Partial<DesignNetworkNode>) => {
-    if (!selectedId) return
-    setProject((p) => ({
-      ...p,
-      networkNodes: p.networkNodes.map((n) =>
-        n.id === selectedId ? { ...n, ...patch } : n,
-      ),
-    }))
-  }
-
   const patchNetworkNode = (id: string, patch: Partial<DesignNetworkNode>) => {
     setProject((p) => ({
       ...p,
       networkNodes: p.networkNodes.map((n) =>
         n.id === id ? { ...n, ...patch } : n,
+      ),
+    }))
+  }
+
+  const patchStructure = (id: string, patch: Partial<DesignStructure>) => {
+    setProject((p) => ({
+      ...p,
+      structures: (p.structures ?? []).map((s) =>
+        s.id === id ? { ...s, ...patch } : s,
+      ),
+    }))
+  }
+
+  const patchCableType = (id: string, type: CableType) => {
+    setProject((p) => ({
+      ...p,
+      cableSegments: (p.cableSegments ?? []).map((s) =>
+        s.id === id ? { ...s, type } : s,
       ),
     }))
   }
@@ -1870,6 +1884,7 @@ export default function NexusVisionArchitectClient() {
                     nightMode={nightMode}
                     onSelect={(id) => {
                       setSelectedId(id)
+                      setInspectorOpen(true)
                       if (project.cameras.some((c) => c.id === id)) {
                         setShowFov(true)
                         setSideTab('cctv')
@@ -1890,11 +1905,29 @@ export default function NexusVisionArchitectClient() {
                         setUndergroundDraft(null)
                         setDrawCable(false)
                         clearCableDraft()
+                      } else if (project.networkNodes.some((n) => n.id === id)) {
+                        setSideTab('red')
+                        setViewMode('plano')
+                        setCalibrateMode(false)
+                        setDrawStructureMaterial(null)
+                        setStructureDraft(null)
+                        setDrawUnderground(false)
+                        setUndergroundDraft(null)
+                        setDrawCable(false)
+                        clearCableDraft()
                       } else if (cableRoutes.some((r) => r.id === id)) {
                         setSideTab('cable')
                         setShowCableRoutes(true)
                         setShowUnderground(false)
                         setViewMode('plano')
+                      } else if (
+                        (project.undergroundSegments ?? []).some((s) => s.id === id)
+                      ) {
+                        setSideTab('sub')
+                        setShowUnderground(true)
+                        setViewMode('plano')
+                        setDrawCable(false)
+                        clearCableDraft()
                       }
                     }}
                     onCableWaypointMove={moveBreakOnRoute}
@@ -1936,9 +1969,54 @@ export default function NexusVisionArchitectClient() {
 
         {inspectorOpen ? (
         <GlassCardMotion delay={0.04} className="space-y-3 p-4">
+          <NetVisionSelectedProps
+            camera={selectedCam}
+            network={selectedNet}
+            structure={selectedStructure}
+            cable={selectedManualCable}
+            nightMode={nightMode}
+            onPatchCamera={(patch) => {
+              if (!selectedCam) return
+              patchCamera(selectedCam.id, patch)
+            }}
+            onPatchNetwork={(patch) => {
+              if (!selectedNet) return
+              patchNetworkNode(selectedNet.id, patch)
+            }}
+            onPatchStructure={(patch) => {
+              if (!selectedStructure) return
+              patchStructure(selectedStructure.id, patch)
+            }}
+            onPatchCableType={(type) => {
+              if (!selectedManualCable) return
+              patchCableType(selectedManualCable.id, type)
+            }}
+            onRemove={quitar}
+          />
+          {selectedUnderground ? (
+            <div className="space-y-2 rounded-lg border border-orange-400/30 bg-orange-400/10 p-2.5 text-xs">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-orange-100">
+                Seleccionado · Subterráneo
+              </p>
+              <p className="font-semibold text-white">{selectedUnderground.label}</p>
+              <p className="text-[10px] text-[var(--nexus-text-dim)]">
+                Tramo geométrico · zona/terreno se definen abajo para el plan.
+              </p>
+              <Button
+                type="button"
+                variant="glass"
+                className="w-full"
+                onClick={() => quitar(selectedUnderground.id)}
+              >
+                <Trash2 className="mr-2 h-3.5 w-3.5" />
+                Quitar tramo
+              </Button>
+            </div>
+          ) : null}
           {sideTab === 'muros' ? (
             <StructureDesigner
               structures={structures}
+              selectedId={selectedId}
               drawMaterialId={drawStructureMaterial}
               draftPoint={structureDraft}
               disabled={!project.planoUrl || loading}
@@ -1958,7 +2036,11 @@ export default function NexusVisionArchitectClient() {
                   setShowStructures(true)
                 }
               }}
-              onSelect={setSelectedId}
+              onSelect={(id) => {
+                setSelectedId(id)
+                setInspectorOpen(true)
+                setSideTab('muros')
+              }}
               onRemove={quitar}
               onFinishDraft={() => setStructureDraft(null)}
             />
@@ -2063,12 +2145,7 @@ export default function NexusVisionArchitectClient() {
                 }}
                 onRemoveSegment={quitar}
                 onChangeSegmentType={(id, type) => {
-                  setProject((p) => ({
-                    ...p,
-                    cableSegments: (p.cableSegments ?? []).map((s) =>
-                      s.id === id ? { ...s, type } : s,
-                    ),
-                  }))
+                  patchCableType(id, type)
                 }}
               />
               <div className="border-t border-white/10 pt-3">
@@ -2110,7 +2187,11 @@ export default function NexusVisionArchitectClient() {
                   ),
                 }))
               }
-              onSelectNode={setSelectedId}
+              onSelectNode={(id) => {
+                setSelectedId(id)
+                setInspectorOpen(true)
+                setSideTab('red')
+              }}
               onRemoveNode={quitar}
             />
           ) : (
@@ -2133,41 +2214,8 @@ export default function NexusVisionArchitectClient() {
               </p>
               {selectedCam ? (
                 <div className="space-y-2 text-xs">
-                  <label className="block">
-                    <span className="text-[var(--nexus-text-dim)]">Etiqueta</span>
-                    <input
-                      value={selectedCam.label}
-                      onChange={(e) => updateSelectedCam({ label: e.target.value })}
-                      className="mt-0.5 w-full rounded border border-white/10 bg-black/40 px-2 py-1 text-white"
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="text-[var(--nexus-text-dim)]">Modelo</span>
-                    <select
-                      value={selectedCam.modelId}
-                      onChange={(e) => {
-                        const id = e.target.value
-                        const vision = catalogVisionDefaults(id, nightMode ? 'night' : 'day')
-                        updateSelectedCam({
-                          modelId: id,
-                          ...vision,
-                        })
-                      }}
-                      className="mt-0.5 w-full rounded border border-white/10 bg-black/40 px-2 py-1 text-white"
-                    >
-                      {cameraCatalogGrouped().map((g) => (
-                        <optgroup key={g.brand} label={g.brand}>
-                          {g.models.map((m) => (
-                            <option key={m.id} value={m.id}>
-                              {m.name}
-                            </option>
-                          ))}
-                        </optgroup>
-                      ))}
-                    </select>
-                  </label>
                   <p className="text-[10px] text-[var(--nexus-text-dim)]">
-                    Marcas: {CAMERA_BRANDS.join(' · ')}
+                    Modelo y etiqueta arriba · aquí ajustas la óptica.
                   </p>
                   {(() => {
                     const mode = nightMode ? 'night' : 'day'
@@ -2370,127 +2418,12 @@ export default function NexusVisionArchitectClient() {
                       </NetVisionCollapsible>
                     )
                   })()}
-                  <Button
-                    type="button"
-                    variant="glass"
-                    className="w-full"
-                    onClick={() => quitar(selectedCam.id)}
-                  >
-                    <Trash2 className="mr-2 h-3.5 w-3.5" />
-                    Quitar cámara
-                  </Button>
                 </div>
-              ) : selectedStructure ? (
-                <div className="space-y-2 text-xs">
-                  <p className="text-[10px] uppercase text-[var(--nexus-text-dim)]">
-                    Estructura · {getStructureMaterialOrDefault(selectedStructure.materialId).label}
-                  </p>
-                  <p className="font-semibold text-white">{selectedStructure.label}</p>
-                  <p className="text-[10px] text-[var(--nexus-text-dim)]">
-                    {(() => {
-                      const m = getStructureMaterialOrDefault(selectedStructure.materialId)
-                      return m.blocksVision
-                        ? `Corta visión · WiFi −${m.wifiLossDb} dB · Sonido −${m.soundLossDb} dB`
-                        : `Transparente · WiFi −${m.wifiLossDb} dB · Sonido −${m.soundLossDb} dB`
-                    })()}
-                  </p>
-                  <Button
-                    type="button"
-                    variant="glass"
-                    className="w-full"
-                    onClick={() => quitar(selectedStructure.id)}
-                  >
-                    <Trash2 className="mr-2 h-3.5 w-3.5" />
-                    Quitar estructura
-                  </Button>
-                </div>
-              ) : selectedNet ? (
-                <div className="space-y-2 text-xs">
-                  <p className="text-[10px] uppercase text-[var(--nexus-text-dim)]">
-                    Nodo red · {selectedNet.kind}
-                  </p>
-                  <label className="block">
-                    <span className="text-[var(--nexus-text-dim)]">Etiqueta</span>
-                    <input
-                      value={selectedNet.label}
-                      onChange={(e) => updateSelectedNet({ label: e.target.value })}
-                      className="mt-0.5 w-full rounded border border-white/10 bg-black/40 px-2 py-1 text-white"
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="text-[var(--nexus-text-dim)]">Modelo</span>
-                    <select
-                      value={selectedNet.modelId}
-                      onChange={(e) => updateSelectedNet({ modelId: e.target.value })}
-                      className="mt-0.5 w-full rounded border border-white/10 bg-black/40 px-2 py-1 text-white"
-                    >
-                      {networkCatalogByKind(selectedNet.kind).map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.brand} · {m.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <p className="text-[10px] text-[var(--nexus-text-dim)]">
-                    {(() => {
-                      const m = getNetworkModelOrDefault(
-                        selectedNet.modelId,
-                        selectedNet.kind,
-                      )
-                      return `${m.poeBudgetW} W PoE · ${m.poePorts} puertos · $${m.priceUsd}`
-                    })()}
-                  </p>
-                  <label className="block">
-                    <span className="flex items-center justify-between text-[var(--nexus-text-dim)]">
-                      <span>Tamaño en plano</span>
-                      <span className="tabular-nums text-white">
-                        {networkPlanSizePct(resolveNetworkPlanSize(selectedNet))}%
-                        del ancho
-                      </span>
-                    </span>
-                    <input
-                      type="range"
-                      min={networkPlanSizePct(NETWORK_PLAN_SIZE_MIN)}
-                      max={networkPlanSizePct(NETWORK_PLAN_SIZE_MAX)}
-                      step={0.1}
-                      value={networkPlanSizePct(resolveNetworkPlanSize(selectedNet))}
-                      onChange={(e) =>
-                        updateSelectedNet({
-                          planSizeNorm: planSizeNormFromPct(Number(e.target.value)),
-                        })
-                      }
-                      className="mt-1 w-full accent-[var(--nexus-cyan)]"
-                    />
-                    <span className="mt-0.5 flex justify-between text-[9px] text-[var(--nexus-text-dim)]">
-                      <button
-                        type="button"
-                        className="underline-offset-2 hover:underline"
-                        onClick={() =>
-                          updateSelectedNet({
-                            planSizeNorm: defaultNetworkPlanSize(selectedNet.kind),
-                          })
-                        }
-                      >
-                        Predeterminado
-                      </button>
-                      <span>Arrastra la esquina en el plano</span>
-                    </span>
-                  </label>
-                  <Button
-                    type="button"
-                    variant="glass"
-                    className="w-full"
-                    onClick={() => quitar(selectedNet.id)}
-                  >
-                    <Trash2 className="mr-2 h-3.5 w-3.5" />
-                    Quitar nodo
-                  </Button>
-                </div>
-              ) : (
+              ) : !hasSelection ? (
                 <p className="text-xs text-[var(--nexus-text-dim)]">
-                  Selecciona una cámara, nodo de red o muro.
+                  Selecciona una cámara, nodo, muro o cable en el plano.
                 </p>
-              )}
+              ) : null}
             </>
           )}
 
