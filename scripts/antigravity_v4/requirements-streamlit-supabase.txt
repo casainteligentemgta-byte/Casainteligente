@@ -1,0 +1,4 @@
+# Dependencias para app_administracion_delegada_v4.py → Supabase
+streamlit>=1.28
+psycopg2-binary>=2.9.9
+supabase>=2.4.0
