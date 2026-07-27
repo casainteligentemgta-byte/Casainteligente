@@ -6,6 +6,7 @@ import AeropuertoRelojPizarra from '@/components/home/AeropuertoRelojPizarra';
 import { createClient } from '@/lib/supabase/client';
 import { GlassCard } from '@/components/nexus/GlassCard';
 import { cn } from '@/lib/utils';
+import type { User } from '@supabase/supabase-js';
 
 type StatTileProps = {
   href?: string;
@@ -92,6 +93,8 @@ export default function DashboardPage() {
   /** Solo en cliente: evita mismatch SSR vs navegador (fecha, conteos). */
   const [dayLabel, setDayLabel] = useState('');
   const [clientReady, setClientReady] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
     setClientReady(true);
@@ -105,7 +108,25 @@ export default function DashboardPage() {
       .from('customers')
       .select('id', { count: 'exact', head: true })
       .then(({ count }) => setClientCount(count ?? 0));
+    void supabase.auth.getUser().then(({ data }) => setUser(data.user ?? null));
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+    return () => subscription.unsubscribe();
   }, []);
+
+  async function handleSignOut() {
+    setSigningOut(true);
+    try {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+      setUser(null);
+    } finally {
+      setSigningOut(false);
+    }
+  }
 
   const dash = '\u2014';
   const clientesValue = clientReady ? (clientCount ?? dash) : dash;
@@ -125,7 +146,7 @@ export default function DashboardPage() {
             CASA INTELIGENTE
           </h1>
         </div>
-        <div className="mt-2.5 flex items-center gap-2 landscape:mt-2">
+        <div className="mt-2.5 flex items-center gap-2 landscape:mt-2 flex-wrap">
           <Link
             href="/nexus/vision"
             className="rounded-full px-3 py-1.5 landscape:px-2.5 landscape:py-1 text-[10px] font-bold uppercase tracking-tighter text-[var(--nexus-cyan)] ring-1 ring-[rgba(0,242,254,0.45)] bg-[rgba(0,242,254,0.08)] hover:bg-[rgba(0,242,254,0.16)] transition-all"
@@ -138,6 +159,25 @@ export default function DashboardPage() {
           >
             Nexus
           </Link>
+          {clientReady && !user ? (
+            <Link
+              href="/login"
+              className="rounded-full px-3.5 py-1.5 landscape:px-3 landscape:py-1 text-[10px] font-bold uppercase tracking-tighter text-white bg-[#007AFF] hover:bg-[#0062CC] shadow-[0_4px_12px_rgba(0,122,255,0.35)] transition-all"
+            >
+              Iniciar sesión
+            </Link>
+          ) : null}
+          {clientReady && user ? (
+            <button
+              type="button"
+              onClick={() => void handleSignOut()}
+              disabled={signingOut}
+              className="rounded-full px-3 py-1.5 landscape:px-2.5 landscape:py-1 text-[10px] font-bold uppercase tracking-tighter text-[var(--nexus-text-muted)] ring-1 ring-white/15 hover:bg-white/5 transition-all disabled:opacity-50"
+              title={user.email ?? 'Sesión activa'}
+            >
+              {signingOut ? 'Saliendo…' : 'Salir'}
+            </button>
+          ) : null}
           <div className="w-9 h-9 landscape:w-8 landscape:h-8 rounded-full bg-gradient-to-br from-[var(--ios-blue)] to-[var(--ios-indigo)] flex items-center justify-center text-white text-xs font-bold shadow-[0_4px_12px_rgba(0,122,255,0.3)] border border-white/20">
             CI
           </div>
