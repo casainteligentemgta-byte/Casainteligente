@@ -179,12 +179,21 @@ export default function NuevoEmpleadoPage() {
             referencias: referencias.filter(r => r.nombre),
             afiliaciones: afiliaciones.filter(a => a.gremio),
         };
-        const { error } = await supabase.from('employees').insert([payload]);
+        const { data: created, error } = await supabase
+            .from('employees')
+            .insert([payload])
+            .select('id')
+            .single();
         setSaving(false);
         if (error) {
             console.error('Error details:', error);
             // Show the raw error message to the user for debugging
             return alert('Error de Base de Datos: ' + error.message);
+        }
+        const newId = (created as { id?: string } | null)?.id;
+        if (newId) {
+            router.push(`/empleados/${newId}/editar`);
+            return;
         }
         router.push('/empleados');
     }
