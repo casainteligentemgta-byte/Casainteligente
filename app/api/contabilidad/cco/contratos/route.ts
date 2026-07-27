@@ -8,6 +8,7 @@ import {
   upsertContratoObra,
   vincularPagosAContrato,
 } from '@/lib/contabilidad/cco/contratosJerarquia';
+import { registrarEventoAuditoriaCco } from '@/lib/contabilidad/cco/registrarAuditoria';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import { requireCcoAcceso } from '@/lib/auth/requireCcoRoute';
 
@@ -175,11 +176,20 @@ export async function POST(req: Request) {
     });
 
     const db = admin.client as SupabaseClient;
-    await db.from('cco_auditoria_eventos').insert({
+    await registrarEventoAuditoriaCco(db, {
       proyecto_id: proyectoId,
       accion: body.id ? 'ACTUALIZO CONTRATO' : 'REGISTRO CONTRATO',
-      detalle: `${proveedor} · ${descripcion} · $${monto}`,
-      metadata: { contrato_id: contrato.id },
+      detalle: body.id
+        ? `Actualizó contrato de «${proveedor}»: ${descripcion} · $${monto}${
+            body.estado ? ` · estado «${body.estado}»` : ''
+          }`
+        : `Alta de contrato: «${proveedor}» · ${descripcion} · $${monto}`,
+      metadata: {
+        contrato_id: contrato.id,
+        proveedor,
+        monto_usd: monto,
+        estado: body.estado ?? null,
+      },
     });
 
     return NextResponse.json({ ok: true, contrato });

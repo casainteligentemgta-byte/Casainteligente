@@ -575,7 +575,7 @@ const box: React.CSSProperties = {
   padding: 20,
 };
 const muted: React.CSSProperties = { color: '#64748B', fontSize: 13, margin: '0 0 12px' };
-const td: React.CSSProperties = { padding: '7px 6px', verticalAlign: 'top', color: '#334155' };
+const td: React.CSSProperties = { padding: '8px 6px', verticalAlign: 'top', color: '#334155' };
 const input: React.CSSProperties = {
   padding: '6px 10px',
   borderRadius: 8,

@@ -126,7 +126,9 @@ export default function CcoImportarPdfPanel({
               body: JSON.stringify({
                 proyecto_id: pid,
                 accion: 'IMPORTACION PDF',
-                detalle: 'Carga desde CCO · extract-tabla / cuadro compras',
+                detalle:
+                  'Importó PDF/imagen con extract-tabla al cuadro contable de la obra (OCR/IA · sin stock)',
+                metadata: { fuente: 'cco_importar_pdf' },
               }),
             }).catch(() => undefined);
           }

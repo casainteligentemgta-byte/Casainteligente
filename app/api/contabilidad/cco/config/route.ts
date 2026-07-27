@@ -4,6 +4,7 @@ import {
   guardarConfigCco,
   obtenerConfigCco,
 } from '@/lib/contabilidad/cco/proyectoConfig';
+import { resolverActorCco } from '@/lib/contabilidad/cco/registrarAuditoria';
 import { TIPO_CONTRATO_AD, ESTADO_CONTRATO_EXITOSO } from '@/lib/proyectos/contratoAdministracionDelegada';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import { requireCcoAcceso } from '@/lib/auth/requireCcoRoute';
@@ -75,6 +76,7 @@ export async function PUT(req: Request) {
       return NextResponse.json({ ok: false, error: 'proyecto_id requerido.' }, { status: 400 });
     }
 
+    const actor = await resolverActorCco('cco_ajustes');
     const config = await guardarConfigCco(admin.client as SupabaseClient, {
       proyecto_id: proyectoId,
       honorarios_admin_pct: Number(body.honorarios_admin_pct),
@@ -82,6 +84,7 @@ export async function PUT(req: Request) {
       empresa_nombre: body.empresa_nombre,
       obra_alias: body.obra_alias,
       area_m2: body.area_m2 != null ? Number(body.area_m2) : null,
+      actor,
     });
 
     return NextResponse.json({ ok: true, config });
