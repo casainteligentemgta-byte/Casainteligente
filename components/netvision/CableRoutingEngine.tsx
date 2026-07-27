@@ -20,6 +20,8 @@ type Props = {
   drawType: CableType
   drawMode: boolean
   draftPoint: { x: number; y: number } | null
+  draftPointCount?: number
+  onFinishDraft?: () => void
   disabled?: boolean
   onDrawType: (t: CableType) => void
   onDrawMode: (active: boolean) => void
@@ -39,6 +41,8 @@ export default function CableRoutingEngine({
   drawType,
   drawMode,
   draftPoint,
+  draftPointCount = 0,
+  onFinishDraft,
   disabled = false,
   onDrawType,
   onDrawMode,
@@ -64,7 +68,7 @@ export default function CableRoutingEngine({
           Rutas de cable
         </h2>
         <p className="text-[11px] text-[var(--nexus-text-dim)]">
-          Dibuja en el plano (2 toques) o rutas auto cámara→PoE con quiebres ·{' '}
+          Traza polilínea ortogonal en el plano · Enter o «Terminar» cierra ·{' '}
           <Mono>{totalM} m</Mono> total
         </p>
       </div>
@@ -109,16 +113,29 @@ export default function CableRoutingEngine({
         }`}
       >
         {drawMode
-          ? `Dibujando ${cableTypeLabel(drawType)}… (tocar plano)`
-          : `+ Dibujar ${cableTypeLabel(drawType)} en plano`}
+          ? `Trazando ${cableTypeLabel(drawType)}…`
+          : `+ Trazar ${cableTypeLabel(drawType)}`}
       </button>
 
       {drawMode ? (
-        <p className="rounded-lg border border-yellow-400/30 bg-yellow-400/10 px-2 py-1.5 text-[11px] text-yellow-100">
-          {draftPoint
-            ? 'Toca el segundo punto en el plano para cerrar el cable.'
-            : `Toca el inicio del cable (${cableTypeLabel(drawType)}).`}
-        </p>
+        <div className="space-y-1.5 rounded-lg border border-yellow-400/30 bg-yellow-400/10 px-2 py-1.5 text-[11px] text-yellow-100">
+          <p>
+            {draftPointCount === 0
+              ? `Toca el inicio (${cableTypeLabel(drawType)}). Trazo H/V con imán a equipos.`
+              : draftPointCount === 1
+                ? 'Toca el siguiente vértice. Doble toque o Enter para cerrar.'
+                : `${draftPointCount} puntos · Enter / Terminar para cerrar · Esc cancela.`}
+          </p>
+          {draftPointCount >= 2 ? (
+            <button
+              type="button"
+              className="rounded-md bg-yellow-400 px-2 py-1 text-[10px] font-semibold text-black"
+              onClick={() => onFinishDraft?.()}
+            >
+              Terminar cable
+            </button>
+          ) : null}
+        </div>
       ) : null}
 
       {selectedIsAuto ? (

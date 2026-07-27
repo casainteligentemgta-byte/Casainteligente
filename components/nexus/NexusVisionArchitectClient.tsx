@@ -141,6 +141,10 @@ import type {
   StructureMaterialId,
 } from '@/lib/netvision/types'
 import { snapOrtho90 } from '@/lib/netvision/utils/structureDraw'
+import {
+  sanitizeCablePoints,
+  snapCableDrawPoint,
+} from '@/lib/netvision/utils/cableDraw'
 import { downloadDataUrl } from '@/lib/netvision/utils/exporters'
 import { downloadNetVisionPlanPdf } from '@/lib/netvision/utils/exportPlanPdf'
 import type { NetVisionZoomControls } from '@/components/netvision/CameraPlacementTool'
@@ -198,10 +202,26 @@ export default function NexusVisionArchitectClient() {
     y: number
   } | null>(null)
   const [drawCable, setDrawCable] = useState(false)
-  const [cableDraft, setCableDraft] = useState<{ x: number; y: number } | null>(
+  const [cableDraftPoints, setCableDraftPoints] = useState<
+    { x: number; y: number }[]
+  >([])
+  const [cableCursor, setCableCursor] = useState<{ x: number; y: number } | null>(
     null,
   )
   const [drawCableType, setDrawCableType] = useState<CableType>('CAT6')
+
+  const clearCableDraft = useCallback(() => {
+    setCableDraftPoints([])
+    setCableCursor(null)
+  }, [])
+
+  const cableMagnetPoints = useMemo(
+    () => [
+      ...project.cameras.map((c) => ({ x: c.x, y: c.y })),
+      ...project.networkNodes.map((n) => ({ x: n.x, y: n.y })),
+    ],
+    [project.cameras, project.networkNodes],
+  )
   const [ugZone, setUgZone] = useState<ZoneType>('vehicle')
   const [ugTerrain, setUgTerrain] = useState<TerrainType>('medium')
   const [ugChamberMat, setUgChamberMat] = useState<ChamberMaterial>('polietileno')
@@ -270,18 +290,49 @@ export default function NexusVisionArchitectClient() {
     setCalibMeters(defaultCalibrationInput(project.unitSystem ?? 'metric'))
   }, [project.unitSystem, hydrated])
 
-  /** Escape termina el trazo de muro en curso. */
+  /** Escape / Enter: cable polilínea y muros. */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return
-      if (structureDraft) {
-        setStructureDraft(null)
+      if (e.key === 'Escape') {
+        if (cableDraftPoints.length > 0) {
+          clearCableDraft()
+          e.preventDefault()
+          return
+        }
+        if (drawCable) {
+          setDrawCable(false)
+          clearCableDraft()
+          e.preventDefault()
+          return
+        }
+        if (structureDraft) {
+          setStructureDraft(null)
+          e.preventDefault()
+        }
+        return
+      }
+      if (
+        (e.key === 'Enter' || e.key === ' ') &&
+        drawCable &&
+        cableDraftPoints.length >= 2
+      ) {
         e.preventDefault()
+        const points = sanitizeCablePoints(cableDraftPoints)
+        if (points.length < 2) return
+        addCableSegmentFromPoints(drawCableType, points)
+        clearCableDraft()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [structureDraft])
+    // addCableSegmentFromPoints is stable enough via closure on project length
+  }, [
+    structureDraft,
+    cableDraftPoints,
+    drawCable,
+    drawCableType,
+    clearCableDraft,
+  ])
 
   const structures = project.structures ?? []
 
@@ -600,7 +651,7 @@ export default function NexusVisionArchitectClient() {
       setDrawUnderground(false)
       setUndergroundDraft(null)
       setDrawCable(false)
-      setCableDraft(null)
+      clearCableDraft()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al cargar el plano')
     } finally {
@@ -664,7 +715,7 @@ export default function NexusVisionArchitectClient() {
         setDrawStructureMaterial(null)
         setStructureDraft(null)
         setDrawCable(false)
-        setCableDraft(null)
+        clearCableDraft()
       } else if (id === 'cable') {
         setShowCableRoutes(true)
         setShowUnderground(false)
@@ -681,14 +732,14 @@ export default function NexusVisionArchitectClient() {
         setDrawUnderground(false)
         setUndergroundDraft(null)
         setDrawCable(false)
-        setCableDraft(null)
+        clearCableDraft()
       } else {
         setDrawStructureMaterial(null)
         setStructureDraft(null)
         setDrawUnderground(false)
         setUndergroundDraft(null)
         setDrawCable(false)
-        setCableDraft(null)
+        clearCableDraft()
       }
     },
     [],
@@ -799,22 +850,27 @@ export default function NexusVisionArchitectClient() {
     setViewMode('plano')
   }
 
-  const addCableSegment = (
+  const addCableSegmentFromPoints = (
     type: CableType,
-    x1: number,
-    y1: number,
-    x2: number,
-    y2: number,
+    rawPoints: { x: number; y: number }[],
   ) => {
+    const points = sanitizeCablePoints(rawPoints)
+    if (points.length < 2) {
+      setError('El cable necesita al menos dos puntos.')
+      return
+    }
+    const first = points[0]!
+    const last = points[points.length - 1]!
     const n = (project.cableSegments?.length ?? 0) + 1
     const seg: DesignCableSegment = {
       id: uid(),
       label: `CAB-${String(n).padStart(2, '0')}`,
       type,
-      x1: Math.round(x1 * 1000) / 1000,
-      y1: Math.round(y1 * 1000) / 1000,
-      x2: Math.round(x2 * 1000) / 1000,
-      y2: Math.round(y2 * 1000) / 1000,
+      points,
+      x1: first.x,
+      y1: first.y,
+      x2: last.x,
+      y2: last.y,
     }
     setError(null)
     setProject((p) => ({
@@ -826,6 +882,26 @@ export default function NexusVisionArchitectClient() {
     setShowCableRoutes(true)
     setShowUnderground(false)
     setViewMode('plano')
+  }
+
+  const finishCableDraft = () => {
+    if (cableDraftPoints.length < 2) {
+      setError('Añade al menos dos puntos o pulsa Escape para cancelar.')
+      return
+    }
+    addCableSegmentFromPoints(drawCableType, cableDraftPoints)
+    clearCableDraft()
+  }
+
+  const onCablePointerMove = (normX: number, normY: number) => {
+    if (!drawCable) return
+    const from = cableDraftPoints[cableDraftPoints.length - 1] ?? null
+    const snapped = snapCableDrawPoint(
+      from,
+      { x: normX, y: normY },
+      cableMagnetPoints,
+    )
+    setCableCursor(snapped)
   }
 
   const onAddAt = (normX: number, normY: number) => {
@@ -859,18 +935,22 @@ export default function NexusVisionArchitectClient() {
     }
 
     if (drawCable) {
-      if (!cableDraft) {
-        setCableDraft({ x: normX, y: normY })
+      const from = cableDraftPoints[cableDraftPoints.length - 1] ?? null
+      const snapped = snapCableDrawPoint(
+        from,
+        { x: normX, y: normY },
+        cableMagnetPoints,
+      )
+      if (
+        from &&
+        Math.abs(from.x - snapped.x) + Math.abs(from.y - snapped.y) < 0.008
+      ) {
+        if (cableDraftPoints.length >= 2) finishCableDraft()
         return
       }
-      const dx = Math.abs(cableDraft.x - normX)
-      const dy = Math.abs(cableDraft.y - normY)
-      if (dx + dy < 0.01) {
-        setError('El cable es demasiado corto; elige otro punto.')
-        return
-      }
-      addCableSegment(drawCableType, cableDraft.x, cableDraft.y, normX, normY)
-      setCableDraft(null)
+      setCableDraftPoints((pts) => [...pts, snapped])
+      setCableCursor(snapped)
+      setError(null)
       return
     }
 
@@ -1079,9 +1159,12 @@ export default function NexusVisionArchitectClient() {
 
   const placeMode =
     calibrateMode || !!drawStructureMaterial || drawUnderground || drawCable
-  const draftPoint = cableDraft ?? undergroundDraft ?? structureDraft
+  const draftPoint =
+    cableDraftPoints.length > 0
+      ? cableDraftPoints[cableDraftPoints.length - 1]!
+      : undergroundDraft ?? structureDraft
   const draftColor =
-    cableDraft || drawCable
+    drawCable || cableDraftPoints.length > 0
       ? '#facc15'
       : undergroundDraft || drawUnderground
         ? '#fb923c'
@@ -1199,7 +1282,7 @@ export default function NexusVisionArchitectClient() {
                   setDrawUnderground(false)
                   setUndergroundDraft(null)
                   setDrawCable(false)
-                  setCableDraft(null)
+                  clearCableDraft()
                   if (next) {
                     setCalibrateMode(false)
                     setViewMode('plano')
@@ -1228,7 +1311,7 @@ export default function NexusVisionArchitectClient() {
                 const activate = !(drawCable && drawCableType === t)
                 setDrawCableType(t)
                 setDrawCable(activate)
-                setCableDraft(null)
+                clearCableDraft()
                 if (activate) {
                   setCalibrateMode(false)
                   setDrawStructureMaterial(null)
@@ -1244,6 +1327,15 @@ export default function NexusVisionArchitectClient() {
               {cableTypeLabel(t)}
             </button>
           ))}
+          {drawCable && cableDraftPoints.length >= 2 ? (
+            <button
+              type="button"
+              className="rounded-md bg-yellow-400 px-2 py-1 text-[11px] font-semibold text-black"
+              onClick={() => finishCableDraft()}
+            >
+              Terminar cable
+            </button>
+          ) : null}
         </>
       )
     }
@@ -1264,7 +1356,7 @@ export default function NexusVisionArchitectClient() {
                 setDrawStructureMaterial(null)
                 setStructureDraft(null)
                 setDrawCable(false)
-                setCableDraft(null)
+                clearCableDraft()
                 setShowUnderground(true)
                 setViewMode('plano')
               }
@@ -1642,7 +1734,7 @@ export default function NexusVisionArchitectClient() {
                 setDrawUnderground(false)
                 setUndergroundDraft(null)
                 setDrawCable(false)
-                setCableDraft(null)
+                clearCableDraft()
               }}
             >
               Calibrar
@@ -1757,6 +1849,8 @@ export default function NexusVisionArchitectClient() {
                     selectedId={selectedId}
                     placeMode={placeMode}
                     draftPoint={draftPoint}
+                    draftPoints={drawCable ? cableDraftPoints : undefined}
+                    draftCursor={drawCable ? cableCursor : null}
                     draftColor={draftColor}
                     showFov={showFov}
                     showWifi={showWifi}
@@ -1766,6 +1860,9 @@ export default function NexusVisionArchitectClient() {
                     showUnderground={showUnderground || sideTab === 'sub'}
                     showStructures={showStructures}
                     onAddAt={onAddAt}
+                    onDraftPointerMove={drawCable ? onCablePointerMove : undefined}
+                    onFinishPlace={drawCable ? finishCableDraft : undefined}
+                    snapPlaceToDevices={drawCable}
                     onMove={onMove}
                     onAdjustCameraVision={adjustCameraVision}
                     metersPerNormX={project.scale.metersPerNormX}
@@ -1782,7 +1879,7 @@ export default function NexusVisionArchitectClient() {
                         setDrawUnderground(false)
                         setUndergroundDraft(null)
                         setDrawCable(false)
-                        setCableDraft(null)
+                        clearCableDraft()
                       } else if ((project.structures ?? []).some((s) => s.id === id)) {
                         setSideTab('muros')
                         setViewMode('plano')
@@ -1792,7 +1889,7 @@ export default function NexusVisionArchitectClient() {
                         setDrawUnderground(false)
                         setUndergroundDraft(null)
                         setDrawCable(false)
-                        setCableDraft(null)
+                        clearCableDraft()
                       } else if (cableRoutes.some((r) => r.id === id)) {
                         setSideTab('cable')
                         setShowCableRoutes(true)
@@ -1853,7 +1950,7 @@ export default function NexusVisionArchitectClient() {
                 setDrawUnderground(false)
                 setUndergroundDraft(null)
                 setDrawCable(false)
-                setCableDraft(null)
+                clearCableDraft()
                 if (id) {
                   setCalibrateMode(false)
                   setViewMode('plano')
@@ -1909,7 +2006,7 @@ export default function NexusVisionArchitectClient() {
                     setDrawStructureMaterial(null)
                     setStructureDraft(null)
                     setDrawCable(false)
-                    setCableDraft(null)
+                    clearCableDraft()
                     setShowUnderground(true)
                     setViewMode('plano')
                   }
@@ -1936,12 +2033,18 @@ export default function NexusVisionArchitectClient() {
                 manualSegments={cableSegments}
                 drawType={drawCableType}
                 drawMode={drawCable}
-                draftPoint={cableDraft}
+                draftPoint={
+                  cableDraftPoints.length > 0
+                    ? cableDraftPoints[cableDraftPoints.length - 1]!
+                    : null
+                }
+                draftPointCount={cableDraftPoints.length}
+                onFinishDraft={finishCableDraft}
                 disabled={!project.planoUrl || loading}
                 onDrawType={setDrawCableType}
                 onDrawMode={(active) => {
                   setDrawCable(active)
-                  setCableDraft(null)
+                  clearCableDraft()
                   if (active) {
                     setCalibrateMode(false)
                     setDrawStructureMaterial(null)

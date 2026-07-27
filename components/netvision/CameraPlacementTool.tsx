@@ -52,7 +52,11 @@ export type CameraPlacementToolProps = {
   selectedId: string | null
   placeMode: boolean
   draftPoint?: { x: number; y: number } | null
-  /** Color del punto de borrador (muros cyan, sub naranja). */
+  /** Vértices del cable en curso (polilínea). */
+  draftPoints?: { x: number; y: number }[]
+  /** Cursor con snap ortho / imán mientras se traza. */
+  draftCursor?: { x: number; y: number } | null
+  /** Color del punto de borrador (muros cyan, sub naranja, cable amarillo). */
   draftColor?: string
   showFov: boolean
   showWifi: boolean
@@ -63,6 +67,10 @@ export type CameraPlacementToolProps = {
   /** Muros / vidrio / ventana / puerta en el plano. */
   showStructures?: boolean
   onAddAt: (normX: number, normY: number) => void
+  onDraftPointerMove?: (normX: number, normY: number) => void
+  onFinishPlace?: () => void
+  /** En placeMode, tocar cámara/nodo ancla el trazo a ese punto. */
+  snapPlaceToDevices?: boolean
   onMove: (id: string, normX: number, normY: number) => void
   /** Ajuste interactivo de óptica (yaw / FOV por lado / alcance) desde el plano. */
   onAdjustCameraVision?: (
@@ -227,6 +235,8 @@ export default function CameraPlacementTool({
   selectedId,
   placeMode,
   draftPoint = null,
+  draftPoints,
+  draftCursor = null,
   draftColor = '#22d3ee',
   showFov,
   showWifi,
@@ -236,6 +246,9 @@ export default function CameraPlacementTool({
   showUnderground = false,
   showStructures = true,
   onAddAt,
+  onDraftPointerMove,
+  onFinishPlace,
+  snapPlaceToDevices = false,
   onMove,
   onAdjustCameraVision,
   metersPerNormX = 40,
@@ -450,6 +463,16 @@ export default function CameraPlacementTool({
     onAddAt(n.x, n.y)
   }
 
+  const handleStageMouseMove = () => {
+    if (!placeMode || !onDraftPointerMove) return
+    const stage = localStageRef.current
+    if (!stage) return
+    const pos = stage.getRelativePointerPosition()
+    if (!pos) return
+    const n = toNorm(pos.x, pos.y)
+    onDraftPointerMove(n.x, n.y)
+  }
+
   const setStage = (node: Konva.Stage | null) => {
     localStageRef.current = node
     if (stageRef) stageRef.current = node
@@ -528,6 +551,8 @@ export default function CameraPlacementTool({
         onWheel={handleWheel}
         onClick={handleStageClick}
         onTap={handleStageClick}
+        onMouseMove={handleStageMouseMove}
+        onTouchMove={handleStageMouseMove}
         style={{ cursor: placeMode ? 'crosshair' : 'grab' }}
       >
         <Layer>
@@ -854,7 +879,50 @@ export default function CameraPlacementTool({
             )
           })}
 
-          {draftPoint ? (
+          {(draftPoints && draftPoints.length > 0) || draftCursor ? (
+            <>
+              {draftPoints && draftPoints.length >= 1 ? (
+                <Line
+                  points={(draftCursor
+                    ? [...draftPoints, draftCursor]
+                    : draftPoints
+                  ).flatMap((p) => [
+                    offsetX + p.x * drawW,
+                    offsetY + p.y * drawH,
+                  ])}
+                  stroke={draftColor}
+                  strokeWidth={1.75}
+                  dash={[5, 4]}
+                  lineCap="round"
+                  lineJoin="round"
+                  opacity={0.9}
+                  listening={false}
+                />
+              ) : null}
+              {(draftPoints ?? []).map((p, i) => (
+                <Circle
+                  key={`draft-pt-${i}`}
+                  x={offsetX + p.x * drawW}
+                  y={offsetY + p.y * drawH}
+                  radius={i === 0 ? 3 : 2.25}
+                  fill={draftColor}
+                  stroke="#fff"
+                  strokeWidth={1}
+                  listening={false}
+                />
+              ))}
+              {draftCursor ? (
+                <Circle
+                  x={offsetX + draftCursor.x * drawW}
+                  y={offsetY + draftCursor.y * drawH}
+                  radius={2}
+                  fill={draftColor}
+                  opacity={0.7}
+                  listening={false}
+                />
+              ) : null}
+            </>
+          ) : draftPoint ? (
             <Circle
               x={offsetX + draftPoint.x * drawW}
               y={offsetY + draftPoint.y * drawH}
@@ -905,7 +973,8 @@ export default function CameraPlacementTool({
                   }
                   lineCap="round"
                   lineJoin="round"
-                  hitStrokeWidth={18}
+                  hitStrokeWidth={placeMode ? 0 : 18}
+                  listening={!placeMode}
                   onClick={(e) => {
                     e.cancelBubble = true
                     const already = selectedId === r.id
@@ -1087,13 +1156,21 @@ export default function CameraPlacementTool({
                 shadowColor="black"
                 shadowBlur={3}
                 shadowOpacity={0.3}
-                draggable
+                draggable={!snapPlaceToDevices}
                 onClick={(e) => {
                   e.cancelBubble = true
+                  if (snapPlaceToDevices && placeMode) {
+                    onAddAt(cam.x, cam.y)
+                    return
+                  }
                   onSelect(cam.id)
                 }}
                 onTap={(e) => {
                   e.cancelBubble = true
+                  if (snapPlaceToDevices && placeMode) {
+                    onAddAt(cam.x, cam.y)
+                    return
+                  }
                   onSelect(cam.id)
                 }}
                 onDragStart={(e) => {
@@ -1116,6 +1193,7 @@ export default function CameraPlacementTool({
           {/* Asas de visión encima del pin: orient./alcance/FOV tras mover o seleccionar */}
           {showFov &&
             onAdjustCameraVision &&
+            !snapPlaceToDevices &&
             cameras
               .filter((c) => c.id === selectedId)
               .map((cam) => {
@@ -1370,13 +1448,21 @@ export default function CameraPlacementTool({
                   shadowBlur={selected ? 6 : 4}
                   shadowOpacity={0.28}
                   hitStrokeWidth={Math.max(10, 14 - size)}
-                  draggable
+                  draggable={!snapPlaceToDevices}
                   onClick={(e) => {
                     e.cancelBubble = true
+                    if (snapPlaceToDevices && placeMode) {
+                      onAddAt(node.x, node.y)
+                      return
+                    }
                     onSelect(node.id)
                   }}
                   onTap={(e) => {
                     e.cancelBubble = true
+                    if (snapPlaceToDevices && placeMode) {
+                      onAddAt(node.x, node.y)
+                      return
+                    }
                     onSelect(node.id)
                   }}
                   onDragStart={(e) => {
@@ -1393,7 +1479,7 @@ export default function CameraPlacementTool({
                     resumeStageDrag(e.target.getStage())
                   }}
                 />
-                {selected && onNetworkSizeChange ? (
+                {selected && onNetworkSizeChange && !snapPlaceToDevices ? (
                   <Circle
                     x={cx + size}
                     y={cy + size}

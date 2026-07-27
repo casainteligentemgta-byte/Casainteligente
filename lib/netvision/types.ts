@@ -262,11 +262,14 @@ export type CableType =
   | 'AUDIO'
   | 'POWER_12V'
 
-/** Cable dibujado a mano en el plano (2 puntos + tipo). */
+/** Cable dibujado a mano en el plano (polilínea + tipo). */
 export type DesignCableSegment = {
   id: string
   label: string
   type: CableType
+  /** Polilínea completa (mín. 2 puntos). Fuente de verdad. */
+  points: { x: number; y: number }[]
+  /** Extremos (espejo de points[0] / points[at-1] para compat). */
   x1: number
   y1: number
   x2: number
