@@ -14,13 +14,6 @@ export default function ControlObraEquipoPage({ params }: Props) {
 
   return (
     <div className="space-y-8">
-      <header className="space-y-1">
-        <h2 className="text-lg font-bold text-white">Equipo</h2>
-        <p className="text-sm text-zinc-500">
-          Acceso del patrono, roles de obra, alertas RRHH y depositario Telegram de este proyecto.
-        </p>
-      </header>
-
       <ProyectoEquipoAccesoPanel proyectoId={proyectoId} />
       <ProyectoNominaRolesPanel proyectoId={proyectoId} />
       <ProyectoEquipoAlertasPanel proyectoId={proyectoId} />

@@ -18,6 +18,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 type Body = {
   email?: string;
   nombre?: string;
+  apellido?: string;
   rol?: string;
   entidadId?: string;
   entidad_id?: string;
@@ -32,6 +33,18 @@ type Body = {
   telegram_chat_id?: string | number | null;
   cargo?: string | null;
 };
+
+function nombreCompletoDesdeBody(body: Body, email: string): {
+  nombre: string;
+  apellido: string;
+  displayName: string;
+} {
+  const nombre = (body.nombre ?? '').trim();
+  const apellido = (body.apellido ?? '').trim();
+  const displayName =
+    [nombre, apellido].filter(Boolean).join(' ').trim() || email.split('@')[0] || 'Usuario';
+  return { nombre, apellido, displayName };
+}
 
 function baseUrlApp(req: Request): string {
   const env =
@@ -49,7 +62,8 @@ function baseUrlApp(req: Request): string {
  * POST — Invita usuario por correo (Auth), asigna rol por entidad y opcionalmente
  * lo agrega a la whitelist de Telegram.
  *
- * Body: { email, nombre?, rol, entidadId, invitar_web?, telegram_chat_id?, cargo? }
+ * Body: { email, nombre?, apellido?, rol, entidadId, invitar_web?, telegram_chat_id?, cargo? }
+ * Si el usuario ya existe, redefine el rol (upsert por entidad) sin reenviar invitación.
  */
 export async function POST(req: Request) {
   const gate = await requirePermisoWeb('equipo.gestionar');
@@ -63,7 +77,7 @@ export async function POST(req: Request) {
   }
 
   const email = (body.email ?? '').trim().toLowerCase();
-  const nombre = (body.nombre ?? '').trim() || email.split('@')[0] || 'Usuario';
+  const { apellido, displayName } = nombreCompletoDesdeBody(body, email);
   const rolRaw = (body.rol ?? '').trim();
   const entidadId = (body.entidadId ?? body.entidad_id ?? '').trim();
   const invitarWeb = body.invitar_web !== false;
@@ -71,6 +85,12 @@ export async function POST(req: Request) {
   const crearConPassword = password.length > 0;
   const chatIdRaw = body.telegram_chat_id;
   const cargo = body.cargo?.trim() || null;
+  const userMeta = {
+    nombre: displayName,
+    apellido: apellido || undefined,
+    entidad_id: entidadId,
+    rol: '' as string,
+  };
 
   if (!email || !email.includes('@')) {
     return NextResponse.json({ error: 'email inválido' }, { status: 400 });
@@ -85,6 +105,7 @@ export async function POST(req: Request) {
   if (!rolNorm) {
     return NextResponse.json({ error: 'rol inválido' }, { status: 400 });
   }
+  userMeta.rol = rolNorm;
   if (!entidadId || !UUID_RE.test(entidadId)) {
     return NextResponse.json({ error: 'entidadId inválido' }, { status: 400 });
   }
@@ -114,26 +135,24 @@ export async function POST(req: Request) {
   if ('userId' in lookup) {
     userId = lookup.userId;
     yaExistia = true;
-    if (crearConPassword) {
-      const { error: updErr } = await admin.auth.admin.updateUserById(userId, {
-        password,
-        email_confirm: true,
-        user_metadata: { nombre, entidad_id: entidadId, rol: rolNorm },
-      });
-      if (updErr) {
-        return NextResponse.json(
-          { error: updErr.message || 'No se pudo actualizar la contraseña' },
-          { status: 502 },
-        );
-      }
-      creadoConPassword = true;
+    // Usuario ya autorizado: se puede redefinir rol/nombre en esta u otra entidad.
+    const { error: updErr } = await admin.auth.admin.updateUserById(userId, {
+      ...(crearConPassword ? { password, email_confirm: true } : {}),
+      user_metadata: userMeta,
+    });
+    if (updErr) {
+      return NextResponse.json(
+        { error: updErr.message || 'No se pudo actualizar el usuario' },
+        { status: 502 },
+      );
     }
+    if (crearConPassword) creadoConPassword = true;
   } else if (crearConPassword) {
     const { data: created, error: createErr } = await admin.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
-      user_metadata: { nombre, entidad_id: entidadId, rol: rolNorm },
+      user_metadata: userMeta,
     });
     if (createErr) {
       return NextResponse.json(
@@ -151,7 +170,7 @@ export async function POST(req: Request) {
     const redirectTo = `${baseUrlApp(req)}/auth/callback?next=${encodeURIComponent(home)}`;
     const { data: inviteData, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(email, {
       redirectTo,
-      data: { nombre, entidad_id: entidadId, rol: rolNorm },
+      data: userMeta,
     });
     if (inviteErr) {
       // Usuario puede existir pero listUsers no lo encontró; reintentar lookup
@@ -159,6 +178,7 @@ export async function POST(req: Request) {
       if ('userId' in again) {
         userId = again.userId;
         yaExistia = true;
+        await admin.auth.admin.updateUserById(userId, { user_metadata: userMeta });
       } else {
         return NextResponse.json(
           { error: inviteErr.message || 'No se pudo enviar la invitación' },
@@ -200,7 +220,7 @@ export async function POST(req: Request) {
   if (chatId != null) {
     try {
       await crearTelegramWhitelist(admin, {
-        nombre,
+        nombre: displayName,
         chat_id: chatId,
         email,
         cargo: cargo ?? rolNorm,
@@ -212,7 +232,7 @@ export async function POST(req: Request) {
       if (rolTg) {
         const { error: sisErr } = await admin.from('ci_usuarios_sistema_telegram').upsert(
           {
-            nombre: nombre.slice(0, 150),
+            nombre: displayName.slice(0, 150),
             telegram_id: chatId,
             rol: rolTg,
             proyecto_id: null,
@@ -249,11 +269,11 @@ export async function POST(req: Request) {
         ? 'Usuario CCO (solo visualización) creado con contraseña. Puede entrar en /login.'
         : 'Usuario creado con contraseña. Puede entrar en /login.';
   } else if (creadoConPassword && yaExistia) {
-    mensaje = 'Usuario ya existía; se actualizó el rol y la contraseña.';
+    mensaje = 'Usuario ya existía; se redefinió el rol y la contraseña.';
   } else if (inviteEnviado) {
     mensaje = 'Invitación enviada por correo. El usuario definirá su clave al aceptar.';
   } else if (yaExistia) {
-    mensaje = 'Usuario ya existía en Auth; se actualizó el rol.';
+    mensaje = 'Usuario ya autorizado; se redefinió el rol para esta entidad.';
   } else {
     mensaje = 'Acceso configurado.';
   }

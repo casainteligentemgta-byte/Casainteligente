@@ -27,6 +27,11 @@ function normalizarFilaRol(row: FilaRolUsuario): FilaRolUsuario {
   return usuarioId ? { ...row, usuario_id: usuarioId, user_id: usuarioId } : row;
 }
 
+function esErrorRecursionRls(message: string | undefined): boolean {
+  const m = (message ?? '').toLowerCase();
+  return m.includes('infinite recursion') && m.includes('policy');
+}
+
 /** Listado global de asignaciones (Equipo / Menú del patrono). Producción: `user_id`. */
 export async function listarAsignacionesRolesEmpresa(
   supabase: SupabaseClient,
@@ -41,6 +46,13 @@ export async function listarAsignacionesRolesEmpresa(
       error: null,
     };
   }
+  if (esErrorRecursionRls(legacy.error.message)) {
+    return {
+      data: [],
+      error:
+        'Recursión RLS en ci_usuarios_roles. Aplique la migración 301_repair_ci_usuarios_roles_rls_recursion (o use service role).',
+    };
+  }
   if (!esErrorColumnaInexistente(legacy.error.message, 'user_id')) {
     return { data: [], error: legacy.error.message };
   }
@@ -49,7 +61,16 @@ export async function listarAsignacionesRolesEmpresa(
     .from('ci_usuarios_roles')
     .select('id, rol, entidad_id, usuario_id, created_at, updated_at, ci_entidades(nombre)')
     .order('created_at', { ascending: false });
-  if (modern.error) return { data: [], error: modern.error.message };
+  if (modern.error) {
+    if (esErrorRecursionRls(modern.error.message)) {
+      return {
+        data: [],
+        error:
+          'Recursión RLS en ci_usuarios_roles. Aplique la migración 301_repair_ci_usuarios_roles_rls_recursion (o use service role).',
+      };
+    }
+    return { data: [], error: modern.error.message };
+  }
   return {
     data: ((modern.data ?? []) as FilaRolUsuario[]).map(normalizarFilaRol),
     error: null,

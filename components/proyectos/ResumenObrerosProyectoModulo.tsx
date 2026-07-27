@@ -610,15 +610,27 @@ export default function ResumenObrerosProyectoModulo({
         const contrMap = new Map<string, string[]>();
         const filasContratoPorEmpleado = new Map<string, FilaContratoObra[]>();
         if (empIdsParaContratosObra.length > 0) {
-          const ctr = await supabase
+          let ctr = await supabase
             .from('ci_contratos_empleado_obra')
-            .select('empleado_id,estado_contrato,obra_id')
+            .select('empleado_id,estado_contrato,obra_id,proyecto_id')
             .in('empleado_id', empIdsParaContratosObra);
+          if (
+            ctr.error &&
+            /obra_id/i.test(ctr.error.message) &&
+            /(does not exist|could not find|schema cache)/i.test(ctr.error.message)
+          ) {
+            ctr = await supabase
+              .from('ci_contratos_empleado_obra')
+              .select('empleado_id,estado_contrato,proyecto_id')
+              .in('empleado_id', empIdsParaContratosObra);
+          }
           if (!alive) return;
           for (const row of ctr.data ?? []) {
             const eid = String((row as { empleado_id?: unknown }).empleado_id ?? '');
             const st = String((row as { estado_contrato?: unknown }).estado_contrato ?? '');
-            const oidRaw = (row as { obra_id?: unknown }).obra_id;
+            const oidRaw =
+              (row as { obra_id?: unknown }).obra_id ??
+              (row as { proyecto_id?: unknown }).proyecto_id;
             const obra_id = typeof oidRaw === 'string' && oidRaw ? oidRaw : null;
             if (!eid) continue;
             const arr = contrMap.get(eid) ?? [];

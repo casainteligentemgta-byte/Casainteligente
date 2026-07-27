@@ -59,6 +59,17 @@ function nombresDesdeEmpleado(row: {
   return full;
 }
 
+function esColumnaInexistente(message: string | undefined, columna: string): boolean {
+  const m = (message ?? '').toLowerCase();
+  const col = columna.toLowerCase();
+  if (!m.includes(col)) return false;
+  return (
+    m.includes('does not exist') ||
+    m.includes('could not find') ||
+    m.includes('schema cache')
+  );
+}
+
 async function projectIdsAlcance(
   supabase: SupabaseClient,
   proyectoModuloId?: string,
@@ -69,23 +80,83 @@ async function projectIdsAlcance(
   return Array.from(new Set([pid, ...hijas]));
 }
 
+type ContratoActivoRow = {
+  empleado_id?: unknown;
+  fecha_ingreso?: unknown;
+  obra_id?: unknown;
+  proyecto_id?: unknown;
+  estado_contrato?: unknown;
+  created_at?: unknown;
+};
+
+/**
+ * Lista contratos firmados activos.
+ * Compat: algunos entornos solo tienen `proyecto_id` (sin `obra_id`).
+ */
+async function listarContratosFirmadosActivos(
+  supabase: SupabaseClient,
+  projectIds: string[] | null,
+): Promise<ContratoActivoRow[]> {
+  const selectConObra = 'empleado_id,fecha_ingreso,obra_id,proyecto_id,estado_contrato,created_at';
+  const selectSoloProyecto = 'empleado_id,fecha_ingreso,proyecto_id,estado_contrato,created_at';
+
+  let q = supabase
+    .from('ci_contratos_empleado_obra')
+    .select(selectConObra)
+    .eq('estado_contrato', 'firmado_activo');
+
+  if (projectIds?.length) {
+    // obra_id o proyecto_id pueden apuntar al mismo módulo / obra hija.
+    const orParts = [
+      ...projectIds.map((id) => `obra_id.eq.${id}`),
+      ...projectIds.map((id) => `proyecto_id.eq.${id}`),
+    ];
+    q = q.or(orParts.join(','));
+  }
+
+  const first = await q;
+  if (!first.error) return (first.data ?? []) as ContratoActivoRow[];
+
+  if (
+    !esColumnaInexistente(first.error.message, 'obra_id') &&
+    !esColumnaInexistente(first.error.message, 'proyecto_id')
+  ) {
+    throw new Error(first.error.message);
+  }
+
+  // Reintento sin obra_id (esquema legacy / prod desalineado).
+  let q2 = supabase
+    .from('ci_contratos_empleado_obra')
+    .select(selectSoloProyecto)
+    .eq('estado_contrato', 'firmado_activo');
+  if (projectIds?.length) {
+    q2 = q2.in('proyecto_id', projectIds);
+  }
+  const second = await q2;
+  if (second.error) {
+    // Último intento: solo obra_id (por si falta proyecto_id).
+    if (!esColumnaInexistente(second.error.message, 'proyecto_id')) {
+      throw new Error(second.error.message);
+    }
+    let q3 = supabase
+      .from('ci_contratos_empleado_obra')
+      .select('empleado_id,fecha_ingreso,obra_id,estado_contrato,created_at')
+      .eq('estado_contrato', 'firmado_activo');
+    if (projectIds?.length) q3 = q3.in('obra_id', projectIds);
+    const third = await q3;
+    if (third.error) throw new Error(third.error.message);
+    return (third.data ?? []) as ContratoActivoRow[];
+  }
+  return (second.data ?? []) as ContratoActivoRow[];
+}
+
 export async function fetchCuadroContratados(
   supabase: SupabaseClient,
   opts?: { proyectoModuloId?: string },
 ): Promise<FilaNominaContratado[]> {
   const projectIds = await projectIdsAlcance(supabase, opts?.proyectoModuloId);
 
-  let contratosQuery = supabase
-    .from('ci_contratos_empleado_obra')
-    .select('empleado_id,fecha_ingreso,obra_id,estado_contrato,created_at')
-    .eq('estado_contrato', 'firmado_activo');
-
-  if (projectIds?.length) {
-    contratosQuery = contratosQuery.in('obra_id', projectIds);
-  }
-
-  const { data: contratos, error: cErr } = await contratosQuery;
-  if (cErr) throw new Error(cErr.message);
+  const contratos = await listarContratosFirmadosActivos(supabase, projectIds);
 
   const empleadoIds = Array.from(
     new Set(
