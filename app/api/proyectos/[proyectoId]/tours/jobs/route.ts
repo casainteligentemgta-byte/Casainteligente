@@ -158,6 +158,23 @@ export async function POST(
           },
         })
         .eq('id', job.id);
+    } else {
+      await supabase
+        .from('ci_obra_tour_jobs')
+        .update({
+          estado: 'procesando',
+          progreso_pct: 5,
+          mensaje_estado: 'Enviado al worker de reconstrucción',
+          started_at: new Date().toISOString(),
+          worker_payload: {
+            ...worker_payload,
+            stub: false,
+            worker_accepted_at: new Date().toISOString(),
+            worker_http_status: enqueue.worker_status ?? null,
+            worker_ack: enqueue.worker_body ?? null,
+          },
+        })
+        .eq('id', job.id);
     }
 
     const { data: refreshed } = await supabase
@@ -170,6 +187,7 @@ export async function POST(
       {
         job: (refreshed ?? job) as ObraTourJob,
         stub: enqueue.stub,
+        worker_status: enqueue.stub ? undefined : enqueue.worker_status,
       },
       { status: 201 },
     );

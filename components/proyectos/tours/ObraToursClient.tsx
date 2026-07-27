@@ -167,6 +167,10 @@ export default function ObraToursClient({ proyectoId }: Props) {
           <span className="text-zinc-200">modo piloto con joystick</span> o{' '}
           <span className="text-zinc-200">export MP4 para DJI Goggles</span>.
         </p>
+        <p className="max-w-2xl text-[11px] text-zinc-500">
+          Si el worker de reconstrucción está conectado, el video se procesa y el modelo 3D
+          vuelve solo. Si no, usa «Simular modelo» para probar piloto / DJI.
+        </p>
       </header>
 
       <div className="flex flex-wrap gap-2">

@@ -87,6 +87,9 @@ export async function POST(req: Request) {
       patch.modelo_storage_path = body.modelo.storage_path ?? null;
       patch.progreso_pct = body.progreso_pct ?? 100;
       patch.mensaje_estado = body.mensaje_estado ?? 'Modelo 3D listo para piloto / tour DJI';
+      patch.finished_at = new Date().toISOString();
+      patch.error_codigo = null;
+      patch.error_detalle = null;
     }
 
     if (body.result && typeof body.result === 'object') {
