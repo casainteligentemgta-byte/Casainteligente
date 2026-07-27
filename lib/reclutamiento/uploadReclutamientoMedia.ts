@@ -35,6 +35,17 @@ export async function uploadOnboardingCedulaPhoto(
   supabase: SupabaseClient,
 ): Promise<{ url: string | null; error: string | null }> {
   const ext = file.type === 'image/png' ? 'png' : 'jpg';
-  const path = `reclutamiento/onboarding/${token}/${crypto.randomUUID()}.${ext}`;
+  const path = `reclutamiento/onboarding/${token}/cedula-${crypto.randomUUID()}.${ext}`;
+  return uploadToSupabaseReclutamientoBucket(supabase, path, file);
+}
+
+/** Foto tipo carnet (perfil) en onboarding por token. */
+export async function uploadOnboardingPerfilPhoto(
+  file: File,
+  token: string,
+  supabase: SupabaseClient,
+): Promise<{ url: string | null; error: string | null }> {
+  const ext = file.type === 'image/png' ? 'png' : 'jpg';
+  const path = `reclutamiento/onboarding/${token}/perfil-${crypto.randomUUID()}.${ext}`;
   return uploadToSupabaseReclutamientoBucket(supabase, path, file);
 }

@@ -27,7 +27,10 @@ import { GlassCard, GlassCardMotion } from '@/components/nexus/GlassCard';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import DocumentUpload from '@/components/reclutamiento/DocumentUpload';
-import { uploadOnboardingCedulaPhoto } from '@/lib/reclutamiento/uploadReclutamientoMedia';
+import {
+  uploadOnboardingCedulaPhoto,
+  uploadOnboardingPerfilPhoto,
+} from '@/lib/reclutamiento/uploadReclutamientoMedia';
 import { apiUrl } from '@/lib/http/apiUrl';
 
 type Props = { params: { token: string } };
@@ -38,10 +41,12 @@ function HojaDeVidaMovilInner({ params }: Props) {
   const supabase = useMemo(() => createClient(), []);
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitPhase, setSubmitPhase] = useState<'idle' | 'compress' | 'upload' | 'save'>('idle');
+  const [submitPhase, setSubmitPhase] = useState<'idle' | 'compress' | 'upload' | 'save' | 'pdf'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [cedulaFoto, setCedulaFoto] = useState<File | null>(null);
   const [cedulaFotoUrl, setCedulaFotoUrl] = useState<string | null>(null);
+  const [perfilFoto, setPerfilFoto] = useState<File | null>(null);
+  const [perfilFotoUrl, setPerfilFotoUrl] = useState<string | null>(null);
   const [mostrarVista, setMostrarVista] = useState(false);
   const [formData, setFormData] = useState({
     cedula: '',
@@ -95,6 +100,12 @@ function HojaDeVidaMovilInner({ params }: Props) {
             hvLeg.contratacion.cargoUOficio = j.empleado.cargo.trim();
           }
           setLegal(hvLeg);
+          setFormData((prev) => ({
+            ...prev,
+            cedula: hvLeg.datosPersonales.cedulaIdentidad.trim() || prev.cedula,
+          }));
+          if (hvLeg.datosPersonales.fotoCedulaUrl) setCedulaFotoUrl(hvLeg.datosPersonales.fotoCedulaUrl);
+          if (hvLeg.datosPersonales.fotoUrl) setPerfilFotoUrl(hvLeg.datosPersonales.fotoUrl);
           try {
             const campos = await resolvePlanillaPatronoParaEmpleado(supabase, rowLeg);
             if (alive) setPlanillaPatrono(campos);
@@ -111,6 +122,12 @@ function HojaDeVidaMovilInner({ params }: Props) {
           hv.contratacion.cargoUOficio = j.empleado.cargo.trim();
         }
         setLegal(hv);
+        setFormData((prev) => ({
+          ...prev,
+          cedula: hv.datosPersonales.cedulaIdentidad.trim() || prev.cedula,
+        }));
+        if (hv.datosPersonales.fotoCedulaUrl) setCedulaFotoUrl(hv.datosPersonales.fotoCedulaUrl);
+        if (hv.datosPersonales.fotoUrl) setPerfilFotoUrl(hv.datosPersonales.fotoUrl);
         try {
           const campos = await resolvePlanillaPatronoParaEmpleado(supabase, row);
           if (alive) setPlanillaPatrono(campos);
@@ -132,6 +149,12 @@ function HojaDeVidaMovilInner({ params }: Props) {
     if (step === 1) {
       if (!formData.cedula.trim()) {
         setError('Ingresa la cédula para continuar.');
+        return;
+      }
+      const tieneCedula = Boolean(cedulaFoto || cedulaFotoUrl || legal.datosPersonales.fotoCedulaUrl.trim());
+      const tienePerfil = Boolean(perfilFoto || perfilFotoUrl || legal.datosPersonales.fotoUrl.trim());
+      if (!tieneCedula || !tienePerfil) {
+        setError('Adjunta foto de perfil (carnet) y foto de cédula para continuar.');
         return;
       }
       setError(null);
@@ -162,10 +185,11 @@ function HojaDeVidaMovilInner({ params }: Props) {
     setIsSubmitting(true);
     setSubmitPhase('idle');
     setError(null);
-    let fotoUrl: string | null = cedulaFotoUrl;
-    if (cedulaFoto && !fotoUrl) {
-      try {
-        setSubmitPhase('upload');
+    let fotoCedUrl: string | null = cedulaFotoUrl || legal.datosPersonales.fotoCedulaUrl || null;
+    let fotoPerUrl: string | null = perfilFotoUrl || legal.datosPersonales.fotoUrl || null;
+    try {
+      setSubmitPhase('upload');
+      if (cedulaFoto && !fotoCedUrl) {
         const up = await uploadOnboardingCedulaPhoto(cedulaFoto, params.token, supabase);
         if (up.error) {
           setIsSubmitting(false);
@@ -173,16 +197,26 @@ function HojaDeVidaMovilInner({ params }: Props) {
           setError(up.error);
           return;
         }
-        fotoUrl = up.url;
-        setSubmitPhase('save');
-      } catch (e) {
-        setIsSubmitting(false);
-        setSubmitPhase('idle');
-        setError(e instanceof Error ? e.message : 'No se pudo subir la imagen.');
-        return;
+        fotoCedUrl = up.url;
+        if (up.url) setCedulaFotoUrl(up.url);
       }
-    } else {
+      if (perfilFoto && !fotoPerUrl) {
+        const up = await uploadOnboardingPerfilPhoto(perfilFoto, params.token, supabase);
+        if (up.error) {
+          setIsSubmitting(false);
+          setSubmitPhase('idle');
+          setError(up.error);
+          return;
+        }
+        fotoPerUrl = up.url;
+        if (up.url) setPerfilFotoUrl(up.url);
+      }
       setSubmitPhase('save');
+    } catch (e) {
+      setIsSubmitting(false);
+      setSubmitPhase('idle');
+      setError(e instanceof Error ? e.message : 'No se pudo subir la imagen.');
+      return;
     }
 
     const merged: HojaVidaObreroCompleta = {
@@ -190,7 +224,8 @@ function HojaDeVidaMovilInner({ params }: Props) {
       datosPersonales: {
         ...legal.datosPersonales,
         cedulaIdentidad: legal.datosPersonales.cedulaIdentidad.trim() || formData.cedula.trim(),
-        fotoCedulaUrl: fotoUrl ?? legal.datosPersonales.fotoCedulaUrl,
+        fotoCedulaUrl: fotoCedUrl ?? legal.datosPersonales.fotoCedulaUrl,
+        fotoUrl: fotoPerUrl ?? legal.datosPersonales.fotoUrl,
       },
       pesoMedidas: {
         ...legal.pesoMedidas,
@@ -221,32 +256,61 @@ function HojaDeVidaMovilInner({ params }: Props) {
       rol_buscado: t(merged.contratacion.cargoUOficio) || undefined,
       cargo: t(merged.contratacion.cargoUOficio) || 'Por definir',
       cedula_foto_url: merged.datosPersonales.fotoCedulaUrl || undefined,
+      foto_perfil_url: merged.datosPersonales.fotoUrl || undefined,
       estado_proceso: 'cv_completado',
       updated_at: new Date().toISOString(),
     };
 
-    const { data, error: upErr } = await supabase
+    let { data, error: upErr } = await supabase
       .from('ci_empleados')
       .update(payload as never)
       .eq('token_registro', params.token)
       .select('id')
       .limit(1);
 
-    setIsSubmitting(false);
-    setSubmitPhase('idle');
+    if ((!data || data.length === 0) && !upErr) {
+      const retry = await supabase
+        .from('ci_empleados')
+        .update(payload as never)
+        .eq('token', params.token)
+        .select('id')
+        .limit(1);
+      data = retry.data;
+      upErr = retry.error;
+    }
+
     if (upErr) {
+      setIsSubmitting(false);
+      setSubmitPhase('idle');
       setError(upErr.message);
       return;
     }
     if (!data || data.length === 0) {
+      setIsSubmitting(false);
+      setSubmitPhase('idle');
       setError('Token inválido o no encontrado.');
       return;
     }
+
+    setSubmitPhase('pdf');
+    try {
+      await fetch(apiUrl('/api/talento/hoja-legal/generar'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: params.token, variante: 'hoja_vida' }),
+      });
+    } catch {
+      /* el PDF on-demand por token sigue disponible */
+    }
+
     void fetch(apiUrl('/api/expediente/marcar-token-usado'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token: params.token }),
     }).catch(() => undefined);
+
+    setIsSubmitting(false);
+    setSubmitPhase('idle');
     setLegal(merged);
     setStep(4);
   }
@@ -298,9 +362,9 @@ function HojaDeVidaMovilInner({ params }: Props) {
               className="space-y-6"
             >
               <div className="space-y-2">
-                <h2 className="text-3xl font-bold text-white tracking-tight">Identidad</h2>
+                <h2 className="text-3xl font-bold text-white tracking-tight">Identidad y fotos</h2>
                 <p className="text-[var(--nexus-text-muted)]">
-                  Ingresa tu cédula y adjunta una foto clara de tu documento para el expediente.
+                  Cédula, foto tipo carnet y foto de tu cédula. Con eso se arma tu hoja de vida al enviar el formulario.
                 </p>
               </div>
 
@@ -319,7 +383,28 @@ function HojaDeVidaMovilInner({ params }: Props) {
                 </div>
                 <div>
                   <DocumentUpload
-                    label="Foto de cédula (frente)"
+                    label="Foto de perfil (tipo carnet) *"
+                    currentFileName={perfilFoto?.name}
+                    preferCamera
+                    uploadOnSelect={async (file) => {
+                      const up = await uploadOnboardingPerfilPhoto(file, params.token, supabase);
+                      if (up.error) throw new Error(up.error);
+                      return { publicUrl: up.url ?? undefined };
+                    }}
+                    onUploadError={(msg) => setError(msg)}
+                    onUploadSuccess={({ file, publicUrl }) => {
+                      setPerfilFoto(file);
+                      if (publicUrl) setPerfilFotoUrl(publicUrl);
+                      setError(null);
+                    }}
+                  />
+                  {perfilFotoUrl && !perfilFoto ? (
+                    <p className="mt-1 text-[11px] text-emerald-400/90">Foto de perfil ya cargada.</p>
+                  ) : null}
+                </div>
+                <div>
+                  <DocumentUpload
+                    label="Foto de cédula (frente) *"
                     currentFileName={cedulaFoto?.name}
                     preferCamera
                     uploadOnSelect={async (file) => {
@@ -334,6 +419,9 @@ function HojaDeVidaMovilInner({ params }: Props) {
                       setError(null);
                     }}
                   />
+                  {cedulaFotoUrl && !cedulaFoto ? (
+                    <p className="mt-1 text-[11px] text-emerald-400/90">Foto de cédula ya cargada.</p>
+                  ) : null}
                 </div>
               </GlassCard>
             </motion.div>
@@ -438,10 +526,10 @@ function HojaDeVidaMovilInner({ params }: Props) {
               <div className="w-24 h-24 bg-[var(--nexus-green)]/20 text-[var(--nexus-green)] rounded-full flex items-center justify-center text-4xl mx-auto mb-6 shadow-[0_0_40px_-10px_rgba(0,255,65,0.4)]">
                 ✓
               </div>
-              <h2 className="text-3xl font-bold text-white tracking-tight">¡Hoja de vida guardada!</h2>
+              <h2 className="text-3xl font-bold text-white tracking-tight">¡Hoja de vida enviada!</h2>
               <p className="text-[var(--nexus-text-muted)] max-w-sm mx-auto">
-                Tus datos quedaron en el expediente. Puedes descargar el PDF de hoja de vida; la hoja de empleo se arma
-                con lo mismo cuando RRHH te contrate.
+                Ya se generó tu hoja de vida con el cuestionario y las fotos. Si te contratan, con esos mismos datos se
+                genera la hoja de empleo (RRHH completa patrono, obra y faltantes).
               </p>
               
               <div className="flex flex-col gap-3 max-w-sm mx-auto">
@@ -490,10 +578,12 @@ function HojaDeVidaMovilInner({ params }: Props) {
               ? submitPhase === 'compress'
                 ? 'Optimizando foto…'
                 : submitPhase === 'upload'
-                  ? 'Subiendo foto…'
+                  ? 'Subiendo fotos…'
                   : submitPhase === 'save'
                     ? 'Guardando…'
-                    : 'Procesando…'
+                    : submitPhase === 'pdf'
+                      ? 'Generando hoja de vida…'
+                      : 'Procesando…'
               : step === 3 
                 ? 'Finalizar Registro' 
                 : 'Siguiente'}

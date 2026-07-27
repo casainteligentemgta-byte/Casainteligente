@@ -327,7 +327,7 @@ export default function RegistroPorNeedCliente({
         } else if (body.exam_invite_error) {
           toast.message(`Enlace de evaluación no disponible: ${body.exam_invite_error}`);
         }
-        toast.success('Planilla enviada. PDF generado; pendiente de firma / revisión.');
+        toast.success('Hoja de vida enviada. PDF generado; la hoja de empleo se arma al contratar.');
         router.push(
           `/registro/exito?empleadoId=${encodeURIComponent(eid)}&cedula=${encodeURIComponent(form.cedula.trim())}`,
         );
@@ -477,7 +477,7 @@ export default function RegistroPorNeedCliente({
         if (!resFirma.ok) {
           toast.error(bodyFirma.error ?? 'No se pudo almacenar la firma electrónica.', {
             description:
-              'Tu postulación ya quedó registrada. Puedes imprimir la planilla; RRHH puede volver a cargar la firma o usar firma física.',
+              'Tu hoja de vida quedó registrada. Puedes descargar el PDF; la hoja de empleo se genera solo si te contratan.',
           });
         }
       }

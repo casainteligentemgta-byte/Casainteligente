@@ -30,7 +30,7 @@ function PlanillaIframe() {
   const volverRaw = sp.get('volver') ?? sp.get('return');
   const volverTo = useMemo(() => safeReturnPath(volverRaw), [volverRaw]);
   const [docTipo, setDocTipo] = useState<PlanillaDocTipo>(() =>
-    tipoUrl === 'hoja_vida' ? 'hoja_vida' : 'hoja_empleo',
+    tipoUrl === 'hoja_empleo' ? 'hoja_empleo' : 'hoja_vida',
   );
 
   const src = useMemo(() => {
