@@ -10,6 +10,7 @@ import NetVisionCollapsible from '@/components/netvision/NetVisionCollapsible'
 
 type Props = {
   structures: DesignStructure[]
+  selectedId?: string | null
   drawMaterialId: StructureMaterialId | null
   draftPoint: { x: number; y: number } | null
   disabled?: boolean
@@ -25,6 +26,7 @@ type Props = {
 
 export default function StructureDesigner({
   structures,
+  selectedId = null,
   drawMaterialId,
   draftPoint,
   disabled = false,
@@ -136,7 +138,11 @@ export default function StructureDesigner({
               return (
                 <li
                   key={s.id}
-                  className="flex items-center justify-between gap-2 rounded border border-white/10 bg-black/20 px-2 py-1"
+                  className={`flex items-center justify-between gap-2 rounded border px-2 py-1 ${
+                    selectedId === s.id
+                      ? 'border-[rgba(0,242,254,0.45)] bg-[rgba(0,242,254,0.1)]'
+                      : 'border-white/10 bg-black/20'
+                  }`}
                 >
                   <button
                     type="button"

@@ -19,12 +19,14 @@ export function structuresToSegs(structures: DesignStructure[]): NormSeg[] {
 }
 
 /**
- * Segmentos que bloquean visión, con leve grosor (paralelas) para que el FOV
- * no “se cuele” por errores de precisión en paredes delgadas.
+ * Segmentos con leve grosor (paralelas) para que el raycast no se cuele
+ * por errores de precisión en paredes delgadas.
  */
-export function visionBlockingSegs(structures: DesignStructure[]): {
+function thickenedSegs(
+  structures: DesignStructure[],
+  opts?: { onlyOpaque?: boolean },
+): {
   segs: NormSeg[]
-  /** Índice del segmento → estructura origen */
   structureIndex: number[]
 } {
   const segs: NormSeg[] = []
@@ -32,7 +34,7 @@ export function visionBlockingSegs(structures: DesignStructure[]): {
   for (let i = 0; i < structures.length; i++) {
     const s = structures[i]!
     const mat = getStructureMaterialOrDefault(s.materialId)
-    if (!mat.blocksVision) continue
+    if (opts?.onlyOpaque && !mat.blocksVision) continue
     const dx = s.x2 - s.x1
     const dy = s.y2 - s.y1
     const len = Math.hypot(dx, dy)
@@ -50,6 +52,18 @@ export function visionBlockingSegs(structures: DesignStructure[]): {
     }
   }
   return { segs, structureIndex }
+}
+
+/**
+ * Segmentos que bloquean visión, con leve grosor (paralelas) para que el FOV
+ * no “se cuele” por errores de precisión en paredes delgadas.
+ */
+export function visionBlockingSegs(structures: DesignStructure[]): {
+  segs: NormSeg[]
+  /** Índice del segmento → estructura origen */
+  structureIndex: number[]
+} {
+  return thickenedSegs(structures, { onlyOpaque: true })
 }
 
 /** Distancia normalizada hasta el primer muro que bloquea visión. */
@@ -70,7 +84,10 @@ export function visionRangeAlongRay(
   return Math.max(0.01, maxRadiusNorm * hits[0]!.t)
 }
 
-/** Pérdida WiFi (dB) acumulada entre dos puntos por muros cruzados. */
+/**
+ * Pérdida WiFi (dB) acumulada entre dos puntos por muros cruzados.
+ * Deduplica por estructura (grosor de raycast no multiplica la pérdida).
+ */
 export function wifiLossBetween(
   ax: number,
   ay: number,
@@ -79,11 +96,16 @@ export function wifiLossBetween(
   structures: DesignStructure[],
 ): number {
   if (structures.length === 0) return 0
-  const segs = structuresToSegs(structures)
+  const { segs, structureIndex } = thickenedSegs(structures)
+  if (segs.length === 0) return 0
   const hits = rayCrossings(ax, ay, bx, by, segs)
+  const seen = new Set<number>()
   let loss = 0
   for (const hit of hits) {
-    const s = structures[hit.index]!
+    const si = structureIndex[hit.index]!
+    if (seen.has(si)) continue
+    seen.add(si)
+    const s = structures[si]!
     loss += getStructureMaterialOrDefault(s.materialId).wifiLossDb
   }
   return loss
@@ -98,11 +120,16 @@ export function soundLossBetween(
   structures: DesignStructure[],
 ): number {
   if (structures.length === 0) return 0
-  const segs = structuresToSegs(structures)
+  const { segs, structureIndex } = thickenedSegs(structures)
+  if (segs.length === 0) return 0
   const hits = rayCrossings(ax, ay, bx, by, segs)
+  const seen = new Set<number>()
   let loss = 0
   for (const hit of hits) {
-    const s = structures[hit.index]!
+    const si = structureIndex[hit.index]!
+    if (seen.has(si)) continue
+    seen.add(si)
+    const s = structures[si]!
     loss += getStructureMaterialOrDefault(s.materialId).soundLossDb
   }
   return loss

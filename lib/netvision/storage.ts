@@ -18,6 +18,10 @@ import { defaultScale } from '@/lib/netvision/services/coverageCalculator'
 import { DEFAULT_CAMERA_MODEL_ID } from '@/lib/netvision/catalog/cameras'
 import { DEFAULT_STRUCTURE_MATERIAL_ID } from '@/lib/netvision/catalog/materials'
 import { defaultModelIdForKind } from '@/lib/netvision/catalog/network'
+import {
+  clampNetworkPlanSize,
+  defaultNetworkPlanSize,
+} from '@/lib/netvision/utils/networkNodeSize'
 
 /** Copia activa de trabajo (rápida). */
 export const NETVISION_STORAGE_KEY = 'nexus.netvision.v1'
@@ -450,6 +454,11 @@ function normalizeNetworkNode(
     modelId: n.modelId ?? defaultModelIdForKind(kind),
     x: looksPercent ? (n.x ?? 0) / 100 : (n.x ?? 0),
     y: looksPercent ? (n.y ?? 0) / 100 : (n.y ?? 0),
+    planSizeNorm: clampNetworkPlanSize(
+      typeof n.planSizeNorm === 'number'
+        ? n.planSizeNorm
+        : defaultNetworkPlanSize(kind),
+    ),
     wifiChannel: typeof n.wifiChannel === 'number' ? n.wifiChannel : undefined,
     linkedCameraIds: Array.isArray(n.linkedCameraIds) ? n.linkedCameraIds : [],
   }
@@ -515,14 +524,39 @@ function normalizeCableSegment(
   const type = (
     typeof s.type === 'string' && CABLE_TYPE_SET.has(s.type) ? s.type : 'CAT6'
   ) as CableType
+  let points: { x: number; y: number }[] = []
+  if (Array.isArray(s.points) && s.points.length >= 2) {
+    points = s.points
+      .filter(
+        (p): p is { x: number; y: number } =>
+          !!p && typeof p.x === 'number' && typeof p.y === 'number',
+      )
+      .map((p) => ({
+        x: Math.min(1, Math.max(0, p.x)),
+        y: Math.min(1, Math.max(0, p.y)),
+      }))
+  }
+  if (points.length < 2) {
+    const x1 = typeof s.x1 === 'number' ? s.x1 : 0.3
+    const y1 = typeof s.y1 === 'number' ? s.y1 : 0.3
+    const x2 = typeof s.x2 === 'number' ? s.x2 : 0.7
+    const y2 = typeof s.y2 === 'number' ? s.y2 : 0.3
+    points = [
+      { x: x1, y: y1 },
+      { x: x2, y: y2 },
+    ]
+  }
+  const first = points[0]!
+  const last = points[points.length - 1]!
   return {
     id: s.id ?? `${Date.now()}`,
     label: s.label ?? 'CAB-01',
     type,
-    x1: typeof s.x1 === 'number' ? s.x1 : 0.3,
-    y1: typeof s.y1 === 'number' ? s.y1 : 0.3,
-    x2: typeof s.x2 === 'number' ? s.x2 : 0.7,
-    y2: typeof s.y2 === 'number' ? s.y2 : 0.3,
+    points,
+    x1: first.x,
+    y1: first.y,
+    x2: last.x,
+    y2: last.y,
   }
 }
 

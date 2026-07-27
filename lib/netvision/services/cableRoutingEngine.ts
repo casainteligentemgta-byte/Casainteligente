@@ -321,17 +321,24 @@ export function cableSegmentToRoute(
   seg: DesignCableSegment,
   scale: ScaleCalibration,
 ): CableRoute {
-  const points = [
-    { x: seg.x1, y: seg.y1 },
-    { x: seg.x2, y: seg.y2 },
-  ]
+  const points =
+    Array.isArray(seg.points) && seg.points.length >= 2
+      ? seg.points.map((p) => ({ x: p.x, y: p.y }))
+      : [
+          { x: seg.x1, y: seg.y1 },
+          { x: seg.x2, y: seg.y2 },
+        ]
   const lengthM =
+    Math.round(pathLengthM(points, scale) * 10) / 10
+  const first = points[0]!
+  const last = points[points.length - 1]!
+  const straightM =
     Math.round(
       distMeters(
-        seg.x1,
-        seg.y1,
-        seg.x2,
-        seg.y2,
+        first.x,
+        first.y,
+        last.x,
+        last.y,
         scale.metersPerNormX,
         scale.metersPerNormY,
       ) * 10,
@@ -344,7 +351,7 @@ export function cableSegmentToRoute(
     fromLabel: seg.label,
     toLabel: cableTypeLabel(seg.type),
     points,
-    straightM: lengthM,
+    straightM,
     routeM: lengthM,
     type: seg.type,
     certified: isDataCableType(seg.type),

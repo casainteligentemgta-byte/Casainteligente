@@ -95,6 +95,11 @@ export type DesignNetworkNode = {
   modelId: string
   x: number
   y: number
+  /**
+   * Mitad del icono en el plano como fracción del ancho del plano (0–1).
+   * Permite escalar switch/AP/NVR al tamaño deseado según el plano.
+   */
+  planSizeNorm?: number
   /** Canal WiFi asignado (AP) */
   wifiChannel?: number
   /** IDs de cámaras asignadas a este switch/injector (PoE) */
@@ -257,11 +262,14 @@ export type CableType =
   | 'AUDIO'
   | 'POWER_12V'
 
-/** Cable dibujado a mano en el plano (2 puntos + tipo). */
+/** Cable dibujado a mano en el plano (polilínea + tipo). */
 export type DesignCableSegment = {
   id: string
   label: string
   type: CableType
+  /** Polilínea completa (mín. 2 puntos). Fuente de verdad. */
+  points: { x: number; y: number }[]
+  /** Extremos (espejo de points[0] / points[at-1] para compat). */
   x1: number
   y1: number
   x2: number

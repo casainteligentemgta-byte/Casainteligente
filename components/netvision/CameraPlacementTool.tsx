@@ -27,6 +27,11 @@ import { effectiveCameraVision } from '@/lib/netvision/catalog/cameras'
 import { getStructureMaterialOrDefault } from '@/lib/netvision/catalog/materials'
 import { degToRad, radToDeg } from '@/lib/netvision/utils/geometryHelpers'
 import { snapOrtho90 } from '@/lib/netvision/utils/structureDraw'
+import {
+  clampNetworkPlanSize,
+  networkNodeHalfPx,
+  resolveNetworkPlanSize,
+} from '@/lib/netvision/utils/networkNodeSize'
 import type { WifiCoverageCircle } from '@/lib/netvision/services/wifiPredictor'
 import type { AccessChamber, UndergroundRun } from '@/lib/netvision/services/canalizationCalculator'
 import { nearestSegmentOnRoute, MANUAL_CABLE_TO_ID } from '@/lib/netvision/services/cableRoutingEngine'
@@ -47,7 +52,11 @@ export type CameraPlacementToolProps = {
   selectedId: string | null
   placeMode: boolean
   draftPoint?: { x: number; y: number } | null
-  /** Color del punto de borrador (muros cyan, sub naranja). */
+  /** Vértices del cable en curso (polilínea). */
+  draftPoints?: { x: number; y: number }[]
+  /** Cursor con snap ortho / imán mientras se traza. */
+  draftCursor?: { x: number; y: number } | null
+  /** Color del punto de borrador (muros cyan, sub naranja, cable amarillo). */
   draftColor?: string
   showFov: boolean
   showWifi: boolean
@@ -58,6 +67,10 @@ export type CameraPlacementToolProps = {
   /** Muros / vidrio / ventana / puerta en el plano. */
   showStructures?: boolean
   onAddAt: (normX: number, normY: number) => void
+  onDraftPointerMove?: (normX: number, normY: number) => void
+  onFinishPlace?: () => void
+  /** En placeMode, tocar cámara/nodo ancla el trazo a ese punto. */
+  snapPlaceToDevices?: boolean
   onMove: (id: string, normX: number, normY: number) => void
   /** Ajuste interactivo de óptica (yaw / FOV por lado / alcance) desde el plano. */
   onAdjustCameraVision?: (
@@ -95,6 +108,8 @@ export type CameraPlacementToolProps = {
     id: string,
     patch: { x1: number; y1: number; x2: number; y2: number },
   ) => void
+  /** Cambiar tamaño del icono de red en el plano (fracción del ancho). */
+  onNetworkSizeChange?: (id: string, planSizeNorm: number) => void
   stageRef?: React.MutableRefObject<Konva.Stage | null>
   /** Oculta el overlay +/−/% del plano (p. ej. si están en la barra junto al modelo). */
   showZoomOverlay?: boolean
@@ -220,6 +235,8 @@ export default function CameraPlacementTool({
   selectedId,
   placeMode,
   draftPoint = null,
+  draftPoints,
+  draftCursor = null,
   draftColor = '#22d3ee',
   showFov,
   showWifi,
@@ -229,6 +246,9 @@ export default function CameraPlacementTool({
   showUnderground = false,
   showStructures = true,
   onAddAt,
+  onDraftPointerMove,
+  onFinishPlace,
+  snapPlaceToDevices = false,
   onMove,
   onAdjustCameraVision,
   metersPerNormX = 40,
@@ -239,6 +259,7 @@ export default function CameraPlacementTool({
   onCableWaypointInsert,
   onCableWaypointRemove,
   onStructureMove,
+  onNetworkSizeChange,
   stageRef,
   showZoomOverlay = true,
   onZoomChange,
@@ -442,6 +463,16 @@ export default function CameraPlacementTool({
     onAddAt(n.x, n.y)
   }
 
+  const handleStageMouseMove = () => {
+    if (!placeMode || !onDraftPointerMove) return
+    const stage = localStageRef.current
+    if (!stage) return
+    const pos = stage.getRelativePointerPosition()
+    if (!pos) return
+    const n = toNorm(pos.x, pos.y)
+    onDraftPointerMove(n.x, n.y)
+  }
+
   const setStage = (node: Konva.Stage | null) => {
     localStageRef.current = node
     if (stageRef) stageRef.current = node
@@ -520,6 +551,8 @@ export default function CameraPlacementTool({
         onWheel={handleWheel}
         onClick={handleStageClick}
         onTap={handleStageClick}
+        onMouseMove={handleStageMouseMove}
+        onTouchMove={handleStageMouseMove}
         style={{ cursor: placeMode ? 'crosshair' : 'grab' }}
       >
         <Layer>
@@ -593,6 +626,25 @@ export default function CameraPlacementTool({
           {showWifi &&
             wifiSpectrum.length === 0 &&
             wifiCircles.map((c) => {
+              const poly = c.polygon
+              if (poly && poly.length >= 3) {
+                const pts: number[] = []
+                for (const p of poly) {
+                  pts.push(offsetX + p.x * drawW, offsetY + p.y * drawH)
+                }
+                return (
+                  <Line
+                    key={`wifi-${c.nodeId}`}
+                    points={pts}
+                    closed
+                    fill="rgba(52,211,153,0.12)"
+                    stroke="rgba(52,211,153,0.55)"
+                    strokeWidth={1}
+                    dash={[6, 4]}
+                    listening={false}
+                  />
+                )
+              }
               const cx = offsetX + c.cx * drawW
               const cy = offsetY + c.cy * drawH
               const radius = Math.max(8, c.radiusNorm * avg)
@@ -827,7 +879,50 @@ export default function CameraPlacementTool({
             )
           })}
 
-          {draftPoint ? (
+          {(draftPoints && draftPoints.length > 0) || draftCursor ? (
+            <>
+              {draftPoints && draftPoints.length >= 1 ? (
+                <Line
+                  points={(draftCursor
+                    ? [...draftPoints, draftCursor]
+                    : draftPoints
+                  ).flatMap((p) => [
+                    offsetX + p.x * drawW,
+                    offsetY + p.y * drawH,
+                  ])}
+                  stroke={draftColor}
+                  strokeWidth={1.75}
+                  dash={[5, 4]}
+                  lineCap="round"
+                  lineJoin="round"
+                  opacity={0.9}
+                  listening={false}
+                />
+              ) : null}
+              {(draftPoints ?? []).map((p, i) => (
+                <Circle
+                  key={`draft-pt-${i}`}
+                  x={offsetX + p.x * drawW}
+                  y={offsetY + p.y * drawH}
+                  radius={i === 0 ? 3 : 2.25}
+                  fill={draftColor}
+                  stroke="#fff"
+                  strokeWidth={1}
+                  listening={false}
+                />
+              ))}
+              {draftCursor ? (
+                <Circle
+                  x={offsetX + draftCursor.x * drawW}
+                  y={offsetY + draftCursor.y * drawH}
+                  radius={2}
+                  fill={draftColor}
+                  opacity={0.7}
+                  listening={false}
+                />
+              ) : null}
+            </>
+          ) : draftPoint ? (
             <Circle
               x={offsetX + draftPoint.x * drawW}
               y={offsetY + draftPoint.y * drawH}
@@ -878,7 +973,8 @@ export default function CameraPlacementTool({
                   }
                   lineCap="round"
                   lineJoin="round"
-                  hitStrokeWidth={18}
+                  hitStrokeWidth={placeMode ? 0 : 18}
+                  listening={!placeMode}
                   onClick={(e) => {
                     e.cancelBubble = true
                     const already = selectedId === r.id
@@ -1060,13 +1156,21 @@ export default function CameraPlacementTool({
                 shadowColor="black"
                 shadowBlur={3}
                 shadowOpacity={0.3}
-                draggable
+                draggable={!snapPlaceToDevices}
                 onClick={(e) => {
                   e.cancelBubble = true
+                  if (snapPlaceToDevices && placeMode) {
+                    onAddAt(cam.x, cam.y)
+                    return
+                  }
                   onSelect(cam.id)
                 }}
                 onTap={(e) => {
                   e.cancelBubble = true
+                  if (snapPlaceToDevices && placeMode) {
+                    onAddAt(cam.x, cam.y)
+                    return
+                  }
                   onSelect(cam.id)
                 }}
                 onDragStart={(e) => {
@@ -1089,6 +1193,7 @@ export default function CameraPlacementTool({
           {/* Asas de visión encima del pin: orient./alcance/FOV tras mover o seleccionar */}
           {showFov &&
             onAdjustCameraVision &&
+            !snapPlaceToDevices &&
             cameras
               .filter((c) => c.id === selectedId)
               .map((cam) => {
@@ -1325,36 +1430,96 @@ export default function CameraPlacementTool({
             const cy = offsetY + node.y * drawH
             const selected = node.id === selectedId
             const color = NODE_COLORS[node.kind]
-            const size = selected ? 16 : 13
+            const planSize = resolveNetworkPlanSize(node)
+            const size = networkNodeHalfPx(planSize, drawW)
+            const handleR = Math.max(4, Math.min(7, size * 0.45))
             return (
-              <Rect
-                key={node.id}
-                x={cx - size}
-                y={cy - size}
-                width={size * 2}
-                height={size * 2}
-                fill={color}
-                stroke={selected ? '#fff' : '#0f172a'}
-                strokeWidth={selected ? 2.5 : 2}
-                cornerRadius={node.kind === 'ap' ? size : 3}
-                shadowColor="black"
-                shadowBlur={8}
-                shadowOpacity={0.35}
-                draggable
-                onClick={(e) => {
-                  e.cancelBubble = true
-                  onSelect(node.id)
-                }}
-                onTap={(e) => {
-                  e.cancelBubble = true
-                  onSelect(node.id)
-                }}
-                onDragEnd={(e: KonvaEventObject<DragEvent>) => {
-                  const r = e.target as Konva.Rect
-                  const n = toNorm(r.x() + size, r.y() + size)
-                  onMove(node.id, n.x, n.y)
-                }}
-              />
+              <Fragment key={node.id}>
+                <Rect
+                  x={cx - size}
+                  y={cy - size}
+                  width={size * 2}
+                  height={size * 2}
+                  fill={color}
+                  stroke={selected ? '#fff' : '#0f172a'}
+                  strokeWidth={selected ? 1.75 : 1.25}
+                  cornerRadius={node.kind === 'ap' ? size : Math.min(3, size * 0.35)}
+                  shadowColor="black"
+                  shadowBlur={selected ? 6 : 4}
+                  shadowOpacity={0.28}
+                  hitStrokeWidth={Math.max(10, 14 - size)}
+                  draggable={!snapPlaceToDevices}
+                  onClick={(e) => {
+                    e.cancelBubble = true
+                    if (snapPlaceToDevices && placeMode) {
+                      onAddAt(node.x, node.y)
+                      return
+                    }
+                    onSelect(node.id)
+                  }}
+                  onTap={(e) => {
+                    e.cancelBubble = true
+                    if (snapPlaceToDevices && placeMode) {
+                      onAddAt(node.x, node.y)
+                      return
+                    }
+                    onSelect(node.id)
+                  }}
+                  onDragStart={(e) => {
+                    e.cancelBubble = true
+                    pauseStageDrag(e.target.getStage())
+                    onSelect(node.id)
+                  }}
+                  onDragEnd={(e: KonvaEventObject<DragEvent>) => {
+                    e.cancelBubble = true
+                    const r = e.target as Konva.Rect
+                    const n = toNorm(r.x() + size, r.y() + size)
+                    onMove(node.id, n.x, n.y)
+                    onSelect(node.id)
+                    resumeStageDrag(e.target.getStage())
+                  }}
+                />
+                {selected && onNetworkSizeChange && !snapPlaceToDevices ? (
+                  <Circle
+                    x={cx + size}
+                    y={cy + size}
+                    radius={handleR}
+                    fill="#f8fafc"
+                    stroke="#0f172a"
+                    strokeWidth={1.25}
+                    draggable
+                    onClick={(e) => {
+                      e.cancelBubble = true
+                      onSelect(node.id)
+                    }}
+                    onTap={(e) => {
+                      e.cancelBubble = true
+                      onSelect(node.id)
+                    }}
+                    onDragStart={(e) => {
+                      e.cancelBubble = true
+                      pauseStageDrag(e.target.getStage())
+                      onSelect(node.id)
+                    }}
+                    onDragMove={(e) => {
+                      e.cancelBubble = true
+                      const h = e.target as Konva.Circle
+                      const dx = Math.abs(h.x() - cx)
+                      const dy = Math.abs(h.y() - cy)
+                      const halfPx = Math.max(dx, dy)
+                      const next = clampNetworkPlanSize(halfPx / Math.max(drawW, 1))
+                      const clampedHalf = networkNodeHalfPx(next, drawW)
+                      h.position({ x: cx + clampedHalf, y: cy + clampedHalf })
+                      onNetworkSizeChange(node.id, next)
+                    }}
+                    onDragEnd={(e) => {
+                      e.cancelBubble = true
+                      resumeStageDrag(e.target.getStage())
+                      onSelect(node.id)
+                    }}
+                  />
+                ) : null}
+              </Fragment>
             )
           })}
 
@@ -1370,21 +1535,25 @@ export default function CameraPlacementTool({
             />
           ))}
 
-          {networkNodes.map((node) => (
-            <Text
-              key={`nlbl-${node.id}`}
-              x={offsetX + node.x * drawW + 14}
-              y={offsetY + node.y * drawH - 18}
-              text={
-                node.kind === 'ap' && node.wifiChannel
-                  ? `${node.label}·ch${node.wifiChannel}`
-                  : node.label
-              }
-              fontSize={11}
-              fill="#e2e8f0"
-              listening={false}
-            />
-          ))}
+          {networkNodes.map((node) => {
+            const planSize = resolveNetworkPlanSize(node)
+            const size = networkNodeHalfPx(planSize, drawW)
+            return (
+              <Text
+                key={`nlbl-${node.id}`}
+                x={offsetX + node.x * drawW + size + 4}
+                y={offsetY + node.y * drawH - Math.max(12, size + 4)}
+                text={
+                  node.kind === 'ap' && node.wifiChannel
+                    ? `${node.label}·ch${node.wifiChannel}`
+                    : node.label
+                }
+                fontSize={10}
+                fill="#e2e8f0"
+                listening={false}
+              />
+            )
+          })}
         </Layer>
       </Stage>
     </div>
