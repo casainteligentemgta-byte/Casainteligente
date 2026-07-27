@@ -1,5 +1,10 @@
 -- Migración Unificada de Nómina y Asistencias (Fusionando RRHH Obra + RRHH Administrativa)
 
+-- 0. Limpiar tablas conflictivas del otro agente (solo si existen y están vacías de datos productivos, ya que acaba de crearse)
+DROP TABLE IF EXISTS public.ci_nomina_conceptos CASCADE;
+DROP TABLE IF EXISTS public.ci_nomina_recibos CASCADE;
+DROP TABLE IF EXISTS public.ci_nomina_periodos CASCADE;
+
 -- 1. Evaluaciones Psico y Estado Banca (De la fase RRHH Obra)
 ALTER TABLE public.ci_empleados 
   DROP CONSTRAINT IF EXISTS ci_empleados_estatus_check;

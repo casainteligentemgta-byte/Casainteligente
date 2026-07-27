@@ -31,28 +31,69 @@ export default function NominaPeriodosClient({ proyectoId, proyectoNombre }: Pro
   const supabase = useMemo(() => createClient(), []);
   const [periodos, setPeriodos] = useState<NominaPeriodo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [generando, setGenerando] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('ci_nomina_periodos')
+      .select('*')
+      .eq('proyecto_id', proyectoId)
+      .order('numero_semana', { ascending: false });
+      
+    if (error) {
+      toast.error('Error cargando períodos: ' + error.message);
+    } else {
+      setPeriodos(data as NominaPeriodo[]);
+    }
+    setLoading(false);
+  };
 
   useEffect(() => {
-    let alive = true;
-    async function load() {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('ci_nomina_periodos')
-        .select('*')
-        .eq('proyecto_id', proyectoId)
-        .order('numero_semana', { ascending: false });
-        
-      if (!alive) return;
-      if (error) {
-        toast.error('Error cargando períodos: ' + error.message);
-      } else {
-        setPeriodos(data as NominaPeriodo[]);
-      }
-      setLoading(false);
-    }
     void load();
-    return () => { alive = false; };
   }, [supabase, proyectoId]);
+
+  const handleGenerar = async () => {
+    // Para el MVP usamos un prompt simple. En el futuro, será un Modal de configuración.
+    const week = prompt("Introduce el número de semana a generar (Ej: 42):");
+    if (!week) return;
+    
+    const rate = prompt("Introduce la tasa BCV del día (Ej: 55.40):");
+    if (!rate) return;
+
+    setGenerando(true);
+    const toastId = toast.loading('Calculando nómina y deducciones de ley...');
+
+    try {
+      const today = new Date();
+      const monday = new Date(today);
+      monday.setDate(monday.getDate() - monday.getDay() + 1);
+      const friday = new Date(monday);
+      friday.setDate(monday.getDate() + 4);
+
+      const res = await fetch('/api/rrhh/nomina/generar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          proyectoId,
+          numeroSemana: parseInt(week),
+          tasaBcv: parseFloat(rate),
+          fechaInicio: monday.toISOString().split('T')[0],
+          fechaFin: friday.toISOString().split('T')[0]
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      toast.success(`Nómina generada para ${data.totalObreros} obreros`, { id: toastId });
+      void load();
+    } catch (e: any) {
+      toast.error(e.message, { id: toastId });
+    } finally {
+      setGenerando(false);
+    }
+  };
 
   const badgeEstado = (estado: string) => {
     switch(estado) {
@@ -78,11 +119,12 @@ export default function NominaPeriodosClient({ proyectoId, proyectoNombre }: Pro
           <p className="text-zinc-400 text-sm mt-1">{proyectoNombre}</p>
         </div>
         <button 
-          onClick={() => toast.info('La función de generar período estará en la Fase 2')}
-          className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-violet-500"
+          onClick={handleGenerar}
+          disabled={generando}
+          className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-violet-500 disabled:opacity-50"
         >
           <Plus className="w-4 h-4" />
-          Generar Período
+          {generando ? 'Generando...' : 'Generar Período'}
         </button>
       </div>
 

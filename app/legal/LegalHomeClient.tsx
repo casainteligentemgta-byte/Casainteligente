@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
-import { Camera, FileText, FolderOpen, Loader2, MessageSquareText, Plus, Scale } from 'lucide-react';
+import { Activity, BookOpen, Camera, FileText, FolderOpen, Loader2, MessageSquareText, Plus, Scale } from 'lucide-react';
 import { apiUrl } from '@/lib/http/apiUrl';
 import { etiquetaDe, LEGAL_ESTADOS } from '@/lib/legal/casosCatalogo';
 
@@ -68,11 +68,25 @@ export default function LegalHomeClient() {
           </div>
           <div className="flex flex-wrap gap-2">
             <Link
+              href="/legal/biblioteca"
+              className="inline-flex items-center gap-2 rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-2.5 text-sm font-semibold text-amber-100"
+            >
+              <BookOpen className="h-4 w-4" />
+              Biblioteca Legal
+            </Link>
+            <Link
               href="/legal/formatos"
               className="inline-flex items-center gap-2 rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-2.5 text-sm font-semibold text-amber-100"
             >
               <FileText className="h-4 w-4" />
               Subir formatos
+            </Link>
+            <Link
+              href="/legal/cumplimiento"
+              className="inline-flex items-center gap-2 rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-2.5 text-sm font-semibold text-amber-100"
+            >
+              <Activity className="h-4 w-4" />
+              Auditoría
             </Link>
             <Link
               href="/legal/documentos/nuevo"

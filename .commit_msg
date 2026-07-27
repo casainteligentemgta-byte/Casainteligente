@@ -1,5 +1,0 @@
-feat: add mercantil documents to entities and new rrhh components
-
-- Add document upload and sharing in entities' mercantil section
-- Add missing RRHH components: tests psicologicos, banca, and nomina
-- Include corresponding supabase migrations for rrhh and nomina
