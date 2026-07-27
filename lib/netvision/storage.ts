@@ -18,6 +18,10 @@ import { defaultScale } from '@/lib/netvision/services/coverageCalculator'
 import { DEFAULT_CAMERA_MODEL_ID } from '@/lib/netvision/catalog/cameras'
 import { DEFAULT_STRUCTURE_MATERIAL_ID } from '@/lib/netvision/catalog/materials'
 import { defaultModelIdForKind } from '@/lib/netvision/catalog/network'
+import {
+  clampNetworkPlanSize,
+  defaultNetworkPlanSize,
+} from '@/lib/netvision/utils/networkNodeSize'
 
 /** Copia activa de trabajo (rápida). */
 export const NETVISION_STORAGE_KEY = 'nexus.netvision.v1'
@@ -450,6 +454,11 @@ function normalizeNetworkNode(
     modelId: n.modelId ?? defaultModelIdForKind(kind),
     x: looksPercent ? (n.x ?? 0) / 100 : (n.x ?? 0),
     y: looksPercent ? (n.y ?? 0) / 100 : (n.y ?? 0),
+    planSizeNorm: clampNetworkPlanSize(
+      typeof n.planSizeNorm === 'number'
+        ? n.planSizeNorm
+        : defaultNetworkPlanSize(kind),
+    ),
     wifiChannel: typeof n.wifiChannel === 'number' ? n.wifiChannel : undefined,
     linkedCameraIds: Array.isArray(n.linkedCameraIds) ? n.linkedCameraIds : [],
   }

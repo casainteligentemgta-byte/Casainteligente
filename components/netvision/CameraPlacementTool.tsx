@@ -27,6 +27,11 @@ import { effectiveCameraVision } from '@/lib/netvision/catalog/cameras'
 import { getStructureMaterialOrDefault } from '@/lib/netvision/catalog/materials'
 import { degToRad, radToDeg } from '@/lib/netvision/utils/geometryHelpers'
 import { snapOrtho90 } from '@/lib/netvision/utils/structureDraw'
+import {
+  clampNetworkPlanSize,
+  networkNodeHalfPx,
+  resolveNetworkPlanSize,
+} from '@/lib/netvision/utils/networkNodeSize'
 import type { WifiCoverageCircle } from '@/lib/netvision/services/wifiPredictor'
 import type { AccessChamber, UndergroundRun } from '@/lib/netvision/services/canalizationCalculator'
 import { nearestSegmentOnRoute, MANUAL_CABLE_TO_ID } from '@/lib/netvision/services/cableRoutingEngine'
@@ -95,6 +100,8 @@ export type CameraPlacementToolProps = {
     id: string,
     patch: { x1: number; y1: number; x2: number; y2: number },
   ) => void
+  /** Cambiar tamaño del icono de red en el plano (fracción del ancho). */
+  onNetworkSizeChange?: (id: string, planSizeNorm: number) => void
   stageRef?: React.MutableRefObject<Konva.Stage | null>
   /** Oculta el overlay +/−/% del plano (p. ej. si están en la barra junto al modelo). */
   showZoomOverlay?: boolean
@@ -239,6 +246,7 @@ export default function CameraPlacementTool({
   onCableWaypointInsert,
   onCableWaypointRemove,
   onStructureMove,
+  onNetworkSizeChange,
   stageRef,
   showZoomOverlay = true,
   onZoomChange,
@@ -1325,36 +1333,88 @@ export default function CameraPlacementTool({
             const cy = offsetY + node.y * drawH
             const selected = node.id === selectedId
             const color = NODE_COLORS[node.kind]
-            const size = selected ? 16 : 13
+            const planSize = resolveNetworkPlanSize(node)
+            const size = networkNodeHalfPx(planSize, drawW)
+            const handleR = Math.max(4, Math.min(7, size * 0.45))
             return (
-              <Rect
-                key={node.id}
-                x={cx - size}
-                y={cy - size}
-                width={size * 2}
-                height={size * 2}
-                fill={color}
-                stroke={selected ? '#fff' : '#0f172a'}
-                strokeWidth={selected ? 2.5 : 2}
-                cornerRadius={node.kind === 'ap' ? size : 3}
-                shadowColor="black"
-                shadowBlur={8}
-                shadowOpacity={0.35}
-                draggable
-                onClick={(e) => {
-                  e.cancelBubble = true
-                  onSelect(node.id)
-                }}
-                onTap={(e) => {
-                  e.cancelBubble = true
-                  onSelect(node.id)
-                }}
-                onDragEnd={(e: KonvaEventObject<DragEvent>) => {
-                  const r = e.target as Konva.Rect
-                  const n = toNorm(r.x() + size, r.y() + size)
-                  onMove(node.id, n.x, n.y)
-                }}
-              />
+              <Fragment key={node.id}>
+                <Rect
+                  x={cx - size}
+                  y={cy - size}
+                  width={size * 2}
+                  height={size * 2}
+                  fill={color}
+                  stroke={selected ? '#fff' : '#0f172a'}
+                  strokeWidth={selected ? 1.75 : 1.25}
+                  cornerRadius={node.kind === 'ap' ? size : Math.min(3, size * 0.35)}
+                  shadowColor="black"
+                  shadowBlur={selected ? 6 : 4}
+                  shadowOpacity={0.28}
+                  hitStrokeWidth={Math.max(10, 14 - size)}
+                  draggable
+                  onClick={(e) => {
+                    e.cancelBubble = true
+                    onSelect(node.id)
+                  }}
+                  onTap={(e) => {
+                    e.cancelBubble = true
+                    onSelect(node.id)
+                  }}
+                  onDragStart={(e) => {
+                    e.cancelBubble = true
+                    pauseStageDrag(e.target.getStage())
+                    onSelect(node.id)
+                  }}
+                  onDragEnd={(e: KonvaEventObject<DragEvent>) => {
+                    e.cancelBubble = true
+                    const r = e.target as Konva.Rect
+                    const n = toNorm(r.x() + size, r.y() + size)
+                    onMove(node.id, n.x, n.y)
+                    onSelect(node.id)
+                    resumeStageDrag(e.target.getStage())
+                  }}
+                />
+                {selected && onNetworkSizeChange ? (
+                  <Circle
+                    x={cx + size}
+                    y={cy + size}
+                    radius={handleR}
+                    fill="#f8fafc"
+                    stroke="#0f172a"
+                    strokeWidth={1.25}
+                    draggable
+                    onClick={(e) => {
+                      e.cancelBubble = true
+                      onSelect(node.id)
+                    }}
+                    onTap={(e) => {
+                      e.cancelBubble = true
+                      onSelect(node.id)
+                    }}
+                    onDragStart={(e) => {
+                      e.cancelBubble = true
+                      pauseStageDrag(e.target.getStage())
+                      onSelect(node.id)
+                    }}
+                    onDragMove={(e) => {
+                      e.cancelBubble = true
+                      const h = e.target as Konva.Circle
+                      const dx = Math.abs(h.x() - cx)
+                      const dy = Math.abs(h.y() - cy)
+                      const halfPx = Math.max(dx, dy)
+                      const next = clampNetworkPlanSize(halfPx / Math.max(drawW, 1))
+                      const clampedHalf = networkNodeHalfPx(next, drawW)
+                      h.position({ x: cx + clampedHalf, y: cy + clampedHalf })
+                      onNetworkSizeChange(node.id, next)
+                    }}
+                    onDragEnd={(e) => {
+                      e.cancelBubble = true
+                      resumeStageDrag(e.target.getStage())
+                      onSelect(node.id)
+                    }}
+                  />
+                ) : null}
+              </Fragment>
             )
           })}
 
@@ -1370,21 +1430,25 @@ export default function CameraPlacementTool({
             />
           ))}
 
-          {networkNodes.map((node) => (
-            <Text
-              key={`nlbl-${node.id}`}
-              x={offsetX + node.x * drawW + 14}
-              y={offsetY + node.y * drawH - 18}
-              text={
-                node.kind === 'ap' && node.wifiChannel
-                  ? `${node.label}·ch${node.wifiChannel}`
-                  : node.label
-              }
-              fontSize={11}
-              fill="#e2e8f0"
-              listening={false}
-            />
-          ))}
+          {networkNodes.map((node) => {
+            const planSize = resolveNetworkPlanSize(node)
+            const size = networkNodeHalfPx(planSize, drawW)
+            return (
+              <Text
+                key={`nlbl-${node.id}`}
+                x={offsetX + node.x * drawW + size + 4}
+                y={offsetY + node.y * drawH - Math.max(12, size + 4)}
+                text={
+                  node.kind === 'ap' && node.wifiChannel
+                    ? `${node.label}·ch${node.wifiChannel}`
+                    : node.label
+                }
+                fontSize={10}
+                fill="#e2e8f0"
+                listening={false}
+              />
+            )
+          })}
         </Layer>
       </Stage>
     </div>
