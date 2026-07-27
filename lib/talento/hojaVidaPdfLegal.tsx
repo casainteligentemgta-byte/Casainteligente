@@ -6,8 +6,6 @@ import {
   HOJA_EMPLEO_TITULO,
   HOJA_VIDA_GACETA_NUMERO,
   HOJA_VIDA_GACETA_REFERENCIA,
-  HOJA_VIDA_PLANILLA_SUBTITULO,
-  HOJA_VIDA_PLANILLA_TITULO,
   HOJA_VIDA_SOLO_SUBTITULO,
   HOJA_VIDA_SOLO_TITULO,
 } from '@/lib/talento/hojaVidaGacetaLayout';
@@ -645,9 +643,12 @@ export function HojaDeVidaObreroLegalPlantillaPdfDoc() {
       <Page size="A4" style={st.page}>
         <GacetaHeader page={1} total={PLANTILLA_TOTAL} />
         <View style={st.frame}>
-          <Text style={st.planillaTitle}>{HOJA_VIDA_PLANILLA_TITULO}</Text>
-          <Text style={st.planillaSub}>{HOJA_VIDA_PLANILLA_SUBTITULO}</Text>
-          <PlanillaPatronoStrip />
+          <Text style={st.planillaTitle}>{HOJA_VIDA_SOLO_TITULO}</Text>
+          <Text style={st.planillaSub}>{HOJA_VIDA_SOLO_SUBTITULO}</Text>
+          <Text style={st.note}>
+            El trabajador completa esta hoja de vida (WhatsApp / email). Al contratar, los mismos datos alimentan la hoja
+            de empleo; RRHH solo completa patrono, obra y faltantes.
+          </Text>
 
           <RomanSection code="I" title="Identificación del trabajador" />
           <View style={st.row}>
@@ -713,12 +714,8 @@ export function HojaDeVidaObreroLegalPlantillaPdfDoc() {
             </View>
           </View>
 
-          <RomanSection code="II" title="Datos de la contratación y certificaciones" />
+          <RomanSection code="II" title="Antecedentes penales (certificado)" />
           <View style={st.row}>
-            <CellBlank label="Cargo u oficio a desempeñar" flex={1} />
-            <CellBlank label="Cargo (tabulador)" w="38%" />
-          </View>
-          <View style={[st.row, { marginTop: -1 }]}>
             <CellBlank label="Antecedentes penales" w="28%" />
             <CellBlank label="Expedido por" flex={1} />
           </View>

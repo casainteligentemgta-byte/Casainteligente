@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { MessageSquare, Link as LinkIcon, User, Briefcase, Phone, Sparkles, CheckCircle2, Copy, X, FileText, Mail, QrCode } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
+import { apiUrl } from '@/lib/http/apiUrl';
 
 export default function GeneradorHojaVida({ onClose }: { onClose?: () => void }) {
   const [name, setName] = useState('');
@@ -15,41 +15,43 @@ export default function GeneradorHojaVida({ onClose }: { onClose?: () => void })
 
   const generateInvitation = async () => {
     if (!name || !phone) {
-        setError('Por favor completa el nombre y teléfono');
-        return;
+      setError('Por favor completa el nombre y teléfono');
+      return;
     }
-    
+
     setLoading(true);
     setError(null);
-    const token = `hv_${Math.random().toString(36).substring(2, 11)}`;
-    const link = `${window.location.origin}/onboarding/hoja-de-vida/${token}`;
-    const messageTemplate = `¡Hola ${name}! 👋 Te saluda el equipo de Reclutamiento de Casa Inteligente. Te invitamos a completar tu Hoja de Vida oficial para el cargo de ${cargo} aquí: ${link}`;
 
     try {
-        const supabase = createClient();
-        // El estado debe ser 'prospecto_invitado' según el CHECK constraint de la base de datos
-        const { error: insertError } = await supabase.from('ci_empleados').insert({
-            nombres: name,
-            nombre_completo: name,
-            celular: phone,
-            telefono: phone,
-            email: email,
-            cargo,
-            rol_buscado: cargo,
-            token,
-            token_registro: token,
-            estado_proceso: 'prospecto_invitado',
-            fecha_invitacion: new Date().toISOString()
-        });
+      const res = await fetch(apiUrl('/api/talento/generar-link'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nombre: name.trim(),
+          whatsapp: phone.trim(),
+          rol_buscado: cargo.trim(),
+          rol_examen: 'obrero',
+          public_base_url: typeof window !== 'undefined' ? window.location.origin : undefined,
+        }),
+      });
+      const j = (await res.json().catch(() => ({}))) as {
+        onboarding_url?: string;
+        error?: string;
+        hint?: string;
+      };
+      if (!res.ok || !j.onboarding_url) {
+        throw new Error([j.error, j.hint].filter(Boolean).join(' — ') || 'No se pudo generar el enlace');
+      }
 
-        if (insertError) throw insertError;
-
-        setSuccess({ link, message: messageTemplate });
-    } catch (err: any) {
-        console.error('Error saving invitation:', err);
-        setError('Error al generar la invitación: ' + (err.message || 'Error desconocido'));
+      const link = j.onboarding_url;
+      const messageTemplate = `¡Hola ${name}! Te saluda el equipo de Reclutamiento de Casa Inteligente. Completa tu Hoja de Vida oficial para el cargo de ${cargo} aquí: ${link}`;
+      setSuccess({ link, message: messageTemplate });
+    } catch (err: unknown) {
+      console.error('Error saving invitation:', err);
+      const msg = err instanceof Error ? err.message : 'Error desconocido';
+      setError('Error al generar la invitación: ' + msg);
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
   };
 
@@ -60,176 +62,163 @@ export default function GeneradorHojaVida({ onClose }: { onClose?: () => void })
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Preparar URLs para botones
-  const whatsappUrl = success ? `https://wa.me/${phone.replace(/\D/g, '')}?text=${encodeURIComponent(success.message)}` : '#';
-  const emailSubject = `Invitación a Proceso de Selección - Casa Inteligente`;
-  const emailBody = success ? `Hola ${name},\n\nTe invitamos a completar tu Hoja de Vida oficial para el cargo de ${cargo} en el siguiente enlace:\n\n${success.link}\n\nSaludos,\nEquipo de RRHH` : '';
+  const digits = phone.replace(/\D/g, '');
+  const waPhone = digits.startsWith('0') ? `58${digits.slice(1)}` : digits.length <= 10 ? `58${digits}` : digits;
+  const whatsappUrl = success
+    ? `https://wa.me/${waPhone}?text=${encodeURIComponent(success.message)}`
+    : '#';
+  const emailSubject = `Invitación a Hoja de Vida - Casa Inteligente`;
+  const emailBody = success
+    ? `Hola ${name},\n\nTe invitamos a completar tu Hoja de Vida oficial para el cargo de ${cargo} en el siguiente enlace:\n\n${success.link}\n\nCon esos datos se arma la hoja de empleo al contratarte; RRHH solo completa lo faltante.\n\nSaludos,\nEquipo de RRHH`
+    : '';
   const emailUrl = `mailto:${email}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
 
   return (
     <div className="glass p-6 rounded-[32px] border border-white/10 shadow-2xl max-w-md mx-auto fade-in overflow-hidden relative">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-xl font-black text-white flex items-center gap-2">
-            <div className="p-2 bg-blue-500/20 rounded-xl">
-                <FileText className="text-blue-500" size={20} /> 
-            </div>
-            Generar Invitación
+          <div className="p-2 bg-blue-500/20 rounded-xl">
+            <FileText className="text-blue-500" size={20} />
+          </div>
+          Invitar hoja de vida
         </h2>
         {onClose && (
-          <button 
+          <button
             onClick={onClose}
-            className="p-2 hover:bg-white/10 rounded-full transition-colors text-gray-400 hover:text-white"
+            className="p-2 hover:bg-white/10 rounded-full transition-colors text-zinc-400 hover:text-white"
+            aria-label="Cerrar"
           >
             <X size={20} />
           </button>
         )}
       </div>
-      
+
       {!success ? (
         <div className="space-y-4">
-          {error && (
-            <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs flex items-center gap-2 animate-shake">
-                <X size={14} /> {error}
-            </div>
-          )}
-
+          <p className="text-xs text-zinc-400 leading-relaxed">
+            El obrero recibe el enlace por WhatsApp o email, completa la hoja de vida una sola vez, y al contratarlo esos
+            datos alimentan la hoja de empleo (RRHH solo completa patrono, obra y faltantes).
+          </p>
           <div>
-            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1.5 ml-1 block">Candidato</label>
-            <div className="relative group">
-                <User className="absolute left-3.5 top-3.5 text-gray-500 group-focus-within:text-blue-500 transition-colors" size={18} />
-                <input 
-                    type="text" 
-                    placeholder="Nombre Completo"
-                    value={name}
-                    className="w-full bg-white/5 border border-white/10 rounded-2xl px-11 py-3.5 text-white outline-none focus:border-blue-500 transition-all text-sm"
-                    onChange={(e) => setName(e.target.value)}
-                />
-            </div>
+            <label className="text-[10px] font-bold uppercase tracking-wide text-zinc-500 flex items-center gap-1.5 mb-1.5">
+              <User size={12} /> Nombre
+            </label>
+            <input
+              className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-blue-500/50"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Nombre del candidato"
+            />
           </div>
-
-          <div className="grid grid-cols-1 gap-4">
-            <div>
-                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1.5 ml-1 block">WhatsApp (con código de país)</label>
-                <div className="relative group">
-                    <Phone className="absolute left-3.5 top-3.5 text-gray-500 group-focus-within:text-blue-500 transition-colors" size={18} />
-                    <input 
-                        type="text" 
-                        placeholder="Ej: 584120000000"
-                        value={phone}
-                        className="w-full bg-white/5 border border-white/10 rounded-2xl px-11 py-3.5 text-white outline-none focus:border-blue-500 transition-all text-sm"
-                        onChange={(e) => setPhone(e.target.value)}
-                    />
-                </div>
-            </div>
-
-            <div>
-                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1.5 ml-1 block">Email (Opcional)</label>
-                <div className="relative group">
-                    <Mail className="absolute left-3.5 top-3.5 text-gray-500 group-focus-within:text-blue-500 transition-colors" size={18} />
-                    <input 
-                        type="email" 
-                        placeholder="correo@ejemplo.com"
-                        value={email}
-                        className="w-full bg-white/5 border border-white/10 rounded-2xl px-11 py-3.5 text-white outline-none focus:border-blue-500 transition-all text-sm"
-                        onChange={(e) => setEmail(e.target.value)}
-                    />
-                </div>
-            </div>
-          </div>
-
           <div>
-            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1.5 ml-1 block">Cargo</label>
-            <div className="relative group">
-                <Briefcase className="absolute left-3.5 top-3.5 text-gray-500 group-focus-within:text-blue-500 transition-colors" size={18} />
-                <select 
-                    value={cargo}
-                    className="w-full bg-white/5 border border-white/10 rounded-2xl px-11 py-3.5 text-white outline-none focus:border-blue-500 transition-all text-sm appearance-none cursor-pointer"
-                    onChange={(e) => setCargo(e.target.value)}
-                >
-                    <option value="Albañil de 1ra" className="bg-[#1C1C1E]">Albañil de 1ra</option>
-                    <option value="Electricista" className="bg-[#1C1C1E]">Electricista</option>
-                    <option value="Plomero" className="bg-[#1C1C1E]">Plomero</option>
-                    <option value="Ayudante" className="bg-[#1C1C1E]">Ayudante</option>
-                    <option value="Supervisor" className="bg-[#1C1C1E]">Supervisor</option>
-                    <option value="Vendedor" className="bg-[#1C1C1E]">Vendedor</option>
-                    <option value="Administrador" className="bg-[#1C1C1E]">Administrador</option>
-                </select>
-            </div>
+            <label className="text-[10px] font-bold uppercase tracking-wide text-zinc-500 flex items-center gap-1.5 mb-1.5">
+              <Phone size={12} /> WhatsApp
+            </label>
+            <input
+              className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-blue-500/50"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="0412..."
+            />
+          </div>
+          <div>
+            <label className="text-[10px] font-bold uppercase tracking-wide text-zinc-500 flex items-center gap-1.5 mb-1.5">
+              <Mail size={12} /> Correo (opcional)
+            </label>
+            <input
+              className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-blue-500/50"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="correo@ejemplo.com"
+            />
+          </div>
+          <div>
+            <label className="text-[10px] font-bold uppercase tracking-wide text-zinc-500 flex items-center gap-1.5 mb-1.5">
+              <Briefcase size={12} /> Cargo / oficio
+            </label>
+            <input
+              className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-blue-500/50"
+              value={cargo}
+              onChange={(e) => setCargo(e.target.value)}
+            />
           </div>
 
-          <button 
-            onClick={generateInvitation}
+          {error ? <p className="text-sm text-red-400">{error}</p> : null}
+
+          <button
+            type="button"
+            onClick={() => void generateInvitation()}
             disabled={loading}
-            className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-black py-4 rounded-2xl flex items-center justify-center gap-2 hover:scale-[1.02] transition-all active:scale-95 shadow-xl shadow-blue-600/20 mt-4 disabled:opacity-50 disabled:hover:scale-100"
+            className="w-full rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 py-3 text-sm font-bold text-white flex items-center justify-center gap-2"
           >
             {loading ? (
-                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              'Generando…'
             ) : (
-                <>
-                    <Sparkles size={20} />
-                    Generar Acceso
-                </>
+              <>
+                <Sparkles size={16} /> Generar enlace de hoja de vida
+              </>
             )}
           </button>
         </div>
       ) : (
-        <div className="space-y-6 slide-up">
-            <div className="flex flex-col items-center">
-                <a 
-                    href={success.link} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="p-4 bg-white rounded-3xl shadow-2xl mb-4 border-4 border-blue-500/20 hover:scale-105 transition-transform cursor-pointer block"
-                    title="Click para abrir enlace"
-                >
-                    <img 
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(success.link)}`} 
-                        alt="QR Code"
-                        className="w-[140px] h-[140px]"
-                    />
-                </a>
-                <div className="text-center">
-                    <h3 className="text-white font-black text-lg">¡Acceso Listo!</h3>
-                    <p className="text-gray-500 text-xs mt-1">Escanea el QR o usa los botones de abajo</p>
-                </div>
-            </div>
-
-            <div className="flex gap-2">
-                <a 
-                    href={whatsappUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex-[2] bg-[#25D366] hover:bg-[#20ba5a] text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-[#25D366]/20 no-underline"
-                >
-                    <MessageSquare size={20} />
-                    WhatsApp
-                </a>
-                <a 
-                    href={emailUrl}
-                    className="flex-1 bg-white/5 hover:bg-white/10 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 transition-all border border-white/10 active:scale-95 no-underline"
-                >
-                    <Mail size={20} />
-                    Email
-                </a>
-            </div>
-
-            <button 
-                onClick={copyToClipboard}
-                className="w-full bg-white/5 text-gray-300 font-bold py-3.5 rounded-2xl flex items-center justify-center gap-2 hover:bg-white/10 transition-all text-sm border border-white/5"
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 text-emerald-400 text-sm font-semibold">
+            <CheckCircle2 size={18} /> Enlace listo para enviar
+          </div>
+          <p className="text-xs break-all text-zinc-300 bg-black/30 rounded-xl p-3 border border-white/10">{success.link}</p>
+          <div className="grid grid-cols-2 gap-2">
+            <a
+              href={whatsappUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-xl bg-emerald-600 hover:bg-emerald-500 py-2.5 text-center text-xs font-bold text-white flex items-center justify-center gap-1.5"
             >
-                {copied ? <CheckCircle2 className="text-green-500" size={18} /> : <Copy size={18} />}
-                {copied ? '¡Copiado!' : 'Copiar Mensaje'}
-            </button>
-
-            <button 
-                onClick={() => { setSuccess(null); setName(''); setPhone(''); setError(null); }}
-                className="w-full text-gray-500 text-[10px] font-black uppercase tracking-[0.2em] py-2 hover:text-white transition-colors"
+              <MessageSquare size={14} /> WhatsApp
+            </a>
+            <a
+              href={email ? emailUrl : undefined}
+              onClick={(e) => {
+                if (!email) {
+                  e.preventDefault();
+                  setError('Agrega un correo para enviar por email');
+                }
+              }}
+              className="rounded-xl bg-white/10 hover:bg-white/15 py-2.5 text-center text-xs font-bold text-white flex items-center justify-center gap-1.5"
             >
-                Generar Nueva Invitación
-            </button>
+              <Mail size={14} /> Email
+            </a>
+          </div>
+          <button
+            type="button"
+            onClick={copyToClipboard}
+            className="w-full rounded-xl border border-white/10 py-2.5 text-xs font-bold text-zinc-200 flex items-center justify-center gap-1.5 hover:bg-white/5"
+          >
+            {copied ? <CheckCircle2 size={14} className="text-emerald-400" /> : <Copy size={14} />}
+            {copied ? 'Copiado' : 'Copiar mensaje'}
+          </button>
+          <a
+            href={success.link}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full rounded-xl border border-blue-500/30 bg-blue-500/10 py-2.5 text-center text-xs font-bold text-blue-200 flex items-center justify-center gap-1.5 hover:bg-blue-500/20"
+          >
+            <LinkIcon size={14} /> Abrir hoja de vida
+          </a>
+          <button
+            type="button"
+            onClick={() => {
+              setSuccess(null);
+              setError(null);
+            }}
+            className="w-full text-center text-[11px] text-zinc-500 hover:text-zinc-300"
+          >
+            Generar otra invitación
+          </button>
+          <div className="flex items-center justify-center gap-2 text-[10px] text-zinc-600">
+            <QrCode size={12} /> El candidato completa la hoja de vida en el enlace
+          </div>
         </div>
       )}
     </div>
   );
 }
-
