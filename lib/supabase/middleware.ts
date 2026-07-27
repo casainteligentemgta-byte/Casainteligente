@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { debeCambiarPassword } from '@/lib/auth/passwordPolicy';
 import { supabaseFetch } from '@/lib/supabase/supabaseFetch';
 
 const RUTAS_PUBLICAS = [
@@ -24,6 +25,8 @@ const RUTAS_PROTEGIDAS = [
   '/agenda',
   '/pheme',
   '/metron',
+  '/empleados',
+  '/cambiar-password',
 ];
 
 function esRutaPublica(pathname: string): boolean {
@@ -108,10 +111,26 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
   }
 
   if (user && (pathname === '/login' || pathname.startsWith('/login/'))) {
+    const mustChange = debeCambiarPassword(
+      user.app_metadata as Record<string, unknown> | undefined,
+    );
+    if (mustChange) {
+      return NextResponse.redirect(new URL('/cambiar-password', request.url));
+    }
     const dest = request.nextUrl.searchParams.get('next')?.trim() || '/';
     const safe =
       dest.startsWith('/') && !dest.startsWith('//') && !dest.startsWith('/login') ? dest : '/';
     return NextResponse.redirect(new URL(safe, request.url));
+  }
+
+  if (
+    user &&
+    debeCambiarPassword(user.app_metadata as Record<string, unknown> | undefined) &&
+    pathname !== '/cambiar-password' &&
+    !pathname.startsWith('/cambiar-password/') &&
+    !pathname.startsWith('/auth')
+  ) {
+    return NextResponse.redirect(new URL('/cambiar-password', request.url));
   }
 
   if (!user && esRutaProtegida(pathname) && !esRutaPublica(pathname)) {

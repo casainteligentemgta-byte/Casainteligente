@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import AccesoEmpleadoPanel from '@/components/empleados/AccesoEmpleadoPanel';
 import { createClient } from '@/lib/supabase/client';
 
 const SECTIONS = ['Personales', 'Laboral', 'Estudios', 'Experiencia', 'Cursos', 'Conocimientos', 'Médicos', 'Vehículo', 'Referencias'];
@@ -41,6 +42,8 @@ export default function EditarEmpleadoPage() {
     const [email, setEmail] = useState('');
     const [fotoUrl, setFotoUrl] = useState('');
     const [rif, setRif] = useState('');
+    const [authUserId, setAuthUserId] = useState<string | null>(null);
+    const [accesoHabilitado, setAccesoHabilitado] = useState(false);
 
     // — Laboral —
     const [cargo, setCargo] = useState('');
@@ -127,6 +130,8 @@ export default function EditarEmpleadoPage() {
             setCelular(d.celular || '');
             setEmail(d.email || '');
             setFotoUrl(d.foto_url || '');
+            setAuthUserId(d.auth_user_id || null);
+            setAccesoHabilitado(Boolean(d.acceso_habilitado));
 
             setCargo(d.cargo || '');
             setDepartamento(d.departamento || '');
@@ -343,6 +348,20 @@ export default function EditarEmpleadoPage() {
                 {section === 1 && (
                     <div>
                         <h2 style={{ fontSize: '18px', fontWeight: 700, marginTop: 0, marginBottom: '24px', color: '#00AEEF' }}>Información Laboral</h2>
+                        <div style={{ marginBottom: '24px' }}>
+                            <AccesoEmpleadoPanel
+                                employeeId={id}
+                                email={email}
+                                nombres={nombres}
+                                apellidos={apellidos}
+                                authUserId={authUserId}
+                                accesoHabilitado={accesoHabilitado}
+                                onChanged={({ authUserId: uid, accesoHabilitado: hab }) => {
+                                    setAuthUserId(uid);
+                                    setAccesoHabilitado(hab);
+                                }}
+                            />
+                        </div>
                         <div style={rowStyle}>
                             <div><label style={labelStyle}>Cargo</label><input style={inputStyle} value={cargo} onChange={e => setCargo(e.target.value)} /></div>
                             <div><label style={labelStyle}>Departamento</label><input style={inputStyle} value={departamento} onChange={e => setDepartamento(e.target.value)} /></div>

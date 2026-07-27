@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { GlassCard } from '@/components/nexus/GlassCard';
 import { apiUrl } from '@/lib/http/apiUrl';
+import { debeCambiarPassword } from '@/lib/auth/passwordPolicy';
 import { homeHrefParaRolesEmpresa } from '@/lib/auth/permisosCatalogo';
 
 function LoginForm() {
@@ -42,6 +43,15 @@ function LoginForm() {
             ? 'Correo o contraseña incorrectos.'
             : signInError.message;
         setError(msg);
+        return;
+      }
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (debeCambiarPassword(user?.app_metadata as Record<string, unknown> | undefined)) {
+        router.push('/cambiar-password');
+        router.refresh();
         return;
       }
 
