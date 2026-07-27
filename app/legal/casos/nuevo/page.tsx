@@ -111,7 +111,7 @@ export default function LegalCasoNuevoPage() {
           </div>
         </div>
         <div>
-          <label className="text-xs font-semibold uppercase text-zinc-500">Cliente / mandante</label>
+          <label className="text-xs font-semibold uppercase text-zinc-500">Cliente / Trabajador</label>
           <input className={campo} value={cliente} onChange={(e) => setCliente(e.target.value)} />
         </div>
         <div>

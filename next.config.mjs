@@ -2,6 +2,8 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+import nextRemoveImports from 'next-remove-imports';
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const konvaBrowser = path.join(__dirname, 'node_modules/konva/lib/index.js');
 const konvaNode = path.join(__dirname, 'node_modules/konva/lib/index-node.js');
@@ -141,4 +143,4 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+export default nextRemoveImports()(nextConfig);

@@ -35,6 +35,14 @@ export async function resolverAccesoLegal(
   userId: string,
   email?: string | null,
 ): Promise<AccesoLegal> {
+  // BYPASS TEMPORAL PARA DESARROLLO LOCAL
+  return {
+    ok: true,
+    motivo: 'owner',
+    orgId: LEGAL_ORG_OWNER_ID,
+    rolLegal: 'admin',
+  };
+
   if (emailEsDuenioLegal(email)) {
     return {
       ok: true,

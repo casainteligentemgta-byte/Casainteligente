@@ -163,7 +163,7 @@ export default function LegalCasoDetallePage() {
         </p>
         <h2 className="mt-1 text-2xl font-bold text-white">{caso.titulo}</h2>
         <p className="mt-1 text-sm text-zinc-500">
-          {caso.cliente_nombre ? `Cliente: ${caso.cliente_nombre}` : null}
+          {caso.cliente_nombre ? `Cliente / Trabajador: ${caso.cliente_nombre}` : null}
           {caso.contraparte ? ` · Contraparte: ${caso.contraparte}` : null}
           {caso.fecha_limite ? ` · Límite: ${caso.fecha_limite}` : null}
         </p>

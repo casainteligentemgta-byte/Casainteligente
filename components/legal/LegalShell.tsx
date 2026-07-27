@@ -16,7 +16,7 @@ import {
 import { cn } from '@/lib/utils';
 
 const NAV = [
-  { href: '/legal', label: 'Resumen', icon: LayoutDashboard, exact: true },
+  { href: '/legal', label: 'Inicio', icon: LayoutDashboard, exact: true },
   { href: '/legal/casos', label: 'Casos', icon: FolderOpen, exact: false },
   { href: '/legal/documentos', label: 'Documentos', icon: FileText, exact: false },
   { href: '/legal/formatos', label: 'Formatos', icon: FileUp, exact: false },

@@ -126,7 +126,7 @@ export default function LegalCasosListClient() {
                       <p className="font-semibold text-zinc-100">{c.titulo}</p>
                       <p className="mt-0.5 text-xs text-zinc-500">
                         {etiquetaDe(LEGAL_AMBITOS, c.ambito)}
-                        {c.cliente_nombre ? ` · ${c.cliente_nombre}` : ''}
+                        {c.cliente_nombre ? ` · Trabajador/Cliente: ${c.cliente_nombre}` : ''}
                         {c.contraparte ? ` · vs ${c.contraparte}` : ''}
                       </p>
                     </div>
