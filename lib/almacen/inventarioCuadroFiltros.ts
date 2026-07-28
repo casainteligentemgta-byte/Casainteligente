@@ -53,7 +53,7 @@ export function mensajeVacioCuadroAlmacen(opts: {
 }): MensajeVacioCuadroAlmacen | null {
   if (!opts.filterEntidadId && !opts.filterProyectoId && !opts.filterDepositId && !opts.hayFiltrosActivos) {
     return {
-      titulo: 'Seleccione un almacén',
+      titulo: 'Seleccione el almacén por favor',
       subtitulo:
         'Use la barra superior (entidad · obra · almacén) para ver el stock físico de ese depósito.',
     };
@@ -62,17 +62,10 @@ export function mensajeVacioCuadroAlmacen(opts: {
   if (opts.cargandoStockUbicacion) return null;
 
   if (opts.filtroSinUbicaciones && opts.filtroStockPorUbicacion) {
-    if (opts.filterDepositId && !opts.filterProyectoId && !opts.filterEntidadId) {
-      return {
-        titulo: 'Sin ubicaciones para este almacén',
-        subtitulo:
-          'No hay inv_ubicaciones vinculadas; se filtra por depósito asignado en catálogo. Revise maestros para stock físico.',
-      };
-    }
     return {
-      titulo: 'Sin ubicaciones para este filtro',
+      titulo: 'Seleccione el almacén por favor',
       subtitulo:
-        'La obra o entidad seleccionada no tiene almacenes registrados. Configure ubicaciones en maestros.',
+        'Elija un almacén en la barra superior para ver el inventario de esa ubicación.',
     };
   }
 
