@@ -1460,7 +1460,7 @@ export default function CcoDashboardClient() {
                 title={TABS.find((t) => t.id === tab)?.label ?? 'Sección'}
                 desc="Menú CCO V4 cableado (Importar → CSV/PDF/V4 SQLite, libro, contratos, exports)."
                 href="/contabilidad/compras"
-                hrefLabel="Ir a módulos secundarios →"
+                hrefLabel="Ir a compras →"
                 lines={[
                   'Import PDF: menú izquierdo o pestaña IMPORTAR PDF',
                   'Exporta Excel/PDF desde la barra superior',
