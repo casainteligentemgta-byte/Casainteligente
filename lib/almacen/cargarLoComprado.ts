@@ -3,6 +3,11 @@ import {
   claveAgrupacionLoComprado,
   elegirDescripcionCanonica,
 } from '@/lib/almacen/claveAgrupacionLoComprado';
+import {
+  categoriaNombreCoincideFiltro,
+  mapNombreCategoriaPorMaterialIds,
+  parseCategoriaFiltroCuadro,
+} from '@/lib/almacen/categoriasMaterialCompra';
 import { normalizarTextoMaterial } from '@/lib/almacen/normalizarTextoMaterial';
 import {
   esCompraSoloAuditoriaCco,
@@ -15,6 +20,8 @@ export type LoCompradoFiltros = {
   desde?: string | null;
   hasta?: string | null;
   q?: string | null;
+  /** Chip: Materiales, Insumos, Maquinaria, etc. */
+  categoria?: string | null;
 };
 
 export type FilaLoComprado = {
@@ -31,6 +38,7 @@ export type FilaLoComprado = {
   entidad_id: string | null;
   entidad_nombre: string | null;
   descripciones_variantes: string[];
+  categoria_nombre: string | null;
 };
 
 export type ResumenLoComprado = {
@@ -80,6 +88,7 @@ type Accumulador = {
   proyecto_id: string | null;
   proyecto_nombre: string | null;
   entidad_id: string | null;
+  categoria_nombre: string | null;
   variantes: Map<string, number>;
 };
 
@@ -118,6 +127,7 @@ export async function cargarLoComprado(
   const desde = filtros.desde?.trim().slice(0, 10) || null;
   const hasta = filtros.hasta?.trim().slice(0, 10) || null;
   const qNorm = normalizarTextoMaterial(filtros.q ?? '');
+  const categoriaFiltro = parseCategoriaFiltroCuadro(filtros.categoria);
 
   const selectBase =
     'id,fecha,created_at,invoice_number,supplier_name,supplier_rif,origen,notas,proyecto_id,entidad_id,monto_usd,total_amount,ci_proyectos(nombre),contabilidad_compra_lineas(id,descripcion,item_code,unidad,cantidad,material_id)';
@@ -149,6 +159,19 @@ export async function cargarLoComprado(
     if (batch.length < PAGE_SIZE) break;
     offset += PAGE_SIZE;
   }
+
+  const materialIds: string[] = [];
+  for (const compra of filasBrutas) {
+    const lineas = Array.isArray(compra.contabilidad_compra_lineas)
+      ? compra.contabilidad_compra_lineas
+      : [];
+    for (const linea of lineas) {
+      const mid = linea.material_id?.trim();
+      if (mid) materialIds.push(mid);
+    }
+  }
+
+  const catPorMaterial = await mapNombreCategoriaPorMaterialIds(supabase, materialIds);
 
   const acc = new Map<string, Accumulador>();
   let totalLineas = 0;
@@ -188,6 +211,18 @@ export async function cargarLoComprado(
 
       if (!coincideBusqueda(qNorm, descripcion, linea.item_code ?? null)) continue;
 
+      const mid = linea.material_id?.trim() || null;
+      const categoriaNombre = mid ? catPorMaterial.get(mid) ?? null : null;
+      if (
+        !categoriaNombreCoincideFiltro(
+          categoriaNombre,
+          categoriaFiltro,
+          categoriaNombre ? null : descripcion,
+        )
+      ) {
+        continue;
+      }
+
       const clave = claveAgrupacionLoComprado({
         materialId: linea.material_id,
         descripcion,
@@ -200,7 +235,7 @@ export async function cargarLoComprado(
       if (!row) {
         row = {
           clave,
-          material_id: linea.material_id?.trim() || null,
+          material_id: mid,
           item_code: linea.item_code?.trim() || null,
           unidad: String(linea.unidad ?? 'UND').trim() || 'UND',
           cantidad_comprada: 0,
@@ -209,6 +244,7 @@ export async function cargarLoComprado(
           proyecto_id: proyId,
           proyecto_nombre: obraNombre,
           entidad_id: entId,
+          categoria_nombre: categoriaNombre,
           variantes: new Map(),
         };
         acc.set(clave, row);
@@ -217,14 +253,17 @@ export async function cargarLoComprado(
       row.cantidad_comprada += cantidad;
       row.lineas_count += 1;
       row.compraIds.add(compra.id);
-      if (!row.material_id && linea.material_id) {
-        row.material_id = linea.material_id.trim();
+      if (!row.material_id && mid) {
+        row.material_id = mid;
       }
       if (!row.item_code && linea.item_code) {
         row.item_code = linea.item_code.trim();
       }
       if (!row.proyecto_nombre && obraNombre) {
         row.proyecto_nombre = obraNombre;
+      }
+      if (!row.categoria_nombre && categoriaNombre) {
+        row.categoria_nombre = categoriaNombre;
       }
       row.variantes.set(descripcion, (row.variantes.get(descripcion) ?? 0) + 1);
     }
@@ -270,6 +309,7 @@ export async function cargarLoComprado(
         entidad_id: r.entidad_id,
         entidad_nombre: r.entidad_id ? entidadesMap.get(r.entidad_id) ?? null : null,
         descripciones_variantes: variantes,
+        categoria_nombre: r.categoria_nombre,
       };
     })
     .sort((a, b) => {

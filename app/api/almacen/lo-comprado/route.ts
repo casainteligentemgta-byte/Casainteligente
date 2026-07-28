@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
  * Inventario de cantidades compradas (agregado desde contabilidad_compra_lineas).
  * No escribe stock ni altera CCO.
  *
- * Query: proyecto_id, entidad_id, desde, hasta, q
+ * Query: proyecto_id, entidad_id, desde, hasta, q, categoria
  */
 export async function GET(req: Request) {
   try {
@@ -24,6 +24,7 @@ export async function GET(req: Request) {
       desde: url.searchParams.get('desde'),
       hasta: url.searchParams.get('hasta'),
       q: url.searchParams.get('q'),
+      categoria: url.searchParams.get('categoria'),
     });
 
     return NextResponse.json(resumen);

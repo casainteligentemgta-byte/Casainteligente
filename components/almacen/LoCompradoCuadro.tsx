@@ -5,6 +5,10 @@ import Link from 'next/link';
 import { Loader2, Package, RefreshCw, Search } from 'lucide-react';
 import type { FilaLoComprado, ResumenLoComprado } from '@/lib/almacen/cargarLoComprado';
 import {
+  CATEGORIAS_FILTRO_CUADRO,
+  type CategoriaFiltroCuadro,
+} from '@/lib/almacen/categoriasMaterialCompra';
+import {
   rangoFechasPeriodo,
   todayIso,
   type PeriodoCompras,
@@ -41,6 +45,7 @@ export default function LoCompradoCuadro() {
   const [proyectoId, setProyectoId] = useState('');
   const [periodo, setPeriodo] = useState<PeriodoCompras>('todas');
   const [refDate, setRefDate] = useState(todayIso);
+  const [categoria, setCategoria] = useState<CategoriaFiltroCuadro>('Todos');
   const [q, setQ] = useState('');
   const [qDebounced, setQDebounced] = useState('');
   const [loading, setLoading] = useState(true);
@@ -102,6 +107,7 @@ export default function LoCompradoCuadro() {
         qs.set('hasta', rango.hasta);
       }
       if (qDebounced) qs.set('q', qDebounced);
+      if (categoria && categoria !== 'Todos') qs.set('categoria', categoria);
 
       const res = await fetch(`/api/almacen/lo-comprado?${qs.toString()}`, {
         cache: 'no-store',
@@ -134,7 +140,7 @@ export default function LoCompradoCuadro() {
     } finally {
       setLoading(false);
     }
-  }, [proyectoId, entidadId, rango, qDebounced]);
+  }, [proyectoId, entidadId, rango, qDebounced, categoria]);
 
   useEffect(() => {
     void cargar();
@@ -243,6 +249,28 @@ export default function LoCompradoCuadro() {
             </div>
           </label>
         </div>
+
+        <div>
+          <span className="text-[10px] font-black uppercase tracking-widest text-sky-400 mb-1.5 block">
+            Categoría
+          </span>
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filtrar por categoría">
+            {CATEGORIAS_FILTRO_CUADRO.map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setCategoria(cat)}
+                className={`rounded-lg px-2.5 py-2 text-[10px] font-black uppercase tracking-wide transition-colors ${
+                  categoria === cat
+                    ? 'bg-sky-600 text-white shadow-sm shadow-sky-600/25'
+                    : 'border border-white/10 bg-zinc-900/80 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {resumen ? (
@@ -321,6 +349,9 @@ export default function LoCompradoCuadro() {
                     </Link>
                     {fila.item_code ? (
                       <p className="text-[11px] text-zinc-500 mt-0.5">{fila.item_code}</p>
+                    ) : null}
+                    {fila.categoria_nombre ? (
+                      <p className="text-[10px] text-sky-400/80 mt-0.5">{fila.categoria_nombre}</p>
                     ) : null}
                     {fila.descripciones_variantes.length > 0 ? (
                       <p className="text-[10px] text-amber-500/80 mt-1">
