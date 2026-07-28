@@ -324,14 +324,6 @@ function ChartCard({
   );
 }
 
-const SECUNDARIOS = [
-  { title: 'Compras CI', href: '/contabilidad/compras' },
-  { title: 'Inyecciones', href: '/contabilidad/inyecciones' },
-  { title: 'Gastos entidad', href: '/contabilidad/gastos-entidad' },
-  { title: 'Procuras', href: '/contabilidad/procuras' },
-  { title: 'Canal Telegram', href: '/contabilidad/compras/canal' },
-];
-
 const MQ_DESKTOP = '(min-width: 900px)';
 /** Preferencia de menú lateral CCO en desktop (`'1'` abierto, `'0'` cerrado). */
 const CCO_MENU_OPEN_KEY = 'ci-cco-menu-open';
@@ -1475,41 +1467,6 @@ export default function CcoDashboardClient() {
                 ]}
               />
             ) : null}
-
-            <div style={{ marginTop: 28 }}>
-              <p
-                style={{
-                  color: '#64748B',
-                  fontSize: 11,
-                  fontWeight: 800,
-                  letterSpacing: '0.06em',
-                  textTransform: 'uppercase',
-                  marginBottom: 10,
-                }}
-              >
-                Módulos secundarios · aportan al libro solo si no hay duplicado
-              </p>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {SECUNDARIOS.map((m) => (
-                  <Link
-                    key={m.href}
-                    href={m.href}
-                    style={{
-                      textDecoration: 'none',
-                      border: '1px solid #E2E8F0',
-                      background: '#fff',
-                      borderRadius: 10,
-                      padding: '10px 14px',
-                      color: '#334155',
-                      fontSize: 13,
-                      fontWeight: 700,
-                    }}
-                  >
-                    {m.title}
-                  </Link>
-                ))}
-              </div>
-            </div>
           </>
         ) : null}
         </>
