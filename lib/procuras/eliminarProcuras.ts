@@ -120,7 +120,12 @@ export async function eliminarProcurasPorIds(
   }
 
   const { error: delErr } = await supabase.from('ci_procuras').delete().in('id', idsFound);
-  if (delErr) throw new Error(delErr.message);
+  if (delErr) {
+    const hint = /foreign key|violates|23503/i.test(delErr.message)
+      ? ' Hay vínculos que impiden el borrado; reintente o desvincule facturas/recepciones.'
+      : '';
+    throw new Error(`${delErr.message}${hint}`);
+  }
 
   return {
     eliminadas: idsFound.length,
