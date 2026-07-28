@@ -8,19 +8,18 @@ import {
   getGeminiApiKey,
 } from '@/lib/gemini/client';
 import { GEMINI_PROCUREMENT_DEFAULT_MODEL } from '@/lib/almacen/geminiProcurementModels';
+import {
+  IURISVIGIA_RESPONSE_SCHEMA,
+  parseIurisVigiaReport,
+  type IurisVigiaReport,
+} from '@/lib/legal/iurisVigiaParse';
 
-export type EstadoCumplimientoIuris =
-  | 'Conforme'
-  | 'No Conforme'
-  | 'Observación'
-  | 'No analizable';
-
-export type IurisVigiaReport = {
-  descripcion: string;
-  nota_legal: string;
-  estado_cumplimiento: EstadoCumplimientoIuris | string;
-  riesgo_identificado: string;
-};
+export type { EstadoCumplimientoIuris, IurisVigiaReport } from '@/lib/legal/iurisVigiaParse';
+export {
+  extractIurisJsonObject,
+  IURISVIGIA_RESPONSE_SCHEMA,
+  parseIurisVigiaReport,
+} from '@/lib/legal/iurisVigiaParse';
 
 export const IURISVIGIA_SYSTEM_TEMPLATE = `Eres IurisVigía, un auditor técnico-legal experto en normativa venezolana (LOPCYMAT y estándares técnicos).
 Tu tarea es analizar la imagen proporcionada dentro del contexto de: {context}.
@@ -36,20 +35,6 @@ Si la imagen no es clara o no se puede analizar, indica "No analizable" en los c
 
 export function buildIurisVigiaSystemPrompt(context: string): string {
   return IURISVIGIA_SYSTEM_TEMPLATE.replaceAll('{context}', context.trim() || 'Inspección general');
-}
-
-function parseReport(raw: string): IurisVigiaReport {
-  const cleaned = raw
-    .trim()
-    .replace(/^```(?:json)?\s*/i, '')
-    .replace(/\s*```$/i, '');
-  const parsed = JSON.parse(cleaned) as Partial<IurisVigiaReport>;
-  return {
-    descripcion: String(parsed.descripcion ?? 'No analizable'),
-    nota_legal: String(parsed.nota_legal ?? 'No analizable'),
-    estado_cumplimiento: String(parsed.estado_cumplimiento ?? 'No analizable'),
-    riesgo_identificado: String(parsed.riesgo_identificado ?? 'No analizable'),
-  };
 }
 
 async function imageUrlToInline(
@@ -105,13 +90,21 @@ export async function analyzeInspectionPhoto(
     base64,
     systemInstruction: systemPrompt,
     temperature: 0.2,
-    maxOutputTokens: 2048,
-    prompt: 'Analiza esta fotografía para mi reporte legal. Responde solo JSON.',
+    maxOutputTokens: 4096,
+    responseSchema: IURISVIGIA_RESPONSE_SCHEMA,
+    prompt:
+      'Analiza esta fotografía para mi reporte legal. Responde solo JSON con las claves descripcion, nota_legal, estado_cumplimiento y riesgo_identificado.',
   });
 
   try {
-    return parseReport(content);
-  } catch {
-    throw new Error('Respuesta IurisVigía no es JSON válido');
+    return parseIurisVigiaReport(content);
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    const preview = content.replace(/\s+/g, ' ').slice(0, 180);
+    throw new Error(
+      preview
+        ? `Respuesta IurisVigía no es JSON válido (${detail}). Vista previa: ${preview}`
+        : `Respuesta IurisVigía no es JSON válido (${detail})`,
+    );
   }
 }

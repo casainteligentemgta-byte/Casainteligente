@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Camera, Loader2 } from 'lucide-react';
 import { apiUrl } from '@/lib/http/apiUrl';
 import type { IurisVigiaReport } from '@/lib/legal/iurisVigia';
+import { parseFetchJson } from '@/lib/utils/parseFetchJson';
 
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -57,18 +58,18 @@ export default function InspeccionesIurisClient() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      const data = (await res.json()) as {
+      const data = await parseFetchJson<{
         report?: IurisVigiaReport;
         error?: string;
         hint?: string;
-      };
+      }>(res);
       if (!res.ok) {
         setError([data.error, data.hint].filter(Boolean).join(' — ') || 'Error');
         return;
       }
       setReport(data.report ?? null);
-    } catch {
-      setError('Error de red');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error de red');
     } finally {
       setLoading(false);
     }
