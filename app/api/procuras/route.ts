@@ -157,11 +157,29 @@ export async function POST(req: Request) {
 /** DELETE — Elimina procuras seleccionadas (desvincula factura contable sin borrarla). */
 export async function DELETE(req: Request) {
   try {
-    const auth = await requirePermisoWeb('procura.aprobar');
+    let auth = await requirePermisoWeb('procura.aprobar');
+    if (!auth.ok) auth = await requirePermisoWeb('procura.ejecutar_compra');
+    if (!auth.ok) auth = await requirePermisoWeb('procura.solicitar');
     if (!auth.ok) return auth.response;
 
-    const body = (await req.json()) as { ids?: string[] };
-    const ids = Array.isArray(body.ids) ? body.ids.map((id) => String(id).trim()).filter(Boolean) : [];
+    const url = new URL(req.url);
+    const idsQuery = url.searchParams.get('ids');
+    let ids: string[] = [];
+    if (idsQuery?.trim()) {
+      ids = idsQuery
+        .split(',')
+        .map((id) => id.trim())
+        .filter(Boolean);
+    } else {
+      try {
+        const body = (await req.json()) as { ids?: string[] };
+        ids = Array.isArray(body.ids)
+          ? body.ids.map((id) => String(id).trim()).filter(Boolean)
+          : [];
+      } catch {
+        ids = [];
+      }
+    }
     if (!ids.length) {
       return NextResponse.json({ error: 'Indique al menos un id de procura.' }, { status: 400 });
     }
@@ -173,7 +191,11 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ ok: true, ...result });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'No se pudieron eliminar las procuras';
-    const status = /Indique|No se pueden|no existen|vinculadas|recepciones/i.test(message) ? 400 : 500;
+    const status = /Indique|No se pueden|no existen|vinculadas|recepciones|material ya recibido/i.test(
+      message,
+    )
+      ? 400
+      : 500;
     return NextResponse.json({ error: message }, { status });
   }
 }

@@ -122,6 +122,8 @@ export default function ProcurasPage() {
   const [error, setError] = useState<string | null>(null);
   const [procesandoId, setProcesandoId] = useState<string | null>(null);
   const [eliminandoId, setEliminandoId] = useState<string | null>(null);
+  const [eliminandoBulk, setEliminandoBulk] = useState(false);
+  const [seleccionEliminarIds, setSeleccionEliminarIds] = useState<Set<string>>(new Set());
   const [vincularProcuras, setVincularProcuras] = useState<ProcuraVinculoFactura[]>([]);
   const [seleccionVinculoIds, setSeleccionVinculoIds] = useState<Set<string>>(new Set());
   const [verFactura, setVerFactura] = useState<FacturaProcuraVista | null>(null);
@@ -191,7 +193,36 @@ export default function ProcurasPage() {
 
   useEffect(() => {
     setSeleccionVinculoIds(new Set());
+    setSeleccionEliminarIds(new Set());
   }, [tab]);
+
+  const eliminablesVisibles = useMemo(
+    () => visibles.filter((f) => procuraPuedeEliminarse(f.estado)),
+    [visibles],
+  );
+
+  const seleccionEliminarValida = useMemo(() => {
+    const map = new Map(filas.map((f) => [f.id, f]));
+    return Array.from(seleccionEliminarIds)
+      .map((id) => map.get(id))
+      .filter((f): f is ProcuraRow => Boolean(f && procuraPuedeEliminarse(f.estado)));
+  }, [seleccionEliminarIds, filas]);
+
+  const toggleSeleccionEliminar = (id: string) => {
+    setSeleccionEliminarIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSeleccionEliminarTodas = () => {
+    setSeleccionEliminarIds((prev) => {
+      if (prev.size >= eliminablesVisibles.length) return new Set();
+      return new Set(eliminablesVisibles.map((f) => f.id));
+    });
+  };
 
   const conteosTab = useMemo(
     () => ({
@@ -220,6 +251,39 @@ export default function ProcurasPage() {
     }
   };
 
+  const ejecutarEliminarIds = async (ids: string[], etiquetaConfirm: string) => {
+    if (!ids.length) return;
+    if (!confirm(etiquetaConfirm)) return;
+
+    if (ids.length === 1) setEliminandoId(ids[0]!);
+    else setEliminandoBulk(true);
+
+    // Optimista: quitar de la tabla de inmediato
+    setFilas((prev) => prev.filter((f) => !ids.includes(f.id)));
+    setSeleccionEliminarIds((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) next.delete(id);
+      return next;
+    });
+
+    try {
+      const res = await fetch(apiUrl('/api/compras/procuras'), {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+      const json = (await res.json()) as { error?: string; eliminadas?: number };
+      if (!res.ok) throw new Error(json.error ?? 'No se pudo eliminar');
+      await cargar();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Error al eliminar');
+      await cargar();
+    } finally {
+      setEliminandoId(null);
+      setEliminandoBulk(false);
+    }
+  };
+
   const eliminarProcura = async (f: ProcuraRow) => {
     if (!procuraPuedeEliminarse(f.estado)) {
       alert('No se puede eliminar: el material ya fue recibido en almacén.');
@@ -229,28 +293,24 @@ export default function ProcurasPage() {
     const avisoFactura = tieneFactura
       ? '\n\nLa factura en contabilidad no se borrará; solo se desvinculará de esta procura.'
       : '';
-    if (
-      !confirm(
-        `¿Eliminar la procura ${f.ticket} (${etiquetaEstadoProcura(f.estado)})?${avisoFactura}`,
-      )
-    ) {
-      return;
-    }
-    setEliminandoId(f.id);
-    try {
-      const res = await fetch(apiUrl('/api/compras/procuras'), {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: [f.id] }),
-      });
-      const json = (await res.json()) as { error?: string; eliminadas?: number };
-      if (!res.ok) throw new Error(json.error ?? 'No se pudo eliminar');
-      await cargar();
-    } catch (e) {
-      alert(e instanceof Error ? e.message : 'Error al eliminar');
-    } finally {
-      setEliminandoId(null);
-    }
+    await ejecutarEliminarIds(
+      [f.id],
+      `¿Eliminar la procura ${f.ticket} (${etiquetaEstadoProcura(f.estado)})?${avisoFactura}`,
+    );
+  };
+
+  const eliminarSeleccionadas = async () => {
+    const lista = seleccionEliminarValida;
+    if (!lista.length) return;
+    const tickets = lista
+      .slice(0, 8)
+      .map((f) => f.ticket)
+      .join(', ');
+    const extra = lista.length > 8 ? ` y ${lista.length - 8} más` : '';
+    await ejecutarEliminarIds(
+      lista.map((f) => f.id),
+      `¿Eliminar ${lista.length} procura(s)?\n\n${tickets}${extra}\n\nLas facturas en contabilidad no se borran; solo se desvinculan.`,
+    );
   };
 
   return (
@@ -335,6 +395,41 @@ export default function ProcurasPage() {
               </div>
             ) : null}
 
+            {tab !== 'aprobados' && eliminablesVisibles.length > 0 ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-500/20 bg-red-500/[0.06] px-4 py-3">
+                <p className="text-xs text-red-200/80">
+                  Seleccione procuras para eliminarlas de la tabla (rechazadas, pendientes o compradas sin recepción).
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={toggleSeleccionEliminarTodas}
+                    className="px-3 py-2 rounded-lg border border-white/10 text-[10px] font-bold uppercase text-zinc-400 hover:text-white"
+                  >
+                    {seleccionEliminarIds.size >= eliminablesVisibles.length
+                      ? 'Quitar selección'
+                      : `Seleccionar todas (${eliminablesVisibles.length})`}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={seleccionEliminarValida.length === 0 || eliminandoBulk}
+                    onClick={() => void eliminarSeleccionadas()}
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-red-500/20 border border-red-500/40 text-red-200 text-[10px] font-black uppercase disabled:opacity-40"
+                  >
+                    {eliminandoBulk ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <Trash2 size={14} />
+                    )}
+                    Eliminar
+                    {seleccionEliminarValida.length > 0
+                      ? ` (${seleccionEliminarValida.length})`
+                      : ''}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
             <div className="rounded-2xl border border-white/[0.06] bg-white/[0.04] overflow-hidden">
           {loading ? (
             <div className="flex items-center justify-center gap-2 py-16 text-zinc-500">
@@ -354,7 +449,7 @@ export default function ProcurasPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-white/[0.06] text-[10px] uppercase tracking-widest text-zinc-500">
-                  {tab === 'aprobados' ? (
+                  {tab === 'aprobados' || eliminablesVisibles.length > 0 ? (
                     <th className="p-3 w-10">
                       <span className="sr-only">Seleccionar</span>
                     </th>
@@ -373,22 +468,34 @@ export default function ProcurasPage() {
                   const color =
                     COLOR_ESTADO_PROCURA[f.estado as keyof typeof COLOR_ESTADO_PROCURA] ??
                     '#8E8E93';
-                  const busy = procesandoId === f.id || eliminandoId === f.id;
+                  const busy =
+                    procesandoId === f.id || eliminandoId === f.id || eliminandoBulk;
                   const esRechazada = ESTADOS_RECHAZADOS.has(f.estado.toLowerCase());
                   const puedeEliminar = procuraPuedeEliminarse(f.estado);
                   const pendienteFactura = procuraPendienteFactura(f);
-                  const seleccionada = seleccionVinculoIds.has(f.id);
+                  const seleccionadaVinculo = seleccionVinculoIds.has(f.id);
+                  const seleccionadaEliminar = seleccionEliminarIds.has(f.id);
+                  const muestraCheckbox =
+                    tab === 'aprobados' || (eliminablesVisibles.length > 0 && puedeEliminar);
                   return (
                     <tr key={f.id} className="border-b border-white/[0.04] hover:bg-white/[0.02]">
-                      {tab === 'aprobados' ? (
+                      {tab === 'aprobados' || eliminablesVisibles.length > 0 ? (
                         <td className="p-3">
-                          {pendienteFactura ? (
+                          {tab === 'aprobados' && pendienteFactura ? (
                             <input
                               type="checkbox"
-                              checked={seleccionada}
+                              checked={seleccionadaVinculo}
                               onChange={() => toggleSeleccionVinculo(f.id)}
                               className="rounded border-white/20 accent-[#FF9500]"
                               aria-label={`Seleccionar ${f.ticket}`}
+                            />
+                          ) : muestraCheckbox && tab !== 'aprobados' ? (
+                            <input
+                              type="checkbox"
+                              checked={seleccionadaEliminar}
+                              onChange={() => toggleSeleccionEliminar(f.id)}
+                              className="rounded border-white/20 accent-red-500"
+                              aria-label={`Seleccionar ${f.ticket} para eliminar`}
                             />
                           ) : null}
                         </td>
@@ -510,8 +617,8 @@ export default function ProcurasPage() {
                             type="button"
                             disabled={busy}
                             onClick={() => void eliminarProcura(f)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-zinc-500/10 border border-zinc-500/25 text-zinc-400 text-[10px] font-black uppercase hover:bg-red-500/15 hover:border-red-500/30 hover:text-red-300 disabled:opacity-50 transition-colors"
-                            title="Eliminar procura"
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-red-500/15 border border-red-500/35 text-red-300 text-[10px] font-black uppercase hover:bg-red-500/25 disabled:opacity-50 transition-colors"
+                            title="Eliminar procura de la tabla"
                           >
                             {eliminandoId === f.id ? (
                               <Loader2 size={12} className="animate-spin" />
