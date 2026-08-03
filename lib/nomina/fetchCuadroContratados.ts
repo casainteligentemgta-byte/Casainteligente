@@ -86,19 +86,19 @@ type ContratoActivoRow = {
   obra_id?: unknown;
   proyecto_id?: unknown;
   estado_contrato?: unknown;
-  created_at?: unknown;
 };
 
 /**
  * Lista contratos firmados activos.
  * Compat: algunos entornos solo tienen `proyecto_id` (sin `obra_id`).
+ * No pedir `created_at`: en prod esa columna no existe en ci_contratos_empleado_obra.
  */
 async function listarContratosFirmadosActivos(
   supabase: SupabaseClient,
   projectIds: string[] | null,
 ): Promise<ContratoActivoRow[]> {
-  const selectConObra = 'empleado_id,fecha_ingreso,obra_id,proyecto_id,estado_contrato,created_at';
-  const selectSoloProyecto = 'empleado_id,fecha_ingreso,proyecto_id,estado_contrato,created_at';
+  const selectConObra = 'empleado_id,fecha_ingreso,obra_id,proyecto_id,estado_contrato';
+  const selectSoloProyecto = 'empleado_id,fecha_ingreso,proyecto_id,estado_contrato';
 
   let q = supabase
     .from('ci_contratos_empleado_obra')
@@ -140,7 +140,7 @@ async function listarContratosFirmadosActivos(
     }
     let q3 = supabase
       .from('ci_contratos_empleado_obra')
-      .select('empleado_id,fecha_ingreso,obra_id,estado_contrato,created_at')
+      .select('empleado_id,fecha_ingreso,obra_id,estado_contrato')
       .eq('estado_contrato', 'firmado_activo');
     if (projectIds?.length) q3 = q3.in('obra_id', projectIds);
     const third = await q3;
