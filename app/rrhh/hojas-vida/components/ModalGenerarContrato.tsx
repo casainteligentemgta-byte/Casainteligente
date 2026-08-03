@@ -137,13 +137,26 @@ async function cargarContextoContrato(client: SupabaseClient, obreroId: string, 
   let entidad: ObreroContratoContext['entidad'] = null;
 
   if (proyectoId) {
-    const selFull =
-      'id,nombre,ubicacion_texto,obra_ubicacion,ubicacion,estado,entidad_id,proyecto_modulo_origen_id,horario_semanal_obra_default,punto_encuentro_transporte_contrato,fase_tecnica_contrato';
-    const selSinFase =
-      'id,nombre,ubicacion_texto,obra_ubicacion,ubicacion,estado,entidad_id,proyecto_modulo_origen_id,horario_semanal_obra_default,punto_encuentro_transporte_contrato';
-    let prRes = await client.from('ci_proyectos').select(selFull).eq('id', proyectoId).maybeSingle();
-    if (prRes.error && /fase_tecnica_contrato/i.test(prRes.error.message)) {
-      prRes = await client.from('ci_proyectos').select(selSinFase).eq('id', proyectoId).maybeSingle();
+    const selBase =
+      'id,nombre,ubicacion_texto,obra_ubicacion,ubicacion,estado,entidad_id,proyecto_modulo_origen_id';
+    const selectCandidatos = [
+      `${selBase},horario_semanal_obra_default,punto_encuentro_transporte_contrato,fase_tecnica_contrato`,
+      `${selBase},horario_semanal_obra_default,punto_encuentro_transporte_contrato`,
+      `${selBase},horario_semanal_obra_default`,
+      selBase,
+    ];
+    let prRes: { data: unknown; error: { message?: string } | null } = { data: null, error: { message: 'init' } };
+    for (const sel of selectCandidatos) {
+      prRes = await client.from('ci_proyectos').select(sel).eq('id', proyectoId).maybeSingle();
+      if (!prRes.error) break;
+      const msg = prRes.error.message || '';
+      if (
+        !/schema cache|Could not find|horario_semanal_obra_default|punto_encuentro_transporte_contrato|fase_tecnica_contrato/i.test(
+          msg,
+        )
+      ) {
+        break;
+      }
     }
     const { data: pr, error: ePr } = prRes;
     if (!ePr && pr) {
