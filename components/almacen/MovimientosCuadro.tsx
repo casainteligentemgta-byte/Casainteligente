@@ -192,6 +192,12 @@ export default function MovimientosCuadro({
     proyectoIdsEntidad ?? almacenFiltros?.proyectoIdsEntidadArr;
   const esperandoUbicaciones =
     Boolean(almacenFiltros?.filtroStockEntidadActivo && almacenFiltros.cargandoUbicaciones);
+  /** Filtro activo sin ubicación física: no cargar todo el historial (evita salto de pantalla). */
+  const pedirSeleccionarAlmacen = Boolean(
+    almacenFiltros?.filtroStockEntidadActivo &&
+      almacenFiltros.filtroSinUbicaciones &&
+      !almacenFiltros.cargandoUbicaciones,
+  );
 
   const [hydrated, setHydrated] = useState(false);
   const [vistaLocal, setVistaLocal] = useState<VistaMovimientoInventario>(() =>
@@ -332,7 +338,7 @@ export default function MovimientosCuadro({
 
   const cargarPagina = useCallback(
     async (nextOffset: number, append: boolean) => {
-      if (esperandoUbicaciones) return;
+      if (esperandoUbicaciones || pedirSeleccionarAlmacen) return;
       const gen = ++fetchGenRef.current;
       if (append) setLoadingMore(true);
       else {
@@ -363,7 +369,7 @@ export default function MovimientosCuadro({
         }
       }
     },
-    [queryBase, esperandoUbicaciones],
+    [queryBase, esperandoUbicaciones, pedirSeleccionarAlmacen],
   );
 
   const cargar = useCallback(async () => {
@@ -372,14 +378,34 @@ export default function MovimientosCuadro({
   }, [cargarPagina]);
 
   const cargarMas = useCallback(() => {
-    if (!hasMore || loading || loadingMore || esperandoUbicaciones) return;
+    if (!hasMore || loading || loadingMore || esperandoUbicaciones || pedirSeleccionarAlmacen) return;
     void cargarPagina(offset, true);
-  }, [hasMore, loading, loadingMore, esperandoUbicaciones, cargarPagina, offset]);
+  }, [
+    hasMore,
+    loading,
+    loadingMore,
+    esperandoUbicaciones,
+    pedirSeleccionarAlmacen,
+    cargarPagina,
+    offset,
+  ]);
 
   useEffect(() => {
     if (!hydrated) return;
+    if (pedirSeleccionarAlmacen) {
+      fetchGenRef.current += 1;
+      setFilas([]);
+      setResumen({ ingresado: 0, despachado: 0, almacenado: 0 });
+      setTotalFilas(0);
+      setHasMore(false);
+      setOffset(0);
+      setLoading(false);
+      setLoadingMore(false);
+      setError(null);
+      return;
+    }
     void cargar();
-  }, [hydrated, cargar]);
+  }, [hydrated, cargar, pedirSeleccionarAlmacen]);
 
   useEffect(() => {
     const el = scrollSentinelRef.current;
@@ -1004,7 +1030,9 @@ export default function MovimientosCuadro({
                 ) : filas.length === 0 ? (
                   <tr>
                     <td colSpan={10} className="p-12 text-center text-zinc-600">
-                      Sin registros con estos filtros.
+                      {pedirSeleccionarAlmacen
+                        ? 'Seleccione el almacén por favor.'
+                        : 'Sin registros con estos filtros.'}
                     </td>
                   </tr>
                 ) : (

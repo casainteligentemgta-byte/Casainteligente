@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { Filter, Loader2, Pencil } from 'lucide-react';
 import { useAlmacenFiltros } from '@/components/almacen/AlmacenFiltrosProvider';
 
@@ -43,6 +42,9 @@ export default function AlmacenFiltrosUbicacionBar({ hint }: Props) {
     : null;
 
   const mostrarSelectores = editando || !seleccionCompleta;
+  /** Sin ubicación física resuelta: guía a elegir almacén (evita el aviso técnico que saltaba el layout). */
+  const pedirAlmacen =
+    filtroSinUbicaciones && filtroStockEntidadActivo && !cargandoUbicaciones;
 
   return (
     <div className="mb-4 box-border w-full max-w-full overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/80 p-3 sm:p-4 space-y-3">
@@ -122,7 +124,11 @@ export default function AlmacenFiltrosUbicacionBar({ hint }: Props) {
             <select
               value={filterDepositId}
               onChange={(e) => setFilterDepositId(e.target.value)}
-              className="w-full max-w-full box-border rounded-xl border border-emerald-500/30 bg-black/50 px-3 py-2.5 text-sm font-bold text-white"
+              className={`w-full max-w-full box-border rounded-xl border bg-black/50 px-3 py-2.5 text-sm font-bold text-white ${
+                pedirAlmacen && !cargandoUbicaciones
+                  ? 'border-emerald-400/60 ring-1 ring-emerald-400/25'
+                  : 'border-emerald-500/30'
+              }`}
             >
               <option value="">
                 {filterEntidadId || filterProyectoId
@@ -156,25 +162,23 @@ export default function AlmacenFiltrosUbicacionBar({ hint }: Props) {
         </div>
       ) : null}
 
-      {filtroSinUbicaciones && filtroStockEntidadActivo && !cargandoUbicaciones ? (
-        <div className="rounded-xl border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-[11px] font-bold text-amber-200">
-          Sin ubicaciones físicas para este filtro.
-          {' '}
-          <Link href="/almacen/maestros" className="underline hover:text-amber-100">
-            Abrir maestros de almacén
-          </Link>
-          {' '}
-          para sincronizar depósitos con inventario, o elija otra entidad/obra/almacén.
-        </div>
-      ) : null}
-
-      {hint && mostrarSelectores ? (
-        <p className="text-[11px] text-zinc-500 leading-relaxed">{hint}</p>
-      ) : filtroStockEntidadActivo && ubicacionIdsFiltro.length > 0 && mostrarSelectores ? (
-        <p className="text-[11px] text-zinc-500">
-          {ubicacionIdsFiltro.length} ubicación(es) física(s) en alcance del filtro.
-        </p>
-      ) : null}
+      {/* Altura reservada para no saltar el layout al resolver ubicaciones */}
+      <p
+        className={`min-h-[1.25rem] text-[11px] leading-relaxed ${
+          pedirAlmacen && !cargandoUbicaciones
+            ? 'font-semibold text-emerald-300/90'
+            : 'text-zinc-500'
+        }`}
+        aria-live="polite"
+      >
+        {cargandoUbicaciones && filtroStockEntidadActivo
+          ? '\u00a0'
+          : pedirAlmacen
+            ? 'Seleccione el almacén por favor.'
+            : hint && mostrarSelectores
+              ? hint
+              : '\u00a0'}
+      </p>
     </div>
   );
 }
