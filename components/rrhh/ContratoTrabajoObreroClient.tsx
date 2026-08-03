@@ -866,13 +866,12 @@ export default function ContratoTrabajoObreroClient() {
                 apellidos (o nombre_completo).
               </p>
               <p className="mt-1">
-                <span className="text-zinc-300">Opcionales:</span> direccion, municipio, estado,
-                nacionalidad, estado_civil, fecha_ingreso, jornada, horario, bono_usd, cargo,
-                objeto_contrato.
+                <span className="text-zinc-300">Opcionales:</span> nacionalidad, estado_civil,
+                fecha_ingreso, jornada, horario, bono_usd, cargo, objeto_contrato.
               </p>
               <p className="mt-1">
-                Obra y cargo del tabulador se toman de los valores por defecto abajo (o de columnas
-                cargo / proyecto_id si vienen en el archivo).
+                Obra y cargo del tabulador se toman de los valores por defecto abajo (o de la columna
+                cargo si viene en el archivo). No se piden domicilio, municipio ni estado.
               </p>
             </div>
 
