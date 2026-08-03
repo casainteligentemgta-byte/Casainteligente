@@ -182,10 +182,16 @@ export async function POST(req: Request) {
 
   const examUrl = `${baseUrl}/talento/examen?token=${encodeURIComponent(token)}`;
   const onboardingUrl = `${baseUrl}/reclutamiento/onboarding/${token}`;
+  const colorExamUrl = `${baseUrl}/talento/evaluacion-color?token=${encodeURIComponent(token)}`;
+  const evaluacionObreroUrl = `${baseUrl}/talento/evaluacion-obrero?token=${encodeURIComponent(token)}`;
 
   return NextResponse.json({
     url: examUrl,
     onboarding_url: onboardingUrl,
+    color_exam_url: colorExamUrl,
+    evaluacion_obrero_url: evaluacionObreroUrl,
+    /** Primera evaluación tras HV (cadena unificada). */
+    post_hv_url: colorExamUrl,
     expira_at: expiraAt,
     empleado_id: row.id,
     token,

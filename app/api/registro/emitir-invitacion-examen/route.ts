@@ -103,7 +103,15 @@ export async function POST(req: Request) {
 
   const exam_url = `${base}/talento/examen?token=${encodeURIComponent(token)}`;
   const color_exam_url = `${base}/talento/evaluacion-color?token=${encodeURIComponent(token)}`;
+  const evaluacion_obrero_url = `${base}/talento/evaluacion-obrero?token=${encodeURIComponent(token)}`;
   const onboarding_url = `${base}/reclutamiento/onboarding/${encodeURIComponent(token)}`;
+  const post_hv_url = color_exam_url;
 
-  return NextResponse.json({ exam_url, color_exam_url, onboarding_url });
+  return NextResponse.json({
+    exam_url,
+    color_exam_url,
+    evaluacion_obrero_url,
+    onboarding_url,
+    post_hv_url,
+  });
 }

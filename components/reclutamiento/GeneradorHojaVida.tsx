@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { MessageSquare, Link as LinkIcon, User, Briefcase, Phone, Sparkles, CheckCircle2, Copy, X, FileText, Mail, QrCode } from 'lucide-react';
 import { apiUrl } from '@/lib/http/apiUrl';
+import { mensajeWhatsAppHvYEvaluacion } from '@/lib/talento/flujoHvEvaluacion';
 
 export default function GeneradorHojaVida({ onClose }: { onClose?: () => void }) {
   const [name, setName] = useState('');
@@ -44,7 +45,11 @@ export default function GeneradorHojaVida({ onClose }: { onClose?: () => void })
       }
 
       const link = j.onboarding_url;
-      const messageTemplate = `¡Hola ${name}! Te saluda el equipo de Reclutamiento de Casa Inteligente. Completa tu Hoja de Vida oficial para el cargo de ${cargo} aquí: ${link}`;
+      const messageTemplate = mensajeWhatsAppHvYEvaluacion({
+        nombre: name.trim(),
+        cargo: cargo.trim(),
+        link,
+      });
       setSuccess({ link, message: messageTemplate });
     } catch (err: unknown) {
       console.error('Error saving invitation:', err);
@@ -67,9 +72,9 @@ export default function GeneradorHojaVida({ onClose }: { onClose?: () => void })
   const whatsappUrl = success
     ? `https://wa.me/${waPhone}?text=${encodeURIComponent(success.message)}`
     : '#';
-  const emailSubject = `Invitación a Hoja de Vida - Casa Inteligente`;
+  const emailSubject = `Invitación HV + evaluación - Casa Inteligente`;
   const emailBody = success
-    ? `Hola ${name},\n\nTe invitamos a completar tu Hoja de Vida oficial para el cargo de ${cargo} en el siguiente enlace:\n\n${success.link}\n\nCon esos datos se arma la hoja de empleo al contratarte; RRHH solo completa lo faltante.\n\nSaludos,\nEquipo de RRHH`
+    ? `Hola ${name},\n\nTe invitamos a completar tu hoja de vida y tu evaluación (tipo de color y prueba de admisión) en un solo enlace:\n\n${success.link}\n\nAl finalizar la hoja de vida pasarás automáticamente a la evaluación.\n\nSaludos,\nEquipo de RRHH`
     : '';
   const emailUrl = `mailto:${email}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
 
@@ -96,8 +101,8 @@ export default function GeneradorHojaVida({ onClose }: { onClose?: () => void })
       {!success ? (
         <div className="space-y-4">
           <p className="text-xs text-zinc-400 leading-relaxed">
-            El obrero recibe el enlace por WhatsApp o email, completa la hoja de vida una sola vez, y al contratarlo esos
-            datos alimentan la hoja de empleo (RRHH solo completa patrono, obra y faltantes).
+            El obrero recibe un solo enlace: completa la hoja de vida y, al terminar, continúa automáticamente con la
+            evaluación (tipo de color y prueba de admisión).
           </p>
           <div>
             <label className="text-[10px] font-bold uppercase tracking-wide text-zinc-500 flex items-center gap-1.5 mb-1.5">
@@ -215,7 +220,7 @@ export default function GeneradorHojaVida({ onClose }: { onClose?: () => void })
             Generar otra invitación
           </button>
           <div className="flex items-center justify-center gap-2 text-[10px] text-zinc-600">
-            <QrCode size={12} /> El candidato completa la hoja de vida en el enlace
+            <QrCode size={12} /> El candidato completa HV y evaluación en el mismo enlace
           </div>
         </div>
       )}

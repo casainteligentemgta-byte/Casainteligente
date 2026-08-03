@@ -21,6 +21,8 @@ import { ResumenSolicitadosOficiosToolbar } from '@/components/rrhh/gestion-pers
 import BonoUsdEditor from '@/components/rrhh/BonoUsdEditor';
 import { isBonoColumnMissingError, parseBonoUsd } from '@/lib/rrhh/projectAssignmentBono';
 import { idsObrerosConContratoSuscrito } from '@/lib/rrhh/obreroContratoSuscrito';
+import { apiUrl } from '@/lib/http/apiUrl';
+import { mensajeWhatsAppHvYEvaluacion } from '@/lib/talento/flujoHvEvaluacion';
 
 type LaborRequestRow = {
   id: string;
@@ -125,9 +127,31 @@ function hrefFormatoHojaVidaLabor(projectId: string, codigoOficio: string): stri
   return `${base}/registro?prj=${encodeURIComponent(projectId.trim())}&role=${encodeURIComponent(codigoOficio.trim())}`;
 }
 
-function mensajeWhatsAppPlanilla(link: string, specialtyNombre: string | null, codigo: string): string {
-  const cargo = (specialtyNombre ?? '').trim() || codigo.trim();
-  return `Hola, Casa Inteligente te invita a completar tu hoja de vida para el oficio «${cargo}». Con esos datos se arma la hoja de empleo al contratarte. Enlace:\n${link}`;
+async function generarEnlaceHvTokenizado(opts: {
+  cargo: string;
+  projectId?: string;
+}): Promise<{ onboarding_url: string } | { error: string }> {
+  const cargo = opts.cargo.trim() || 'Obrero';
+  const res = await fetch(apiUrl('/api/talento/generar-link'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      nombre: `Candidato · ${cargo}`,
+      rol_buscado: cargo,
+      rol_examen: 'obrero',
+      proyecto_modulo_id: opts.projectId?.trim() || undefined,
+      public_base_url: typeof window !== 'undefined' ? window.location.origin : undefined,
+    }),
+  });
+  const j = (await res.json().catch(() => ({}))) as {
+    onboarding_url?: string;
+    error?: string;
+    hint?: string;
+  };
+  if (!res.ok || !j.onboarding_url) {
+    return { error: [j.error, j.hint].filter(Boolean).join(' — ') || 'No se pudo generar el enlace' };
+  }
+  return { onboarding_url: j.onboarding_url };
 }
 
 type RrhhGestionPersonalClientProps = {
@@ -235,18 +259,46 @@ export default function RrhhGestionPersonalClient({
   }, [supabase, assignments, asignadosPorSolicitud, tick]);
 
   const copiarEnlaceHojaVida = useCallback(async (r: LaborRequestRow) => {
-    const href = hrefFormatoHojaVidaLabor(r.project_id, r.specialty_codigo);
+    const cargo = (r.specialty_nombre ?? '').trim() || r.specialty_codigo.trim();
+    const out = await generarEnlaceHvTokenizado({
+      cargo,
+      projectId: r.project_id,
+    });
+    if ('error' in out) {
+      // Fallback legado si falla generar-link
+      const href = hrefFormatoHojaVidaLabor(r.project_id, r.specialty_codigo);
+      try {
+        await navigator.clipboard.writeText(href);
+        toast.message('Enlace genérico copiado (no se pudo crear invitación tokenizada).', {
+          description: out.error,
+        });
+      } catch {
+        toast.error(out.error);
+      }
+      return;
+    }
     try {
-      await navigator.clipboard.writeText(href);
-      toast.success('Enlace del formato de hoja de vida copiado.');
+      await navigator.clipboard.writeText(out.onboarding_url);
+      toast.success('Enlace HV + evaluación copiado (el candidato completa ambos en cadena).');
     } catch {
       toast.error('No se pudo copiar al portapapeles.');
     }
   }, []);
 
-  const abrirWhatsAppPlanilla = useCallback((r: LaborRequestRow) => {
-    const href = hrefFormatoHojaVidaLabor(r.project_id, r.specialty_codigo);
-    const text = mensajeWhatsAppPlanilla(href, r.specialty_nombre, r.specialty_codigo);
+  const abrirWhatsAppPlanilla = useCallback(async (r: LaborRequestRow) => {
+    const cargo = (r.specialty_nombre ?? '').trim() || r.specialty_codigo.trim();
+    const out = await generarEnlaceHvTokenizado({
+      cargo,
+      projectId: r.project_id,
+    });
+    if ('error' in out) {
+      const href = hrefFormatoHojaVidaLabor(r.project_id, r.specialty_codigo);
+      const text = mensajeWhatsAppHvYEvaluacion({ cargo, link: href });
+      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
+      toast.message('WhatsApp con enlace genérico (falló invitación tokenizada).');
+      return;
+    }
+    const text = mensajeWhatsAppHvYEvaluacion({ cargo, link: out.onboarding_url });
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
   }, []);
 
@@ -892,7 +944,7 @@ export default function RrhhGestionPersonalClient({
                     size="sm"
                     variant="elite"
                     className="gap-1.5 h-8 text-xs"
-                    title="Copiar enlace público del formato de hoja de vida"
+                    title="Copiar enlace tokenizado: HV + evaluación en cadena"
                     onClick={() => void copiarEnlaceHojaVida(r)}
                   >
                     <Copy className="h-3 w-3" aria-hidden />
@@ -903,8 +955,8 @@ export default function RrhhGestionPersonalClient({
                     size="sm"
                     variant="elite"
                     className="gap-1.5 h-8 text-xs border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/10"
-                    title="Abrir WhatsApp con mensaje e enlace"
-                    onClick={() => abrirWhatsAppPlanilla(r)}
+                    title="WhatsApp: HV + evaluación (un solo enlace)"
+                    onClick={() => void abrirWhatsAppPlanilla(r)}
                   >
                     <MessageCircle className="h-3 w-3" aria-hidden />
                     WhatsApp
