@@ -215,7 +215,7 @@ function mapHeaders(headers: string[]): {
 
   // Encabezados típicos de la tabla de nómina (normHeader exacto).
   if (!mapeo.cedula) {
-    for (const [norm, original] of byNorm) {
+    for (const [norm, original] of Array.from(byNorm.entries())) {
       if (norm === 'c_i' || norm === 'c_i_' || /^c_?i_?$/.test(norm)) {
         mapeo.cedula = original;
         break;
@@ -223,7 +223,7 @@ function mapHeaders(headers: string[]): {
     }
   }
   if (!mapeo.nombre_completo) {
-    for (const [norm, original] of byNorm) {
+    for (const [norm, original] of Array.from(byNorm.entries())) {
       if (norm.includes('nombre_completo') || (norm.includes('nombre') && norm.includes('excel'))) {
         mapeo.nombre_completo = original;
         break;
@@ -231,7 +231,7 @@ function mapHeaders(headers: string[]): {
     }
   }
   if (!mapeo.canon_semanal_usd) {
-    for (const [norm, original] of byNorm) {
+    for (const [norm, original] of Array.from(byNorm.entries())) {
       if (norm.includes('canon')) {
         mapeo.canon_semanal_usd = original;
         break;
