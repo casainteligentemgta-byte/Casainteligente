@@ -9,21 +9,36 @@ import {
   FileSpreadsheet,
   Loader2,
   Play,
+  Plus,
+  RefreshCw,
   Upload,
   CheckCircle2,
   XCircle,
+  Users,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import { apiUrl } from '@/lib/http/apiUrl';
+import AccionesContratoPdfFila from '@/components/rrhh/AccionesContratoPdfFila';
 import {
   generarPlantillaContratoTrabajoXlsx,
   parseContratoTrabajoObreroTabla,
   type FilaContratoTrabajoObrero,
 } from '@/lib/talento/parseContratoTrabajoObreroTabla';
 
+type Vista = 'lista' | 'nuevo' | 'masiva';
+
 type ProyectoOpt = { id: string; nombre: string };
 type NominaOpt = { id: string; cargo_nombre: string };
+
+type ContratoRow = {
+  id: string;
+  created_at: string;
+  obrero_nombre: string;
+  obrero_cedula: string;
+  cargo_nombre_snapshot?: string | null;
+  formalizado_empleado_id?: string | null;
+};
 
 type ResultadoFila = {
   filaExcel: number;
@@ -62,23 +77,57 @@ export default function ContratoTrabajoObreroClient() {
   const searchParams = useSearchParams();
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const proyectoUrl =
+    searchParams.get('proyecto')?.trim() ||
+    searchParams.get('proyecto_modulo')?.trim() ||
+    '';
+
+  const vistaUrl = (searchParams.get('vista') ?? '').trim().toLowerCase();
+  const [vista, setVista] = useState<Vista>(
+    vistaUrl === 'nuevo' || vistaUrl === 'masiva' ? (vistaUrl as Vista) : 'lista',
+  );
+
   const [proyectos, setProyectos] = useState<ProyectoOpt[]>([]);
   const [nominas, setNominas] = useState<NominaOpt[]>([]);
   const [loadingOpts, setLoadingOpts] = useState(true);
 
-  const [proyectoId, setProyectoId] = useState(() => searchParams.get('proyecto')?.trim() || '');
+  const [proyectoId, setProyectoId] = useState(proyectoUrl);
   const [configNominaId, setConfigNominaId] = useState('');
   const [fechaIngreso, setFechaIngreso] = useState(hoyIso);
   const [jornada, setJornada] = useState<'DIURNA' | 'NOCTURNA' | 'MIXTA'>('DIURNA');
   const [horarioDefault, setHorarioDefault] = useState('');
 
+  const [contratos, setContratos] = useState<ContratoRow[]>([]);
+  const [loadingLista, setLoadingLista] = useState(false);
+  const [errorLista, setErrorLista] = useState<string | null>(null);
+
+  /** Formulario «Nuevo contrato» */
+  const [nombres, setNombres] = useState('');
+  const [apellidos, setApellidos] = useState('');
+  const [cedula, setCedula] = useState('');
+  const [direccion, setDireccion] = useState('');
+  const [municipio, setMunicipio] = useState('');
+  const [estadoRes, setEstadoRes] = useState('');
+  const [nacionalidad, setNacionalidad] = useState('Venezolana');
+  const [estadoCivil, setEstadoCivil] = useState('');
+  const [bonoUsd, setBonoUsd] = useState('0');
+  const [guardandoUno, setGuardandoUno] = useState(false);
+
   const [filas, setFilas] = useState<FilaContratoTrabajoObrero[]>([]);
   const [avisosParse, setAvisosParse] = useState<string[]>([]);
   const [archivoNombre, setArchivoNombre] = useState<string | null>(null);
-
   const [generando, setGenerando] = useState(false);
   const [progreso, setProgreso] = useState({ done: 0, total: 0 });
   const [resultados, setResultados] = useState<ResultadoFila[]>([]);
+
+  const proyectoNombre = useMemo(
+    () => proyectos.find((p) => p.id === proyectoId)?.nombre ?? null,
+    [proyectos, proyectoId],
+  );
+
+  const backHref = proyectoId
+    ? `/rrhh/hojas-vida?proyecto_modulo=${encodeURIComponent(proyectoId)}`
+    : '/rrhh/hojas-vida';
 
   const cargarOpciones = useCallback(async () => {
     setLoadingOpts(true);
@@ -110,9 +159,66 @@ export default function ContratoTrabajoObreroClient() {
     }
   }, [supabase]);
 
+  const cargarContratos = useCallback(async () => {
+    if (!proyectoId.trim()) {
+      setContratos([]);
+      setErrorLista(null);
+      return;
+    }
+    setLoadingLista(true);
+    setErrorLista(null);
+    try {
+      const full = await supabase
+        .from('ci_contratos_express')
+        .select(
+          'id,created_at,obrero_nombre,obrero_cedula,cargo_nombre_snapshot,formalizado_empleado_id',
+        )
+        .eq('proyecto_id', proyectoId.trim())
+        .order('created_at', { ascending: false });
+
+      let data = full.data as ContratoRow[] | null;
+      let error = full.error;
+
+      if (
+        error &&
+        /formalizado_empleado_id|cargo_nombre_snapshot|42703|column|schema cache/i.test(
+          error.message ?? '',
+        )
+      ) {
+        const lite = await supabase
+          .from('ci_contratos_express')
+          .select('id,created_at,obrero_nombre,obrero_cedula')
+          .eq('proyecto_id', proyectoId.trim())
+          .order('created_at', { ascending: false });
+        data = lite.data as ContratoRow[] | null;
+        error = lite.error;
+      }
+
+      if (error) {
+        setErrorLista(error.message);
+        setContratos([]);
+      } else {
+        setContratos(data ?? []);
+      }
+    } catch {
+      setErrorLista('No se pudo cargar la lista de contratados.');
+      setContratos([]);
+    } finally {
+      setLoadingLista(false);
+    }
+  }, [proyectoId, supabase]);
+
   useEffect(() => {
     void cargarOpciones();
   }, [cargarOpciones]);
+
+  useEffect(() => {
+    if (proyectoUrl) setProyectoId(proyectoUrl);
+  }, [proyectoUrl]);
+
+  useEffect(() => {
+    if (vista === 'lista') void cargarContratos();
+  }, [vista, cargarContratos]);
 
   function resolverNominaId(fila: FilaContratoTrabajoObrero): string | null {
     if (fila.configNominaId?.trim()) return fila.configNominaId.trim();
@@ -139,6 +245,82 @@ export default function ContratoTrabajoObreroClient() {
     return proyectoId.trim() || null;
   }
 
+  async function generarUno(body: Record<string, unknown>): Promise<{
+    ok: boolean;
+    id?: string;
+    signed_url?: string | null;
+    error?: string;
+  }> {
+    const res = await fetch(apiUrl('/api/talento/contratos-fast'), {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const j = (await res.json()) as {
+      id?: string;
+      signed_url?: string | null;
+      error?: string;
+    };
+    if (!res.ok) return { ok: false, error: j.error ?? `Error HTTP ${res.status}` };
+    return { ok: true, id: j.id, signed_url: j.signed_url };
+  }
+
+  async function guardarNuevoContrato(e: React.FormEvent) {
+    e.preventDefault();
+    if (!proyectoId.trim()) {
+      toast.error('Seleccione la obra / proyecto');
+      return;
+    }
+    if (!configNominaId.trim()) {
+      toast.error('Seleccione el cargo (tabulador)');
+      return;
+    }
+    if (!nombres.trim() || !apellidos.trim() || !cedula.trim()) {
+      toast.error('Nombres, apellidos y cédula son obligatorios');
+      return;
+    }
+    setGuardandoUno(true);
+    try {
+      const out = await generarUno({
+        proyecto_id: proyectoId.trim(),
+        config_nomina_id: configNominaId.trim(),
+        obrero_nombres: nombres.trim(),
+        obrero_apellidos: apellidos.trim(),
+        obrero_cedula: cedula.trim(),
+        obrero_direccion: direccion.trim() || null,
+        obrero_municipio_residencia: municipio.trim() || null,
+        obrero_estado_residencia: estadoRes.trim() || null,
+        nacionalidad: nacionalidad.trim() || null,
+        estado_civil: estadoCivil.trim() || null,
+        fecha_ingreso: fechaIngreso,
+        jornada_trabajo: jornada,
+        horario_semanal_texto: horarioDefault.trim() || null,
+        bono_manual_usd: Number.parseFloat(bonoUsd.replace(',', '.')) || 0,
+      });
+      if (!out.ok) {
+        toast.error(out.error ?? 'No se pudo generar');
+        return;
+      }
+      toast.success('Contrato de trabajo generado');
+      setNombres('');
+      setApellidos('');
+      setCedula('');
+      setDireccion('');
+      setMunicipio('');
+      setEstadoRes('');
+      setEstadoCivil('');
+      setBonoUsd('0');
+      setVista('lista');
+      void cargarContratos();
+      if (out.signed_url) window.open(out.signed_url, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error de red');
+    } finally {
+      setGuardandoUno(false);
+    }
+  }
+
   async function onFile(file: File | null) {
     setResultados([]);
     setFilas([]);
@@ -151,11 +333,8 @@ export default function ContratoTrabajoObreroClient() {
       setFilas(parsed.filas);
       setAvisosParse(parsed.avisos);
       setArchivoNombre(file.name);
-      if (parsed.filas.length === 0) {
-        toast.error('No se extrajeron filas del archivo');
-      } else {
-        toast.success(`${parsed.filas.length} fila(s) leídas de «${file.name}»`);
-      }
+      if (parsed.filas.length === 0) toast.error('No se extrajeron filas del archivo');
+      else toast.success(`${parsed.filas.length} fila(s) leídas de «${file.name}»`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'No se pudo leer el archivo');
     }
@@ -184,7 +363,7 @@ export default function ContratoTrabajoObreroClient() {
       return;
     }
     if (filas.length === 0) {
-      toast.error('Cargue una tabla Excel/CSV con los obreros');
+      toast.error('Cargue la plantilla Excel/CSV con los obreros');
       return;
     }
 
@@ -196,14 +375,15 @@ export default function ContratoTrabajoObreroClient() {
 
     setGenerando(true);
     setProgreso({ done: 0, total: pendientes.length });
-    const init: ResultadoFila[] = filas.map((f) => ({
-      filaExcel: f.filaExcel,
-      cedula: f.cedula,
-      nombre: nombreFila(f),
-      status: f.errores.length ? 'omitida' : 'pendiente',
-      error: f.errores.length ? f.errores.join('; ') : undefined,
-    }));
-    setResultados(init);
+    setResultados(
+      filas.map((f) => ({
+        filaExcel: f.filaExcel,
+        cedula: f.cedula,
+        nombre: nombreFila(f),
+        status: f.errores.length ? 'omitida' : 'pendiente',
+        error: f.errores.length ? f.errores.join('; ') : undefined,
+      })),
+    );
 
     let ok = 0;
     let fail = 0;
@@ -223,8 +403,8 @@ export default function ContratoTrabajoObreroClient() {
                   ...r,
                   status: 'error',
                   error: !proy
-                    ? 'Sin proyecto (defínalo arriba o en la fila)'
-                    : 'Sin cargo/tabulador (defínalo arriba o en la columna cargo)',
+                    ? 'Sin proyecto'
+                    : 'Sin cargo/tabulador (columna cargo o selección por defecto)',
                 }
               : r,
           ),
@@ -233,7 +413,7 @@ export default function ContratoTrabajoObreroClient() {
       }
 
       try {
-        const body = {
+        const out = await generarUno({
           proyecto_id: proy,
           config_nomina_id: nomina,
           obrero_cedula: f.cedula,
@@ -250,26 +430,15 @@ export default function ContratoTrabajoObreroClient() {
           objeto_contrato: f.objetoContrato,
           obrero_municipio_residencia: f.municipio,
           obrero_estado_residencia: f.estadoResidencia,
-        };
-        const res = await fetch(apiUrl('/api/talento/contratos-fast'), {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
         });
-        const j = (await res.json()) as {
-          id?: string;
-          signed_url?: string | null;
-          error?: string;
-        };
         done += 1;
         setProgreso({ done, total: pendientes.length });
-        if (!res.ok) {
+        if (!out.ok) {
           fail += 1;
           setResultados((prev) =>
             prev.map((r) =>
               r.filaExcel === f.filaExcel
-                ? { ...r, status: 'error', error: j.error ?? `Error HTTP ${res.status}` }
+                ? { ...r, status: 'error', error: out.error ?? 'Error' }
                 : r,
             ),
           );
@@ -278,17 +447,12 @@ export default function ContratoTrabajoObreroClient() {
           setResultados((prev) =>
             prev.map((r) =>
               r.filaExcel === f.filaExcel
-                ? {
-                    ...r,
-                    status: 'ok',
-                    id: j.id,
-                    signedUrl: j.signed_url ?? null,
-                  }
+                ? { ...r, status: 'ok', id: out.id, signedUrl: out.signed_url ?? null }
                 : r,
             ),
           );
         }
-      } catch (e) {
+      } catch (err) {
         fail += 1;
         done += 1;
         setProgreso({ done, total: pendientes.length });
@@ -298,7 +462,7 @@ export default function ContratoTrabajoObreroClient() {
               ? {
                   ...r,
                   status: 'error',
-                  error: e instanceof Error ? e.message : 'Error de red',
+                  error: err instanceof Error ? err.message : 'Error de red',
                 }
               : r,
           ),
@@ -307,21 +471,85 @@ export default function ContratoTrabajoObreroClient() {
     }
 
     setGenerando(false);
-    if (fail === 0) {
-      toast.success(`${ok} contrato(s) de trabajo generados`);
-    } else {
-      toast.message(`Serie terminada: ${ok} ok, ${fail} con error`);
-    }
+    if (fail === 0) toast.success(`${ok} contrato(s) generados`);
+    else toast.message(`Serie terminada: ${ok} ok, ${fail} con error`);
+    void cargarContratos();
   }
 
   const validas = filas.filter((f) => f.errores.length === 0).length;
   const invalidas = filas.length - validas;
 
+  function DefaultsObraCargo({ required = true }: { required?: boolean }) {
+    return (
+      <div className="grid gap-4 sm:grid-cols-2">
+        <label className="block space-y-1.5 sm:col-span-2">
+          <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+            Obra / proyecto {required ? '*' : ''}
+          </span>
+          <select
+            className={inputClass}
+            value={proyectoId}
+            onChange={(e) => setProyectoId(e.target.value)}
+            disabled={loadingOpts}
+          >
+            <option value="">Seleccione…</option>
+            {proyectos.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nombre}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block space-y-1.5 sm:col-span-2">
+          <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+            Cargo (tabulador) {required ? '*' : ''}
+          </span>
+          <select
+            className={inputClass}
+            value={configNominaId}
+            onChange={(e) => setConfigNominaId(e.target.value)}
+            disabled={loadingOpts}
+          >
+            <option value="">Seleccione…</option>
+            {nominas.map((n) => (
+              <option key={n.id} value={n.id}>
+                {n.cargo_nombre}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block space-y-1.5">
+          <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+            Fecha de ingreso
+          </span>
+          <input
+            type="date"
+            className={inputClass}
+            value={fechaIngreso}
+            onChange={(e) => setFechaIngreso(e.target.value)}
+          />
+        </label>
+        <label className="block space-y-1.5">
+          <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Jornada</span>
+          <select
+            className={inputClass}
+            value={jornada}
+            onChange={(e) => setJornada(e.target.value as typeof jornada)}
+          >
+            <option value="DIURNA">Diurna</option>
+            <option value="NOCTURNA">Nocturna</option>
+            <option value="MIXTA">Mixta</option>
+          </select>
+        </label>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#0A0A0F] text-white px-4 py-6 pb-24">
       <div className="mx-auto max-w-3xl space-y-6">
         <Link
-          href="/rrhh"
+          href={backHref}
           className="inline-flex items-center gap-2 text-xs font-bold text-zinc-500 hover:text-amber-400"
         >
           <ArrowLeft size={14} />
@@ -333,244 +561,456 @@ export default function ContratoTrabajoObreroClient() {
             Contrato de trabajo (obrero)
           </h1>
           <p className="text-sm text-zinc-500">
-            Genere contratos en serie cargando una tabla Excel/CSV con los datos que falten. La obra,
-            el cargo del tabulador y la jornada se pueden fijar aquí como valores por defecto.
+            {proyectoNombre
+              ? `Contratados de «${proyectoNombre}». Nuevo contrato individual o contratación masiva con Excel.`
+              : 'Seleccione la obra para ver contratados, crear uno nuevo o cargar una plantilla Excel.'}
           </p>
         </header>
 
-        {/* Defaults */}
-        <section className="space-y-4 rounded-2xl border border-white/[0.06] bg-white/[0.03] p-5">
-          <h2 className="text-xs font-bold uppercase tracking-widest text-amber-200/90">
-            Datos comunes (obra y cargo)
-          </h2>
-          {loadingOpts ? (
-            <p className="text-sm text-zinc-500">Cargando proyectos y tabulador…</p>
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block space-y-1.5 sm:col-span-2">
-                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
-                  Obra / proyecto *
-                </span>
-                <select
-                  className={inputClass}
-                  value={proyectoId}
-                  onChange={(e) => setProyectoId(e.target.value)}
-                >
-                  <option value="">Seleccione…</option>
-                  {proyectos.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.nombre}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="block space-y-1.5 sm:col-span-2">
-                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
-                  Cargo (tabulador) *
-                </span>
-                <select
-                  className={inputClass}
-                  value={configNominaId}
-                  onChange={(e) => setConfigNominaId(e.target.value)}
-                >
-                  <option value="">Seleccione…</option>
-                  {nominas.map((n) => (
-                    <option key={n.id} value={n.id}>
-                      {n.cargo_nombre}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="block space-y-1.5">
-                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
-                  Fecha de ingreso
-                </span>
-                <input
-                  type="date"
-                  className={inputClass}
-                  value={fechaIngreso}
-                  onChange={(e) => setFechaIngreso(e.target.value)}
-                />
-              </label>
-              <label className="block space-y-1.5">
-                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
-                  Jornada
-                </span>
-                <select
-                  className={inputClass}
-                  value={jornada}
-                  onChange={(e) => setJornada(e.target.value as typeof jornada)}
-                >
-                  <option value="DIURNA">Diurna</option>
-                  <option value="NOCTURNA">Nocturna</option>
-                  <option value="MIXTA">Mixta</option>
-                </select>
-              </label>
-              <label className="block space-y-1.5 sm:col-span-2">
-                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
-                  Horario semanal (opcional)
-                </span>
-                <textarea
-                  className={`${inputClass} min-h-[4rem] resize-y`}
-                  value={horarioDefault}
-                  onChange={(e) => setHorarioDefault(e.target.value)}
-                  placeholder="Si la obra ya tiene horario en el proyecto, puede dejarlo vacío"
-                />
-              </label>
-            </div>
-          )}
-        </section>
+        {/* Acciones principales */}
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <button
+            type="button"
+            onClick={() => setVista('lista')}
+            className={`inline-flex min-h-[2.75rem] items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold ${
+              vista === 'lista'
+                ? 'border-amber-400/60 bg-amber-500/20 text-amber-50'
+                : 'border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10'
+            }`}
+          >
+            <Users className="h-4 w-4 shrink-0" aria-hidden />
+            Ya contratados
+          </button>
+          <button
+            type="button"
+            onClick={() => setVista('nuevo')}
+            className={`inline-flex min-h-[2.75rem] items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold ${
+              vista === 'nuevo'
+                ? 'border-sky-400/60 bg-sky-500/20 text-sky-50'
+                : 'border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10'
+            }`}
+          >
+            <Plus className="h-4 w-4 shrink-0" aria-hidden />
+            Nuevo contrato
+          </button>
+          <button
+            type="button"
+            onClick={() => setVista('masiva')}
+            className={`inline-flex min-h-[2.75rem] items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold ${
+              vista === 'masiva'
+                ? 'border-emerald-400/60 bg-emerald-500/20 text-emerald-50'
+                : 'border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10'
+            }`}
+          >
+            <FileSpreadsheet className="h-4 w-4 shrink-0" aria-hidden />
+            Contratación masiva
+          </button>
+        </div>
 
-        {/* Excel */}
-        <section className="space-y-4 rounded-2xl border border-emerald-500/25 bg-emerald-950/20 p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="flex gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-500/40 bg-emerald-500/15">
-                <FileSpreadsheet className="h-5 w-5 text-emerald-300" aria-hidden />
-              </div>
+        {/* LISTA */}
+        {vista === 'lista' ? (
+          <section className="space-y-4 rounded-2xl border border-amber-500/25 bg-amber-950/15 p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h2 className="text-sm font-bold text-white">Tabla Excel / CSV</h2>
+                <h2 className="text-sm font-bold text-white">Ya contratados</h2>
                 <p className="mt-0.5 text-[11px] text-zinc-500">
-                  Columnas: cedula, nombres, apellidos (o nombre_completo), direccion, municipio,
-                  estado, nacionalidad, estado_civil, fecha_ingreso, jornada, horario, bono_usd,
-                  cargo, objeto_contrato.
+                  Contratos de trabajo de esta obra (PDF generado).
                 </p>
               </div>
+              <button
+                type="button"
+                onClick={() => void cargarContratos()}
+                disabled={loadingLista || !proyectoId}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-white/10 disabled:opacity-50"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${loadingLista ? 'animate-spin' : ''}`} />
+                Actualizar
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={descargarPlantilla}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-white/10"
-            >
-              <Download className="h-3.5 w-3.5" aria-hidden />
-              Descargar plantilla
-            </button>
-          </div>
 
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
-            className="sr-only"
-            onChange={(e) => void onFile(e.target.files?.[0] ?? null)}
-          />
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            disabled={generando}
-            className="inline-flex w-full min-h-[2.75rem] items-center justify-center gap-2 rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/20 disabled:opacity-50"
-          >
-            <Upload className="h-4 w-4 shrink-0" aria-hidden />
-            <span className="truncate leading-none">
-              {archivoNombre ? archivoNombre : 'Seleccionar archivo Excel o CSV'}
-            </span>
-          </button>
+            <label className="block space-y-1.5">
+              <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                Obra / proyecto *
+              </span>
+              <select
+                className={inputClass}
+                value={proyectoId}
+                onChange={(e) => setProyectoId(e.target.value)}
+                disabled={loadingOpts}
+              >
+                <option value="">Seleccione…</option>
+                {proyectos.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.nombre}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-          {avisosParse.length > 0 ? (
-            <ul className="space-y-1 rounded-lg border border-amber-500/25 bg-amber-950/30 px-3 py-2 text-[11px] text-amber-200">
-              {avisosParse.map((a) => (
-                <li key={a}>{a}</li>
-              ))}
-            </ul>
-          ) : null}
-
-          {filas.length > 0 ? (
-            <div className="overflow-x-auto rounded-xl border border-white/10 bg-black/30">
-              <table className="w-full min-w-[520px] text-left text-xs">
-                <thead>
-                  <tr className="border-b border-white/10 text-[10px] uppercase tracking-wide text-zinc-500">
-                    <th className="px-3 py-2">Fila</th>
-                    <th className="px-3 py-2">Cédula</th>
-                    <th className="px-3 py-2">Nombre</th>
-                    <th className="px-3 py-2">Cargo</th>
-                    <th className="px-3 py-2">Estado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filas.map((f) => (
-                    <tr key={f.filaExcel} className="border-b border-white/5 text-zinc-300">
-                      <td className="px-3 py-2 font-mono text-zinc-500">{f.filaExcel}</td>
-                      <td className="px-3 py-2 font-mono">{f.cedula || '—'}</td>
-                      <td className="px-3 py-2">{nombreFila(f)}</td>
-                      <td className="px-3 py-2 text-zinc-400">{f.cargo ?? '—'}</td>
-                      <td className="px-3 py-2">
-                        {f.errores.length ? (
-                          <span className="text-red-400">{f.errores[0]}</span>
-                        ) : (
-                          <span className="text-emerald-400">Lista</span>
-                        )}
-                      </td>
+            {!proyectoId ? (
+              <p className="rounded-lg border border-zinc-700/50 bg-zinc-900/40 px-4 py-6 text-center text-sm text-zinc-500">
+                Elija la obra para ver los contratados.
+              </p>
+            ) : loadingLista ? (
+              <p className="py-8 text-center text-sm text-zinc-500">Cargando…</p>
+            ) : errorLista ? (
+              <p className="rounded-lg border border-red-500/30 bg-red-950/30 px-4 py-3 text-sm text-red-300">
+                {errorLista}
+              </p>
+            ) : contratos.length === 0 ? (
+              <p className="rounded-lg border border-zinc-700/50 bg-zinc-900/40 px-4 py-6 text-center text-sm text-zinc-500">
+                Aún no hay contratos en esta obra. Use <strong className="text-zinc-300">Nuevo contrato</strong> o{' '}
+                <strong className="text-zinc-300">Contratación masiva</strong>.
+              </p>
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-amber-500/20 bg-black/25">
+                <table className="w-full min-w-[560px] text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-amber-500/25 text-[10px] font-bold uppercase tracking-wide text-amber-200/90">
+                      <th className="px-4 py-3">Fecha</th>
+                      <th className="px-4 py-3">Obrero</th>
+                      <th className="px-4 py-3">Cédula</th>
+                      <th className="px-4 py-3">Cargo</th>
+                      <th className="px-4 py-3 text-center">PDF</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-              <p className="border-t border-white/10 px-3 py-2 text-[11px] text-zinc-500">
-                {validas} válida(s)
-                {invalidas > 0 ? ` · ${invalidas} con error (se omiten)` : null}
+                  </thead>
+                  <tbody>
+                    {contratos.map((r) => (
+                      <tr
+                        key={r.id}
+                        className="border-b border-white/[0.06] last:border-0 hover:bg-white/[0.03]"
+                      >
+                        <td className="whitespace-nowrap px-4 py-2.5 text-zinc-500">
+                          {new Date(r.created_at).toLocaleDateString('es-VE')}
+                        </td>
+                        <td className="px-4 py-2.5 font-medium text-zinc-100">{r.obrero_nombre}</td>
+                        <td className="px-4 py-2.5 font-mono text-xs text-zinc-400">
+                          {r.obrero_cedula}
+                        </td>
+                        <td className="px-4 py-2.5 text-xs text-zinc-400">
+                          {r.cargo_nombre_snapshot ?? '—'}
+                        </td>
+                        <td className="px-4 py-2.5 text-center">
+                          <AccionesContratoPdfFila
+                            empleadoRowId={`ci-express-${r.id}`}
+                            nombreObrero={r.obrero_nombre}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="border-t border-white/10 px-3 py-2 text-[11px] text-zinc-500">
+                  {contratos.length} contratado{contratos.length === 1 ? '' : 's'}
+                </p>
+              </div>
+            )}
+          </section>
+        ) : null}
+
+        {/* NUEVO */}
+        {vista === 'nuevo' ? (
+          <section className="space-y-4 rounded-2xl border border-sky-500/25 bg-sky-950/15 p-5">
+            <h2 className="text-sm font-bold text-white">Nuevo contrato</h2>
+            <form onSubmit={(e) => void guardarNuevoContrato(e)} className="space-y-4">
+              <DefaultsObraCargo />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block space-y-1.5">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                    Nombres *
+                  </span>
+                  <input className={inputClass} value={nombres} onChange={(e) => setNombres(e.target.value)} required />
+                </label>
+                <label className="block space-y-1.5">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                    Apellidos *
+                  </span>
+                  <input
+                    className={inputClass}
+                    value={apellidos}
+                    onChange={(e) => setApellidos(e.target.value)}
+                    required
+                  />
+                </label>
+                <label className="block space-y-1.5">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                    Cédula *
+                  </span>
+                  <input
+                    className={inputClass}
+                    value={cedula}
+                    onChange={(e) => setCedula(e.target.value)}
+                    placeholder="V-12345678"
+                    required
+                  />
+                </label>
+                <label className="block space-y-1.5">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                    Bono USD
+                  </span>
+                  <input
+                    className={inputClass}
+                    value={bonoUsd}
+                    onChange={(e) => setBonoUsd(e.target.value)}
+                    inputMode="decimal"
+                  />
+                </label>
+                <label className="block space-y-1.5 sm:col-span-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                    Dirección
+                  </span>
+                  <input
+                    className={inputClass}
+                    value={direccion}
+                    onChange={(e) => setDireccion(e.target.value)}
+                  />
+                </label>
+                <label className="block space-y-1.5">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                    Municipio
+                  </span>
+                  <input
+                    className={inputClass}
+                    value={municipio}
+                    onChange={(e) => setMunicipio(e.target.value)}
+                  />
+                </label>
+                <label className="block space-y-1.5">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                    Estado
+                  </span>
+                  <input
+                    className={inputClass}
+                    value={estadoRes}
+                    onChange={(e) => setEstadoRes(e.target.value)}
+                  />
+                </label>
+                <label className="block space-y-1.5">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                    Nacionalidad
+                  </span>
+                  <input
+                    className={inputClass}
+                    value={nacionalidad}
+                    onChange={(e) => setNacionalidad(e.target.value)}
+                  />
+                </label>
+                <label className="block space-y-1.5">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                    Estado civil
+                  </span>
+                  <input
+                    className={inputClass}
+                    value={estadoCivil}
+                    onChange={(e) => setEstadoCivil(e.target.value)}
+                  />
+                </label>
+                <label className="block space-y-1.5 sm:col-span-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                    Horario semanal (opcional)
+                  </span>
+                  <textarea
+                    className={`${inputClass} min-h-[3.5rem] resize-y`}
+                    value={horarioDefault}
+                    onChange={(e) => setHorarioDefault(e.target.value)}
+                    placeholder="Si la obra ya tiene horario, puede dejarlo vacío"
+                  />
+                </label>
+              </div>
+              <button
+                type="submit"
+                disabled={guardandoUno}
+                className="inline-flex w-full min-h-[2.75rem] items-center justify-center gap-2 rounded-xl bg-sky-500 px-4 py-2.5 text-sm font-black uppercase tracking-wide text-black hover:bg-sky-400 disabled:opacity-50"
+              >
+                {guardandoUno ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Plus className="h-4 w-4" />
+                )}
+                Generar contrato
+              </button>
+            </form>
+          </section>
+        ) : null}
+
+        {/* MASIVA */}
+        {vista === 'masiva' ? (
+          <section className="space-y-4 rounded-2xl border border-emerald-500/25 bg-emerald-950/20 p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-500/40 bg-emerald-500/15">
+                  <FileSpreadsheet className="h-5 w-5 text-emerald-300" aria-hidden />
+                </div>
+                <div>
+                  <h2 className="text-sm font-bold text-white">Contratación masiva</h2>
+                  <p className="mt-0.5 text-[11px] text-zinc-500">
+                    Descargue la plantilla, complete una fila por obrero y cárguela. Se generan los
+                    PDF en serie.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={descargarPlantilla}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-white/10"
+              >
+                <Download className="h-3.5 w-3.5" aria-hidden />
+                Descargar plantilla
+              </button>
+            </div>
+
+            <div className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-[11px] leading-relaxed text-zinc-400">
+              <p className="font-semibold text-zinc-300">Columnas del Excel</p>
+              <p className="mt-1">
+                <span className="text-emerald-300">Obligatorias por fila:</span> cedula, nombres,
+                apellidos (o nombre_completo).
+              </p>
+              <p className="mt-1">
+                <span className="text-zinc-300">Opcionales:</span> direccion, municipio, estado,
+                nacionalidad, estado_civil, fecha_ingreso, jornada, horario, bono_usd, cargo,
+                objeto_contrato.
+              </p>
+              <p className="mt-1">
+                Obra y cargo del tabulador se toman de los valores por defecto abajo (o de columnas
+                cargo / proyecto_id si vienen en el archivo).
               </p>
             </div>
-          ) : null}
 
-          <button
-            type="button"
-            onClick={() => void generarEnSerie()}
-            disabled={generando || filas.length === 0 || !proyectoId || !configNominaId}
-            className="inline-flex w-full min-h-[2.75rem] items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-black uppercase tracking-wide text-black hover:bg-amber-400 disabled:opacity-50"
-          >
-            {generando ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                Generando {progreso.done}/{progreso.total}…
-              </>
-            ) : (
-              <>
-                <Play className="h-4 w-4" aria-hidden />
-                Generar contratos en serie
-              </>
-            )}
-          </button>
-        </section>
+            <DefaultsObraCargo />
 
-        {resultados.length > 0 ? (
-          <section className="space-y-3 rounded-2xl border border-white/[0.06] bg-white/[0.03] p-5">
-            <h2 className="text-xs font-bold uppercase tracking-widest text-zinc-400">Resultado</h2>
-            <ul className="space-y-2">
-              {resultados.map((r) => (
-                <li
-                  key={`${r.filaExcel}-${r.cedula}`}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs"
-                >
-                  <div className="min-w-0">
-                    <p className="font-medium text-zinc-200">
-                      Fila {r.filaExcel} · {r.nombre}
-                    </p>
-                    <p className="font-mono text-zinc-500">{r.cedula}</p>
-                    {r.error ? <p className="mt-0.5 text-red-400">{r.error}</p> : null}
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {r.status === 'ok' ? (
-                      <>
-                        <CheckCircle2 className="h-4 w-4 text-emerald-400" aria-hidden />
-                        {r.signedUrl ? (
-                          <a
-                            href={r.signedUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-amber-300 underline underline-offset-2 hover:text-amber-200"
-                          >
-                            PDF
-                          </a>
-                        ) : null}
-                      </>
-                    ) : r.status === 'error' || r.status === 'omitida' ? (
-                      <XCircle className="h-4 w-4 text-red-400" aria-hidden />
-                    ) : (
-                      <Loader2 className="h-4 w-4 animate-spin text-zinc-500" aria-hidden />
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <label className="block space-y-1.5">
+              <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                Horario semanal por defecto (opcional)
+              </span>
+              <textarea
+                className={`${inputClass} min-h-[3.5rem] resize-y`}
+                value={horarioDefault}
+                onChange={(e) => setHorarioDefault(e.target.value)}
+              />
+            </label>
+
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+              className="sr-only"
+              onChange={(e) => void onFile(e.target.files?.[0] ?? null)}
+            />
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={generando}
+              className="inline-flex w-full min-h-[2.75rem] items-center justify-center gap-2 rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/20 disabled:opacity-50"
+            >
+              <Upload className="h-4 w-4 shrink-0" aria-hidden />
+              <span className="truncate leading-none">
+                {archivoNombre ? archivoNombre : 'Cargar plantilla Excel o CSV'}
+              </span>
+            </button>
+
+            {avisosParse.length > 0 ? (
+              <ul className="space-y-1 rounded-lg border border-amber-500/25 bg-amber-950/30 px-3 py-2 text-[11px] text-amber-200">
+                {avisosParse.map((a) => (
+                  <li key={a}>{a}</li>
+                ))}
+              </ul>
+            ) : null}
+
+            {filas.length > 0 ? (
+              <div className="overflow-x-auto rounded-xl border border-white/10 bg-black/30">
+                <table className="w-full min-w-[520px] text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-white/10 text-[10px] uppercase tracking-wide text-zinc-500">
+                      <th className="px-3 py-2">Fila</th>
+                      <th className="px-3 py-2">Cédula</th>
+                      <th className="px-3 py-2">Nombre</th>
+                      <th className="px-3 py-2">Cargo</th>
+                      <th className="px-3 py-2">Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filas.map((f) => (
+                      <tr key={f.filaExcel} className="border-b border-white/5 text-zinc-300">
+                        <td className="px-3 py-2 font-mono text-zinc-500">{f.filaExcel}</td>
+                        <td className="px-3 py-2 font-mono">{f.cedula || '—'}</td>
+                        <td className="px-3 py-2">{nombreFila(f)}</td>
+                        <td className="px-3 py-2 text-zinc-400">{f.cargo ?? '—'}</td>
+                        <td className="px-3 py-2">
+                          {f.errores.length ? (
+                            <span className="text-red-400">{f.errores[0]}</span>
+                          ) : (
+                            <span className="text-emerald-400">Lista</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="border-t border-white/10 px-3 py-2 text-[11px] text-zinc-500">
+                  {validas} válida(s)
+                  {invalidas > 0 ? ` · ${invalidas} con error (se omiten)` : null}
+                </p>
+              </div>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={() => void generarEnSerie()}
+              disabled={generando || filas.length === 0 || !proyectoId || !configNominaId}
+              className="inline-flex w-full min-h-[2.75rem] items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-black uppercase tracking-wide text-black hover:bg-amber-400 disabled:opacity-50"
+            >
+              {generando ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  Generando {progreso.done}/{progreso.total}…
+                </>
+              ) : (
+                <>
+                  <Play className="h-4 w-4" aria-hidden />
+                  Generar contratos en serie
+                </>
+              )}
+            </button>
+
+            {resultados.length > 0 ? (
+              <ul className="space-y-2">
+                {resultados.map((r) => (
+                  <li
+                    key={`${r.filaExcel}-${r.cedula}`}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium text-zinc-200">
+                        Fila {r.filaExcel} · {r.nombre}
+                      </p>
+                      <p className="font-mono text-zinc-500">{r.cedula}</p>
+                      {r.error ? <p className="mt-0.5 text-red-400">{r.error}</p> : null}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {r.status === 'ok' ? (
+                        <>
+                          <CheckCircle2 className="h-4 w-4 text-emerald-400" aria-hidden />
+                          {r.signedUrl ? (
+                            <a
+                              href={r.signedUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-amber-300 underline underline-offset-2 hover:text-amber-200"
+                            >
+                              PDF
+                            </a>
+                          ) : null}
+                        </>
+                      ) : r.status === 'error' || r.status === 'omitida' ? (
+                        <XCircle className="h-4 w-4 text-red-400" aria-hidden />
+                      ) : (
+                        <Loader2 className="h-4 w-4 animate-spin text-zinc-500" aria-hidden />
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </section>
         ) : null}
       </div>
