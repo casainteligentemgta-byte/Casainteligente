@@ -678,6 +678,25 @@ export default function ModuloProyectosPage() {
                           Tours 3D
                         </button>
                       </Link>
+                      {r.origen === 'modulo' ? (
+                        <Link href={`/proyectos/modulo/${r.id}?editar=1`} title="Cambiar nombre y datos del proyecto">
+                          <button
+                            type="button"
+                            style={{
+                              background: 'rgba(56, 189, 248, 0.15)',
+                              color: '#bae6fd',
+                              border: '1px solid rgba(56, 189, 248, 0.5)',
+                              borderRadius: '10px',
+                              padding: '8px 14px',
+                              fontSize: '12px',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Modificar
+                          </button>
+                        </Link>
+                      ) : null}
                       <ProyectoAccionesConfigRoles
                         proyectoId={r.id}
                         proyectoNombre={r.nombre}
