@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { MessageSquare, Link as LinkIcon, User, Briefcase, Phone, Sparkles, CheckCircle2, Copy, X, FileText, Mail, QrCode } from 'lucide-react';
 import { apiUrl } from '@/lib/http/apiUrl';
 import { mensajeWhatsAppHvYEvaluacion } from '@/lib/talento/flujoHvEvaluacion';
+import { leerProyectoRrhhContexto } from '@/lib/rrhh/proyectoRrhhContexto';
 
 export default function GeneradorHojaVida({ onClose }: { onClose?: () => void }) {
   const [name, setName] = useState('');
@@ -24,6 +25,7 @@ export default function GeneradorHojaVida({ onClose }: { onClose?: () => void })
     setError(null);
 
     try {
+      const proyectoModuloId = leerProyectoRrhhContexto();
       const res = await fetch(apiUrl('/api/talento/generar-link'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -32,6 +34,7 @@ export default function GeneradorHojaVida({ onClose }: { onClose?: () => void })
           whatsapp: phone.trim(),
           rol_buscado: cargo.trim(),
           rol_examen: 'obrero',
+          proyecto_modulo_id: proyectoModuloId || undefined,
           public_base_url: typeof window !== 'undefined' ? window.location.origin : undefined,
         }),
       });
