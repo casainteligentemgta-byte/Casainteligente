@@ -985,7 +985,16 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                 <div className="mt-4 rounded-2xl border border-white/10 bg-zinc-900/70 p-5 shadow-lg backdrop-blur-xl">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
-                      <h1 className="text-2xl font-bold text-white">{proyecto.nombre}</h1>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h1 className="text-2xl font-bold text-white">{proyecto.nombre}</h1>
+                        <Link
+                          href={`/proyectos/modulo/${id}?editar=1`}
+                          className="rounded-lg border border-white/15 bg-white/5 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-300 hover:bg-white/10 hover:text-white"
+                          title="Cambiar nombre y datos del proyecto"
+                        >
+                          Editar nombre
+                        </Link>
+                      </div>
                       <p className="mt-1 text-sm text-zinc-400">{proyecto.ubicacion_texto}</p>
                       <p className="mt-1 text-xs text-zinc-400">
                         Patrono:{' '}
@@ -997,14 +1006,22 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                         GPS: {proyecto.lat ?? '—'}, {proyecto.lng ?? '—'} · Estado: {proyecto.estado}
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => void borrarProyectoActual()}
-                      disabled={borrandoProyecto}
-                      className="shrink-0 rounded-xl border border-red-500/40 bg-red-950/40 px-3 py-2 text-xs font-semibold text-red-300 hover:bg-red-950/70 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {borrandoProyecto ? 'Borrando…' : 'Borrar proyecto'}
-                    </button>
+                    <div className="flex shrink-0 flex-col items-stretch gap-2 sm:items-end">
+                      <Link
+                        href={`/proyectos/modulo/${id}?editar=1`}
+                        className="inline-flex justify-center rounded-xl border border-sky-500/40 bg-sky-950/40 px-3 py-2 text-xs font-semibold text-sky-200 hover:bg-sky-900/55"
+                      >
+                        Modificar proyecto
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => void borrarProyectoActual()}
+                        disabled={borrandoProyecto}
+                        className="inline-flex justify-center rounded-xl border border-red-500/40 bg-red-950/40 px-3 py-2 text-xs font-semibold text-red-300 hover:bg-red-950/70 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {borrandoProyecto ? 'Borrando…' : 'Borrar proyecto'}
+                      </button>
+                    </div>
                   </div>
                 </div>
                 {checklistContratoPm ? (
