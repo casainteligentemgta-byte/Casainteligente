@@ -381,7 +381,11 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
         : 'nuevo',
     );
     setPeUbicacion(proyecto.ubicacion_texto);
-    setPeMonto(String(proyecto.monto_aproximado ?? 0));
+    setPeMonto(
+      proyecto.monto_aproximado != null && Number(proyecto.monto_aproximado) > 0
+        ? String(proyecto.monto_aproximado)
+        : '',
+    );
     setPeMoneda(proyecto.moneda || 'USD');
     setPeObs(proyecto.observaciones ?? '');
     setPeLat(proyecto.lat != null ? String(proyecto.lat) : '');
@@ -406,10 +410,14 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
       setProyectoSaveError('Selecciona el patrono / empresa ejecutora.');
       return;
     }
-    const m = Number(String(peMonto).replace(',', '.'));
-    if (!Number.isFinite(m) || m < 0) {
-      setProyectoSaveError('Monto aproximado no válido.');
-      return;
+    const montoRaw = String(peMonto).trim().replace(',', '.');
+    let m = 0;
+    if (montoRaw !== '') {
+      m = Number(montoRaw);
+      if (!Number.isFinite(m) || m < 0) {
+        setProyectoSaveError('Monto aproximado no válido (usa un número ≥ 0 o déjalo vacío).');
+        return;
+      }
     }
     let lat: number | null = null;
     let lng: number | null = null;
@@ -859,12 +867,17 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-500">
-                    Monto aproximado
+                    Monto aproximado (USD)
                   </label>
+                  <p className="mt-0.5 text-[11px] text-zinc-500">
+                    Puedes dejarlo vacío y completarlo cuando tengas el monto.
+                  </p>
                   <input
                     value={peMonto}
                     onChange={(e) => setPeMonto(e.target.value)}
-                    className="mt-1 w-full max-w-xs rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-sky-500/40"
+                    placeholder="Opcional"
+                    inputMode="decimal"
+                    className="mt-1 w-full max-w-xs rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-sky-500/40"
                   />
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
