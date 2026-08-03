@@ -355,7 +355,9 @@ function HojaDeVidaMovilInner({ params }: Props) {
   return (
     <div className="min-h-screen app-root-bg flex flex-col font-sans pb-28 text-white">
       <header className="glass sticky top-0 z-50 px-6 py-5 border-b border-white/5 backdrop-blur-xl">
-        <h1 className="text-xl font-bold tracking-tight text-white">CASA INTELIGENTE</h1>
+        <h1 className="text-xl font-bold tracking-tight text-white uppercase">
+          {(planillaPatrono?.entidadNombre ?? '').trim() || 'Casa Inteligente'}
+        </h1>
         <div className="flex items-center gap-2 mt-1">
           <div className="h-1 flex-1 bg-white/10 rounded-full overflow-hidden">
             <motion.div 
