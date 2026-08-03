@@ -21,6 +21,11 @@ import { createClient } from '@/lib/supabase/client';
 import { apiUrl } from '@/lib/http/apiUrl';
 import AccionesContratoPdfFila from '@/components/rrhh/AccionesContratoPdfFila';
 import {
+  esUuidProyectoModulo,
+  guardarProyectoRrhhContexto,
+  leerProyectoRrhhContexto,
+} from '@/lib/rrhh/proyectoRrhhContexto';
+import {
   generarPlantillaContratoTrabajoXlsx,
   parseContratoTrabajoObreroTabla,
   type FilaContratoTrabajoObrero,
@@ -91,7 +96,11 @@ export default function ContratoTrabajoObreroClient() {
   const [nominas, setNominas] = useState<NominaOpt[]>([]);
   const [loadingOpts, setLoadingOpts] = useState(true);
 
-  const [proyectoId, setProyectoId] = useState(proyectoUrl);
+  /** Si venimos del RRHH de una obra, el proyecto queda fijo (no se vuelve a elegir). */
+  const [proyectoId, setProyectoId] = useState(() =>
+    esUuidProyectoModulo(proyectoUrl) ? proyectoUrl : '',
+  );
+  const [proyectoFijo, setProyectoFijo] = useState(() => esUuidProyectoModulo(proyectoUrl));
   const [configNominaId, setConfigNominaId] = useState('');
   const [fechaIngreso, setFechaIngreso] = useState(hoyIso);
   const [jornada, setJornada] = useState<'DIURNA' | 'NOCTURNA' | 'MIXTA'>('DIURNA');
@@ -213,7 +222,18 @@ export default function ContratoTrabajoObreroClient() {
   }, [cargarOpciones]);
 
   useEffect(() => {
-    if (proyectoUrl) setProyectoId(proyectoUrl);
+    if (esUuidProyectoModulo(proyectoUrl)) {
+      setProyectoId(proyectoUrl);
+      setProyectoFijo(true);
+      guardarProyectoRrhhContexto(proyectoUrl);
+      return;
+    }
+    // Sin ?proyecto= en la URL: usar última obra del contexto RRHH (Asfaltado, etc.).
+    const stored = leerProyectoRrhhContexto();
+    if (stored) {
+      setProyectoId(stored);
+      setProyectoFijo(true);
+    }
   }, [proyectoUrl]);
 
   useEffect(() => {
@@ -355,11 +375,12 @@ export default function ContratoTrabajoObreroClient() {
 
   async function generarEnSerie() {
     if (!proyectoId.trim()) {
-      toast.error('Seleccione la obra / proyecto por defecto');
+      toast.error('No hay obra en contexto. Abra Express desde el RRHH del proyecto.');
       return;
     }
-    if (!configNominaId.trim()) {
-      toast.error('Seleccione el cargo (tabulador) por defecto');
+    // Cargo por defecto opcional si cada fila trae «Cargo» de la tabla de nómina.
+    if (!configNominaId.trim() && !filas.some((f) => f.errores.length === 0 && f.cargo)) {
+      toast.error('Seleccione un cargo por defecto o incluya la columna Cargo en el Excel');
       return;
     }
     if (filas.length === 0) {
@@ -482,24 +503,38 @@ export default function ContratoTrabajoObreroClient() {
   function DefaultsObraCargo({ required = true }: { required?: boolean }) {
     return (
       <div className="grid gap-4 sm:grid-cols-2">
-        <label className="block space-y-1.5 sm:col-span-2">
+        <div className="block space-y-1.5 sm:col-span-2">
           <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
             Obra / proyecto {required ? '*' : ''}
           </span>
-          <select
-            className={inputClass}
-            value={proyectoId}
-            onChange={(e) => setProyectoId(e.target.value)}
-            disabled={loadingOpts}
-          >
-            <option value="">Seleccione…</option>
-            {proyectos.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.nombre}
-              </option>
-            ))}
-          </select>
-        </label>
+          {proyectoFijo && proyectoId ? (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-950/30 px-3 py-2.5 text-sm text-amber-50">
+              <p className="font-semibold">{proyectoNombre ?? proyectoId.slice(0, 8)}</p>
+              <p className="mt-0.5 text-[10px] text-amber-200/70">
+                Fijado desde RRHH de esta obra — no hace falta volver a seleccionarlo.
+              </p>
+            </div>
+          ) : (
+            <select
+              className={inputClass}
+              value={proyectoId}
+              onChange={(e) => {
+                setProyectoId(e.target.value);
+                if (esUuidProyectoModulo(e.target.value)) {
+                  guardarProyectoRrhhContexto(e.target.value);
+                }
+              }}
+              disabled={loadingOpts}
+            >
+              <option value="">Seleccione…</option>
+              {proyectos.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nombre}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
         <label className="block space-y-1.5 sm:col-span-2">
           <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
             Cargo (tabulador) {required ? '*' : ''}
@@ -510,7 +545,7 @@ export default function ContratoTrabajoObreroClient() {
             onChange={(e) => setConfigNominaId(e.target.value)}
             disabled={loadingOpts}
           >
-            <option value="">Seleccione…</option>
+            <option value="">Seleccione… (o columna Cargo del Excel)</option>
             {nominas.map((n) => (
               <option key={n.id} value={n.id}>
                 {n.cargo_nombre}
@@ -628,24 +663,37 @@ export default function ContratoTrabajoObreroClient() {
               </button>
             </div>
 
-            <label className="block space-y-1.5">
+            <div className="block space-y-1.5">
               <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
                 Obra / proyecto *
               </span>
-              <select
-                className={inputClass}
-                value={proyectoId}
-                onChange={(e) => setProyectoId(e.target.value)}
-                disabled={loadingOpts}
-              >
-                <option value="">Seleccione…</option>
-                {proyectos.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.nombre}
-                  </option>
-                ))}
-              </select>
-            </label>
+              {proyectoFijo && proyectoId ? (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-950/30 px-3 py-2.5 text-sm text-amber-50">
+                  <p className="font-semibold">{proyectoNombre ?? 'Obra actual'}</p>
+                  <p className="mt-0.5 text-[10px] text-amber-200/70">Proyecto del contexto RRHH</p>
+                </div>
+              ) : (
+                <select
+                  className={inputClass}
+                  value={proyectoId}
+                  onChange={(e) => {
+                    setProyectoId(e.target.value);
+                    if (esUuidProyectoModulo(e.target.value)) {
+                      guardarProyectoRrhhContexto(e.target.value);
+                      setProyectoFijo(true);
+                    }
+                  }}
+                  disabled={loadingOpts}
+                >
+                  <option value="">Seleccione…</option>
+                  {proyectos.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.nombre}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
 
             {!proyectoId ? (
               <p className="rounded-lg border border-zinc-700/50 bg-zinc-900/40 px-4 py-6 text-center text-sm text-zinc-500">
@@ -860,18 +908,17 @@ export default function ContratoTrabajoObreroClient() {
             </div>
 
             <div className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-[11px] leading-relaxed text-zinc-400">
-              <p className="font-semibold text-zinc-300">Columnas del Excel</p>
+              <p className="font-semibold text-zinc-300">Formato Excel (tabla de nómina)</p>
               <p className="mt-1">
-                <span className="text-emerald-300">Obligatorias por fila:</span> cedula, nombres,
-                apellidos (o nombre_completo).
+                <span className="text-emerald-300">Columnas:</span> N° Excel, Nombre (Manuscrito),
+                Nombre Completo (Excel), C.I., Categoría, Tipo, Cargo, Cánon Semanal ($), Cuenta
+                Bancaria.
               </p>
               <p className="mt-1">
-                <span className="text-zinc-300">Opcionales:</span> nacionalidad, estado_civil,
-                fecha_ingreso, jornada, horario, bono_usd, cargo, objeto_contrato.
-              </p>
-              <p className="mt-1">
-                Obra y cargo del tabulador se toman de los valores por defecto abajo (o de la columna
-                cargo si viene en el archivo). No se piden domicilio, municipio ni estado.
+                Se usan sobre todo <span className="text-zinc-200">C.I.</span>,{' '}
+                <span className="text-zinc-200">Nombre Completo</span> y{' '}
+                <span className="text-zinc-200">Cargo</span> (para el tabulador). Filas «No
+                registrado» se omiten. Sin domicilio ni municipio.
               </p>
             </div>
 
@@ -955,7 +1002,7 @@ export default function ContratoTrabajoObreroClient() {
             <button
               type="button"
               onClick={() => void generarEnSerie()}
-              disabled={generando || filas.length === 0 || !proyectoId || !configNominaId}
+              disabled={generando || filas.length === 0 || !proyectoId}
               className="inline-flex w-full min-h-[2.75rem] items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-black uppercase tracking-wide text-black hover:bg-amber-400 disabled:opacity-50"
             >
               {generando ? (

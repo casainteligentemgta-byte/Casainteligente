@@ -185,7 +185,10 @@ export default function RrhhHojasVidaClient() {
 
       <header className="mb-6 mt-6">
         <RrhhSubnavEnlaces
-          proyectoModuloId={proyectoModuloIdFiltroEnlaces ?? (proyectoModuloIdPrincipal || null)}
+          proyectoModuloId={
+            // Preferir la obra elegida en el selector; si está en «Todos», usar contexto guardado.
+            proyectoModuloIdFiltroEnlaces || null
+          }
           accionesObra={
             puedeAccionesObra ? (
               <>

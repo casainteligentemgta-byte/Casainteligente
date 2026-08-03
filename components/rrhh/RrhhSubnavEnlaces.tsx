@@ -1,6 +1,9 @@
+'use client';
+
 import Link from 'next/link';
 import { ClipboardList, FileText, HardHat, ScrollText, UserCog, UserRound, Users } from 'lucide-react';
 import { hrefListaContratosExpress } from '@/lib/talento/hrefListaContratosExpress';
+import { leerProyectoRrhhContexto } from '@/lib/rrhh/proyectoRrhhContexto';
 import {
   hrefGestionPersonalSolicitados,
   hrefRrhhHub,
@@ -24,7 +27,7 @@ export default function RrhhSubnavEnlaces({
   className = '',
   accionesObra,
 }: Props) {
-  const mod = proyectoModuloId?.trim() || null;
+  const mod = proyectoModuloId?.trim() || leerProyectoRrhhContexto() || null;
   const hrefSolicitud = hrefSolicitudPersonalObrero({
     proyectoModuloId: mod,
   });
@@ -33,6 +36,7 @@ export default function RrhhSubnavEnlaces({
     todosLosProyectos: !mod,
   });
   const hrefEquipoRec = `${hrefRrhhHub({ proyectoModuloId: mod })}#equipo-recomendado`;
+  const hrefExpress = hrefListaContratosExpress({ proyectoModuloId: mod });
 
   return (
     <nav
@@ -82,7 +86,7 @@ export default function RrhhSubnavEnlaces({
         <span className="truncate">Hojas de vida</span>
       </Link>
       <Link
-        href={hrefListaContratosExpress({ proyectoModuloId: mod })}
+        href={hrefExpress}
         title="Contrato de trabajo (obrero): ya contratados, nuevo y contratación masiva"
         className={`${rrhhSubnavBtnClass} border-amber-500/40 bg-amber-950/45 text-amber-100 hover:bg-amber-900/55`}
       >
