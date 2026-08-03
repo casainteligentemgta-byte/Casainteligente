@@ -1,8 +1,12 @@
 import type { HojaVidaObreroCompleta } from '@/lib/talento/hojaVidaObreroCompleta';
 import { CESTATICKET_SEMANAL_USD } from '@/lib/nomina/cestaticketLegalUsd';
+import {
+  dueñoPlaceholderContrato,
+  valorPlantillaEfectivamenteVacio,
+  type DueñoDatoContrato,
+} from '@/lib/talento/datosObraContratoPm';
 import { CONTRATO_OBRERO_HORARIO_CUARTA_DEFAULT } from '@/lib/talento/plantillas/contratoObreroDefaultCuerpo';
 import { razonSocialPatronoParaContratoPdf } from '@/lib/talento/razonSocialContratoPdf';
-import { textoPuntoEncuentroTransporteClausulaSex } from '@/lib/talento/puntoEncuentroTransporteClausulaSex';
 import { textoInscripcionRegistroMercantilComparecencia } from '@/lib/talento/textoInscripcionRegistroMercantilContrato';
 
 export type DatoContratoFaltante = {
@@ -10,6 +14,8 @@ export type DatoContratoFaltante = {
   etiqueta: string;
   /** Texto corto para el obrero */
   ayuda: string;
+  /** Quién debe completar el dato (evita pedir todo al PM). */
+  dueño: DueñoDatoContrato;
 };
 
 const ETIQUETAS: Record<string, { etiqueta: string; ayuda: string }> = {
@@ -47,9 +53,18 @@ const ETIQUETAS: Record<string, { etiqueta: string; ayuda: string }> = {
     etiqueta: 'Inscripción en Registro Mercantil',
     ayuda: 'Tomo, número y fecha desde `ci_entidades.registro_mercantil`.',
   },
-  CONTRATO_FASE_TECNICA: { etiqueta: 'Fase técnica (cláusula primera)', ayuda: 'Campo objeto del contrato / fase de obra.' },
-  CONTRATO_HORARIO_CUARTA: { etiqueta: 'Horario detallado (cláusula cuarta)', ayuda: 'Horario semanal del contrato o del proyecto.' },
-  CONTRATO_LUGAR_QUINTA: { etiqueta: 'Lugar de prestación (cláusula quinta)', ayuda: 'Obra / ubicación del proyecto.' },
+  CONTRATO_FASE_TECNICA: {
+    etiqueta: 'Fase técnica (cláusula primera)',
+    ayuda: 'PM: campo «fase técnica» en el módulo del proyecto (una vez por obra).',
+  },
+  CONTRATO_HORARIO_CUARTA: {
+    etiqueta: 'Horario detallado (cláusula cuarta)',
+    ayuda: 'PM: horario semanal de obra en el módulo del proyecto.',
+  },
+  CONTRATO_LUGAR_QUINTA: {
+    etiqueta: 'Lugar de prestación (cláusula quinta)',
+    ayuda: 'PM: ubicación del proyecto en el módulo obra.',
+  },
   CONTRATO_SALARIO_SEMANAL_VES: { etiqueta: 'Salario semanal en Bs.', ayuda: 'Salario mensual tabulador ÷ 4.' },
   CONTRATO_CESTA_TICKET_USD_SEMANAL: { etiqueta: 'Cesta ticket semanal USD', ayuda: 'Por defecto 10 USD.' },
   CONTRATO_INGRESO_SEMANAL_USD_TOTAL: { etiqueta: 'Ingreso semanal total USD', ayuda: 'Tabulador + bono especial.' },
@@ -97,8 +112,8 @@ const ETIQUETAS: Record<string, { etiqueta: string; ayuda: string }> = {
   OBRA_NOMBRE: { etiqueta: 'Nombre de la obra o proyecto', ayuda: 'Proyecto vinculado al contrato.' },
   OBRA_UBICACION: { etiqueta: 'Ubicación de la obra', ayuda: 'Datos del proyecto en ci_proyectos.' },
   OBRA_PUNTO_ENC_TRANSPORTE: {
-    etiqueta: 'Parada / punto de encuentro del transporte (SEXTA)',
-    ayuda: 'Campo «punto_encuentro_transporte_contrato» en el proyecto (Módulo proyecto).',
+    etiqueta: 'Parada / punto de encuentro del transporte',
+    ayuda: 'PM: punto de encuentro del transporte en el módulo del proyecto (una vez por obra).',
   },
 };
 
@@ -153,6 +168,8 @@ export type FuentesContratoObrero = {
     ubicacion?: string | null;
     /** `ci_proyectos.punto_encuentro_transporte_contrato` */
     punto_encuentro_transporte_contrato?: string | null;
+    /** `ci_proyectos.fase_tecnica_contrato` — PM una vez por obra */
+    fase_tecnica_contrato?: string | null;
   };
   /** Valores por defecto patrono (env, planilla o `ci_entidades`). */
   patron: {
@@ -301,15 +318,17 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
       : '__________________';
 
   const horarioCuarta = str(f.contrato.horario_semanal_texto) || CONTRATO_OBRERO_HORARIO_CUARTA_DEFAULT;
-  const faseTecnica = str(f.contrato.objeto_contrato) || '_______________________________________________';
+  /** Preferir objeto del contrato; si no, fase técnica cargada por el PM en la obra. */
+  const faseTecnica = str(f.contrato.objeto_contrato) || str(f.obra.fase_tecnica_contrato);
   const lugarQuinta =
-    str(f.contrato.lugar_prestacion_servicio) || str(f.obra.ubicacion) || str(f.obra.nombre) || '______________________________';
+    str(f.contrato.lugar_prestacion_servicio) || str(f.obra.ubicacion) || str(f.obra.nombre);
 
   const fechaFirmaIso = str(f.contrato.fecha_firma_contrato) || new Date().toISOString().slice(0, 10);
   const { dia: diaFirma, mes: mesFirma, anio: anioFirma } = partesFechaFirmaContrato(fechaFirmaIso);
 
-  const puntoEnc = textoPuntoEncuentroTransporteClausulaSex(f.obra.punto_encuentro_transporte_contrato);
-  const puntoEncFragmento = /^en\s/i.test(puntoEnc) ? puntoEnc : `en ${puntoEnc}`;
+  /** Sin default hardcodeado: si el PM no cargó el punto, queda como faltante (dueño PM). */
+  const puntoEnc = str(f.obra.punto_encuentro_transporte_contrato);
+  const puntoEncFragmento = !puntoEnc ? '' : /^en\s/i.test(puntoEnc) ? puntoEnc : `en ${puntoEnc}`;
 
   return {
     PATRON_INSCRIPCION_RM: textoInscripcionRegistroMercantilComparecencia(f.patron.registro_mercantil),
@@ -403,9 +422,9 @@ export function compilarPlantillaContratoObrero(
   for (const k of keys) {
     const raw = mapa[k];
     const val = raw != null ? String(raw).trim() : '';
-    if (!val) {
+    if (valorPlantillaEfectivamenteVacio(val)) {
       const { etiqueta, ayuda } = etiquetaPlaceholder(k);
-      faltantes.push({ id: k, etiqueta, ayuda });
+      faltantes.push({ id: k, etiqueta, ayuda, dueño: dueñoPlaceholderContrato(k) });
       texto = texto.split(`{{${k}}}`).join(`[… COMPLETAR: ${etiqueta} …]`);
     } else {
       texto = texto.split(`{{${k}}}`).join(val);

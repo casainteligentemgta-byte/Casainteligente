@@ -15,6 +15,7 @@ import ExpedienteContratoChecklist from '@/components/rrhh/ExpedienteContratoChe
 import { apiUrl } from '@/lib/http/apiUrl';
 import { createClient } from '@/lib/supabase/client';
 import type { DatoContratoFaltante } from '@/lib/talento/plantillaContratoObreroCompile';
+import { ETIQUETA_DUEÑO_DATO_CONTRATO } from '@/lib/talento/datosObraContratoPm';
 
 type EmpleadoRow = EmpleadoHojaVidaRow;
 
@@ -219,6 +220,29 @@ export default function RrhhHojasVidaArchivoPage() {
   const validarYAbrirContrato = useCallback(async (r: EmpleadoRow) => {
     setValidandoContratoId(r.id);
     try {
+      const vista = await fetch(apiUrl(`/api/rrhh/empleados/${encodeURIComponent(r.id)}/contrato-vista`), {
+        credentials: 'include',
+      });
+      const j = (await vista.json().catch(() => ({}))) as {
+        error?: string;
+        faltantes?: DatoContratoFaltante[];
+        tiene_datos_faltantes?: boolean;
+      };
+      if (vista.ok && Array.isArray(j.faltantes) && j.faltantes.length > 0) {
+        const urgentes = j.faltantes.filter(
+          (f) => f.dueño === 'pm' || f.dueño === 'legal_admin' || f.dueño === 'obrero',
+        );
+        if (urgentes.length > 0) {
+          setFaltantesRow(r);
+          setFaltantesContrato(j.faltantes);
+          setOverridesDraft({});
+          setFaltantesOpen(true);
+          toast.message(
+            `Hay ${urgentes.length} dato(s) de PM / Legal / planilla pendientes. Complétalos con el dueño indicado.`,
+          );
+          return;
+        }
+      }
       window.open(
         apiUrl(`/api/rrhh/empleados/${encodeURIComponent(r.id)}/contrato-laboral-pdf?formato=estructurado`),
         '_blank',
@@ -692,10 +716,9 @@ export default function RrhhHojasVidaArchivoPage() {
           <div className="w-full max-w-2xl rounded-2xl border border-amber-400/25 bg-[#0F1117] p-5 shadow-2xl">
             <h2 className="text-base font-bold text-amber-100">Datos pendientes para generar contrato</h2>
             <p className="mt-1 text-xs text-zinc-400">
-              {(faltantesRow.nombre_completo ?? 'Sin nombre').trim() || 'Sin nombre'} · puedes completar la planilla o escribir
-              aquí los valores que faltan. Placeholder en plantilla:{' '}
-              <span className="font-mono text-zinc-300">{'{{'}CLAVE{'}}'}</span> en la
-              plantilla.
+              {(faltantesRow.nombre_completo ?? 'Sin nombre').trim() || 'Sin nombre'} · pide cada dato solo a su dueño
+              (PM, Legal/Admin, obrero o RRHH). Placeholder:{' '}
+              <span className="font-mono text-zinc-300">{'{{'}CLAVE{'}}'}</span>.
             </p>
             <ul className="mt-4 max-h-[46vh] space-y-3 overflow-y-auto rounded-xl border border-white/10 bg-black/20 p-3 text-xs">
               {faltantesContrato.length === 0 ? (
@@ -704,30 +727,68 @@ export default function RrhhHojasVidaArchivoPage() {
                   PDF.
                 </li>
               ) : null}
-              {faltantesContrato.map((f) => (
-                <li key={f.id} className="rounded-lg border border-amber-500/20 bg-amber-950/15 px-3 py-2">
-                  <p className="font-semibold text-amber-100">
-                    {f.etiqueta}{' '}
-                    <span className="font-normal font-mono text-[10px] text-zinc-500">({f.id})</span>
-                  </p>
-                  <p className="mt-0.5 text-amber-100/80">{f.ayuda}</p>
-                  <label className="mt-2 block text-[10px] font-bold uppercase tracking-wide text-zinc-500">
-                    Valor manual
-                    <textarea
-                      value={overridesDraft[f.id] ?? ''}
-                      onChange={(e) =>
-                        setOverridesDraft((prev) => ({
-                          ...prev,
-                          [f.id]: e.target.value,
-                        }))
-                      }
-                      rows={2}
-                      placeholder="Escribe el texto que debe aparecer en el contrato…"
-                      className="mt-1 w-full resize-y rounded-lg border border-white/15 bg-black/40 px-2 py-1.5 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-amber-500/50"
-                    />
-                  </label>
-                </li>
-              ))}
+              {faltantesContrato.map((f) => {
+                const dueño = f.dueño ?? 'rrhh';
+                return (
+                  <li key={f.id} className="rounded-lg border border-amber-500/20 bg-amber-950/15 px-3 py-2">
+                    <p className="font-semibold text-amber-100">
+                      {f.etiqueta}{' '}
+                      <span className="font-normal font-mono text-[10px] text-zinc-500">({f.id})</span>
+                    </p>
+                    <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-300/90">
+                      Dueño: {ETIQUETA_DUEÑO_DATO_CONTRATO[dueño]}
+                    </p>
+                    <p className="mt-0.5 text-amber-100/80">{f.ayuda}</p>
+                    {dueño === 'pm' && faltantesRow.proyecto_modulo_id ? (
+                      <a
+                        href={`/proyectos/modulo/${encodeURIComponent(faltantesRow.proyecto_modulo_id)}?editar=1`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-2 inline-flex text-[11px] font-semibold text-sky-300 underline hover:text-sky-200"
+                      >
+                        Abrir módulo proyecto (PM)
+                      </a>
+                    ) : null}
+                    {dueño === 'obrero' ? (
+                      <a
+                        href={apiUrl(
+                          `/registro/planilla?empleadoId=${encodeURIComponent(faltantesRow.id)}&cedula=${encodeURIComponent(docMostrado(faltantesRow) === '—' ? '' : docMostrado(faltantesRow))}&volver=${encodeURIComponent(VOLVER_PATH)}`,
+                        )}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-2 inline-flex text-[11px] font-semibold text-sky-300 underline hover:text-sky-200"
+                      >
+                        Abrir planilla del obrero
+                      </a>
+                    ) : null}
+                    {dueño === 'legal_admin' ? (
+                      <a
+                        href="/configuracion/entidades"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-2 inline-flex text-[11px] font-semibold text-sky-300 underline hover:text-sky-200"
+                      >
+                        Configuración → Entidades
+                      </a>
+                    ) : null}
+                    <label className="mt-2 block text-[10px] font-bold uppercase tracking-wide text-zinc-500">
+                      Valor manual (solo si urge)
+                      <textarea
+                        value={overridesDraft[f.id] ?? ''}
+                        onChange={(e) =>
+                          setOverridesDraft((prev) => ({
+                            ...prev,
+                            [f.id]: e.target.value,
+                          }))
+                        }
+                        rows={2}
+                        placeholder="Escribe el texto que debe aparecer en el contrato…"
+                        className="mt-1 w-full resize-y rounded-lg border border-white/15 bg-black/40 px-2 py-1.5 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-amber-500/50"
+                      />
+                    </label>
+                  </li>
+                );
+              })}
             </ul>
             <div className="mt-4 flex flex-wrap justify-end gap-2">
               <button
