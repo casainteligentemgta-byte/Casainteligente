@@ -222,43 +222,18 @@ export async function loadProyectosModuloIntegral(
   return { proyectos, errors };
 }
 
-/** Proyectos visibles en `/rrhh/hojas-vida` (p. ej. Video de frente, Rancho Flamboyant). */
+/** Proyectos visibles en `/rrhh/hojas-vida` (prioridad de orden, no exclusión). */
 export function esProyectoSmartRrhhPorNombre(nombre: string): boolean {
   return prioridadSmartRrhh(nombre) === 0;
 }
 
 /**
- * Cuadros SMART RRHH: prioriza obras por nombre (frente / flamboyant), integral o Talento.
+ * Cuadros SMART RRHH: todos los módulos integrales (orden: frente/flamboyant primero).
+ * No excluye obras nuevas: un filtro previo por nombre hacía caer a «Todos» y mezclar proyectos.
  */
 export async function loadProyectosSmartRrhhHojasVida(
   supabase: SupabaseClient,
 ): Promise<{ proyectos: ProyectoModuloIntegral[]; errors: string[] }> {
-  const errors: string[] = [];
-  const { data, error } = await supabase
-    .from('ci_proyectos')
-    .select('id,nombre,tipo_proyecto,entidad_id')
-    .order('nombre', { ascending: true })
-    .limit(250);
-
-  if (error) {
-    if (esColumnaTipoProyectoAusente(error.message ?? '')) {
-      return loadProyectosModuloIntegral(supabase);
-    }
-    errors.push(error.message ?? 'No se pudieron cargar proyectos.');
-    return { proyectos: [], errors };
-  }
-
-  const porNombre = mapFilasModuloIntegral(
-    ((data ?? []) as { id: unknown; nombre?: unknown; tipo_proyecto?: string | null; entidad_id?: string | null }[]).filter(
-      (r) => esProyectoSmartRrhhPorNombre(String(r.nombre ?? '')),
-    ),
-  );
-
-  if (porNombre.length > 0) {
-    porNombre.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
-    return { proyectos: porNombre, errors };
-  }
-
   return loadProyectosModuloIntegral(supabase);
 }
 

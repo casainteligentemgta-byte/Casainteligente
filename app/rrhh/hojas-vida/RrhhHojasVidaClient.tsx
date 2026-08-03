@@ -81,16 +81,42 @@ export default function RrhhHojasVidaClient() {
       setErrorProyectos(null);
       const { proyectos, errors } = await loadProyectosSmartRrhhHojasVida(supabase);
       if (!alive) return;
-      setProyectosModulo(proyectos);
+
+      let lista = proyectos;
+      const urlId = proyectoModuloQuery;
+      // Si la URL apunta a un proyecto concreto, forzar ese alcance e incluirlo aunque no estuviera en el listado.
+      if (urlId && !lista.some((p) => p.id === urlId)) {
+        const { data: extra } = await supabase
+          .from('ci_proyectos')
+          .select('id,nombre,entidad_id,tipo_proyecto')
+          .eq('id', urlId)
+          .maybeSingle();
+        if (!alive) return;
+        const row = extra as {
+          id?: string;
+          nombre?: string | null;
+          entidad_id?: string | null;
+          tipo_proyecto?: string | null;
+        } | null;
+        if (row?.id) {
+          lista = [
+            ...lista,
+            {
+              id: row.id,
+              nombre: (row.nombre ?? '').trim() || 'Sin nombre',
+              entidad_id: row.entidad_id ?? null,
+            },
+          ];
+        }
+      }
+
+      setProyectosModulo(lista);
       setAlcanceObra((prev) => {
-        const desdeUrl =
-          proyectoModuloQuery && proyectos.some((p) => p.id === proyectoModuloQuery)
-            ? proyectoModuloQuery
-            : '';
-        if (desdeUrl) return desdeUrl;
-        if (prev && proyectos.some((p) => p.id === prev)) return prev;
-        if (proyectos.length <= 1) return proyectos[0]?.id ?? '';
-        return '';
+        // URL con proyecto concreto: nunca degradar a «Todos» ni a otra obra.
+        if (urlId) return urlId;
+        if (prev && lista.some((p) => p.id === prev)) return prev;
+        if (lista.length <= 1) return lista[0]?.id ?? '';
+        return lista[0]?.id ?? '';
       });
       if (errors.length) setErrorProyectos(errors.join(' · '));
       setCargandoProyectos(false);
