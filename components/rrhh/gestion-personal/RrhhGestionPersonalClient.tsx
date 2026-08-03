@@ -864,10 +864,10 @@ export default function RrhhGestionPersonalClient({
                             {nombreEmpleado.get(a.worker_id) ?? a.worker_id.slice(0, 8)}
                             {!obrerosConContrato.has(a.worker_id) ? (
                               <Link
-                                href={`/rrhh/registro?worker=${encodeURIComponent(a.worker_id)}&proyecto=${encodeURIComponent(r.project_id)}`}
+                                href={`/rrhh/contrato-trabajo-obrero?proyecto=${encodeURIComponent(r.project_id)}`}
                                 className="mt-0.5 block text-[10px] font-semibold text-sky-400/90 hover:text-sky-300"
                               >
-                                Generar contrato express →
+                                Generar contrato de trabajo →
                               </Link>
                             ) : (
                               <span className="mt-0.5 block text-[10px] text-zinc-600">Contrato suscrito</span>

@@ -106,13 +106,21 @@ function RrhhHubInner() {
             <h1 className="text-2xl font-black tracking-tight">Recursos Humanos</h1>
             <p className="text-sm text-zinc-500 mt-1">Personal activo y pipeline de reclutamiento</p>
           </div>
-          <Link
-            href="/rrhh/registro"
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#FF9500] text-black text-xs font-black uppercase"
-          >
-            <UserPlus size={14} />
-            Alta rápida
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/rrhh/contrato-trabajo-obrero"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-amber-500/40 bg-amber-950/50 text-amber-50 text-xs font-black uppercase hover:bg-amber-900/55"
+            >
+              Contrato de trabajo
+            </Link>
+            <Link
+              href="/rrhh/registro"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#FF9500] text-black text-xs font-black uppercase"
+            >
+              <UserPlus size={14} />
+              Alta rápida
+            </Link>
+          </div>
         </div>
 
         <nav className="flex flex-wrap gap-2 p-1.5 rounded-2xl border border-white/[0.06] bg-white/[0.04]">
