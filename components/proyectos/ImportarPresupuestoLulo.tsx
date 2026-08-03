@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { Upload, FileSpreadsheet, Database, Table2, Search, Settings } from 'lucide-react';
@@ -129,6 +129,7 @@ export default function ImportarPresupuestoLulo({
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
   const [extrayendo, setExtrayendo] = useState(false);
   const [cuadroLuloActivo, setCuadroLuloActivo] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const moduloLuloHref = isValidProyectoUuid(pid)
     ? `/proyectos/modulo/${encodeURIComponent(pid)}/lulo`
@@ -515,6 +516,7 @@ export default function ImportarPresupuestoLulo({
 
       <div className="space-y-3">
         <input
+          ref={fileInputRef}
           type="file"
           accept=".csv,text/csv,.mdb,.accdb"
           onChange={(e) => {
@@ -525,8 +527,20 @@ export default function ImportarPresupuestoLulo({
             setTableSelectionPending(null);
             setSelectedTable(null);
           }}
-          className="w-full text-xs text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-white/5 file:text-white hover:file:bg-white/10"
+          className="sr-only"
+          tabIndex={-1}
         />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={procesando}
+          className="w-full min-h-[2.75rem] inline-flex items-center justify-center gap-2 rounded-lg border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-medium text-white hover:bg-white/10 disabled:opacity-50 transition-colors"
+        >
+          <Upload className="h-4 w-4 shrink-0 text-emerald-400" aria-hidden />
+          <span className="truncate leading-none">
+            {file ? file.name : 'Seleccionar archivo (.mdb / .csv)'}
+          </span>
+        </button>
 
         {procesando ? (
           <div className="rounded-lg border border-sky-500/25 bg-sky-500/5 px-3 py-3">
@@ -676,14 +690,16 @@ export default function ImportarPresupuestoLulo({
           type="button"
           onClick={handleUpload}
           disabled={uploading || !file}
-          className="w-full bg-[#34C759] hover:bg-[#2eb04f] disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-medium py-2.5 px-4 rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
+          className="w-full min-h-[2.75rem] bg-[#34C759] hover:bg-[#2eb04f] disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-medium py-2.5 px-4 rounded-lg text-sm transition-colors inline-flex items-center justify-center gap-2 leading-none"
         >
           {uploading ? (
             <EngranajeProcesando texto={esMdb ? 'Importando presupuesto…' : 'Procesando…'} />
           ) : (
             <>
-              <Upload className="h-4 w-4" />
-              {esMdb ? 'Importar presupuesto' : 'Procesar presupuesto CSV'}
+              <Upload className="h-4 w-4 shrink-0" aria-hidden />
+              <span className="truncate">
+                {esMdb ? 'Importar presupuesto' : 'Procesar presupuesto CSV'}
+              </span>
             </>
           )}
         </button>
