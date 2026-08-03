@@ -437,7 +437,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
     }
     setSavingProyecto(true);
     setProyectoSaveError(null);
-    const payloadBase = {
+    const payloadCore = {
       nombre: n,
       estado: peEstado,
       ubicacion_texto: u,
@@ -447,34 +447,70 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
       lat,
       lng,
       entidad_id: peEntidadId.trim() || null,
-      horario_semanal_obra_default: peHorarioSemanalObra.trim() || null,
-      punto_encuentro_transporte_contrato: pePuntoEncTransporteContrato.trim() || null,
       updated_at: new Date().toISOString(),
     };
-    let upErr = (
-      await supabase
-        .from('ci_proyectos')
-        .update({
-          ...payloadBase,
-          fase_tecnica_contrato: peFaseTecnicaContrato.trim() || null,
-        })
-        .eq('id', id)
-    ).error;
-    // Migración 307 pendiente: reintentar sin fase_tecnica_contrato.
-    if (upErr && /fase_tecnica_contrato/i.test(upErr.message)) {
-      upErr = (await supabase.from('ci_proyectos').update(payloadBase).eq('id', id)).error;
+    const payloadContrato = {
+      horario_semanal_obra_default: peHorarioSemanalObra.trim() || null,
+      punto_encuentro_transporte_contrato: pePuntoEncTransporteContrato.trim() || null,
+      fase_tecnica_contrato: peFaseTecnicaContrato.trim() || null,
+    };
+
+    const intentos: Array<{ patch: Record<string, unknown>; aviso: string | null }> = [
+      { patch: { ...payloadCore, ...payloadContrato }, aviso: null },
+      {
+        patch: {
+          ...payloadCore,
+          horario_semanal_obra_default: payloadContrato.horario_semanal_obra_default,
+          punto_encuentro_transporte_contrato:
+            payloadContrato.punto_encuentro_transporte_contrato,
+        },
+        aviso:
+          'Guardado parcial: aplica la migración 307/308 (fase técnica) en Supabase SQL Editor.',
+      },
+      {
+        patch: {
+          ...payloadCore,
+          horario_semanal_obra_default: payloadContrato.horario_semanal_obra_default,
+        },
+        aviso:
+          'Guardado parcial: falta la columna punto_encuentro_transporte_contrato. Ejecute sql_editor_308_… + notify pgrst.',
+      },
+      {
+        patch: payloadCore,
+        aviso:
+          'Guardado parcial: faltan columnas de contrato en ci_proyectos. Ejecute sql_editor_308_ci_proyectos_punto_encuentro_transporte_ensure.sql en Supabase.',
+      },
+    ];
+
+    let upErr: { message: string } | null = null;
+    let avisoParcial: string | null = null;
+    for (const intento of intentos) {
+      const res = await supabase.from('ci_proyectos').update(intento.patch).eq('id', id);
+      upErr = res.error;
       if (!upErr) {
-        setProyectoSaveError(
-          'Guardado parcial: aplica la migración 307 (fase técnica) en Supabase para persistir la fase del contrato.',
-        );
-        setSavingProyecto(false);
-        void load();
-        return;
+        avisoParcial = intento.aviso;
+        break;
       }
+      const msg = upErr.message ?? '';
+      const esSchema =
+        /schema cache|column|punto_encuentro_transporte_contrato|horario_semanal_obra_default|fase_tecnica_contrato/i.test(
+          msg,
+        );
+      if (!esSchema) break;
     }
+
     setSavingProyecto(false);
     if (upErr) {
-      setProyectoSaveError(upErr.message);
+      setProyectoSaveError(
+        /punto_encuentro_transporte_contrato|schema cache/i.test(upErr.message)
+          ? `${upErr.message} — Ejecute en SQL Editor: supabase/sql_editor_308_ci_proyectos_punto_encuentro_transporte_ensure.sql`
+          : upErr.message,
+      );
+      return;
+    }
+    if (avisoParcial) {
+      setProyectoSaveError(avisoParcial);
+      void load();
       return;
     }
     router.replace(`/proyectos/modulo/${id}`);
