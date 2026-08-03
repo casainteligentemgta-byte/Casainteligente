@@ -32,10 +32,12 @@ import {
   uploadOnboardingPerfilPhoto,
 } from '@/lib/reclutamiento/uploadReclutamientoMedia';
 import { apiUrl } from '@/lib/http/apiUrl';
+import { urlSiguientePostHv } from '@/lib/talento/flujoHvEvaluacion';
 
 type Props = { params: { token: string } };
 
 const TOTAL_PASOS = 4;
+const REDIRECT_EVAL_SEG = 4;
 
 function HojaDeVidaMovilInner({ params }: Props) {
   const supabase = useMemo(() => createClient(), []);
@@ -57,6 +59,24 @@ function HojaDeVidaMovilInner({ params }: Props) {
   const [planillaPatrono, setPlanillaPatrono] = useState<PlanillaPatronoCampos | null>(null);
   const [tokenValidando, setTokenValidando] = useState(true);
   const [tokenInvalido, setTokenInvalido] = useState<string | null>(null);
+  const [redirectSeg, setRedirectSeg] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (step !== 4) return;
+    setRedirectSeg(REDIRECT_EVAL_SEG);
+    const tick = window.setInterval(() => {
+      setRedirectSeg((prev) => {
+        if (prev == null) return prev;
+        if (prev <= 1) {
+          window.clearInterval(tick);
+          window.location.href = urlSiguientePostHv(params.token);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(tick);
+  }, [step, params.token]);
 
   useEffect(() => {
     let alive = true;
@@ -528,8 +548,8 @@ function HojaDeVidaMovilInner({ params }: Props) {
               </div>
               <h2 className="text-3xl font-bold text-white tracking-tight">¡Hoja de vida enviada!</h2>
               <p className="text-[var(--nexus-text-muted)] max-w-sm mx-auto">
-                Ya se generó tu hoja de vida con el cuestionario y las fotos. Si te contratan, con esos mismos datos se
-                genera la hoja de empleo (RRHH completa patrono, obra y faltantes).
+                Ya se generó tu hoja de vida. A continuación harás la evaluación: primero el tipo de color y luego la
+                prueba de admisión.
               </p>
               
               <div className="flex flex-col gap-3 max-w-sm mx-auto">
@@ -545,10 +565,13 @@ function HojaDeVidaMovilInner({ params }: Props) {
 
               <GlassCard glow className="text-left mt-8 !bg-[var(--ios-blue-light)]/20 border-[var(--ios-blue)]/30">
                 <p className="text-sm text-[var(--ios-teal)] font-bold flex items-center gap-2">
-                  <span>⏱️</span> Prueba de Admisión
+                  <span>⏱️</span> Siguiente: evaluación
                 </p>
                 <p className="text-sm text-zinc-300 mt-2">
-                  Tendrás **15 minutos** una vez inicies el temporizador. Asegúrate de estar en un lugar tranquilo y sin distracciones.
+                  {redirectSeg != null && redirectSeg > 0
+                    ? `Continuamos automáticamente en ${redirectSeg} s…`
+                    : 'Abriendo la evaluación de tipo de color…'}{' '}
+                  Puedes empezar ya con el botón de abajo.
                 </p>
               </GlassCard>
             </motion.div>
@@ -592,11 +615,11 @@ function HojaDeVidaMovilInner({ params }: Props) {
           <button
             type="button"
             onClick={() => {
-              window.location.href = `/talento/examen?token=${encodeURIComponent(params.token)}`;
+              window.location.href = urlSiguientePostHv(params.token);
             }}
             className="ios-btn-primary w-full !bg-[var(--nexus-green)] !shadow-[0_4px_16px_rgba(0,255,65,0.2)]"
           >
-            Comenzar Prueba
+            Continuar a evaluación
           </button>
         )}
       </div>

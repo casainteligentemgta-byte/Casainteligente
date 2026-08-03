@@ -305,6 +305,8 @@ export default function RegistroPorNeedCliente({
           hint?: string;
           empleadoId?: string;
           exam_url?: string;
+          post_hv_url?: string;
+          color_exam_url?: string;
           exam_invite_error?: string;
         };
         if (!res.ok) {
@@ -313,15 +315,17 @@ export default function RegistroPorNeedCliente({
           return;
         }
         const eid = (body.empleadoId ?? '').trim();
-        if (body.exam_url && eid && typeof window !== 'undefined') {
+        const nextUrl = body.post_hv_url || body.color_exam_url || body.exam_url;
+        if (nextUrl && eid && typeof window !== 'undefined') {
           const nombrePost =
             `${form.primerNombre.trim()} ${form.primerApellido.trim()}`.replace(/\s+/g, ' ').trim() || 'Postulante';
           window.sessionStorage.setItem(
             `registro-examen-${eid}`,
             JSON.stringify({
-              examUrl: body.exam_url,
+              examUrl: nextUrl,
               nombre: nombrePost,
               whatsapp: form.celular.trim(),
+              autoRedirect: true,
             }),
           );
         } else if (body.exam_invite_error) {
@@ -387,7 +391,7 @@ export default function RegistroPorNeedCliente({
         documento: form.cedula.trim(),
         cedula: form.cedula.trim(),
         celular: form.celular.trim(),
-        rol_examen: 'tecnico',
+        rol_examen: need.tipo_vacante === 'empleado' ? 'empleado' : 'obrero',
         rol_buscado: cargoEtiqueta,
         respuestas_personalidad: [],
         respuestas_logica: [],
@@ -488,14 +492,21 @@ export default function RegistroPorNeedCliente({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ empleadoId: ins.id, cedula: form.cedula.trim() }),
         });
-        const ij = (await inv.json().catch(() => ({}))) as { exam_url?: string; error?: string };
-        if (inv.ok && ij.exam_url && typeof window !== 'undefined') {
+        const ij = (await inv.json().catch(() => ({}))) as {
+          exam_url?: string;
+          color_exam_url?: string;
+          post_hv_url?: string;
+          error?: string;
+        };
+        const nextUrl = ij.post_hv_url || ij.color_exam_url || ij.exam_url;
+        if (inv.ok && nextUrl && typeof window !== 'undefined') {
           window.sessionStorage.setItem(
             `registro-examen-${ins.id}`,
             JSON.stringify({
-              examUrl: ij.exam_url,
+              examUrl: nextUrl,
               nombre: nombreCompleto || 'Postulante',
               whatsapp: form.celular.trim(),
+              autoRedirect: true,
             }),
           );
         } else if (!inv.ok && ij.error) {

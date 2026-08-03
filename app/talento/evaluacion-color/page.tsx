@@ -5,6 +5,9 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import FormularioEvaluacionColor from '@/components/talento/FormularioEvaluacionColor';
 import type { ColorPerfilObrero } from '@/lib/talento/evaluacionObrero';
+import { urlSiguientePostColor } from '@/lib/talento/flujoHvEvaluacion';
+
+const REDIRECT_ABC_SEG = 3;
 
 function EvaluacionColorInner() {
   const searchParams = useSearchParams();
@@ -20,6 +23,7 @@ function EvaluacionColorInner() {
     semaforo_riesgo: string | null;
     motivo: string | null;
   } | null>(null);
+  const [redirectSeg, setRedirectSeg] = useState<number | null>(null);
 
   useEffect(() => {
     if (!urlToken) {
@@ -59,6 +63,23 @@ function EvaluacionColorInner() {
     };
   }, [urlToken]);
 
+  useEffect(() => {
+    if (!resultado || !candidate) return;
+    setRedirectSeg(REDIRECT_ABC_SEG);
+    const tick = window.setInterval(() => {
+      setRedirectSeg((prev) => {
+        if (prev == null) return prev;
+        if (prev <= 1) {
+          window.clearInterval(tick);
+          window.location.href = urlSiguientePostColor(candidate.token);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(tick);
+  }, [resultado, candidate]);
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-950 p-4 text-zinc-100">
@@ -84,7 +105,7 @@ function EvaluacionColorInner() {
     );
   }
 
-  if (resultado) {
+  if (resultado && candidate) {
     const colorCls =
       resultado.perfil_color === 'Rojo'
         ? 'text-red-400'
@@ -96,8 +117,8 @@ function EvaluacionColorInner() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-950 p-4 text-zinc-100">
         <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-8 text-center">
-          <h1 className="text-2xl font-bold">¡Evaluación completada!</h1>
-          <p className="mt-2 text-sm text-zinc-400">Gracias, {candidate?.nombre}.</p>
+          <h1 className="text-2xl font-bold">¡Perfil de color listo!</h1>
+          <p className="mt-2 text-sm text-zinc-400">Gracias, {candidate.nombre}.</p>
           <div className="mt-6 rounded-xl border border-zinc-800 bg-zinc-950 p-4">
             <p className="text-[10px] uppercase tracking-wider text-zinc-500">Perfil de color</p>
             <p className={`mt-1 text-2xl font-bold ${colorCls}`}>{resultado.perfil_color}</p>
@@ -111,6 +132,20 @@ function EvaluacionColorInner() {
               </p>
             ) : null}
           </div>
+          <p className="mt-6 text-sm text-zinc-400">
+            {redirectSeg != null && redirectSeg > 0
+              ? `Siguiente: prueba de admisión en ${redirectSeg} s…`
+              : 'Abriendo la prueba de admisión…'}
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              window.location.href = urlSiguientePostColor(candidate.token);
+            }}
+            className="mt-4 w-full rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white"
+          >
+            Continuar a prueba de admisión
+          </button>
         </div>
       </div>
     );
