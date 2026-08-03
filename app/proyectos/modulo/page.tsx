@@ -64,6 +64,46 @@ async function contarObrerosPorObra(
   return out;
 }
 
+/** Conteo por módulo integral: express + empleados con ese `proyecto_modulo_id` (sin mezclar otras obras). */
+async function contarObrerosPorModuloIntegral(
+  supabase: ReturnType<typeof createClient>,
+  moduloIds: string[],
+): Promise<Record<string, number>> {
+  const out: Record<string, number> = Object.fromEntries(moduloIds.map((id) => [id, 0]));
+  if (moduloIds.length === 0) return out;
+  const chunk = 80;
+  for (let i = 0; i < moduloIds.length; i += chunk) {
+    const slice = moduloIds.slice(i, i + chunk);
+    const idsUnicos = new Map<string, Set<string>>();
+    for (const id of slice) idsUnicos.set(id, new Set());
+
+    const ex = await supabase
+      .from('ci_contratos_express')
+      .select('id,proyecto_id')
+      .in('proyecto_id', slice);
+    if (!ex.error) {
+      for (const row of (ex.data ?? []) as { id: string; proyecto_id: string }[]) {
+        idsUnicos.get(row.proyecto_id)?.add(`ex:${row.id}`);
+      }
+    }
+
+    const emp = await supabase
+      .from('ci_empleados')
+      .select('id,proyecto_modulo_id')
+      .in('proyecto_modulo_id', slice);
+    if (!emp.error) {
+      for (const row of (emp.data ?? []) as { id: string; proyecto_modulo_id: string }[]) {
+        idsUnicos.get(row.proyecto_modulo_id)?.add(`em:${row.id}`);
+      }
+    }
+
+    for (const id of slice) {
+      out[id] = idsUnicos.get(id)?.size ?? 0;
+    }
+  }
+  return out;
+}
+
 const estadoChip: Record<string, { bg: string; text: string }> = {
   nuevo: { bg: 'rgba(148,163,184,0.2)', text: '#94A3B8' },
   levantamiento: { bg: 'rgba(90,200,250,0.15)', text: '#5AC8FA' },
@@ -280,6 +320,14 @@ export default function ModuloProyectosPage() {
         );
       }
 
+      const moduloIds = integralRows.map((r) => r.id);
+      const porModulo = await withTimeout(
+        contarObrerosPorModuloIntegral(supabase, moduloIds),
+        25_000,
+        'Conteo de obreros por módulo integral',
+      );
+      if (stale()) return;
+
       const desdeModulo: ProyectoRow[] = integralRows.map((r) => ({
         id: r.id,
         nombre: r.nombre ?? 'Sin nombre',
@@ -292,7 +340,7 @@ export default function ModuloProyectosPage() {
         entidad_id: r.entidad_id ?? null,
         origen: 'modulo' as const,
         customer_name: byId[r.customer_id] || null,
-        obrerosContratados: null,
+        obrerosContratados: porModulo[r.id] ?? 0,
         patrono_nombre: r.entidad_id ? patronoPorId[String(r.entidad_id)] ?? null : null,
         limite_fast_track_usd: parseLimiteFastTrackUsd(r.limite_fast_track_usd),
       }));
