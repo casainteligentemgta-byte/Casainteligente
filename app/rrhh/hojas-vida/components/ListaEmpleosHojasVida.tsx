@@ -58,8 +58,11 @@ function formVacio(rol: string): FormState {
   };
 }
 
+const LS_EMPLEOS_RETRAIDOS = 'ci-rrhh-empleos-retraidos-v1';
+
 export default function ListaEmpleosHojasVida({ proyectoModuloId }: Props) {
   const [abierto, setAbierto] = useState<string | null>(null);
+  const [seccionRetraida, setSeccionRetraida] = useState(false);
   const [nomina, setNomina] = useState<FilaNominaProyecto[]>([]);
   const [empleados, setEmpleados] = useState<EmpleadoNominaOpcion[]>([]);
   const [ingenieroNombre, setIngenieroNombre] = useState<string | null>(null);
@@ -69,6 +72,27 @@ export default function ListaEmpleosHojasVida({ proyectoModuloId }: Props) {
   const [rolLabelModal, setRolLabelModal] = useState('');
   const [form, setForm] = useState<FormState>(formVacio('depositario'));
   const [guardando, setGuardando] = useState(false);
+
+  useEffect(() => {
+    try {
+      setSeccionRetraida(localStorage.getItem(LS_EMPLEOS_RETRAIDOS) === '1');
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const toggleSeccion = () => {
+    setSeccionRetraida((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(LS_EMPLEOS_RETRAIDOS, next ? '1' : '0');
+      } catch {
+        /* ignore */
+      }
+      if (next) setAbierto(null);
+      return next;
+    });
+  };
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -244,10 +268,37 @@ export default function ListaEmpleosHojasVida({ proyectoModuloId }: Props) {
     );
   }
 
+  const asignadosCount =
+    (ingenieroNombre ? 1 : 0) +
+    ROLES_NOMINA_EMPLEADO.filter((r) => r.value !== 'ingeniero_residente').reduce(
+      (n, r) => n + (filasPorRol.get(r.value)?.length ?? 0),
+      0,
+    );
+
   return (
     <>
       <section className="mb-8 rounded-2xl border border-white/10 bg-white/[0.03] p-4 backdrop-blur-xl">
-        <h2 className="mb-3 text-xs font-bold uppercase tracking-wide text-zinc-500">Empleos</h2>
+        <button
+          type="button"
+          onClick={toggleSeccion}
+          className="mb-3 flex w-full items-center justify-between gap-3 text-left"
+          aria-expanded={!seccionRetraida}
+        >
+          <span className="flex items-center gap-2">
+            {seccionRetraida ? (
+              <ChevronRight className="h-4 w-4 shrink-0 text-zinc-500" aria-hidden />
+            ) : (
+              <ChevronDown className="h-4 w-4 shrink-0 text-sky-400" aria-hidden />
+            )}
+            <h2 className="text-xs font-bold uppercase tracking-wide text-zinc-500">Empleos</h2>
+          </span>
+          <span className="text-[11px] font-medium text-zinc-500">
+            {seccionRetraida
+              ? `${asignadosCount} asignado${asignadosCount === 1 ? '' : 's'} · tocar para expandir`
+              : 'Retraer'}
+          </span>
+        </button>
+        {seccionRetraida ? null : (
         <ul className="overflow-hidden rounded-xl border border-white/10 divide-y divide-white/10">
           <li>
             <button
@@ -370,6 +421,7 @@ export default function ListaEmpleosHojasVida({ proyectoModuloId }: Props) {
             );
           })}
         </ul>
+        )}
       </section>
 
       <Dialog open={modalAbierto} onOpenChange={setModalAbierto}>

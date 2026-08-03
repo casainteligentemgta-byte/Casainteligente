@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ClipboardList, FileText, HardHat, ScrollText, UserCog, UserRound, Users } from 'lucide-react';
+import { Brain, ClipboardList, FileText, HardHat, ScrollText, UserCog, UserRound, Users } from 'lucide-react';
 import { hrefListaContratosExpress } from '@/lib/talento/hrefListaContratosExpress';
 import { leerProyectoRrhhContexto } from '@/lib/rrhh/proyectoRrhhContexto';
 import {
@@ -84,6 +84,13 @@ export default function RrhhSubnavEnlaces({
       >
         <UserRound className="h-3.5 w-3.5 shrink-0" aria-hidden />
         <span className="truncate">Hojas de vida</span>
+      </Link>
+      <Link
+        href="/rrhh/evaluaciones"
+        className={`${rrhhSubnavBtnClass} border-violet-500/40 bg-violet-950/45 text-violet-100 hover:bg-violet-900/55`}
+      >
+        <Brain className="h-3.5 w-3.5 shrink-0" aria-hidden />
+        <span className="truncate">Evaluaciones</span>
       </Link>
       <Link
         href={hrefExpress}

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowLeft, FileText, Link2, MessageSquareText, Pencil, RefreshCw, ScrollText, Trash2 } from 'lucide-react';
+import { ArrowLeft, FileText, Link2, MessageSquareText, Pencil, Plus, RefreshCw, ScrollText, Trash2 } from 'lucide-react';
 import {
   etiquetaEstadoArchivo,
   fetchEmpleadosHojasVida,
@@ -12,6 +12,13 @@ import { toast } from 'sonner';
 import { ModalGenerarContrato } from '@/app/rrhh/hojas-vida/components/ModalGenerarContrato';
 import { ModalEditarOficioHojaEmpleo } from '@/app/rrhh/hojas-vida/components/ModalEditarOficioHojaEmpleo';
 import ExpedienteContratoChecklist from '@/components/rrhh/ExpedienteContratoChecklist';
+import GeneradorHojaVida from '@/components/reclutamiento/GeneradorHojaVida';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { apiUrl } from '@/lib/http/apiUrl';
 import { createClient } from '@/lib/supabase/client';
 import type { DatoContratoFaltante } from '@/lib/talento/plantillaContratoObreroCompile';
@@ -61,6 +68,7 @@ export default function RrhhHojasVidaArchivoPage() {
   const [oficioOpen, setOficioOpen] = useState(false);
   const [oficioRow, setOficioRow] = useState<EmpleadoRow | null>(null);
   const [contratoFlowRow, setContratoFlowRow] = useState<EmpleadoRow | null>(null);
+  const [nuevaHvOpen, setNuevaHvOpen] = useState(false);
   const cargar = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -78,7 +86,7 @@ export default function RrhhHojasVidaArchivoPage() {
     void cargar();
   }, [cargar]);
 
-  const emitirEnlaceEvaluacion = useCallback(async (r: EmpleadoRow) => {
+  const emitirEnlaceEvaluacion = useCallback(async (r: EmpleadoRow, tipo: 'psique' | 'color' = 'psique') => {
     const doc = docMostrado(r);
     if (doc === '—') {
       toast.error('Sin cédula en el expediente: no se puede validar el enlace de evaluación.');
@@ -90,22 +98,31 @@ export default function RrhhHojasVidaArchivoPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ empleadoId: r.id, cedula: doc }),
       });
-      const j = (await res.json().catch(() => ({}))) as { exam_url?: string; error?: string };
+      const j = (await res.json().catch(() => ({}))) as {
+        exam_url?: string;
+        color_exam_url?: string;
+        error?: string;
+      };
       if (!res.ok) {
         toast.error(j.error ?? 'No se pudo generar el enlace de evaluación');
         return;
       }
-      if (!j.exam_url) {
+      const url = tipo === 'color' ? j.color_exam_url : j.exam_url;
+      if (!url) {
         toast.error('Respuesta sin URL de evaluación');
         return;
       }
       try {
-        await navigator.clipboard.writeText(j.exam_url);
-        toast.success('Enlace copiado; se abre en una nueva pestaña.');
+        await navigator.clipboard.writeText(url);
+        toast.success(
+          tipo === 'color'
+            ? 'Enlace de color copiado; se abre en una nueva pestaña.'
+            : 'Enlace copiado; se abre en una nueva pestaña.',
+        );
       } catch {
         toast.message('Enlace listo (no se pudo copiar al portapapeles automáticamente)');
       }
-      window.open(j.exam_url, '_blank', 'noopener,noreferrer');
+      window.open(url, '_blank', 'noopener,noreferrer');
     } catch {
       toast.error('Error de red al solicitar el enlace');
     }
@@ -345,6 +362,20 @@ export default function RrhhHojasVidaArchivoPage() {
             ) : null}
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setNuevaHvOpen(true)}
+              className="inline-flex items-center gap-2 rounded-xl border border-sky-500/40 bg-sky-600/25 px-4 py-2.5 text-sm font-semibold text-sky-50 transition hover:bg-sky-600/40"
+            >
+              <Plus className="h-4 w-4" aria-hidden />
+              Nueva hoja de vida
+            </button>
+            <Link
+              href="/rrhh/evaluaciones"
+              className="inline-flex items-center gap-2 rounded-xl border border-violet-500/35 bg-violet-950/40 px-4 py-2.5 text-sm font-semibold text-violet-100 transition hover:bg-violet-900/50"
+            >
+              Evaluaciones
+            </Link>
             <Link
               href="/rrhh/trabajadores"
               className="inline-flex items-center gap-2 rounded-xl border border-fuchsia-500/35 bg-fuchsia-950/40 px-4 py-2.5 text-sm font-semibold text-fuchsia-100 transition hover:bg-fuchsia-900/50"
@@ -371,7 +402,15 @@ export default function RrhhHojasVidaArchivoPage() {
 
       {!loading && !error && rows.length === 0 ? (
         <p className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-8 text-center text-sm text-zinc-500">
-          Aún no hay obreros con hoja de vida cargada en el archivo.
+          Aún no hay obreros con hoja de vida cargada. Usa{' '}
+          <button
+            type="button"
+            onClick={() => setNuevaHvOpen(true)}
+            className="font-semibold text-sky-300 underline-offset-2 hover:underline"
+          >
+            Nueva hoja de vida
+          </button>{' '}
+          para invitar al candidato.
         </p>
       ) : null}
 
@@ -449,12 +488,21 @@ export default function RrhhHojasVidaArchivoPage() {
                               setInformeOpen(true);
                               return;
                             }
-                            void emitirEnlaceEvaluacion(r);
+                            void emitirEnlaceEvaluacion(r, 'psique');
                           }}
                           className="inline-flex items-center gap-1.5 rounded-md border border-transparent px-2.5 py-1.5 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-900/50"
                         >
                           <Link2 className="h-3.5 w-3.5" />
-                          {tieneInformeEvaluacion(r) ? 'Informe evaluación' : 'Evaluación'}
+                          {tieneInformeEvaluacion(r) ? 'Informe evaluación' : 'Eval. psicológica'}
+                        </button>
+                        <span className="w-px shrink-0 bg-emerald-700/50" aria-hidden />
+                        <button
+                          type="button"
+                          onClick={() => void emitirEnlaceEvaluacion(r, 'color')}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-transparent px-2.5 py-1.5 text-xs font-semibold text-amber-200 transition hover:bg-emerald-900/50"
+                          title="Evaluación de tipo de color (DISC)"
+                        >
+                          Color
                         </button>
                         <span className="w-px shrink-0 bg-emerald-700/50" aria-hidden />
                         <button
@@ -870,6 +918,21 @@ export default function RrhhHojasVidaArchivoPage() {
           setRows((prev) => prev.map((r) => (r.id === id ? { ...r, cargo_nombre: cargoUOficio } : r)));
         }}
       />
+
+      <Dialog
+        open={nuevaHvOpen}
+        onOpenChange={(open) => {
+          setNuevaHvOpen(open);
+          if (!open) void cargar();
+        }}
+      >
+        <DialogContent className="max-h-[90vh] overflow-y-auto border-white/10 bg-transparent p-0 sm:max-w-md">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Nueva hoja de vida</DialogTitle>
+          </DialogHeader>
+          <GeneradorHojaVida onClose={() => setNuevaHvOpen(false)} />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
