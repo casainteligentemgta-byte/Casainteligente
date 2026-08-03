@@ -86,7 +86,7 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId, proyecto
 
       setRows((data ?? []) as ExpressRow[]);
     } catch {
-      setErr('No se pudo cargar la lista de contratos express.');
+      setErr('No se pudo cargar la lista de contratos de trabajo.');
       setRows([]);
     } finally {
       setLoading(false);
@@ -97,7 +97,7 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId, proyecto
     const detalle = formalizado
       ? 'Este express ya fue formalizado: el expediente en Talento (ci_empleados) no se borra. Solo se elimina el registro express y los archivos en almacenamiento.'
       : 'Se eliminará el registro y los PDF/archivos asociados. Esta acción no se puede deshacer.';
-    if (!window.confirm(`${detalle}\n\n¿Eliminar el contrato express de «${nombre}»?`)) return;
+    if (!window.confirm(`${detalle}\n\n¿Eliminar el contrato de trabajo de «${nombre}»?`)) return;
     setBusyDeleteId(id);
     try {
       const res = await fetch(`/api/talento/contratos-express/${id}`, { method: 'DELETE' });
@@ -110,7 +110,7 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId, proyecto
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('ci-resumen-obreros-refresh'));
       }
-      toast.success('Contrato express eliminado');
+      toast.success('Contrato de trabajo eliminado');
     } catch {
       toast.error('Error de red');
     } finally {
@@ -134,11 +134,11 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId, proyecto
           </div>
           <div>
             <h2 id="cuadro-obreros-express-titulo" className="text-base font-bold tracking-tight text-white">
-              Cuadro de obreros — contratos express (fast-track)
+              Cuadro de obreros — contrato de trabajo (obrero)
             </h2>
             <p className="mt-0.5 max-w-2xl text-[11px] text-zinc-500">
               Contratados por Talento sin expediente previo en <span className="font-mono text-zinc-400">ci_empleados</span>
-              ; mismo módulo integral y obras/proyectos hijos vinculados. Desde Talento: PDF, compartir enlace y
+              ; mismo módulo integral y obras/proyectos hijos vinculados. Desde RRHH: PDF, serie desde Excel y
               formalizar.
             </p>
           </div>
@@ -157,11 +157,11 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId, proyecto
             <span className="ml-1.5 hidden sm:inline">Actualizar</span>
           </Button>
           <Link
-            href="/rrhh/registro"
+            href="/rrhh/contrato-trabajo-obrero"
             className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/45 bg-amber-950/50 px-3 py-2 text-xs font-bold text-amber-50 transition hover:border-amber-400/70 hover:bg-amber-900/55"
           >
             <FileText className="size-3.5 shrink-0" aria-hidden />
-            Nuevo express
+            Nuevo contrato
             <ExternalLink className="size-3.5 shrink-0 opacity-80" aria-hidden />
           </Link>
         </div>
@@ -169,14 +169,14 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId, proyecto
 
       <div className="mt-4">
         {loading ? (
-          <p className="py-8 text-center text-sm text-zinc-500">Cargando contratos express…</p>
+          <p className="py-8 text-center text-sm text-zinc-500">Cargando contratos de trabajo…</p>
         ) : err ? (
           <p className="rounded-lg border border-red-500/30 bg-red-950/30 px-4 py-3 text-sm text-red-300">{err}</p>
         ) : rows.length === 0 ? (
           <p className="rounded-lg border border-zinc-700/50 bg-zinc-900/40 px-4 py-6 text-center text-sm text-zinc-500">
-            No hay contratos express en este alcance. Crea uno en{' '}
-            <Link href="/rrhh/registro" className="font-semibold text-amber-300 underline underline-offset-2 hover:text-amber-200">
-              Talento → Nuevo express
+            No hay contratos de trabajo en este alcance. Crea uno en{' '}
+            <Link href="/rrhh/contrato-trabajo-obrero" className="font-semibold text-amber-300 underline underline-offset-2 hover:text-amber-200">
+              RRHH → Contrato de trabajo (obrero)
             </Link>
             .
           </p>
@@ -211,7 +211,7 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId, proyecto
                           </span>
                         ) : (
                           <span className="inline-block rounded-md border border-amber-500/45 bg-amber-950/40 px-2 py-0.5 text-[11px] font-semibold text-amber-100">
-                            Express — pendiente expediente
+                            Pendiente expediente
                           </span>
                         )}
                       </td>
@@ -228,8 +228,8 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId, proyecto
                           size="sm"
                           disabled={busy || loading}
                           className="h-8 gap-1 border-red-900/55 bg-red-950/30 px-2 text-xs font-semibold text-red-200 hover:bg-red-950/50 hover:text-red-50"
-                          title="Eliminar este contrato express de la lista y el almacenamiento"
-                          aria-label={`Borrar contrato express ${r.obrero_nombre}`}
+                          title="Eliminar este contrato de trabajo de la lista y el almacenamiento"
+                          aria-label={`Borrar contrato de trabajo ${r.obrero_nombre}`}
                           onClick={() => void eliminarFila(r.id, r.obrero_nombre, formal)}
                         >
                           <Trash2 className="size-3.5 shrink-0" aria-hidden />

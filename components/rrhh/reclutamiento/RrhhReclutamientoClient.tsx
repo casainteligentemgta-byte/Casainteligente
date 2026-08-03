@@ -336,7 +336,7 @@ export default function RrhhReclutamientoClient() {
             </p>
             <h1 className="text-2xl font-bold tracking-tight text-white">Reclutamiento</h1>
             <p className="mt-2 max-w-2xl text-sm text-zinc-400">
-              Examen de ingreso, envío de invitaciones y seguimiento de evaluaciones (obreros y contratos express).
+              Examen de ingreso, envío de invitaciones y seguimiento de evaluaciones (obreros y contratos de trabajo).
             </p>
           </div>
           <button
@@ -356,7 +356,7 @@ export default function RrhhReclutamientoClient() {
           { label: 'En archivo', labelShort: 'Archivo', value: stats.total, tone: 'text-zinc-100' },
           { label: 'Con evaluación', labelShort: 'Con eval.', value: stats.evaluados, tone: 'text-emerald-300' },
           { label: 'Sin evaluación', labelShort: 'Sin eval.', value: stats.pendientes, tone: 'text-amber-200' },
-          { label: 'Express sin evaluar', labelShort: 'Express', value: stats.expressSin, tone: 'text-orange-200' },
+          { label: 'Sin evaluar (CTO)', labelShort: 'CTO', value: stats.expressSin, tone: 'text-orange-200' },
         ].map((s) => (
           <div
             key={s.label}
@@ -377,7 +377,7 @@ export default function RrhhReclutamientoClient() {
           [
             { id: 'examen' as const, label: 'Examen e invitación', icon: BookOpen },
             { id: 'evaluaciones' as const, label: 'Todas las evaluaciones', icon: UserCheck },
-            { id: 'pendientes' as const, label: 'Pendientes / Express', icon: UserX },
+            { id: 'pendientes' as const, label: 'Pendientes / CTO', icon: UserX },
           ] as const
         ).map(({ id, label, icon: Icon }) => (
           <button
@@ -744,13 +744,13 @@ export default function RrhhReclutamientoClient() {
           </section>
 
           <section>
-            <h2 className="text-lg font-bold text-orange-100">Contratos express sin evaluación</h2>
+            <h2 className="text-lg font-bold text-orange-100">Contratos de trabajo sin evaluación</h2>
             <p className="mt-1 text-sm text-zinc-500">
               Fast-track sin evaluación registrada: formaliza en Talento o envía examen si ya existe expediente con la
               misma cédula.
             </p>
             {expressSinEvaluar.length === 0 ? (
-              <p className="mt-4 text-sm text-zinc-500">Todos los express visibles tienen evaluación o están formalizados.</p>
+              <p className="mt-4 text-sm text-zinc-500">Todos los contratos de trabajo visibles tienen evaluación o están formalizados.</p>
             ) : (
               <ul className="mt-4 space-y-2">
                 {expressSinEvaluar.map((x) => (
@@ -761,7 +761,7 @@ export default function RrhhReclutamientoClient() {
                     <div>
                       <p className="font-semibold text-zinc-100">{x.obrero_nombre}</p>
                       <p className="text-xs text-zinc-500">
-                        {x.obrero_cedula} · Express {fechaCorta(x.created_at)}
+                        {x.obrero_cedula} · CTO {fechaCorta(x.created_at)}
                         {x.empleado_id ? ' · Hay expediente' : ' · Sin expediente en ci_empleados'}
                       </p>
                     </div>
@@ -785,17 +785,17 @@ export default function RrhhReclutamientoClient() {
                         </>
                       ) : (
                         <Link
-                          href="/rrhh/registro"
+                          href="/rrhh/contrato-trabajo-obrero"
                           className="rounded-lg border border-amber-500/40 bg-amber-950/40 px-3 py-2 text-xs font-semibold text-amber-100"
                         >
-                          Crear express / formalizar
+                          Contrato de trabajo
                         </Link>
                       )}
                       <Link
                         href={hrefListaContratosExpress()}
                         className="rounded-lg border border-white/15 px-3 py-2 text-xs text-zinc-300 hover:bg-white/10"
                       >
-                        Lista express
+                        Generar / serie
                       </Link>
                     </div>
                   </li>

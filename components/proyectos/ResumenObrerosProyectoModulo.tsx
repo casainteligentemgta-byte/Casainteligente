@@ -328,7 +328,7 @@ function esInactivoPorObraCulminada(
 }
 
 const SUBTITULO_CUADRO_DEFAULT =
-  'Plazas solicitadas, obreros no aprobados en evaluación, contratos activos en obra vinculada y contratos express (fast-track) del mismo proyecto u obras hijas.';
+  'Plazas solicitadas, obreros no aprobados en evaluación, contratos activos en obra vinculada y contratos de trabajo (obrero) del mismo proyecto u obras hijas.';
 
 export default function ResumenObrerosProyectoModulo({
   proyectoModuloId,
@@ -1016,11 +1016,11 @@ export default function ResumenObrerosProyectoModulo({
                   type="button"
                   onClick={() => setExpressPanelAbierto(true)}
                   className="flex w-full items-center justify-between gap-2 rounded-lg border border-amber-500/40 bg-amber-950/45 px-3 py-2.5 text-left transition hover:border-amber-400/55 hover:bg-amber-900/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/40"
-                  title="Ver cuadro de obreros — contratos express (fast-track)"
+                  title="Ver cuadro de obreros — contrato de trabajo (obrero)"
                 >
                   <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-amber-100/95">
                     <FileText className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                    Contratados express
+                    Contrato de trabajo
                   </span>
                   <span className="rounded-md bg-amber-500/20 px-2 py-0.5 text-sm font-bold tabular-nums text-amber-50">
                     {numResumen(contratosExpressCount)}
