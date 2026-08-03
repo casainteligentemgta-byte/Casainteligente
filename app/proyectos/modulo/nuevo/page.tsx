@@ -542,14 +542,16 @@ export default function NuevoProyectoModuloPage() {
       return;
     }
     const montoParsed = monto.trim().replace(',', '.');
-    const montoNum =
-      montoParsed !== '' && Number.isFinite(Number(montoParsed)) ? Number(montoParsed) : null;
-    if (montoNum == null || montoNum < 0 || !Number.isFinite(montoNum)) {
-      setSaving(false);
-      setError('Indica el monto del proyecto (USD), un número válido mayor o igual que 0.');
-      return;
+    let montoFinal = 0;
+    if (montoParsed !== '') {
+      const montoNum = Number(montoParsed);
+      if (!Number.isFinite(montoNum) || montoNum < 0) {
+        setSaving(false);
+        setError('Si indicas monto, debe ser un número válido mayor o igual que 0 (USD).');
+        return;
+      }
+      montoFinal = montoNum;
     }
-    const montoFinal = montoNum;
 
     const payload: Record<string, unknown> = {
       customer_id: customerId,
@@ -877,14 +879,13 @@ export default function NuevoProyectoModuloPage() {
             </div>
 
             <div className="mt-4">
-              <label className={labelClass}>Monto del proyecto (USD) *</label>
+              <label className={labelClass}>Monto del proyecto (USD)</label>
               <input
-                required
                 value={monto}
                 onChange={(e) => setMonto(e.target.value)}
                 className={fieldClass}
                 inputMode="decimal"
-                placeholder="Ej. 12500.50"
+                placeholder="Opcional — puedes indicarlo después"
               />
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <button
@@ -904,7 +905,8 @@ export default function NuevoProyectoModuloPage() {
                 ) : null}
               </div>
               <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
-                Se rellena al elegir presupuesto(s); puedes corregir el monto manualmente antes de crear el proyecto.
+                Opcional al crear. Si eliges presupuesto(s) se puede rellenar con la suma; si no, lo completas después
+                en Modificar proyecto.
               </p>
             </div>
           </div>
