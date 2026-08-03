@@ -526,10 +526,6 @@ export default function NuevoProyectoModuloPage() {
       setError('Selecciona la entidad de trabajo (patrono / empresa que ejecuta el proyecto).');
       return;
     }
-    if (!budgetId.trim()) {
-      setError('Selecciona el presupuesto principal del cliente (número P-…).');
-      return;
-    }
     setSaving(true);
     setError(null);
     setOkId(null);
@@ -553,8 +549,8 @@ export default function NuevoProyectoModuloPage() {
 
     const payload: Record<string, unknown> = {
       customer_id: customerId,
-      budget_id: budgetId,
-      budgets_adicionales: budgetIdsAdicionales,
+      budget_id: budgetId.trim() || null,
+      budgets_adicionales: budgetId.trim() ? budgetIdsAdicionales : [],
       entidad_id: entidadId.trim() || null,
       nombre: nombre.trim(),
       nombre_proyecto: nombre.trim(),
@@ -592,7 +588,7 @@ export default function NuevoProyectoModuloPage() {
     if (!budgetId || !presupuestoSeleccionado) {
       return {
         titulo: loadingBudgetsCliente ? 'Cargando presupuestos…' : 'Presupuesto principal',
-        subtitulo: loadingBudgetsCliente ? null : 'Obligatorio · toca para elegir P-…',
+        subtitulo: loadingBudgetsCliente ? null : 'Opcional · toca para elegir P-…',
         disabled: loadingRefs || loadingBudgetsCliente,
       };
     }
@@ -735,9 +731,9 @@ export default function NuevoProyectoModuloPage() {
           </div>
 
           <div ref={presupuestoMenuRef} className="relative">
-            <label className={labelClass}>Presupuesto principal *</label>
+            <label className={labelClass}>Presupuesto principal</label>
             <p className="mb-1 text-[11px] leading-relaxed text-zinc-500">
-              Debe ser un presupuesto del cliente elegido. Crear o revisar en{' '}
+              Opcional. Si lo vinculas, debe ser un presupuesto del cliente elegido. Crear o revisar en{' '}
               <Link href="/presupuestos" className="font-semibold text-sky-400 underline hover:text-sky-300">
                 Presupuestos
               </Link>
@@ -770,6 +766,24 @@ export default function NuevoProyectoModuloPage() {
                 className="absolute z-30 mt-1 max-h-72 w-full overflow-auto rounded-xl border border-white/10 bg-zinc-900 py-1 shadow-xl"
                 role="listbox"
               >
+                <li>
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={!budgetId}
+                    className={`flex w-full flex-col gap-0.5 px-3 py-2.5 text-left hover:bg-white/5 ${!budgetId ? 'bg-sky-500/15' : ''}`}
+                    onClick={() => {
+                      setBudgetId('');
+                      setBudgetIdsAdicionales([]);
+                      cerrarPresupuestoMenu();
+                    }}
+                  >
+                    <span className={`text-sm font-bold ${!budgetId ? 'text-white' : 'text-zinc-100'}`}>
+                      Sin presupuesto
+                    </span>
+                    <span className="text-[11px] text-zinc-500">Crear el proyecto y vincular el P-… después</span>
+                  </button>
+                </li>
                 {budgetsCliente.map((b) => {
                   const active = b.id === budgetId;
                   const st = subtotalPresupuestoUSD(b);
@@ -802,8 +816,8 @@ export default function NuevoProyectoModuloPage() {
             ) : null}
             {customerId && !loadingRefs && !loadingBudgetsCliente && budgetsCliente.length === 0 ? (
               <p className="mt-1 text-xs text-zinc-500">
-                No hay presupuestos vinculados a este cliente por ID ni por nombre en presupuestos sin cliente
-                asignado.
+                No hay presupuestos de este cliente por ahora. Puedes crear el proyecto sin presupuesto y vincularlo
+                después.
               </p>
             ) : null}
 
@@ -847,7 +861,9 @@ export default function NuevoProyectoModuloPage() {
               {!customerId ? (
                 <p className="mt-1 text-[11px] text-zinc-500">Primero elige un cliente.</p>
               ) : !budgetId ? (
-                <p className="mt-1 text-[11px] text-zinc-500">Elige el presupuesto principal antes de añadir otros.</p>
+                <p className="mt-1 text-[11px] text-zinc-500">
+                  Para añadir más P-…, elige primero un presupuesto principal (sigue siendo opcional crear sin ninguno).
+                </p>
               ) : presupuestosDisponiblesParaAdicional.length === 0 && budgetsCliente.length > 0 ? (
                 <p className="mt-1 text-[11px] text-zinc-500">No quedan más presupuestos de este cliente por vincular.</p>
               ) : null}
