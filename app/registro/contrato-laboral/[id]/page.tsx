@@ -5,7 +5,7 @@ import { useParams, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { apiUrl } from '@/lib/http/apiUrl';
 
-type DatoFaltante = { id: string; etiqueta: string; ayuda: string };
+type DatoFaltante = { id: string; etiqueta: string; ayuda: string; dueño?: string };
 
 type Meta = {
   contrato_id: string;
@@ -211,6 +211,18 @@ function ContratoLaboralObreroInner() {
                   {meta.datos_faltantes.slice(0, 12).map((d) => (
                     <li key={d.id}>
                       <span className="font-medium">{d.etiqueta}</span>
+                      {d.dueño ? (
+                        <span className="text-amber-200/70">
+                          {' '}
+                          [{d.dueño === 'pm'
+                            ? 'PM / obra'
+                            : d.dueño === 'legal_admin'
+                              ? 'Legal / Admin'
+                              : d.dueño === 'obrero'
+                                ? 'Planilla'
+                                : 'RRHH'}]
+                        </span>
+                      ) : null}
                       {d.ayuda ? <span className="text-amber-200/80"> — {d.ayuda}</span> : null}
                     </li>
                   ))}

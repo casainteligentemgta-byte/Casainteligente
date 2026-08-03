@@ -11,6 +11,11 @@ import { Label } from '@/components/ui/label';
 import { apiUrl } from '@/lib/http/apiUrl';
 import { cn } from '@/lib/utils';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import {
+  ETIQUETA_DUEÑO_DATO_CONTRATO,
+  evaluarChecklistObraContratoPm,
+  type ChecklistObraContratoPm,
+} from '@/lib/talento/datosObraContratoPm';
 
 const formSchema = z.object({
   fechaIngreso: z
@@ -35,6 +40,9 @@ export type ObreroContratoContext = {
     nombre: string | null;
     ubicacion: string | null;
     etapa_actual: string | null;
+    fase_tecnica_contrato: string | null;
+    horario_semanal_obra_default: string | null;
+    punto_encuentro_transporte_contrato: string | null;
   } | null;
   entidad: {
     nombre_legal: string | null;
@@ -45,6 +53,7 @@ export type ObreroContratoContext = {
     cedula_representante: string | null;
     datos_registro: unknown;
   } | null;
+  checklistPm: ChecklistObraContratoPm | null;
 };
 
 export type ModalGenerarContratoProps = {
@@ -128,11 +137,15 @@ async function cargarContextoContrato(client: SupabaseClient, obreroId: string, 
   let entidad: ObreroContratoContext['entidad'] = null;
 
   if (proyectoId) {
-    const { data: pr, error: ePr } = await client
-      .from('ci_proyectos')
-      .select('id,nombre,ubicacion_texto,obra_ubicacion,ubicacion,estado,entidad_id,proyecto_modulo_origen_id')
-      .eq('id', proyectoId)
-      .maybeSingle();
+    const selFull =
+      'id,nombre,ubicacion_texto,obra_ubicacion,ubicacion,estado,entidad_id,proyecto_modulo_origen_id,horario_semanal_obra_default,punto_encuentro_transporte_contrato,fase_tecnica_contrato';
+    const selSinFase =
+      'id,nombre,ubicacion_texto,obra_ubicacion,ubicacion,estado,entidad_id,proyecto_modulo_origen_id,horario_semanal_obra_default,punto_encuentro_transporte_contrato';
+    let prRes = await client.from('ci_proyectos').select(selFull).eq('id', proyectoId).maybeSingle();
+    if (prRes.error && /fase_tecnica_contrato/i.test(prRes.error.message)) {
+      prRes = await client.from('ci_proyectos').select(selSinFase).eq('id', proyectoId).maybeSingle();
+    }
+    const { data: pr, error: ePr } = prRes;
     if (!ePr && pr) {
       const p = pr as {
         id: string;
@@ -143,6 +156,9 @@ async function cargarContextoContrato(client: SupabaseClient, obreroId: string, 
         estado?: string | null;
         entidad_id?: string | null;
         proyecto_modulo_origen_id?: string | null;
+        horario_semanal_obra_default?: string | null;
+        punto_encuentro_transporte_contrato?: string | null;
+        fase_tecnica_contrato?: string | null;
       };
       const ubic =
         [p.obra_ubicacion, p.ubicacion_texto, p.ubicacion].map((s) => String(s ?? '').trim()).find(Boolean) ?? null;
@@ -151,6 +167,9 @@ async function cargarContextoContrato(client: SupabaseClient, obreroId: string, 
         nombre: p.nombre ?? null,
         ubicacion: ubic,
         etapa_actual: p.estado ?? null,
+        fase_tecnica_contrato: (p.fase_tecnica_contrato ?? '').trim() || null,
+        horario_semanal_obra_default: (p.horario_semanal_obra_default ?? '').trim() || null,
+        punto_encuentro_transporte_contrato: (p.punto_encuentro_transporte_contrato ?? '').trim() || null,
       };
 
       let eid = (p.entidad_id ?? '').trim();
@@ -167,9 +186,9 @@ async function cargarContextoContrato(client: SupabaseClient, obreroId: string, 
         }
       }
       if (eid) {
-        const selFull =
+        const selEntFull =
           'id,nombre,nombre_legal,rif,domicilio_fiscal,direccion_fiscal,representante_legal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil';
-        let ent = await client.from('ci_entidades').select(selFull).eq('id', eid).maybeSingle();
+        let ent = await client.from('ci_entidades').select(selEntFull).eq('id', eid).maybeSingle();
         if (ent.error) {
           ent = await client
             .from('ci_entidades')
@@ -202,7 +221,16 @@ async function cargarContextoContrato(client: SupabaseClient, obreroId: string, 
     }
   }
 
-  return { obrero, proyecto, entidad };
+  const checklistPm = proyecto
+    ? evaluarChecklistObraContratoPm({
+        ubicacion: proyecto.ubicacion,
+        fase_tecnica_contrato: proyecto.fase_tecnica_contrato,
+        horario_semanal_obra_default: proyecto.horario_semanal_obra_default,
+        punto_encuentro_transporte_contrato: proyecto.punto_encuentro_transporte_contrato,
+      })
+    : null;
+
+  return { obrero, proyecto, entidad, checklistPm };
 }
 
 const selectDark =
@@ -413,7 +441,15 @@ export function ModalGenerarContrato({
                   <InfoRow label="Cargo (tabulador)" value={ctxQuery.data!.obrero.cargo_nombre ?? ''} />
                   <InfoRow label="Proyecto / obra" value={ctxQuery.data!.proyecto?.nombre ?? ''} />
                   <InfoRow label="Ubicación obra" value={ctxQuery.data!.proyecto?.ubicacion ?? ''} />
-                  <InfoRow label="Etapa actual" value={ctxQuery.data!.proyecto?.etapa_actual ?? ''} />
+                  <InfoRow label="Fase técnica (PM)" value={ctxQuery.data!.proyecto?.fase_tecnica_contrato ?? ''} />
+                  <InfoRow
+                    label="Horario obra (PM)"
+                    value={ctxQuery.data!.proyecto?.horario_semanal_obra_default ?? ''}
+                  />
+                  <InfoRow
+                    label="Punto encuentro transporte (PM)"
+                    value={ctxQuery.data!.proyecto?.punto_encuentro_transporte_contrato ?? ''}
+                  />
                   <InfoRow label="Empleador (nombre legal)" value={ctxQuery.data!.entidad?.nombre_legal ?? ''} />
                   <InfoRow label="RIF" value={ctxQuery.data!.entidad?.rif ?? ''} />
                   <InfoRow label="Domicilio fiscal" value={ctxQuery.data!.entidad?.domicilio_fiscal ?? ''} />
@@ -421,6 +457,36 @@ export function ModalGenerarContrato({
                   <InfoRow label="Cargo representante" value={ctxQuery.data!.entidad?.cargo_representante ?? ''} />
                   <InfoRow label="C.I. representante" value={ctxQuery.data!.entidad?.cedula_representante ?? ''} />
                 </div>
+                {ctxQuery.data!.checklistPm && !ctxQuery.data!.checklistPm.listos ? (
+                  <div className="rounded-xl border border-amber-500/30 bg-amber-950/25 px-3 py-3 text-xs text-amber-100/95">
+                    <p className="font-semibold text-amber-100">
+                      Datos de obra pendientes ({ETIQUETA_DUEÑO_DATO_CONTRATO.pm})
+                    </p>
+                    <p className="mt-1 text-amber-100/80">
+                      No pidas estos datos al obrero ni los completes a mano por cada contrato. El PM los carga una vez
+                      en el módulo del proyecto.
+                    </p>
+                    <ul className="mt-2 list-disc space-y-0.5 pl-4 text-amber-100/90">
+                      {ctxQuery.data!.checklistPm.faltantes.map((c) => (
+                        <li key={c.id}>{c.etiqueta}</li>
+                      ))}
+                    </ul>
+                    {ctxQuery.data!.proyecto?.id ? (
+                      <Link
+                        href={`/proyectos/modulo/${encodeURIComponent(ctxQuery.data!.proyecto.id)}?editar=1`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-3 inline-flex rounded-lg border border-amber-500/40 bg-amber-500/15 px-3 py-1.5 text-[11px] font-semibold text-amber-50 hover:bg-amber-500/25"
+                      >
+                        Abrir proyecto → completar datos PM
+                      </Link>
+                    ) : null}
+                  </div>
+                ) : ctxQuery.data!.checklistPm?.listos ? (
+                  <p className="rounded-xl border border-emerald-500/25 bg-emerald-950/20 px-3 py-2 text-xs text-emerald-100/90">
+                    Datos de obra listos ({ETIQUETA_DUEÑO_DATO_CONTRATO.pm}). RRHH solo confirma fecha, plazo y jornada.
+                  </p>
+                ) : null}
                 {ctxQuery.data!.entidad?.datos_registro != null ? (
                   <details className="rounded-lg border border-white/[0.06] bg-black/30 px-2 py-2 text-[11px] text-zinc-400">
                     <summary className="cursor-pointer font-semibold text-zinc-300">Datos registro mercantil (JSON)</summary>

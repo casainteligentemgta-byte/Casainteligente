@@ -21,6 +21,7 @@ import HorarioObraEditor from '@/components/proyectos/HorarioObraEditor';
 import { hrefRrhhHub } from '@/lib/rrhh/hrefSolicitudPersonal';
 import { hrefCcoProyecto } from '@/lib/contabilidad/cco/hrefCcoProyecto';
 import { guardarProyectoRrhhContexto } from '@/lib/rrhh/proyectoRrhhContexto';
+import { evaluarChecklistObraContratoPm } from '@/lib/talento/datosObraContratoPm';
 
 const LOAD_TIMEOUT_MS = 45_000;
 
@@ -71,6 +72,8 @@ type Proyecto = {
   horario_semanal_obra_default?: string | null;
   /** Parada del transporte gratuito (cláusula SEXTA del contrato laboral). */
   punto_encuentro_transporte_contrato?: string | null;
+  /** Fase técnica / objeto de obra determinada (cláusula PRIMERA). PM una vez por obra. */
+  fase_tecnica_contrato?: string | null;
   updated_at?: string;
 };
 
@@ -181,6 +184,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
   const [peEntidadId, setPeEntidadId] = useState('');
   const [peHorarioSemanalObra, setPeHorarioSemanalObra] = useState('');
   const [pePuntoEncTransporteContrato, setPePuntoEncTransporteContrato] = useState('');
+  const [peFaseTecnicaContrato, setPeFaseTecnicaContrato] = useState('');
   const [entidades, setEntidades] = useState<EntidadOpt[]>([]);
   const [savingProyecto, setSavingProyecto] = useState(false);
   const [proyectoSaveError, setProyectoSaveError] = useState<string | null>(null);
@@ -374,6 +378,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
     setPeEntidadId(proyecto.entidad_id ? String(proyecto.entidad_id) : '');
     setPeHorarioSemanalObra(proyecto.horario_semanal_obra_default ?? '');
     setPePuntoEncTransporteContrato(proyecto.punto_encuentro_transporte_contrato ?? '');
+    setPeFaseTecnicaContrato(proyecto.fase_tecnica_contrato ?? '');
     setProyectoSaveError(null);
   }, [proyecto]);
 
@@ -413,23 +418,41 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
     }
     setSavingProyecto(true);
     setProyectoSaveError(null);
-    const { error: upErr } = await supabase
-      .from('ci_proyectos')
-      .update({
-        nombre: n,
-        estado: peEstado,
-        ubicacion_texto: u,
-        monto_aproximado: m,
-        moneda: (peMoneda.trim() || 'USD').slice(0, 8),
-        observaciones: peObs.trim() || null,
-        lat,
-        lng,
-        entidad_id: peEntidadId.trim() || null,
-        horario_semanal_obra_default: peHorarioSemanalObra.trim() || null,
-        punto_encuentro_transporte_contrato: pePuntoEncTransporteContrato.trim() || null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', id);
+    const payloadBase = {
+      nombre: n,
+      estado: peEstado,
+      ubicacion_texto: u,
+      monto_aproximado: m,
+      moneda: (peMoneda.trim() || 'USD').slice(0, 8),
+      observaciones: peObs.trim() || null,
+      lat,
+      lng,
+      entidad_id: peEntidadId.trim() || null,
+      horario_semanal_obra_default: peHorarioSemanalObra.trim() || null,
+      punto_encuentro_transporte_contrato: pePuntoEncTransporteContrato.trim() || null,
+      updated_at: new Date().toISOString(),
+    };
+    let upErr = (
+      await supabase
+        .from('ci_proyectos')
+        .update({
+          ...payloadBase,
+          fase_tecnica_contrato: peFaseTecnicaContrato.trim() || null,
+        })
+        .eq('id', id)
+    ).error;
+    // Migración 307 pendiente: reintentar sin fase_tecnica_contrato.
+    if (upErr && /fase_tecnica_contrato/i.test(upErr.message)) {
+      upErr = (await supabase.from('ci_proyectos').update(payloadBase).eq('id', id)).error;
+      if (!upErr) {
+        setProyectoSaveError(
+          'Guardado parcial: aplica la migración 307 (fase técnica) en Supabase para persistir la fase del contrato.',
+        );
+        setSavingProyecto(false);
+        void load();
+        return;
+      }
+    }
     setSavingProyecto(false);
     if (upErr) {
       setProyectoSaveError(upErr.message);
@@ -481,6 +504,16 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
     const row = entidades.find((en) => en.id === String(eid).trim());
     return row?.nombre?.trim() || null;
   }, [proyecto?.entidad_id, entidades]);
+
+  const checklistContratoPm = useMemo(() => {
+    if (!proyecto) return null;
+    return evaluarChecklistObraContratoPm({
+      ubicacion: proyecto.ubicacion_texto,
+      fase_tecnica_contrato: proyecto.fase_tecnica_contrato,
+      horario_semanal_obra_default: proyecto.horario_semanal_obra_default,
+      punto_encuentro_transporte_contrato: proyecto.punto_encuentro_transporte_contrato,
+    });
+  }, [proyecto]);
 
   /** Enlace directo ?tab=rrhh|talento|solicitados|finanzas: vistas compactas / cuadro RRHH / utilidad real. */
   const tabVistaTalento =
@@ -728,39 +761,66 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                     className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-sky-500/40"
                   />
                 </div>
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-500">
-                    Horario semanal en obra (contratos laborales)
-                  </label>
-                  <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-500">
-                    Se usa en el PDF estructurado si el contrato del obrero no define otro horario. Elige días y hora de
-                    inicio y culminación por franja; puedes añadir otra franja (p. ej. viernes corto).
-                  </p>
-                  <div className="mt-2">
-                    <HorarioObraEditor
-                      key={`${id}:${proyecto.updated_at ?? ''}`}
-                      value={peHorarioSemanalObra}
-                      onChange={setPeHorarioSemanalObra}
+
+                <div className="rounded-2xl border border-sky-500/25 bg-sky-950/20 p-4 space-y-4">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-sky-300/90">
+                      Datos de obra para contrato (PM · una vez)
+                    </p>
+                    <p className="mt-1 text-[11px] leading-relaxed text-zinc-400">
+                      Completa estos campos al abrir la obra. RRHH los reutiliza al generar cada contrato; no hace falta
+                      pedirlos por obrero.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-500">
+                      Fase técnica (cláusula PRIMERA)
+                    </label>
+                    <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-500">
+                      Objeto de la obra determinada. Ej.: estructura y fundaciones; acabados; instalaciones eléctricas.
+                    </p>
+                    <textarea
+                      value={peFaseTecnicaContrato}
+                      onChange={(e) => setPeFaseTecnicaContrato(e.target.value)}
+                      rows={2}
+                      placeholder="Ej.: ejecución de estructura y fundaciones de la obra"
+                      className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-sky-500/40"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-500">
+                      Horario semanal en obra (contratos laborales)
+                    </label>
+                    <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-500">
+                      Se usa en el PDF si el contrato del obrero no define otro horario. Elige días y hora de inicio y
+                      culminación por franja; puedes añadir otra (p. ej. viernes corto).
+                    </p>
+                    <div className="mt-2">
+                      <HorarioObraEditor
+                        key={`${id}:${proyecto.updated_at ?? ''}`}
+                        value={peHorarioSemanalObra}
+                        onChange={setPeHorarioSemanalObra}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-500">
+                      Parada del transporte (contrato laboral)
+                    </label>
+                    <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-500">
+                      Texto tras «desde el punto de encuentro» hasta el sitio de la obra. Ej.:{' '}
+                      <span className="text-zinc-400">en el sector Jorge Coll (Municipio Maneiro)</span>.
+                    </p>
+                    <textarea
+                      value={pePuntoEncTransporteContrato}
+                      onChange={(e) => setPePuntoEncTransporteContrato(e.target.value)}
+                      rows={2}
+                      placeholder="en el sector Jorge Coll (Municipio Maneiro)"
+                      className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-sky-500/40"
                     />
                   </div>
                 </div>
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-500">
-                    Parada del transporte (contrato laboral, cláusula SEXTA)
-                  </label>
-                  <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-500">
-                    Texto que aparece en el PDF tras «desde el punto de encuentro» (hasta «hasta el sitio de la obra»).
-                    Ej.: <span className="text-zinc-400">en el sector Jorge Coll (Municipio Maneiro)</span>. Si lo dejas
-                    vacío, se usa ese ejemplo por defecto.
-                  </p>
-                  <textarea
-                    value={pePuntoEncTransporteContrato}
-                    onChange={(e) => setPePuntoEncTransporteContrato(e.target.value)}
-                    rows={2}
-                    placeholder="en el sector Jorge Coll (Municipio Maneiro)"
-                    className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-sky-500/40"
-                  />
-                </div>
+
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-500">Estado</label>
@@ -870,6 +930,55 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                     </button>
                   </div>
                 </div>
+                {checklistContratoPm ? (
+                  <div
+                    className={`mt-4 rounded-2xl border p-4 ${
+                      checklistContratoPm.listos
+                        ? 'border-emerald-500/30 bg-emerald-950/20'
+                        : 'border-amber-500/30 bg-amber-950/20'
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p
+                          className={`text-[10px] font-bold uppercase tracking-[0.14em] ${
+                            checklistContratoPm.listos ? 'text-emerald-300/90' : 'text-amber-300/90'
+                          }`}
+                        >
+                          Contrato laboral · datos PM
+                        </p>
+                        <p className="mt-1 text-xs text-zinc-400">
+                          {checklistContratoPm.listos
+                            ? 'Listos: RRHH puede generar contratos sin pedirte más datos de obra.'
+                            : `Faltan ${checklistContratoPm.faltantes.length} dato(s) de obra. Completa una sola vez en Modificar proyecto.`}
+                        </p>
+                        <ul className="mt-2 grid gap-1 sm:grid-cols-2">
+                          {checklistContratoPm.campos.map((c) => (
+                            <li key={c.id} className="text-[11px] text-zinc-300">
+                              <span className={c.completo ? 'text-emerald-400' : 'text-amber-400'}>
+                                {c.completo ? '✓' : '○'}
+                              </span>{' '}
+                              {c.etiqueta}
+                              {!c.completo ? null : c.valor ? (
+                                <span className="block truncate pl-4 text-zinc-500" title={c.valor}>
+                                  {c.valor}
+                                </span>
+                              ) : null}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      {!checklistContratoPm.listos ? (
+                        <Link
+                          href={`/proyectos/modulo/${id}?editar=1`}
+                          className="shrink-0 rounded-xl border border-amber-500/40 bg-amber-500/15 px-3 py-2 text-xs font-semibold text-amber-100 hover:bg-amber-500/25"
+                        >
+                          Completar datos PM
+                        </Link>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
                 <div className="mt-4 flex flex-wrap items-start gap-4">
                   <ImportarPresupuestoLulo proyectoId={id} />
                   <Link

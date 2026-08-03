@@ -172,6 +172,7 @@ export async function cargarFuentesContratoObreroPdf(
     entidad_id?: string | null;
     horario_semanal_obra_default?: string | null;
     punto_encuentro_transporte_contrato?: string | null;
+    fase_tecnica_contrato?: string | null;
   };
   const ubic = (o.obra_ubicacion ?? o.ubicacion_texto ?? '').trim() || null;
 
@@ -220,7 +221,7 @@ export async function cargarFuentesContratoObreroPdf(
     contrato: {
       cargo_oficio_desempeño: row.cargo_oficio_desempeño,
       lugar_prestacion_servicio: row.lugar_prestacion_servicio,
-      objeto_contrato: row.objeto_contrato,
+      objeto_contrato: row.objeto_contrato || strOpt(o.fase_tecnica_contrato),
       tipo_contrato: row.tipo_contrato,
       jornada_trabajo: row.jornada_trabajo,
       salario_basico_diario_ves: row.salario_basico_diario_ves,
@@ -237,6 +238,7 @@ export async function cargarFuentesContratoObreroPdf(
       nombre: o.nombre,
       ubicacion: ubic,
       punto_encuentro_transporte_contrato: strOpt(o.punto_encuentro_transporte_contrato),
+      fase_tecnica_contrato: strOpt(o.fase_tecnica_contrato),
     },
     patron: {
       ...patron,
@@ -274,6 +276,8 @@ function strOpt(v: unknown): string | null {
 
 /** Campos de obra/proyecto para PDF; se prueba de más completo a más mínimo (columnas opcionales 086/115/117/123/124). */
 const CI_PROYECTO_SELECT_CANDIDATES = [
+  'nombre,ubicacion_texto,obra_ubicacion,entidad_id,horario_semanal_obra_default,punto_encuentro_transporte_contrato,fase_tecnica_contrato',
+  'nombre,ubicacion_texto,entidad_id,horario_semanal_obra_default,punto_encuentro_transporte_contrato,fase_tecnica_contrato',
   'nombre,ubicacion_texto,obra_ubicacion,entidad_id,horario_semanal_obra_default,punto_encuentro_transporte_contrato',
   'nombre,ubicacion_texto,entidad_id,horario_semanal_obra_default,punto_encuentro_transporte_contrato',
   'nombre,ubicacion_texto,obra_ubicacion,entidad_id,horario_semanal_obra_default',
@@ -494,6 +498,7 @@ export async function cargarFuentesContratoObreroPorEmpleadoId(
   let entidadId: string | null = null;
   let horarioProyectoDefault: string | null = null;
   let puntoEncTransporteProyecto: string | null = null;
+  let faseTecnicaProyecto: string | null = null;
   if (proyectoId) {
     const { data: ob } = await fetchCiProyectoCamposContratoPdf(supabase, proyectoId);
     if (ob) {
@@ -504,12 +509,14 @@ export async function cargarFuentesContratoObreroPorEmpleadoId(
         entidad_id?: string | null;
         horario_semanal_obra_default?: string | null;
         punto_encuentro_transporte_contrato?: string | null;
+        fase_tecnica_contrato?: string | null;
       };
       obraNombre = o.nombre;
       obraUbic = (o.obra_ubicacion ?? o.ubicacion_texto ?? '').trim() || null;
       entidadId = strOpt(o.entidad_id);
       horarioProyectoDefault = strOpt(o.horario_semanal_obra_default);
       puntoEncTransporteProyecto = strOpt(o.punto_encuentro_transporte_contrato);
+      faseTecnicaProyecto = strOpt(o.fase_tecnica_contrato);
     }
   }
 
@@ -544,7 +551,7 @@ export async function cargarFuentesContratoObreroPorEmpleadoId(
   const contrato: FuentesContratoObrero['contrato'] = {
     cargo_oficio_desempeño: pick(c?.cargo_oficio_desempeño, e.cargo_nombre ?? null) ?? null,
     lugar_prestacion_servicio: pick(c?.lugar_prestacion_servicio, obraNombre) ?? null,
-    objeto_contrato: c?.objeto_contrato ?? null,
+    objeto_contrato: pick(c?.objeto_contrato, faseTecnicaProyecto) ?? null,
     tipo_contrato: c?.tipo_contrato ?? null,
     jornada_trabajo: c?.jornada_trabajo ?? null,
     salario_basico_diario_ves: c?.salario_basico_diario_ves ?? null,
@@ -598,6 +605,7 @@ export async function cargarFuentesContratoObreroPorEmpleadoId(
       nombre: obraNombre,
       ubicacion: obraUbic,
       punto_encuentro_transporte_contrato: puntoEncTransporteProyecto,
+      fase_tecnica_contrato: faseTecnicaProyecto,
     },
     patron: {
       ...patron,
