@@ -282,14 +282,11 @@ export function parseContratoTrabajoObreroTabla(buffer: ArrayBuffer, filename?: 
   return { filas, encabezados, mapeo, avisos };
 }
 
-/** Encabezados sugeridos para plantilla descargable. */
+/** Encabezados sugeridos para plantilla descargable (sin domicilio / municipio / estado). */
 export const PLANTILLA_ENCABEZADOS_CONTRATO_TRABAJO = [
   'cedula',
   'nombres',
   'apellidos',
-  'direccion',
-  'municipio',
-  'estado',
   'nacionalidad',
   'estado_civil',
   'fecha_ingreso',
@@ -307,9 +304,6 @@ export function generarPlantillaContratoTrabajoXlsx(): ArrayBuffer {
       cedula: 'V-12345678',
       nombres: 'José Luis',
       apellidos: 'Pérez Gómez',
-      direccion: 'Calle 5, sector Centro',
-      municipio: 'Maracaibo',
-      estado: 'Zulia',
       nacionalidad: 'Venezolana',
       estado_civil: 'Soltero',
       fecha_ingreso: '2026-08-03',
