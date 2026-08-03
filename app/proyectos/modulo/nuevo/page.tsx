@@ -957,6 +957,9 @@ export default function NuevoProyectoModuloPage() {
                 setLng(String(v.lng));
                 if (v.label && !ubicacion.trim()) setUbicacion(v.label);
               }}
+              onLabelFromShare={(label) => {
+                if (!ubicacion.trim()) setUbicacion(label);
+              }}
             />
           ) : (
             <div className="space-y-2">

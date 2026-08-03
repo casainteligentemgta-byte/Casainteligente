@@ -22,6 +22,17 @@ import { hrefRrhhHub } from '@/lib/rrhh/hrefSolicitudPersonal';
 import { hrefCcoProyecto } from '@/lib/contabilidad/cco/hrefCcoProyecto';
 import { guardarProyectoRrhhContexto } from '@/lib/rrhh/proyectoRrhhContexto';
 import { evaluarChecklistObraContratoPm } from '@/lib/talento/datosObraContratoPm';
+import dynamic from 'next/dynamic';
+
+const ProjectLocationPicker = dynamic(
+  () => import('@/components/proyectos/ProjectLocationPicker'),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-72 w-full animate-pulse rounded-xl border border-white/10 bg-white/[0.04]" />
+    ),
+  },
+);
 
 const LOAD_TIMEOUT_MS = 45_000;
 
@@ -877,6 +888,23 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                       className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-sky-500/40"
                     />
                   </div>
+                </div>
+                <div>
+                  <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-zinc-500">
+                    Mapa / pegar ubicación
+                  </p>
+                  <ProjectLocationPicker
+                    lat={peLat.trim() ? Number(peLat) : null}
+                    lng={peLng.trim() ? Number(peLng) : null}
+                    onChange={(v) => {
+                      setPeLat(String(v.lat));
+                      setPeLng(String(v.lng));
+                      if (v.label && !peUbicacion.trim()) setPeUbicacion(v.label);
+                    }}
+                    onLabelFromShare={(label) => {
+                      if (!peUbicacion.trim()) setPeUbicacion(label);
+                    }}
+                  />
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-500">

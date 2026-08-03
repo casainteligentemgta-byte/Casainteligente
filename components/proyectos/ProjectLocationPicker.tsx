@@ -4,6 +4,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet';
+import { apiUrl } from '@/lib/http/apiUrl';
+import { parseUbicacionCompartida } from '@/lib/proyectos/parseUbicacionCompartida';
 
 type PickValue = {
   lat: number;
@@ -15,6 +17,11 @@ type Props = {
   lat?: number | null;
   lng?: number | null;
   onChange: (v: PickValue) => void;
+  /**
+   * Si se define, al aplicar una ubicación pegada con etiqueta se llama
+   * para rellenar `ubicacion_texto`.
+   */
+  onLabelFromShare?: (label: string) => void;
 };
 
 const DEFAULT_CENTER: [number, number] = [10.4806, -66.9036];
@@ -40,6 +47,17 @@ function ClickCapture({ onPick }: { onPick: (lat: number, lng: number) => void }
   return null;
 }
 
+/** Centra el mapa cuando llegan coordenadas nuevas (pegar link / buscar). */
+function FlyToCoords({ lat, lng }: { lat?: number | null; lng?: number | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (lat == null || lng == null) return;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    map.flyTo([lat, lng], Math.max(map.getZoom(), 15), { animate: true, duration: 0.6 });
+  }, [lat, lng, map]);
+  return null;
+}
+
 /** Tras `dynamic()` / cambio de layout, Leaflet a veces calcula mal el tamaño hasta `invalidateSize`. */
 function InvalidateSizeOnReady() {
   const map = useMap();
@@ -60,9 +78,25 @@ function InvalidateSizeOnReady() {
   return null;
 }
 
-export default function ProjectLocationPicker({ lat, lng, onChange }: Props) {
+async function geocodeNominatim(q: string): Promise<PickValue | null> {
+  const res = await fetch(
+    `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`,
+    { headers: { Accept: 'application/json' } },
+  );
+  if (!res.ok) return null;
+  const data = (await res.json()) as Array<{ lat: string; lon: string; display_name: string }>;
+  const first = data[0];
+  if (!first) return null;
+  return { lat: Number(first.lat), lng: Number(first.lon), label: first.display_name };
+}
+
+export default function ProjectLocationPicker({ lat, lng, onChange, onLabelFromShare }: Props) {
   const pin = useMemo(() => crearIconoMarcador(), []);
   const [q, setQ] = useState('');
+  const [pasteRaw, setPasteRaw] = useState('');
+  const [pasteBusy, setPasteBusy] = useState(false);
+  const [pasteMsg, setPasteMsg] = useState<string | null>(null);
+  const [pasteErr, setPasteErr] = useState<string | null>(null);
   const [geoLoading, setGeoLoading] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
   /** Una clave estable por montaje del componente (Strict Mode remonta = nueva instancia). */
@@ -97,18 +131,88 @@ export default function ProjectLocationPicker({ lat, lng, onChange }: Props) {
     };
   }, []);
 
+  function aplicarPick(v: PickValue, opts?: { fromShare?: boolean }) {
+    onChange(v);
+    if (v.label && opts?.fromShare) onLabelFromShare?.(v.label);
+  }
+
   async function buscarDireccion() {
     const qq = q.trim();
     if (!qq) return;
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(qq)}&limit=1`,
-      { headers: { Accept: 'application/json' } },
-    );
-    if (!res.ok) return;
-    const data = (await res.json()) as Array<{ lat: string; lon: string; display_name: string }>;
-    const first = data[0];
-    if (!first) return;
-    onChange({ lat: Number(first.lat), lng: Number(first.lon), label: first.display_name });
+    const hit = await geocodeNominatim(qq);
+    if (!hit) return;
+    aplicarPick(hit);
+  }
+
+  async function aplicarUbicacionPegada() {
+    const raw = pasteRaw.trim();
+    if (!raw) {
+      setPasteErr('Pega un enlace de Maps, geo: o coordenadas.');
+      setPasteMsg(null);
+      return;
+    }
+    setPasteBusy(true);
+    setPasteErr(null);
+    setPasteMsg(null);
+
+    const local = parseUbicacionCompartida(raw);
+    if (local.ok) {
+      aplicarPick({ lat: local.lat, lng: local.lng, label: local.label }, { fromShare: true });
+      setPasteMsg('Ubicación aplicada al mapa.');
+      setPasteBusy(false);
+      return;
+    }
+
+    if (local.error.startsWith('LINK_QUERY:')) {
+      const query = local.error.slice('LINK_QUERY:'.length).trim();
+      const hit = await geocodeNominatim(query);
+      setPasteBusy(false);
+      if (!hit) {
+        setPasteErr('No encontré esa dirección en el mapa. Prueba con un link de Maps o lat, lng.');
+        return;
+      }
+      aplicarPick(hit, { fromShare: true });
+      setPasteMsg('Dirección geocodificada y aplicada.');
+      return;
+    }
+
+    try {
+      const res = await fetch(apiUrl('/api/proyectos/resolver-ubicacion'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ texto: raw }),
+      });
+      const j = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        lat?: number;
+        lng?: number;
+        label?: string | null;
+        needs_geocode?: boolean;
+        query?: string;
+        error?: string | null;
+      };
+      if (res.ok && j.ok && typeof j.lat === 'number' && typeof j.lng === 'number') {
+        aplicarPick({ lat: j.lat, lng: j.lng, label: j.label ?? undefined }, { fromShare: true });
+        setPasteMsg('Ubicación aplicada (enlace resuelto).');
+        setPasteBusy(false);
+        return;
+      }
+      if (res.ok && j.needs_geocode && j.query) {
+        const hit = await geocodeNominatim(j.query);
+        if (hit) {
+          aplicarPick(hit, { fromShare: true });
+          setPasteMsg('Dirección geocodificada y aplicada.');
+          setPasteBusy(false);
+          return;
+        }
+      }
+      setPasteErr(j.error || local.error || 'No se pudo interpretar la ubicación.');
+    } catch {
+      setPasteErr(local.error || 'Error de red al resolver el enlace.');
+    } finally {
+      setPasteBusy(false);
+    }
   }
 
   function usarUbicacionActual() {
@@ -121,9 +225,7 @@ export default function ProjectLocationPicker({ lat, lng, onChange }: Props) {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setGeoLoading(false);
-        const la = pos.coords.latitude;
-        const ln = pos.coords.longitude;
-        onChange({ lat: la, lng: ln });
+        onChange({ lat: pos.coords.latitude, lng: pos.coords.longitude });
       },
       (err) => {
         setGeoLoading(false);
@@ -151,13 +253,56 @@ export default function ProjectLocationPicker({ lat, lng, onChange }: Props) {
 
   return (
     <div className="space-y-2">
+      <div className="space-y-2 rounded-xl border border-sky-500/25 bg-sky-950/20 p-3">
+        <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-sky-300/90">
+          Pegar ubicación compartida
+        </p>
+        <p className="text-[11px] leading-relaxed text-zinc-400">
+          Si te mandan un pin por WhatsApp o un link de Google/Apple Maps, pégalo aquí. También vale{' '}
+          <span className="font-mono text-zinc-300">10.48, -66.90</span> o{' '}
+          <span className="font-mono text-zinc-300">geo:…</span>.
+        </p>
+        <textarea
+          value={pasteRaw}
+          onChange={(e) => setPasteRaw(e.target.value)}
+          rows={2}
+          placeholder="Pega el enlace o las coordenadas…"
+          className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none placeholder:text-zinc-500 focus:border-sky-500/40"
+        />
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={pasteBusy || !pasteRaw.trim()}
+            onClick={() => void aplicarUbicacionPegada()}
+            className="rounded-xl bg-sky-600 px-3 py-2 text-xs font-semibold text-white hover:bg-sky-500 disabled:opacity-50"
+          >
+            {pasteBusy ? 'Aplicando…' : 'Aplicar al proyecto'}
+          </button>
+          {pasteRaw.trim() ? (
+            <button
+              type="button"
+              onClick={() => {
+                setPasteRaw('');
+                setPasteErr(null);
+                setPasteMsg(null);
+              }}
+              className="rounded-xl border border-white/15 px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-white/10"
+            >
+              Limpiar
+            </button>
+          ) : null}
+        </div>
+        {pasteMsg ? <p className="text-xs text-emerald-300/90">{pasteMsg}</p> : null}
+        {pasteErr ? <p className="text-xs text-amber-200/90">{pasteErr}</p> : null}
+      </div>
+
       <div className="flex flex-wrap gap-2">
         <div className="flex min-w-[260px] flex-1 gap-2">
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Buscar direccion o referencia..."
-            className="flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-sky-500/40"
+            className="flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none placeholder:text-zinc-500 focus:border-sky-500/40"
           />
           <button
             type="button"
@@ -187,6 +332,7 @@ export default function ProjectLocationPicker({ lat, lng, onChange }: Props) {
             scrollWheelZoom
           >
             <InvalidateSizeOnReady />
+            <FlyToCoords lat={lat} lng={lng} />
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -204,9 +350,7 @@ export default function ProjectLocationPicker({ lat, lng, onChange }: Props) {
           </div>
         )}
       </div>
-      <p className="text-xs text-zinc-400">
-        Haz clic en el mapa para fijar coordenadas GPS del proyecto.
-      </p>
+      <p className="text-xs text-zinc-400">Haz clic en el mapa para fijar coordenadas GPS del proyecto.</p>
       {geoError ? <p className="text-xs text-red-400">{geoError}</p> : null}
       <p className="text-[11px] text-zinc-500">
         En móvil/tablet permite ubicación para que latitud y longitud se completen automáticamente.
