@@ -48,8 +48,8 @@ function trimOrNull(v: string | null | undefined): string | null {
 export function valorPlantillaEfectivamenteVacio(raw: string | null | undefined): boolean {
   const t = typeof raw === 'string' ? raw.trim() : '';
   if (!t) return true;
-  // Guiones de relleno: ______ o ___ … ___
-  if (/^[_\s.…]{3,}$/u.test(t)) return true;
+  // Guiones de relleno: ______ o solo puntos/espacios
+  if (/^[_\s.]{3,}$/.test(t)) return true;
   if (/^_{2,}\s*(USD|Bs\.?|VES)?\.?$/i.test(t)) return true;
   return false;
 }
