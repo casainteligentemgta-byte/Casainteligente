@@ -62,9 +62,6 @@ export default function OnboardingHojaVidaLegalForm({ value, onChange }: Props) 
   const setGre = (patch: Partial<(typeof value)['actividadGremial']>) =>
     onChange({ ...value, actividadGremial: { ...value.actividadGremial, ...patch } });
 
-  const setMed = (patch: Partial<(typeof value)['antecedentesMedicos']>) =>
-    onChange({ ...value, antecedentesMedicos: { ...value.antecedentesMedicos, ...patch } });
-
   const setPm = (patch: Partial<(typeof value)['pesoMedidas']>) =>
     onChange({ ...value, pesoMedidas: { ...value.pesoMedidas, ...patch } });
 
@@ -286,41 +283,53 @@ export default function OnboardingHojaVidaLegalForm({ value, onChange }: Props) 
       </Sec>
 
       <Sec title="Antecedentes médicos">
-        <SiNoField
-          label="Examen médico previo"
-          value={value.antecedentesMedicos.examenMedicoPrevio}
-          onChange={(v) => setMed({ examenMedicoPrevio: v })}
-        />
-        <label className="block sm:col-span-2">
-          <span className={lab()}>Efectuado por</span>
-          <input
-            className={inpCls()}
-            value={value.antecedentesMedicos.efectuadoPor}
-            onChange={(e) => setMed({ efectuadoPor: e.target.value })}
-          />
-        </label>
-        <label className="block">
-          <span className={lab()}>Tipo de sangre</span>
-          <input className={inpCls()} value={value.antecedentesMedicos.tipoSangre} onChange={(e) => setMed({ tipoSangre: e.target.value })} />
-        </label>
-        <label className="block sm:col-span-2">
-          <span className={lab()}>Enfermedades padecidas</span>
-          <textarea
-            rows={2}
-            className={inpCls()}
-            value={value.antecedentesMedicos.enfermedadesPadecidas}
-            onChange={(e) => setMed({ enfermedadesPadecidas: e.target.value })}
-          />
-        </label>
-        <label className="block sm:col-span-2">
-          <span className={lab()}>Incapacidades físicas o funcionales</span>
-          <textarea
-            rows={2}
-            className={inpCls()}
-            value={value.antecedentesMedicos.incapacidadesFisicasOFuncionales}
-            onChange={(e) => setMed({ incapacidadesFisicasOFuncionales: e.target.value })}
-          />
-        </label>
+        <div className="sm:col-span-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-xs leading-relaxed text-amber-950">
+          <p className="font-semibold">Lo completa el médico de la entidad</p>
+          <p className="mt-1 text-amber-900/90">
+            Esta sección se rellena cuando el médico de la empresa realice el chequeo médico. El obrero no la modifica
+            en este formulario.
+          </p>
+          {(value.antecedentesMedicos.tipoSangre.trim() ||
+            value.antecedentesMedicos.enfermedadesPadecidas.trim() ||
+            value.antecedentesMedicos.incapacidadesFisicasOFuncionales.trim() ||
+            value.antecedentesMedicos.efectuadoPor.trim() ||
+            value.antecedentesMedicos.examenMedicoPrevio) && (
+            <dl className="mt-3 grid gap-1.5 border-t border-amber-200/80 pt-2 text-[11px] text-slate-700">
+              {value.antecedentesMedicos.examenMedicoPrevio ? (
+                <div>
+                  <dt className="inline font-semibold">Examen médico previo: </dt>
+                  <dd className="inline">
+                    {value.antecedentesMedicos.examenMedicoPrevio === 'si' ? 'Sí' : 'No'}
+                  </dd>
+                </div>
+              ) : null}
+              {value.antecedentesMedicos.efectuadoPor.trim() ? (
+                <div>
+                  <dt className="inline font-semibold">Efectuado por: </dt>
+                  <dd className="inline">{value.antecedentesMedicos.efectuadoPor}</dd>
+                </div>
+              ) : null}
+              {value.antecedentesMedicos.tipoSangre.trim() ? (
+                <div>
+                  <dt className="inline font-semibold">Tipo de sangre: </dt>
+                  <dd className="inline">{value.antecedentesMedicos.tipoSangre}</dd>
+                </div>
+              ) : null}
+              {value.antecedentesMedicos.enfermedadesPadecidas.trim() ? (
+                <div>
+                  <dt className="inline font-semibold">Enfermedades: </dt>
+                  <dd className="inline">{value.antecedentesMedicos.enfermedadesPadecidas}</dd>
+                </div>
+              ) : null}
+              {value.antecedentesMedicos.incapacidadesFisicasOFuncionales.trim() ? (
+                <div>
+                  <dt className="inline font-semibold">Incapacidades: </dt>
+                  <dd className="inline">{value.antecedentesMedicos.incapacidadesFisicasOFuncionales}</dd>
+                </div>
+              ) : null}
+            </dl>
+          )}
+        </div>
       </Sec>
 
       <Sec title="Peso y medidas">
