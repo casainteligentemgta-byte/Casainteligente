@@ -264,22 +264,41 @@ export default function OnboardingHojaVidaLegalForm({ value, onChange }: Props) 
       </Sec>
 
       <Sec title="Actividad gremial o sindical">
-        <label className="block sm:col-span-2">
-          <span className={lab()}>Federación / Sindicato / Gremio</span>
-          <input
-            className={inpCls()}
-            value={value.actividadGremial.federacionSindicatoGremio}
-            onChange={(e) => setGre({ federacionSindicatoGremio: e.target.value })}
-          />
-        </label>
-        <label className="block sm:col-span-2">
-          <span className={lab()}>Cargo que ejerce</span>
-          <input
-            className={inpCls()}
-            value={value.actividadGremial.cargoQueEjerce}
-            onChange={(e) => setGre({ cargoQueEjerce: e.target.value })}
-          />
-        </label>
+        <SiNoField
+          label="¿Realiza actividad gremial o sindical?"
+          value={value.actividadGremial.realizaActividad}
+          onChange={(v) => {
+            if (v === 'no') {
+              setGre({
+                realizaActividad: 'no',
+                federacionSindicatoGremio: '',
+                cargoQueEjerce: '',
+              });
+              return;
+            }
+            setGre({ realizaActividad: v });
+          }}
+        />
+        {value.actividadGremial.realizaActividad === 'si' ? (
+          <>
+            <label className="block sm:col-span-2">
+              <span className={lab()}>Federación / Sindicato / Gremio</span>
+              <input
+                className={inpCls()}
+                value={value.actividadGremial.federacionSindicatoGremio}
+                onChange={(e) => setGre({ federacionSindicatoGremio: e.target.value })}
+              />
+            </label>
+            <label className="block sm:col-span-2">
+              <span className={lab()}>Cargo que ejerce</span>
+              <input
+                className={inpCls()}
+                value={value.actividadGremial.cargoQueEjerce}
+                onChange={(e) => setGre({ cargoQueEjerce: e.target.value })}
+              />
+            </label>
+          </>
+        ) : null}
       </Sec>
 
       <Sec title="Antecedentes médicos">
