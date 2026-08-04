@@ -16,7 +16,8 @@ export type CampoObraContratoPmId =
   | 'ubicacion'
   | 'fase_tecnica'
   | 'horario_semanal'
-  | 'punto_encuentro';
+  | 'punto_encuentro'
+  | 'domicilio_procesal';
 
 export type CampoObraContratoPm = {
   id: CampoObraContratoPmId;
@@ -37,6 +38,8 @@ export type DatosObraContratoPmInput = {
   fase_tecnica_contrato?: string | null;
   horario_semanal_obra_default?: string | null;
   punto_encuentro_transporte_contrato?: string | null;
+  /** Ciudad (ej. Pampatar). Si vacío, el PDF usa Pampatar. */
+  domicilio_procesal_contrato?: string | null;
 };
 
 function trimOrNull(v: string | null | undefined): string | null {
@@ -54,17 +57,25 @@ export function valorPlantillaEfectivamenteVacio(raw: string | null | undefined)
   return false;
 }
 
+/** Ciudad de domicilio procesal; default operativo Pampatar. */
+export function resolverDomicilioProcesalContrato(raw: string | null | undefined): string {
+  const t = trimOrNull(raw);
+  return t || 'Pampatar';
+}
+
 export function evaluarChecklistObraContratoPm(input: DatosObraContratoPmInput): ChecklistObraContratoPm {
   const ubicacion = trimOrNull(input.ubicacion);
   const fase = trimOrNull(input.fase_tecnica_contrato);
   const horario = trimOrNull(input.horario_semanal_obra_default);
   const punto = trimOrNull(input.punto_encuentro_transporte_contrato);
+  const domicilioProcesal = trimOrNull(input.domicilio_procesal_contrato);
 
   const campos: CampoObraContratoPm[] = [
     {
       id: 'ubicacion',
-      etiqueta: 'Lugar / ubicación de la obra',
-      ayuda: 'Texto de ubicación del proyecto (lugar de prestación en cláusula quinta).',
+      etiqueta: 'Lugar de trabajo (cláusula QUINTA)',
+      ayuda:
+        'Dónde se prestan los servicios. Ej.: Alcaldía de Chacao; instalaciones del cliente en…',
       valor: ubicacion,
       completo: Boolean(ubicacion),
     },
@@ -88,6 +99,14 @@ export function evaluarChecklistObraContratoPm(input: DatosObraContratoPmInput):
       ayuda: 'Parada del transporte gratuito (cláusula del contrato).',
       valor: punto,
       completo: Boolean(punto),
+    },
+    {
+      id: 'domicilio_procesal',
+      etiqueta: 'Domicilio procesal (ciudad)',
+      ayuda: 'Ciudad de la cláusula DÉCIMA. Si se omite, se usa Pampatar.',
+      valor: domicilioProcesal,
+      // No bloquea: hay default Pampatar.
+      completo: true,
     },
   ];
 
@@ -113,7 +132,8 @@ export function dueñoPlaceholderContrato(id: string): DueñoDatoContrato {
     id === 'CONTRATO_FASE_TECNICA' ||
     id === 'CONTRATO_HORARIO_CUARTA' ||
     id === 'CONTRATO_LUGAR_QUINTA' ||
-    id === 'CONTRATO_LUGAR_PRESTACION'
+    id === 'CONTRATO_LUGAR_PRESTACION' ||
+    id === 'CONTRATO_DOMICILIO_PROCESAL'
   ) {
     return 'pm';
   }

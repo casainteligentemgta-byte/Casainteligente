@@ -422,6 +422,13 @@ export default function ContratoTrabajoObreroClient() {
       return;
     }
 
+    const sinEstadoCivil = pendientes.filter((f) => !(f.estadoCivil ?? '').trim()).length;
+    if (sinEstadoCivil > 0) {
+      toast.message(
+        `${sinEstadoCivil} fila(s) sin estado civil: el PDF dejará ese dato en blanco en la comparecencia.`,
+      );
+    }
+
     setGenerando(true);
     setProgreso({ done: 0, total: pendientes.length });
     setResultados(
@@ -972,6 +979,11 @@ export default function ContratoTrabajoObreroClient() {
               <p className="mt-1">
                 <span className="text-emerald-300">Columnas:</span> Nombres, Apellidos, Cédula,
                 Cargo, Fecha de ingreso, Jornada, Bono, Estado civil.
+              </p>
+              <p className="mt-1">
+                Lugar de trabajo, nombre de obra, fase técnica, punto de encuentro y domicilio procesal
+                salen de la <span className="text-zinc-200">obra seleccionada</span> (datos PM). Completa
+                estado civil en el Excel para la comparecencia.
               </p>
               <p className="mt-1">
                 Si una fila no trae fecha, jornada o bono, se usan los valores por defecto de abajo.
