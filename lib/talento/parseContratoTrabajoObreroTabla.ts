@@ -308,7 +308,7 @@ function mapHeaders(headers: string[]): {
   if (mapeo.categoria || mapeo.tipo) score += 1;
 
   if (!mapeo.cedula) {
-    avisos.push('No se detectó columna de cédula (C.I.).');
+    avisos.push('No se detectó columna de cédula (C.I. / Cédula).');
   }
   if (!mapeo.nombres && !mapeo.nombre_completo && !mapeo.nombre_manuscrito) {
     avisos.push('No se detectó columna de nombre completo.');

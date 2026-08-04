@@ -902,14 +902,14 @@ export default function ContratoTrabajoObreroClient() {
               <p className="font-semibold text-zinc-300">Formato Excel (tabla de nómina)</p>
               <p className="mt-1">
                 <span className="text-emerald-300">Columnas:</span> N° Excel, Nombre (Manuscrito),
-                Nombre Completo (Excel), C.I., Categoría, Tipo, Cargo, Cánon Semanal ($), Cuenta
-                Bancaria.
+                Nombre Completo (Excel), C.I. (cédula), Categoría, Tipo, Cargo, Cánon Semanal ($),
+                Cuenta Bancaria.
               </p>
               <p className="mt-1">
-                Se usan sobre todo <span className="text-zinc-200">C.I.</span>,{' '}
+                Se usan sobre todo <span className="text-zinc-200">C.I. (cédula)</span>,{' '}
                 <span className="text-zinc-200">Nombre Completo</span> y{' '}
-                <span className="text-zinc-200">Cargo</span> (para el tabulador). Filas «No
-                registrado» se omiten. Sin domicilio ni municipio.
+                <span className="text-zinc-200">Cargo</span> (para el tabulador). También acepta
+                columnas llamadas «Cédula» o «Nombres y Apellidos». Filas «No registrado» se omiten.
               </p>
             </div>
 
