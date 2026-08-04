@@ -4,6 +4,9 @@
  *
  * Formato de plantilla alineado a la tabla de nómina de obra:
  * N° Excel | Nombre (Manuscrito) | Nombre Completo (Excel) | C.I. | Categoría | Tipo | Cargo | Cánon Semanal ($) | Cuenta Bancaria
+ *
+ * También tolera listas consolidadas con filas de título arriba del encabezado
+ * y alias frecuentes (Cédula, Nombres y Apellidos, etc.).
  */
 
 import * as XLSX from 'xlsx';
@@ -17,9 +20,19 @@ export const COLUMNAS_CONTRATO_TRABAJO_OBRERO = {
     'ci',
     'c_i',
     'c_i_',
+    'c_i_n',
+    'nro_c_i',
+    'n_c_i',
+    'nro_ci',
+    'numero_ci',
+    'nro_cedula',
+    'numero_cedula',
+    'cedula_identidad',
+    'cedula_de_identidad',
     'documento',
     'doc',
     'rif_obrero',
+    'identidad',
   ],
   nombres: ['nombres', 'primer_nombre', 'name'],
   apellidos: ['apellidos', 'apellido', 'surname'],
@@ -28,9 +41,15 @@ export const COLUMNAS_CONTRATO_TRABAJO_OBRERO = {
     'nombre completo',
     'nombre_completo_excel',
     'nombre_completo__excel_',
+    'nombres_y_apellidos',
+    'apellidos_y_nombres',
+    'nombre_y_apellido',
+    'nombre_y_apellidos',
+    'apellido_y_nombre',
     'obrero',
     'trabajador',
     'full_name',
+    'nombre_apellido',
   ],
   /** Nombre corto manuscrito (informativo; si no hay completo se usa como nombre). */
   nombre_manuscrito: [
@@ -188,14 +207,58 @@ function parseMoneyUsd(raw: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+function pareceCedulaValor(raw: string): boolean {
+  const t = String(raw ?? '').trim();
+  if (!t || t.length > 20) return false;
+  const norm = normalizeCedulaForApi(t);
+  return CEDULA_VE_NORMALIZADA_REGEX.test(norm);
+}
+
+function pareceNombrePersona(raw: string): boolean {
+  const t = String(raw ?? '').trim();
+  if (t.length < 3 || t.length > 80) return false;
+  if (/^\d+$/.test(t)) return false;
+  if (/^(si|no|x|n\/a|na|null|#n\/a)$/i.test(t)) return false;
+  // Al menos una letra y un espacio (nombre + apellido) o 2+ tokens
+  const letters = (t.match(/[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/g) ?? []).length;
+  if (letters < 3) return false;
+  return /\s/.test(t) || letters >= 6;
+}
+
+function headerMatchesCampo(norm: string, campo: ColumnaContratoTrabajo): boolean {
+  const aliases = COLUMNAS_CONTRATO_TRABAJO_OBRERO[campo];
+  for (const alias of aliases) {
+    if (norm === normHeader(alias)) return true;
+  }
+  if (campo === 'cedula') {
+    if (/^c_?i_?$/.test(norm)) return true;
+    if (/(^|_)(c_?i|cedula|documento)(_|$)/.test(norm) && !/cuenta|banco|cargo/.test(norm)) {
+      return true;
+    }
+  }
+  if (campo === 'nombre_completo') {
+    if (norm.includes('nombre_completo')) return true;
+    if (norm.includes('nombre') && norm.includes('excel')) return true;
+    if (norm.includes('nombres') && norm.includes('apellido')) return true;
+    if (norm.includes('apellido') && norm.includes('nombre')) return true;
+  }
+  if (campo === 'canon_semanal_usd' && norm.includes('canon')) return true;
+  if (campo === 'cargo' && (norm === 'cargo' || norm.includes('oficio') || norm.includes('tabulador'))) {
+    return true;
+  }
+  return false;
+}
+
 function mapHeaders(headers: string[]): {
   mapeo: Partial<Record<ColumnaContratoTrabajo, string>>;
   avisos: string[];
+  score: number;
 } {
   const byNorm = new Map<string, string>();
   for (const h of headers) {
     const n = normHeader(h);
-    if (n && !byNorm.has(n)) byNorm.set(n, h);
+    if (!n || n.startsWith('__empty') || n === 'undefined') continue;
+    if (!byNorm.has(n)) byNorm.set(n, h);
   }
 
   const mapeo: Partial<Record<ColumnaContratoTrabajo, string>> = {};
@@ -213,40 +276,122 @@ function mapHeaders(headers: string[]): {
     }
   }
 
-  // Encabezados típicos de la tabla de nómina (normHeader exacto).
-  if (!mapeo.cedula) {
-    for (const [norm, original] of Array.from(byNorm.entries())) {
-      if (norm === 'c_i' || norm === 'c_i_' || /^c_?i_?$/.test(norm)) {
-        mapeo.cedula = original;
-        break;
-      }
+  // Fuzzy por encabezado normalizado.
+  for (const [norm, original] of Array.from(byNorm.entries())) {
+    if (!mapeo.cedula && headerMatchesCampo(norm, 'cedula')) mapeo.cedula = original;
+    if (!mapeo.nombre_completo && headerMatchesCampo(norm, 'nombre_completo')) {
+      mapeo.nombre_completo = original;
     }
-  }
-  if (!mapeo.nombre_completo) {
-    for (const [norm, original] of Array.from(byNorm.entries())) {
-      if (norm.includes('nombre_completo') || (norm.includes('nombre') && norm.includes('excel'))) {
-        mapeo.nombre_completo = original;
-        break;
-      }
+    if (!mapeo.canon_semanal_usd && headerMatchesCampo(norm, 'canon_semanal_usd')) {
+      mapeo.canon_semanal_usd = original;
     }
-  }
-  if (!mapeo.canon_semanal_usd) {
-    for (const [norm, original] of Array.from(byNorm.entries())) {
-      if (norm.includes('canon')) {
-        mapeo.canon_semanal_usd = original;
-        break;
-      }
+    if (!mapeo.cargo && headerMatchesCampo(norm, 'cargo')) mapeo.cargo = original;
+    if (!mapeo.nombres && (norm === 'nombres' || norm === 'primer_nombre')) {
+      mapeo.nombres = original;
+    }
+    if (!mapeo.apellidos && (norm === 'apellidos' || norm === 'apellido')) {
+      mapeo.apellidos = original;
+    }
+    if (
+      !mapeo.nombre_manuscrito &&
+      (norm === 'nombre' || norm.includes('manuscrito') || norm === 'nombre_corto')
+    ) {
+      mapeo.nombre_manuscrito = original;
     }
   }
 
+  let score = 0;
+  if (mapeo.cedula) score += 5;
+  if (mapeo.nombre_completo || mapeo.nombres || mapeo.nombre_manuscrito) score += 4;
+  if (mapeo.cargo) score += 1;
+  if (mapeo.canon_semanal_usd) score += 1;
+  if (mapeo.categoria || mapeo.tipo) score += 1;
+
   if (!mapeo.cedula) {
-    avisos.push('No se detectó columna de cédula (C.I.).');
+    avisos.push('No se detectó columna de cédula (C.I. / Cédula).');
   }
   if (!mapeo.nombres && !mapeo.nombre_completo && !mapeo.nombre_manuscrito) {
     avisos.push('No se detectó columna de nombre completo.');
   }
 
-  return { mapeo, avisos };
+  return { mapeo, avisos, score };
+}
+
+/**
+ * Heurística: si faltan columnas por nombre, inferir por contenido de las primeras filas.
+ */
+function completarMapeoPorContenido(
+  rows: Record<string, unknown>[],
+  mapeo: Partial<Record<ColumnaContratoTrabajo, string>>,
+  headers: string[],
+): Partial<Record<ColumnaContratoTrabajo, string>> {
+  const out = { ...mapeo };
+  const sample = rows.slice(0, 25);
+  if (sample.length === 0) return out;
+
+  const used = new Set(Object.values(out).filter(Boolean) as string[]);
+
+  if (!out.cedula) {
+    let best: { key: string; hits: number } | null = null;
+    for (const key of headers) {
+      if (used.has(key)) continue;
+      let hits = 0;
+      for (const row of sample) {
+        if (pareceCedulaValor(cellStr(row[key]))) hits += 1;
+      }
+      if (hits >= Math.min(2, sample.length) && (!best || hits > best.hits)) {
+        best = { key, hits };
+      }
+    }
+    if (best) {
+      out.cedula = best.key;
+      used.add(best.key);
+    }
+  }
+
+  if (!out.nombre_completo && !out.nombres && !out.nombre_manuscrito) {
+    let best: { key: string; hits: number } | null = null;
+    for (const key of headers) {
+      if (used.has(key)) continue;
+      let hits = 0;
+      for (const row of sample) {
+        if (pareceNombrePersona(cellStr(row[key]))) hits += 1;
+      }
+      if (hits >= Math.min(2, sample.length) && (!best || hits > best.hits)) {
+        best = { key, hits };
+      }
+    }
+    if (best) {
+      out.nombre_completo = best.key;
+      used.add(best.key);
+    }
+  }
+
+  return out;
+}
+
+function scoreHeaderCandidate(cells: unknown[]): number {
+  const headers = cells.map((c) => cellStr(c)).filter(Boolean);
+  if (headers.length < 2) return -1;
+  return mapHeaders(headers).score;
+}
+
+/** Busca la fila de encabezados reales (salta títulos tipo «Lista consolidada»). */
+function encontrarIndiceEncabezado(aoa: unknown[][]): number {
+  const maxScan = Math.min(aoa.length, 40);
+  let bestIdx = 0;
+  let bestScore = -1;
+  for (let i = 0; i < maxScan; i++) {
+    const row = aoa[i] ?? [];
+    const score = scoreHeaderCandidate(row);
+    if (score > bestScore) {
+      bestScore = score;
+      bestIdx = i;
+    }
+    // Encabezado típico de plantilla: ya es suficiente
+    if (score >= 9) break;
+  }
+  return bestScore >= 4 ? bestIdx : 0;
 }
 
 function getCell(
@@ -259,50 +404,87 @@ function getCell(
   return cellStr(row[key]);
 }
 
-/**
- * Lee un ArrayBuffer (xlsx/xls/csv) y devuelve filas tipadas para contratos en serie.
- */
-export function parseContratoTrabajoObreroTabla(buffer: ArrayBuffer, filename?: string): ParseContratoTrabajoResult {
-  const name = (filename ?? '').toLowerCase();
-  const wb = XLSX.read(buffer, {
-    type: 'array',
-    cellDates: true,
-    raw: false,
-    codepage: name.endsWith('.csv') ? 65001 : undefined,
-  });
-  const sheetName = wb.SheetNames[0];
-  if (!sheetName) {
-    return { filas: [], encabezados: [], mapeo: {}, avisos: ['El archivo no tiene hojas.'] };
-  }
-  const sheet = wb.Sheets[sheetName]!;
-  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
-    defval: '',
-    raw: false,
-    blankrows: false,
-  });
 
-  if (rows.length === 0) {
+function parseFilasDesdeAoa(aoa: unknown[][]): {
+  filas: FilaContratoTrabajoObrero[];
+  encabezados: string[];
+  mapeo: Partial<Record<ColumnaContratoTrabajo, string>>;
+  avisos: string[];
+  score: number;
+} {
+  if (!aoa.length) {
     return {
       filas: [],
       encabezados: [],
       mapeo: {},
-      avisos: ['No hay filas de datos en la primera hoja.'],
+      avisos: ['No hay filas de datos en la hoja.'],
+      score: 0,
     };
   }
 
-  const encabezados = Object.keys(rows[0] ?? {});
-  const { mapeo, avisos } = mapHeaders(encabezados);
+  const headerRowIndex = encontrarIndiceEncabezado(aoa);
+  const headerRaw = (aoa[headerRowIndex] ?? []).map((c) => cellStr(c));
+  const encabezados: string[] = [];
+  const seen = new Map<string, number>();
+  for (let c = 0; c < headerRaw.length; c++) {
+    let h = headerRaw[c]!.trim();
+    if (!h) h = `__EMPTY_${c}`;
+    const n = seen.get(h) ?? 0;
+    seen.set(h, n + 1);
+    encabezados.push(n === 0 ? h : `${h}_${n}`);
+  }
+
+  const dataRows: Record<string, unknown>[] = [];
+  for (let r = headerRowIndex + 1; r < aoa.length; r++) {
+    const cells = aoa[r] ?? [];
+    const row: Record<string, unknown> = {};
+    let any = false;
+    for (let c = 0; c < encabezados.length; c++) {
+      const v = cellStr(cells[c]);
+      row[encabezados[c]!] = v;
+      if (v) any = true;
+    }
+    if (any) dataRows.push(row);
+  }
+
+  if (dataRows.length === 0) {
+    return {
+      filas: [],
+      encabezados,
+      mapeo: {},
+      avisos: ['No hay filas de datos bajo el encabezado detectado.'],
+      score: 0,
+    };
+  }
+
+  let { mapeo, avisos, score } = mapHeaders(encabezados.filter((h) => !h.startsWith('__EMPTY')));
+  mapeo = completarMapeoPorContenido(dataRows, mapeo, encabezados);
+
+  avisos = [];
+  if (!mapeo.cedula) avisos.push('No se detectó columna de cédula (C.I.).');
+  if (!mapeo.nombres && !mapeo.nombre_completo && !mapeo.nombre_manuscrito) {
+    avisos.push('No se detectó columna de nombre completo.');
+  }
+  if (headerRowIndex > 0) {
+    avisos.unshift(
+      `Encabezado detectado en la fila ${headerRowIndex + 1} (se omitieron títulos superiores).`,
+    );
+  }
+
+  score = 0;
+  if (mapeo.cedula) score += 5;
+  if (mapeo.nombre_completo || mapeo.nombres || mapeo.nombre_manuscrito) score += 4;
+  if (mapeo.cargo) score += 1;
 
   const filas: FilaContratoTrabajoObrero[] = [];
-  rows.forEach((row, idx) => {
-    const filaExcel = idx + 2; // 1 = encabezado
+  dataRows.forEach((row, idx) => {
+    const filaExcel = headerRowIndex + idx + 2;
     const cedulaRaw = getCell(row, mapeo, 'cedula');
     const nombres = getCell(row, mapeo, 'nombres') || null;
     const apellidos = getCell(row, mapeo, 'apellidos') || null;
     const manuscrito = getCell(row, mapeo, 'nombre_manuscrito') || null;
     let nombreCompleto = getCell(row, mapeo, 'nombre_completo') || null;
     if (nombreCompleto && /^no\s*registrado$/i.test(nombreCompleto.trim())) {
-      // Fila de la tabla sin alta en Excel de nómina → omitir
       return;
     }
     if (!nombreCompleto && nombres && apellidos) {
@@ -334,7 +516,6 @@ export function parseContratoTrabajoObreroTabla(buffer: ArrayBuffer, filename?: 
     const categoria = getCell(row, mapeo, 'categoria') || null;
     const tipo = getCell(row, mapeo, 'tipo') || null;
 
-    // Fila totalmente vacía → omitir
     const vacia =
       !cedulaRaw &&
       !nombres &&
@@ -343,6 +524,13 @@ export function parseContratoTrabajoObreroTabla(buffer: ArrayBuffer, filename?: 
       !manuscrito &&
       !cargo;
     if (vacia) return;
+
+    const esFilaEncabezadoRepetida =
+      /^(c\.?i\.?|cedula|cédula)$/i.test(cedulaRaw.trim()) ||
+      /^(nombre|nombres|nombre\s*completo|apellidos)(\s|\(|$)/i.test(
+        String(nombreCompleto ?? manuscrito ?? '').trim(),
+      );
+    if (esFilaEncabezadoRepetida) return;
 
     const canon = parseMoneyUsd(getCell(row, mapeo, 'canon_semanal_usd'));
     const bonoRaw = getCell(row, mapeo, 'bono_usd');
@@ -377,7 +565,84 @@ export function parseContratoTrabajoObreroTabla(buffer: ArrayBuffer, filename?: 
     });
   });
 
-  return { filas, encabezados, mapeo, avisos };
+  if (filas.length === 0 && encabezados.length > 0) {
+    avisos.push(
+      `Encabezados leídos: ${encabezados
+        .filter((h) => !h.startsWith('__EMPTY'))
+        .slice(0, 12)
+        .join(' · ')}${encabezados.length > 12 ? '…' : ''}`,
+    );
+  }
+
+  return { filas, encabezados, mapeo, avisos, score: score + Math.min(filas.length, 5) };
+}
+
+/**
+ * Lee un ArrayBuffer (xlsx/xls/csv) y devuelve filas tipadas para contratos en serie.
+ */
+export function parseContratoTrabajoObreroTabla(
+  buffer: ArrayBuffer,
+  filename?: string,
+): ParseContratoTrabajoResult {
+  const name = (filename ?? '').toLowerCase();
+  const wb = XLSX.read(buffer, {
+    type: 'array',
+    cellDates: true,
+    raw: false,
+    codepage: name.endsWith('.csv') ? 65001 : undefined,
+  });
+
+  if (!wb.SheetNames.length) {
+    return { filas: [], encabezados: [], mapeo: {}, avisos: ['El archivo no tiene hojas.'] };
+  }
+
+  let best: ReturnType<typeof parseFilasDesdeAoa> | null = null;
+  let bestSheet = '';
+
+  for (const sheetName of wb.SheetNames) {
+    const sheet = wb.Sheets[sheetName];
+    if (!sheet) continue;
+    const aoa = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+      header: 1,
+      defval: '',
+      raw: false,
+      blankrows: true,
+    });
+    if (!aoa.length) continue;
+    const parsed = parseFilasDesdeAoa(aoa);
+    if (!best || parsed.score > best.score || parsed.filas.length > best.filas.length) {
+      best = parsed;
+      bestSheet = sheetName;
+    }
+    if (
+      parsed.filas.length > 0 &&
+      parsed.mapeo.cedula &&
+      (parsed.mapeo.nombre_completo || parsed.mapeo.nombre_manuscrito || parsed.mapeo.nombres)
+    ) {
+      break;
+    }
+  }
+
+  if (!best) {
+    return {
+      filas: [],
+      encabezados: [],
+      mapeo: {},
+      avisos: ['No hay filas de datos en el archivo.'],
+    };
+  }
+
+  const avisos = [...best.avisos];
+  if (wb.SheetNames.length > 1 && bestSheet) {
+    avisos.unshift(`Hoja usada: «${bestSheet}».`);
+  }
+
+  return {
+    filas: best.filas,
+    encabezados: best.encabezados,
+    mapeo: best.mapeo,
+    avisos,
+  };
 }
 
 /**
