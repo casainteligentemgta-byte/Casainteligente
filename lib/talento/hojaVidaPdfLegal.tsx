@@ -40,16 +40,17 @@ export const legalPdfStyles = StyleSheet.create({
   /** Carnet: rectángulo vertical (retrato). */
   photoBox: { width: '15%', borderWidth: 1, borderColor: '#000', minHeight: 96, padding: 2 },
   photoInner: { flex: 1, marginTop: 2, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
-  /** Cédula: franja apaisada (horizontal). */
-  photoCedulaOuter: { borderWidth: 1, borderColor: '#000', padding: 2 },
+  /** Cédula: franja apaisada (horizontal), debajo de los datos. */
+  photoCedulaOuter: { borderWidth: 1, borderColor: '#000', padding: 2, marginTop: 2 },
   photoCedulaSlot: {
     marginTop: 2,
     borderWidth: 1,
     borderColor: '#000',
-    minHeight: 28,
-    maxHeight: 30,
+    minHeight: 52,
+    maxHeight: 64,
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
   },
   note: { marginTop: 3, fontSize: 5.2, color: '#475569', lineHeight: 1.3 },
   footer: {
@@ -321,26 +322,15 @@ export function IdentificacionTrabajadorPdfBlock({
             <CellBox label="Nombres" value={nombres} flex={1} />
           </View>
           <View style={[st.row, { marginTop: -1 }]}>
-            <View style={[st.cell, { flex: 1, flexDirection: 'row', alignItems: 'stretch' }]}>
-              <View style={{ flex: 1, paddingRight: 3 }}>
-                <Text style={st.cellLabel}>Cédula de identidad</Text>
-                <Text style={st.cellValue}>{val(d.cedulaIdentidad)}</Text>
-              </View>
-              <View
-                style={{
-                  width: '24%',
-                  borderLeftWidth: 1,
-                  borderLeftColor: '#000',
-                  paddingLeft: 2,
-                }}
-              >
-                <Text style={st.cellLabel}>Edad</Text>
-                <Text style={st.cellValue}>{val(d.edad)}</Text>
-              </View>
-            </View>
-            <CellBox label="Fecha de nacimiento" value={d.fechaNacimiento} w="36%" />
+            <CellBox label="Fecha de nacimiento" value={d.fechaNacimiento} flex={1} />
+            <CellBox label="Edad" value={d.edad} w="28%" />
           </View>
         </View>
+      </View>
+
+      {/* Cédula (número) debajo del carnet; foto del documento más abajo. */}
+      <View style={[st.row, { marginTop: -1 }]}>
+        <CellBox label="Cédula de identidad" value={d.cedulaIdentidad} flex={1} />
       </View>
 
       <View style={[st.row, { marginTop: -1 }]}>
@@ -367,13 +357,13 @@ export function IdentificacionTrabajadorPdfBlock({
       <View style={[st.row, { marginTop: -1 }]}>
         <CellBox label="Correo electrónico" value={d.correoElectronico} flex={1} />
       </View>
-      <View style={[st.photoCedulaOuter, { marginTop: -1 }]}>
+      <View style={st.photoCedulaOuter}>
         <Text style={st.cellLabel}>Fotografía de la cédula (apaisada / horizontal)</Text>
         <View style={st.photoCedulaSlot}>
           {d.fotoCedulaUrl.trim() ? (
             <Image
               src={d.fotoCedulaUrl.trim()}
-              style={{ width: '100%', maxHeight: 26, objectFit: 'contain' }}
+              style={{ width: '100%', height: 56, objectFit: 'contain' }}
             />
           ) : (
             <Text style={{ fontSize: 5.5, color: '#64748b' }}>—</Text>
@@ -674,26 +664,13 @@ export function HojaDeVidaObreroLegalPlantillaPdfDoc() {
                 <CellBlank label="Nombres" flex={1} />
               </View>
               <View style={[st.row, { marginTop: -1 }]}>
-                <View style={[st.cell, { flex: 1, flexDirection: 'row', alignItems: 'stretch' }]}>
-                  <View style={{ flex: 1, paddingRight: 3 }}>
-                    <Text style={st.cellLabel}>Cédula de identidad</Text>
-                    <Text style={st.cellValue}>{BLANK}</Text>
-                  </View>
-                  <View
-                    style={{
-                      width: '24%',
-                      borderLeftWidth: 1,
-                      borderLeftColor: '#000',
-                      paddingLeft: 2,
-                    }}
-                  >
-                    <Text style={st.cellLabel}>Edad</Text>
-                    <Text style={st.cellValue}>{BLANK}</Text>
-                  </View>
-                </View>
-                <CellBlank label="Fecha de nacimiento" w="36%" />
+                <CellBlank label="Fecha de nacimiento" flex={1} />
+                <CellBlank label="Edad" w="28%" />
               </View>
             </View>
+          </View>
+          <View style={[st.row, { marginTop: -1 }]}>
+            <CellBlank label="Cédula de identidad" flex={1} />
           </View>
           <View style={[st.row, { marginTop: -1 }]}>
             <CellBlank label="Estado civil" w="26%" />
@@ -719,7 +696,7 @@ export function HojaDeVidaObreroLegalPlantillaPdfDoc() {
           <View style={[st.row, { marginTop: -1 }]}>
             <CellBlank label="Correo electrónico" flex={1} />
           </View>
-          <View style={[st.photoCedulaOuter, { marginTop: -1 }]}>
+          <View style={st.photoCedulaOuter}>
             <Text style={st.cellLabel}>Fotografía de la cédula (apaisada / horizontal)</Text>
             <View style={st.photoCedulaSlot}>
               <Text style={{ fontSize: 5.5, color: '#94a3b8' }}>{BLANK}</Text>
