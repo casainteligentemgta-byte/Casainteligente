@@ -136,7 +136,8 @@ async function generarEnlaceHvTokenizado(opts: {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      nombre: `Candidato · ${cargo}`,
+      // No usar «Candidato · cargo» como nombre: ensucia el formulario HV.
+      nombre: 'Por completar',
       rol_buscado: cargo,
       rol_examen: 'obrero',
       proyecto_modulo_id: opts.projectId?.trim() || undefined,

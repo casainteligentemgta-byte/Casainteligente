@@ -7,6 +7,7 @@ import {
   emptyHojaVidaObreroCompleta,
   hojaVidaDesdeRow,
   nombreCompletoDesde,
+  parseHojaVidaObreroJson,
   type HojaVidaObreroCompleta,
 } from '@/lib/talento/hojaVidaObreroCompleta';
 import type { PlanillaPatronoCampos } from '@/lib/talento/planillaPatronoTypes';
@@ -38,6 +39,51 @@ type Props = { params: { token: string } };
 
 const TOTAL_PASOS = 4;
 const REDIRECT_EVAL_SEG = 4;
+
+/** Nombres inventados al generar el enlace (p. ej. «Candidato · ELECTRICISTA»). */
+function esNombrePlaceholderInvitacion(nombre: string): boolean {
+  const n = nombre.trim().toLowerCase();
+  if (!n) return true;
+  if (n.startsWith('candidato')) return true;
+  if (n === 'por completar' || n.startsWith('por completar')) return true;
+  if (n.includes('·') || n.includes('•')) return true;
+  return false;
+}
+
+/**
+ * Primera visita (pendiente_cv sin HV guardada): formulario vacío.
+ * No rellenar nombres partiendo el nombre_completo de la invitación.
+ */
+function hvInicialOnboarding(row: Record<string, unknown>): HojaVidaObreroCompleta {
+  const desdeRow = hojaVidaDesdeRow(row);
+  const json = parseHojaVidaObreroJson(row.hoja_vida_obrero);
+  const tieneHvGuardada = Boolean(
+    json.datosPersonales.primerNombre.trim() ||
+      json.datosPersonales.primerApellido.trim() ||
+      json.datosPersonales.cedulaIdentidad.trim(),
+  );
+  const estado = String(row.estado_proceso ?? '').trim().toLowerCase();
+  if (tieneHvGuardada || estado === 'cv_completado') {
+    return desdeRow;
+  }
+
+  const vacia = emptyHojaVidaObreroCompleta();
+  vacia.contratacion.cargoUOficio = desdeRow.contratacion.cargoUOficio;
+  vacia.datosPersonales.fotoUrl = desdeRow.datosPersonales.fotoUrl;
+  vacia.datosPersonales.fotoCedulaUrl = desdeRow.datosPersonales.fotoCedulaUrl;
+
+  const nom = String(row.nombre_completo ?? '').trim();
+  if (nom && !esNombrePlaceholderInvitacion(nom)) {
+    vacia.datosPersonales.primerNombre = desdeRow.datosPersonales.primerNombre;
+    vacia.datosPersonales.segundoNombre = desdeRow.datosPersonales.segundoNombre;
+    vacia.datosPersonales.primerApellido = desdeRow.datosPersonales.primerApellido;
+    vacia.datosPersonales.segundoApellido = desdeRow.datosPersonales.segundoApellido;
+  }
+  // Celular/WhatsApp de la invitación sí pueden prellenar (dato real del contacto).
+  vacia.datosPersonales.celular = desdeRow.datosPersonales.celular;
+
+  return vacia;
+}
 
 function HojaDeVidaMovilInner({ params }: Props) {
   const supabase = useMemo(() => createClient(), []);
@@ -115,7 +161,7 @@ function HojaDeVidaMovilInner({ params }: Props) {
             return;
           }
           const rowLeg = leg.data as Record<string, unknown>;
-          const hvLeg = hojaVidaDesdeRow(rowLeg);
+          const hvLeg = hvInicialOnboarding(rowLeg);
           if (j.empleado?.cargo && !hvLeg.contratacion.cargoUOficio.trim()) {
             hvLeg.contratacion.cargoUOficio = j.empleado.cargo.trim();
           }
@@ -137,7 +183,7 @@ function HojaDeVidaMovilInner({ params }: Props) {
         }
 
         const row = data as Record<string, unknown>;
-        const hv = hojaVidaDesdeRow(row);
+        const hv = hvInicialOnboarding(row);
         if (j.empleado?.cargo && !hv.contratacion.cargoUOficio.trim()) {
           hv.contratacion.cargoUOficio = j.empleado.cargo.trim();
         }

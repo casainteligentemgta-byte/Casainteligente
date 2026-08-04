@@ -85,10 +85,6 @@ export default function OnboardingHojaVidaLegalForm({ value, onChange }: Props) 
   return (
     <div className="space-y-3 text-slate-900">
       <Sec title="Datos personales del trabajador">
-        <label className="block sm:col-span-2">
-          <span className={lab()}>Foto (opcional — URL si ya subiste archivo, o déjalo en blanco)</span>
-          <input className={inpCls()} value={d.fotoUrl} onChange={(e) => setDp({ fotoUrl: e.target.value })} />
-        </label>
         <label className="block">
           <span className={lab()}>Primer nombre</span>
           <input className={inpCls()} value={d.primerNombre} onChange={(e) => setDp({ primerNombre: e.target.value })} />
