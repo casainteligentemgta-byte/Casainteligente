@@ -1,7 +1,18 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowLeft, FileText, Link2, MessageSquareText, Pencil, Plus, RefreshCw, ScrollText, Trash2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  Eraser,
+  FileText,
+  Link2,
+  MessageSquareText,
+  Pencil,
+  Plus,
+  RefreshCw,
+  ScrollText,
+  Trash2,
+} from 'lucide-react';
 import {
   etiquetaEstadoArchivo,
   fetchEmpleadosHojasVida,
@@ -69,6 +80,8 @@ export default function RrhhHojasVidaArchivoPage() {
   const [oficioRow, setOficioRow] = useState<EmpleadoRow | null>(null);
   const [contratoFlowRow, setContratoFlowRow] = useState<EmpleadoRow | null>(null);
   const [nuevaHvOpen, setNuevaHvOpen] = useState(false);
+  const [limpiandoPlaceholders, setLimpiandoPlaceholders] = useState(false);
+
   const cargar = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -234,6 +247,46 @@ export default function RrhhHojasVidaArchivoPage() {
     [],
   );
 
+  const limpiarPorCompletar = useCallback(async () => {
+    if (
+      !window.confirm(
+        '¿Eliminar todos los «Por completar» / pendiente_cv sin cédula?\n\nSon invitaciones de hoja de vida no usadas. No se puede deshacer.',
+      )
+    ) {
+      return;
+    }
+    setLimpiandoPlaceholders(true);
+    setError(null);
+    try {
+      const res = await fetch(apiUrl('/api/rrhh/empleados/limpiar-placeholders'), {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const j = (await res.json().catch(() => ({}))) as {
+        eliminados?: number;
+        errores?: Array<{ id: string; error: string }>;
+        error?: string;
+      };
+      if (!res.ok) {
+        setError(j.error || 'No se pudo limpiar');
+        toast.error(j.error || 'No se pudo limpiar');
+        return;
+      }
+      const n = j.eliminados ?? 0;
+      if (n === 0) toast.message('No había «Por completar» vacíos');
+      else toast.success(`${n} expediente(s) eliminado(s)`);
+      if ((j.errores?.length ?? 0) > 0) {
+        toast.message(`Algunos no se borraron (${j.errores!.length})`);
+      }
+      await cargar();
+    } catch {
+      setError('Error de red al limpiar');
+      toast.error('Error de red al limpiar');
+    } finally {
+      setLimpiandoPlaceholders(false);
+    }
+  }, [cargar]);
+
   const validarYAbrirContrato = useCallback(async (r: EmpleadoRow) => {
     setValidandoContratoId(r.id);
     try {
@@ -360,6 +413,20 @@ export default function RrhhHojasVidaArchivoPage() {
             >
               <Plus className="h-4 w-4" aria-hidden />
               Enviar formato hoja de vida
+            </button>
+            <button
+              type="button"
+              onClick={() => void limpiarPorCompletar()}
+              disabled={limpiandoPlaceholders || loading}
+              title="Borrar invitaciones «Por completar» sin cédula"
+              className="inline-flex items-center gap-2 rounded-xl border border-amber-500/35 bg-amber-950/40 px-4 py-2.5 text-sm font-semibold text-amber-100 transition hover:bg-amber-900/50 disabled:opacity-50"
+            >
+              {limpiandoPlaceholders ? (
+                <RefreshCw className="h-4 w-4 animate-spin" aria-hidden />
+              ) : (
+                <Eraser className="h-4 w-4" aria-hidden />
+              )}
+              Limpiar Por completar
             </button>
             <button
               type="button"
