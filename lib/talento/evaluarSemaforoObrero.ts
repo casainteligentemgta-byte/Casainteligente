@@ -24,7 +24,8 @@ export function esRolEvaluacionExamen(rol: string): rol is RolEvaluacionExamen {
 }
 
 /**
- * Cuenta respuestas A/B/C y aplica reglas de semáforo (20 ítems).
+ * Cuenta respuestas A/B/C y aplica reglas de semáforo.
+ * Escala umbrales al tamaño del banco (20 completo o 9 en evaluación unificada).
  * `respuestas` es un objeto: { obr_01: "A", obr_02: "B", ... }
  */
 export function evaluarSemaforoObrero(
@@ -42,22 +43,26 @@ export function evaluarSemaforoObrero(
   });
 
   const resumen = { respuestasA, respuestasB, respuestasC };
-  const totalPreguntas = Math.max(Object.keys(respuestas).length, 20);
+  const nRespuestas = Object.keys(respuestas).length;
+  const totalPreguntas = nRespuestas > 0 ? nRespuestas : 20;
+  /** Referencia 20 ítems: rojo ≥3 C; verde ≥14 A y 0 C. */
+  const umbralRojoC = Math.max(2, Math.ceil((3 / 20) * totalPreguntas));
+  const umbralVerdeA = Math.ceil((14 / 20) * totalPreguntas);
   const pp = (respuestasA / totalPreguntas) * 100;
   const puntaje = Math.round(pp * 100) / 100;
 
-  if (respuestasC >= 3) {
+  if (respuestasC >= umbralRojoC) {
     return {
       semaforo: 'rojo',
       estado: 'reprobado',
-      motivo: 'Conductas de riesgo detectadas (3 o más respuestas C)',
+      motivo: `Conductas de riesgo detectadas (${umbralRojoC} o más respuestas C)`,
       status_evaluacion: 'reprobado',
       puntaje_personalidad: puntaje,
       puntaje_total: puntaje,
       resumen,
     };
   }
-  if (respuestasA >= 14 && respuestasC === 0) {
+  if (respuestasA >= umbralVerdeA && respuestasC === 0) {
     return {
       semaforo: 'verde',
       estado: 'aprobado',

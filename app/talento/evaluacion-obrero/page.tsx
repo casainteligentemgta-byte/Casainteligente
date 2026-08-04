@@ -1,190 +1,20 @@
-'use client';
+"use client";
 
-import { useEffect, useMemo, useState, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
-import FormularioEvaluacion from '@/components/talento/FormularioEvaluacion';
-import { metaAbcObreroParaCargo, type PreguntaObrero } from '@/lib/talento/exam';
-import Link from 'next/link';
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
-function EvaluacionObreroPageInner() {
-  const searchParams = useSearchParams();
-  const urlToken = searchParams.get('token');
-
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [candidateData, setCandidateData] = useState<{
-    token: string;
-    rol: string;
-    nombre: string;
-    cargo: string;
-    codigoGoE: string;
-  } | null>(null);
-  const [resultado, setResultado] = useState<{
-    semaforo?: string;
-    statusEvaluacion?: string;
-  } | null>(null);
+/** Enlaces antiguos → evaluación unificada. */
+export default function EvaluacionObreroRedirectPage() {
+  const router = useRouter();
 
   useEffect(() => {
-    if (!urlToken) {
-      setError('Se requiere un token de invitación válido.');
-      setLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-    setLoading(true);
-
-    void (async () => {
-      try {
-        const res = await fetch(
-          `/api/talento/examen/invitacion?token=${encodeURIComponent(urlToken)}`,
-        );
-        const data = (await res.json()) as {
-          error?: string;
-          rol_examen?: string;
-          examen_token?: string;
-          nombre_completo?: string;
-          rol_buscado?: string | null;
-          cargo?: string | null;
-          cargo_codigo?: string | null;
-        };
-
-        if (cancelled) return;
-
-        if (!res.ok) {
-          setError(data.error || 'Invitación no válida o expirada');
-          return;
-        }
-
-        const rol = data.rol_examen || 'obrero';
-        if (rol !== 'obrero' && rol !== 'vigilante') {
-          setError('Este formulario es exclusivo para personal obrero o de vigilancia.');
-          return;
-        }
-
-        setCandidateData({
-          token: data.examen_token || urlToken,
-          rol,
-          nombre: data.nombre_completo || 'Candidato',
-          cargo: (data.rol_buscado || data.cargo || '').trim(),
-          codigoGoE: (data.cargo_codigo || '').trim(),
-        });
-      } catch {
-        if (!cancelled) setError('No se pudo conectar con el servidor.');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [urlToken]);
-
-  const banco = useMemo(() => {
-    if (!candidateData) {
-      return { preguntas: [] as PreguntaObrero[], etiquetaFamilia: '', familia: 'general' as const };
-    }
-    return metaAbcObreroParaCargo({
-      cargo: candidateData.cargo,
-      rolExamen: candidateData.rol,
-      codigoGoE: candidateData.codigoGoE || null,
-    });
-  }, [candidateData]);
-
-  const alFinalizar = (res: { semaforo?: string; statusEvaluacion?: string }) => {
-    setResultado(res);
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center p-4">
-        <div className="text-center">
-          <div className="w-10 h-10 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-zinc-400 text-sm">Cargando evaluación...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-zinc-900 border border-zinc-800 p-6 rounded-2xl text-center">
-          <h1 className="text-xl font-bold text-red-400 mb-2">Error</h1>
-          <p className="text-zinc-400 text-sm mb-6">{error}</p>
-          <Link
-            href="/talento"
-            className="inline-block bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-          >
-            Volver al Hub
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  if (resultado) {
-    return (
-      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-zinc-900 border border-zinc-800 p-8 rounded-2xl text-center">
-          <div className="w-16 h-16 bg-emerald-500/10 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-8 w-8"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          <h1 className="text-2xl font-bold mb-2">¡Evaluación Completada!</h1>
-          <p className="text-zinc-400 text-sm mb-6">
-            Gracias, {candidateData?.nombre}. Tus respuestas han sido registradas.
-          </p>
-
-          <p className="text-xs text-zinc-500 leading-relaxed">
-            Puedes cerrar esta ventana. El equipo de RRHH revisará tus resultados y se pondrá en
-            contacto contigo.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!candidateData || banco.preguntas.length === 0) return null;
+    const q = typeof window !== "undefined" ? window.location.search : "";
+    router.replace(`/talento/evaluacion${q}`);
+  }, [router]);
 
   return (
-    <div className="min-h-screen bg-zinc-950">
-      {banco.etiquetaFamilia ? (
-        <p className="mx-auto max-w-md px-4 pt-4 text-center text-[11px] text-zinc-500">
-          Oficio: <span className="font-semibold text-zinc-300">{banco.etiquetaFamilia}</span>
-          {candidateData.cargo ? (
-            <span className="text-zinc-600"> · {candidateData.cargo}</span>
-          ) : null}
-        </p>
-      ) : null}
-      <FormularioEvaluacion
-        preguntas={banco.preguntas}
-        token={candidateData.token}
-        rol={candidateData.rol}
-        onFinalizar={alFinalizar}
-      />
-    </div>
-  );
-}
-
-export default function EvaluacionObreroPage() {
-  return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center p-4">
-          <div className="text-zinc-400 text-sm">Cargando...</div>
-        </div>
-      }
-    >
-      <EvaluacionObreroPageInner />
-    </Suspense>
+    <main className="flex min-h-screen items-center justify-center bg-slate-50 p-6 text-sm text-slate-600">
+      Redirigiendo a la evaluación…
+    </main>
   );
 }

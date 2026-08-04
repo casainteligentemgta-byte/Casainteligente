@@ -11,7 +11,9 @@ const RUTAS_PUBLICAS = [
   '/reclutamiento',
   '/onboarding',
   '/talento/examen',
+  '/talento/evaluacion',
   '/talento/evaluacion-obrero',
+  '/talento/evaluacion-color',
   '/nexus',
   '/abogado',
 ];

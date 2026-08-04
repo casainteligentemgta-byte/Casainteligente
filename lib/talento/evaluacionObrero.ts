@@ -287,17 +287,20 @@ export function colorPredominanteDisc(
   return 'Verde';
 }
 
-export function puntajeLogicaObrero(respuestas: Record<string, number>): {
+export function puntajeLogicaObrero(
+  respuestas: Record<string, number>,
+  banco: readonly PreguntaLogicaObrero[] = PREGUNTAS_LOGICA_OBRERO,
+): {
   correctas: number;
   total: number;
   porcentaje: number;
 } {
   let correctas = 0;
-  for (const q of PREGUNTAS_LOGICA_OBRERO) {
+  for (const q of banco) {
     const v = respuestas[q.id];
     if (typeof v === 'number' && v === q.correcta) correctas += 1;
   }
-  const total = PREGUNTAS_LOGICA_OBRERO.length;
+  const total = banco.length;
   return {
     correctas,
     total,
@@ -306,20 +309,23 @@ export function puntajeLogicaObrero(respuestas: Record<string, number>): {
 }
 
 /** 0–100: 100 si elige la mejor opción, 50 si la intermedia, 0 si la peor. */
-export function puntajeConfiabilidadObrero(respuestas: Record<string, number>): {
+export function puntajeConfiabilidadObrero(
+  respuestas: Record<string, number>,
+  banco: readonly PreguntaConfObrero[] = PREGUNTAS_CONFIABILIDAD_OBRERO,
+): {
   porcentaje: number;
   puntosSuma: number;
 } {
   let suma = 0;
   const maxPorPregunta = 100;
-  for (const q of PREGUNTAS_CONFIABILIDAD_OBRERO) {
+  for (const q of banco) {
     const v = respuestas[q.id];
     if (typeof v !== 'number' || v < 0 || v > 2) continue;
     const dist = Math.abs(v - q.mejor);
     const p = dist === 0 ? 100 : dist === 1 ? 50 : 0;
     suma += p;
   }
-  const n = PREGUNTAS_CONFIABILIDAD_OBRERO.length;
+  const n = banco.length;
   const porcentaje = n === 0 ? 0 : Math.round((suma / (n * maxPorPregunta)) * 10000) / 100;
   return { porcentaje, puntosSuma: suma };
 }
