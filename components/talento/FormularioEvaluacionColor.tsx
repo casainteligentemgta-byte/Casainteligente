@@ -3,9 +3,11 @@
 import { useMemo, useState } from 'react';
 import { ArrowLeft, ArrowRight, CheckCircle2, Loader2 } from 'lucide-react';
 import {
-  PARES_DISC_OBRERO,
   PREGUNTAS_CONFIABILIDAD_OBRERO,
+  PREGUNTAS_DISC_OBRERO,
   PREGUNTAS_LOGICA_OBRERO,
+  esColorPerfilObrero,
+  opcionesDiscVisibles,
   totalPasosEvaluacionObrero,
   type ColorPerfilObrero,
 } from '@/lib/talento/evaluacionObrero';
@@ -30,14 +32,14 @@ type Props = {
 export default function FormularioEvaluacionColor({ token, nombre, onFinalizar }: Props) {
   const pasos = useMemo<Paso[]>(() => {
     const out: Paso[] = [];
-    for (let i = 0; i < PARES_DISC_OBRERO.length; i++) out.push({ tipo: 'disc', idx: i });
+    for (let i = 0; i < PREGUNTAS_DISC_OBRERO.length; i++) out.push({ tipo: 'disc', idx: i });
     for (let i = 0; i < PREGUNTAS_LOGICA_OBRERO.length; i++) out.push({ tipo: 'logica', idx: i });
     for (let i = 0; i < PREGUNTAS_CONFIABILIDAD_OBRERO.length; i++) out.push({ tipo: 'conf', idx: i });
     return out;
   }, []);
 
   const [i, setI] = useState(0);
-  const [disc, setDisc] = useState<Record<string, 'a' | 'b'>>({});
+  const [disc, setDisc] = useState<Record<string, ColorPerfilObrero>>({});
   const [logica, setLogica] = useState<Record<string, number>>({});
   const [conf, setConf] = useState<Record<string, number>>({});
   const [inicio] = useState(() => Date.now());
@@ -48,8 +50,8 @@ export default function FormularioEvaluacionColor({ token, nombre, onFinalizar }
   const paso = pasos[i]!;
   const progreso = Math.round(((i + 1) / total) * 100);
 
-  const responderDisc = (id: string, v: 'a' | 'b') => {
-    setDisc((prev) => ({ ...prev, [id]: v }));
+  const responderDisc = (id: string, color: ColorPerfilObrero) => {
+    setDisc((prev) => ({ ...prev, [id]: color }));
   };
   const responderLogica = (id: string, v: number) => {
     setLogica((prev) => ({ ...prev, [id]: v }));
@@ -60,8 +62,8 @@ export default function FormularioEvaluacionColor({ token, nombre, onFinalizar }
 
   const pasoRespondido = (): boolean => {
     if (paso.tipo === 'disc') {
-      const id = PARES_DISC_OBRERO[paso.idx]!.id;
-      return disc[id] === 'a' || disc[id] === 'b';
+      const id = PREGUNTAS_DISC_OBRERO[paso.idx]!.id;
+      return esColorPerfilObrero(disc[id] ?? '');
     }
     if (paso.tipo === 'logica') {
       const id = PREGUNTAS_LOGICA_OBRERO[paso.idx]!.id;
@@ -119,9 +121,7 @@ export default function FormularioEvaluacionColor({ token, nombre, onFinalizar }
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-between bg-zinc-950 px-4 py-6 text-zinc-100">
       <header>
-        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-500">
-          Evaluación
-        </p>
+        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-500">Evaluación</p>
         <p className="mt-1 text-sm text-zinc-400">Hola, {nombre}</p>
         <div className="mt-4 flex items-center justify-between text-xs text-zinc-500">
           <span>{seccionLabel}</span>
@@ -140,31 +140,24 @@ export default function FormularioEvaluacionColor({ token, nombre, onFinalizar }
       <main className="flex-1 py-8">
         {paso.tipo === 'disc' ? (
           (() => {
-            const par = PARES_DISC_OBRERO[paso.idx]!;
-            const sel = disc[par.id];
+            const q = PREGUNTAS_DISC_OBRERO[paso.idx]!;
+            const visibles = opcionesDiscVisibles(q, paso.idx);
+            const sel = disc[q.id];
             return (
-              <div className="space-y-4">
-                <p className="text-sm font-medium text-zinc-200">
-                  En la obra, ¿qué haces tú?
-                </p>
-                {(
-                  [
-                    ['a', par.a],
-                    ['b', par.b],
-                  ] as const
-                ).map(([key, opt]) => (
+              <div className="space-y-3">
+                <p className="text-sm font-medium text-zinc-200">{q.pregunta}</p>
+                <p className="text-[11px] text-zinc-500">Escoge una (la que más te queda):</p>
+                {visibles.map((opt) => (
                   <button
-                    key={key}
+                    key={opt.color}
                     type="button"
-                    onClick={() => responderDisc(par.id, key)}
-                    className={`w-full rounded-2xl border px-4 py-4 text-left text-sm transition ${
-                      sel === key
+                    onClick={() => responderDisc(q.id, opt.color)}
+                    className={`w-full rounded-2xl border px-4 py-3.5 text-left text-sm transition ${
+                      sel === opt.color
                         ? 'border-amber-500/60 bg-amber-500/15 text-white'
                         : 'border-white/10 bg-white/[0.04] text-zinc-300 hover:bg-white/[0.07]'
                     }`}
                   >
-                    {/* Sin etiqueta de color: el obrero elige por conducta, no por color. */}
-                    <span className="sr-only">{opt.color}</span>
                     {opt.texto}
                   </button>
                 ))}

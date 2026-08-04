@@ -40,7 +40,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: validacion }, { status: 400 });
   }
 
-  const disc = body.disc as Record<string, 'a' | 'b'>;
+  const disc = body.disc as Record<string, string>;
   const logica = body.logica as Record<string, number>;
   const confiabilidad = body.confiabilidad as Record<string, number>;
 

@@ -1,15 +1,23 @@
 /**
  * Evaluación de talento — personal de campo (obrero).
- * DISC por colores (pares forzados), razonamiento lógico contextual, confiabilidad operativa.
+ * DISC por colores (4 opciones, una por color, sin mostrar el nombre),
+ * razonamiento lógico contextual, confiabilidad operativa.
  */
 
 export type ColorPerfilObrero = 'Rojo' | 'Amarillo' | 'Verde' | 'Azul';
 
-export type ParDiscObrero = {
+export type OpcionDiscObrero = { texto: string; color: ColorPerfilObrero };
+
+export type PreguntaDiscObrero = {
   id: string;
-  a: { texto: string; color: ColorPerfilObrero };
-  b: { texto: string; color: ColorPerfilObrero };
+  /** Situación corta de obra. */
+  pregunta: string;
+  /** Una conducta por color. El obrero no ve la etiqueta de color. */
+  opciones: [OpcionDiscObrero, OpcionDiscObrero, OpcionDiscObrero, OpcionDiscObrero];
 };
+
+/** @deprecated Compat; el banco actual es PreguntaDiscObrero (4 opciones). */
+export type ParDiscObrero = PreguntaDiscObrero;
 
 export type PreguntaLogicaObrero = {
   id: string;
@@ -26,79 +34,115 @@ export type PreguntaConfObrero = {
   mejor: 0 | 1 | 2;
 };
 
-/** Situaciones de obra: frase corta + dos acciones (sin jerga de oficina). */
-export const PARES_DISC_OBRERO: ParDiscObrero[] = [
-  {
-    id: 'd01',
-    a: { texto: 'Termino lo del día aunque tenga que decidir al momento.', color: 'Rojo' },
-    b: { texto: 'Mido y reviso material antes de seguir.', color: 'Azul' },
-  },
-  {
-    id: 'd02',
-    a: { texto: 'Animo a la cuadrilla cuando el día pesa.', color: 'Amarillo' },
-    b: { texto: 'Hago lo que dijo el encargado, paso a paso.', color: 'Verde' },
-  },
-  {
-    id: 'd03',
-    a: { texto: 'Si vamos atrasados, apuro para alcanzar.', color: 'Rojo' },
-    b: { texto: 'Si vamos atrasados, pregunto y sigo con calma.', color: 'Verde' },
-  },
-  {
-    id: 'd04',
-    a: { texto: 'Digo en voz alta qué voy a hacer.', color: 'Amarillo' },
-    b: { texto: 'Me concentro y hago bien lo acordado.', color: 'Azul' },
-  },
-  {
-    id: 'd05',
-    a: { texto: 'Decido ya, sin tanta reunión.', color: 'Rojo' },
-    b: { texto: 'Espero la orden y no me salgo de ella.', color: 'Verde' },
-  },
-  {
-    id: 'd06',
-    a: { texto: 'Hablo con la gente y calmo los líos.', color: 'Amarillo' },
-    b: { texto: 'Dejo el trabajo limpio y parejo.', color: 'Azul' },
-  },
-  {
-    id: 'd07',
-    a: { texto: 'Si hay duda de seguridad, paro y pregunto.', color: 'Azul' },
-    b: { texto: 'Si hay duda de seguridad, busco cómo seguir.', color: 'Rojo' },
-  },
-  {
-    id: 'd08',
-    a: { texto: 'Que la cuadrilla esté a gusto, aunque vayamos más lento.', color: 'Amarillo' },
-    b: { texto: 'Que cada quien haga lo suyo, sin vuelta.', color: 'Rojo' },
-  },
-  {
-    id: 'd09',
-    a: { texto: 'Hago lo que me mandan, aunque piense otra cosa.', color: 'Verde' },
-    b: { texto: 'Si veo una forma más rápida y segura, la digo.', color: 'Rojo' },
-  },
-  {
-    id: 'd10',
-    a: { texto: 'Me lleva el ambiente: hablar y reír con la cuadrilla.', color: 'Amarillo' },
-    b: { texto: 'Me lleva dejar filas o instalación bien hechas.', color: 'Azul' },
-  },
-  {
-    id: 'd11',
-    a: { texto: 'Quiero ver avance hoy, aunque falten detalles.', color: 'Rojo' },
-    b: { texto: 'Quiero cerrar bien los detalles, aunque avance menos.', color: 'Azul' },
-  },
-  {
-    id: 'd12',
-    a: { texto: 'Oigo a todos antes de actuar.', color: 'Amarillo' },
-    b: { texto: 'Sigo con paciencia aunque el oficio se repita.', color: 'Verde' },
-  },
-  {
-    id: 'd13',
-    a: { texto: 'Me importa que el trabajo quede bien hecho.', color: 'Azul' },
-    b: { texto: 'Me importa levantar el ánimo cuando el día está feo.', color: 'Amarillo' },
-  },
-  {
-    id: 'd14',
-    a: { texto: 'Me acomodo al ritmo del grupo.', color: 'Verde' },
-    b: { texto: 'Empujo para ir más rápido cuando hay que entregar.', color: 'Rojo' },
-  },
+function disc4(
+  id: string,
+  pregunta: string,
+  rojo: string,
+  amarillo: string,
+  verde: string,
+  azul: string,
+): PreguntaDiscObrero {
+  return {
+    id,
+    pregunta,
+    opciones: [
+      { texto: rojo, color: 'Rojo' },
+      { texto: amarillo, color: 'Amarillo' },
+      { texto: verde, color: 'Verde' },
+      { texto: azul, color: 'Azul' },
+    ],
+  };
+}
+
+/**
+ * 10 situaciones × 4 respuestas (Rojo / Amarillo / Verde / Azul).
+ * Sin mostrar el color en pantalla: solo la conducta.
+ */
+export const PREGUNTAS_DISC_OBRERO: PreguntaDiscObrero[] = [
+  disc4(
+    'd01',
+    'El día se atrasa y hay que entregar. ¿Qué haces tú?',
+    'Apuro y decido rápido para alcanzar.',
+    'Animo a la cuadrilla para que no se caiga el ánimo.',
+    'Sigo el paso que dijo el encargado, sin apurar de más.',
+    'Reviso medidas y material antes de seguir.',
+  ),
+  disc4(
+    'd02',
+    'Hay un lío en la cuadrilla. ¿Qué haces?',
+    'Corto el lío y digo cómo se hace.',
+    'Hablo con todos y calmo las aguas.',
+    'Me mantengo en lo mío y espero la orden.',
+    'Miro el problema con detalle y propongo un arreglo claro.',
+  ),
+  disc4(
+    'd03',
+    'El encargado aún no llega y hay que empezar. ¿Qué haces?',
+    'Arranco ya con lo que hay.',
+    'Organizo a la gente y les hablo.',
+    'Espero la orden para no salirme.',
+    'Reviso el área y dejo todo listo y ordenado.',
+  ),
+  disc4(
+    'd04',
+    'Hay duda de seguridad. ¿Qué haces?',
+    'Busco la forma más rápida de seguir.',
+    'Lo comento con la cuadrilla y vemos juntos.',
+    'Paro y espero lo que diga el encargado.',
+    'Paro, reviso bien y no sigo hasta estar seguro.',
+  ),
+  disc4(
+    'd05',
+    'Te mandan un trabajo repetitivo todo el día. ¿Qué haces?',
+    'Lo saco rápido para pasar a otra cosa.',
+    'Hablo y hago ambiente mientras trabajo.',
+    'Sigo con paciencia, paso a paso.',
+    'Cuido que cada pieza quede bien hecha.',
+  ),
+  disc4(
+    'd06',
+    'Hay que elegir cómo hacer una tarea. ¿Qué haces?',
+    'Decido ya y seguimos.',
+    'Oigo a todos y busco que todos estén de acuerdo.',
+    'Hago lo que me mandaron, aunque piense otra cosa.',
+    'Miro cuál opción queda más limpia y correcta.',
+  ),
+  disc4(
+    'd07',
+    'La obra está pesada y el ánimo bajo. ¿Qué haces?',
+    'Empujo para que no se paren.',
+    'Levanto el ánimo: hablo, animo, rio.',
+    'Me acomodo al ritmo del grupo sin pelear.',
+    'Me concentro en dejar el trabajo bien parejo.',
+  ),
+  disc4(
+    'd08',
+    'Ves un atajo que puede ahorrar tiempo. ¿Qué haces?',
+    'Lo tomo si sirve para entregar hoy.',
+    'Lo comento con la cuadrilla.',
+    'No me salgo de lo acordado.',
+    'Solo lo uso si es seguro y queda bien hecho.',
+  ),
+  disc4(
+    'd09',
+    'Al final del día, ¿qué te importa más?',
+    'Ver avance y meta cumplida.',
+    'Que la cuadrilla se vaya a gusto.',
+    'Haber cumplido lo que me mandaron.',
+    'Que el trabajo haya quedado limpio y bien hecho.',
+  ),
+  disc4(
+    'd10',
+    'Te piden apoyar a otra cuadrilla. ¿Qué haces?',
+    'Voy y empujo para acabar rápido.',
+    'Voy, saludo y me integro con la gente.',
+    'Voy y hago lo que me indiquen.',
+    'Voy y cuido que lo que haga quede bien.',
+  ),
 ];
+
+/** Alias del banco (4 opciones por pregunta). */
+export const PARES_DISC_OBRERO = PREGUNTAS_DISC_OBRERO;
 
 export const PREGUNTAS_LOGICA_OBRERO: PreguntaLogicaObrero[] = [
   {
@@ -199,21 +243,35 @@ export const PREGUNTAS_CONFIABILIDAD_OBRERO: PreguntaConfObrero[] = [
 
 const ORDEN_DESEMPATE: ColorPerfilObrero[] = ['Azul', 'Verde', 'Amarillo', 'Rojo'];
 
-export function colorPredominanteDisc(respuestas: Record<string, 'a' | 'b'>): ColorPerfilObrero {
+const COLORES: ColorPerfilObrero[] = ['Rojo', 'Amarillo', 'Verde', 'Azul'];
+
+export function esColorPerfilObrero(v: string): v is ColorPerfilObrero {
+  return (COLORES as readonly string[]).includes(v);
+}
+
+/** Rota el orden visual para que el mismo color no quede siempre primero. */
+export function opcionesDiscVisibles(q: PreguntaDiscObrero, idxPregunta: number): OpcionDiscObrero[] {
+  const rot = ((idxPregunta % 4) + 4) % 4;
+  const arr = [...q.opciones];
+  return [...arr.slice(rot), ...arr.slice(0, rot)];
+}
+
+export function colorPredominanteDisc(
+  respuestas: Record<string, ColorPerfilObrero | string>,
+): ColorPerfilObrero {
   const cont: Record<ColorPerfilObrero, number> = {
     Rojo: 0,
     Amarillo: 0,
     Verde: 0,
     Azul: 0,
   };
-  for (const par of PARES_DISC_OBRERO) {
-    const r = respuestas[par.id];
-    if (r === 'a') cont[par.a.color] += 1;
-    else if (r === 'b') cont[par.b.color] += 1;
+  for (const q of PREGUNTAS_DISC_OBRERO) {
+    const r = respuestas[q.id];
+    if (typeof r === 'string' && esColorPerfilObrero(r)) cont[r] += 1;
   }
   let max = -1;
   const candidatos: ColorPerfilObrero[] = [];
-  for (const c of ['Rojo', 'Amarillo', 'Verde', 'Azul'] as const) {
+  for (const c of COLORES) {
     if (cont[c] > max) {
       max = cont[c];
       candidatos.length = 0;
@@ -267,7 +325,7 @@ export function puntajeConfiabilidadObrero(respuestas: Record<string, number>): 
 }
 
 export function idsDiscObrero(): string[] {
-  return PARES_DISC_OBRERO.map((p) => p.id);
+  return PREGUNTAS_DISC_OBRERO.map((p) => p.id);
 }
 
 export function idsLogicaObrero(): string[] {
@@ -279,7 +337,9 @@ export function idsConfObrero(): string[] {
 }
 
 export function totalPasosEvaluacionObrero(): number {
-  return PARES_DISC_OBRERO.length + PREGUNTAS_LOGICA_OBRERO.length + PREGUNTAS_CONFIABILIDAD_OBRERO.length;
+  return (
+    PREGUNTAS_DISC_OBRERO.length + PREGUNTAS_LOGICA_OBRERO.length + PREGUNTAS_CONFIABILIDAD_OBRERO.length
+  );
 }
 
 export function validarRespuestasCompletasObrero(body: {
@@ -289,7 +349,7 @@ export function validarRespuestasCompletasObrero(body: {
 }): string | null {
   for (const id of idsDiscObrero()) {
     const v = body.disc?.[id];
-    if (v !== 'a' && v !== 'b') return `Falta respuesta DISC (${id})`;
+    if (!v || !esColorPerfilObrero(v)) return `Falta respuesta de color (${id})`;
   }
   for (const id of idsLogicaObrero()) {
     const v = body.logica?.[id];
@@ -303,7 +363,7 @@ export function validarRespuestasCompletasObrero(body: {
 }
 
 export function procesarEvaluacionObrero(body: {
-  disc: Record<string, 'a' | 'b'>;
+  disc: Record<string, ColorPerfilObrero | string>;
   logica: Record<string, number>;
   confiabilidad: Record<string, number>;
 }): {
