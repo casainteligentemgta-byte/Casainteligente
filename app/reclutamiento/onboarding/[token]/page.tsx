@@ -7,7 +7,9 @@ import {
   emptyHojaVidaObreroCompleta,
   hojaVidaDesdeRow,
   nombreCompletoDesde,
+  parseHojaVidaObreroJson,
   type HojaVidaObreroCompleta,
+  type SiNo,
 } from '@/lib/talento/hojaVidaObreroCompleta';
 import type { PlanillaPatronoCampos } from '@/lib/talento/planillaPatronoTypes';
 import { resolvePlanillaPatronoParaEmpleado } from '@/lib/talento/resolvePlanillaPatronoPdf';
@@ -39,6 +41,74 @@ type Props = { params: { token: string } };
 const TOTAL_PASOS = 4;
 const REDIRECT_EVAL_SEG = 4;
 
+/** Nombres inventados al generar el enlace (p. ej. «Candidato · ELECTRICISTA»). */
+function esNombrePlaceholderInvitacion(nombre: string): boolean {
+  const n = nombre.trim().toLowerCase();
+  if (!n) return true;
+  if (n.startsWith('candidato')) return true;
+  if (n.includes('candidato')) return true;
+  if (n === 'por completar' || n.startsWith('por completar')) return true;
+  if (n.includes('·') || n.includes('•')) return true;
+  return false;
+}
+
+function compuestoNombresHv(hv: HojaVidaObreroCompleta): string {
+  return [
+    hv.datosPersonales.primerNombre,
+    hv.datosPersonales.segundoNombre,
+    hv.datosPersonales.primerApellido,
+    hv.datosPersonales.segundoApellido,
+  ]
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .join(' ');
+}
+
+function limpiarNombresEnHv(hv: HojaVidaObreroCompleta): void {
+  hv.datosPersonales.primerNombre = '';
+  hv.datosPersonales.segundoNombre = '';
+  hv.datosPersonales.primerApellido = '';
+  hv.datosPersonales.segundoApellido = '';
+}
+
+/**
+ * Onboarding: primer/segundo nombre y apellidos van vacíos salvo HV real ya guardada
+ * por el obrero (no partir nombre_completo / cargo de la invitación).
+ */
+function hvInicialOnboarding(row: Record<string, unknown>): HojaVidaObreroCompleta {
+  const desdeRow = hojaVidaDesdeRow(row);
+  const json = parseHojaVidaObreroJson(row.hoja_vida_obrero);
+  const nomInvitacion = String(row.nombre_completo ?? row.nombres ?? '').trim();
+  const nombresJsonSonPlaceholder =
+    !compuestoNombresHv(json) ||
+    esNombrePlaceholderInvitacion(compuestoNombresHv(json)) ||
+    esNombrePlaceholderInvitacion(nomInvitacion);
+
+  const tieneHvRealDelObrero = Boolean(
+    !nombresJsonSonPlaceholder &&
+      (json.datosPersonales.primerNombre.trim() || json.datosPersonales.primerApellido.trim()),
+  );
+  const estado = String(row.estado_proceso ?? '').trim().toLowerCase();
+
+  if (tieneHvRealDelObrero || (estado === 'cv_completado' && !nombresJsonSonPlaceholder)) {
+    const hv = desdeRow;
+    if (esNombrePlaceholderInvitacion(compuestoNombresHv(hv)) || esNombrePlaceholderInvitacion(nomInvitacion)) {
+      limpiarNombresEnHv(hv);
+    }
+    return hv;
+  }
+
+  // Primera visita / nombres de invitación: campos de nombre vacíos.
+  const vacia = emptyHojaVidaObreroCompleta();
+  vacia.contratacion.cargoUOficio = desdeRow.contratacion.cargoUOficio;
+  vacia.datosPersonales.fotoUrl = desdeRow.datosPersonales.fotoUrl;
+  vacia.datosPersonales.fotoCedulaUrl = desdeRow.datosPersonales.fotoCedulaUrl;
+  vacia.datosPersonales.cedulaIdentidad = json.datosPersonales.cedulaIdentidad.trim();
+  vacia.datosPersonales.celular = desdeRow.datosPersonales.celular;
+  limpiarNombresEnHv(vacia);
+  return vacia;
+}
+
 function HojaDeVidaMovilInner({ params }: Props) {
   const supabase = useMemo(() => createClient(), []);
   const [step, setStep] = useState(1);
@@ -60,6 +130,10 @@ function HojaDeVidaMovilInner({ params }: Props) {
   const [tokenValidando, setTokenValidando] = useState(true);
   const [tokenInvalido, setTokenInvalido] = useState<string | null>(null);
   const [redirectSeg, setRedirectSeg] = useState<number | null>(null);
+  /** Cargo fijado por la invitación / RRHH; no editable por el obrero. */
+  const [cargoOficioFijo, setCargoOficioFijo] = useState('');
+  /** Inscripción IVSS la define RRHH; el obrero no la responde. */
+  const [inscripcionIvssFija, setInscripcionIvssFija] = useState<SiNo>('');
 
   useEffect(() => {
     if (step !== 4) return;
@@ -115,10 +189,17 @@ function HojaDeVidaMovilInner({ params }: Props) {
             return;
           }
           const rowLeg = leg.data as Record<string, unknown>;
-          const hvLeg = hojaVidaDesdeRow(rowLeg);
+          const hvLeg = hvInicialOnboarding(rowLeg);
           if (j.empleado?.cargo && !hvLeg.contratacion.cargoUOficio.trim()) {
             hvLeg.contratacion.cargoUOficio = j.empleado.cargo.trim();
           }
+          const cargoLeg =
+            hvLeg.contratacion.cargoUOficio.trim() ||
+            String(j.empleado?.cargo || '').trim() ||
+            String(rowLeg.rol_buscado || rowLeg.cargo || '').trim();
+          hvLeg.contratacion.cargoUOficio = cargoLeg;
+          setCargoOficioFijo(cargoLeg);
+          setInscripcionIvssFija(hvLeg.datosPersonales.inscripcionIvss);
           setLegal(hvLeg);
           setFormData((prev) => ({
             ...prev,
@@ -137,10 +218,17 @@ function HojaDeVidaMovilInner({ params }: Props) {
         }
 
         const row = data as Record<string, unknown>;
-        const hv = hojaVidaDesdeRow(row);
+        const hv = hvInicialOnboarding(row);
         if (j.empleado?.cargo && !hv.contratacion.cargoUOficio.trim()) {
           hv.contratacion.cargoUOficio = j.empleado.cargo.trim();
         }
+        const cargoFijo =
+          hv.contratacion.cargoUOficio.trim() ||
+          String(j.empleado?.cargo || '').trim() ||
+          String(row.rol_buscado || row.cargo || '').trim();
+        hv.contratacion.cargoUOficio = cargoFijo;
+        setCargoOficioFijo(cargoFijo);
+        setInscripcionIvssFija(hv.datosPersonales.inscripcionIvss);
         setLegal(hv);
         setFormData((prev) => ({
           ...prev,
@@ -239,6 +327,8 @@ function HojaDeVidaMovilInner({ params }: Props) {
       return;
     }
 
+    const cargoBloqueado =
+      cargoOficioFijo.trim() || legal.contratacion.cargoUOficio.trim();
     const merged: HojaVidaObreroCompleta = {
       ...legal,
       datosPersonales: {
@@ -246,12 +336,16 @@ function HojaDeVidaMovilInner({ params }: Props) {
         cedulaIdentidad: legal.datosPersonales.cedulaIdentidad.trim() || formData.cedula.trim(),
         fotoCedulaUrl: fotoCedUrl ?? legal.datosPersonales.fotoCedulaUrl,
         fotoUrl: fotoPerUrl ?? legal.datosPersonales.fotoUrl,
+        // Inscripción IVSS: solo RRHH.
+        inscripcionIvss: inscripcionIvssFija,
       },
       pesoMedidas: {
         ...legal.pesoMedidas,
         tallaCamisa: legal.pesoMedidas.tallaCamisa || formData.talla_camisa,
         medidaBotas: legal.pesoMedidas.medidaBotas || String(formData.talla_botas),
       },
+      // El cargo lo fija RRHH / la solicitud; el obrero no puede cambiarlo.
+      contratacion: { cargoUOficio: cargoBloqueado },
     };
 
     const nombre = nombreCompletoDesde(merged).trim();
@@ -508,15 +602,15 @@ function HojaDeVidaMovilInner({ params }: Props) {
             >
               <div className="space-y-2">
                 <h2 className="text-3xl font-bold text-white tracking-tight">Hoja de Vida</h2>
-                <p className="text-sm text-[var(--nexus-text-muted)]">
-                  Formulario legal completo (una sola vez). Al contratarte, estos datos rellenan la hoja de empleo; RRHH
-                  solo completa patrono, obra y faltantes. Información confidencial.
-                </p>
               </div>
 
               <GlassCard className="!p-0 overflow-hidden">
                 <div className="p-5 border-b border-white/5 bg-white/[0.02]">
-                  <OnboardingHojaVidaLegalForm value={legal} onChange={setLegal} />
+                  <OnboardingHojaVidaLegalForm
+                    value={legal}
+                    onChange={setLegal}
+                    cargoFijo={cargoOficioFijo}
+                  />
                 </div>
                 <button
                   type="button"
@@ -556,8 +650,7 @@ function HojaDeVidaMovilInner({ params }: Props) {
               </div>
               <h2 className="text-3xl font-bold text-white tracking-tight">¡Hoja de vida enviada!</h2>
               <p className="text-[var(--nexus-text-muted)] max-w-sm mx-auto">
-                Ya se generó tu hoja de vida. A continuación harás la evaluación: primero el tipo de color y luego la
-                prueba de admisión.
+                Ya se generó tu hoja de vida. A continuación harás la evaluación.
               </p>
               
               <div className="flex flex-col gap-3 max-w-sm mx-auto">

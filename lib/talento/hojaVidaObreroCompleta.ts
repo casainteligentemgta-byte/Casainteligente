@@ -66,6 +66,8 @@ export type HojaVidaObreroCompleta = {
     profesionUOficioActual: string;
   };
   actividadGremial: {
+    /** Si/no: controla si se piden federación y cargo. */
+    realizaActividad: SiNo;
     federacionSindicatoGremio: string;
     cargoQueEjerce: string;
   };
@@ -149,7 +151,7 @@ export function emptyHojaVidaObreroCompleta(): HojaVidaObreroCompleta {
       superior: false,
       profesionUOficioActual: '',
     },
-    actividadGremial: { federacionSindicatoGremio: '', cargoQueEjerce: '' },
+    actividadGremial: { realizaActividad: '', federacionSindicatoGremio: '', cargoQueEjerce: '' },
     antecedentesMedicos: {
       examenMedicoPrevio: '',
       efectuadoPor: '',
@@ -236,9 +238,15 @@ export function parseHojaVidaObreroJson(raw: unknown): HojaVidaObreroCompleta {
   };
 
   const ag = isRecord(raw.actividadGremial) ? raw.actividadGremial : {};
+  const federacion = String(ag.federacionSindicatoGremio ?? '');
+  const cargoGrem = String(ag.cargoQueEjerce ?? '');
+  let realiza = mergeSiNo(ag.realizaActividad);
+  // Compat: HV antiguas sin el flag → inferir si hay datos.
+  if (!realiza && (federacion.trim() || cargoGrem.trim())) realiza = 'si';
   const actividadGremial = {
-    federacionSindicatoGremio: String(ag.federacionSindicatoGremio ?? ''),
-    cargoQueEjerce: String(ag.cargoQueEjerce ?? ''),
+    realizaActividad: realiza,
+    federacionSindicatoGremio: federacion,
+    cargoQueEjerce: cargoGrem,
   };
 
   const am = isRecord(raw.antecedentesMedicos) ? raw.antecedentesMedicos : {};
@@ -365,7 +373,16 @@ export function hojaVidaDesdeRow(row: Record<string, unknown>): HojaVidaObreroCo
   }
 
   const nom = str('nombre_completo');
-  if (nom && !fromJson.datosPersonales.primerNombre) {
+  const nomLower = nom.toLowerCase();
+  const nomEsPlaceholderInvitacion =
+    !nom ||
+    nomLower.startsWith('candidato') ||
+    nomLower.includes('candidato') ||
+    nomLower.startsWith('por completar') ||
+    nom.includes('·') ||
+    nom.includes('•');
+  // No partir «Candidato · CARGO» / «Por completar» en primer/segundo nombre y apellidos.
+  if (nom && !nomEsPlaceholderInvitacion && !fromJson.datosPersonales.primerNombre) {
     const parts = nom.split(/\s+/).filter(Boolean);
     if (parts.length >= 1) fromJson.datosPersonales.primerNombre = parts[0] ?? '';
     if (parts.length >= 2) fromJson.datosPersonales.primerApellido = parts[parts.length - 1] ?? '';

@@ -5,10 +5,25 @@ import type { HojaVidaObreroCompleta, SiNo } from '@/lib/talento/hojaVidaObreroC
 type Props = {
   value: HojaVidaObreroCompleta;
   onChange: (next: HojaVidaObreroCompleta) => void;
+  /** Cargo fijado por RRHH / solicitud; el obrero no puede modificarlo. */
+  cargoFijo?: string;
 };
 
 function inpCls() {
   return 'mt-1 w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm text-slate-900';
+}
+
+/** Normaliza a `yyyy-mm-dd` para `<input type="date">` (acepta dd/mm/yyyy y yyyy-mm-dd). */
+function aFechaInput(raw: string): string {
+  const s = raw.trim();
+  if (!s) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+  if (!m) return '';
+  const dd = m[1]!.padStart(2, '0');
+  const mm = m[2]!.padStart(2, '0');
+  const yyyy = m[3]!;
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 function lab() {
@@ -45,56 +60,56 @@ function Sec({ title, children }: { title: string; children: React.ReactNode }) 
   );
 }
 
-export default function OnboardingHojaVidaLegalForm({ value, onChange }: Props) {
+export default function OnboardingHojaVidaLegalForm({ value, onChange, cargoFijo = '' }: Props) {
+  const cargoBloqueado = (cargoFijo.trim() || value.contratacion.cargoUOficio || '').trim();
+  const ivssBloqueado = value.datosPersonales.inscripcionIvss;
+  const commit = (next: HojaVidaObreroCompleta) => {
+    // Cargo e inscripción IVSS los define RRHH; el obrero no los modifica.
+    onChange({
+      ...next,
+      contratacion: { cargoUOficio: cargoBloqueado },
+      datosPersonales: {
+        ...next.datosPersonales,
+        inscripcionIvss: ivssBloqueado,
+      },
+    });
+  };
+
   const d = value.datosPersonales;
   const setDp = (patch: Partial<typeof d>) =>
-    onChange({ ...value, datosPersonales: { ...value.datosPersonales, ...patch } });
-
-  const setCon = (cargoUOficio: string) => onChange({ ...value, contratacion: { cargoUOficio } });
-
-  const setCap = (patch: Partial<(typeof value)['certificadoAntecedentesPenales']>) =>
-    onChange({
+    commit({
       ...value,
-      certificadoAntecedentesPenales: { ...value.certificadoAntecedentesPenales, ...patch },
+      datosPersonales: {
+        ...value.datosPersonales,
+        ...patch,
+        inscripcionIvss: ivssBloqueado,
+      },
     });
 
   const setIns = (patch: Partial<(typeof value)['instruccionCapacitacion']>) =>
-    onChange({ ...value, instruccionCapacitacion: { ...value.instruccionCapacitacion, ...patch } });
+    commit({ ...value, instruccionCapacitacion: { ...value.instruccionCapacitacion, ...patch } });
 
   const setGre = (patch: Partial<(typeof value)['actividadGremial']>) =>
-    onChange({ ...value, actividadGremial: { ...value.actividadGremial, ...patch } });
-
-  const setMed = (patch: Partial<(typeof value)['antecedentesMedicos']>) =>
-    onChange({ ...value, antecedentesMedicos: { ...value.antecedentesMedicos, ...patch } });
+    commit({ ...value, actividadGremial: { ...value.actividadGremial, ...patch } });
 
   const setPm = (patch: Partial<(typeof value)['pesoMedidas']>) =>
-    onChange({ ...value, pesoMedidas: { ...value.pesoMedidas, ...patch } });
+    commit({ ...value, pesoMedidas: { ...value.pesoMedidas, ...patch } });
 
   const setDep = (i: number, patch: Partial<(typeof value.familiaresDependientes)[0]>) => {
     const fam = [...value.familiaresDependientes];
     fam[i] = { ...fam[i], ...patch };
-    onChange({ ...value, familiaresDependientes: fam });
+    commit({ ...value, familiaresDependientes: fam });
   };
 
   const setTp = (i: number, patch: Partial<(typeof value.trabajosPrevios)[0]>) => {
     const tp = [...value.trabajosPrevios];
     tp[i] = { ...tp[i], ...patch };
-    onChange({ ...value, trabajosPrevios: tp });
+    commit({ ...value, trabajosPrevios: tp });
   };
 
   return (
     <div className="space-y-3 text-slate-900">
-      <p className="text-xs text-slate-600">
-        Hoja de vida del trabajador (formato legal rama construcción, Convención Colectiva 2023). Rellénala una sola vez:
-        al contratarte, esos datos alimentan automáticamente la hoja de empleo y RRHH solo completa patrono, obra y lo que
-        falte. Los vacíos salen como «—» en el PDF.
-      </p>
-
       <Sec title="Datos personales del trabajador">
-        <label className="block sm:col-span-2">
-          <span className={lab()}>Foto (opcional — URL si ya subiste archivo, o déjalo en blanco)</span>
-          <input className={inpCls()} value={d.fotoUrl} onChange={(e) => setDp({ fotoUrl: e.target.value })} />
-        </label>
         <label className="block">
           <span className={lab()}>Primer nombre</span>
           <input className={inpCls()} value={d.primerNombre} onChange={(e) => setDp({ primerNombre: e.target.value })} />
@@ -158,8 +173,11 @@ export default function OnboardingHojaVidaLegalForm({ value, onChange }: Props) 
         <label className="block">
           <span className={lab()}>Fecha de nacimiento</span>
           <input
+            type="date"
             className={inpCls()}
-            value={d.fechaNacimiento}
+            value={aFechaInput(d.fechaNacimiento)}
+            max={new Date().toISOString().slice(0, 10)}
+            min="1920-01-01"
             onChange={(e) => setDp({ fechaNacimiento: e.target.value })}
           />
         </label>
@@ -201,48 +219,36 @@ export default function OnboardingHojaVidaLegalForm({ value, onChange }: Props) 
             onChange={(e) => setDp({ direccionDomicilio: e.target.value })}
           />
         </label>
-        <SiNoField label="Inscripción IVSS" value={d.inscripcionIvss} onChange={(v) => setDp({ inscripcionIvss: v })} />
+        <div className="sm:col-span-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+          <p className="font-semibold text-slate-900">Inscripción IVSS</p>
+          <p className="mt-0.5 text-[11px] text-slate-500">
+            Lo completa RRHH. El obrero no responde esta pregunta aquí.
+          </p>
+          {d.inscripcionIvss === 'si' || d.inscripcionIvss === 'no' ? (
+            <p className="mt-1 text-sm font-semibold text-slate-900">
+              {d.inscripcionIvss === 'si' ? 'Sí' : 'No'}
+            </p>
+          ) : null}
+        </div>
         <SiNoField label="Zurdo" value={d.zurdo} onChange={(v) => setDp({ zurdo: v })} />
       </Sec>
 
       <Sec title="Datos de la contratación">
-        <label className="block sm:col-span-2">
+        <div className="sm:col-span-2">
           <span className={lab()}>Cargo u oficio a desempeñar</span>
-          <input
-            className={inpCls()}
-            value={value.contratacion.cargoUOficio}
-            onChange={(e) => setCon(e.target.value)}
-          />
-        </label>
+          <p
+            className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-2.5 py-2 text-sm font-semibold text-slate-900 select-none"
+            aria-readonly="true"
+          >
+            {cargoBloqueado || '—'}
+          </p>
+          <span className="mt-1 block text-[10px] text-slate-500">
+            Definido por RRHH / la solicitud. El obrero no puede cambiarlo.
+          </span>
+        </div>
       </Sec>
 
-      <Sec title="Certificado de antecedentes penales">
-        <SiNoField
-          label="Antecedentes penales"
-          value={value.certificadoAntecedentesPenales.antecedentesPenales}
-          onChange={(v) => setCap({ antecedentesPenales: v })}
-        />
-        <label className="block sm:col-span-2">
-          <span className={lab()}>Expedido por</span>
-          <input
-            className={inpCls()}
-            value={value.certificadoAntecedentesPenales.expedidoPor}
-            onChange={(e) => setCap({ expedidoPor: e.target.value })}
-          />
-        </label>
-        <label className="block">
-          <span className={lab()}>Lugar</span>
-          <input className={inpCls()} value={value.certificadoAntecedentesPenales.lugar} onChange={(e) => setCap({ lugar: e.target.value })} />
-        </label>
-        <label className="block">
-          <span className={lab()}>Fecha de expedición</span>
-          <input
-            className={inpCls()}
-            value={value.certificadoAntecedentesPenales.fechaExpedicion}
-            onChange={(e) => setCap({ fechaExpedicion: e.target.value })}
-          />
-        </label>
-      </Sec>
+      {/* Certificado de antecedentes penales: omitido en onboarding por ahora (sigue en modelo/PDF). */}
 
       <Sec title="Instrucción y capacitación">
         <SiNoField label="Sabe leer" value={value.instruccionCapacitacion.sabeLeer} onChange={(v) => setIns({ sabeLeer: v })} />
@@ -274,60 +280,91 @@ export default function OnboardingHojaVidaLegalForm({ value, onChange }: Props) 
       </Sec>
 
       <Sec title="Actividad gremial o sindical">
-        <label className="block sm:col-span-2">
-          <span className={lab()}>Federación / Sindicato / Gremio</span>
-          <input
-            className={inpCls()}
-            value={value.actividadGremial.federacionSindicatoGremio}
-            onChange={(e) => setGre({ federacionSindicatoGremio: e.target.value })}
-          />
-        </label>
-        <label className="block sm:col-span-2">
-          <span className={lab()}>Cargo que ejerce</span>
-          <input
-            className={inpCls()}
-            value={value.actividadGremial.cargoQueEjerce}
-            onChange={(e) => setGre({ cargoQueEjerce: e.target.value })}
-          />
-        </label>
+        <SiNoField
+          label="¿Realiza actividad gremial o sindical?"
+          value={value.actividadGremial.realizaActividad}
+          onChange={(v) => {
+            if (v === 'no') {
+              setGre({
+                realizaActividad: 'no',
+                federacionSindicatoGremio: '',
+                cargoQueEjerce: '',
+              });
+              return;
+            }
+            setGre({ realizaActividad: v });
+          }}
+        />
+        {value.actividadGremial.realizaActividad === 'si' ? (
+          <>
+            <label className="block sm:col-span-2">
+              <span className={lab()}>Federación / Sindicato / Gremio</span>
+              <input
+                className={inpCls()}
+                value={value.actividadGremial.federacionSindicatoGremio}
+                onChange={(e) => setGre({ federacionSindicatoGremio: e.target.value })}
+              />
+            </label>
+            <label className="block sm:col-span-2">
+              <span className={lab()}>Cargo que ejerce</span>
+              <input
+                className={inpCls()}
+                value={value.actividadGremial.cargoQueEjerce}
+                onChange={(e) => setGre({ cargoQueEjerce: e.target.value })}
+              />
+            </label>
+          </>
+        ) : null}
       </Sec>
 
       <Sec title="Antecedentes médicos">
-        <SiNoField
-          label="Examen médico previo"
-          value={value.antecedentesMedicos.examenMedicoPrevio}
-          onChange={(v) => setMed({ examenMedicoPrevio: v })}
-        />
-        <label className="block sm:col-span-2">
-          <span className={lab()}>Efectuado por</span>
-          <input
-            className={inpCls()}
-            value={value.antecedentesMedicos.efectuadoPor}
-            onChange={(e) => setMed({ efectuadoPor: e.target.value })}
-          />
-        </label>
-        <label className="block">
-          <span className={lab()}>Tipo de sangre</span>
-          <input className={inpCls()} value={value.antecedentesMedicos.tipoSangre} onChange={(e) => setMed({ tipoSangre: e.target.value })} />
-        </label>
-        <label className="block sm:col-span-2">
-          <span className={lab()}>Enfermedades padecidas</span>
-          <textarea
-            rows={2}
-            className={inpCls()}
-            value={value.antecedentesMedicos.enfermedadesPadecidas}
-            onChange={(e) => setMed({ enfermedadesPadecidas: e.target.value })}
-          />
-        </label>
-        <label className="block sm:col-span-2">
-          <span className={lab()}>Incapacidades físicas o funcionales</span>
-          <textarea
-            rows={2}
-            className={inpCls()}
-            value={value.antecedentesMedicos.incapacidadesFisicasOFuncionales}
-            onChange={(e) => setMed({ incapacidadesFisicasOFuncionales: e.target.value })}
-          />
-        </label>
+        <div className="sm:col-span-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-xs leading-relaxed text-amber-950">
+          <p className="font-semibold">Lo completa el médico de la entidad</p>
+          <p className="mt-1 text-amber-900/90">
+            Esta sección se rellena cuando el médico de la empresa realice el chequeo médico. El obrero no la modifica
+            en este formulario.
+          </p>
+          {(value.antecedentesMedicos.tipoSangre.trim() ||
+            value.antecedentesMedicos.enfermedadesPadecidas.trim() ||
+            value.antecedentesMedicos.incapacidadesFisicasOFuncionales.trim() ||
+            value.antecedentesMedicos.efectuadoPor.trim() ||
+            value.antecedentesMedicos.examenMedicoPrevio) && (
+            <dl className="mt-3 grid gap-1.5 border-t border-amber-200/80 pt-2 text-[11px] text-slate-700">
+              {value.antecedentesMedicos.examenMedicoPrevio ? (
+                <div>
+                  <dt className="inline font-semibold">Examen médico previo: </dt>
+                  <dd className="inline">
+                    {value.antecedentesMedicos.examenMedicoPrevio === 'si' ? 'Sí' : 'No'}
+                  </dd>
+                </div>
+              ) : null}
+              {value.antecedentesMedicos.efectuadoPor.trim() ? (
+                <div>
+                  <dt className="inline font-semibold">Efectuado por: </dt>
+                  <dd className="inline">{value.antecedentesMedicos.efectuadoPor}</dd>
+                </div>
+              ) : null}
+              {value.antecedentesMedicos.tipoSangre.trim() ? (
+                <div>
+                  <dt className="inline font-semibold">Tipo de sangre: </dt>
+                  <dd className="inline">{value.antecedentesMedicos.tipoSangre}</dd>
+                </div>
+              ) : null}
+              {value.antecedentesMedicos.enfermedadesPadecidas.trim() ? (
+                <div>
+                  <dt className="inline font-semibold">Enfermedades: </dt>
+                  <dd className="inline">{value.antecedentesMedicos.enfermedadesPadecidas}</dd>
+                </div>
+              ) : null}
+              {value.antecedentesMedicos.incapacidadesFisicasOFuncionales.trim() ? (
+                <div>
+                  <dt className="inline font-semibold">Incapacidades: </dt>
+                  <dd className="inline">{value.antecedentesMedicos.incapacidadesFisicasOFuncionales}</dd>
+                </div>
+              ) : null}
+            </dl>
+          )}
+        </div>
       </Sec>
 
       <Sec title="Peso y medidas">
