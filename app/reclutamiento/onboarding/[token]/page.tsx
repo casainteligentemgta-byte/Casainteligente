@@ -106,6 +106,8 @@ function HojaDeVidaMovilInner({ params }: Props) {
   const [tokenValidando, setTokenValidando] = useState(true);
   const [tokenInvalido, setTokenInvalido] = useState<string | null>(null);
   const [redirectSeg, setRedirectSeg] = useState<number | null>(null);
+  /** Cargo fijado por la invitación / RRHH; no editable por el obrero. */
+  const [cargoOficioFijo, setCargoOficioFijo] = useState('');
 
   useEffect(() => {
     if (step !== 4) return;
@@ -165,6 +167,12 @@ function HojaDeVidaMovilInner({ params }: Props) {
           if (j.empleado?.cargo && !hvLeg.contratacion.cargoUOficio.trim()) {
             hvLeg.contratacion.cargoUOficio = j.empleado.cargo.trim();
           }
+          const cargoLeg =
+            hvLeg.contratacion.cargoUOficio.trim() ||
+            String(j.empleado?.cargo || '').trim() ||
+            String(rowLeg.rol_buscado || rowLeg.cargo || '').trim();
+          hvLeg.contratacion.cargoUOficio = cargoLeg;
+          setCargoOficioFijo(cargoLeg);
           setLegal(hvLeg);
           setFormData((prev) => ({
             ...prev,
@@ -187,6 +195,12 @@ function HojaDeVidaMovilInner({ params }: Props) {
         if (j.empleado?.cargo && !hv.contratacion.cargoUOficio.trim()) {
           hv.contratacion.cargoUOficio = j.empleado.cargo.trim();
         }
+        const cargoFijo =
+          hv.contratacion.cargoUOficio.trim() ||
+          String(j.empleado?.cargo || '').trim() ||
+          String(row.rol_buscado || row.cargo || '').trim();
+        hv.contratacion.cargoUOficio = cargoFijo;
+        setCargoOficioFijo(cargoFijo);
         setLegal(hv);
         setFormData((prev) => ({
           ...prev,
@@ -285,6 +299,8 @@ function HojaDeVidaMovilInner({ params }: Props) {
       return;
     }
 
+    const cargoBloqueado =
+      cargoOficioFijo.trim() || legal.contratacion.cargoUOficio.trim();
     const merged: HojaVidaObreroCompleta = {
       ...legal,
       datosPersonales: {
@@ -298,6 +314,8 @@ function HojaDeVidaMovilInner({ params }: Props) {
         tallaCamisa: legal.pesoMedidas.tallaCamisa || formData.talla_camisa,
         medidaBotas: legal.pesoMedidas.medidaBotas || String(formData.talla_botas),
       },
+      // El cargo lo fija RRHH / la solicitud; el obrero no puede cambiarlo.
+      contratacion: { cargoUOficio: cargoBloqueado },
     };
 
     const nombre = nombreCompletoDesde(merged).trim();
@@ -558,7 +576,11 @@ function HojaDeVidaMovilInner({ params }: Props) {
 
               <GlassCard className="!p-0 overflow-hidden">
                 <div className="p-5 border-b border-white/5 bg-white/[0.02]">
-                  <OnboardingHojaVidaLegalForm value={legal} onChange={setLegal} />
+                  <OnboardingHojaVidaLegalForm
+                    value={legal}
+                    onChange={setLegal}
+                    cargoFijo={cargoOficioFijo}
+                  />
                 </div>
                 <button
                   type="button"

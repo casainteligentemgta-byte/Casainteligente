@@ -5,6 +5,8 @@ import type { HojaVidaObreroCompleta, SiNo } from '@/lib/talento/hojaVidaObreroC
 type Props = {
   value: HojaVidaObreroCompleta;
   onChange: (next: HojaVidaObreroCompleta) => void;
+  /** Cargo fijado por RRHH / solicitud; el obrero no puede modificarlo. */
+  cargoFijo?: string;
 };
 
 function inpCls() {
@@ -45,36 +47,39 @@ function Sec({ title, children }: { title: string; children: React.ReactNode }) 
   );
 }
 
-export default function OnboardingHojaVidaLegalForm({ value, onChange }: Props) {
+export default function OnboardingHojaVidaLegalForm({ value, onChange, cargoFijo = '' }: Props) {
+  const cargoBloqueado = (cargoFijo.trim() || value.contratacion.cargoUOficio || '').trim();
+  const commit = (next: HojaVidaObreroCompleta) => {
+    // Siempre reescribe el cargo con el valor fijado por RRHH.
+    onChange({
+      ...next,
+      contratacion: { cargoUOficio: cargoBloqueado },
+    });
+  };
+
   const d = value.datosPersonales;
   const setDp = (patch: Partial<typeof d>) =>
-    onChange({ ...value, datosPersonales: { ...value.datosPersonales, ...patch } });
-
-  const setCap = (patch: Partial<(typeof value)['certificadoAntecedentesPenales']>) =>
-    onChange({
-      ...value,
-      certificadoAntecedentesPenales: { ...value.certificadoAntecedentesPenales, ...patch },
-    });
+    commit({ ...value, datosPersonales: { ...value.datosPersonales, ...patch } });
 
   const setIns = (patch: Partial<(typeof value)['instruccionCapacitacion']>) =>
-    onChange({ ...value, instruccionCapacitacion: { ...value.instruccionCapacitacion, ...patch } });
+    commit({ ...value, instruccionCapacitacion: { ...value.instruccionCapacitacion, ...patch } });
 
   const setGre = (patch: Partial<(typeof value)['actividadGremial']>) =>
-    onChange({ ...value, actividadGremial: { ...value.actividadGremial, ...patch } });
+    commit({ ...value, actividadGremial: { ...value.actividadGremial, ...patch } });
 
   const setPm = (patch: Partial<(typeof value)['pesoMedidas']>) =>
-    onChange({ ...value, pesoMedidas: { ...value.pesoMedidas, ...patch } });
+    commit({ ...value, pesoMedidas: { ...value.pesoMedidas, ...patch } });
 
   const setDep = (i: number, patch: Partial<(typeof value.familiaresDependientes)[0]>) => {
     const fam = [...value.familiaresDependientes];
     fam[i] = { ...fam[i], ...patch };
-    onChange({ ...value, familiaresDependientes: fam });
+    commit({ ...value, familiaresDependientes: fam });
   };
 
   const setTp = (i: number, patch: Partial<(typeof value.trabajosPrevios)[0]>) => {
     const tp = [...value.trabajosPrevios];
     tp[i] = { ...tp[i], ...patch };
-    onChange({ ...value, trabajosPrevios: tp });
+    commit({ ...value, trabajosPrevios: tp });
   };
 
   return (
@@ -191,19 +196,18 @@ export default function OnboardingHojaVidaLegalForm({ value, onChange }: Props) 
       </Sec>
 
       <Sec title="Datos de la contratación">
-        <label className="block sm:col-span-2">
+        <div className="sm:col-span-2">
           <span className={lab()}>Cargo u oficio a desempeñar</span>
-          <input
-            className={`${inpCls()} cursor-not-allowed bg-slate-100 text-slate-800`}
-            value={value.contratacion.cargoUOficio}
-            readOnly
+          <p
+            className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-2.5 py-2 text-sm font-semibold text-slate-900 select-none"
             aria-readonly="true"
-            title="Definido por la solicitud de personal; no lo modifica el obrero"
-          />
+          >
+            {cargoBloqueado || '—'}
+          </p>
           <span className="mt-1 block text-[10px] text-slate-500">
-            Lo define RRHH / la solicitud. No se puede cambiar aquí.
+            Definido por RRHH / la solicitud. El obrero no puede cambiarlo.
           </span>
-        </label>
+        </div>
       </Sec>
 
       {/* Certificado de antecedentes penales: omitido en onboarding por ahora (sigue en modelo/PDF). */}
