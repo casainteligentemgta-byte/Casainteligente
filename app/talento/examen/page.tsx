@@ -235,13 +235,6 @@ function ExamenTalentoPageInner() {
     examenInvToken,
   ]);
 
-  const semaforoColor =
-    resultado?.semaforo === 'verde'
-      ? 'text-emerald-400'
-      : resultado?.semaforo === 'amarillo'
-        ? 'text-amber-400'
-        : 'text-red-400';
-
   return (
     <div className="max-w-3xl mx-auto px-4 py-10 pb-28">
       <Link href="/talento" className="text-xs text-zinc-500 hover:text-zinc-300 mb-6 inline-block">
@@ -495,32 +488,12 @@ function ExamenTalentoPageInner() {
 
       {fase === 'fin' && resultado && (
         <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-8 text-center">
-          <p className="text-xs uppercase tracking-widest text-zinc-500 mb-2">Resultado</p>
-          <p className={`text-3xl font-bold mb-2 ${semaforoColor}`}>
-            Semáforo: {resultado.semaforo.toUpperCase()}
+          <h1 className="text-2xl font-bold text-white mb-2">¡Evaluación Completada!</h1>
+          <p className="text-zinc-400 text-sm mb-6">
+            Tus respuestas han sido registradas. El equipo de RRHH las revisará y se pondrá en
+            contacto contigo.
           </p>
-          <p className="text-zinc-400 text-sm mb-1">Puntaje total: {resultado.puntaje_total.toFixed(1)}</p>
-          <p className="text-zinc-500 text-sm">Estado: {resultado.estado}</p>
-          {resultado.motivo && (
-            <p className="text-zinc-400 text-sm mt-4 max-w-md mx-auto leading-relaxed">{resultado.motivo}</p>
-          )}
-          {resultado.estado === 'aprobado' ? (
-            <div className="mt-8 max-w-lg mx-auto rounded-xl border border-emerald-600/30 bg-emerald-950/20 px-4 py-4 text-left">
-              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-300/90">Contrato laboral</p>
-              <p className="mt-2 text-sm text-zinc-300 leading-relaxed">
-                Con evaluación favorable, el siguiente paso es el <strong className="text-white">contrato de trabajo</strong>:
-                RRHH lo generará en el sistema y te compartirá un enlace para revisarlo en PDF,{' '}
-                <strong className="text-white">aceptarlo de forma electrónica</strong> y luego{' '}
-                <strong className="text-white">imprimirlo y firmarlo en físico</strong> (firma autógrafa y huella), según
-                las instrucciones del equipo.
-              </p>
-              <p className="mt-2 text-[11px] text-zinc-500">
-                Ruta pública (cuando te envíen el enlace):{' '}
-                <code className="text-zinc-400">/registro/contrato-laboral/[id]?token=…</code>
-              </p>
-            </div>
-          ) : null}
-          <Link href="/talento" className="mt-8 inline-block text-sky-400 text-sm hover:underline">
+          <Link href="/talento" className="mt-4 inline-block text-sky-400 text-sm hover:underline">
             Volver al hub
           </Link>
         </div>

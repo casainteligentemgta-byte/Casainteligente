@@ -106,32 +106,13 @@ function EvaluacionColorInner() {
   }
 
   if (resultado && candidate) {
-    const colorCls =
-      resultado.perfil_color === 'Rojo'
-        ? 'text-red-400'
-        : resultado.perfil_color === 'Amarillo'
-          ? 'text-amber-300'
-          : resultado.perfil_color === 'Azul'
-            ? 'text-sky-400'
-            : 'text-emerald-400';
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-950 p-4 text-zinc-100">
         <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-8 text-center">
-          <h1 className="text-2xl font-bold">¡Perfil de color listo!</h1>
-          <p className="mt-2 text-sm text-zinc-400">Gracias, {candidate.nombre}.</p>
-          <div className="mt-6 rounded-xl border border-zinc-800 bg-zinc-950 p-4">
-            <p className="text-[10px] uppercase tracking-wider text-zinc-500">Perfil de color</p>
-            <p className={`mt-1 text-2xl font-bold ${colorCls}`}>{resultado.perfil_color}</p>
-            <p className="mt-3 text-xs text-zinc-500">
-              Lógica {resultado.puntuacion_logica.toFixed(0)}% · Confiabilidad{' '}
-              {resultado.puntuacion_confiabilidad.toFixed(0)}%
-            </p>
-            {resultado.semaforo_riesgo ? (
-              <p className="mt-2 text-xs text-zinc-400">
-                Riesgo: <span className="font-semibold text-zinc-200">{resultado.semaforo_riesgo}</span>
-              </p>
-            ) : null}
-          </div>
+          <h1 className="text-2xl font-bold">¡Evaluación registrada!</h1>
+          <p className="mt-2 text-sm text-zinc-400">
+            Gracias, {candidate.nombre}. Tus respuestas han sido guardadas.
+          </p>
           <p className="mt-6 text-sm text-zinc-400">
             {redirectSeg != null && redirectSeg > 0
               ? `Siguiente: prueba de admisión en ${redirectSeg} s…`
