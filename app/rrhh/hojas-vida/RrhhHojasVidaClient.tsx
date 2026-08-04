@@ -17,7 +17,10 @@ import {
   type ProyectoModuloIntegral,
 } from '@/lib/proyectos/proyectosUnificados';
 import { hrefSolicitudPersonalObrero } from '@/lib/rrhh/hrefSolicitudPersonal';
-import { guardarProyectoRrhhContexto } from '@/lib/rrhh/proyectoRrhhContexto';
+import {
+  guardarProyectoRrhhContexto,
+  leerProyectoRrhhContexto,
+} from '@/lib/rrhh/proyectoRrhhContexto';
 import { createClient } from '@/lib/supabase/client';
 
 /** '' = todos los proyectos de la misma entidad de trabajo; uuid = una obra concreta. */
@@ -115,6 +118,9 @@ export default function RrhhHojasVidaClient() {
         // URL con proyecto concreto: nunca degradar a «Todos» ni a otra obra.
         if (urlId) return urlId;
         if (prev && lista.some((p) => p.id === prev)) return prev;
+        // Última obra de RRHH/Express (p. ej. Asfaltado), no forzar Flamboyant por orden.
+        const stored = leerProyectoRrhhContexto();
+        if (stored && lista.some((p) => p.id === stored)) return stored;
         if (lista.length <= 1) return lista[0]?.id ?? '';
         return lista[0]?.id ?? '';
       });

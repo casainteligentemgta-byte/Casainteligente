@@ -11,11 +11,20 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { coincideEspecialidad, esObreroDisponible } from '@/lib/rrhh/laborPersonnel';
 import { projectIdsAlcanceLaborDesdeModulos } from '@/lib/rrhh/alcanceLaborProyectos';
-import { loadProyectosModuloIntegralPorEntidad } from '@/lib/proyectos/proyectosUnificados';
+import {
+  loadProyectosModuloIntegralPorEntidad,
+  loadProyectosSmartRrhhHojasVida,
+  type ProyectoModuloIntegral,
+} from '@/lib/proyectos/proyectosUnificados';
 import { publicRegistroOrigin } from '@/lib/registro/publicRegistroOrigin';
 import { createClient } from '@/lib/supabase/client';
 import ResumenObrerosProyectoModulo from '@/components/proyectos/ResumenObrerosProyectoModulo';
-import { hrefSolicitudPersonalObrero } from '@/lib/rrhh/hrefSolicitudPersonal';
+import { hrefRrhhHub, hrefSolicitudPersonalObrero } from '@/lib/rrhh/hrefSolicitudPersonal';
+import {
+  esUuidProyectoModulo,
+  guardarProyectoRrhhContexto,
+  leerProyectoRrhhContexto,
+} from '@/lib/rrhh/proyectoRrhhContexto';
 import Link from 'next/link';
 import { ResumenSolicitadosOficiosToolbar } from '@/components/rrhh/gestion-personal/ResumenSolicitadosOficiosToolbar';
 import BonoUsdEditor from '@/components/rrhh/BonoUsdEditor';
@@ -213,8 +222,83 @@ export default function RrhhGestionPersonalClient({
     [router, searchParams],
   );
 
+  /** Sin filtro en URL: usar última obra RRHH (p. ej. Asfaltado) en vez de quedar en otra obra. */
+  useEffect(() => {
+    if (!soloPendientes) return;
+    if (proyectoModuloFiltro || proyectoObraFiltro || todosProyectosFiltro || entidadFiltro) {
+      if (proyectoModuloFiltro) guardarProyectoRrhhContexto(proyectoModuloFiltro);
+      return;
+    }
+    if (proyectoModuloIdsFiltro.length > 0) return;
+    const stored = leerProyectoRrhhContexto();
+    if (!stored) return;
+    replaceGestionUrl({
+      proyecto_modulo: stored,
+      proyecto: null,
+      todos: null,
+      entidad: null,
+      proyecto_modulo_ids: null,
+    });
+  }, [
+    soloPendientes,
+    proyectoModuloFiltro,
+    proyectoObraFiltro,
+    todosProyectosFiltro,
+    entidadFiltro,
+    proyectoModuloIdsFiltro.length,
+    replaceGestionUrl,
+  ]);
+
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      const { proyectos } = await loadProyectosSmartRrhhHojasVida(supabase);
+      if (!alive) return;
+      setProyectosSelector(proyectos);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [supabase]);
+
+  const onCambiarObraSolicitados = useCallback(
+    (proyectoId: string) => {
+      const id = proyectoId.trim();
+      if (!id) {
+        guardarProyectoRrhhContexto(null);
+        replaceGestionUrl({
+          proyecto_modulo: null,
+          proyecto: null,
+          todos: '1',
+          entidad: null,
+          proyecto_modulo_ids: null,
+        });
+        return;
+      }
+      if (!esUuidProyectoModulo(id)) return;
+      guardarProyectoRrhhContexto(id);
+      replaceGestionUrl({
+        proyecto_modulo: id,
+        proyecto: null,
+        todos: null,
+        entidad: null,
+        proyecto_modulo_ids: null,
+      });
+    },
+    [replaceGestionUrl],
+  );
+
+  const hrefVolverRrhh = useMemo(
+    () =>
+      hrefRrhhHub({
+        proyectoModuloId: proyectoModuloFiltro || proyectoObraFiltro || null,
+      }),
+    [proyectoModuloFiltro, proyectoObraFiltro],
+  );
+
   const [tick, setTick] = useState(0);
   const [alcanceNombre, setAlcanceNombre] = useState<string | null>(null);
+  const [proyectosSelector, setProyectosSelector] = useState<ProyectoModuloIntegral[]>([]);
   const [pending, setPending] = useState<LaborRequestRow[]>([]);
   const [loadingPending, setLoadingPending] = useState(true);
 
@@ -1061,20 +1145,36 @@ export default function RrhhGestionPersonalClient({
                   className="h-9 w-9 shrink-0 border-white/15 bg-zinc-900/50 text-zinc-200 hover:bg-white/10"
                   asChild
                 >
-                  <Link href="/rrhh/hojas-vida" aria-label="Volver a RRHH">
+                  <Link href={hrefVolverRrhh} aria-label="Volver a RRHH">
                     <ArrowLeft className="h-5 w-5" />
                   </Link>
                 </Button>
                 <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">RRHH</p>
               </div>
-              <div className="min-w-0 text-right">
+              <div className="min-w-0 flex-1 text-right">
                 <h1 className="text-2xl font-bold tracking-tight text-white">Cuadro de solicitados</h1>
-                <p className="mt-1 text-sm text-zinc-400">
-                  Proyecto:{' '}
-                  <span className="font-semibold text-white">
-                    {alcanceNombre?.trim() || 'Todos los proyectos'}
+                <label className="mt-2 block space-y-1">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+                    Proyecto
                   </span>
-                </p>
+                  <select
+                    className="ml-auto block w-full max-w-xs rounded-xl border border-white/15 bg-zinc-950 px-3 py-2 text-left text-sm font-semibold text-white outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-400/30"
+                    value={
+                      todosProyectosFiltro || entidadFiltro
+                        ? ''
+                        : proyectoModuloFiltro || proyectoObraFiltro || ''
+                    }
+                    onChange={(e) => onCambiarObraSolicitados(e.target.value)}
+                    aria-label="Seleccionar proyecto"
+                  >
+                    <option value="">Todos los proyectos</option>
+                    {proyectosSelector.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </div>
             </div>
           </header>
