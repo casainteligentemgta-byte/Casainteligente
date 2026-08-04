@@ -2,11 +2,11 @@
  * Parsea Excel (.xlsx/.xls) o CSV con filas de obreros para generar
  * contratos de trabajo en serie (antes «contrato express»).
  *
- * Formato de plantilla alineado a la tabla de nómina de obra:
- * N° Excel | Nombre (Manuscrito) | Nombre Completo (Excel) | C.I. | Categoría | Tipo | Cargo | Cánon Semanal ($) | Cuenta Bancaria
+ * Plantilla oficial de contratación masiva:
+ * Nombres | Apellidos | Cédula | Cargo | Fecha de ingreso | Jornada | Bono | Estado civil
  *
- * También tolera listas consolidadas con filas de título arriba del encabezado
- * y alias frecuentes (Cédula, Nombres y Apellidos, etc.).
+ * También tolera listas consolidadas / nómina antigua (Nombre Completo, C.I., Cánon, etc.)
+ * con filas de título arriba del encabezado y alias frecuentes.
  */
 
 import * as XLSX from 'xlsx';
@@ -62,11 +62,19 @@ export const COLUMNAS_CONTRATO_TRABAJO_OBRERO = {
   municipio: ['municipio', 'municipio_residencia', 'obrero_municipio'],
   estado_residencia: ['estado_residencia', 'edo', 'obrero_estado'],
   nacionalidad: ['nacionalidad'],
-  estado_civil: ['estado_civil', 'edo_civil', 'civil'],
-  fecha_ingreso: ['fecha_ingreso', 'fecha ingreso', 'ingreso', 'fecha', 'fecha_firma'],
-  jornada: ['jornada', 'jornada_trabajo', 'turno'],
+  estado_civil: ['estado_civil', 'edo_civil', 'civil', 'estado civil'],
+  fecha_ingreso: [
+    'fecha_ingreso',
+    'fecha_de_ingreso',
+    'fecha ingreso',
+    'fecha de ingreso',
+    'ingreso',
+    'fecha',
+    'fecha_firma',
+  ],
+  jornada: ['jornada', 'jornada_trabajo', 'jornada_de_trabajo', 'turno'],
   horario: ['horario', 'horario_semanal', 'horario_semanal_texto'],
-  bono_usd: ['bono', 'bono_usd', 'bono_manual_usd', 'bono usd'],
+  bono_usd: ['bono', 'bono_usd', 'bono_manual_usd', 'bono usd', 'bono_$', 'bono_dolares'],
   /** Cánon semanal de la tabla de nómina (referencia; el PDF usa tabulador por cargo). */
   canon_semanal_usd: [
     'canon_semanal',
@@ -246,6 +254,12 @@ function headerMatchesCampo(norm: string, campo: ColumnaContratoTrabajo): boolea
   if (campo === 'cargo' && (norm === 'cargo' || norm.includes('oficio') || norm.includes('tabulador'))) {
     return true;
   }
+  if (campo === 'fecha_ingreso') {
+    if (norm.includes('fecha') && norm.includes('ingreso')) return true;
+  }
+  if (campo === 'estado_civil') {
+    if (norm.includes('estado') && norm.includes('civil')) return true;
+  }
   return false;
 }
 
@@ -286,6 +300,12 @@ function mapHeaders(headers: string[]): {
       mapeo.canon_semanal_usd = original;
     }
     if (!mapeo.cargo && headerMatchesCampo(norm, 'cargo')) mapeo.cargo = original;
+    if (!mapeo.fecha_ingreso && headerMatchesCampo(norm, 'fecha_ingreso')) {
+      mapeo.fecha_ingreso = original;
+    }
+    if (!mapeo.estado_civil && headerMatchesCampo(norm, 'estado_civil')) {
+      mapeo.estado_civil = original;
+    }
     if (!mapeo.nombres && (norm === 'nombres' || norm === 'primer_nombre')) {
       mapeo.nombres = original;
     }
@@ -303,15 +323,22 @@ function mapHeaders(headers: string[]): {
   let score = 0;
   if (mapeo.cedula) score += 5;
   if (mapeo.nombre_completo || mapeo.nombres || mapeo.nombre_manuscrito) score += 4;
+  if (mapeo.apellidos) score += 2;
   if (mapeo.cargo) score += 1;
-  if (mapeo.canon_semanal_usd) score += 1;
+  if (mapeo.fecha_ingreso) score += 1;
+  if (mapeo.jornada) score += 1;
+  if (mapeo.estado_civil) score += 1;
+  if (mapeo.canon_semanal_usd || mapeo.bono_usd) score += 1;
   if (mapeo.categoria || mapeo.tipo) score += 1;
 
   if (!mapeo.cedula) {
-    avisos.push('No se detectó columna de cédula (C.I. / Cédula).');
+    avisos.push('No se detectó columna de cédula (Cédula / C.I.).');
   }
   if (!mapeo.nombres && !mapeo.nombre_completo && !mapeo.nombre_manuscrito) {
-    avisos.push('No se detectó columna de nombre completo.');
+    avisos.push('No se detectó columna de nombres.');
+  }
+  if (mapeo.nombres && !mapeo.apellidos && !mapeo.nombre_completo) {
+    avisos.push('No se detectó columna de apellidos.');
   }
 
   return { mapeo, avisos, score };
@@ -461,9 +488,9 @@ function parseFilasDesdeAoa(aoa: unknown[][]): {
   mapeo = completarMapeoPorContenido(dataRows, mapeo, encabezados);
 
   avisos = [];
-  if (!mapeo.cedula) avisos.push('No se detectó columna de cédula (C.I.).');
+  if (!mapeo.cedula) avisos.push('No se detectó columna de cédula (Cédula / C.I.).');
   if (!mapeo.nombres && !mapeo.nombre_completo && !mapeo.nombre_manuscrito) {
-    avisos.push('No se detectó columna de nombre completo.');
+    avisos.push('No se detectó columna de nombres.');
   }
   if (headerRowIndex > 0) {
     avisos.unshift(
@@ -474,7 +501,10 @@ function parseFilasDesdeAoa(aoa: unknown[][]): {
   score = 0;
   if (mapeo.cedula) score += 5;
   if (mapeo.nombre_completo || mapeo.nombres || mapeo.nombre_manuscrito) score += 4;
+  if (mapeo.apellidos) score += 2;
   if (mapeo.cargo) score += 1;
+  if (mapeo.fecha_ingreso) score += 1;
+  if (mapeo.jornada) score += 1;
 
   const filas: FilaContratoTrabajoObrero[] = [];
   dataRows.forEach((row, idx) => {
@@ -645,46 +675,40 @@ export function parseContratoTrabajoObreroTabla(
   };
 }
 
-/**
- * Encabezados de la plantilla = misma tabla de nómina de obra
- * (sin domicilio / municipio / estado).
- */
+/** Encabezados oficiales de la plantilla de contratación masiva. */
 export const PLANTILLA_ENCABEZADOS_CONTRATO_TRABAJO = [
-  'N° Excel',
-  'Nombre (Manuscrito)',
-  'Nombre Completo (Excel)',
-  'C.I.',
-  'Categoría',
-  'Tipo',
+  'Nombres',
+  'Apellidos',
+  'Cédula',
   'Cargo',
-  'Cánon Semanal ($)',
-  'Cuenta Bancaria',
+  'Fecha de ingreso',
+  'Jornada',
+  'Bono',
+  'Estado civil',
 ] as const;
 
 /** Genera un .xlsx de plantilla (ArrayBuffer) con filas de ejemplo. */
 export function generarPlantillaContratoTrabajoXlsx(): ArrayBuffer {
   const ejemplo = [
     {
-      'N° Excel': 26,
-      'Nombre (Manuscrito)': 'Brigido Gonzalez',
-      'Nombre Completo (Excel)': 'BRIGIDO ANTONIO GONZALEZ CALVO',
-      'C.I.': '10.199.713',
-      Categoría: 'OBRERO',
-      Tipo: 'AYUDANTE',
+      Nombres: 'BRIGIDO ANTONIO',
+      Apellidos: 'GONZALEZ CALVO',
+      Cédula: '10.199.713',
       Cargo: 'AYUDANTE',
-      'Cánon Semanal ($)': 70,
-      'Cuenta Bancaria': '0102 0667 7900 0045 3819',
+      'Fecha de ingreso': '2026-08-04',
+      Jornada: 'DIURNA',
+      Bono: 0,
+      'Estado civil': 'Soltero',
     },
     {
-      'N° Excel': 19,
-      'Nombre (Manuscrito)': 'Antony Diaz',
-      'Nombre Completo (Excel)': 'ANTONY JOSE DIAZ DIAZ',
-      'C.I.': '25.479.932',
-      Categoría: 'OBRERO',
-      Tipo: 'CLASIFICADO',
+      Nombres: 'ANTONY JOSE',
+      Apellidos: 'DIAZ DIAZ',
+      Cédula: '25.479.932',
       Cargo: 'ELECTRICISTA',
-      'Cánon Semanal ($)': 90,
-      'Cuenta Bancaria': '0102 0671 5100 0016 2854',
+      'Fecha de ingreso': '2026-08-04',
+      Jornada: 'DIURNA',
+      Bono: 10,
+      'Estado civil': 'Casado',
     },
   ];
   const ws = XLSX.utils.json_to_sheet(ejemplo, {

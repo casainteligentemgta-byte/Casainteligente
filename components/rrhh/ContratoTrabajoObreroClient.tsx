@@ -74,6 +74,32 @@ function nombreFila(f: FilaContratoTrabajoObrero): string {
   return (f.nombreCompleto ?? '').trim() || '—';
 }
 
+/** Parte nombres/apellidos para el cuadro (si el Excel trae nombre completo). */
+function partesNombreFila(f: FilaContratoTrabajoObrero): { nombres: string; apellidos: string } {
+  const n = (f.nombres ?? '').trim();
+  const a = (f.apellidos ?? '').trim();
+  if (n || a) return { nombres: n || '—', apellidos: a || '—' };
+  const full = (f.nombreCompleto ?? '').trim();
+  if (!full) return { nombres: '—', apellidos: '—' };
+  const parts = full.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) return { nombres: parts[0]!, apellidos: '—' };
+  const mid = Math.ceil(parts.length / 2);
+  return {
+    nombres: parts.slice(0, mid).join(' '),
+    apellidos: parts.slice(mid).join(' '),
+  };
+}
+
+function fechaFilaMostrada(f: FilaContratoTrabajoObrero, defaultIso: string): string {
+  const raw = (f.fechaIngreso || defaultIso || '').trim();
+  if (!raw) return '—';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    const [y, m, d] = raw.split('-');
+    return `${d}/${m}/${y}`;
+  }
+  return raw;
+}
+
 const inputClass =
   'w-full rounded-xl border border-white/[0.08] bg-black/50 px-3 py-2.5 text-sm text-white outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/25';
 
@@ -377,7 +403,7 @@ export default function ContratoTrabajoObreroClient() {
 
   async function generarEnSerie() {
     if (!proyectoId.trim()) {
-      toast.error('No hay obra en contexto. Abra Express desde el RRHH del proyecto.');
+      toast.error('Seleccione la obra / proyecto para la contratación masiva.');
       return;
     }
     // Cargo por defecto opcional si cada fila trae «Cargo» de la tabla de nómina.
@@ -508,32 +534,41 @@ export default function ContratoTrabajoObreroClient() {
     if (esUuidProyectoModulo(id)) guardarProyectoRrhhContexto(id);
   }
 
-  function DefaultsObraCargo({ required = true }: { required?: boolean }) {
+  function DefaultsObraCargo({
+    required = true,
+    omitObra = false,
+  }: {
+    required?: boolean;
+    /** En masiva la obra ya se pregunta arriba. */
+    omitObra?: boolean;
+  }) {
     return (
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="block space-y-1.5 sm:col-span-2">
-          <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
-            Obra / proyecto {required ? '*' : ''}
-          </span>
-          <select
-            className={inputClass}
-            value={proyectoId}
-            onChange={(e) => onCambiarObra(e.target.value)}
-            disabled={loadingOpts}
-          >
-            <option value="">Seleccione…</option>
-            {proyectos.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.nombre}
-              </option>
-            ))}
-          </select>
-          {obraPreseleccionada && proyectoId ? (
-            <p className="text-[10px] text-amber-200/70">
-              Preseleccionada desde RRHH — cámbiala si la obra es otra (p. ej. Asfaltado).
-            </p>
-          ) : null}
-        </div>
+        {omitObra ? null : (
+          <div className="block space-y-1.5 sm:col-span-2">
+            <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+              Obra / proyecto {required ? '*' : ''}
+            </span>
+            <select
+              className={inputClass}
+              value={proyectoId}
+              onChange={(e) => onCambiarObra(e.target.value)}
+              disabled={loadingOpts}
+            >
+              <option value="">Seleccione…</option>
+              {proyectos.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nombre}
+                </option>
+              ))}
+            </select>
+            {obraPreseleccionada && proyectoId ? (
+              <p className="text-[10px] text-amber-200/70">
+                Preseleccionada desde RRHH — cámbiala si la obra es otra (p. ej. Asfaltado).
+              </p>
+            ) : null}
+          </div>
+        )}
         <label className="block space-y-1.5 sm:col-span-2">
           <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
             Cargo (tabulador) {required ? '*' : ''}
@@ -581,7 +616,7 @@ export default function ContratoTrabajoObreroClient() {
 
   return (
     <div className="min-h-screen bg-[#0A0A0F] text-white px-4 py-6 pb-24">
-      <div className="mx-auto max-w-3xl space-y-6">
+      <div className="mx-auto max-w-5xl space-y-6">
         <Link
           href={backHref}
           className="inline-flex items-center gap-2 text-xs font-bold text-zinc-500 hover:text-amber-400"
@@ -883,8 +918,8 @@ export default function ContratoTrabajoObreroClient() {
                 <div>
                   <h2 className="text-sm font-bold text-white">Contratación masiva</h2>
                   <p className="mt-0.5 text-[11px] text-zinc-500">
-                    Descargue la plantilla, complete una fila por obrero y cárguela. Se generan los
-                    PDF en serie.
+                    Confirme la obra, descargue la plantilla, complete una fila por obrero y cárguela.
+                    Se generan los PDF en serie.
                   </p>
                 </div>
               </div>
@@ -898,22 +933,50 @@ export default function ContratoTrabajoObreroClient() {
               </button>
             </div>
 
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/30 p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-300/90">
+                ¿Obra / proyecto?
+              </p>
+              <p className="mt-1 text-[11px] text-zinc-400">
+                Debe estar preseleccionada si entró por proyecto → RRHH → Express. Cámbiela si
+                corresponde a otra obra.
+              </p>
+              <div className="mt-3">
+                <select
+                  className={inputClass}
+                  value={proyectoId}
+                  onChange={(e) => onCambiarObra(e.target.value)}
+                  disabled={loadingOpts}
+                  aria-label="Obra o proyecto"
+                >
+                  <option value="">Seleccione la obra…</option>
+                  {proyectos.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.nombre}
+                    </option>
+                  ))}
+                </select>
+                {obraPreseleccionada && proyectoId ? (
+                  <p className="mt-1.5 text-[10px] text-amber-200/70">
+                    Preseleccionada desde RRHH — puedes cambiarla.
+                  </p>
+                ) : null}
+              </div>
+            </div>
+
             <div className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-[11px] leading-relaxed text-zinc-400">
-              <p className="font-semibold text-zinc-300">Formato Excel (tabla de nómina)</p>
+              <p className="font-semibold text-zinc-300">Formato Excel</p>
               <p className="mt-1">
-                <span className="text-emerald-300">Columnas:</span> N° Excel, Nombre (Manuscrito),
-                Nombre Completo (Excel), C.I. (cédula), Categoría, Tipo, Cargo, Cánon Semanal ($),
-                Cuenta Bancaria.
+                <span className="text-emerald-300">Columnas:</span> Nombres, Apellidos, Cédula,
+                Cargo, Fecha de ingreso, Jornada, Bono, Estado civil.
               </p>
               <p className="mt-1">
-                Se usan sobre todo <span className="text-zinc-200">C.I. (cédula)</span>,{' '}
-                <span className="text-zinc-200">Nombre Completo</span> y{' '}
-                <span className="text-zinc-200">Cargo</span> (para el tabulador). También acepta
-                columnas llamadas «Cédula» o «Nombres y Apellidos». Filas «No registrado» se omiten.
+                Si una fila no trae fecha, jornada o bono, se usan los valores por defecto de abajo.
+                También se aceptan plantillas antiguas (Nombre Completo / C.I.).
               </p>
             </div>
 
-            <DefaultsObraCargo />
+            <DefaultsObraCargo omitObra />
 
             <label className="block space-y-1.5">
               <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
@@ -955,37 +1018,47 @@ export default function ContratoTrabajoObreroClient() {
 
             {filas.length > 0 ? (
               <div className="overflow-x-auto rounded-xl border border-white/10 bg-black/30">
-                <table className="w-full min-w-[520px] text-left text-xs">
+                <table className="w-full min-w-[880px] text-left text-xs">
                   <thead>
                     <tr className="border-b border-white/10 text-[10px] uppercase tracking-wide text-zinc-500">
-                      <th className="px-3 py-2">Fila</th>
+                      <th className="px-3 py-2">Nombres</th>
+                      <th className="px-3 py-2">Apellidos</th>
                       <th className="px-3 py-2">Cédula</th>
-                      <th className="px-3 py-2">Nombre</th>
                       <th className="px-3 py-2">Cargo</th>
-                      <th className="px-3 py-2">Estado</th>
+                      <th className="px-3 py-2">Fecha de ingreso</th>
+                      <th className="px-3 py-2">Jornada</th>
+                      <th className="px-3 py-2">Bono</th>
+                      <th className="px-3 py-2">Estado civil</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filas.map((f) => (
-                      <tr key={f.filaExcel} className="border-b border-white/5 text-zinc-300">
-                        <td className="px-3 py-2 font-mono text-zinc-500">{f.filaExcel}</td>
-                        <td className="px-3 py-2 font-mono">{f.cedula || '—'}</td>
-                        <td className="px-3 py-2">{nombreFila(f)}</td>
-                        <td className="px-3 py-2 text-zinc-400">{f.cargo ?? '—'}</td>
-                        <td className="px-3 py-2">
-                          {f.errores.length ? (
-                            <span className="text-red-400">{f.errores[0]}</span>
-                          ) : (
-                            <span className="text-emerald-400">Lista</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                    {filas.map((f) => {
+                      const partes = partesNombreFila(f);
+                      const err = f.errores.length > 0;
+                      return (
+                        <tr
+                          key={f.filaExcel}
+                          className={`border-b border-white/5 ${err ? 'bg-red-950/20 text-red-200' : 'text-zinc-300'}`}
+                          title={err ? f.errores.join('; ') : undefined}
+                        >
+                          <td className="px-3 py-2">{partes.nombres}</td>
+                          <td className="px-3 py-2">{partes.apellidos}</td>
+                          <td className="px-3 py-2 font-mono">{f.cedula || '—'}</td>
+                          <td className="px-3 py-2 text-zinc-400">{f.cargo ?? '—'}</td>
+                          <td className="px-3 py-2 whitespace-nowrap">
+                            {fechaFilaMostrada(f, fechaIngreso)}
+                          </td>
+                          <td className="px-3 py-2">{(f.jornada || jornada).trim() || '—'}</td>
+                          <td className="px-3 py-2">{Number.isFinite(f.bonoUsd) ? f.bonoUsd : '—'}</td>
+                          <td className="px-3 py-2">{(f.estadoCivil ?? '').trim() || '—'}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
                 <p className="border-t border-white/10 px-3 py-2 text-[11px] text-zinc-500">
                   {validas} válida(s)
-                  {invalidas > 0 ? ` · ${invalidas} con error (se omiten)` : null}
+                  {invalidas > 0 ? ` · ${invalidas} con error (se omiten; pase el cursor para ver el detalle)` : null}
                 </p>
               </div>
             ) : null}
