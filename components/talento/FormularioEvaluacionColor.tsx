@@ -27,13 +27,6 @@ type Props = {
   }) => void;
 };
 
-const COLOR_UI: Record<ColorPerfilObrero, string> = {
-  Rojo: 'text-red-400',
-  Amarillo: 'text-amber-300',
-  Verde: 'text-emerald-400',
-  Azul: 'text-sky-400',
-};
-
 export default function FormularioEvaluacionColor({ token, nombre, onFinalizar }: Props) {
   const pasos = useMemo<Paso[]>(() => {
     const out: Paso[] = [];
@@ -118,10 +111,10 @@ export default function FormularioEvaluacionColor({ token, nombre, onFinalizar }
 
   const seccionLabel =
     paso.tipo === 'disc'
-      ? 'Tipo de color (DISC)'
+      ? 'Cómo eres en la obra'
       : paso.tipo === 'logica'
-        ? 'Razonamiento'
-        : 'Confiabilidad';
+        ? 'Preguntas de obra'
+        : 'Honestidad en la obra';
 
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-between bg-zinc-950 px-4 py-6 text-zinc-100">
@@ -152,7 +145,7 @@ export default function FormularioEvaluacionColor({ token, nombre, onFinalizar }
             return (
               <div className="space-y-4">
                 <p className="text-sm font-medium text-zinc-200">
-                  Elige la opción que más te describe en obra:
+                  ¿Cuál te queda mejor en la obra? Escoge una:
                 </p>
                 {(
                   [
@@ -170,9 +163,8 @@ export default function FormularioEvaluacionColor({ token, nombre, onFinalizar }
                         : 'border-white/10 bg-white/[0.04] text-zinc-300 hover:bg-white/[0.07]'
                     }`}
                   >
-                    <span className={`mb-1 block text-[10px] font-bold uppercase ${COLOR_UI[opt.color]}`}>
-                      {opt.color}
-                    </span>
+                    {/* Sin etiqueta de color: el obrero elige por conducta, no por color. */}
+                    <span className="sr-only">{opt.color}</span>
                     {opt.texto}
                   </button>
                 ))}
