@@ -63,12 +63,46 @@ describe('parseContratoTrabajoObreroTabla', () => {
     assert.equal(r.filas[0]!.nombreCompleto, 'JULIO SUAREZ');
   });
 
-  it('plantilla descargable tiene el formato de nómina', () => {
+  it('plantilla descargable tiene Nombres, Apellidos, Cédula y demás columnas', () => {
     const buf = generarPlantillaContratoTrabajoXlsx();
     const r = parseContratoTrabajoObreroTabla(buf, 'plantilla.xlsx');
     assert.ok(r.filas.length >= 1);
     assert.equal(r.filas[0]!.errores.length, 0);
-    assert.ok(r.encabezados.some((h) => /c\.?i/i.test(h) || /cedula/i.test(h)));
+    assert.ok(r.encabezados.some((h) => /^nombres$/i.test(h)));
+    assert.ok(r.encabezados.some((h) => /^apellidos$/i.test(h)));
+    assert.ok(r.encabezados.some((h) => /c[eé]dula/i.test(h)));
+    assert.ok(r.encabezados.some((h) => /fecha/i.test(h)));
+    assert.ok(r.encabezados.some((h) => /jornada/i.test(h)));
+    assert.ok(r.encabezados.some((h) => /^bono$/i.test(h)));
+    assert.ok(r.encabezados.some((h) => /estado\s*civil/i.test(h)));
+    assert.equal(r.filas[0]!.nombres, 'BRIGIDO ANTONIO');
+    assert.equal(r.filas[0]!.apellidos, 'GONZALEZ CALVO');
+    assert.equal(r.filas[0]!.jornada, 'DIURNA');
+    assert.equal(r.filas[0]!.estadoCivil, 'Soltero');
+  });
+
+  it('lee plantilla nueva (Nombres / Apellidos / Cédula / …)', () => {
+    const buf = bufferFromRows([
+      {
+        Nombres: 'JULIO',
+        Apellidos: 'SUAREZ',
+        Cédula: '9.427.286',
+        Cargo: 'AYUDANTE',
+        'Fecha de ingreso': '2026-08-01',
+        Jornada: 'DIURNA',
+        Bono: 5,
+        'Estado civil': 'Soltero',
+      },
+    ]);
+    const r = parseContratoTrabajoObreroTabla(buf, 'nueva.xlsx');
+    assert.equal(r.filas.length, 1);
+    assert.equal(r.filas[0]!.cedula, 'V9427286');
+    assert.equal(r.filas[0]!.nombres, 'JULIO');
+    assert.equal(r.filas[0]!.apellidos, 'SUAREZ');
+    assert.equal(r.filas[0]!.fechaIngreso, '2026-08-01');
+    assert.equal(r.filas[0]!.bonoUsd, 5);
+    assert.equal(r.filas[0]!.estadoCivil, 'Soltero');
+    assert.equal(r.filas[0]!.errores.length, 0);
   });
 
   it('salta filas de título y detecta encabezado (lista consolidada)', () => {
