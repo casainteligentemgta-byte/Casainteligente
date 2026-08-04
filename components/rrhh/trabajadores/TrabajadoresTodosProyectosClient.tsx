@@ -108,20 +108,6 @@ export default function TrabajadoresTodosProyectosClient() {
               <Users className="h-7 w-7 text-fuchsia-300" aria-hidden />
               Trabajadores por proyecto
             </h1>
-            <p className="mt-2 max-w-2xl text-sm text-zinc-400">
-              Todos los trabajadores registrados, vinculados por módulo, vacante, asignación en obra o solicitud de
-              personal. Filtra por proyecto u obra.
-            </p>
-            {!loading ? (
-              <p className="mt-1 text-xs text-zinc-500">
-                {filtrados.length} de {trabajadores.length} trabajador(es)
-                {proyectoFiltro && proyectoFiltro !== SIN_PROYECTO
-                  ? ` · ${proyectos.find((p) => p.id === proyectoFiltro)?.nombre ?? 'Proyecto'}`
-                  : proyectoFiltro === SIN_PROYECTO
-                    ? ' · sin proyecto'
-                    : ''}
-              </p>
-            ) : null}
           </div>
           <button
             type="button"
