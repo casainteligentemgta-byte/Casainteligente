@@ -17,8 +17,10 @@ import {
 } from '@/components/ui/table';
 
 type Props = {
-  /** Si se indica, solo contratados del módulo / obras hijas. */
+  /** Si se indica, solo contratados de ese proyecto (por defecto sin obras hijas). */
   proyectoModuloId?: string;
+  /** Si true, incluye obras Talento hijas del módulo (puede mezclar obras). */
+  incluirObrasHijas?: boolean;
   className?: string;
   titulo?: string;
 };
@@ -42,8 +44,9 @@ function fmtUsd(n: number): string {
 
 export default function CuadroNominaContratados({
   proyectoModuloId,
+  incluirObrasHijas = false,
   className = '',
-  titulo = 'Contratados — nómina',
+  titulo = 'Contratados activos',
 }: Props) {
   const supabase = useMemo(() => createClient(), []);
   const [loading, setLoading] = useState(true);
@@ -56,6 +59,7 @@ export default function CuadroNominaContratados({
     try {
       const data = await fetchCuadroContratados(supabase, {
         proyectoModuloId: proyectoModuloId?.trim() || undefined,
+        incluirObrasHijas,
       });
       setFilas(data);
     } catch (e) {
@@ -64,7 +68,7 @@ export default function CuadroNominaContratados({
     } finally {
       setLoading(false);
     }
-  }, [proyectoModuloId, supabase]);
+  }, [proyectoModuloId, incluirObrasHijas, supabase]);
 
   useEffect(() => {
     void load();

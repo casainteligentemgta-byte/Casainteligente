@@ -70,12 +70,20 @@ function esColumnaInexistente(message: string | undefined, columna: string): boo
   );
 }
 
+/**
+ * IDs de proyecto para el cuadro de nómina.
+ * Por defecto solo el proyecto elegido (sin obras hijas): si Asfaltado quedó
+ * vinculado como hija de Flamboyant, no debe aparecer en la nómina del rancho.
+ * Con `incluirObrasHijas: true` se mantiene el alcance módulo + hijas Talento.
+ */
 async function projectIdsAlcance(
   supabase: SupabaseClient,
   proyectoModuloId?: string,
+  opts?: { incluirObrasHijas?: boolean },
 ): Promise<string[] | null> {
   const pid = proyectoModuloId?.trim();
   if (!pid) return null;
+  if (!opts?.incluirObrasHijas) return [pid];
   const hijas = await idsObrasHijasDesdeModuloIntegral(supabase, pid);
   return Array.from(new Set([pid, ...hijas]));
 }
@@ -152,9 +160,11 @@ async function listarContratosFirmadosActivos(
 
 export async function fetchCuadroContratados(
   supabase: SupabaseClient,
-  opts?: { proyectoModuloId?: string },
+  opts?: { proyectoModuloId?: string; incluirObrasHijas?: boolean },
 ): Promise<FilaNominaContratado[]> {
-  const projectIds = await projectIdsAlcance(supabase, opts?.proyectoModuloId);
+  const projectIds = await projectIdsAlcance(supabase, opts?.proyectoModuloId, {
+    incluirObrasHijas: opts?.incluirObrasHijas === true,
+  });
 
   const contratos = await listarContratosFirmadosActivos(supabase, projectIds);
 

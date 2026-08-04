@@ -32,14 +32,18 @@ export default function NominaRrhhClient() {
     let alive = true;
     void (async () => {
       setCargando(true);
-      const { proyectos: lista } = await loadProyectosSmartRrhhHojasVida(supabase);
+      const { proyectos: listaRaw } = await loadProyectosSmartRrhhHojasVida(supabase);
       if (!alive) return;
+      // Orden alfabético: no empujar Flamboyant al tope (evita abrir nómina en la obra equivocada).
+      const lista = [...listaRaw].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
       setProyectos(lista);
       setProyectoId((prev) => {
         if (urlProyecto && lista.some((p) => p.id === urlProyecto)) return urlProyecto;
         if (prev && lista.some((p) => p.id === prev)) return prev;
         const stored = leerProyectoRrhhContexto();
         if (stored && lista.some((p) => p.id === stored)) return stored;
+        const asfaltado = lista.find((p) => /asfalt/i.test(p.nombre));
+        if (asfaltado) return asfaltado.id;
         return lista[0]?.id ?? '';
       });
       setCargando(false);
@@ -88,7 +92,7 @@ export default function NominaRrhhClient() {
               Nómina
             </h1>
             <p className="mt-1 text-sm text-zinc-500">
-              Contratados activos del proyecto seleccionado.
+              Solo el proyecto elegido (p. ej. Asfaltado). No mezcla obras hijas ni Flamboyant.
             </p>
           </div>
         </div>
