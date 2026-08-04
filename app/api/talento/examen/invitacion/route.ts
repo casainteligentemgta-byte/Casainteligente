@@ -56,7 +56,7 @@ export async function GET(req: Request) {
   const { data: emp, error: errEmp } = await admin.client
     .from('ci_empleados')
     .select(
-      'nombre_completo, telefono, celular, email, cedula, documento, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido, rol_examen, rol_buscado',
+      'nombre_completo, telefono, celular, email, cedula, documento, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido, rol_examen, rol_buscado, cargo, cargo_codigo',
     )
     .eq('id', row.empleado_id)
     .maybeSingle();
@@ -78,6 +78,8 @@ export async function GET(req: Request) {
     segundo_apellido: string | null;
     rol_examen: string;
     rol_buscado: string | null;
+    cargo: string | null;
+    cargo_codigo: string | null;
   };
 
   const whatsapp = (e.celular ?? e.telefono ?? '').trim() || null;
@@ -99,5 +101,7 @@ export async function GET(req: Request) {
     segundo_apellido: e.segundo_apellido,
     rol_examen: e.rol_examen,
     rol_buscado: e.rol_buscado,
+    cargo: e.cargo,
+    cargo_codigo: e.cargo_codigo,
   });
 }

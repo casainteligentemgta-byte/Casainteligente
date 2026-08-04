@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { PREGUNTAS_OBRERO } from '@/lib/talento/exam';
+import { preguntasAbcObreroParaCargo } from '@/lib/talento/exam';
 import { evaluarSemaforoObrero } from '@/lib/talento/evaluarSemaforoObrero';
 
 export type EvaluarObreroPorTokenInput = {
@@ -62,24 +62,38 @@ export async function evaluarObreroPorToken(
     return { error: 'Invitación expirada', status: 410 };
   }
 
-  if (Object.keys(respuestas).length < PREGUNTAS_OBRERO.length) {
-    return {
-      error: `Completa las ${PREGUNTAS_OBRERO.length} preguntas`,
-      status: 400,
-    };
-  }
-
   const { data: emp, error: empErr } = await admin
     .from('ci_empleados')
-    .select('id, rol_examen')
+    .select('id, rol_examen, rol_buscado, cargo, cargo_codigo')
     .eq('id', invR.empleado_id)
     .maybeSingle();
 
   if (empErr || !emp) return { error: 'Empleado no encontrado', status: 404 };
 
-  const empRol = ((emp as { rol_examen?: string }).rol_examen ?? '').trim().toLowerCase();
+  const empRow = emp as {
+    rol_examen?: string;
+    rol_buscado?: string | null;
+    cargo?: string | null;
+    cargo_codigo?: string | null;
+  };
+  const empRol = (empRow.rol_examen ?? '').trim().toLowerCase();
   if (empRol !== 'obrero' && empRol !== 'vigilante') {
     return { error: 'El empleado no tiene rol de examen obrero/vigilante', status: 409 };
+  }
+
+  const banco = preguntasAbcObreroParaCargo({
+    cargo: empRow.rol_buscado || empRow.cargo,
+    rolExamen: empRol,
+    codigoGoE: empRow.cargo_codigo,
+  });
+  const idsEsperados = banco.map((p) => p.id);
+  for (const id of idsEsperados) {
+    const v = String(respuestas[id] ?? '')
+      .trim()
+      .toUpperCase();
+    if (v !== 'A' && v !== 'B' && v !== 'C') {
+      return { error: `Completa las ${banco.length} preguntas`, status: 400 };
+    }
   }
 
   const resultado = evaluarSemaforoObrero(respuestas);

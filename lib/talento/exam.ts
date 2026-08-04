@@ -15,6 +15,7 @@ import {
   normalizarValorPersonalidad,
   type ValorFrecuenciaPersonalidad,
 } from '@/lib/talento/escalaFrecuenciaPersonalidad';
+import { armarPreguntasAbcObrero } from '@/lib/talento/preguntasAbcFamiliaObrero';
 
 export { ESCALA_FRECUENCIA_PERSONALIDAD } from '@/lib/talento/escalaFrecuenciaPersonalidad';
 export type PreguntaObrero = {
@@ -24,8 +25,11 @@ export type PreguntaObrero = {
   opciones: { texto: string; valor: string }[];
 };
 
-/** 20 ítems ABC — léxico de obra (claro y corto). Valores A/B/C sin cambio de reglas. */
-export const PREGUNTAS_OBRERO: PreguntaObrero[] = [
+/**
+ * Núcleo ABC común (15) — léxico de obra.
+ * El bloque 16–20 depende de la familia de oficio (`preguntasAbcObreroParaCargo`).
+ */
+export const PREGUNTAS_OBRERO_NUCLEO: PreguntaObrero[] = [
   // Bloque 1: Seguridad y uso de equipos
   {
     id: 'obr_01',
@@ -190,61 +194,37 @@ export const PREGUNTAS_OBRERO: PreguntaObrero[] = [
       { texto: 'Me uno y meto más quejas e insultos.', valor: 'C' },
     ],
   },
-  // Bloque 4: Adaptabilidad, herramientas y datos del obrero
-  {
-    id: 'obr_16',
-    categoria: 'herramientas',
-    pregunta: 'Al final del día la carretilla o herramienta quedó llena de cemento o mezcla. ¿Qué haces?',
-    opciones: [
-      { texto: 'La lavo bien antes de guardarla, para que no se dañe.', valor: 'A' },
-      { texto: 'La guardo así: mañana con el martillo se le cae lo seco.', valor: 'B' },
-      { texto: 'La dejo tirada para que el almacenista la busque.', valor: 'C' },
-    ],
-  },
-  {
-    id: 'obr_17',
-    categoria: 'adaptabilidad',
-    pregunta: 'Cambian el plano o la orden y tienes que deshacer un trabajo que ya habías terminado. ¿Qué haces?',
-    opciones: [
-      { texto: 'Me calmo: en obra eso pasa, y lo rehago como digan ahora.', valor: 'A' },
-      { texto: 'Me quejo todo el día y lo hago de mala gana.', valor: 'B' },
-      { texto: 'Suelto las herramientas y amenazo con irme.', valor: 'C' },
-    ],
-  },
-  {
-    id: 'obr_18',
-    categoria: 'datos_obrero',
-    pregunta: 'Sobre leer planos sencillos de obra (civil, eléctrico o mecánico básico):',
-    opciones: [
-      { texto: 'Sí sé leer planos básicos y guiarme con ellos en el campo.', valor: 'A' },
-      { texto: 'Entiendo poco: prefiero que me digan de palabra qué hacer.', valor: 'B' },
-      { texto: 'No sé leer planos.', valor: 'C' },
-    ],
-  },
-  {
-    id: 'obr_19',
-    categoria: 'datos_obrero',
-    pregunta: 'Si la empresa da cursos el fin de semana de seguridad o de oficio:',
-    opciones: [
-      { texto: 'Voy: me gusta aprender y mejorar.', valor: 'A' },
-      { texto: 'Voy solo si es obligatorio para no perder el puesto.', valor: 'B' },
-      { texto: 'No voy: yo ya sé hacer mi trabajo.', valor: 'C' },
-    ],
-  },
-  {
-    id: 'obr_20',
-    categoria: 'datos_obrero',
-    pregunta: 'Un compañero tiene una emergencia médica en la obra. ¿Qué haces?',
-    opciones: [
-      {
-        texto: 'Mantengo la calma, ayudo como pueda y pido que llamen la ambulancia.',
-        valor: 'A',
-      },
-      { texto: 'Corro a buscar al encargado o al vigilante para que ellos vean.', valor: 'B' },
-      { texto: 'Me asusto, me quedo quieto o me alejo para no ver.', valor: 'C' },
-    ],
-  },
 ];
+
+/** Banco ABC completo según cargo / rol (núcleo + 5 del oficio). */
+export function preguntasAbcObreroParaCargo(opts?: {
+  cargo?: string | null;
+  rolExamen?: string | null;
+  codigoGoE?: string | null;
+}): PreguntaObrero[] {
+  return armarPreguntasAbcObrero({
+    nucleo: PREGUNTAS_OBRERO_NUCLEO,
+    cargo: opts?.cargo,
+    rolExamen: opts?.rolExamen,
+    codigoGoE: opts?.codigoGoE,
+  }).preguntas as PreguntaObrero[];
+}
+
+export function metaAbcObreroParaCargo(opts?: {
+  cargo?: string | null;
+  rolExamen?: string | null;
+  codigoGoE?: string | null;
+}) {
+  return armarPreguntasAbcObrero({
+    nucleo: PREGUNTAS_OBRERO_NUCLEO,
+    cargo: opts?.cargo,
+    rolExamen: opts?.rolExamen,
+    codigoGoE: opts?.codigoGoE,
+  });
+}
+
+/** Compat: sin cargo = núcleo + familia general (20 ítems). */
+export const PREGUNTAS_OBRERO: PreguntaObrero[] = preguntasAbcObreroParaCargo();
 
 /** 20 ítems fijos (Nunca → Siempre): conducta, equipo, integridad operativa. */
 export const PREGUNTAS_PERSONALIDAD: PreguntaPersonalidad[] = [
@@ -404,7 +384,7 @@ export function logicaDelExamen(examen: ExamenAdaptativoResult): PreguntaLogica[
 
 /**
  * Genera el banco de preguntas según rol.
- * - obrero / vigilante: 20 situacionales ABC (`PREGUNTAS_OBRERO`)
+ * - obrero / vigilante: 20 situacionales ABC (núcleo + familia de oficio)
  * - tecnico: 20 conducta obra (4 opciones) + 5 lógica de campo
  * - empleado / programador: 20 frecuencia + 5 lógica (TI / razonamiento)
  */
@@ -426,7 +406,7 @@ export function generarExamenAdaptativo(rol: string): ExamenAdaptativoResult {
       return obtenerPreguntasTech(rol);
     case 'obrero':
     case 'vigilante':
-      return PREGUNTAS_OBRERO;
+      return preguntasAbcObreroParaCargo({ rolExamen: rol });
     default:
       throw new Error(`El rol ${rol} no tiene una evaluación configurada.`);
   }
