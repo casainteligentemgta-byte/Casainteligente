@@ -350,7 +350,7 @@ export default function RrhhHojasVidaArchivoPage() {
               <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
               SMART RRHH
             </Link>
-            <h1 className="text-2xl font-bold tracking-tight text-white">Hojas de vida</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-white">Banca de obreros</h1>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
             <button
