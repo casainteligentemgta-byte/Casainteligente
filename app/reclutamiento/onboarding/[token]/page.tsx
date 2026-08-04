@@ -671,7 +671,7 @@ function HojaDeVidaMovilInner({ params }: Props) {
                 <p className="text-sm text-zinc-300 mt-2">
                   {redirectSeg != null && redirectSeg > 0
                     ? `Continuamos automáticamente en ${redirectSeg} s…`
-                    : 'Abriendo la evaluación de tipo de color…'}{' '}
+                    : 'Abriendo la evaluación…'}{' '}
                   Puedes empezar ya con el botón de abajo.
                 </p>
               </GlassCard>
