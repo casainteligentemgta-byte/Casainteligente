@@ -199,10 +199,15 @@ export default function OnboardingHojaVidaLegalForm({ value, onChange }: Props) 
         <label className="block sm:col-span-2">
           <span className={lab()}>Cargo u oficio a desempeñar</span>
           <input
-            className={inpCls()}
+            className={`${inpCls()} cursor-not-allowed bg-slate-100 text-slate-800`}
             value={value.contratacion.cargoUOficio}
-            onChange={(e) => setCon(e.target.value)}
+            readOnly
+            aria-readonly="true"
+            title="Definido por la solicitud de personal; no lo modifica el obrero"
           />
+          <span className="mt-1 block text-[10px] text-slate-500">
+            Lo define RRHH / la solicitud. No se puede cambiar aquí.
+          </span>
         </label>
       </Sec>
 
