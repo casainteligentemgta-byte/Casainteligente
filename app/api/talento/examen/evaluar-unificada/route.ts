@@ -90,7 +90,6 @@ export async function POST(req: Request) {
     cargo: empRow.rol_buscado || empRow.cargo,
     rolExamen: empRol,
     codigoGoE: empRow.cargo_codigo,
-    incluirLogica: true,
   });
 
   const disc = body.disc ?? {};

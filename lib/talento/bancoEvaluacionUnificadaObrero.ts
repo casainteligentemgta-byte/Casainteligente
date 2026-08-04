@@ -1,10 +1,6 @@
 /**
- * Banco mínimo unificado para evaluación de ingreso del obrero.
- *
- * Mínimo viable (sin lógica numérica): 18
- *   6 color + 3 honestidad + 6 ABC común + 3 oficio
- * Recomendado (con lógica de obra): 21
- *   6 color + 3 lógica + 3 honestidad + 6 ABC + 3 oficio
+ * Banco unificado de ingreso del obrero (21 preguntas).
+ * 6 color + 3 lógica + 3 honestidad + 6 ABC común + 3 oficio.
  */
 
 import {
@@ -27,7 +23,7 @@ export const DISC_UNIFICADA: PreguntaDiscObrero[] = PREGUNTAS_DISC_OBRERO.filter
   ['d01', 'd02', 'd04', 'd06', 'd07', 'd09'].includes(q.id),
 );
 
-/** Lógica práctica (opcional pero recomendada). */
+/** Lógica práctica de obra. */
 export const LOGICA_UNIFICADA: PreguntaLogicaObrero[] = PREGUNTAS_LOGICA_OBRERO.filter((q) =>
   ['l02', 'l04', 'l05'].includes(q.id),
 );
@@ -51,20 +47,15 @@ export type BancoEvaluacionUnificada = {
   abc: PreguntaAbcObrero[];
   familia: FamiliaOficioObrero;
   etiquetaFamilia: string;
-  /** Total de pasos en UI. */
+  /** Total de pasos en UI (siempre 21). */
   total: number;
-  /** Mínimo teórico sin lógica. */
-  minimoSinLogica: number;
 };
 
 export function bancoEvaluacionUnificadaObrero(opts?: {
   cargo?: string | null;
   rolExamen?: string | null;
   codigoGoE?: string | null;
-  /** Si false, omite lógica (mínimo 18). Default true → 21. */
-  incluirLogica?: boolean;
 }): BancoEvaluacionUnificada {
-  const incluirLogica = opts?.incluirLogica !== false;
   const armado = armarPreguntasAbcObrero({
     nucleo: ABC_NUCLEO_UNIFICADA,
     cargo: opts?.cargo,
@@ -74,22 +65,19 @@ export function bancoEvaluacionUnificadaObrero(opts?: {
   // Del bloque de oficio (5) nos quedamos con 3.
   const bloqueOficio = armado.preguntas.slice(ABC_NUCLEO_UNIFICADA.length, ABC_NUCLEO_UNIFICADA.length + 3);
   const abc = [...ABC_NUCLEO_UNIFICADA, ...bloqueOficio];
-  const logica = incluirLogica ? LOGICA_UNIFICADA : [];
   const total =
-    DISC_UNIFICADA.length + logica.length + CONF_UNIFICADA.length + abc.length;
+    DISC_UNIFICADA.length + LOGICA_UNIFICADA.length + CONF_UNIFICADA.length + abc.length;
 
   return {
     disc: DISC_UNIFICADA,
-    logica,
+    logica: LOGICA_UNIFICADA,
     confiabilidad: CONF_UNIFICADA,
     abc,
     familia: armado.familia,
     etiquetaFamilia: armado.etiquetaFamilia,
     total,
-    minimoSinLogica:
-      DISC_UNIFICADA.length + CONF_UNIFICADA.length + ABC_NUCLEO_UNIFICADA.length + 3,
   };
 }
 
-export const TOTAL_MINIMO_SIN_LOGICA = 18;
-export const TOTAL_RECOMENDADO = 21;
+/** Total fijo de la evaluación unificada. */
+export const TOTAL_EVALUACION_UNIFICADA = 21;

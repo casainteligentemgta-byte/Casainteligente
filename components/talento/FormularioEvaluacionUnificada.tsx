@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { ArrowLeft, ArrowRight, CheckCircle2, Loader2 } from 'lucide-react';
 import {
   bancoEvaluacionUnificadaObrero,
-  TOTAL_RECOMENDADO,
+  TOTAL_EVALUACION_UNIFICADA,
 } from '@/lib/talento/bancoEvaluacionUnificadaObrero';
 import {
   esColorPerfilObrero,
@@ -41,7 +41,6 @@ export default function FormularioEvaluacionUnificada({
         cargo,
         codigoGoE,
         rolExamen,
-        incluirLogica: true,
       }),
     [cargo, codigoGoE, rolExamen],
   );
@@ -124,9 +123,7 @@ export default function FormularioEvaluacionUnificada({
       <header>
         <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-500">Evaluación</p>
         <p className="mt-1 text-sm text-zinc-400">Hola, {nombre}</p>
-        <p className="mt-1 text-[11px] text-zinc-600">
-          {total} preguntas · recomendado {TOTAL_RECOMENDADO}
-        </p>
+        <p className="mt-1 text-[11px] text-zinc-600">{TOTAL_EVALUACION_UNIFICADA} preguntas</p>
         <div className="mt-4 flex items-center justify-between text-xs text-zinc-500">
           <span>{seccionLabel}</span>
           <span>

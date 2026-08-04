@@ -5,29 +5,21 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   bancoEvaluacionUnificadaObrero,
-  TOTAL_MINIMO_SIN_LOGICA,
-  TOTAL_RECOMENDADO,
+  TOTAL_EVALUACION_UNIFICADA,
 } from './bancoEvaluacionUnificadaObrero';
 import { evaluarSemaforoObrero } from './evaluarSemaforoObrero';
 import { urlSiguientePostHv } from './flujoHvEvaluacion';
 
 describe('bancoEvaluacionUnificadaObrero', () => {
-  it('recomendado = 21 (con lógica)', () => {
-    const b = bancoEvaluacionUnificadaObrero({ cargo: 'ELECTRICISTA DE 1ra.', incluirLogica: true });
-    assert.equal(b.total, TOTAL_RECOMENDADO);
+  it('siempre 21 preguntas (con lógica)', () => {
+    const b = bancoEvaluacionUnificadaObrero({ cargo: 'ELECTRICISTA DE 1ra.' });
+    assert.equal(b.total, TOTAL_EVALUACION_UNIFICADA);
     assert.equal(b.total, 21);
     assert.equal(b.disc.length, 6);
     assert.equal(b.logica.length, 3);
     assert.equal(b.confiabilidad.length, 3);
     assert.equal(b.abc.length, 9);
     assert.equal(b.familia, 'electricidad');
-  });
-
-  it('mínimo = 18 (sin lógica)', () => {
-    const b = bancoEvaluacionUnificadaObrero({ cargo: 'Ayudante', incluirLogica: false });
-    assert.equal(b.total, TOTAL_MINIMO_SIN_LOGICA);
-    assert.equal(b.total, 18);
-    assert.equal(b.logica.length, 0);
   });
 });
 
