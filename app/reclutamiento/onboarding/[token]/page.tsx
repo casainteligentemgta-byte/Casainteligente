@@ -46,43 +46,66 @@ function esNombrePlaceholderInvitacion(nombre: string): boolean {
   const n = nombre.trim().toLowerCase();
   if (!n) return true;
   if (n.startsWith('candidato')) return true;
+  if (n.includes('candidato')) return true;
   if (n === 'por completar' || n.startsWith('por completar')) return true;
   if (n.includes('·') || n.includes('•')) return true;
   return false;
 }
 
+function compuestoNombresHv(hv: HojaVidaObreroCompleta): string {
+  return [
+    hv.datosPersonales.primerNombre,
+    hv.datosPersonales.segundoNombre,
+    hv.datosPersonales.primerApellido,
+    hv.datosPersonales.segundoApellido,
+  ]
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .join(' ');
+}
+
+function limpiarNombresEnHv(hv: HojaVidaObreroCompleta): void {
+  hv.datosPersonales.primerNombre = '';
+  hv.datosPersonales.segundoNombre = '';
+  hv.datosPersonales.primerApellido = '';
+  hv.datosPersonales.segundoApellido = '';
+}
+
 /**
- * Primera visita (pendiente_cv sin HV guardada): formulario vacío.
- * No rellenar nombres partiendo el nombre_completo de la invitación.
+ * Onboarding: primer/segundo nombre y apellidos van vacíos salvo HV real ya guardada
+ * por el obrero (no partir nombre_completo / cargo de la invitación).
  */
 function hvInicialOnboarding(row: Record<string, unknown>): HojaVidaObreroCompleta {
   const desdeRow = hojaVidaDesdeRow(row);
   const json = parseHojaVidaObreroJson(row.hoja_vida_obrero);
-  const tieneHvGuardada = Boolean(
-    json.datosPersonales.primerNombre.trim() ||
-      json.datosPersonales.primerApellido.trim() ||
-      json.datosPersonales.cedulaIdentidad.trim(),
+  const nomInvitacion = String(row.nombre_completo ?? row.nombres ?? '').trim();
+  const nombresJsonSonPlaceholder =
+    !compuestoNombresHv(json) ||
+    esNombrePlaceholderInvitacion(compuestoNombresHv(json)) ||
+    esNombrePlaceholderInvitacion(nomInvitacion);
+
+  const tieneHvRealDelObrero = Boolean(
+    !nombresJsonSonPlaceholder &&
+      (json.datosPersonales.primerNombre.trim() || json.datosPersonales.primerApellido.trim()),
   );
   const estado = String(row.estado_proceso ?? '').trim().toLowerCase();
-  if (tieneHvGuardada || estado === 'cv_completado') {
-    return desdeRow;
+
+  if (tieneHvRealDelObrero || (estado === 'cv_completado' && !nombresJsonSonPlaceholder)) {
+    const hv = desdeRow;
+    if (esNombrePlaceholderInvitacion(compuestoNombresHv(hv)) || esNombrePlaceholderInvitacion(nomInvitacion)) {
+      limpiarNombresEnHv(hv);
+    }
+    return hv;
   }
 
+  // Primera visita / nombres de invitación: campos de nombre vacíos.
   const vacia = emptyHojaVidaObreroCompleta();
   vacia.contratacion.cargoUOficio = desdeRow.contratacion.cargoUOficio;
   vacia.datosPersonales.fotoUrl = desdeRow.datosPersonales.fotoUrl;
   vacia.datosPersonales.fotoCedulaUrl = desdeRow.datosPersonales.fotoCedulaUrl;
-
-  const nom = String(row.nombre_completo ?? '').trim();
-  if (nom && !esNombrePlaceholderInvitacion(nom)) {
-    vacia.datosPersonales.primerNombre = desdeRow.datosPersonales.primerNombre;
-    vacia.datosPersonales.segundoNombre = desdeRow.datosPersonales.segundoNombre;
-    vacia.datosPersonales.primerApellido = desdeRow.datosPersonales.primerApellido;
-    vacia.datosPersonales.segundoApellido = desdeRow.datosPersonales.segundoApellido;
-  }
-  // Celular/WhatsApp de la invitación sí pueden prellenar (dato real del contacto).
+  vacia.datosPersonales.cedulaIdentidad = json.datosPersonales.cedulaIdentidad.trim();
   vacia.datosPersonales.celular = desdeRow.datosPersonales.celular;
-
+  limpiarNombresEnHv(vacia);
   return vacia;
 }
 

@@ -373,7 +373,16 @@ export function hojaVidaDesdeRow(row: Record<string, unknown>): HojaVidaObreroCo
   }
 
   const nom = str('nombre_completo');
-  if (nom && !fromJson.datosPersonales.primerNombre) {
+  const nomLower = nom.toLowerCase();
+  const nomEsPlaceholderInvitacion =
+    !nom ||
+    nomLower.startsWith('candidato') ||
+    nomLower.includes('candidato') ||
+    nomLower.startsWith('por completar') ||
+    nom.includes('·') ||
+    nom.includes('•');
+  // No partir «Candidato · CARGO» / «Por completar» en primer/segundo nombre y apellidos.
+  if (nom && !nomEsPlaceholderInvitacion && !fromJson.datosPersonales.primerNombre) {
     const parts = nom.split(/\s+/).filter(Boolean);
     if (parts.length >= 1) fromJson.datosPersonales.primerNombre = parts[0] ?? '';
     if (parts.length >= 2) fromJson.datosPersonales.primerApellido = parts[parts.length - 1] ?? '';
