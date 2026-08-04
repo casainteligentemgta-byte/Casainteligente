@@ -750,11 +750,9 @@ export function ContratoObreroPDF({
 
   return (
     <Document>
-      <Page size="LETTER" style={[styles.page, styles.pageFirst]}>
+      <Page size="LETTER" style={[styles.page, styles.pageFirst]} wrap>
         {bloquePortadaIntro}
         {bloqueClausulasPrimeraACuarta}
-      </Page>
-      <Page size="LETTER" style={styles.page}>
         {bloqueClausulasQuintaANovenaYFirmas}
       </Page>
     </Document>
