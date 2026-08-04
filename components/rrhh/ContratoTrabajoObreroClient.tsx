@@ -133,6 +133,9 @@ export default function ContratoTrabajoObreroClient() {
   const [fechaIngreso, setFechaIngreso] = useState(hoyIso);
   const [jornada, setJornada] = useState<'DIURNA' | 'NOCTURNA' | 'MIXTA'>('DIURNA');
   const [horarioDefault, setHorarioDefault] = useState('');
+  /** Si la fila del Excel no trae estado civil, se usa este valor. */
+  const [estadoCivilDefault, setEstadoCivilDefault] = useState('');
+  const [nacionalidadDefault, setNacionalidadDefault] = useState('Venezolano');
 
   const [contratos, setContratos] = useState<ContratoRow[]>([]);
   const [loadingLista, setLoadingLista] = useState(false);
@@ -339,7 +342,7 @@ export default function ContratoTrabajoObreroClient() {
         obrero_direccion: direccion.trim() || null,
         obrero_municipio_residencia: municipio.trim() || null,
         obrero_estado_residencia: estadoRes.trim() || null,
-        nacionalidad: nacionalidad.trim() || null,
+        nacionalidad: nacionalidad.trim() || 'Venezolano',
         estado_civil: estadoCivil.trim() || null,
         fecha_ingreso: fechaIngreso,
         jornada_trabajo: jornada,
@@ -422,10 +425,12 @@ export default function ContratoTrabajoObreroClient() {
       return;
     }
 
-    const sinEstadoCivil = pendientes.filter((f) => !(f.estadoCivil ?? '').trim()).length;
+    const sinEstadoCivil = pendientes.filter(
+      (f) => !(f.estadoCivil ?? '').trim() && !estadoCivilDefault.trim(),
+    ).length;
     if (sinEstadoCivil > 0) {
       toast.message(
-        `${sinEstadoCivil} fila(s) sin estado civil: el PDF dejará ese dato en blanco en la comparecencia.`,
+        `${sinEstadoCivil} fila(s) sin estado civil: indica uno por defecto abajo o complétalo en el Excel.`,
       );
     }
 
@@ -484,8 +489,8 @@ export default function ContratoTrabajoObreroClient() {
           fecha_ingreso: f.fechaIngreso || fechaIngreso,
           jornada_trabajo: f.jornada || jornada,
           horario_semanal_texto: f.horario || horarioDefault || null,
-          nacionalidad: f.nacionalidad,
-          estado_civil: f.estadoCivil,
+          nacionalidad: (f.nacionalidad ?? '').trim() || nacionalidadDefault.trim() || 'Venezolano',
+          estado_civil: (f.estadoCivil ?? '').trim() || estadoCivilDefault.trim() || null,
           objeto_contrato: f.objetoContrato,
           obrero_municipio_residencia: f.municipio,
           obrero_estado_residencia: f.estadoResidencia,
@@ -619,6 +624,40 @@ export default function ContratoTrabajoObreroClient() {
             <option value="NOCTURNA">Nocturna</option>
             <option value="MIXTA">Mixta</option>
           </select>
+        </label>
+        <label className="block space-y-1.5">
+          <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+            Estado civil (por defecto)
+          </span>
+          <input
+            className={inputClass}
+            value={estadoCivilDefault}
+            onChange={(e) => setEstadoCivilDefault(e.target.value)}
+            placeholder="Ej.: soltero (si el Excel no lo trae)"
+            list="ci-estado-civil-opts"
+          />
+          <datalist id="ci-estado-civil-opts">
+            <option value="soltero" />
+            <option value="soltera" />
+            <option value="casado" />
+            <option value="casada" />
+            <option value="unión libre" />
+            <option value="divorciado" />
+            <option value="divorciada" />
+            <option value="viudo" />
+            <option value="viuda" />
+          </datalist>
+        </label>
+        <label className="block space-y-1.5">
+          <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+            Nacionalidad (por defecto)
+          </span>
+          <input
+            className={inputClass}
+            value={nacionalidadDefault}
+            onChange={(e) => setNacionalidadDefault(e.target.value)}
+            placeholder="Venezolano"
+          />
         </label>
       </div>
     );
@@ -983,7 +1022,7 @@ export default function ContratoTrabajoObreroClient() {
               <p className="mt-1">
                 Lugar de trabajo, nombre de obra, fase técnica, punto de encuentro y domicilio procesal
                 salen de la <span className="text-zinc-200">obra seleccionada</span> (datos PM). Completa
-                estado civil en el Excel para la comparecencia.
+                estado civil en el Excel o usa el valor por defecto abajo.
               </p>
               <p className="mt-1">
                 Si una fila no trae fecha, jornada o bono, se usan los valores por defecto de abajo.
@@ -1065,7 +1104,14 @@ export default function ContratoTrabajoObreroClient() {
                           </td>
                           <td className="px-3 py-2">{(f.jornada || jornada).trim() || '—'}</td>
                           <td className="px-3 py-2">{Number.isFinite(f.bonoUsd) ? f.bonoUsd : '—'}</td>
-                          <td className="px-3 py-2">{(f.estadoCivil ?? '').trim() || '—'}</td>
+                          <td className="px-3 py-2">
+                            {(f.estadoCivil ?? '').trim() ||
+                              (estadoCivilDefault.trim() ? (
+                                <span className="text-zinc-500 italic">{estadoCivilDefault.trim()}</span>
+                              ) : (
+                                '—'
+                              ))}
+                          </td>
                         </tr>
                       );
                     })}
