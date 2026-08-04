@@ -341,7 +341,6 @@ export default function RrhhHojasVidaArchivoPage() {
   return (
     <div className="mx-auto max-w-6xl px-4 pb-28 pt-8">
       <header className="mb-8">
-        <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Casa Inteligente</p>
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <Link
@@ -351,15 +350,7 @@ export default function RrhhHojasVidaArchivoPage() {
               <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
               SMART RRHH
             </Link>
-            <h1 className="text-2xl font-bold tracking-tight text-white">Hojas de vida</h1>
-            <p className="mt-2 max-w-2xl text-sm text-zinc-400">
-              Archivo de todos los obreros que cargaron su hoja de vida: activos o inactivos, aprobados o no.
-            </p>
-            {!loading ? (
-              <p className="mt-1 text-xs text-zinc-500">
-                {rows.length} registro{rows.length === 1 ? '' : 's'} en el archivo.
-              </p>
-            ) : null}
+            <h1 className="text-2xl font-bold tracking-tight text-white">Banca de obreros</h1>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
             <button
@@ -368,28 +359,17 @@ export default function RrhhHojasVidaArchivoPage() {
               className="inline-flex items-center gap-2 rounded-xl border border-sky-500/40 bg-sky-600/25 px-4 py-2.5 text-sm font-semibold text-sky-50 transition hover:bg-sky-600/40"
             >
               <Plus className="h-4 w-4" aria-hidden />
-              Nueva hoja de vida
+              Enviar formato hoja de vida
             </button>
-            <Link
-              href="/rrhh/evaluaciones"
-              className="inline-flex items-center gap-2 rounded-xl border border-violet-500/35 bg-violet-950/40 px-4 py-2.5 text-sm font-semibold text-violet-100 transition hover:bg-violet-900/50"
-            >
-              Evaluaciones
-            </Link>
-            <Link
-              href="/rrhh/trabajadores"
-              className="inline-flex items-center gap-2 rounded-xl border border-fuchsia-500/35 bg-fuchsia-950/40 px-4 py-2.5 text-sm font-semibold text-fuchsia-100 transition hover:bg-fuchsia-900/50"
-            >
-              Trabajadores por proyecto
-            </Link>
             <button
               type="button"
               onClick={() => void cargar()}
               disabled={loading}
-              className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-semibold text-zinc-200 transition hover:bg-white/10 disabled:opacity-50"
+              title="Actualizar"
+              aria-label="Actualizar lista"
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-zinc-200 transition hover:bg-white/10 disabled:opacity-50"
             >
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-              Actualizar
             </button>
           </div>
         </div>
@@ -408,7 +388,7 @@ export default function RrhhHojasVidaArchivoPage() {
             onClick={() => setNuevaHvOpen(true)}
             className="font-semibold text-sky-300 underline-offset-2 hover:underline"
           >
-            Nueva hoja de vida
+            Enviar formato hoja de vida
           </button>{' '}
           para invitar al candidato.
         </p>
@@ -424,9 +404,6 @@ export default function RrhhHojasVidaArchivoPage() {
             const estadoEtiqueta = etiquetaEstadoArchivo(r);
             const pdfHojaVida = `${pdfBase}&tipo=hoja_vida`;
             const pdfHojaEmpleo = `${pdfBase}&tipo=hoja_empleo`;
-            const proyectoHref = r.proyecto_modulo_id
-              ? `/rrhh/hojas-vida?proyecto_modulo=${encodeURIComponent(r.proyecto_modulo_id)}`
-              : null;
 
             return (
               <li
@@ -436,7 +413,7 @@ export default function RrhhHojasVidaArchivoPage() {
                 <div className="min-w-0">
                   <p className="truncate font-semibold text-white">{nombre}</p>
                   <p className="mt-0.5 text-xs text-zinc-500">
-                    Cédula / doc.: <span className="text-zinc-300">{doc}</span>
+                    Cédula: <span className="text-zinc-300">{doc}</span>
                     {' · '}
                     <span className="text-zinc-500">{fechaCorta(r.created_at)}</span>
                   </p>
@@ -452,6 +429,15 @@ export default function RrhhHojasVidaArchivoPage() {
                 <div className="mt-3 flex w-full flex-wrap items-center gap-2 border-t border-white/10 pt-3">
                   {doc !== '—' ? (
                     <>
+                      <a
+                        href={pdfHojaVida}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-zinc-200 transition hover:bg-white/10"
+                      >
+                        <FileText className="h-3.5 w-3.5 opacity-70" />
+                        Hoja de vida
+                      </a>
                       <a
                         href={pdfHojaEmpleo}
                         target="_blank"
@@ -470,61 +456,39 @@ export default function RrhhHojasVidaArchivoPage() {
                         <Pencil className="h-3.5 w-3.5" />
                         Editar oficio
                       </button>
-                      <a
-                        href={pdfHojaVida}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-zinc-200 transition hover:bg-white/10"
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (tieneInformeEvaluacion(r)) {
+                            setInformeRow(r);
+                            setInformeOpen(true);
+                            return;
+                          }
+                          void emitirEnlaceEvaluacion(r, 'psique');
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-600/40 bg-emerald-950/30 px-3 py-2 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-900/45"
                       >
-                        <FileText className="h-3.5 w-3.5 opacity-70" />
-                        Hoja de vida
-                      </a>
-                      <div className="inline-flex rounded-lg border border-emerald-600/40 bg-emerald-950/20 p-0.5 shadow-sm">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (tieneInformeEvaluacion(r)) {
-                              setInformeRow(r);
-                              setInformeOpen(true);
-                              return;
-                            }
-                            void emitirEnlaceEvaluacion(r, 'psique');
-                          }}
-                          className="inline-flex items-center gap-1.5 rounded-md border border-transparent px-2.5 py-1.5 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-900/50"
-                        >
-                          <Link2 className="h-3.5 w-3.5" />
-                          {tieneInformeEvaluacion(r) ? 'Informe evaluación' : 'Eval. psicológica'}
-                        </button>
-                        <span className="w-px shrink-0 bg-emerald-700/50" aria-hidden />
-                        <button
-                          type="button"
-                          onClick={() => void emitirEnlaceEvaluacion(r, 'color')}
-                          className="inline-flex items-center gap-1.5 rounded-md border border-transparent px-2.5 py-1.5 text-xs font-semibold text-amber-200 transition hover:bg-emerald-900/50"
-                          title="Evaluación de tipo de color (DISC)"
-                        >
-                          Color
-                        </button>
-                        <span className="w-px shrink-0 bg-emerald-700/50" aria-hidden />
-                        <button
-                          type="button"
-                          onClick={() => void validarYAbrirContrato(r)}
-                          disabled={validandoContratoId === r.id}
-                          className="inline-flex items-center gap-1.5 rounded-md border border-transparent px-2.5 py-1.5 text-xs font-semibold text-emerald-100/95 transition hover:bg-emerald-900/50"
-                          title="Previsualizar contrato individual (PDF)"
-                        >
-                          <ScrollText className="h-3.5 w-3.5 opacity-90" />
-                          {validandoContratoId === r.id ? '…' : 'Contrato'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void validarYAbrirContrato(r)}
-                          disabled={validandoContratoId === r.id}
-                          className="inline-flex items-center gap-1.5 rounded-md border border-transparent px-2 py-1.5 text-[10px] font-semibold text-emerald-200/80 transition hover:bg-emerald-900/40"
-                          title="Plantilla PDF con placeholders"
-                        >
-                          {validandoContratoId === r.id ? '…' : 'PDF'}
-                        </button>
-                      </div>
+                        <Link2 className="h-3.5 w-3.5" />
+                        {tieneInformeEvaluacion(r) ? 'Informe evaluación' : 'Eval. psicológica'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void emitirEnlaceEvaluacion(r, 'color')}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-950/25 px-3 py-2 text-xs font-semibold text-amber-100 transition hover:bg-amber-900/40"
+                        title="Evaluación de tipo de color (DISC)"
+                      >
+                        {(r.perfil_color ?? '').trim() || 'Color'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void validarYAbrirContrato(r)}
+                        disabled={validandoContratoId === r.id}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/35 bg-emerald-950/25 px-3 py-2 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-900/40"
+                        title="Previsualizar contrato individual (PDF)"
+                      >
+                        <ScrollText className="h-3.5 w-3.5 opacity-90" />
+                        {validandoContratoId === r.id ? '…' : 'Contrato'}
+                      </button>
                       <button
                         type="button"
                         onClick={() => setContratoFlowRow(r)}
@@ -542,14 +506,6 @@ export default function RrhhHojasVidaArchivoPage() {
                         Observaciones
                       </button>
                     </>
-                  ) : null}
-                  {proyectoHref ? (
-                    <Link
-                      href={proyectoHref}
-                      className="inline-flex rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-zinc-200 transition hover:bg-white/10"
-                    >
-                      Proyecto RRHH
-                    </Link>
                   ) : null}
                   <Link
                     href={`/empleados/${encodeURIComponent(r.id)}`}
@@ -928,7 +884,7 @@ export default function RrhhHojasVidaArchivoPage() {
       >
         <DialogContent className="max-h-[90vh] overflow-y-auto border-white/10 bg-transparent p-0 sm:max-w-md">
           <DialogHeader className="sr-only">
-            <DialogTitle>Nueva hoja de vida</DialogTitle>
+            <DialogTitle>Enviar formato hoja de vida</DialogTitle>
           </DialogHeader>
           <GeneradorHojaVida onClose={() => setNuevaHvOpen(false)} />
         </DialogContent>
