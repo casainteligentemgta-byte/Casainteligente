@@ -30,6 +30,7 @@ import {
   parseContratoTrabajoObreroTabla,
   type FilaContratoTrabajoObrero,
 } from '@/lib/talento/parseContratoTrabajoObreroTabla';
+import { nacionalidadDesdeCedula } from '@/lib/talento/cedulaAuth';
 
 type Vista = 'lista' | 'nuevo' | 'masiva';
 
@@ -147,10 +148,11 @@ export default function ContratoTrabajoObreroClient() {
   const [direccion, setDireccion] = useState('');
   const [municipio, setMunicipio] = useState('');
   const [estadoRes, setEstadoRes] = useState('');
-  const [nacionalidad, setNacionalidad] = useState('Venezolana');
   const [estadoCivil, setEstadoCivil] = useState('');
   const [bonoUsd, setBonoUsd] = useState('0');
   const [guardandoUno, setGuardandoUno] = useState(false);
+  const nacionalidadDesdeDoc =
+    nacionalidadDesdeCedula(cedula) ?? (cedula.trim() ? 'venezolana' : '—');
 
   const [filas, setFilas] = useState<FilaContratoTrabajoObrero[]>([]);
   const [avisosParse, setAvisosParse] = useState<string[]>([]);
@@ -899,12 +901,13 @@ export default function ContratoTrabajoObreroClient() {
                 </label>
                 <label className="block space-y-1.5">
                   <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
-                    Nacionalidad
+                    Nacionalidad (según cédula)
                   </span>
                   <input
-                    className={inputClass}
-                    value={nacionalidad}
-                    onChange={(e) => setNacionalidad(e.target.value)}
+                    className={`${inputClass} bg-zinc-900/50 text-zinc-300`}
+                    value={nacionalidadDesdeDoc}
+                    readOnly
+                    title="V → venezolana; E → extranjero"
                   />
                 </label>
                 <label className="block space-y-1.5">
@@ -915,6 +918,8 @@ export default function ContratoTrabajoObreroClient() {
                     className={inputClass}
                     value={estadoCivil}
                     onChange={(e) => setEstadoCivil(e.target.value)}
+                    placeholder="Soltero"
+                    list="ci-estado-civil-opts"
                   />
                 </label>
                 <label className="block space-y-1.5 sm:col-span-2">
