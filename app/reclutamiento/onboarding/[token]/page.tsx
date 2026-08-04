@@ -480,12 +480,18 @@ function HojaDeVidaMovilInner({ params }: Props) {
                 <div>
                   <label className="block text-sm font-semibold text-zinc-400 mb-2">Botas (nº)</label>
                   <input
-                    type="number"
-                    min={35}
-                    max={50}
-                    className="ios-input"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    autoComplete="off"
+                    className="ios-input text-white"
                     value={formData.talla_botas}
-                    onChange={(e) => setFormData({ ...formData, talla_botas: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        talla_botas: e.target.value.replace(/[^\d]/g, '').slice(0, 2),
+                      })
+                    }
                   />
                 </div>
               </GlassCard>

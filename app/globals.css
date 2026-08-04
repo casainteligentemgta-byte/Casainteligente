@@ -214,40 +214,51 @@
     box-shadow: 0 2px 8px rgba(0, 122, 255, 0.25);
   }
 
-  /* iOS Input */
+  /* iOS Input — tema oscuro: nunca fondo blanco (evita texto claro ilegible en iOS). */
   .ios-input {
-    background: var(--bg-secondary);
-    border: 1.5px solid transparent;
+    background: #1c1c1e;
+    border: 1.5px solid rgba(255, 255, 255, 0.12);
     border-radius: var(--radius-md);
     padding: 14px 16px;
     font-size: 16px;
-    color: var(--label-primary);
-    -webkit-text-fill-color: var(--label-primary);
+    color: #fafafa;
+    -webkit-text-fill-color: #fafafa;
     caret-color: var(--ios-blue);
     transition: all 0.2s ease;
     width: 100%;
     outline: none;
     font-family: inherit;
+    color-scheme: dark;
   }
 
   .ios-input:focus {
-    /* Fondo claro al enfocar: el texto debe ser oscuro (si no, blanco sobre blanco en móvil). */
-    background: #FFFFFF;
+    background: #2c2c2e;
     border-color: var(--ios-blue);
-    box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.12);
-    color: #111827;
-    -webkit-text-fill-color: #111827;
+    box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.18);
+    color: #ffffff;
+    -webkit-text-fill-color: #ffffff;
     caret-color: #007aff;
   }
 
   .ios-input::placeholder {
-    color: var(--label-tertiary);
-    -webkit-text-fill-color: var(--label-tertiary);
+    color: #8e8e93;
+    -webkit-text-fill-color: #8e8e93;
   }
 
   .ios-input:focus::placeholder {
-    color: #9ca3af;
-    -webkit-text-fill-color: #9ca3af;
+    color: #8e8e93;
+    -webkit-text-fill-color: #8e8e93;
+  }
+
+  /* Spinner nativo de type=number en Safari/iOS: mismo contraste. */
+  .ios-input[type='number'] {
+    color: #fafafa;
+    -webkit-text-fill-color: #fafafa;
+  }
+
+  .ios-input[type='number']:focus {
+    color: #ffffff;
+    -webkit-text-fill-color: #ffffff;
   }
 
   /* Segment Control */
