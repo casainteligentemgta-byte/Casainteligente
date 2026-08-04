@@ -13,6 +13,19 @@ function inpCls() {
   return 'mt-1 w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm text-slate-900';
 }
 
+/** Normaliza a `yyyy-mm-dd` para `<input type="date">` (acepta dd/mm/yyyy y yyyy-mm-dd). */
+function aFechaInput(raw: string): string {
+  const s = raw.trim();
+  if (!s) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+  if (!m) return '';
+  const dd = m[1]!.padStart(2, '0');
+  const mm = m[2]!.padStart(2, '0');
+  const yyyy = m[3]!;
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 function lab() {
   return 'block text-[11px] font-semibold text-slate-600';
 }
@@ -160,8 +173,11 @@ export default function OnboardingHojaVidaLegalForm({ value, onChange, cargoFijo
         <label className="block">
           <span className={lab()}>Fecha de nacimiento</span>
           <input
+            type="date"
             className={inpCls()}
-            value={d.fechaNacimiento}
+            value={aFechaInput(d.fechaNacimiento)}
+            max={new Date().toISOString().slice(0, 10)}
+            min="1920-01-01"
             onChange={(e) => setDp({ fechaNacimiento: e.target.value })}
           />
         </label>
