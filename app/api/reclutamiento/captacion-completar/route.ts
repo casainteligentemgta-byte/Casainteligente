@@ -321,23 +321,25 @@ export async function POST(req: Request) {
   await admin.client.from('recruitment_needs').update({ conteo_postulaciones: prev + 1 } as never).eq('id', n.id);
 
   const base = publicBaseFromReq(req);
-  const color_exam_url =
+  const evaluacion_url =
     examInvite.ok && base
-      ? `${base}/talento/evaluacion-color?token=${encodeURIComponent(tokenRegistro)}`
-      : undefined;
-  const evaluacion_obrero_url =
-    examInvite.ok && base
-      ? `${base}/talento/evaluacion-obrero?token=${encodeURIComponent(tokenRegistro)}`
+      ? `${base}/talento/evaluacion?token=${encodeURIComponent(tokenRegistro)}`
       : undefined;
   const exam_url =
     examInvite.ok && base ? `${base}/talento/examen?token=${encodeURIComponent(tokenRegistro)}` : undefined;
-  const post_hv_url = color_exam_url;
 
   return NextResponse.json({
     ok: true,
     empleadoId,
     cedula: formState.cedula.trim(),
-    ...(post_hv_url ? { post_hv_url, color_exam_url, evaluacion_obrero_url } : {}),
+    ...(evaluacion_url
+      ? {
+          post_hv_url: evaluacion_url,
+          evaluacion_url,
+          color_exam_url: evaluacion_url,
+          evaluacion_obrero_url: evaluacion_url,
+        }
+      : {}),
     ...(exam_url ? { exam_url } : {}),
     ...(!examInvite.ok ? { exam_invite_error: examInvite.error } : {}),
   });
