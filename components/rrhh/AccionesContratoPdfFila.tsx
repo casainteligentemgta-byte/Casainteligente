@@ -1,10 +1,11 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { Copy, FileText, Link2, Loader2, MessageCircle, Printer } from 'lucide-react';
+import { FileText, Link2, Loader2, MessageCircle, Printer, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
-import { assertHttpOrigin } from '@/lib/http/apiUrl';
+import { apiUrl, assertHttpOrigin } from '@/lib/http/apiUrl';
 import {
+  expressIdDesdeFilaEmpleado,
   mensajeWhatsAppContratoPdf,
   resolverUrlPdfContratoFila,
   urlCompartirContratoPdf,
@@ -32,9 +33,12 @@ export default function AccionesContratoPdfFila({
 }: Props) {
   const [abierto, setAbierto] = useState(false);
   const [cargando, setCargando] = useState(false);
+  const [regenerando, setRegenerando] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const expressId = expressIdDesdeFilaEmpleado(empleadoRowId);
 
   const cargarUrl = useCallback(async () => {
     setCargando(true);
@@ -68,6 +72,41 @@ export default function AccionesContratoPdfFila({
       setPdfUrl(null);
       setShareUrl(null);
       setErrorMsg(null);
+    }
+  };
+
+  const regenerarPdf = async () => {
+    if (!expressId) {
+      toast.error('Solo se puede regenerar contratos express desde esta lista.');
+      return;
+    }
+    setRegenerando(true);
+    try {
+      const res = await fetch(apiUrl(`/api/talento/contratos-express/${encodeURIComponent(expressId)}/regenerar-pdf`), {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const j = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        signed_url?: string | null;
+      };
+      if (!res.ok || !j.ok) {
+        toast.error(j.error ?? 'No se pudo regenerar el PDF');
+        return;
+      }
+      toast.success('PDF regenerado (nacionalidad y estado civil actualizados)');
+      setPdfUrl(null);
+      setShareUrl(null);
+      await cargarUrl();
+      if (j.signed_url) {
+        const err = assertHttpOrigin();
+        if (!err) window.open(j.signed_url, '_blank', 'noopener,noreferrer');
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error de red');
+    } finally {
+      setRegenerando(false);
     }
   };
 
@@ -131,7 +170,7 @@ export default function AccionesContratoPdfFila({
         variant="outline"
         size={soloIcono ? 'icon' : 'sm'}
         className="h-8 w-8 shrink-0 border-emerald-500/35 bg-emerald-950/30 text-emerald-100 hover:bg-emerald-900/45"
-        title="Contrato en PDF — ver, imprimir o compartir"
+        title="Contrato en PDF — ver, imprimir, regenerar o compartir"
         aria-label="Contrato en PDF"
         onClick={abrirMenu}
       >
@@ -147,13 +186,29 @@ export default function AccionesContratoPdfFila({
             </DialogDescription>
           </DialogHeader>
 
-          {cargando ? (
+          {cargando && !pdfUrl && !errorMsg ? (
             <p className="flex items-center gap-2 text-sm text-zinc-500">
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
               Cargando documento…
             </p>
           ) : pdfUrl ? (
             <div className="grid gap-2">
+              {expressId ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="justify-start gap-2 border-amber-500/40 bg-amber-950/30 text-amber-100"
+                  disabled={regenerando}
+                  onClick={() => void regenerarPdf()}
+                >
+                  {regenerando ? (
+                    <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
+                  ) : (
+                    <RefreshCw className="h-4 w-4 shrink-0" aria-hidden />
+                  )}
+                  Regenerar PDF
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 variant="outline"
@@ -196,6 +251,23 @@ export default function AccionesContratoPdfFila({
               <p className="text-sm text-red-300">
                 {errorMsg ?? 'No se pudo cargar el PDF.'}
               </p>
+              {expressId ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="border-amber-500/40 text-amber-100"
+                  disabled={regenerando}
+                  onClick={() => void regenerarPdf()}
+                >
+                  {regenerando ? (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  ) : (
+                    <RefreshCw className="h-4 w-4" aria-hidden />
+                  )}
+                  Regenerar PDF
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 variant="outline"

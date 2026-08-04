@@ -160,6 +160,7 @@ export default function ContratoTrabajoObreroClient() {
   const [generando, setGenerando] = useState(false);
   const [progreso, setProgreso] = useState({ done: 0, total: 0 });
   const [resultados, setResultados] = useState<ResultadoFila[]>([]);
+  const [regenerandoTodos, setRegenerandoTodos] = useState(false);
 
   const proyectoNombre = useMemo(
     () => proyectos.find((p) => p.id === proyectoId)?.nombre ?? null,
@@ -248,6 +249,36 @@ export default function ContratoTrabajoObreroClient() {
       setLoadingLista(false);
     }
   }, [proyectoId, supabase]);
+
+  const regenerarTodosPdf = useCallback(async () => {
+    if (!contratos.length || regenerandoTodos) return;
+    const okConfirm = window.confirm(
+      `¿Regenerar el PDF de ${contratos.length} contrato(s)? Se actualizarán nacionalidad (V/E) y estado civil (Soltero si falta).`,
+    );
+    if (!okConfirm) return;
+    setRegenerandoTodos(true);
+    let ok = 0;
+    let fail = 0;
+    try {
+      for (const r of contratos) {
+        try {
+          const res = await fetch(
+            apiUrl(`/api/talento/contratos-express/${encodeURIComponent(r.id)}/regenerar-pdf`),
+            { method: 'POST', credentials: 'include' },
+          );
+          const j = (await res.json().catch(() => ({}))) as { ok?: boolean };
+          if (res.ok && j.ok) ok += 1;
+          else fail += 1;
+        } catch {
+          fail += 1;
+        }
+      }
+      if (fail === 0) toast.success(`${ok} PDF regenerado(s)`);
+      else toast.message(`Regenerados: ${ok}. Fallidos: ${fail}.`);
+    } finally {
+      setRegenerandoTodos(false);
+    }
+  }, [contratos, regenerandoTodos]);
 
   useEffect(() => {
     void cargarOpciones();
@@ -726,15 +757,33 @@ export default function ContratoTrabajoObreroClient() {
                   Contratos de trabajo de esta obra (PDF generado).
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => void cargarContratos()}
-                disabled={loadingLista || !proyectoId}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-white/10 disabled:opacity-50"
-              >
-                <RefreshCw className={`h-3.5 w-3.5 ${loadingLista ? 'animate-spin' : ''}`} />
-                Actualizar
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                {contratos.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => void regenerarTodosPdf()}
+                    disabled={regenerandoTodos || loadingLista || !proyectoId}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/35 bg-amber-950/40 px-3 py-2 text-xs font-semibold text-amber-100 hover:bg-amber-900/50 disabled:opacity-50"
+                    title="Regenerar todos los PDF con nacionalidad V/E y estado civil actualizado"
+                  >
+                    {regenerandoTodos ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-3.5 w-3.5" />
+                    )}
+                    Regenerar PDFs
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => void cargarContratos()}
+                  disabled={loadingLista || !proyectoId}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-white/10 disabled:opacity-50"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${loadingLista ? 'animate-spin' : ''}`} />
+                  Actualizar
+                </button>
+              </div>
             </div>
 
             <div className="block space-y-1.5">
@@ -815,7 +864,8 @@ export default function ContratoTrabajoObreroClient() {
                   </tbody>
                 </table>
                 <p className="border-t border-white/10 px-3 py-2 text-[11px] text-zinc-500">
-                  {contratos.length} contratado{contratos.length === 1 ? '' : 's'}
+                  {contratos.length} contratado{contratos.length === 1 ? '' : 's'}. Icono PDF → Regenerar
+                  PDF (uno) o use «Regenerar PDFs» arriba (todos).
                 </p>
               </div>
             )}
