@@ -145,7 +145,7 @@ export default function FormularioEvaluacionColor({ token, nombre, onFinalizar }
             return (
               <div className="space-y-4">
                 <p className="text-sm font-medium text-zinc-200">
-                  ¿Cuál te queda mejor en la obra? Escoge una:
+                  En la obra, ¿qué haces tú?
                 </p>
                 {(
                   [
