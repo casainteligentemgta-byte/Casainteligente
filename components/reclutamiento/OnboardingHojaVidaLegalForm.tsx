@@ -49,17 +49,29 @@ function Sec({ title, children }: { title: string; children: React.ReactNode }) 
 
 export default function OnboardingHojaVidaLegalForm({ value, onChange, cargoFijo = '' }: Props) {
   const cargoBloqueado = (cargoFijo.trim() || value.contratacion.cargoUOficio || '').trim();
+  const ivssBloqueado = value.datosPersonales.inscripcionIvss;
   const commit = (next: HojaVidaObreroCompleta) => {
-    // Siempre reescribe el cargo con el valor fijado por RRHH.
+    // Cargo e inscripción IVSS los define RRHH; el obrero no los modifica.
     onChange({
       ...next,
       contratacion: { cargoUOficio: cargoBloqueado },
+      datosPersonales: {
+        ...next.datosPersonales,
+        inscripcionIvss: ivssBloqueado,
+      },
     });
   };
 
   const d = value.datosPersonales;
   const setDp = (patch: Partial<typeof d>) =>
-    commit({ ...value, datosPersonales: { ...value.datosPersonales, ...patch } });
+    commit({
+      ...value,
+      datosPersonales: {
+        ...value.datosPersonales,
+        ...patch,
+        inscripcionIvss: ivssBloqueado,
+      },
+    });
 
   const setIns = (patch: Partial<(typeof value)['instruccionCapacitacion']>) =>
     commit({ ...value, instruccionCapacitacion: { ...value.instruccionCapacitacion, ...patch } });
@@ -191,7 +203,17 @@ export default function OnboardingHojaVidaLegalForm({ value, onChange, cargoFijo
             onChange={(e) => setDp({ direccionDomicilio: e.target.value })}
           />
         </label>
-        <SiNoField label="Inscripción IVSS" value={d.inscripcionIvss} onChange={(v) => setDp({ inscripcionIvss: v })} />
+        <div className="sm:col-span-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+          <p className="font-semibold text-slate-900">Inscripción IVSS</p>
+          <p className="mt-0.5 text-[11px] text-slate-500">
+            Lo completa RRHH. El obrero no responde esta pregunta aquí.
+          </p>
+          {d.inscripcionIvss === 'si' || d.inscripcionIvss === 'no' ? (
+            <p className="mt-1 text-sm font-semibold text-slate-900">
+              {d.inscripcionIvss === 'si' ? 'Sí' : 'No'}
+            </p>
+          ) : null}
+        </div>
         <SiNoField label="Zurdo" value={d.zurdo} onChange={(v) => setDp({ zurdo: v })} />
       </Sec>
 

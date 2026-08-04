@@ -9,6 +9,7 @@ import {
   nombreCompletoDesde,
   parseHojaVidaObreroJson,
   type HojaVidaObreroCompleta,
+  type SiNo,
 } from '@/lib/talento/hojaVidaObreroCompleta';
 import type { PlanillaPatronoCampos } from '@/lib/talento/planillaPatronoTypes';
 import { resolvePlanillaPatronoParaEmpleado } from '@/lib/talento/resolvePlanillaPatronoPdf';
@@ -108,6 +109,8 @@ function HojaDeVidaMovilInner({ params }: Props) {
   const [redirectSeg, setRedirectSeg] = useState<number | null>(null);
   /** Cargo fijado por la invitación / RRHH; no editable por el obrero. */
   const [cargoOficioFijo, setCargoOficioFijo] = useState('');
+  /** Inscripción IVSS la define RRHH; el obrero no la responde. */
+  const [inscripcionIvssFija, setInscripcionIvssFija] = useState<SiNo>('');
 
   useEffect(() => {
     if (step !== 4) return;
@@ -173,6 +176,7 @@ function HojaDeVidaMovilInner({ params }: Props) {
             String(rowLeg.rol_buscado || rowLeg.cargo || '').trim();
           hvLeg.contratacion.cargoUOficio = cargoLeg;
           setCargoOficioFijo(cargoLeg);
+          setInscripcionIvssFija(hvLeg.datosPersonales.inscripcionIvss);
           setLegal(hvLeg);
           setFormData((prev) => ({
             ...prev,
@@ -201,6 +205,7 @@ function HojaDeVidaMovilInner({ params }: Props) {
           String(row.rol_buscado || row.cargo || '').trim();
         hv.contratacion.cargoUOficio = cargoFijo;
         setCargoOficioFijo(cargoFijo);
+        setInscripcionIvssFija(hv.datosPersonales.inscripcionIvss);
         setLegal(hv);
         setFormData((prev) => ({
           ...prev,
@@ -308,6 +313,8 @@ function HojaDeVidaMovilInner({ params }: Props) {
         cedulaIdentidad: legal.datosPersonales.cedulaIdentidad.trim() || formData.cedula.trim(),
         fotoCedulaUrl: fotoCedUrl ?? legal.datosPersonales.fotoCedulaUrl,
         fotoUrl: fotoPerUrl ?? legal.datosPersonales.fotoUrl,
+        // Inscripción IVSS: solo RRHH.
+        inscripcionIvss: inscripcionIvssFija,
       },
       pesoMedidas: {
         ...legal.pesoMedidas,
