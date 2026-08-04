@@ -125,13 +125,6 @@ function EvaluacionObreroPageInner() {
   }
 
   if (resultado) {
-    const colorSemaforo =
-      resultado.semaforo === 'verde'
-        ? 'text-emerald-400'
-        : resultado.semaforo === 'amarillo'
-          ? 'text-amber-400'
-          : 'text-red-400';
-
     return (
       <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-zinc-900 border border-zinc-800 p-8 rounded-2xl text-center">
@@ -150,16 +143,6 @@ function EvaluacionObreroPageInner() {
           <p className="text-zinc-400 text-sm mb-6">
             Gracias, {candidateData?.nombre}. Tus respuestas han sido registradas.
           </p>
-
-          <div className="bg-zinc-950 p-4 rounded-xl mb-6 border border-zinc-800">
-            <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">Resultado preliminar</p>
-            <p className={`text-xl font-bold ${colorSemaforo}`}>
-              Estado:{' '}
-              {resultado.statusEvaluacion === 'pendiente_regularizar'
-                ? 'Pendiente'
-                : (resultado.semaforo ?? '').toUpperCase()}
-            </p>
-          </div>
 
           <p className="text-xs text-zinc-500 leading-relaxed">
             Puedes cerrar esta ventana. El equipo de RRHH revisará tus resultados y se pondrá en
