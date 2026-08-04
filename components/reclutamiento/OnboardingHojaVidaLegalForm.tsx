@@ -206,33 +206,7 @@ export default function OnboardingHojaVidaLegalForm({ value, onChange }: Props) 
         </label>
       </Sec>
 
-      <Sec title="Certificado de antecedentes penales">
-        <SiNoField
-          label="Antecedentes penales"
-          value={value.certificadoAntecedentesPenales.antecedentesPenales}
-          onChange={(v) => setCap({ antecedentesPenales: v })}
-        />
-        <label className="block sm:col-span-2">
-          <span className={lab()}>Expedido por</span>
-          <input
-            className={inpCls()}
-            value={value.certificadoAntecedentesPenales.expedidoPor}
-            onChange={(e) => setCap({ expedidoPor: e.target.value })}
-          />
-        </label>
-        <label className="block">
-          <span className={lab()}>Lugar</span>
-          <input className={inpCls()} value={value.certificadoAntecedentesPenales.lugar} onChange={(e) => setCap({ lugar: e.target.value })} />
-        </label>
-        <label className="block">
-          <span className={lab()}>Fecha de expedición</span>
-          <input
-            className={inpCls()}
-            value={value.certificadoAntecedentesPenales.fechaExpedicion}
-            onChange={(e) => setCap({ fechaExpedicion: e.target.value })}
-          />
-        </label>
-      </Sec>
+      {/* Certificado de antecedentes penales: omitido en onboarding por ahora (sigue en modelo/PDF). */}
 
       <Sec title="Instrucción y capacitación">
         <SiNoField label="Sabe leer" value={value.instruccionCapacitacion.sabeLeer} onChange={(v) => setIns({ sabeLeer: v })} />
