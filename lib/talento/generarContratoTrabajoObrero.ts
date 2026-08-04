@@ -160,13 +160,11 @@ export async function generarContratoTrabajoObrero(
       | string
       | null;
 
-  const payload = {
+  const payloadBase = {
     id: expressId,
     proyecto_id: input.proyecto_id.trim(),
     config_nomina_id: input.config_nomina_id.trim(),
     obrero_nombre: obreroNombreCompleto,
-    obrero_nombres: input.obrero_nombres?.trim() || null,
-    obrero_apellidos: input.obrero_apellidos?.trim() || null,
     obrero_cedula: cedula,
     obrero_direccion: input.obrero_direccion?.trim() || null,
     salario_base_mensual_snapshot: salSnap != null && Number.isFinite(salSnap) ? salSnap : null,
@@ -177,15 +175,46 @@ export async function generarContratoTrabajoObrero(
     horario_semanal_texto: horarioVal,
   };
 
-  const { data, error: insErr } = await admin
-    .from('ci_contratos_express')
-    .insert(payload as never)
-    .select('id')
-    .maybeSingle();
+  const payloadConPartes = {
+    ...payloadBase,
+    obrero_nombres: input.obrero_nombres?.trim() || null,
+    obrero_apellidos: input.obrero_apellidos?.trim() || null,
+  };
+
+  let data: { id?: string } | null = null;
+  let insErr: { message?: string; code?: string } | null = null;
+
+  {
+    const first = await admin
+      .from('ci_contratos_express')
+      .insert(payloadConPartes as never)
+      .select('id')
+      .maybeSingle();
+    data = first.data as { id?: string } | null;
+    insErr = first.error;
+  }
+
+  // Compat: si falta migración 309 (columnas nombres/apellidos), reintentar solo con obrero_nombre.
+  if (
+    insErr &&
+    /obrero_(nombres|apellidos)/i.test(insErr.message ?? '') &&
+    /schema cache|could not find/i.test(insErr.message ?? '')
+  ) {
+    console.warn(
+      '[generarContratoTrabajoObrero] columnas nombres/apellidos ausentes; insertando sin ellas. Aplique migración 309.',
+    );
+    const second = await admin
+      .from('ci_contratos_express')
+      .insert(payloadBase as never)
+      .select('id')
+      .maybeSingle();
+    data = second.data as { id?: string } | null;
+    insErr = second.error;
+  }
 
   if (insErr) {
     console.error('[generarContratoTrabajoObrero] insert', insErr.message);
-    return { ok: false, error: insErr.message, status: 500 };
+    return { ok: false, error: insErr.message ?? 'Error al guardar el contrato', status: 500 };
   }
 
   if (!data || (data as { id?: string }).id !== expressId) {

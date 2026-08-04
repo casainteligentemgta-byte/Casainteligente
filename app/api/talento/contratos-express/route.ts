@@ -18,6 +18,14 @@ export async function GET() {
     .order('created_at', { ascending: false });
 
   if (error) {
+    // Compat pre-migración 309: sin columnas nombres/apellidos.
+    if (/obrero_(nombres|apellidos)/i.test(error.message ?? '')) {
+      const lite = await admin.client
+        .from('ci_contratos_express')
+        .select('id,created_at,obrero_nombre,obrero_cedula,proyecto_id,formalizado_empleado_id,ci_proyectos(nombre)')
+        .order('created_at', { ascending: false });
+      if (!lite.error) return NextResponse.json(lite.data);
+    }
     console.error('[contratos-express GET] error:', error.message);
     return NextResponse.json(
       {

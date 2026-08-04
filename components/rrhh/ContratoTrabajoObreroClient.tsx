@@ -445,6 +445,7 @@ export default function ContratoTrabajoObreroClient() {
         fail += 1;
         done += 1;
         setProgreso({ done, total: pendientes.length });
+        const cargoTxt = (f.cargo ?? '').trim();
         setResultados((prev) =>
           prev.map((r) =>
             r.filaExcel === f.filaExcel
@@ -453,7 +454,9 @@ export default function ContratoTrabajoObreroClient() {
                   status: 'error',
                   error: !proy
                     ? 'Sin proyecto'
-                    : 'Sin cargo/tabulador (columna cargo o selección por defecto)',
+                    : cargoTxt
+                      ? `Cargo «${cargoTxt}» no está en el tabulador; elija un cargo por defecto o corrija el Excel`
+                      : 'Sin cargo/tabulador (columna cargo o selección por defecto)',
                 }
               : r,
           ),
