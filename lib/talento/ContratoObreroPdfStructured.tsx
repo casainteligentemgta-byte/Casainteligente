@@ -558,7 +558,7 @@ export function ContratoObreroPDF({
   const zonaPdf = quitarPalabraSectorEnDomicilio(zonaComparecencia).trim();
   const nacionalidadRep = str(entidad.rep_legal_nacionalidad, phRepNat);
   const estadoCivilRep = str(entidad.rep_legal_estado_civil, phRepEc);
-  const nacionalidadTrab = str(empleado.nacionalidad, '__________');
+  const nacionalidadTrab = str(empleado.nacionalidad, 'venezolano');
   const repCedulaLinea = str(repCedulaGuion, '_______________');
   const compUsdMes =
     parametros.compensacionCulminacionUsdPorMes != null &&
@@ -627,8 +627,8 @@ export function ContratoObreroPDF({
         <Text style={styles.bold}>{estadoCivilRep}</Text>, de este domicilio, titular de la cédula de Identidad número{' '}
         <Text style={styles.bold}>{repCedulaLinea}</Text>, quien a los efectos de este contrato se denominará{' '}
         <Text style={styles.bold}>LA ENTIDAD DE TRABAJO</Text>, por una parte y por la otra el ciudadano{' '}
-        <Text style={styles.bold}>{nombreTrabajador}</Text>, <Text style={styles.bold}>{nacionalidadTrab}</Text>, mayor de edad, hábil en
-        derecho, <Text style={styles.bold}>{estadoCivilTrab}</Text>, titular de la cédula de identidad número{' '}
+        <Text style={styles.bold}>{nombreTrabajador}</Text>, <Text style={styles.bold}>{estadoCivilTrab}</Text>, mayor de edad, hábil en
+        derecho, <Text style={styles.bold}>{nacionalidadTrab}</Text>, titular de la cédula de identidad número{' '}
         <Text style={styles.bold}>{cedulaTrabGuion}</Text>, de este domicilio; quien en lo
         sucesivo se denominará <Text style={styles.bold}>EL TRABAJADOR</Text>, se ha convenido en celebrar, como en efecto se celebra, el
         presente Contrato de Trabajo para una Obra Determinada, conforme a lo establecido en el Artículo 63 de la Ley Orgánica de Trabajo de
