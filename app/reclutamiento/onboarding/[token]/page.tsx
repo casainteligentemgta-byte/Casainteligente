@@ -508,10 +508,6 @@ function HojaDeVidaMovilInner({ params }: Props) {
             >
               <div className="space-y-2">
                 <h2 className="text-3xl font-bold text-white tracking-tight">Hoja de Vida</h2>
-                <p className="text-sm text-[var(--nexus-text-muted)]">
-                  Formulario legal completo (una sola vez). Al contratarte, estos datos rellenan la hoja de empleo; RRHH
-                  solo completa patrono, obra y faltantes. Información confidencial.
-                </p>
               </div>
 
               <GlassCard className="!p-0 overflow-hidden">
