@@ -281,11 +281,11 @@ export default function PreviewPage() {
     if (loading) {
         return (
             <div style={{
-                minHeight: '100vh', background: '#0A0A0F',
+                minHeight: '100vh', background: '#F3F4F6',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontFamily: 'Inter, -apple-system, sans-serif',
             }}>
-                <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: '15px' }}>Cargando presupuesto…</p>
+                <p style={{ color: '#64748B', fontSize: '15px' }}>Cargando presupuesto…</p>
             </div>
         );
     }
@@ -293,13 +293,13 @@ export default function PreviewPage() {
     if (!data) {
         return (
             <div style={{
-                minHeight: '100vh', background: '#0A0A0F',
+                minHeight: '100vh', background: '#F3F4F6',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontFamily: 'Inter, -apple-system, sans-serif',
             }}>
-                <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.4)', maxWidth: '380px', padding: '20px' }}>
+                <div style={{ textAlign: 'center', color: '#64748B', maxWidth: '380px', padding: '20px' }}>
                     <div style={{ fontSize: '48px', marginBottom: '16px' }}>📄</div>
-                    <p style={{ fontSize: '16px', color: 'rgba(255,255,255,0.7)' }}>No hay presupuesto para mostrar.</p>
+                    <p style={{ fontSize: '16px', color: '#0F172A' }}>No hay presupuesto para mostrar.</p>
                     <p style={{ fontSize: '13px', marginTop: '10px', lineHeight: 1.5 }}>
                         Esta pantalla necesita datos: o bien los envía <strong>Ventas</strong> al pulsar <strong>Vista previa</strong> (misma sesión del navegador), o bien abres un guardado con su enlace{' '}
                         <code style={{ fontSize: '11px', color: '#5AC8FA' }}>?id=…</code> desde <strong>Presupuestos</strong>.
@@ -348,18 +348,18 @@ export default function PreviewPage() {
     return (
         <div style={{
             minHeight: '100vh',
-            background: '#0A0A0F',
+            background: '#F3F4F6',
             fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
-            color: 'white',
+            color: '#0F172A',
             paddingBottom: '40px',
         }}>
 
             {/* ── Toolbar (no se imprime) ── */}
             <div className="no-print" style={{
                 position: 'sticky', top: 0, zIndex: 50,
-                background: 'rgba(10,10,15,0.9)',
+                background: 'rgba(255,255,255,0.92)',
                 backdropFilter: 'blur(20px)',
-                borderBottom: '1px solid rgba(255,255,255,0.08)',
+                borderBottom: '1px solid #E2E8F0',
                 padding: '12px 20px',
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             }}>
@@ -368,9 +368,9 @@ export default function PreviewPage() {
                         <Link
                             href="/presupuestos"
                             style={{
-                                background: 'rgba(255,255,255,0.08)', border: 'none',
+                                background: '#F1F5F9', border: '1px solid #E2E8F0',
                                 borderRadius: '10px', padding: '8px 14px',
-                                color: 'rgba(255,255,255,0.6)', fontSize: '13px', fontWeight: 600,
+                                color: '#475569', fontSize: '13px', fontWeight: 600,
                                 cursor: 'pointer', fontFamily: 'inherit',
                                 display: 'flex', alignItems: 'center', gap: '6px', textDecoration: 'none',
                             }}
@@ -385,9 +385,9 @@ export default function PreviewPage() {
                             type="button"
                             onClick={() => window.close()}
                             style={{
-                                background: 'rgba(255,255,255,0.08)', border: 'none',
+                                background: '#F1F5F9', border: '1px solid #E2E8F0',
                                 borderRadius: '10px', padding: '8px 14px',
-                                color: 'rgba(255,255,255,0.6)', fontSize: '13px', fontWeight: 600,
+                                color: '#475569', fontSize: '13px', fontWeight: 600,
                                 cursor: 'pointer', fontFamily: 'inherit',
                                 display: 'flex', alignItems: 'center', gap: '6px',
                             }}
@@ -398,7 +398,7 @@ export default function PreviewPage() {
                             Volver
                         </button>
                     )}
-                    <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '13px' }}>
+                    <span style={{ color: '#64748B', fontSize: '13px' }}>
                         Presupuesto {data.numero}
                     </span>
                 </div>
@@ -455,8 +455,8 @@ export default function PreviewPage() {
                     <button
                         onClick={() => window.print()}
                         style={{
-                            background: 'rgba(255,255,255,0.08)', borderRadius: '12px', padding: '10px 18px',
-                            border: '1px solid rgba(255,255,255,0.1)', color: 'white', fontSize: '13px',
+                            background: '#F8FAFC', borderRadius: '12px', padding: '10px 18px',
+                            border: '1px solid #E2E8F0', color: '#0F172A', fontSize: '13px',
                             fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px'
                         }}
                     >
@@ -496,19 +496,19 @@ export default function PreviewPage() {
                 <div
                     className="presupuesto-sin-fotos-producto"
                     style={{
-                    background: 'linear-gradient(160deg, #111118 0%, #0D0D14 100%)',
-                    border: '1px solid rgba(255,255,255,0.08)',
-                    borderRadius: '24px',
+                    background: '#FFFFFF',
+                    border: '1px solid #E2E8F0',
+                    borderRadius: '16px',
                     overflow: 'hidden',
-                    boxShadow: '0 32px 80px rgba(0,0,0,0.6)',
+                    boxShadow: '0 12px 40px rgba(15,23,42,0.08)',
                 }}
                 >
 
                     {/* ── Header del documento ── */}
                     <div style={{
-                        background: 'linear-gradient(135deg, #0D1B2A 0%, #0A1628 100%)',
+                        background: '#FFFFFF',
                         padding: '28px 32px 24px',
-                        borderBottom: '1px solid rgba(255,255,255,0.06)',
+                        borderBottom: '1px solid #E2E8F0',
                     }}>
                         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                             {/* Logo + empresa */}
@@ -519,9 +519,9 @@ export default function PreviewPage() {
                                         height: '52px',
                                         borderRadius: '14px',
                                         flexShrink: 0,
-                                        boxShadow: '0 4px 18px rgba(0,0,0,0.5)',
-                                        border: '1px solid rgba(255,255,255,0.14)',
-                                        background: 'linear-gradient(145deg, #1a2a3a 0%, #0A1628 100%)',
+                                        boxShadow: '0 2px 10px rgba(15,23,42,0.08)',
+                                        border: '1px solid #E2E8F0',
+                                        background: '#FFFFFF',
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
@@ -545,10 +545,10 @@ export default function PreviewPage() {
                                     />
                                 </div>
                                 <div>
-                                    <h2 style={{ fontSize: '18px', fontWeight: 800, color: 'white', letterSpacing: '-0.02em', lineHeight: 1.1 }}>
+                                    <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', lineHeight: 1.1 }}>
                                         {PRESUPUESTO_BRAND.nombreLegal}
                                     </h2>
-                                    <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginTop: '3px', letterSpacing: '0.5px' }}>
+                                    <p style={{ fontSize: '11px', color: '#64748B', marginTop: '3px', letterSpacing: '0.5px' }}>
                                         RIF {PRESUPUESTO_BRAND.rifEmpresa}
                                     </p>
                                 </div>
@@ -556,7 +556,7 @@ export default function PreviewPage() {
 
                             {/* Fecha + número */}
                             <div style={{ textAlign: 'right' }}>
-                                <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.45)', marginBottom: '6px' }}>{data.fecha}</p>
+                                <p style={{ fontSize: '12px', color: '#64748B', marginBottom: '6px' }}>{data.fecha}</p>
                                 <div style={{
                                     background: 'linear-gradient(135deg, #007AFF, #5856D6)',
                                     borderRadius: '10px', padding: '6px 14px',
@@ -574,7 +574,7 @@ export default function PreviewPage() {
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                 {data.cliente ? (
                                     <>
-                                        <h1 style={{ fontSize: '24px', fontWeight: 800, color: 'white', letterSpacing: '-0.02em', marginBottom: '4px' }}>
+                                        <h1 style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', marginBottom: '4px' }}>
                                             {data.cliente.toUpperCase()}
                                         </h1>
 
@@ -588,7 +588,7 @@ export default function PreviewPage() {
                                                         <path d="M15 8h2M15 12h2M7 16h10" />
                                                     </svg>
                                                 </div>
-                                                <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)', fontWeight: 500 }}>
+                                                <span style={{ fontSize: '13px', color: '#475569', fontWeight: 500 }}>
                                                     {data.rif || 'Sin identificación'}
                                                 </span>
                                             </div>
@@ -601,7 +601,7 @@ export default function PreviewPage() {
                                                         <line x1="12" y1="18" x2="12.01" y2="18" />
                                                     </svg>
                                                 </div>
-                                                <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)' }}>
+                                                <span style={{ fontSize: '13px', color: '#475569' }}>
                                                     {data.telefono || 'Teléfono no disp.'}
                                                 </span>
                                             </div>
@@ -614,7 +614,7 @@ export default function PreviewPage() {
                                                         <polyline points="22,6 12,13 2,6" />
                                                     </svg>
                                                 </div>
-                                                <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)' }}>
+                                                <span style={{ fontSize: '13px', color: '#475569' }}>
                                                     {data.email || 'Correo no especificado'}
                                                 </span>
                                             </div>
@@ -627,7 +627,7 @@ export default function PreviewPage() {
                                                             <circle cx="12" cy="10" r="3" />
                                                         </svg>
                                                     </div>
-                                                    <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.55)', lineHeight: 1.35 }}>
+                                                    <span style={{ fontSize: '13px', color: '#64748B', lineHeight: 1.35 }}>
                                                         {data.direccion}
                                                     </span>
                                                 </div>
@@ -635,11 +635,11 @@ export default function PreviewPage() {
                                         </div>
                                     </>
                                 ) : (
-                                    <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.3)', fontStyle: 'italic' }}>Información de cliente no disponible</p>
+                                    <p style={{ fontSize: '14px', color: '#94A3B8', fontStyle: 'italic' }}>Información de cliente no disponible</p>
                                 )}
                             </div>
                             <div style={{ textAlign: 'right' }}>
-                                <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', marginBottom: '2px' }}>Total Pagar</p>
+                                <p style={{ fontSize: '12px', color: '#64748B', marginBottom: '2px' }}>Total Pagar</p>
                                 <p style={{ fontSize: '40px', fontWeight: 800, color: '#34C759', letterSpacing: '-0.04em', lineHeight: 1 }}>
                                     <span style={{ fontSize: '20px', fontWeight: 600 }}>$</span>
                                     {fmt(data.subtotal)}
@@ -654,12 +654,12 @@ export default function PreviewPage() {
                         <div style={{
                             display: 'grid', gridTemplateColumns: '1fr 100px 60px 110px',
                             padding: '12px 32px',
-                            background: 'linear-gradient(90deg, rgba(0,122,255,0.25), rgba(88,86,214,0.15))',
-                            borderBottom: '1px solid rgba(0,122,255,0.2)',
+                            background: '#F1F5F9',
+                            borderBottom: '1px solid #E2E8F0',
                         }}>
                             {['Descripción', 'Precio', 'Cant', 'SubTotal'].map((h, i) => (
                                 <span key={h} style={{
-                                    fontSize: '11px', fontWeight: 700, color: 'white',
+                                    fontSize: '11px', fontWeight: 700, color: '#334155',
                                     letterSpacing: '0.5px', textTransform: 'uppercase',
                                     textAlign: i > 0 ? 'right' : 'left',
                                 }}>
@@ -675,28 +675,28 @@ export default function PreviewPage() {
                                 <div key={idx} style={{
                                     display: 'grid', gridTemplateColumns: '1fr 100px 60px 110px',
                                     padding: '14px 32px',
-                                    borderBottom: '1px solid rgba(255,255,255,0.04)',
-                                    background: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)',
+                                    borderBottom: '1px solid #F1F5F9',
+                                    background: idx % 2 === 0 ? '#FFFFFF' : '#F8FAFC',
                                     transition: 'background 0.15s',
                                 }}>
                                     {/* Solo texto: sin miniatura junto a la descripción */}
                                     <div style={{ minWidth: 0 }}>
-                                        <p style={{ fontSize: '13px', fontWeight: 500, color: 'white', lineHeight: 1.3 }}>
+                                        <p style={{ fontSize: '13px', fontWeight: 500, color: '#0F172A', lineHeight: 1.3 }}>
                                             {lineaPresupuestoTitulo(item.nombre)}
                                             {item.qty > 1 && (
-                                                <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '11px', marginLeft: '6px' }}>
+                                                <span style={{ color: '#94A3B8', fontSize: '11px', marginLeft: '6px' }}>
                                                     (x{item.qty})
                                                 </span>
                                             )}
                                         </p>
                                     </div>
-                                    <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.7)', textAlign: 'right', alignSelf: 'center' }}>
+                                    <p style={{ fontSize: '13px', color: '#475569', textAlign: 'right', alignSelf: 'center' }}>
                                         ${fmt(item.unitPrice)}
                                     </p>
-                                    <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.7)', textAlign: 'right', alignSelf: 'center' }}>
+                                    <p style={{ fontSize: '13px', color: '#475569', textAlign: 'right', alignSelf: 'center' }}>
                                         {item.qty}
                                     </p>
-                                    <p style={{ fontSize: '14px', fontWeight: 600, color: 'white', textAlign: 'right', alignSelf: 'center' }}>
+                                    <p style={{ fontSize: '14px', fontWeight: 600, color: '#0F172A', textAlign: 'right', alignSelf: 'center' }}>
                                         ${fmt(total)}
                                     </p>
                                 </div>
@@ -713,7 +713,7 @@ export default function PreviewPage() {
                     }}>
                         {/* Condiciones */}
                         <div>
-                            <p style={{ fontSize: '11px', fontWeight: 700, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.5px', marginBottom: '8px' }}>
+                            <p style={{ fontSize: '11px', fontWeight: 700, color: '#475569', letterSpacing: '0.5px', marginBottom: '8px' }}>
                                 CONDICIONES:
                             </p>
                             <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', lineHeight: 1.6, maxWidth: '380px' }}>
@@ -721,7 +721,7 @@ export default function PreviewPage() {
                             </p>
                             {data.showZelle !== false && (
                                 <>
-                                    <p style={{ fontSize: '11px', fontWeight: 700, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.5px', marginTop: '12px', marginBottom: '4px' }}>
+                                    <p style={{ fontSize: '11px', fontWeight: 700, color: '#475569', letterSpacing: '0.5px', marginTop: '12px', marginBottom: '4px' }}>
                                         MÉTODO DE PAGO:
                                     </p>
                                     <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', lineHeight: 1.6 }}>
@@ -730,7 +730,7 @@ export default function PreviewPage() {
                                 </>
                             )}
                             <div style={{ marginTop: '12px' }}>
-                                <p style={{ fontSize: '11px', fontWeight: 700, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.5px', marginBottom: '4px' }}>
+                                <p style={{ fontSize: '11px', fontWeight: 700, color: '#475569', letterSpacing: '0.5px', marginBottom: '4px' }}>
                                     NOTAS / CONDICIONES DEL PRESUPUESTO
                                 </p>
                                 <textarea
@@ -768,25 +768,25 @@ export default function PreviewPage() {
                             ].map(row => (
                                 <div key={row.label} style={{
                                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                    background: 'rgba(255,255,255,0.05)',
-                                    border: '1px solid rgba(255,255,255,0.08)',
+                                    background: '#F8FAFC',
+                                    border: '1px solid #E2E8F0',
                                     borderRadius: '10px', padding: '10px 14px',
                                 }}>
-                                    <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.45)', fontWeight: 600 }}>{row.label}</span>
-                                    <span style={{ fontSize: '14px', fontWeight: 700, color: 'white' }}>{row.value}</span>
+                                    <span style={{ fontSize: '11px', color: '#64748B', fontWeight: 600 }}>{row.label}</span>
+                                    <span style={{ fontSize: '14px', fontWeight: 700, color: '#0F172A' }}>{row.value}</span>
                                 </div>
                             ))}
 
                             {/* Total grande */}
                             <div style={{
-                                background: 'linear-gradient(135deg, rgba(52,199,89,0.2), rgba(52,199,89,0.08))',
-                                border: '1px solid rgba(52,199,89,0.3)',
+                                background: '#ECFDF5',
+                                border: '1px solid #A7F3D0',
                                 borderRadius: '12px', padding: '12px 14px',
                                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                                 marginTop: '4px',
                             }}>
-                                <span style={{ fontSize: '13px', fontWeight: 700, color: '#34C759' }}>TOTAL</span>
-                                <span style={{ fontSize: '18px', fontWeight: 800, color: '#34C759' }}>${fmt(data.subtotal)}</span>
+                                <span style={{ fontSize: '13px', fontWeight: 700, color: '#15803D' }}>TOTAL</span>
+                                <span style={{ fontSize: '18px', fontWeight: 800, color: '#15803D' }}>${fmt(data.subtotal)}</span>
                             </div>
                         </div>
                     </div>
@@ -797,16 +797,16 @@ export default function PreviewPage() {
                         display: 'grid',
                         gridTemplateColumns: 'repeat(3, 1fr)',
                         gap: '12px',
-                        background: 'rgba(255,255,255,0.02)',
-                        borderTop: '1px solid rgba(255,255,255,0.05)',
+                        background: '#F8FAFC',
+                        borderTop: '1px solid #E2E8F0',
                     }}>
                         <button
                             onClick={() => window.print()}
                             style={{
-                                background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)',
+                                background: '#FFFFFF', border: '1px solid #E2E8F0',
                                 borderRadius: '16px', padding: '16px 12px',
                                 display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px',
-                                color: 'white', fontSize: '13px', fontWeight: 700, cursor: 'pointer',
+                                color: '#0F172A', fontSize: '13px', fontWeight: 700, cursor: 'pointer',
                             }}
                         >
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="2">
@@ -869,14 +869,14 @@ export default function PreviewPage() {
                 }
                 @media print {
                     .no-print { display: none !important; }
-                    body { background: #0A0A0F !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-                    @page { margin: 0; size: A4; }
+                    body { background: #FFFFFF !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                    @page { margin: 12mm; size: A4; }
                     textarea.preview-notas-field {
                         border: none !important;
                         background: transparent !important;
                         padding: 0 !important;
                         resize: none !important;
-                        color: rgba(255,255,255,0.45) !important;
+                        color: #64748B !important;
                         -webkit-print-color-adjust: exact;
                         print-color-adjust: exact;
                     }
