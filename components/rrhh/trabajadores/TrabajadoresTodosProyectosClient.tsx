@@ -92,7 +92,7 @@ export default function TrabajadoresTodosProyectosClient() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 pb-28 pt-6">
-      <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Casa Inteligente · RRHH</p>
+      <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">RRHH</p>
 
       <header className="mb-6 mt-4">
         <Link
