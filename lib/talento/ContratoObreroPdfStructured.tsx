@@ -177,6 +177,8 @@ export type ParametrosContratoPdf = {
   bonoManualUsd?: number | null;
   textoPuntoEncuentroTransporteSex?: string | null;
   compensacionCulminacionUsdPorMes?: number | null;
+  /** Ciudad domicilio procesal (cláusula DÉCIMA). Default Pampatar. */
+  domicilioProcesalCiudad?: string | null;
 };
 
 export type ContratoObreroDetallePdf = {
@@ -422,8 +424,13 @@ function limpiarNombreRepresentanteLegal(n: string): string {
 /** Texto tras «establecido» en NOVENA (transporte). */
 function fragmentoPuntoEncuentroTransporte(raw: string | null | undefined): string {
   const t0 = (raw ?? '').trim();
-  const t = t0 || 'el sector Jorge Coll (Municipio Maneiro)';
-  return /^en\s/i.test(t) ? t : `en ${t}`;
+  if (!t0) return '_______________________________________________';
+  return /^en\s/i.test(t0) ? t0 : `en ${t0}`;
+}
+
+function ciudadDomicilioProcesal(raw: string | null | undefined): string {
+  const t = (raw ?? '').trim();
+  return t || 'Pampatar';
 }
 
 /** Número USD positivo desde el texto de ingreso semanal tabulador (en-US, es-VE o plano). */
@@ -561,6 +568,7 @@ export function ContratoObreroPDF({
       : 100;
   const compUsdMesTxt = fmtUsdNumeroPlano(compUsdMes);
   const puntoEncTransporte = fragmentoPuntoEncuentroTransporte(parametros.textoPuntoEncuentroTransporteSex);
+  const ciudadProcesal = ciudadDomicilioProcesal(parametros.domicilioProcesalCiudad);
   const fragDomCentroComercial = fragmentosDomicilioCentroComercial(domicilioComparecenciaPdf);
   const textoRegularDomPdf = fragDomCentroComercial
     ? quitarPalabraSectorEnDomicilio(fragDomCentroComercial.textoRegular).trim()
@@ -710,7 +718,11 @@ export function ContratoObreroPDF({
         {` El uso de este servicio es opcional para el trabajador y está sujeto al cumplimiento de las normas de conducta y seguridad dictadas por la empresa durante el trayecto.`}
         {'\n\n'}
         <Text style={styles.bold}>DECIMA (DOMICILIO PROCESAL).</Text>
-        {` Las partes eligen como domicilio especial la ciudad de Pampatar, Estado Nueva Esparta, sometiéndose a sus Tribunales del Trabajo. Se firman dos (2) ejemplares de un mismo tenor y a un solo efecto en la ciudad de Pampatar, a los `}
+        {` Las partes eligen como domicilio especial la ciudad de `}
+        <Text style={styles.bold}>{ciudadProcesal}</Text>
+        {`, Estado Nueva Esparta, sometiéndose a sus Tribunales del Trabajo. Se firman dos (2) ejemplares de un mismo tenor y a un solo efecto en la ciudad de `}
+        <Text style={styles.bold}>{ciudadProcesal}</Text>
+        {`, a los `}
         <Text style={styles.bold}>{diaFirma}</Text> días del mes de <Text style={styles.bold}>{mesFirma}</Text> del año{' '}
         <Text style={styles.bold}>{anioFirma}</Text>.
       </Text>

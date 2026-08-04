@@ -85,6 +85,8 @@ type Proyecto = {
   punto_encuentro_transporte_contrato?: string | null;
   /** Fase técnica / objeto de obra determinada (cláusula PRIMERA). PM una vez por obra. */
   fase_tecnica_contrato?: string | null;
+  /** Ciudad domicilio procesal (cláusula DÉCIMA). Default Pampatar. */
+  domicilio_procesal_contrato?: string | null;
   updated_at?: string;
 };
 
@@ -196,6 +198,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
   const [peHorarioSemanalObra, setPeHorarioSemanalObra] = useState('');
   const [pePuntoEncTransporteContrato, setPePuntoEncTransporteContrato] = useState('');
   const [peFaseTecnicaContrato, setPeFaseTecnicaContrato] = useState('');
+  const [peDomicilioProcesalContrato, setPeDomicilioProcesalContrato] = useState('');
   const [entidades, setEntidades] = useState<EntidadOpt[]>([]);
   const [savingProyecto, setSavingProyecto] = useState(false);
   const [proyectoSaveError, setProyectoSaveError] = useState<string | null>(null);
@@ -394,6 +397,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
     setPeHorarioSemanalObra(proyecto.horario_semanal_obra_default ?? '');
     setPePuntoEncTransporteContrato(proyecto.punto_encuentro_transporte_contrato ?? '');
     setPeFaseTecnicaContrato(proyecto.fase_tecnica_contrato ?? '');
+    setPeDomicilioProcesalContrato(proyecto.domicilio_procesal_contrato ?? '');
     setProyectoSaveError(null);
   }, [proyecto]);
 
@@ -453,10 +457,22 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
       horario_semanal_obra_default: peHorarioSemanalObra.trim() || null,
       punto_encuentro_transporte_contrato: pePuntoEncTransporteContrato.trim() || null,
       fase_tecnica_contrato: peFaseTecnicaContrato.trim() || null,
+      domicilio_procesal_contrato: peDomicilioProcesalContrato.trim() || null,
     };
 
     const intentos: Array<{ patch: Record<string, unknown>; aviso: string | null }> = [
       { patch: { ...payloadCore, ...payloadContrato }, aviso: null },
+      {
+        patch: {
+          ...payloadCore,
+          horario_semanal_obra_default: payloadContrato.horario_semanal_obra_default,
+          punto_encuentro_transporte_contrato:
+            payloadContrato.punto_encuentro_transporte_contrato,
+          fase_tecnica_contrato: payloadContrato.fase_tecnica_contrato,
+        },
+        aviso:
+          'Guardado parcial: aplica sql_editor_310_… (domicilio procesal) en Supabase SQL Editor.',
+      },
       {
         patch: {
           ...payloadCore,
@@ -493,7 +509,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
       }
       const msg = upErr.message ?? '';
       const esSchema =
-        /schema cache|column|punto_encuentro_transporte_contrato|horario_semanal_obra_default|fase_tecnica_contrato/i.test(
+        /schema cache|column|punto_encuentro_transporte_contrato|horario_semanal_obra_default|fase_tecnica_contrato|domicilio_procesal_contrato/i.test(
           msg,
         );
       if (!esSchema) break;
@@ -502,8 +518,8 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
     setSavingProyecto(false);
     if (upErr) {
       setProyectoSaveError(
-        /punto_encuentro_transporte_contrato|schema cache/i.test(upErr.message)
-          ? `${upErr.message} — Ejecute en SQL Editor: supabase/sql_editor_308_ci_proyectos_punto_encuentro_transporte_ensure.sql`
+        /punto_encuentro_transporte_contrato|domicilio_procesal_contrato|schema cache/i.test(upErr.message)
+          ? `${upErr.message} — Ejecute en SQL Editor: supabase/sql_editor_310_ci_proyectos_domicilio_procesal_contrato.sql (y 308 si falta).`
           : upErr.message,
       );
       return;
@@ -567,6 +583,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
       fase_tecnica_contrato: proyecto.fase_tecnica_contrato,
       horario_semanal_obra_default: proyecto.horario_semanal_obra_default,
       punto_encuentro_transporte_contrato: proyecto.punto_encuentro_transporte_contrato,
+      domicilio_procesal_contrato: proyecto.domicilio_procesal_contrato,
     });
   }, [proyecto]);
 
@@ -807,13 +824,17 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-500">
-                    Ubicación (texto) *
+                    Lugar de trabajo / ubicación *
                   </label>
+                  <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-500">
+                    Va a la cláusula QUINTA del contrato. Ej.: Alcaldía de Chacao; instalaciones del cliente…
+                  </p>
                   <input
                     required
                     value={peUbicacion}
                     onChange={(e) => setPeUbicacion(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-sky-500/40"
+                    placeholder="Ej.: Alcaldía de Chacao"
+                    className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-sky-500/40"
                   />
                 </div>
 
@@ -824,7 +845,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                     </p>
                     <p className="mt-1 text-[11px] leading-relaxed text-zinc-400">
                       Completa estos campos al abrir la obra. RRHH los reutiliza al generar cada contrato; no hace falta
-                      pedirlos por obrero.
+                      pedirlos por obrero. El nombre del proyecto va como «obra denominada» en la PRIMERA.
                     </p>
                   </div>
                   <div>
@@ -871,6 +892,20 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                       onChange={(e) => setPePuntoEncTransporteContrato(e.target.value)}
                       rows={2}
                       placeholder="en el sector Jorge Coll (Municipio Maneiro)"
+                      className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-sky-500/40"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-500">
+                      Domicilio procesal (ciudad)
+                    </label>
+                    <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-500">
+                      Cláusula DÉCIMA. Si lo dejas vacío, el PDF usa Pampatar.
+                    </p>
+                    <input
+                      value={peDomicilioProcesalContrato}
+                      onChange={(e) => setPeDomicilioProcesalContrato(e.target.value)}
+                      placeholder="Pampatar"
                       className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-sky-500/40"
                     />
                   </div>

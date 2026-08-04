@@ -140,6 +140,7 @@ async function cargarContextoContrato(client: SupabaseClient, obreroId: string, 
     const selBase =
       'id,nombre,ubicacion_texto,obra_ubicacion,ubicacion,estado,entidad_id,proyecto_modulo_origen_id';
     const selectCandidatos = [
+      `${selBase},horario_semanal_obra_default,punto_encuentro_transporte_contrato,fase_tecnica_contrato,domicilio_procesal_contrato`,
       `${selBase},horario_semanal_obra_default,punto_encuentro_transporte_contrato,fase_tecnica_contrato`,
       `${selBase},horario_semanal_obra_default,punto_encuentro_transporte_contrato`,
       `${selBase},horario_semanal_obra_default`,
@@ -151,7 +152,7 @@ async function cargarContextoContrato(client: SupabaseClient, obreroId: string, 
       if (!prRes.error) break;
       const msg = prRes.error.message || '';
       if (
-        !/schema cache|Could not find|horario_semanal_obra_default|punto_encuentro_transporte_contrato|fase_tecnica_contrato/i.test(
+        !/schema cache|Could not find|horario_semanal_obra_default|punto_encuentro_transporte_contrato|fase_tecnica_contrato|domicilio_procesal_contrato/i.test(
           msg,
         )
       ) {

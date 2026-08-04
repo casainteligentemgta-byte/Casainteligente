@@ -69,7 +69,7 @@ const ETIQUETAS: Record<string, { etiqueta: string; ayuda: string }> = {
   CONTRATO_CESTA_TICKET_USD_SEMANAL: { etiqueta: 'Cesta ticket semanal USD', ayuda: 'Por defecto 10 USD.' },
   CONTRATO_INGRESO_SEMANAL_USD_TOTAL: { etiqueta: 'Ingreso semanal total USD', ayuda: 'Tabulador + bono especial.' },
   CONTRATO_COMPENSACION_CULMINACION_USD: { etiqueta: 'Compensación por culminación USD/mes', ayuda: 'Canon mensual al cierre.' },
-  CONTRATO_DOMICILIO_PROCESAL: { etiqueta: 'Domicilio procesal', ayuda: 'Por defecto Pampatar.' },
+  CONTRATO_DOMICILIO_PROCESAL: { etiqueta: 'Domicilio procesal (ciudad)', ayuda: 'Ciudad de la cláusula DÉCIMA. Default Pampatar si la obra no lo define.' },
   CONTRATO_DIA_FIRMA: { etiqueta: 'Día de firma', ayuda: 'Fecha de firma o ingreso.' },
   CONTRATO_MES_FIRMA: { etiqueta: 'Mes de firma', ayuda: 'Fecha de firma o ingreso.' },
   CONTRATO_ANIO_FIRMA: { etiqueta: 'Año de firma', ayuda: 'Fecha de firma o ingreso.' },
@@ -170,6 +170,8 @@ export type FuentesContratoObrero = {
     punto_encuentro_transporte_contrato?: string | null;
     /** `ci_proyectos.fase_tecnica_contrato` — PM una vez por obra */
     fase_tecnica_contrato?: string | null;
+    /** `ci_proyectos.domicilio_procesal_contrato` — ciudad cláusula DÉCIMA */
+    domicilio_procesal_contrato?: string | null;
   };
   /** Valores por defecto patrono (env, planilla o `ci_entidades`). */
   patron: {
@@ -320,8 +322,9 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
   const horarioCuarta = str(f.contrato.horario_semanal_texto) || CONTRATO_OBRERO_HORARIO_CUARTA_DEFAULT;
   /** Preferir objeto del contrato; si no, fase técnica cargada por el PM en la obra. */
   const faseTecnica = str(f.contrato.objeto_contrato) || str(f.obra.fase_tecnica_contrato);
-  const lugarQuinta =
-    str(f.contrato.lugar_prestacion_servicio) || str(f.obra.ubicacion) || str(f.obra.nombre);
+  /** QUINTA: ubicación de obra; no usar el nombre del proyecto como sustituto. */
+  const lugarQuinta = str(f.contrato.lugar_prestacion_servicio) || str(f.obra.ubicacion);
+  const domicilioProcesal = str(f.obra.domicilio_procesal_contrato) || 'Pampatar';
 
   const fechaFirmaIso = str(f.contrato.fecha_firma_contrato) || new Date().toISOString().slice(0, 10);
   const { dia: diaFirma, mes: mesFirma, anio: anioFirma } = partesFechaFirmaContrato(fechaFirmaIso);
@@ -357,7 +360,7 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
     EMPLEADO_LUGAR_NACIMIENTO: lugarNac,
     EMPLEADO_CELULAR: celular,
     CONTRATO_CARGO_OFICIO: str(f.contrato.cargo_oficio_desempeño) || str(hv?.contratacion?.cargoUOficio),
-    CONTRATO_LUGAR_PRESTACION: str(f.contrato.lugar_prestacion_servicio) || str(f.obra.nombre),
+    CONTRATO_LUGAR_PRESTACION: str(f.contrato.lugar_prestacion_servicio) || str(f.obra.ubicacion),
     CONTRATO_OBJETO: str(f.contrato.objeto_contrato) ? ` ${str(f.contrato.objeto_contrato)}` : '',
     CONTRATO_TIPO_PLAZO: tipoPlazoHuman(f.contrato.tipo_contrato),
     CONTRATO_JORNADA:
@@ -381,7 +384,7 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
     CONTRATO_CESTA_TICKET_USD_SEMANAL: `${CESTATICKET_SEMANAL_USD} USD`,
     CONTRATO_INGRESO_SEMANAL_USD_TOTAL: '__________ USD',
     CONTRATO_COMPENSACION_CULMINACION_USD: '100,00',
-    CONTRATO_DOMICILIO_PROCESAL: 'Pampatar',
+    CONTRATO_DOMICILIO_PROCESAL: domicilioProcesal,
     CONTRATO_DIA_FIRMA: diaFirma,
     CONTRATO_MES_FIRMA: mesFirma,
     CONTRATO_ANIO_FIRMA: anioFirma,
