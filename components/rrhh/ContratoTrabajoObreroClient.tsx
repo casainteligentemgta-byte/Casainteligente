@@ -96,11 +96,13 @@ export default function ContratoTrabajoObreroClient() {
   const [nominas, setNominas] = useState<NominaOpt[]>([]);
   const [loadingOpts, setLoadingOpts] = useState(true);
 
-  /** Si venimos del RRHH de una obra, el proyecto queda fijo (no se vuelve a elegir). */
+  /** Prefill desde URL/contexto RRHH; el usuario siempre puede cambiar la obra. */
   const [proyectoId, setProyectoId] = useState(() =>
     esUuidProyectoModulo(proyectoUrl) ? proyectoUrl : '',
   );
-  const [proyectoFijo, setProyectoFijo] = useState(() => esUuidProyectoModulo(proyectoUrl));
+  const [obraPreseleccionada, setObraPreseleccionada] = useState(() =>
+    esUuidProyectoModulo(proyectoUrl),
+  );
   const [configNominaId, setConfigNominaId] = useState('');
   const [fechaIngreso, setFechaIngreso] = useState(hoyIso);
   const [jornada, setJornada] = useState<'DIURNA' | 'NOCTURNA' | 'MIXTA'>('DIURNA');
@@ -224,15 +226,15 @@ export default function ContratoTrabajoObreroClient() {
   useEffect(() => {
     if (esUuidProyectoModulo(proyectoUrl)) {
       setProyectoId(proyectoUrl);
-      setProyectoFijo(true);
+      setObraPreseleccionada(true);
       guardarProyectoRrhhContexto(proyectoUrl);
       return;
     }
-    // Sin ?proyecto= en la URL: usar última obra del contexto RRHH (Asfaltado, etc.).
+    // Sin ?proyecto=: preseleccionar última obra del contexto, sin bloquear el select.
     const stored = leerProyectoRrhhContexto();
     if (stored) {
-      setProyectoId(stored);
-      setProyectoFijo(true);
+      setProyectoId((prev) => prev || stored);
+      setObraPreseleccionada(true);
     }
   }, [proyectoUrl]);
 
@@ -500,6 +502,12 @@ export default function ContratoTrabajoObreroClient() {
   const validas = filas.filter((f) => f.errores.length === 0).length;
   const invalidas = filas.length - validas;
 
+  function onCambiarObra(id: string) {
+    setProyectoId(id);
+    setObraPreseleccionada(false);
+    if (esUuidProyectoModulo(id)) guardarProyectoRrhhContexto(id);
+  }
+
   function DefaultsObraCargo({ required = true }: { required?: boolean }) {
     return (
       <div className="grid gap-4 sm:grid-cols-2">
@@ -507,33 +515,24 @@ export default function ContratoTrabajoObreroClient() {
           <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
             Obra / proyecto {required ? '*' : ''}
           </span>
-          {proyectoFijo && proyectoId ? (
-            <div className="rounded-xl border border-amber-500/30 bg-amber-950/30 px-3 py-2.5 text-sm text-amber-50">
-              <p className="font-semibold">{proyectoNombre ?? proyectoId.slice(0, 8)}</p>
-              <p className="mt-0.5 text-[10px] text-amber-200/70">
-                Fijado desde RRHH de esta obra — no hace falta volver a seleccionarlo.
-              </p>
-            </div>
-          ) : (
-            <select
-              className={inputClass}
-              value={proyectoId}
-              onChange={(e) => {
-                setProyectoId(e.target.value);
-                if (esUuidProyectoModulo(e.target.value)) {
-                  guardarProyectoRrhhContexto(e.target.value);
-                }
-              }}
-              disabled={loadingOpts}
-            >
-              <option value="">Seleccione…</option>
-              {proyectos.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.nombre}
-                </option>
-              ))}
-            </select>
-          )}
+          <select
+            className={inputClass}
+            value={proyectoId}
+            onChange={(e) => onCambiarObra(e.target.value)}
+            disabled={loadingOpts}
+          >
+            <option value="">Seleccione…</option>
+            {proyectos.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nombre}
+              </option>
+            ))}
+          </select>
+          {obraPreseleccionada && proyectoId ? (
+            <p className="text-[10px] text-amber-200/70">
+              Preseleccionada desde RRHH — cámbiala si la obra es otra (p. ej. Asfaltado).
+            </p>
+          ) : null}
         </div>
         <label className="block space-y-1.5 sm:col-span-2">
           <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
@@ -667,32 +666,24 @@ export default function ContratoTrabajoObreroClient() {
               <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
                 Obra / proyecto *
               </span>
-              {proyectoFijo && proyectoId ? (
-                <div className="rounded-xl border border-amber-500/30 bg-amber-950/30 px-3 py-2.5 text-sm text-amber-50">
-                  <p className="font-semibold">{proyectoNombre ?? 'Obra actual'}</p>
-                  <p className="mt-0.5 text-[10px] text-amber-200/70">Proyecto del contexto RRHH</p>
-                </div>
-              ) : (
-                <select
-                  className={inputClass}
-                  value={proyectoId}
-                  onChange={(e) => {
-                    setProyectoId(e.target.value);
-                    if (esUuidProyectoModulo(e.target.value)) {
-                      guardarProyectoRrhhContexto(e.target.value);
-                      setProyectoFijo(true);
-                    }
-                  }}
-                  disabled={loadingOpts}
-                >
-                  <option value="">Seleccione…</option>
-                  {proyectos.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.nombre}
-                    </option>
-                  ))}
-                </select>
-              )}
+              <select
+                className={inputClass}
+                value={proyectoId}
+                onChange={(e) => onCambiarObra(e.target.value)}
+                disabled={loadingOpts}
+              >
+                <option value="">Seleccione…</option>
+                {proyectos.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.nombre}
+                  </option>
+                ))}
+              </select>
+              {obraPreseleccionada && proyectoId ? (
+                <p className="text-[10px] text-amber-200/70">
+                  Preseleccionada desde RRHH — puedes cambiarla.
+                </p>
+              ) : null}
             </div>
 
             {!proyectoId ? (
