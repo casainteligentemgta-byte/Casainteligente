@@ -476,7 +476,7 @@ export function ContratoObreroPDF({
     '________________________________________________',
   );
   const nombreTrabajador = str(empleado.nombres ?? empleado.nombre_completo, '__________________________________________________');
-  const estadoCivilTrab = str(empleado.estado_civil, '_______________');
+  const estadoCivilTrab = str(empleado.estado_civil, 'Soltero');
   const cedulaTrabGuion = cedulaConGuion(empleado.cedula ?? empleado.documento);
   const domicilioTrab = str(
     empleado.direccion_domicilio ?? empleado.direccion_habitacion,
@@ -558,7 +558,7 @@ export function ContratoObreroPDF({
   const zonaPdf = quitarPalabraSectorEnDomicilio(zonaComparecencia).trim();
   const nacionalidadRep = str(entidad.rep_legal_nacionalidad, phRepNat);
   const estadoCivilRep = str(entidad.rep_legal_estado_civil, phRepEc);
-  const nacionalidadTrab = str(empleado.nacionalidad, 'venezolano');
+  const nacionalidadTrab = str(empleado.nacionalidad, 'venezolana');
   const repCedulaLinea = str(repCedulaGuion, '_______________');
   const compUsdMes =
     parametros.compensacionCulminacionUsdPorMes != null &&

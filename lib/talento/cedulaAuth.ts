@@ -13,6 +13,23 @@ export function normCedulaToken(s: string): string {
 export const CEDULA_VE_NORMALIZADA_REGEX = /^[VE]\d{6,9}$/;
 
 /**
+ * Nacionalidad para contrato según prefijo de cédula:
+ * V → venezolana; E → extranjero. Sin letra reconocible → null.
+ */
+export function nacionalidadDesdeCedula(cedula: string | null | undefined): 'venezolana' | 'extranjero' | null {
+  const t = normCedulaToken(cedula ?? '');
+  if (t.startsWith('V')) return 'venezolana';
+  if (t.startsWith('E')) return 'extranjero';
+  return null;
+}
+
+/** Estado civil en contrato: si falta, «Soltero». */
+export function estadoCivilContratoObrero(raw: string | null | undefined): string {
+  const t = String(raw ?? '').trim();
+  return t || 'Soltero';
+}
+
+/**
  * Número nacional sin prefijo (cédula VE: letra V/E opcional + dígitos).
  * Permite coincidir `V13848186` con `13848186` cuando el expediente y la URL difieren solo en el prefijo.
  */

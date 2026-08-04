@@ -133,9 +133,8 @@ export default function ContratoTrabajoObreroClient() {
   const [fechaIngreso, setFechaIngreso] = useState(hoyIso);
   const [jornada, setJornada] = useState<'DIURNA' | 'NOCTURNA' | 'MIXTA'>('DIURNA');
   const [horarioDefault, setHorarioDefault] = useState('');
-  /** Si la fila del Excel no trae estado civil, se usa este valor. */
-  const [estadoCivilDefault, setEstadoCivilDefault] = useState('');
-  const [nacionalidadDefault, setNacionalidadDefault] = useState('Venezolano');
+  /** Si la fila del Excel no trae estado civil, se usa este valor (default Soltero). */
+  const [estadoCivilDefault, setEstadoCivilDefault] = useState('Soltero');
 
   const [contratos, setContratos] = useState<ContratoRow[]>([]);
   const [loadingLista, setLoadingLista] = useState(false);
@@ -342,8 +341,8 @@ export default function ContratoTrabajoObreroClient() {
         obrero_direccion: direccion.trim() || null,
         obrero_municipio_residencia: municipio.trim() || null,
         obrero_estado_residencia: estadoRes.trim() || null,
-        nacionalidad: nacionalidad.trim() || 'Venezolano',
-        estado_civil: estadoCivil.trim() || null,
+        nacionalidad: null,
+        estado_civil: estadoCivil.trim() || 'Soltero',
         fecha_ingreso: fechaIngreso,
         jornada_trabajo: jornada,
         horario_semanal_texto: horarioDefault.trim() || null,
@@ -425,12 +424,10 @@ export default function ContratoTrabajoObreroClient() {
       return;
     }
 
-    const sinEstadoCivil = pendientes.filter(
-      (f) => !(f.estadoCivil ?? '').trim() && !estadoCivilDefault.trim(),
-    ).length;
+    const sinEstadoCivil = pendientes.filter((f) => !(f.estadoCivil ?? '').trim()).length;
     if (sinEstadoCivil > 0) {
       toast.message(
-        `${sinEstadoCivil} fila(s) sin estado civil: indica uno por defecto abajo o complétalo en el Excel.`,
+        `${sinEstadoCivil} fila(s) sin estado civil: se usará «${estadoCivilDefault.trim() || 'Soltero'}».`,
       );
     }
 
@@ -489,8 +486,8 @@ export default function ContratoTrabajoObreroClient() {
           fecha_ingreso: f.fechaIngreso || fechaIngreso,
           jornada_trabajo: f.jornada || jornada,
           horario_semanal_texto: f.horario || horarioDefault || null,
-          nacionalidad: (f.nacionalidad ?? '').trim() || nacionalidadDefault.trim() || 'Venezolano',
-          estado_civil: (f.estadoCivil ?? '').trim() || estadoCivilDefault.trim() || null,
+          nacionalidad: null,
+          estado_civil: (f.estadoCivil ?? '').trim() || estadoCivilDefault.trim() || 'Soltero',
           objeto_contrato: f.objetoContrato,
           obrero_municipio_residencia: f.municipio,
           obrero_estado_residencia: f.estadoResidencia,
@@ -633,31 +630,23 @@ export default function ContratoTrabajoObreroClient() {
             className={inputClass}
             value={estadoCivilDefault}
             onChange={(e) => setEstadoCivilDefault(e.target.value)}
-            placeholder="Ej.: soltero (si el Excel no lo trae)"
+            placeholder="Soltero"
             list="ci-estado-civil-opts"
           />
           <datalist id="ci-estado-civil-opts">
-            <option value="soltero" />
-            <option value="soltera" />
-            <option value="casado" />
-            <option value="casada" />
-            <option value="unión libre" />
-            <option value="divorciado" />
-            <option value="divorciada" />
-            <option value="viudo" />
-            <option value="viuda" />
+            <option value="Soltero" />
+            <option value="Soltera" />
+            <option value="Casado" />
+            <option value="Casada" />
+            <option value="Unión libre" />
+            <option value="Divorciado" />
+            <option value="Divorciada" />
+            <option value="Viudo" />
+            <option value="Viuda" />
           </datalist>
-        </label>
-        <label className="block space-y-1.5">
-          <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
-            Nacionalidad (por defecto)
-          </span>
-          <input
-            className={inputClass}
-            value={nacionalidadDefault}
-            onChange={(e) => setNacionalidadDefault(e.target.value)}
-            placeholder="Venezolano"
-          />
+          <p className="text-[10px] text-zinc-500">
+            Si el Excel no trae estado civil, se usa este valor. Nacionalidad: V → venezolana, E → extranjero.
+          </p>
         </label>
       </div>
     );
@@ -1022,7 +1011,8 @@ export default function ContratoTrabajoObreroClient() {
               <p className="mt-1">
                 Lugar de trabajo, nombre de obra, fase técnica, punto de encuentro y domicilio procesal
                 salen de la <span className="text-zinc-200">obra seleccionada</span> (datos PM). Completa
-                estado civil en el Excel o usa el valor por defecto abajo.
+                estado civil en el Excel (si falta → Soltero). Nacionalidad según cédula: V = venezolana, E =
+                extranjero.
               </p>
               <p className="mt-1">
                 Si una fila no trae fecha, jornada o bono, se usan los valores por defecto de abajo.
@@ -1105,12 +1095,11 @@ export default function ContratoTrabajoObreroClient() {
                           <td className="px-3 py-2">{(f.jornada || jornada).trim() || '—'}</td>
                           <td className="px-3 py-2">{Number.isFinite(f.bonoUsd) ? f.bonoUsd : '—'}</td>
                           <td className="px-3 py-2">
-                            {(f.estadoCivil ?? '').trim() ||
-                              (estadoCivilDefault.trim() ? (
-                                <span className="text-zinc-500 italic">{estadoCivilDefault.trim()}</span>
-                              ) : (
-                                '—'
-                              ))}
+                            {(f.estadoCivil ?? '').trim() || (
+                              <span className="text-zinc-500 italic">
+                                {estadoCivilDefault.trim() || 'Soltero'}
+                              </span>
+                            )}
                           </td>
                         </tr>
                       );
