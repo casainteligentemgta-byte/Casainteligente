@@ -39,7 +39,7 @@ export const legalPdfStyles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'stretch' },
   /** Carnet: rectángulo vertical (retrato). */
   photoBox: { width: '15%', borderWidth: 1, borderColor: '#000', minHeight: 96, padding: 2 },
-  photoInner: { flex: 1, justifyContent: 'flex-end' },
+  photoInner: { flex: 1, marginTop: 2, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
   /** Cédula: franja apaisada (horizontal). */
   photoCedulaOuter: { borderWidth: 1, borderColor: '#000', padding: 2 },
   photoCedulaSlot: {
@@ -303,7 +303,14 @@ export function IdentificacionTrabajadorPdfBlock({
         <View style={st.photoBox}>
           <Text style={st.cellLabel}>Fotografía tipo carnet (vertical)</Text>
           <View style={st.photoInner}>
-            <Text style={{ fontSize: 5.5, color: '#64748b' }}>{d.fotoUrl.trim() ? '(URL en expediente digital)' : '—'}</Text>
+            {d.fotoUrl.trim() ? (
+              <Image
+                src={d.fotoUrl.trim()}
+                style={{ width: '100%', height: 88, objectFit: 'cover' }}
+              />
+            ) : (
+              <Text style={{ fontSize: 5.5, color: '#64748b' }}>—</Text>
+            )}
           </View>
         </View>
         <View style={{ flex: 1, marginLeft: 4, gap: 0 }}>
@@ -363,9 +370,14 @@ export function IdentificacionTrabajadorPdfBlock({
       <View style={[st.photoCedulaOuter, { marginTop: -1 }]}>
         <Text style={st.cellLabel}>Fotografía de la cédula (apaisada / horizontal)</Text>
         <View style={st.photoCedulaSlot}>
-          <Text style={{ fontSize: 5.5, color: '#64748b' }}>
-            {d.fotoCedulaUrl.trim() ? '(URL en expediente digital)' : '—'}
-          </Text>
+          {d.fotoCedulaUrl.trim() ? (
+            <Image
+              src={d.fotoCedulaUrl.trim()}
+              style={{ width: '100%', maxHeight: 26, objectFit: 'contain' }}
+            />
+          ) : (
+            <Text style={{ fontSize: 5.5, color: '#64748b' }}>—</Text>
+          )}
         </View>
       </View>
     </>
