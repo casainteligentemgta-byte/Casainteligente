@@ -2,6 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { Download, Printer, Share2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import { ModalCompletarContrato } from '@/components/talento/ModalCompletarContrato';
@@ -169,6 +170,81 @@ function PlanillaIframe() {
 
   const pdfHref = src ?? '';
   const labelActivo = docTipo === 'hoja_empleo' ? 'Hoja de empleo' : 'Hoja de vida';
+  const nombreArchivoPdf = `${docTipo === 'hoja_empleo' ? 'hoja-empleo' : 'hoja-vida'}-${cedula || 'documento'}.pdf`;
+
+  async function descargarPdf() {
+    if (!pdfObjectUrl) {
+      toast.error('El PDF aún no está listo');
+      return;
+    }
+    try {
+      const a = document.createElement('a');
+      a.href = pdfObjectUrl;
+      a.download = nombreArchivoPdf;
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch {
+      toast.error('No se pudo descargar el PDF');
+    }
+  }
+
+  function imprimirPdf() {
+    if (!pdfObjectUrl) {
+      toast.error('El PDF aún no está listo');
+      return;
+    }
+    const w = window.open(pdfObjectUrl, '_blank', 'noopener,noreferrer');
+    if (!w) {
+      toast.message('Abre el PDF en otra pestaña e imprime desde allí');
+      return;
+    }
+    const tryPrint = () => {
+      try {
+        w.focus();
+        w.print();
+      } catch {
+        /* el visor del navegador puede tardar */
+      }
+    };
+    w.addEventListener('load', () => setTimeout(tryPrint, 400));
+    setTimeout(tryPrint, 1200);
+  }
+
+  async function compartirPdf() {
+    if (!pdfObjectUrl) {
+      toast.error('El PDF aún no está listo');
+      return;
+    }
+    try {
+      const res = await fetch(pdfObjectUrl);
+      const blob = await res.blob();
+      const file = new File([blob], nombreArchivoPdf, { type: 'application/pdf' });
+      const nav = navigator as Navigator & {
+        share?: (data: ShareData) => Promise<void>;
+        canShare?: (data: ShareData) => boolean;
+      };
+      if (typeof nav.share === 'function') {
+        const data: ShareData = {
+          title: labelActivo,
+          text: `${labelActivo} · ${cedula}`,
+          files: [file],
+        };
+        if (!nav.canShare || nav.canShare(data)) {
+          await nav.share(data);
+          return;
+        }
+        await nav.share({ title: labelActivo, text: `${labelActivo} · ${cedula}`, url: window.location.href });
+        return;
+      }
+      await descargarPdf();
+      toast.message('Descargado. Compártelo desde tus archivos o WhatsApp.');
+    } catch (e) {
+      if (e instanceof Error && e.name === 'AbortError') return;
+      toast.error('No se pudo compartir. Prueba descargar el PDF.');
+    }
+  }
 
   return (
     <div className="flex h-[100dvh] flex-col bg-[#0A0A0F]">
@@ -212,6 +288,36 @@ function PlanillaIframe() {
               Generar contrato
             </button>
           ) : null}
+          <button
+            type="button"
+            onClick={() => imprimirPdf()}
+            disabled={!pdfObjectUrl || Boolean(loadError)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-semibold text-zinc-100 hover:bg-white/10 disabled:opacity-40"
+            title="Imprimir"
+          >
+            <Printer className="h-3.5 w-3.5" aria-hidden />
+            Imprimir
+          </button>
+          <button
+            type="button"
+            onClick={() => void compartirPdf()}
+            disabled={!pdfObjectUrl || Boolean(loadError)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-sky-500/35 bg-sky-500/15 px-3 py-1.5 text-xs font-semibold text-sky-100 hover:bg-sky-500/25 disabled:opacity-40"
+            title="Compartir"
+          >
+            <Share2 className="h-3.5 w-3.5" aria-hidden />
+            Compartir
+          </button>
+          <button
+            type="button"
+            onClick={() => void descargarPdf()}
+            disabled={!pdfObjectUrl || Boolean(loadError)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/35 bg-amber-500/15 px-3 py-1.5 text-xs font-semibold text-amber-100 hover:bg-amber-500/25 disabled:opacity-40"
+            title="Descargar PDF"
+          >
+            <Download className="h-3.5 w-3.5" aria-hidden />
+            Descargar
+          </button>
           <a
             href={pdfHref}
             target="_blank"
