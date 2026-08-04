@@ -708,29 +708,29 @@ export default function PreviewPage() {
                     <div style={{
                         display: 'grid', gridTemplateColumns: '1fr auto',
                         gap: '24px', padding: '24px 32px',
-                        borderTop: '1px solid rgba(255,255,255,0.06)',
-                        background: 'rgba(0,0,0,0.2)',
+                        borderTop: '1px solid #E2E8F0',
+                        background: '#FFFFFF',
                     }}>
                         {/* Condiciones */}
                         <div>
-                            <p style={{ fontSize: '11px', fontWeight: 700, color: '#475569', letterSpacing: '0.5px', marginBottom: '8px' }}>
+                            <p style={{ fontSize: '11px', fontWeight: 700, color: '#334155', letterSpacing: '0.5px', marginBottom: '8px' }}>
                                 CONDICIONES:
                             </p>
-                            <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', lineHeight: 1.6, maxWidth: '380px' }}>
+                            <p style={{ fontSize: '11px', color: '#64748B', lineHeight: 1.6, maxWidth: '380px' }}>
                                 {PRESUPUESTO_BRAND.condicionesDefault.replace(/\s+/g, ' ').trim()}
                             </p>
                             {data.showZelle !== false && (
                                 <>
-                                    <p style={{ fontSize: '11px', fontWeight: 700, color: '#475569', letterSpacing: '0.5px', marginTop: '12px', marginBottom: '4px' }}>
+                                    <p style={{ fontSize: '11px', fontWeight: 700, color: '#334155', letterSpacing: '0.5px', marginTop: '12px', marginBottom: '4px' }}>
                                         MÉTODO DE PAGO:
                                     </p>
-                                    <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', lineHeight: 1.6 }}>
+                                    <p style={{ fontSize: '11px', color: '#64748B', lineHeight: 1.6 }}>
                                         {textoMetodosPago()}
                                     </p>
                                 </>
                             )}
                             <div style={{ marginTop: '12px' }}>
-                                <p style={{ fontSize: '11px', fontWeight: 700, color: '#475569', letterSpacing: '0.5px', marginBottom: '4px' }}>
+                                <p style={{ fontSize: '11px', fontWeight: 700, color: '#334155', letterSpacing: '0.5px', marginBottom: '4px' }}>
                                     NOTAS / CONDICIONES DEL PRESUPUESTO
                                 </p>
                                 <textarea
@@ -745,9 +745,9 @@ export default function PreviewPage() {
                                         boxSizing: 'border-box',
                                         fontSize: '11px',
                                         lineHeight: 1.6,
-                                        color: 'rgba(255,255,255,0.85)',
-                                        background: 'rgba(255,255,255,0.06)',
-                                        border: '1px solid rgba(255,255,255,0.12)',
+                                        color: '#0F172A',
+                                        background: '#F8FAFC',
+                                        border: '1px solid #E2E8F0',
                                         borderRadius: '8px',
                                         padding: '10px 12px',
                                         fontFamily: 'inherit',
