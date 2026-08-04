@@ -1,7 +1,17 @@
 'use client';
 
 import Link from 'next/link';
-import { Brain, ClipboardList, FileText, HardHat, ScrollText, UserCog, UserRound, Users } from 'lucide-react';
+import {
+  Brain,
+  ClipboardList,
+  FileText,
+  HardHat,
+  ScrollText,
+  UserCog,
+  UserRound,
+  Users,
+  Wallet,
+} from 'lucide-react';
 import { hrefListaContratosExpress } from '@/lib/talento/hrefListaContratosExpress';
 import { leerProyectoRrhhContexto } from '@/lib/rrhh/proyectoRrhhContexto';
 import {
@@ -37,6 +47,9 @@ export default function RrhhSubnavEnlaces({
   });
   const hrefEquipoRec = `${hrefRrhhHub({ proyectoModuloId: mod })}#equipo-recomendado`;
   const hrefExpress = hrefListaContratosExpress({ proyectoModuloId: mod });
+  const hrefNomina = mod
+    ? `/rrhh/nomina?proyecto_modulo=${encodeURIComponent(mod)}`
+    : '/rrhh/nomina';
 
   return (
     <nav
@@ -99,6 +112,14 @@ export default function RrhhSubnavEnlaces({
       >
         <FileText className="h-3.5 w-3.5 shrink-0" aria-hidden />
         <span className="truncate">Express</span>
+      </Link>
+      <Link
+        href={hrefNomina}
+        title="Nómina: contratados activos del proyecto"
+        className={`${rrhhSubnavBtnClass} border-emerald-500/40 bg-emerald-950/45 text-emerald-100 hover:bg-emerald-900/55`}
+      >
+        <Wallet className="h-3.5 w-3.5 shrink-0" aria-hidden />
+        <span className="truncate">Nómina</span>
       </Link>
       <Link
         href="/rrhh/oficios-salarios"

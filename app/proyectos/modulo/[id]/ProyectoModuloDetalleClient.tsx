@@ -628,7 +628,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
             nombreObra={proyecto.nombre}
             className="mt-4"
           />
-          <CuadroNominaContratados proyectoModuloId={id} titulo="Contratados — nómina del proyecto" />
+          <CuadroNominaContratados proyectoModuloId={id} titulo="Contratados activos" />
           <DashboardUtilidadReal proyectoId={id} className="" />
         </div>
       );

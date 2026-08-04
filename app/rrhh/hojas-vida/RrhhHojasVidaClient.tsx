@@ -270,10 +270,12 @@ export default function RrhhHojasVidaClient() {
 
           {obraUnicaId && obraSeleccionada ? (
             <>
-              <CuadroNominaContratados
-                proyectoModuloId={obraUnicaId}
-                titulo="Contratados — nómina del proyecto"
-              />
+              <div id="nomina" className="scroll-mt-24">
+                <CuadroNominaContratados
+                  proyectoModuloId={obraUnicaId}
+                  titulo="Contratados activos"
+                />
+              </div>
               <div id="equipo-recomendado" className="scroll-mt-24">
                 <SugerenciaCuadrilla
                   nombreObra={obraSeleccionada.nombre}
