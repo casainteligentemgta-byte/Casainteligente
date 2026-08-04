@@ -83,7 +83,7 @@ export default function RrhhSubnavEnlaces({
         className={`${rrhhSubnavBtnClass} border-sky-500/40 bg-sky-950/45 text-sky-100 hover:bg-sky-900/55`}
       >
         <UserRound className="h-3.5 w-3.5 shrink-0" aria-hidden />
-        <span className="truncate">Hojas de vida</span>
+        <span className="truncate">Banca de obreros</span>
       </Link>
       <Link
         href="/rrhh/evaluaciones"
