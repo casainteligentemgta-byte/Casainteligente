@@ -50,8 +50,6 @@ export default function OnboardingHojaVidaLegalForm({ value, onChange }: Props) 
   const setDp = (patch: Partial<typeof d>) =>
     onChange({ ...value, datosPersonales: { ...value.datosPersonales, ...patch } });
 
-  const setCon = (cargoUOficio: string) => onChange({ ...value, contratacion: { cargoUOficio } });
-
   const setCap = (patch: Partial<(typeof value)['certificadoAntecedentesPenales']>) =>
     onChange({
       ...value,
