@@ -120,7 +120,7 @@ export default function FormularioEvaluacionColor({ token, nombre, onFinalizar }
     <div className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-between bg-zinc-950 px-4 py-6 text-zinc-100">
       <header>
         <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-500">
-          Evaluación · tipo de color
+          Evaluación
         </p>
         <p className="mt-1 text-sm text-zinc-400">Hola, {nombre}</p>
         <div className="mt-4 flex items-center justify-between text-xs text-zinc-500">

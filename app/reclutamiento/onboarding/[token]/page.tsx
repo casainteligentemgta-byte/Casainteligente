@@ -650,8 +650,7 @@ function HojaDeVidaMovilInner({ params }: Props) {
               </div>
               <h2 className="text-3xl font-bold text-white tracking-tight">¡Hoja de vida enviada!</h2>
               <p className="text-[var(--nexus-text-muted)] max-w-sm mx-auto">
-                Ya se generó tu hoja de vida. A continuación harás la evaluación: primero el tipo de color y luego la
-                prueba de admisión.
+                Ya se generó tu hoja de vida. A continuación harás la evaluación.
               </p>
               
               <div className="flex flex-col gap-3 max-w-sm mx-auto">
