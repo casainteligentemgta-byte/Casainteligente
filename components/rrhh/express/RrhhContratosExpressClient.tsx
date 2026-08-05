@@ -10,13 +10,19 @@ import AccionesContratoPdfFila from '@/components/rrhh/AccionesContratoPdfFila';
 import RrhhSubnavEnlaces from '@/components/rrhh/RrhhSubnavEnlaces';
 import { Button } from '@/components/ui/button';
 import {
-  parseCsvContratosExpress,
+  descargarPlantillaXlsxContratosExpress,
+  parseArchivoContratosExpress,
   PLANTILLA_CSV_CONTRATOS_EXPRESS,
   type FilaCsvContratoExpress,
 } from '@/lib/talento/parseCsvContratosExpress';
 
 type EntidadOpt = { id: string; nombre: string };
-type ProyectoOpt = { id: string; nombre: string; entidad_id: string | null };
+type ProyectoOpt = {
+  id: string;
+  nombre: string;
+  entidad_id: string | null;
+  proyecto_modulo_origen_id?: string | null;
+};
 type ExpressRow = {
   id: string;
   created_at: string;
@@ -26,6 +32,23 @@ type ExpressRow = {
   bono_manual_usd?: number | null;
   formalizado_empleado_id?: string | null;
 };
+
+/** Entidad patrono de la obra; si falta, toma la del módulo integral padre. */
+async function resolverEntidadIdProyecto(
+  supabase: ReturnType<typeof createClient>,
+  proyecto: Pick<ProyectoOpt, 'entidad_id' | 'proyecto_modulo_origen_id'>,
+): Promise<string | null> {
+  const directa = (proyecto.entidad_id ?? '').trim();
+  if (directa) return directa;
+  const padreId = (proyecto.proyecto_modulo_origen_id ?? '').trim();
+  if (!padreId) return null;
+  const { data } = await supabase
+    .from('ci_proyectos')
+    .select('entidad_id')
+    .eq('id', padreId)
+    .maybeSingle();
+  return ((data as { entidad_id?: string | null } | null)?.entidad_id ?? '').trim() || null;
+}
 
 type ResultadoMasivo =
   | { fila: number; ok: true; id: string; obrero: string; cedula: string; cargo?: string }
@@ -65,10 +88,31 @@ export default function RrhhContratosExpressClient() {
   const loadMeta = useCallback(async () => {
     setLoadingMeta(true);
     try {
-      const [entRes, proyRes] = await Promise.all([
-        supabase.from('ci_entidades').select('id,nombre,nombre_legal').order('nombre'),
-        supabase.from('ci_proyectos').select('id,nombre,entidad_id').order('nombre').limit(800),
-      ]);
+      const entRes = await supabase.from('ci_entidades').select('id,nombre,nombre_legal').order('nombre');
+
+      let proyData: unknown[] | null = null;
+      let proyErr: { message?: string } | null = null;
+      {
+        const full = await supabase
+          .from('ci_proyectos')
+          .select('id,nombre,entidad_id,proyecto_modulo_origen_id')
+          .order('nombre')
+          .limit(800);
+        proyData = full.data as unknown[] | null;
+        proyErr = full.error;
+        if (
+          proyErr &&
+          /proyecto_modulo_origen_id|42703|column|does not exist|schema cache/i.test(proyErr.message ?? '')
+        ) {
+          const bare = await supabase
+            .from('ci_proyectos')
+            .select('id,nombre,entidad_id')
+            .order('nombre')
+            .limit(800);
+          proyData = bare.data as unknown[] | null;
+          proyErr = bare.error;
+        }
+      }
 
       const ents = ((entRes.data ?? []) as { id: string; nombre?: string | null; nombre_legal?: string | null }[]).map(
         (e) => ({
@@ -78,8 +122,7 @@ export default function RrhhContratosExpressClient() {
       );
       setEntidades(ents);
 
-      const proys = ((proyRes.data ?? []) as ProyectoOpt[]).filter((p) => p.id);
-      setProyectos(proys);
+      let proys = ((proyData ?? []) as ProyectoOpt[]).filter((p) => p.id);
 
       const qsProy = (searchParams.get('proyecto') ?? searchParams.get('obra') ?? '').trim();
       const qsEnt = (searchParams.get('entidad') ?? '').trim();
@@ -87,9 +130,47 @@ export default function RrhhContratosExpressClient() {
       let nextEnt = qsEnt;
       let nextProy = qsProy;
 
-      if (nextProy && proys.some((p) => p.id === nextProy)) {
-        const p = proys.find((x) => x.id === nextProy)!;
-        if (!nextEnt && p.entidad_id) nextEnt = p.entidad_id;
+      // Obra en URL: entidad patrono = la de ese proyecto (p. ej. Asfaltado → DIMAQUINAS).
+      if (nextProy) {
+        let p = proys.find((x) => x.id === nextProy) ?? null;
+        if (!p) {
+          let oneData: unknown = null;
+          const fullOne = await supabase
+            .from('ci_proyectos')
+            .select('id,nombre,entidad_id,proyecto_modulo_origen_id')
+            .eq('id', nextProy)
+            .maybeSingle();
+          oneData = fullOne.data;
+          if (
+            fullOne.error &&
+            /proyecto_modulo_origen_id|42703|column|does not exist|schema cache/i.test(
+              fullOne.error.message ?? '',
+            )
+          ) {
+            const bareOne = await supabase
+              .from('ci_proyectos')
+              .select('id,nombre,entidad_id')
+              .eq('id', nextProy)
+              .maybeSingle();
+            oneData = bareOne.data;
+          }
+          if (oneData && (oneData as ProyectoOpt).id) {
+            p = oneData as ProyectoOpt;
+            proys = [p, ...proys.filter((x) => x.id !== p!.id)];
+          }
+        }
+        if (p) {
+          let eid = await resolverEntidadIdProyecto(supabase, p);
+          // Respaldo: obras Asfaltado sin entidad_id → DIMAQUINAS (patrono habitual).
+          if (!eid && /asfalt/i.test(p.nombre ?? '')) {
+            eid = ents.find((e) => /dimaquinas/i.test(e.nombre))?.id ?? null;
+          }
+          if (eid) {
+            nextEnt = eid;
+            p = { ...p, entidad_id: eid };
+            proys = proys.map((x) => (x.id === p!.id ? p! : x));
+          }
+        }
       } else if (nextEnt) {
         const first = proys.find((p) => p.entidad_id === nextEnt);
         nextProy = first?.id ?? '';
@@ -98,12 +179,23 @@ export default function RrhhContratosExpressClient() {
         if (dima) {
           nextEnt = dima.id;
           const asfalt = proys.find(
-            (p) => p.entidad_id === dima.id && /asfalt/i.test(p.nombre ?? ''),
+            (p) => (p.entidad_id === dima.id || !p.entidad_id) && /asfalt/i.test(p.nombre ?? ''),
           );
           nextProy = asfalt?.id ?? proys.find((p) => p.entidad_id === dima.id)?.id ?? '';
+          if (nextProy) {
+            const p = proys.find((x) => x.id === nextProy);
+            if (p && !p.entidad_id) {
+              const eid = await resolverEntidadIdProyecto(supabase, p);
+              if (eid) {
+                nextEnt = eid;
+                proys = proys.map((x) => (x.id === p.id ? { ...x, entidad_id: eid } : x));
+              }
+            }
+          }
         }
       }
 
+      setProyectos(proys);
       setEntidadId(nextEnt);
       setProyectoId(nextProy);
       setEntidadNombre(ents.find((e) => e.id === nextEnt)?.nombre ?? null);
@@ -184,15 +276,24 @@ export default function RrhhContratosExpressClient() {
     }
   }
 
-  function onChangeProyecto(id: string) {
+  async function onChangeProyecto(id: string) {
     setProyectoId(id);
     setTabla(null);
     setResultados(null);
     const p = proyectos.find((x) => x.id === id);
-    if (p?.entidad_id) setEntidadId(p.entidad_id);
+    if (!p) return;
+    if (p.entidad_id) {
+      setEntidadId(p.entidad_id);
+      return;
+    }
+    const eid = await resolverEntidadIdProyecto(supabase, p);
+    if (eid) {
+      setEntidadId(eid);
+      setProyectos((prev) => prev.map((x) => (x.id === id ? { ...x, entidad_id: eid } : x)));
+    }
   }
 
-  function descargarPlantilla() {
+  function descargarPlantillaCsv() {
     const blob = new Blob([PLANTILLA_CSV_CONTRATOS_EXPRESS], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -202,27 +303,39 @@ export default function RrhhContratosExpressClient() {
     URL.revokeObjectURL(url);
   }
 
-  async function onArchivoCsv(file: File | null) {
+  function descargarPlantillaXlsx() {
+    try {
+      descargarPlantillaXlsxContratosExpress();
+    } catch {
+      toast.error('No se pudo generar la plantilla Excel');
+    }
+  }
+
+  async function onArchivoImport(file: File | null) {
     if (!file) return;
     setResultados(null);
-    const text = await file.text();
-    const parsed = parseCsvContratosExpress(text);
-    if (!parsed.ok) {
-      toast.error(parsed.error);
-      return;
+    try {
+      const parsed = await parseArchivoContratosExpress(file);
+      if (!parsed.ok) {
+        toast.error(parsed.error);
+        return;
+      }
+      if (parsed.filas.length > 40) {
+        toast.error(`Máximo 40 filas por lote (hay ${parsed.filas.length}).`);
+        return;
+      }
+      setTabla(
+        parsed.filas.map((f, i) => ({
+          ...f,
+          key: `${f.fila}-${i}-${f.cedula}`,
+        })),
+      );
+      toast.success(`${parsed.filas.length} fila(s) cargadas — revise la tabla y confirme`);
+    } catch {
+      toast.error('No se pudo leer el archivo. Use .xlsx, .xls o .csv');
+    } finally {
+      if (fileRef.current) fileRef.current.value = '';
     }
-    if (parsed.filas.length > 40) {
-      toast.error(`Máximo 40 filas por lote (hay ${parsed.filas.length}).`);
-      return;
-    }
-    setTabla(
-      parsed.filas.map((f, i) => ({
-        ...f,
-        key: `${f.fila}-${i}-${f.cedula}`,
-      })),
-    );
-    toast.success(`${parsed.filas.length} fila(s) cargadas — revise la tabla y confirme`);
-    if (fileRef.current) fileRef.current.value = '';
   }
 
   function actualizarFila(key: string, patch: Partial<FilaCsvContratoExpress>) {
@@ -359,7 +472,7 @@ export default function RrhhContratosExpressClient() {
               className={selectClass}
               value={proyectoId}
               disabled={loadingMeta || !entidadId}
-              onChange={(e) => onChangeProyecto(e.target.value)}
+              onChange={(e) => void onChangeProyecto(e.target.value)}
             >
               <option value="">Seleccione obra…</option>
               {proyectosFiltrados.map((p) => (
@@ -385,7 +498,8 @@ export default function RrhhContratosExpressClient() {
             <h2 className="text-sm font-bold text-amber-100">Carga masiva</h2>
           </div>
           <p className="mt-1 text-[11px] text-zinc-500">
-            Columnas: <span className="font-mono text-zinc-400">nombres · apellidos · cedula · cargo · remuneracion_semanal · fecha_ingreso</span>
+            Acepta <span className="font-semibold text-zinc-400">.xlsx / .xls / .csv</span>. Columnas:{' '}
+            <span className="font-mono text-zinc-400">nombres · apellidos · cedula · cargo · remuneracion_semanal · fecha_ingreso</span>
             . La remuneración semanal es el total en USD; el bono del contrato = total − tabulador del cargo.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
@@ -393,7 +507,17 @@ export default function RrhhContratosExpressClient() {
               type="button"
               variant="outline"
               size="sm"
-              onClick={descargarPlantilla}
+              onClick={descargarPlantillaXlsx}
+              className="border-zinc-600 bg-zinc-900/60 text-zinc-200"
+            >
+              <Download className="size-3.5" aria-hidden />
+              <span className="ml-1.5">Plantilla Excel</span>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={descargarPlantillaCsv}
               className="border-zinc-600 bg-zinc-900/60 text-zinc-200"
             >
               <Download className="size-3.5" aria-hidden />
@@ -407,14 +531,14 @@ export default function RrhhContratosExpressClient() {
               className="bg-amber-600 text-zinc-950 hover:bg-amber-500"
             >
               <Upload className="size-3.5" aria-hidden />
-              <span className="ml-1.5">Subir CSV</span>
+              <span className="ml-1.5">Subir Excel / CSV</span>
             </Button>
             <input
               ref={fileRef}
               type="file"
-              accept=".csv,text/csv,.txt"
+              accept=".xlsx,.xls,.xlsm,.csv,text/csv,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
               className="hidden"
-              onChange={(e) => void onArchivoCsv(e.target.files?.[0] ?? null)}
+              onChange={(e) => void onArchivoImport(e.target.files?.[0] ?? null)}
             />
           </div>
 
