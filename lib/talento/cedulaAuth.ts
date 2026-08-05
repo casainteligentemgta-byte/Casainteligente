@@ -13,16 +13,18 @@ export function normCedulaToken(s: string): string {
 export const CEDULA_VE_NORMALIZADA_REGEX = /^[VE]\d{6,9}$/;
 
 /**
- * Nacionalidad para contrato según prefijo de cédula:
- * V → venezolana; E → extranjera (forma habitual en contratos VE).
+ * Nacionalidad para contrato según prefijo de cédula.
+ * V → venezolano/venezolana; E → extranjero/extranjera (según género).
+ * Por defecto masculino (concuerda con «el ciudadano» / «Sr.»).
  * Sin letra reconocible → null.
  */
 export function nacionalidadDesdeCedula(
   cedula: string | null | undefined,
-): 'venezolana' | 'extranjera' | null {
+  femenino = false,
+): 'venezolana' | 'venezolano' | 'extranjera' | 'extranjero' | null {
   const t = normCedulaToken(cedula ?? '');
-  if (t.startsWith('V')) return 'venezolana';
-  if (t.startsWith('E')) return 'extranjera';
+  if (t.startsWith('V')) return femenino ? 'venezolana' : 'venezolano';
+  if (t.startsWith('E')) return femenino ? 'extranjera' : 'extranjero';
   return null;
 }
 
@@ -30,6 +32,20 @@ export function nacionalidadDesdeCedula(
 export function estadoCivilContratoObrero(raw: string | null | undefined): string {
   const t = String(raw ?? '').trim();
   return t || 'Soltero';
+}
+
+/**
+ * True si el estado civil indica trabajadora (Soltera, Casada, etc.).
+ * Vacío / Soltero / Casado → masculino (concuerda con «el ciudadano»).
+ */
+export function trabajadorFemeninoDesdeEstadoCivil(raw: string | null | undefined): boolean {
+  const t = String(raw ?? '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '');
+  if (!t) return false;
+  return /^(soltera|casada|viuda|divorciada|separada)\b/.test(t);
 }
 
 /**

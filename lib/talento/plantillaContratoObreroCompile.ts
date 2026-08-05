@@ -9,6 +9,11 @@ import { CONTRATO_OBRERO_HORARIO_CUARTA_DEFAULT } from '@/lib/talento/plantillas
 import { razonSocialPatronoParaContratoPdf } from '@/lib/talento/razonSocialContratoPdf';
 import { textoInscripcionRegistroMercantilComparecencia } from '@/lib/talento/textoInscripcionRegistroMercantilContrato';
 import { nacionalidadRepresentanteSegunGenero } from '@/lib/talento/nacionalidadRepresentanteSegunGenero';
+import {
+  nacionalidadDesdeCedula,
+  trabajadorFemeninoDesdeEstadoCivil,
+  estadoCivilContratoObrero,
+} from '@/lib/talento/cedulaAuth';
 
 export type DatoContratoFaltante = {
   id: string;
@@ -91,7 +96,11 @@ const ETIQUETAS: Record<string, { etiqueta: string; ayuda: string }> = {
   EMPLEADO_NOMBRE_COMPLETO: { etiqueta: 'Nombre completo del trabajador', ayuda: 'Revise su planilla de empleo.' },
   EMPLEADO_CEDULA: { etiqueta: 'Cédula o documento', ayuda: 'Indíquelo en la planilla de empleo.' },
   EMPLEADO_DIRECCION: { etiqueta: 'Domicilio del trabajador', ayuda: 'Planilla de empleo — datos personales.' },
-  EMPLEADO_NACIONALIDAD: { etiqueta: 'Nacionalidad', ayuda: 'Planilla de empleo.' },
+  EMPLEADO_NACIONALIDAD: { etiqueta: 'Nacionalidad', ayuda: 'Planilla de empleo. Ciudadano → venezolano; ciudadana → venezolana.' },
+  EMPLEADO_ARTICULO_CIUDADANO: {
+    etiqueta: 'Artículo ciudadano/ciudadana',
+    ayuda: 'Según estado civil (Soltera/Casada → la ciudadana).',
+  },
   EMPLEADO_ESTADO_CIVIL: { etiqueta: 'Estado civil', ayuda: 'Planilla de empleo.' },
   EMPLEADO_FECHA_NACIMIENTO: { etiqueta: 'Fecha de nacimiento', ayuda: 'Planilla de empleo.' },
   EMPLEADO_LUGAR_NACIMIENTO: { etiqueta: 'Lugar de nacimiento', ayuda: 'Planilla de empleo.' },
@@ -279,8 +288,13 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
   const cedulaEmpFmt = cedula ? cedulaVenezuelaGuion(cedula) : '';
   const direccion = str(dp?.direccionDomicilio) || str(f.empleado.direccion);
   const celular = str(dp?.celular) || str(f.empleado.celular);
-  const nacionalidad = str(dp?.nacionalidad) || str(f.empleado.nacionalidad);
-  const estadoCivil = str(dp?.estadoCivil);
+  const estadoCivil = str(dp?.estadoCivil) || estadoCivilContratoObrero(f.empleado.estado_civil);
+  const trabFemenino = trabajadorFemeninoDesdeEstadoCivil(estadoCivil);
+  const nacionalidadRaw = str(dp?.nacionalidad) || str(f.empleado.nacionalidad);
+  const nacionalidad = nacionalidadRaw
+    ? nacionalidadRepresentanteSegunGenero(nacionalidadRaw, trabFemenino)
+    : nacionalidadDesdeCedula(cedula, trabFemenino) ?? (trabFemenino ? 'venezolana' : 'venezolano');
+  const articuloCiudadanoEmp = trabFemenino ? 'la ciudadana' : 'el ciudadano';
   const fechaNac = str(dp?.fechaNacimiento);
   const lugarNac = [str(dp?.lugarNacimiento), str(dp?.paisNacimiento)].filter(Boolean).join(', ');
 
@@ -360,6 +374,7 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
     EMPLEADO_CEDULA: cedulaEmpFmt || cedula,
     EMPLEADO_DIRECCION: direccion,
     EMPLEADO_NACIONALIDAD: nacionalidad,
+    EMPLEADO_ARTICULO_CIUDADANO: articuloCiudadanoEmp,
     EMPLEADO_ESTADO_CIVIL: estadoCivil,
     EMPLEADO_FECHA_NACIMIENTO: fechaNac,
     EMPLEADO_LUGAR_NACIMIENTO: lugarNac,

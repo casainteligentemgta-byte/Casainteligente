@@ -25,6 +25,8 @@ import {
 import { resolvePlanillaPatronoParaEmpleado } from '@/lib/talento/resolvePlanillaPatronoPdf';
 import { resolverTextoHorarioSemanalObra } from '@/lib/talento/horarioSemanalContratoPdf';
 import { camposRegistroMercantilDesdeRecord, parseRegistroMercantilRecord } from '@/lib/talento/registroMercantilCamposPdf';
+import { trabajadorFemeninoDesdeEstadoCivil } from '@/lib/talento/cedulaAuth';
+import { nacionalidadRepresentanteSegunGenero } from '@/lib/talento/nacionalidadRepresentanteSegunGenero';
 import {
   formatearUsdContratoPdf,
   ingresoSemanalConsolidadoUsdDesdeNivelGaceta,
@@ -730,7 +732,16 @@ export async function cargarPropsContratoObreroPdfEstructurado(
   const f = fu.fuentes;
   const hv = f.hojaVida ?? emptyHojaVidaObreroCompleta();
   const dp = hv.datosPersonales;
-  const nacionalidad = strOpt(dp?.nacionalidad) ?? strOpt(f.empleado.nacionalidad);
+  const estadoCivilEmp = strOpt(f.empleado.estado_civil) ?? strOpt(dp?.estadoCivil) ?? 'Soltero';
+  const nacionalidadRaw = strOpt(dp?.nacionalidad) ?? strOpt(f.empleado.nacionalidad);
+  const { nacionalidadRepresentanteSegunGenero } = await import(
+    '@/lib/talento/nacionalidadRepresentanteSegunGenero'
+  );
+  const { trabajadorFemeninoDesdeEstadoCivil } = await import('@/lib/talento/cedulaAuth');
+  const nacionalidad = nacionalidadRepresentanteSegunGenero(
+    nacionalidadRaw,
+    trabajadorFemeninoDesdeEstadoCivil(estadoCivilEmp),
+  );
   const direccionHab = strOpt(f.empleado.direccion) ?? strOpt(dp?.direccionDomicilio);
   const cargoNom =
     strOpt(f.contrato.cargo_oficio_desempeño) ?? strOpt(hv.contratacion?.cargoUOficio) ?? null;
@@ -799,7 +810,7 @@ export async function cargarPropsContratoObreroPdfEstructurado(
   const empleado: ContratoObreroPdfStructuredProps['empleado'] = {
     nombres: f.empleado.nombre_completo,
     nacionalidad,
-    estado_civil: strOpt(f.empleado.estado_civil),
+    estado_civil: estadoCivilEmp,
     cedula: f.empleado.cedula ?? f.empleado.documento,
     direccion_domicilio: direccionHab,
     cargo_nombre: cargoNom,
@@ -1045,7 +1056,7 @@ export async function cargarPropsContratoObreroPdfExpress(
     direccion_domicilio: dirObrero ?? undefined,
     direccion_habitacion: dirObrero ?? undefined,
     estado_civil: strOpt(manual.estadoCivil) || 'Soltero',
-    nacionalidad: strOpt(manual.nacionalidad) || 'venezolana',
+    nacionalidad: strOpt(manual.nacionalidad) || 'venezolano',
     municipio_domicilio: strOpt(manual.obreroMunicipioResidencia) ?? undefined,
     estado_domicilio: strOpt(manual.obreroEstadoResidencia) ?? undefined,
     cargo_nombre: cargoNom,

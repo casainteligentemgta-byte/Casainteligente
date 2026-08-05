@@ -6,7 +6,11 @@ import {
   type ContratoExpressManualInput,
 } from '@/lib/talento/contratoObreroPdfContext';
 import { ContratoObreroPDF } from '@/lib/talento/ContratoObreroPdfStructured';
-import { estadoCivilContratoObrero, nacionalidadDesdeCedula } from '@/lib/talento/cedulaAuth';
+import {
+  estadoCivilContratoObrero,
+  nacionalidadDesdeCedula,
+  trabajadorFemeninoDesdeEstadoCivil,
+} from '@/lib/talento/cedulaAuth';
 import { BUCKET_CONTRATOS_OBREROS } from '@/lib/talento/contratoLaboralRegistroStorage';
 
 type ExpressRow = {
@@ -23,13 +27,15 @@ type ExpressRow = {
 
 function manualDesdeExpressRow(row: ExpressRow): ContratoExpressManualInput {
   const cedula = String(row.obrero_cedula ?? '').trim();
+  const estadoCivil = estadoCivilContratoObrero(null);
+  const femenino = trabajadorFemeninoDesdeEstadoCivil(estadoCivil);
   return {
     obreroNombre: String(row.obrero_nombre ?? '').trim(),
     obreroCedula: cedula,
     obreroDireccion: row.obrero_direccion?.trim() || null,
     horarioSemanalTexto: row.horario_semanal_texto?.trim() || null,
-    nacionalidad: nacionalidadDesdeCedula(cedula) ?? 'venezolana';
-    estadoCivil: estadoCivilContratoObrero(null),
+    nacionalidad: nacionalidadDesdeCedula(cedula, femenino) ?? (femenino ? 'venezolana' : 'venezolano'),
+    estadoCivil,
     bonoManualUsd:
       row.bono_manual_usd != null && Number.isFinite(Number(row.bono_manual_usd))
         ? Number(row.bono_manual_usd)

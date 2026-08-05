@@ -7,6 +7,7 @@ import { fechaLargaRegistroMercantilContratoVe } from '@/lib/talento/registroMer
 import { CESTATICKET_SEMANAL_USD } from '@/lib/nomina/cestaticketLegalUsd';
 import { TASA_BCV_VES_POR_USD_TABULADOR_2023_06_20 } from '@/lib/nomina/tabuladorSalariosConstruccion2023';
 import { nacionalidadRepresentanteSegunGenero } from '@/lib/talento/nacionalidadRepresentanteSegunGenero';
+import { trabajadorFemeninoDesdeEstadoCivil } from '@/lib/talento/cedulaAuth';
 
 /**
  * Tipografía del contrato (PDF estándar vía @react-pdf/renderer).
@@ -478,6 +479,8 @@ export function ContratoObreroPDF({
   );
   const nombreTrabajador = str(empleado.nombres ?? empleado.nombre_completo, '__________________________________________________');
   const estadoCivilTrab = str(empleado.estado_civil, 'Soltero');
+  const trabFemenino = trabajadorFemeninoDesdeEstadoCivil(estadoCivilTrab);
+  const articuloCiudadanoTrab = trabFemenino ? 'la ciudadana' : 'el ciudadano';
   const cedulaTrabGuion = cedulaConGuion(empleado.cedula ?? empleado.documento);
   const domicilioTrab = str(
     empleado.direccion_domicilio ?? empleado.direccion_habitacion,
@@ -561,7 +564,10 @@ export function ContratoObreroPDF({
     Boolean(entidad.rep_legal_femenino),
   );
   const estadoCivilRep = str(entidad.rep_legal_estado_civil, phRepEc);
-  const nacionalidadTrab = str(empleado.nacionalidad, 'venezolana');
+  const nacionalidadTrab = nacionalidadRepresentanteSegunGenero(
+    empleado.nacionalidad,
+    trabFemenino,
+  );
   const repCedulaLinea = str(repCedulaGuion, '_______________');
   const compUsdMes =
     parametros.compensacionCulminacionUsdPorMes != null &&
@@ -629,7 +635,7 @@ export function ContratoObreroPDF({
         <Text style={styles.bold}>{nacionalidadRep}</Text>, mayor de edad, hábil en derecho,{' '}
         <Text style={styles.bold}>{estadoCivilRep}</Text>, de este domicilio, titular de la cédula de Identidad número{' '}
         <Text style={styles.bold}>{repCedulaLinea}</Text>, quien a los efectos de este contrato se denominará{' '}
-        <Text style={styles.bold}>LA ENTIDAD DE TRABAJO</Text>, por una parte y por la otra el ciudadano{' '}
+        <Text style={styles.bold}>LA ENTIDAD DE TRABAJO</Text>, por una parte y por la otra {articuloCiudadanoTrab}{' '}
         <Text style={styles.bold}>{nombreTrabajador}</Text>, <Text style={styles.bold}>{estadoCivilTrab}</Text>, mayor de edad, hábil en
         derecho, <Text style={styles.bold}>{nacionalidadTrab}</Text>, titular de la cédula de identidad número{' '}
         <Text style={styles.bold}>{cedulaTrabGuion}</Text>, de este domicilio; quien en lo

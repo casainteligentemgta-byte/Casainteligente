@@ -17,6 +17,10 @@ import {
 import { resolvePlanillaPatronoParaEmpleado } from '@/lib/talento/resolvePlanillaPatronoPdf';
 import { numeroALetrasHastaMiles } from '@/lib/talento/numeroALetrasVe';
 import { nacionalidadRepresentanteSegunGenero } from '@/lib/talento/nacionalidadRepresentanteSegunGenero';
+import {
+  estadoCivilContratoObrero,
+  trabajadorFemeninoDesdeEstadoCivil,
+} from '@/lib/talento/cedulaAuth';
 
 function strOrNull(value: unknown): string | null {
   if (typeof value !== 'string') return null;
@@ -206,6 +210,7 @@ export async function POST(req: Request) {
       nombres?: string | null;
       nombre_completo?: string | null;
       nacionalidad?: string | null;
+      estado_civil?: string | null;
       cedula?: string | null;
       documento?: string | null;
       direccion_domicilio?: string | null;
@@ -432,7 +437,15 @@ export async function POST(req: Request) {
     const hvPlanilla = parseHojaVidaObrero(worker.hoja_vida_obrero) ?? emptyHojaVidaObreroCompleta();
     const empPlanilla = fusionarEmpleadoContratoDesdePlanilla(worker, hvPlanilla);
 
-    const nacionalidad = empPlanilla.nacionalidad ?? strOrNull(worker.nacionalidad) ?? 'venezolana';
+    const estadoCivilTrab = estadoCivilContratoObrero(
+      empPlanilla.estado_civil ?? strOrNull(worker.estado_civil),
+    );
+    const trabFemenino = trabajadorFemeninoDesdeEstadoCivil(estadoCivilTrab);
+    const nacionalidad = nacionalidadRepresentanteSegunGenero(
+      empPlanilla.nacionalidad ?? strOrNull(worker.nacionalidad),
+      trabFemenino,
+    );
+    const articuloCiudadanoTrab = trabFemenino ? 'la ciudadana' : 'el ciudadano';
     const domicilioTrabajador =
       empPlanilla.direccion ??
       strOrNull(worker.direccion_domicilio) ??
@@ -504,7 +517,7 @@ export async function POST(req: Request) {
 
     const rifLine = strOrNull(entPatrono?.rif)?.trim() || '_____________';
 
-    const parrafoAperturaRm = `Entre, la sociedad mercantil **${nombreLegalEntidadParrafo}**, inscrita por ante la Oficina de **${textoOficinaRm}**, constando en el Tomo **${tomoRmMd}**, bajo el Nº **${numeroRmMd}**, de fecha **${fechaRmMd}**, de los Libros de Registro de Comercio, inscrita en el Registro de Información Fiscal bajo el número: **${rifLine}**, representada en este acto por su **${cargoRep}**, ${articuloCiudadanoRep} **"${nombreRep}"**, ${nacionalidadRep}, mayor de edad, titular de la cédula de identidad Nº **${cedulaRep}**, quien en lo sucesivo y a los solos efectos del presente contrato se denominará **EL EMPLEADOR**, por una parte y por la otra, el ciudadano **"${nombreTrabajador}"**, de nacionalidad **${nacionalidad}**, mayor de edad, titular de la cédula de identidad **${cedula}** y domiciliado en **"${domicilioTrabajador}"**, quien a los mismos efectos se denominará **EL TRABAJADOR**; y en virtud de la naturaleza del servicio que prestará EL TRABAJADOR y conforme al carácter especialísimo de la naturaleza de los servicios a desempeñarse por parte de él, se ha convenido en celebrar el presente contrato laboral, el cual se regirá por las siguientes cláusulas:`;
+    const parrafoAperturaRm = `Entre, la sociedad mercantil **${nombreLegalEntidadParrafo}**, inscrita por ante la Oficina de **${textoOficinaRm}**, constando en el Tomo **${tomoRmMd}**, bajo el Nº **${numeroRmMd}**, de fecha **${fechaRmMd}**, de los Libros de Registro de Comercio, inscrita en el Registro de Información Fiscal bajo el número: **${rifLine}**, representada en este acto por su **${cargoRep}**, ${articuloCiudadanoRep} **"${nombreRep}"**, ${nacionalidadRep}, mayor de edad, titular de la cédula de identidad Nº **${cedulaRep}**, quien en lo sucesivo y a los solos efectos del presente contrato se denominará **EL EMPLEADOR**, por una parte y por la otra, ${articuloCiudadanoTrab} **"${nombreTrabajador}"**, de nacionalidad **${nacionalidad}**, mayor de edad, titular de la cédula de identidad **${cedula}** y domiciliado en **"${domicilioTrabajador}"**, quien a los mismos efectos se denominará **EL TRABAJADOR**; y en virtud de la naturaleza del servicio que prestará EL TRABAJADOR y conforme al carácter especialísimo de la naturaleza de los servicios a desempeñarse por parte de él, se ha convenido en celebrar el presente contrato laboral, el cual se regirá por las siguientes cláusulas:`;
 
     const clausulaObjeto = `### PRIMERA: OBJETO
 **EL TRABAJADOR** se obliga a prestar sus servicios personales en el cargo u oficio de **${cargoMayus}**, con las funciones inherentes al mismo, tales como: **${funcionesManual}**, de conformidad con el Manual de Cargos y las instrucciones de **EL EMPLEADOR**.`;
