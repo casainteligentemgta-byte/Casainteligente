@@ -29,7 +29,7 @@ function manualDesdeExpressRow(row: ExpressRow): ContratoExpressManualInput {
     obreroCedula: cedula,
     obreroDireccion: row.obrero_direccion?.trim() || null,
     horarioSemanalTexto: row.horario_semanal_texto?.trim() || null,
-    nacionalidad: nacionalidadDesdeCedula(cedula) ?? 'venezolanas',
+    nacionalidad: nacionalidadDesdeCedula(cedula) ?? 'venezolana';
     estadoCivil: estadoCivilContratoObrero(null),
     bonoManualUsd:
       row.bono_manual_usd != null && Number.isFinite(Number(row.bono_manual_usd))

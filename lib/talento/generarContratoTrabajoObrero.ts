@@ -93,7 +93,7 @@ export async function generarContratoTrabajoObrero(
   const fechaFirmaIso = input.fecha_ingreso?.trim() || hoyIsoLocal();
   const obreroNombreCompleto = nombreCompleto(input);
   const nacionalidad =
-    nacionalidadDesdeCedula(cedula) ?? (input.nacionalidad?.trim() || 'venezolanas');
+    nacionalidadDesdeCedula(cedula) ?? (input.nacionalidad?.trim() || 'venezolana');
   const estadoCivil = estadoCivilContratoObrero(input.estado_civil);
 
   const manual: ContratoExpressManualInput = {

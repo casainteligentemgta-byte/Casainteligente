@@ -6,12 +6,12 @@ import {
 } from '@/lib/talento/cedulaAuth';
 
 describe('nacionalidadDesdeCedula / estadoCivilContratoObrero', () => {
-  it('V → venezolanas, E → extranjeras (forma genérica)', () => {
-    assert.equal(nacionalidadDesdeCedula('V-18296258'), 'venezolanas');
-    assert.equal(nacionalidadDesdeCedula('V18296258'), 'venezolanas');
+  it('V → venezolana, E → extranjera', () => {
+    assert.equal(nacionalidadDesdeCedula('V-18296258'), 'venezolana');
+    assert.equal(nacionalidadDesdeCedula('V18296258'), 'venezolana');
     assert.equal(nacionalidadDesdeCedula('10.199.713'), null);
-    assert.equal(nacionalidadDesdeCedula('E-81234567'), 'extranjeras');
-    assert.equal(nacionalidadDesdeCedula('e1234567'), 'extranjeras');
+    assert.equal(nacionalidadDesdeCedula('E-81234567'), 'extranjera');
+    assert.equal(nacionalidadDesdeCedula('e1234567'), 'extranjera');
   });
 
   it('estado civil vacío → Soltero', () => {
