@@ -25,9 +25,27 @@ export type AccesoLegal = {
   rolLegal: string | null;
 };
 
+type LegalOrgRel = {
+  status: string;
+  plan: string;
+  valido_hasta: string | null;
+};
+
+type LegalEntitlementRow = {
+  org_id: string;
+  rol_legal: string;
+  activo: boolean;
+  ci_legal_orgs: LegalOrgRel | LegalOrgRel[] | null;
+};
+
 export function emailEsDuenioLegal(email?: string | null): boolean {
   const e = (email ?? '').trim().toLowerCase();
   return Boolean(e) && LEGAL_OWNER_EMAILS.has(e);
+}
+
+function pickLegalOrg(rel: LegalOrgRel | LegalOrgRel[] | null): LegalOrgRel | null {
+  if (!rel) return null;
+  return Array.isArray(rel) ? (rel[0] ?? null) : rel;
 }
 
 export async function resolverAccesoLegal(
@@ -35,13 +53,15 @@ export async function resolverAccesoLegal(
   userId: string,
   email?: string | null,
 ): Promise<AccesoLegal> {
-  // BYPASS TEMPORAL PARA DESARROLLO LOCAL
-  return {
-    ok: true,
-    motivo: 'owner',
-    orgId: LEGAL_ORG_OWNER_ID,
-    rolLegal: 'admin',
-  };
+  // Solo en desarrollo local: acceso abierto para iterar sin entitlements.
+  if (process.env.NODE_ENV === 'development' && process.env.LEGAL_DEV_BYPASS === '1') {
+    return {
+      ok: true,
+      motivo: 'owner',
+      orgId: LEGAL_ORG_OWNER_ID,
+      rolLegal: 'admin',
+    };
+  }
 
   if (emailEsDuenioLegal(email)) {
     return {
@@ -64,17 +84,11 @@ export async function resolverAccesoLegal(
   }
 
   const now = Date.now();
-  for (const row of data as Array<{
-    org_id: string;
-    rol_legal: string;
-    activo: boolean;
-    ci_legal_orgs:
-      | { status: string; plan: string; valido_hasta: string | null }
-      | { status: string; plan: string; valido_hasta: string | null }[]
-      | null;
-  }>) {
-    const org = Array.isArray(row.ci_legal_orgs) ? row.ci_legal_orgs[0] : row.ci_legal_orgs;
-    if (!org || org.status !== 'active') continue;
+  const rows = data as unknown as LegalEntitlementRow[];
+  for (const row of rows) {
+    const org = pickLegalOrg(row.ci_legal_orgs);
+    if (!org) continue;
+    if (org.status !== 'active') continue;
     if (org.valido_hasta && new Date(org.valido_hasta).getTime() < now) continue;
     return {
       ok: true,

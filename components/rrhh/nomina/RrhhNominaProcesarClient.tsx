@@ -14,6 +14,8 @@ type PeriodoRow = {
   fecha_inicio: string;
   fecha_fin: string;
   estado: string;
+  total_asignaciones: number;
+  total_deducciones: number;
   total_neto: number;
 };
 

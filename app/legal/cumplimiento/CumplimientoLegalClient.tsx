@@ -14,15 +14,17 @@ import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import { apiUrl } from '@/lib/http/apiUrl';
 
+type ObligacionRel = {
+  titulo: string;
+  categoria: string;
+};
+
 type AuditoriaResultado = {
   id: string;
   estado_cumplimiento: string;
   hallazgos: string;
   recomendacion: string;
-  ci_legal_obligaciones: {
-    titulo: string;
-    categoria: string;
-  };
+  ci_legal_obligaciones: ObligacionRel | ObligacionRel[] | null;
 };
 
 type Auditoria = {
@@ -33,6 +35,13 @@ type Auditoria = {
   resumen_ejecutivo: string | null;
   resultados?: AuditoriaResultado[];
 };
+
+function unwrapObligacion(
+  rel: ObligacionRel | ObligacionRel[] | null | undefined
+): ObligacionRel | null {
+  if (!rel) return null;
+  return Array.isArray(rel) ? rel[0] ?? null : rel;
+}
 
 export default function CumplimientoLegalClient() {
   const [auditorias, setAuditorias] = useState<Auditoria[]>([]);
@@ -60,7 +69,7 @@ export default function CumplimientoLegalClient() {
         toast.error(error.message);
         return;
       }
-      setAuditorias(data || []);
+      setAuditorias((data || []) as unknown as Auditoria[]);
       if (data && data.length > 0 && !selectedId) {
         setSelectedId(data[0].id);
       }
@@ -210,16 +219,18 @@ export default function CumplimientoLegalClient() {
                   <p className="text-sm text-zinc-500">No se guardaron detalles de obligaciones en esta auditoría.</p>
                 ) : (
                   <div className="grid gap-3">
-                    {selected.resultados?.map((res) => (
+                    {selected.resultados?.map((res) => {
+                      const obligacion = unwrapObligacion(res.ci_legal_obligaciones);
+                      return (
                       <div key={res.id} className="rounded-xl border border-white/10 bg-[#0c1018] p-4 flex gap-4">
                         <div className="pt-0.5">
                           <StatusIcon status={res.estado_cumplimiento} />
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex flex-wrap items-baseline gap-2 mb-1">
-                            <h5 className="font-bold text-zinc-100">{res.ci_legal_obligaciones?.titulo}</h5>
+                            <h5 className="font-bold text-zinc-100">{obligacion?.titulo}</h5>
                             <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 bg-white/5 px-2 py-0.5 rounded-full">
-                              {res.ci_legal_obligaciones?.categoria}
+                              {obligacion?.categoria}
                             </span>
                           </div>
                           
@@ -236,7 +247,8 @@ export default function CumplimientoLegalClient() {
                           )}
                         </div>
                       </div>
-                    ))}
+                    );
+                    })}
                   </div>
                 )}
               </div>
