@@ -186,41 +186,46 @@ export async function generarContratoTrabajoObrero(
     horario_semanal_texto: horarioVal,
   };
 
-  const payloadConPartes = {
-    ...payloadBase,
-    obrero_nombres: input.obrero_nombres?.trim() || null,
-    obrero_apellidos: input.obrero_apellidos?.trim() || null,
-  };
+  const intentos: Record<string, unknown>[] = [
+    {
+      ...payloadBase,
+      expediente_codigo: expedienteLabel,
+      obrero_nombres: input.obrero_nombres?.trim() || null,
+      obrero_apellidos: input.obrero_apellidos?.trim() || null,
+    },
+    {
+      ...payloadBase,
+      expediente_codigo: expedienteLabel,
+    },
+    {
+      ...payloadBase,
+      obrero_nombres: input.obrero_nombres?.trim() || null,
+      obrero_apellidos: input.obrero_apellidos?.trim() || null,
+    },
+    payloadBase,
+  ];
 
   let data: { id?: string } | null = null;
   let insErr: { message?: string; code?: string } | null = null;
 
-  {
-    const first = await admin
+  for (const payload of intentos) {
+    const res = await admin
       .from('ci_contratos_express')
-      .insert(payloadConPartes as never)
+      .insert(payload as never)
       .select('id')
       .maybeSingle();
-    data = first.data as { id?: string } | null;
-    insErr = first.error;
-  }
-
-  // Compat: si falta migración 309 (columnas nombres/apellidos), reintentar solo con obrero_nombre.
-  if (
-    insErr &&
-    /obrero_(nombres|apellidos)/i.test(insErr.message ?? '') &&
-    /schema cache|could not find/i.test(insErr.message ?? '')
-  ) {
+    data = res.data as { id?: string } | null;
+    insErr = res.error;
+    if (!insErr) break;
+    const msg = insErr.message ?? '';
+    const columnaNueva =
+      /obrero_(nombres|apellidos)|expediente_codigo/i.test(msg) &&
+      /schema cache|could not find|42703/i.test(msg);
+    if (!columnaNueva) break;
     console.warn(
-      '[generarContratoTrabajoObrero] columnas nombres/apellidos ausentes; insertando sin ellas. Aplique migración 309.',
+      '[generarContratoTrabajoObrero] columna ausente al insertar; reintento con payload reducido. Aplique migraciones 309/311.',
+      msg,
     );
-    const second = await admin
-      .from('ci_contratos_express')
-      .insert(payloadBase as never)
-      .select('id')
-      .maybeSingle();
-    data = second.data as { id?: string } | null;
-    insErr = second.error;
   }
 
   if (insErr) {

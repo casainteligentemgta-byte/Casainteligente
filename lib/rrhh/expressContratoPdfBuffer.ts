@@ -20,6 +20,7 @@ type ExpressRow = {
   horario_semanal_texto?: string | null;
   bono_manual_usd?: number | null;
   pdf_storage_path?: string | null;
+  expediente_codigo?: string | null;
 };
 
 function manualDesdeExpressRow(row: ExpressRow): ContratoExpressManualInput {
@@ -43,22 +44,41 @@ function manualDesdeExpressRow(row: ExpressRow): ContratoExpressManualInput {
 export async function generarBufferContratoExpressPdf(
   supabase: SupabaseClient,
   expressId: string,
-): Promise<{ ok: true; buf: Buffer; filename: string } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; buf: Buffer; filename: string; expediente_codigo: string }
+  | { ok: false; error: string }
+> {
   const id = expressId.trim();
   if (!id) return { ok: false, error: 'Falta id de contrato express.' };
 
   const { data, error } = await supabase
     .from('ci_contratos_express')
     .select(
-      'id,proyecto_id,config_nomina_id,obrero_nombre,obrero_cedula,obrero_direccion,horario_semanal_texto,bono_manual_usd,pdf_storage_path',
+      'id,proyecto_id,config_nomina_id,obrero_nombre,obrero_cedula,obrero_direccion,horario_semanal_texto,bono_manual_usd,pdf_storage_path,expediente_codigo',
     )
     .eq('id', id)
     .maybeSingle();
 
-  if (error) return { ok: false, error: error.message };
-  if (!data) return { ok: false, error: 'Contrato express no encontrado.' };
+  let row: ExpressRow;
+  if (error && /expediente_codigo|42703|column|schema cache/i.test(error.message)) {
+    const fallback = await supabase
+      .from('ci_contratos_express')
+      .select(
+        'id,proyecto_id,config_nomina_id,obrero_nombre,obrero_cedula,obrero_direccion,horario_semanal_texto,bono_manual_usd,pdf_storage_path',
+      )
+      .eq('id', id)
+      .maybeSingle();
+    if (fallback.error) return { ok: false, error: fallback.error.message };
+    if (!fallback.data) return { ok: false, error: 'Contrato express no encontrado.' };
+    row = fallback.data as ExpressRow;
+  } else if (error) {
+    return { ok: false, error: error.message };
+  } else if (!data) {
+    return { ok: false, error: 'Contrato express no encontrado.' };
+  } else {
+    row = data as ExpressRow;
+  }
 
-  const row = data as ExpressRow;
   const proyectoId = String(row.proyecto_id ?? '').trim();
   const configNominaId = String(row.config_nomina_id ?? '').trim();
   if (!proyectoId || !configNominaId) {
@@ -77,11 +97,14 @@ export async function generarBufferContratoExpressPdf(
   const loaded = await cargarPropsContratoObreroPdfExpress(supabase, proyectoId, configNominaId, manual);
   if (!loaded.ok) return { ok: false, error: loaded.error };
 
-  const expedienteLabel = await resolverCodigoExpedienteContrato(supabase, {
-    proyectoId,
-    fecha: new Date(),
-    expressId: id,
-  });
+  let expedienteLabel = String(row.expediente_codigo ?? '').trim();
+  if (!expedienteLabel) {
+    expedienteLabel = await resolverCodigoExpedienteContrato(supabase, {
+      proyectoId,
+      fecha: new Date(),
+      expressId: id,
+    });
+  }
 
   try {
     const node = createElement(ContratoObreroPDF, {
@@ -90,7 +113,12 @@ export async function generarBufferContratoExpressPdf(
     });
     const blob = await pdf(node as Parameters<typeof pdf>[0]).toBlob();
     const buf = Buffer.from(await blob.arrayBuffer());
-    return { ok: true, buf, filename: `contrato-express-${id.slice(0, 8)}.pdf` };
+    return {
+      ok: true,
+      buf,
+      filename: `contrato-${expedienteLabel.replace(/[^A-Za-z0-9_-]+/g, '-')}.pdf`,
+      expediente_codigo: expedienteLabel,
+    };
   } catch (e) {
     console.error('[generarBufferContratoExpressPdf]', e);
     return { ok: false, error: 'No se pudo generar el PDF del contrato express.' };
@@ -113,17 +141,30 @@ export async function regenerarYPersistirPdfContratoExpress(
 
   const { data: existing, error: selErr } = await admin
     .from('ci_contratos_express')
-    .select('id,pdf_storage_path')
+    .select('id,pdf_storage_path,expediente_codigo')
     .eq('id', id)
     .maybeSingle();
-  if (selErr) return { ok: false, error: selErr.message, status: 500 };
-  if (!existing) return { ok: false, error: 'Contrato no encontrado.', status: 404 };
+  let existingRow = existing as { id?: string; pdf_storage_path?: string | null; expediente_codigo?: string | null } | null;
+  if (selErr && /expediente_codigo|42703|column|schema cache/i.test(selErr.message)) {
+    const fb = await admin
+      .from('ci_contratos_express')
+      .select('id,pdf_storage_path')
+      .eq('id', id)
+      .maybeSingle();
+    if (fb.error) return { ok: false, error: fb.error.message, status: 500 };
+    existingRow = fb.data as { id?: string; pdf_storage_path?: string | null } | null;
+  } else if (selErr) {
+    return { ok: false, error: selErr.message, status: 500 };
+  }
+  if (!existingRow) return { ok: false, error: 'Contrato no encontrado.', status: 404 };
 
   const built = await generarBufferContratoExpressPdf(admin, id);
   if (!built.ok) return { ok: false, error: built.error, status: 400 };
 
-  const prevPath = String((existing as { pdf_storage_path?: string | null }).pdf_storage_path ?? '').trim();
+  const prevPath = String(existingRow.pdf_storage_path ?? '').trim();
   const storagePath = prevPath || `express/${id}/contrato-estructurado.pdf`;
+  const codigoGuardado = String(existingRow.expediente_codigo ?? '').trim();
+  const codigoNuevo = built.expediente_codigo.trim();
 
   const { error: upErr } = await admin.storage.from(BUCKET_CONTRATOS_OBREROS).upload(storagePath, built.buf, {
     contentType: 'application/pdf',
@@ -134,13 +175,31 @@ export async function regenerarYPersistirPdfContratoExpress(
     return { ok: false, error: upErr.message, status: 500 };
   }
 
-  if (!prevPath || prevPath !== storagePath) {
+  const patch: Record<string, string> = {};
+  if (!prevPath || prevPath !== storagePath) patch.pdf_storage_path = storagePath;
+  if (!codigoGuardado && codigoNuevo) patch.expediente_codigo = codigoNuevo;
+
+  if (Object.keys(patch).length > 0) {
     const { error: updErr } = await admin
       .from('ci_contratos_express')
-      .update({ pdf_storage_path: storagePath } as never)
+      .update(patch as never)
       .eq('id', id);
-    if (updErr) {
-      console.error('[regenerarYPersistirPdfContratoExpress] update path', updErr.message);
+    if (updErr && /expediente_codigo|42703|column|schema cache/i.test(updErr.message)) {
+      if (patch.pdf_storage_path) {
+        const { error: upd2 } = await admin
+          .from('ci_contratos_express')
+          .update({ pdf_storage_path: patch.pdf_storage_path } as never)
+          .eq('id', id);
+        if (upd2) {
+          console.error('[regenerarYPersistirPdfContratoExpress] update path', upd2.message);
+          return { ok: false, error: upd2.message, status: 500 };
+        }
+      }
+      console.warn(
+        '[regenerarYPersistirPdfContratoExpress] columna expediente_codigo ausente; aplique migración 311.',
+      );
+    } else if (updErr) {
+      console.error('[regenerarYPersistirPdfContratoExpress] update', updErr.message);
       return { ok: false, error: updErr.message, status: 500 };
     }
   }
