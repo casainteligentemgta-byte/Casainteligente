@@ -22,6 +22,7 @@ import {
   trabajadorFemeninoDesdeEstadoCivil,
 } from '@/lib/talento/cedulaAuth';
 import { laboresContratoDesdeCargo } from '@/lib/talento/laboresOficioContrato';
+import { construirCodigoExpedienteContrato } from '@/lib/talento/codigoExpedienteContrato';
 
 function strOrNull(value: unknown): string | null {
   if (typeof value !== 'string') return null;
@@ -196,6 +197,7 @@ export async function POST(req: Request) {
     type EntidadPatronoRow = {
       nombre_legal?: string | null;
       nombre?: string | null;
+      nombre_abreviado?: string | null;
       rif?: string | null;
       domicilio_fiscal?: string | null;
       direccion_fiscal?: string | null;
@@ -252,6 +254,7 @@ export async function POST(req: Request) {
       id?: string | null;
       entidad_id?: string | null;
       nombre?: string | null;
+      obra_codigo?: string | null;
       ubicacion?: string | null;
       ubicacion_texto?: string | null;
       obra_ubicacion?: string | null;
@@ -263,7 +266,7 @@ export async function POST(req: Request) {
       const { data: pr } = await supabase
         .from('ci_proyectos')
         .select(
-          'id,entidad_id,proyecto_modulo_origen_id,nombre,ubicacion,ubicacion_texto,obra_ubicacion,ci_entidades(nombre,nombre_legal,nombre_comercial,rif,direccion_fiscal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil)',
+          'id,entidad_id,proyecto_modulo_origen_id,nombre,obra_codigo,ubicacion,ubicacion_texto,obra_ubicacion,ci_entidades(nombre,nombre_legal,nombre_comercial,nombre_abreviado,rif,direccion_fiscal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil)',
         )
         .eq('id', proyectoId)
         .maybeSingle();
@@ -273,6 +276,7 @@ export async function POST(req: Request) {
           entidad_id?: string | null;
           proyecto_modulo_origen_id?: string | null;
           nombre?: string | null;
+          obra_codigo?: string | null;
           ubicacion?: string | null;
           ubicacion_texto?: string | null;
           obra_ubicacion?: string | null;
@@ -505,10 +509,14 @@ export async function POST(req: Request) {
     const numeroRmMd = rmCampos.numero.trim() || '[Nº NO REGISTRADO]';
     const tomoRmMd = rmCampos.tomo.trim() || '[TOMO NO REGISTRADO]';
 
-    /** Cédula del trabajador tal como viene en `ci_empleados` (formato expediente solicitado). */
-    const cedulaWorkerParaExp = strOrNull(worker.cedula) ?? strOrNull(worker.documento) ?? 'NO-REG';
-    const cedulaExp = cedulaWorkerParaExp.replace(/\s+/g, '').replace(/[^\dA-Za-z-]/g, '');
-    const expediente = `EXP-${cedulaExp}-${new Date().getFullYear()}`;
+    /** Código sencillo: AÑO-MES-ENTIDAD-OBRA (sin correlativo en markdown puntual). */
+    const expediente = construirCodigoExpedienteContrato({
+      fecha: new Date(),
+      entidadAbreviado: strOrNull(entPatrono?.nombre_abreviado),
+      entidadNombre: strOrNull(entPatrono?.nombre_legal) ?? strOrNull(entPatrono?.nombre) ?? nombreEntidad,
+      obraCodigo: strOrNull(proyecto?.obra_codigo),
+      obraNombre: strOrNull(proyecto?.nombre) ?? nombreProyecto,
+    });
 
     /** `nombre_legal` de la entidad del proyecto (`ci_entidades` vía `ci_proyectos`), sin forzar mayúsculas en este párrafo. */
     const nombreLegalEntidadParrafo =
