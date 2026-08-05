@@ -21,6 +21,7 @@ import {
   estadoCivilContratoObrero,
   trabajadorFemeninoDesdeEstadoCivil,
 } from '@/lib/talento/cedulaAuth';
+import { laboresContratoDesdeCargo } from '@/lib/talento/laboresOficioContrato';
 
 function strOrNull(value: unknown): string | null {
   if (typeof value !== 'string') return null;
@@ -452,10 +453,12 @@ export async function POST(req: Request) {
       strOrNull(worker.direccion_habitacion) ??
       'Nueva Esparta';
     const cargoMayus = worker.cargo_nombre?.toUpperCase() || 'TRABAJADOR';
-    const funcionesManual =
-      strOrNull(conf?.funciones_oficiales) ??
-      strOrNull(worker.tareas_especificas) ??
-      'las tareas inherentes a su cargo y aquellas asignadas por su supervisor inmediato';
+    const funcionesManual = laboresContratoDesdeCargo({
+      cargoCodigo: strOrNull(conf?.cargo_codigo) ?? strOrNull(worker.cargo_codigo),
+      cargoNombre: worker.cargo_nombre,
+      funcionesOficiales: strOrNull(conf?.funciones_oficiales),
+      tareasEspecificas: strOrNull(worker.tareas_especificas),
+    });
     const nombreProyecto = proyecto?.nombre || 'OBRA NO REGISTRADA';
     const ubicacionProyecto =
       proyecto?.ubicacion || proyecto?.ubicacion_texto || proyecto?.obra_ubicacion || 'UBICACION NO REGISTRADA';

@@ -27,6 +27,7 @@ import { resolverTextoHorarioSemanalObra } from '@/lib/talento/horarioSemanalCon
 import { camposRegistroMercantilDesdeRecord, parseRegistroMercantilRecord } from '@/lib/talento/registroMercantilCamposPdf';
 import { trabajadorFemeninoDesdeEstadoCivil } from '@/lib/talento/cedulaAuth';
 import { nacionalidadRepresentanteSegunGenero } from '@/lib/talento/nacionalidadRepresentanteSegunGenero';
+import { laboresContratoDesdeCargo } from '@/lib/talento/laboresOficioContrato';
 import {
   formatearUsdContratoPdf,
   ingresoSemanalConsolidadoUsdDesdeNivelGaceta,
@@ -810,6 +811,7 @@ export async function cargarPropsContratoObreroPdfEstructurado(
     cedula: f.empleado.cedula ?? f.empleado.documento,
     direccion_domicilio: direccionHab,
     cargo_nombre: cargoNom,
+    cargo_codigo: strOpt(f.contrato.numero_oficio_tabulador),
     tareas_especificas: tareasEsp,
   };
 
@@ -821,7 +823,7 @@ export async function cargarPropsContratoObreroPdfEstructurado(
   if (codTab) {
     const { data: nomList, error: nomErr } = await supabase
       .from('ci_config_nomina')
-      .select('salario_base_mensual,cestaticket_mensual,vigencia_desde')
+      .select('salario_base_mensual,cestaticket_mensual,vigencia_desde,funciones_oficiales,cargo_nombre')
       .ilike('cargo_codigo', codTab)
       .order('vigencia_desde', { ascending: false })
       .limit(1);
@@ -830,12 +832,37 @@ export async function cargarPropsContratoObreroPdfEstructurado(
     }
     const nom = Array.isArray(nomList) && nomList[0] && typeof nomList[0] === 'object' ? nomList[0] : null;
     if (nom) {
-      const n = nom as { salario_base_mensual?: unknown; cestaticket_mensual?: unknown };
+      const n = nom as {
+        salario_base_mensual?: unknown;
+        cestaticket_mensual?: unknown;
+        funciones_oficiales?: unknown;
+        cargo_nombre?: unknown;
+      };
       const sm = Number(n.salario_base_mensual);
       const ce = Number(n.cestaticket_mensual);
       if (Number.isFinite(sm) && sm > 0) salarioMensual = sm;
       if (Number.isFinite(ce) && ce >= 0) cestaMensual = ce;
+      const fo = strOpt(n.funciones_oficiales);
+      if (fo) funcionesOficiales = fo;
+      else if (!funcionesOficiales) {
+        funcionesOficiales = laboresContratoDesdeCargo({
+          cargoCodigo: codTab,
+          cargoNombre: strOpt(n.cargo_nombre) ?? cargoNom,
+          tareasEspecificas: tareasEsp,
+        });
+      }
+    } else if (!funcionesOficiales) {
+      funcionesOficiales = laboresContratoDesdeCargo({
+        cargoCodigo: codTab,
+        cargoNombre: cargoNom,
+        tareasEspecificas: tareasEsp,
+      });
     }
+  } else if (!funcionesOficiales) {
+    funcionesOficiales = laboresContratoDesdeCargo({
+      cargoNombre: cargoNom,
+      tareasEspecificas: tareasEsp,
+    });
   }
 
   const sbDia = f.contrato.salario_basico_diario_ves;
@@ -936,7 +963,7 @@ export async function cargarPropsContratoObreroPdfExpress(
     fetchCiProyectoCamposContratoPdf(supabase, pid),
     supabase
       .from('ci_config_nomina')
-      .select('cargo_nombre,cargo_codigo,salario_base_mensual,cestaticket_mensual,nivel_salarial,vigencia_desde')
+      .select('cargo_nombre,cargo_codigo,salario_base_mensual,cestaticket_mensual,nivel_salarial,vigencia_desde,funciones_oficiales')
       .eq('id', nid)
       .maybeSingle(),
   ]);
@@ -964,6 +991,7 @@ export async function cargarPropsContratoObreroPdfExpress(
   const nom = nomRow as {
     cargo_nombre?: string | null;
     cargo_codigo?: string | null;
+    funciones_oficiales?: string | null;
     salario_base_mensual?: unknown;
     cestaticket_mensual?: unknown;
     nivel_salarial?: number | null;
@@ -1043,6 +1071,12 @@ export async function cargarPropsContratoObreroPdfExpress(
   const nombreObrero = manual.obreroNombre.trim();
   const cedulaObrero = manual.obreroCedula.trim();
   const dirObrero = strOpt(manual.obreroDireccion);
+  const codTab = strOpt(nom.cargo_codigo);
+  const laboresAuto = laboresContratoDesdeCargo({
+    cargoCodigo: codTab,
+    cargoNombre: cargoNom,
+    funcionesOficiales: strOpt(nom.funciones_oficiales),
+  });
 
   const empleado: ContratoObreroPdfStructuredProps['empleado'] = {
     nombres: nombreObrero,
@@ -1056,7 +1090,9 @@ export async function cargarPropsContratoObreroPdfExpress(
     municipio_domicilio: strOpt(manual.obreroMunicipioResidencia) ?? undefined,
     estado_domicilio: strOpt(manual.obreroEstadoResidencia) ?? undefined,
     cargo_nombre: cargoNom,
-    tareas_especificas: cargoNom,
+    cargo_codigo: codTab,
+    tareas_especificas: laboresAuto,
+    funciones_oficiales: laboresAuto,
   };
 
   const smRaw = Number(nom.salario_base_mensual);
@@ -1069,7 +1105,6 @@ export async function cargarPropsContratoObreroPdfExpress(
       ? Math.round((salarioMensual / DIAS_MES_REF_SALARIO) * 10000) / 10000
       : null;
 
-  const codTab = strOpt(nom.cargo_codigo);
   const nivelTab = nom.nivel_salarial;
   const nivelDesdeTab =
     nivelTab != null && Number.isFinite(Number(nivelTab)) && Number(nivelTab) >= 1 && Number(nivelTab) <= 9
@@ -1086,7 +1121,7 @@ export async function cargarPropsContratoObreroPdfExpress(
     ingresoUsdNum != null && Number.isFinite(ingresoUsdNum) ? formatearUsdContratoPdf(ingresoUsdNum) : null;
 
   const configNomina: ContratoObreroPdfStructuredProps['configNomina'] = {
-    funciones_oficiales: cargoNom,
+    funciones_oficiales: laboresAuto,
     salario_base_mensual: salarioMensual,
     cestaticket_mensual: cestaMensual,
     salario_basico_diario_ves: salarioDiarioNum,
