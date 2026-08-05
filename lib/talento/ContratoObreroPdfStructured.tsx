@@ -6,6 +6,11 @@ import {
 import { fechaLargaRegistroMercantilContratoVe } from '@/lib/talento/registroMercantilCamposPdf';
 import { CESTATICKET_SEMANAL_USD } from '@/lib/nomina/cestaticketLegalUsd';
 import { TASA_BCV_VES_POR_USD_TABULADOR_2023_06_20 } from '@/lib/nomina/tabuladorSalariosConstruccion2023';
+import {
+  inferirFemeninoTrabajador,
+  nacionalidadAcordada,
+  tratoTrabajadorContrato,
+} from '@/lib/talento/generoContratoLaboral';
 
 /**
  * Tipografía unificada del contrato (PDF estándar vía @react-pdf/renderer).
@@ -152,6 +157,10 @@ export type EmpleadoContratoPdf = {
   estado_domicilio?: string | null;
   cargo_nombre?: string | null;
   tareas_especificas?: string | null;
+  /** Si true, comparecencia en femenino (la ciudadana / LA TRABAJADORA). */
+  femenino?: boolean | null;
+  /** Alternativa a `femenino`: 'M' | 'F'. */
+  genero?: 'M' | 'F' | string | null;
 };
 
 export type ConfigNominaContratoPdf = {
@@ -545,9 +554,20 @@ export function ContratoObreroPDF({
     str(entidad.sector_domicilio_registro, ZONA_COMPARECENCIA_PDF_DEFAULT),
   );
   const zonaPdf = quitarPalabraSectorEnDomicilio(zonaComparecencia).trim();
-  const nacionalidadRep = str(entidad.rep_legal_nacionalidad, phRepNat);
+  const repFemenino = entidad.rep_legal_femenino === true;
+  const nacionalidadRepRaw = (entidad.rep_legal_nacionalidad ?? '').trim();
+  const nacionalidadRep = nacionalidadRepRaw
+    ? nacionalidadAcordada(nacionalidadRepRaw, repFemenino)
+    : phRepNat;
   const estadoCivilRep = str(entidad.rep_legal_estado_civil, phRepEc);
-  const nacionalidadTrab = str(empleado.nacionalidad, '__________');
+  const trabFemenino = inferirFemeninoTrabajador({
+    femenino: empleado.femenino,
+    genero: empleado.genero,
+    estadoCivil: empleado.estado_civil,
+    nacionalidad: empleado.nacionalidad,
+  });
+  const tratoTrab = tratoTrabajadorContrato(trabFemenino);
+  const nacionalidadTrab = nacionalidadAcordada(empleado.nacionalidad, trabFemenino);
   const repCedulaLinea = str(repCedulaGuion, '_______________');
   const compUsdMes =
     parametros.compensacionCulminacionUsdPorMes != null &&
@@ -614,11 +634,11 @@ export function ContratoObreroPDF({
         <Text style={styles.bold}>{nacionalidadRep}</Text>, mayor de edad, hábil en derecho,{' '}
         <Text style={styles.bold}>{estadoCivilRep}</Text>, de este domicilio, titular de la cédula de Identidad número{' '}
         <Text style={styles.bold}>{repCedulaLinea}</Text>, quien a los efectos de este contrato se denominará{' '}
-        <Text style={styles.bold}>LA ENTIDAD DE TRABAJO</Text>, por una parte y por la otra el ciudadano{' '}
+        <Text style={styles.bold}>LA ENTIDAD DE TRABAJO</Text>, por una parte y por la otra {tratoTrab.articuloCiudadano}{' '}
         <Text style={styles.bold}>{nombreTrabajador}</Text>, <Text style={styles.bold}>{nacionalidadTrab}</Text>, mayor de edad, hábil en
         derecho, <Text style={styles.bold}>{estadoCivilTrab}</Text>, titular de la cédula de identidad número{' '}
         <Text style={styles.bold}>{cedulaTrabGuion}</Text>, de este domicilio; quien en lo
-        sucesivo se denominará <Text style={styles.bold}>EL TRABAJADOR</Text>, se ha convenido en celebrar, como en efecto se celebra, el
+        sucesivo se denominará <Text style={styles.bold}>{tratoTrab.denominacion}</Text>, se ha convenido en celebrar, como en efecto se celebra, el
         presente Contrato de Trabajo para una Obra Determinada, conforme a lo establecido en el Artículo 63 de la Ley Orgánica de Trabajo de
         los Trabajadores y Trabajadoras, y las cláusulas 18 y 19 de la vigente Convención Colectiva de Trabajo para la Rama de la Industria de
         la Construcción, conexos, afines y similares de la República Bolivariana de Venezuela, el cual se regirá por las Cláusulas que se
@@ -635,14 +655,14 @@ export function ContratoObreroPDF({
         <Text style={styles.bold}>{faseTecnicaTxt}</Text>
         {`, dentro de la obra denominada: `}
         <Text style={styles.bold}>{obraDenomTxt}</Text>
-        {`. LA ENTIDAD DE TRABAJO tiene como objeto la explotación de actividades comerciales y de la industria de la construcción, y a tales efectos contrata a EL TRABAJADOR para que desempeñe el cargo de: `}
+        {`. LA ENTIDAD DE TRABAJO tiene como objeto la explotación de actividades comerciales y de la industria de la construcción, y a tales efectos contrata a ${tratoTrab.denominacion} para que desempeñe el cargo de: `}
         <Text style={styles.bold}>{oficioStr}</Text>
-        {`, cargo establecido en el Tabulador de Oficios y Salarios Básicos de la Convención Colectiva vigente. EL TRABAJADOR se obliga a: 1.- Poner a disposición su capacidad normal de trabajo en forma exclusiva y en las labores anexas complementarias. 2.- Ejecutar las actividades inherentes al cargo, incluyendo recibir, procesar y pesar materia prima cuando sea requerido. 3.- Usar obligatoriamente el uniforme y equipos de protección (guantes, lentes, botas, etc.) según la LOPCYMAT. 4.- Mantener el orden del área asignada y el buen estado de maquinarias y herramientas. 5.- No prestar servicios a otros empleadores ni trabajar por cuenta propia en funciones inherentes al cargo.`}
+        {`, cargo establecido en el Tabulador de Oficios y Salarios Básicos de la Convención Colectiva vigente. ${tratoTrab.denominacion} se obliga a: 1.- Poner a disposición su capacidad normal de trabajo en forma exclusiva y en las labores anexas complementarias. 2.- Ejecutar las actividades inherentes al cargo, incluyendo recibir, procesar y pesar materia prima cuando sea requerido. 3.- Usar obligatoriamente el uniforme y equipos de protección (guantes, lentes, botas, etc.) según la LOPCYMAT. 4.- Mantener el orden del área asignada y el buen estado de maquinarias y herramientas. 5.- No prestar servicios a otros empleadores ni trabajar por cuenta propia en funciones inherentes al cargo.`}
       </Text>
 
       <Text style={[styles.paragraph, styles.paragraphIntro]}>
         <Text style={styles.bold}>SEGUNDA: PERIODO DE PRUEBA.</Text>
-        {` Conforme al Art. 25 del Reglamento de la LOTTT, se acuerda un PERIODO DE PRUEBA DE NOVENTA (90) DÍAS. Durante este lapso, LA ENTIDAD DE TRABAJO apreciará los conocimientos y aptitudes de EL TRABAJADOR. Cualquiera de las partes podrá dar por extinguida la relación sin lugar a indemnización alguna.`}
+        {` Conforme al Art. 25 del Reglamento de la LOTTT, se acuerda un PERIODO DE PRUEBA DE NOVENTA (90) DÍAS. Durante este lapso, LA ENTIDAD DE TRABAJO apreciará los conocimientos y aptitudes de ${tratoTrab.denominacion}. Cualquiera de las partes podrá dar por extinguida la relación sin lugar a indemnización alguna.`}
       </Text>
 
       <Text style={[styles.paragraph, styles.paragraphIntro]}>
@@ -655,7 +675,7 @@ export function ContratoObreroPDF({
         {` La jornada semanal será de cuarenta (40) horas de trabajo efectivo: `}
         {horarioCuartaDetalle}{' '}
         <Text style={styles.bold}>CONTROL:</Text>
-        {` EL TRABAJADOR debe firmar diariamente su registro de avance en el Libro de Obra. La inobservancia del horario en 4 oportunidades en un mes o la negativa a firmar el registro constituirá falta grave (Art. 102 literal "i" LOTTT).`}
+        {` ${tratoTrab.denominacion} debe firmar diariamente su registro de avance en el Libro de Obra. La inobservancia del horario en 4 oportunidades en un mes o la negativa a firmar el registro constituirá falta grave (Art. 102 literal "i" LOTTT).`}
       </Text>
     </>
   );
@@ -671,7 +691,7 @@ export function ContratoObreroPDF({
 
       <Text style={[styles.paragraph, styles.paragraphIntro]}>
         <Text style={styles.bold}>SEXTA: INGRESO INTEGRAL INDEXADO.</Text>
-        {` EL TRABAJADOR devengará los siguientes conceptos pagaderos en Bolívares. `}
+        {` ${tratoTrab.denominacion} devengará los siguientes conceptos pagaderos en Bolívares. `}
         {'\n'}
         a.- <Text style={styles.bold}>{salSemanalTxt}</Text>
         {` (Bs.) por concepto de Salario Semanal según Tabulador; `}
@@ -696,14 +716,14 @@ export function ContratoObreroPDF({
 
       <Text style={[styles.paragraph, styles.paragraphIntro, styles.clauseDense]}>
         <Text style={styles.bold}>OCTAVA: ÉTICA, CONFIDENCIALIDAD Y JURISDICCIÓN.</Text>
-        {` EL TRABAJADOR, guardará reserva absoluta sobre información técnica y se abstendrá de prácticas desleales. `}
+        {` ${tratoTrab.denominacion}, guardará reserva absoluta sobre información técnica y se abstendrá de prácticas desleales. `}
         {'\n\n'}
         <Text style={styles.bold}>NOVENA (TRANSPORTE GRATUITO - BENEFICIO SOCIAL NO REMUNERATIVO).</Text>
-        {` Con el firme propósito de facilitar la asistencia, puntualidad y resguardar la seguridad de EL TRABAJADOR, LA ENTIDAD DE TRABAJO brindará de manera gratuita un servicio de transporte diario, de ida y vuelta, desde el punto de encuentro establecido ${puntoEncTransporte} hasta el sitio donde se ejecute la obra determinada. `}
+        {` Con el firme propósito de facilitar la asistencia, puntualidad y resguardar la seguridad de ${tratoTrab.denominacion}, LA ENTIDAD DE TRABAJO brindará de manera gratuita un servicio de transporte diario, de ida y vuelta, desde el punto de encuentro establecido ${puntoEncTransporte} hasta el sitio donde se ejecute la obra determinada. `}
         <Text style={styles.bold}>NATURALEZA JURÍDICA:</Text>
         {` De conformidad con lo establecido en el Artículo 105 de la LOTTT, las partes acuerdan expresamente que este servicio de transporte constituye un beneficio social de carácter no remunerativo. En consecuencia, ambas partes reconocen que: No forma parte del salario bajo ninguna circunstancia. No tiene carácter de salario en especie. No será considerado ni computado para el cálculo de prestaciones sociales, vacaciones, utilidades, bonos ni ningún otro pasivo o derecho laboral derivado de la relación de trabajo. `}
         <Text style={styles.bold}>CONDICIONES:</Text>
-        {` El uso de este servicio es opcional para el trabajador y está sujeto al cumplimiento de las normas de conducta y seguridad dictadas por la empresa durante el trayecto.`}
+        {` El uso de este servicio es opcional para ${tratoTrab.trabajadorMinuscula} y está sujeto al cumplimiento de las normas de conducta y seguridad dictadas por la empresa durante el trayecto.`}
         {'\n\n'}
         <Text style={styles.bold}>DECIMA (DOMICILIO PROCESAL).</Text>
         {` Las partes eligen como domicilio especial la ciudad de Pampatar, Estado Nueva Esparta, sometiéndose a sus Tribunales del Trabajo. Se firman dos (2) ejemplares de un mismo tenor y a un solo efecto en la ciudad de Pampatar, a los `}
@@ -721,7 +741,7 @@ export function ContratoObreroPDF({
           <Text style={styles.signatureLine}>C.I. {repCedulaGuion}</Text>
         </View>
         <View style={styles.signatureBox}>
-          <Text style={styles.signatureLabelBold}>POR EL TRABAJADOR</Text>
+          <Text style={styles.signatureLabelBold}>{tratoTrab.denominacionFirma}</Text>
           <View style={styles.signUnderline} />
           <Text style={styles.signatureLabelBold}>NOMBRE:</Text>
           <Text style={styles.signatureLine}>{nombreTrabajador}</Text>

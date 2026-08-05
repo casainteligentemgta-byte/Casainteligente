@@ -77,6 +77,7 @@ function emptyRepFormRow(): RepFormRow {
 function repFormDesdeMercantil(r: RepresentanteMercantilCi): RepFormRow {
   const nat = (r.nacionalidad ?? '').trim();
   const esVen = !nat || /^venezol/i.test(nat);
+  const genero: 'M' | 'F' = r.genero === 'F' ? 'F' : 'M';
   return {
     id: newRepRowId(),
     nombre: (r.nombre ?? '').trim(),
@@ -85,13 +86,13 @@ function repFormDesdeMercantil(r: RepresentanteMercantilCi): RepFormRow {
     estado_civil: (r.estado_civil ?? '').trim(),
     esVenezolano: esVen,
     nacionalidadOtro: esVen ? '' : nat,
-    nacionalidad: esVen ? 'Venezolano' : nat,
+    nacionalidad: esVen ? (genero === 'F' ? 'Venezolana' : 'Venezolano') : nat,
     municipio_residencia: (r.municipio_residencia ?? '').trim(),
     estado_residencia: (r.estado_residencia ?? '').trim(),
     cargo: (r.cargo ?? '').trim(),
     domicilio: (r.domicilio ?? '').trim(),
     profesion: (r.profesion ?? '').trim(),
-    genero: r.genero === 'F' ? 'F' : 'M',
+    genero,
   };
 }
 
@@ -256,7 +257,9 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
       const representantesPayload: RepresentanteMercantilCi[] = repFilas.map((row) => {
         const nacionalidad =
           row.esVenezolano
-            ? 'Venezolano'
+            ? row.genero === 'F'
+              ? 'Venezolana'
+              : 'Venezolano'
             : row.nacionalidadOtro.trim() || row.nacionalidad.trim() || undefined;
         return {
           nombre: row.nombre.trim() || undefined,
@@ -538,7 +541,8 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
                   aporta nombre, leyenda <strong className="text-zinc-400">el ciudadano / la ciudadana</strong>, cédula,{' '}
                   <strong className="text-zinc-400">nacionalidad</strong> y <strong className="text-zinc-400">estado civil</strong>{' '}
                   (frase «de nacionalidad …, de estado civil …» tras el nombre). Si marca «Es venezolano», la nacionalidad en
-                  el contrato será «Venezolano». También alimentan planilla y <code className="text-zinc-400">rep_legal_*</code>{' '}
+                  el contrato será «Venezolano» o «Venezolana» según Sr/Sra. También alimentan planilla y{' '}
+                  <code className="text-zinc-400">rep_legal_*</code>{' '}
                   en base (nombre, cédula y cargo del primero).
                 </p>
                 {repFilas.map((row, idx) => (
@@ -652,7 +656,10 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
                     </label>
                     {row.esVenezolano ? (
                       <p className="text-[11px] text-zinc-500">
-                        Nacionalidad en contrato y registro: <span className="text-zinc-300">Venezolano</span>
+                        Nacionalidad en contrato y registro:{' '}
+                        <span className="text-zinc-300">
+                          {row.genero === 'F' ? 'Venezolana' : 'Venezolano'}
+                        </span>
                       </p>
                     ) : null}
                     {!row.esVenezolano ? (

@@ -812,6 +812,12 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
             ) : null}
             {!tabCabeceraMinimaSinAcciones && !modoEdicion && !fichaModuloSinPestaña ? (
               <>
+                <Link
+                  href={`/proyectos/modulo/${encodeURIComponent(id)}?editar=1`}
+                  className="rounded-xl border border-sky-500/40 bg-sky-500/15 px-3 py-2 text-xs font-semibold text-sky-100 hover:bg-sky-500/25"
+                >
+                  Modificar proyecto
+                </Link>
                 <button
                   type="button"
                   onClick={() => setVacanteModalOpen(true)}
@@ -845,6 +851,12 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
         {proyecto && tabVistaTalento && !modoEdicion && tabUrl !== 'solicitados' && tabUrl !== 'rrhh' && tabUrl !== 'finanzas' ? (
           <div className="mt-3 flex flex-wrap items-center gap-2 border-b border-white/10 pb-3">
             <RrhhMenuDropdown irRrhhPanel={irRrhhPanel} irCuadroSolicitados={irCuadroSolicitados} />
+            <Link
+              href={`/proyectos/modulo/${id}?editar=1`}
+              className="rounded-xl border border-sky-500/40 bg-sky-500/15 px-3 py-2 text-xs font-semibold text-sky-100 hover:bg-sky-500/25"
+            >
+              Modificar / renombrar
+            </Link>
             <Link
               href={`/proyectos/modulo/${id}`}
               className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-white/10"
@@ -1061,14 +1073,22 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                         GPS: {proyecto.lat ?? '—'}, {proyecto.lng ?? '—'} · Estado: {proyecto.estado}
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => void borrarProyectoActual()}
-                      disabled={borrandoProyecto}
-                      className="shrink-0 rounded-xl border border-red-500/40 bg-red-950/40 px-3 py-2 text-xs font-semibold text-red-300 hover:bg-red-950/70 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {borrandoProyecto ? 'Borrando…' : 'Borrar proyecto'}
-                    </button>
+                    <div className="flex shrink-0 flex-wrap items-center gap-2">
+                      <Link
+                        href={`/proyectos/modulo/${encodeURIComponent(id)}?editar=1`}
+                        className="rounded-xl border border-sky-500/40 bg-sky-500/15 px-3 py-2 text-xs font-semibold text-sky-100 hover:bg-sky-500/25"
+                      >
+                        Modificar / renombrar
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => void borrarProyectoActual()}
+                        disabled={borrandoProyecto}
+                        className="rounded-xl border border-red-500/40 bg-red-950/40 px-3 py-2 text-xs font-semibold text-red-300 hover:bg-red-950/70 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {borrandoProyecto ? 'Borrando…' : 'Borrar proyecto'}
+                      </button>
+                    </div>
                   </div>
                 </div>
                 <div className="mt-4 flex flex-wrap items-start gap-4">

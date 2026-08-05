@@ -532,6 +532,29 @@ export default function ModuloProyectosPage() {
                           {r.origen === 'modulo' ? 'Abrir gestión' : 'Abrir finanzas / obra'}
                         </button>
                       </Link>
+                      <Link
+                        href={
+                          r.origen === 'modulo'
+                            ? `/proyectos/modulo/${r.id}?editar=1`
+                            : `/proyectos/${r.id}/editar`
+                        }
+                      >
+                        <button
+                          type="button"
+                          style={{
+                            background: 'rgba(56, 189, 248, 0.18)',
+                            color: '#bae6fd',
+                            border: '1px solid rgba(56, 189, 248, 0.5)',
+                            borderRadius: '10px',
+                            padding: '8px 14px',
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Modificar nombre
+                        </button>
+                      </Link>
                       {r.origen === 'modulo' ? (
                         <Link href={`/proyectos/modulo/${r.id}?tab=solicitados`} title="Activos, solicitados y listas del cuadro">
                           <button

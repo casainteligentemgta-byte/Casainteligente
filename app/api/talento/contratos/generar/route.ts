@@ -16,6 +16,10 @@ import {
 } from '@/lib/talento/empleadoContratoDesdeHojaPlanilla';
 import { resolvePlanillaPatronoParaEmpleado } from '@/lib/talento/resolvePlanillaPatronoPdf';
 import { numeroALetrasHastaMiles } from '@/lib/talento/numeroALetrasVe';
+import {
+  inferirFemeninoTrabajador,
+  nacionalidadAcordada,
+} from '@/lib/talento/generoContratoLaboral';
 
 function strOrNull(value: unknown): string | null {
   if (typeof value !== 'string') return null;
@@ -426,7 +430,14 @@ export async function POST(req: Request) {
     const hvPlanilla = parseHojaVidaObrero(worker.hoja_vida_obrero) ?? emptyHojaVidaObreroCompleta();
     const empPlanilla = fusionarEmpleadoContratoDesdePlanilla(worker, hvPlanilla);
 
-    const nacionalidad = empPlanilla.nacionalidad ?? strOrNull(worker.nacionalidad) ?? 'venezolana';
+    const nacionalidadRaw = empPlanilla.nacionalidad ?? strOrNull(worker.nacionalidad);
+    const nacionalidad = nacionalidadAcordada(
+      nacionalidadRaw,
+      inferirFemeninoTrabajador({
+        estadoCivil: empPlanilla.estado_civil,
+        nacionalidad: nacionalidadRaw,
+      }),
+    );
     const domicilioTrabajador =
       empPlanilla.direccion ??
       strOrNull(worker.direccion_domicilio) ??

@@ -4,6 +4,11 @@ import { CONTRATO_OBRERO_HORARIO_CUARTA_DEFAULT } from '@/lib/talento/plantillas
 import { razonSocialPatronoParaContratoPdf } from '@/lib/talento/razonSocialContratoPdf';
 import { textoPuntoEncuentroTransporteClausulaSex } from '@/lib/talento/puntoEncuentroTransporteClausulaSex';
 import { textoInscripcionRegistroMercantilComparecencia } from '@/lib/talento/textoInscripcionRegistroMercantilContrato';
+import {
+  inferirFemeninoTrabajador,
+  nacionalidadAcordada,
+  tratoTrabajadorContrato,
+} from '@/lib/talento/generoContratoLaboral';
 
 export type DatoContratoFaltante = {
   id: string;
@@ -75,11 +80,27 @@ const ETIQUETAS: Record<string, { etiqueta: string; ayuda: string }> = {
   EMPLEADO_NOMBRE_COMPLETO: { etiqueta: 'Nombre completo del trabajador', ayuda: 'Revise su planilla de empleo.' },
   EMPLEADO_CEDULA: { etiqueta: 'Cédula o documento', ayuda: 'Indíquelo en la planilla de empleo.' },
   EMPLEADO_DIRECCION: { etiqueta: 'Domicilio del trabajador', ayuda: 'Planilla de empleo — datos personales.' },
-  EMPLEADO_NACIONALIDAD: { etiqueta: 'Nacionalidad', ayuda: 'Planilla de empleo.' },
+  EMPLEADO_NACIONALIDAD: { etiqueta: 'Nacionalidad', ayuda: 'Planilla de empleo; se acuerda por género (venezolano/venezolana).' },
   EMPLEADO_ESTADO_CIVIL: { etiqueta: 'Estado civil', ayuda: 'Planilla de empleo.' },
   EMPLEADO_FECHA_NACIMIENTO: { etiqueta: 'Fecha de nacimiento', ayuda: 'Planilla de empleo.' },
   EMPLEADO_LUGAR_NACIMIENTO: { etiqueta: 'Lugar de nacimiento', ayuda: 'Planilla de empleo.' },
   EMPLEADO_CELULAR: { etiqueta: 'Teléfono celular', ayuda: 'Planilla de empleo.' },
+  EMPLEADO_ARTICULO_CIUDADANO: {
+    etiqueta: 'Tratamiento del trabajador (el/la ciudadano/a)',
+    ayuda: 'Según género inferido (estado civil / nacionalidad).',
+  },
+  EMPLEADO_DENOMINACION: {
+    etiqueta: 'Denominación (EL TRABAJADOR / LA TRABAJADORA)',
+    ayuda: 'Según género del trabajador.',
+  },
+  EMPLEADO_DENOMINACION_FIRMA: {
+    etiqueta: 'Leyenda de firma del trabajador',
+    ayuda: 'POR EL TRABAJADOR / POR LA TRABAJADORA.',
+  },
+  EMPLEADO_TRATO_MINUSCULA: {
+    etiqueta: 'Trato en minúsculas (el/la trabajador/a)',
+    ayuda: 'Frases narrativas del contrato.',
+  },
   CONTRATO_CARGO_OFICIO: { etiqueta: 'Cargo u oficio del contrato', ayuda: 'RRHH al generar el contrato o tabulador.' },
   CONTRATO_LUGAR_PRESTACION: { etiqueta: 'Lugar de prestación de servicios', ayuda: 'Obra / proyecto en el contrato.' },
   CONTRATO_OBJETO: { etiqueta: 'Objeto del contrato', ayuda: 'Campo objeto en expediente del contrato.' },
@@ -259,8 +280,14 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
   const cedulaEmpFmt = cedula ? cedulaVenezuelaGuion(cedula) : '';
   const direccion = str(dp?.direccionDomicilio) || str(f.empleado.direccion);
   const celular = str(dp?.celular) || str(f.empleado.celular);
-  const nacionalidad = str(dp?.nacionalidad) || str(f.empleado.nacionalidad);
+  const nacionalidadRaw = str(dp?.nacionalidad) || str(f.empleado.nacionalidad);
   const estadoCivil = str(dp?.estadoCivil);
+  const trabFemenino = inferirFemeninoTrabajador({
+    estadoCivil,
+    nacionalidad: nacionalidadRaw,
+  });
+  const tratoTrab = tratoTrabajadorContrato(trabFemenino);
+  const nacionalidad = nacionalidadAcordada(nacionalidadRaw || null, trabFemenino);
   const fechaNac = str(dp?.fechaNacimiento);
   const lugarNac = [str(dp?.lugarNacimiento), str(dp?.paisNacimiento)].filter(Boolean).join(', ');
 
@@ -291,7 +318,12 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
   const repCed = str(f.patron.rep_legal_cedula);
   const repCedFmt = repCed ? cedulaVenezuelaGuion(repCed) : '_______________';
   const repCargo = str(f.patron.rep_legal_cargo) || 'Representante Legal';
-  const repArticulo = f.patron.rep_legal_femenino ? 'la Ciudadana' : 'el Ciudadano';
+  const repFemenino = f.patron.rep_legal_femenino === true;
+  const repArticulo = repFemenino ? 'la Ciudadana' : 'el Ciudadano';
+  const repNacionalidadRaw = str(f.patron.rep_nacionalidad);
+  const repNacionalidad = repNacionalidadRaw
+    ? nacionalidadAcordada(repNacionalidadRaw, repFemenino)
+    : phRepNat;
 
   const salMensualEst =
     Number.isFinite(salNum) && salNum > 0 ? salNum * DIAS_MES_REF_SALARIO_PLANTILLA : null;
@@ -322,7 +354,7 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
     PATRON_ESTADO: str(f.patron.estado_geo) || phEdo,
     REP_LEGAL_NOMBRE: repNombre,
     REP_LEGAL_CEDULA: repCedFmt,
-    REP_LEGAL_NACIONALIDAD: str(f.patron.rep_nacionalidad) || phRepNat,
+    REP_LEGAL_NACIONALIDAD: repNacionalidad,
     REP_LEGAL_ESTADO_CIVIL: str(f.patron.rep_estado_civil) || phRepEc,
     EMPLEADO_MUNICIPIO: str(f.empleado.municipio_domicilio) || phMun,
     EMPLEADO_ESTADO_GEO: str(f.empleado.estado_geografico) || phEdo,
@@ -337,6 +369,10 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
     EMPLEADO_FECHA_NACIMIENTO: fechaNac,
     EMPLEADO_LUGAR_NACIMIENTO: lugarNac,
     EMPLEADO_CELULAR: celular,
+    EMPLEADO_ARTICULO_CIUDADANO: tratoTrab.articuloCiudadano,
+    EMPLEADO_DENOMINACION: tratoTrab.denominacion,
+    EMPLEADO_DENOMINACION_FIRMA: tratoTrab.denominacionFirma,
+    EMPLEADO_TRATO_MINUSCULA: tratoTrab.trabajadorMinuscula,
     CONTRATO_CARGO_OFICIO: str(f.contrato.cargo_oficio_desempeño) || str(hv?.contratacion?.cargoUOficio),
     CONTRATO_LUGAR_PRESTACION: str(f.contrato.lugar_prestacion_servicio) || str(f.obra.nombre),
     CONTRATO_OBJETO: str(f.contrato.objeto_contrato) ? ` ${str(f.contrato.objeto_contrato)}` : '',
