@@ -734,10 +734,6 @@ export async function cargarPropsContratoObreroPdfEstructurado(
   const dp = hv.datosPersonales;
   const estadoCivilEmp = strOpt(f.empleado.estado_civil) ?? strOpt(dp?.estadoCivil) ?? 'Soltero';
   const nacionalidadRaw = strOpt(dp?.nacionalidad) ?? strOpt(f.empleado.nacionalidad);
-  const { nacionalidadRepresentanteSegunGenero } = await import(
-    '@/lib/talento/nacionalidadRepresentanteSegunGenero'
-  );
-  const { trabajadorFemeninoDesdeEstadoCivil } = await import('@/lib/talento/cedulaAuth');
   const nacionalidad = nacionalidadRepresentanteSegunGenero(
     nacionalidadRaw,
     trabajadorFemeninoDesdeEstadoCivil(estadoCivilEmp),
