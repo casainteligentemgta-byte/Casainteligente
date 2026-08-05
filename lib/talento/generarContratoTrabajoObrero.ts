@@ -15,7 +15,14 @@ import {
   signedUrlContratoLaboralBucket,
 } from '@/lib/talento/contratoLaboralRegistroStorage';
 import { ContratoObreroPDF } from '@/lib/talento/ContratoObreroPdfStructured';
-import { CEDULA_VE_NORMALIZADA_REGEX, estadoCivilContratoObrero, nacionalidadDesdeCedula, normCedulaToken, trabajadorFemeninoDesdeEstadoCivil } from '@/lib/talento/cedulaAuth';
+import {
+  CEDULA_VE_NORMALIZADA_REGEX,
+  domicilioContratoObrero,
+  estadoCivilContratoObrero,
+  nacionalidadDesdeCedula,
+  normCedulaToken,
+  trabajadorFemeninoDesdeEstadoCivil,
+} from '@/lib/talento/cedulaAuth';
 import { resolverCodigoExpedienteContrato } from '@/lib/talento/codigoExpedienteContrato';
 
 export type GenerarContratoTrabajoObreroInput = {
@@ -102,7 +109,7 @@ export async function generarContratoTrabajoObrero(
   const manual: ContratoExpressManualInput = {
     obreroNombre: obreroNombreCompleto,
     obreroCedula: cedula,
-    obreroDireccion: input.obrero_direccion?.trim() || null,
+    obreroDireccion: domicilioContratoObrero(input.obrero_direccion),
     nacionalidad,
     estadoCivil,
     fechaIngreso: fechaFirmaIso,
