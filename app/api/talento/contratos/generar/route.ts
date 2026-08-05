@@ -458,6 +458,7 @@ export async function POST(req: Request) {
       cargoNombre: worker.cargo_nombre,
       funcionesOficiales: strOrNull(conf?.funciones_oficiales),
       tareasEspecificas: strOrNull(worker.tareas_especificas),
+      conFallbackGenerico: true,
     });
     const nombreProyecto = proyecto?.nombre || 'OBRA NO REGISTRADA';
     const ubicacionProyecto =

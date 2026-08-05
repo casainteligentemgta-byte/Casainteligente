@@ -1,13 +1,12 @@
 /**
  * Labores por oficio del tabulador (GOE 6.752) para auto-relleno en contratos.
- * - `gaceta`: tomadas de `requisitosOficiosGaceta` (texto de referencia).
- * - `derivada`: redactadas a partir de la denominación del oficio (cobertura del catálogo).
- * - `generica`: fallback residual.
+ * Solo oficios con ficha de labores en la referencia de gaceta del proyecto
+ * (`requisitosOficiosGaceta`). Si el cargo no tiene ficha, no se inventa texto.
  */
-import { CARGOS_OBREROS, cargoPorCodigo } from '@/lib/constants/cargosObreros';
+import { cargoPorCodigo } from '@/lib/constants/cargosObreros';
 import { fichaRequisitosPorCodigo } from '@/lib/constants/requisitosOficiosGaceta';
 
-export type FuenteLaboresOficio = 'gaceta' | 'derivada' | 'generica';
+export type FuenteLaboresOficio = 'gaceta';
 
 export type LaboresOficioContrato = {
   codigo: string;
@@ -29,12 +28,6 @@ const LABORES_POR_CODIGO: Record<string, LaboresOficioContrato> = {
     labores: 'Organizar depósito, recibir mercancía, control de implementos de seguridad.',
     fuente: 'gaceta' as const,
   },
-  '2.1': {
-    codigo: '2.1',
-    nombre: 'AYUDANTE',
-    labores: 'Apoyar a oficiales y maestros en labores de construcción: acarreo de materiales, limpieza de área, preparación de mezclas sencillas y asistencia en obra.',
-    fuente: 'derivada' as const,
-  },
   '2.2': {
     codigo: '2.2',
     nombre: 'AUXILIAR DE DEPOSITO',
@@ -52,12 +45,6 @@ const LABORES_POR_CODIGO: Record<string, LaboresOficioContrato> = {
     nombre: 'OPERADOR DE MARTILLO PERFORADOR',
     labores: 'Perforación de taladros verticales/horizontales y apoyo a equipos mayores.',
     fuente: 'gaceta' as const,
-  },
-  '2.5': {
-    codigo: '2.5',
-    nombre: 'AYUDANTE DE OPERADORES',
-    labores: 'Asistir al operador de maquinaria: limpieza, abastecimiento, señales de seguridad y apoyo en el mantenimiento menor del equipo.',
-    fuente: 'derivada' as const,
   },
   '2.6': {
     codigo: '2.6',
@@ -83,66 +70,6 @@ const LABORES_POR_CODIGO: Record<string, LaboresOficioContrato> = {
     labores: 'Mantener uniformidad en el espesor del pavimento y verificar anchos de franja.',
     fuente: 'gaceta' as const,
   },
-  '2.10': {
-    codigo: '2.10',
-    nombre: 'PALERO ASFALTICO',
-    labores: 'Extender, nivelar y compactar material asfáltico con pala; preparar juntas y apoyar al rastrillero y espesorista en pavimentación.',
-    fuente: 'derivada' as const,
-  },
-  '3.1': {
-    codigo: '3.1',
-    nombre: 'CAPORAL',
-    labores: 'Dirigir y coordinar cuadrillas de obra básica; asignar tareas diarias, controlar avance y velar por el cumplimiento de normas de seguridad.',
-    fuente: 'derivada' as const,
-  },
-  '3.2': {
-    codigo: '3.2',
-    nombre: 'ALBAÑIL DE 2da.',
-    labores: 'Ejecutar trabajos de albañilería de segunda: muros, frisos sencillos, mezclas, colocación de bloques y apoyo al albañil de primera.',
-    fuente: 'derivada' as const,
-  },
-  '3.3': {
-    codigo: '3.3',
-    nombre: 'CARPINTERO DE 2da.',
-    labores: 'Ejecutar carpintería de segunda: encofrados sencillos, corte y armado de madera, apoyo al carpintero de primera.',
-    fuente: 'derivada' as const,
-  },
-  '3.4': {
-    codigo: '3.4',
-    nombre: 'CABILLERO DE 2da.',
-    labores: 'Cortar, doblar y amarrar cabillas según indicaciones; armar hierros sencillos y apoyar al cabillero de primera.',
-    fuente: 'derivada' as const,
-  },
-  '3.5': {
-    codigo: '3.5',
-    nombre: 'PLOMERO DE 2da.',
-    labores: 'Instalar tuberías y accesorios de plomería sencillos; apoyar al plomero de primera en redes de agua y desagüe.',
-    fuente: 'derivada' as const,
-  },
-  '3.6': {
-    codigo: '3.6',
-    nombre: 'ELECTRICISTA DE 2da.',
-    labores: 'Ejecutar instalaciones eléctricas sencillas: canalizaciones, tendido de conductores y apoyo al electricista de primera.',
-    fuente: 'derivada' as const,
-  },
-  '3.7': {
-    codigo: '3.7',
-    nombre: 'GRANITERO DE 2da.',
-    labores: 'Preparar y colocar granito o terrazos sencillos; pulir y apoyar al granitero de primera.',
-    fuente: 'derivada' as const,
-  },
-  '3.8': {
-    codigo: '3.8',
-    nombre: 'PINTOR DE 2da.',
-    labores: 'Preparar superficies y aplicar pintura en obras de segunda; apoyar al pintor de primera.',
-    fuente: 'derivada' as const,
-  },
-  '3.9': {
-    codigo: '3.9',
-    nombre: 'IMPERMEABILIZADOR DE 2da.',
-    labores: 'Aplicar impermeabilizantes en superficies sencillas; preparar materiales y apoyar al impermeabilizador de primera.',
-    fuente: 'derivada' as const,
-  },
   '3.10': {
     codigo: '3.10',
     nombre: 'GINCHERO',
@@ -166,18 +93,6 @@ const LABORES_POR_CODIGO: Record<string, LaboresOficioContrato> = {
     nombre: 'CHOFER DE 3ra. (HASTA 3 TONS)',
     labores: 'Manejo de camionetas de carga ligera.',
     fuente: 'gaceta' as const,
-  },
-  '3.14': {
-    codigo: '3.14',
-    nombre: 'OPERADOR DE EQUIPO PERFORADOR',
-    labores: 'Operar equipos perforadores según instrucción; mantener el área segura y realizar mantenimiento menor del equipo.',
-    fuente: 'derivada' as const,
-  },
-  '3.15': {
-    codigo: '3.15',
-    nombre: 'OPERADOR DE EQUIPO LIVIANO',
-    labores: 'Operar equipo liviano de construcción (compactadores, mezcladoras menores, etc.) y cuidar su correcto uso y limpieza.',
-    fuente: 'derivada' as const,
   },
   '3.16': {
     codigo: '3.16',
@@ -239,12 +154,6 @@ const LABORES_POR_CODIGO: Record<string, LaboresOficioContrato> = {
     labores: 'Conducir vehículos de carga hasta 8 toneladas o 6 metros cúbicos. Manejar camiones de transporte de pasajeros dentro de estos límites.',
     fuente: 'gaceta' as const,
   },
-  '4.4': {
-    codigo: '4.4',
-    nombre: 'OPERADOR DE PALA HASTA 1YARDA CUB.',
-    labores: 'Operar pala mecánica hasta 1 yarda cúbica: excavación, carga y movimiento de materiales según planos y señales de obra.',
-    fuente: 'derivada' as const,
-  },
   '4.5': {
     codigo: '4.5',
     nombre: 'MECANICO DE GASOLINA DE 1ra.',
@@ -263,89 +172,11 @@ const LABORES_POR_CODIGO: Record<string, LaboresOficioContrato> = {
     labores: 'Operar el equipo pavimentador, leer chaflanes para distribuir el asfalto y trabajar bajo altas temperaturas de material.',
     fuente: 'gaceta' as const,
   },
-  '5.1': {
-    codigo: '5.1',
-    nombre: 'ALBAÑIL DE 1ra.',
-    labores: 'Ejecutar albañilería de primera: muros, frisos, acabados, lectura de planos y dirección de ayudantes en su especialidad.',
-    fuente: 'derivada' as const,
-  },
-  '5.2': {
-    codigo: '5.2',
-    nombre: 'CARPINTERO DE 1ra.',
-    labores: 'Ejecutar carpintería de primera: encofrados complejos, estructuras de madera, lectura de planos y supervisión de ayudantes.',
-    fuente: 'derivada' as const,
-  },
-  '5.3': {
-    codigo: '5.3',
-    nombre: 'CABILLERO DE 1ra.',
-    labores: 'Armar hierro de primera según planos estructurales; cortar, doblar, amarrar y dirigir ayudantes de cabillería.',
-    fuente: 'derivada' as const,
-  },
-  '5.4': {
-    codigo: '5.4',
-    nombre: 'PLOMERO DE 1ra.',
-    labores: 'Instalar redes de plomería de primera: agua potable, sanitarios, pruebas de presión y lectura de planos.',
-    fuente: 'derivada' as const,
-  },
-  '5.5': {
-    codigo: '5.5',
-    nombre: 'ELECTRICISTA DE 1ra.',
-    labores: 'Ejecutar instalaciones eléctricas de primera: tableros, circuitos, fuerza y alumbrado conforme a planos y normas.',
-    fuente: 'derivada' as const,
-  },
-  '5.6': {
-    codigo: '5.6',
-    nombre: 'GRANITERO DE 1ra.',
-    labores: 'Ejecutar granito/terrazo de primera: colocación, pulido, acabados y control de calidad de superficies.',
-    fuente: 'derivada' as const,
-  },
-  '5.7': {
-    codigo: '5.7',
-    nombre: 'PINTOR DE 1ra.',
-    labores: 'Ejecutar pintura de primera: preparación, aplicación, acabados finos y protección de superficies.',
-    fuente: 'derivada' as const,
-  },
-  '5.8': {
-    codigo: '5.8',
-    nombre: 'IMPERMEABILIZADOR DE 1ra.',
-    labores: 'Ejecutar impermeabilización de primera: membranas, impermeabilizantes, detalles críticos y control de filtraciones.',
-    fuente: 'derivada' as const,
-  },
   '5.9': {
     codigo: '5.9',
     nombre: 'CHOFER DE 1ra. (DE 8 A 15 TONS)',
     labores: 'Conducir camiones hasta 15 toneladas o 10 metros cúbicos. Manejar autobuses de transporte de trabajadores.',
     fuente: 'gaceta' as const,
-  },
-  '5.10': {
-    codigo: '5.10',
-    nombre: 'OPERADOR DE EQUIPO PESADO DE 2da.',
-    labores: 'Operar equipo pesado de segunda bajo supervisión: movimiento de tierra y materiales conforme a señales y normas de seguridad.',
-    fuente: 'derivada' as const,
-  },
-  '5.11': {
-    codigo: '5.11',
-    nombre: 'TRACTORISTA DE 2da.',
-    labores: 'Operar tractores de segunda: empuje, nivelación básica y movimiento de materiales en obra.',
-    fuente: 'derivada' as const,
-  },
-  '5.12': {
-    codigo: '5.12',
-    nombre: 'OPERADOR DE MOTOTRAILLA DE 2da.',
-    labores: 'Operar mototraílla de segunda: corte, transporte y depósito de material conforme a instrucción del caporal o maestro.',
-    fuente: 'derivada' as const,
-  },
-  '5.13': {
-    codigo: '5.13',
-    nombre: 'OPERADOR DE MOTONIVELADORA DE 2da.',
-    labores: 'Operar motoniveladora de segunda: perfilado y nivelación de vías y plataformas según cotas indicadas.',
-    fuente: 'derivada' as const,
-  },
-  '5.14': {
-    codigo: '5.14',
-    nombre: 'OPERADOR DE GRUA (GRUERO) DE 2da.',
-    labores: 'Operar grúa de segunda: izado y traslado de cargas bajo señales del rigger/caporal, respetando capacidades y radio de trabajo.',
-    fuente: 'derivada' as const,
   },
   '5.15': {
     codigo: '5.15',
@@ -401,30 +232,6 @@ const LABORES_POR_CODIGO: Record<string, LaboresOficioContrato> = {
     labores: 'Revestir estructuras con ladrillos refractarios y frisar ductos térmicos.',
     fuente: 'gaceta' as const,
   },
-  '5.24': {
-    codigo: '5.24',
-    nombre: 'DEPOSITARIO',
-    labores: 'Administrar depósito de obra: recepción, resguardo, despacho e inventario de materiales y herramientas.',
-    fuente: 'derivada' as const,
-  },
-  '5.25': {
-    codigo: '5.25',
-    nombre: 'DUCTERO',
-    labores: 'Fabricar e instalar ductos (aire, basura u otros) según planos; cortes, uniones y montaje en obra.',
-    fuente: 'derivada' as const,
-  },
-  '5.26': {
-    codigo: '5.26',
-    nombre: 'ARMADOR METALICO',
-    labores: 'Armar y montar estructuras metálicas: perfiles, uniones, aplomado y fijación conforme a planos.',
-    fuente: 'derivada' as const,
-  },
-  '6.1': {
-    codigo: '6.1',
-    nombre: 'MAESTRO CARPINTERO DE 2da.',
-    labores: 'Supervisar carpintería de segunda como maestro: organizar cuadrilla, controlar calidad de encofrados y materiales.',
-    fuente: 'derivada' as const,
-  },
   '6.2': {
     codigo: '6.2',
     nombre: 'CHOFER DE CAMIÓN MAS DE 15 TONS.',
@@ -443,155 +250,17 @@ const LABORES_POR_CODIGO: Record<string, LaboresOficioContrato> = {
     labores: 'Operar el trompo mezclador, entrega en sitio y limpieza del equipo.',
     fuente: 'gaceta' as const,
   },
-  '6.5': {
-    codigo: '6.5',
-    nombre: 'OPERADOR DE PALA MAS 1YARDA CUB. DE 2da.',
-    labores: 'Operar pala de más de 1 yarda cúbica de segunda: excavaciones mayores y carga de material bajo supervisión.',
-    fuente: 'derivada' as const,
-  },
-  '6.6': {
-    codigo: '6.6',
-    nombre: 'PROYECTADOR DE CONCRETO',
-    labores: 'Proyectar concreto (shotcrete/gunite) sobre superficies; controlar mezcla, presión y acabado.',
-    fuente: 'derivada' as const,
-  },
-  '6.7': {
-    codigo: '6.7',
-    nombre: 'CHOFER DE VOLTEO DE 30 O MAS TONELADAS',
-    labores: 'Conducir camiones de volteo de 30 o más toneladas; cargar, transportar y descargar material de forma segura.',
-    fuente: 'derivada' as const,
-  },
-  '7.1': {
-    codigo: '7.1',
-    nombre: 'MAESTRO ALBAÑIL',
-    labores: 'Dirigir labores de albañilería como maestro: planificar, asignar, controlar calidad y avance de la cuadrilla.',
-    fuente: 'derivada' as const,
-  },
-  '7.2': {
-    codigo: '7.2',
-    nombre: 'MAESTRO CARPINTERO DE 1ra.',
-    labores: 'Dirigir carpintería de primera como maestro: encofrados, estructuras y control de calidad.',
-    fuente: 'derivada' as const,
-  },
-  '7.3': {
-    codigo: '7.3',
-    nombre: 'MAESTRO CABILLERO',
-    labores: 'Dirigir cabillería como maestro: interpretación de planos estructurales y control del armado de hierro.',
-    fuente: 'derivada' as const,
-  },
-  '7.4': {
-    codigo: '7.4',
-    nombre: 'MAESTRO PLOMERO DE 1ra.',
-    labores: 'Dirigir plomería de primera como maestro: redes, pruebas y coordinación con otras especialidades.',
-    fuente: 'derivada' as const,
-  },
-  '7.5': {
-    codigo: '7.5',
-    nombre: 'MAESTRO ELECTRICISTA',
-    labores: 'Dirigir instalaciones eléctricas como maestro electricista: planos, tableros, seguridad eléctrica y cuadrilla.',
-    fuente: 'derivada' as const,
-  },
-  '7.6': {
-    codigo: '7.6',
-    nombre: 'MAESTRO GRANITERO',
-    labores: 'Dirigir granitería como maestro: acabados, pulidos y control de calidad de superficies.',
-    fuente: 'derivada' as const,
-  },
-  '7.7': {
-    codigo: '7.7',
-    nombre: 'MAESTRO PINTOR',
-    labores: 'Dirigir pintura como maestro: programación de acabados, materiales y calidad de aplicación.',
-    fuente: 'derivada' as const,
-  },
-  '7.8': {
-    codigo: '7.8',
-    nombre: 'MAESTRO IMPERMEABILIZADOR',
-    labores: 'Dirigir impermeabilización como maestro: sistemas, detalles críticos y garantía de estanqueidad.',
-    fuente: 'derivada' as const,
-  },
-  '7.9': {
-    codigo: '7.9',
-    nombre: 'MAESTRO DE OBRA DE 2da.',
-    labores: 'Dirigir la obra como maestro de segunda: coordinar oficios, avance diario y seguridad en el frente de trabajo.',
-    fuente: 'derivada' as const,
-  },
   '7.10': {
     codigo: '7.10',
     nombre: 'CHOFER DE GANDOLA DE 1ra. (TODO TON.)',
     labores: 'Conducción de cualquier vehículo asignado sin restricción de carga.',
     fuente: 'gaceta' as const,
   },
-  '7.11': {
-    codigo: '7.11',
-    nombre: 'DINAMITERO',
-    labores: 'Preparar y ejecutar voladuras menores como dinamitero: carga, conexionado y disparo bajo normas de seguridad.',
-    fuente: 'derivada' as const,
-  },
-  '7.12': {
-    codigo: '7.12',
-    nombre: 'CAPORAL DE EQUIPO',
-    labores: 'Coordinar equipos y operadores como caporal de equipo: asignación, señales, productividad y seguridad.',
-    fuente: 'derivada' as const,
-  },
   '7.13': {
     codigo: '7.13',
     nombre: 'MAESTRO DE OBRAS ELECTROMECANICAS',
     labores: 'Supervisión de montaje de bombas, tableros y sistemas de control.',
     fuente: 'gaceta' as const,
-  },
-  '7.14': {
-    codigo: '7.14',
-    nombre: 'ALINEADOR DE GRUA (REGGE)',
-    labores: 'Alinear y calibrar grúas (regge): nivelación, aplomado y verificación de condiciones de operación.',
-    fuente: 'derivada' as const,
-  },
-  '7.15': {
-    codigo: '7.15',
-    nombre: 'MINERO',
-    labores: 'Ejecutar labores de minería/excavación en túneles o frentes mineros: perforación, sostenimiento y seguridad.',
-    fuente: 'derivada' as const,
-  },
-  '8.1': {
-    codigo: '8.1',
-    nombre: 'MAESTRO DE VOLADURAS',
-    labores: 'Planificar y dirigir voladuras como maestro: diseños de carga, seguridad perimetral y coordinación del disparo.',
-    fuente: 'derivada' as const,
-  },
-  '8.2': {
-    codigo: '8.2',
-    nombre: 'OPERADOR DE EQUIPO PESADO DE 1ra.',
-    labores: 'Operar equipo pesado de primera: movimiento de tierra complejo, alta productividad y mantenimiento operativo.',
-    fuente: 'derivada' as const,
-  },
-  '8.3': {
-    codigo: '8.3',
-    nombre: 'TRACTORISTA DE 1ra.',
-    labores: 'Operar tractores de primera: movimientos de tierra exigentes, perfilado y trabajo en pendientes/condiciones difíciles.',
-    fuente: 'derivada' as const,
-  },
-  '8.4': {
-    codigo: '8.4',
-    nombre: 'OPERADOR DE MOTOTRAILLA DE 1ra.',
-    labores: 'Operar mototraílla de primera: corte y transporte de grandes volúmenes con control de pendientes y ciclos.',
-    fuente: 'derivada' as const,
-  },
-  '8.5': {
-    codigo: '8.5',
-    nombre: 'OPERADOR DE PALA MAS 1YARDA CUB. DE 1ra.',
-    labores: 'Operar pala de más de 1 yarda cúbica de primera: excavaciones mayores, precisión y alto rendimiento.',
-    fuente: 'derivada' as const,
-  },
-  '8.6': {
-    codigo: '8.6',
-    nombre: 'OPERADOR DE MOTONIVELADORA DE 1ra.',
-    labores: 'Operar motoniveladora de primera: nivelación fina de vías, taludes y plataformas según proyecto.',
-    fuente: 'derivada' as const,
-  },
-  '8.7': {
-    codigo: '8.7',
-    nombre: 'OPERADOR DE GRÚA (GRUERO) DE 1ra.',
-    labores: 'Operar grúa de primera: izados críticos, cargas complejas y coordinación con rigger en altura.',
-    fuente: 'derivada' as const,
   },
   '8.8': {
     codigo: '8.8',
@@ -604,18 +273,6 @@ const LABORES_POR_CODIGO: Record<string, LaboresOficioContrato> = {
     nombre: 'OPERADOR MÁQUINAS-HERRAMIENTAS 1ra.',
     labores: 'Tallado de engranajes, roscados y piezas de alta precisión.',
     fuente: 'gaceta' as const,
-  },
-  '8.10': {
-    codigo: '8.10',
-    nombre: 'OPERADOR DE PLANTA',
-    labores: 'Operar planta industrial/de proceso: control de procesos, parámetros de producción y seguridad de la instalación.',
-    fuente: 'derivada' as const,
-  },
-  '8.11': {
-    codigo: '8.11',
-    nombre: 'OPERADOR DE ALIVA',
-    labores: 'Operar equipo Aliva (proyección de concreto): control de mezcla, presión y aplicación en túneles u obra.',
-    fuente: 'derivada' as const,
   },
   '9.1': {
     codigo: '9.1',
@@ -645,13 +302,12 @@ for (const row of Object.values(LABORES_POR_CODIGO)) {
   _byNombre.set(normNombre(row.nombre), row);
 }
 
-/** Labores del oficio por código del tabulador (ej. `5.1`). */
+/** Labores del oficio por código del tabulador (ej. `5.17`). Solo si hay ficha gaceta. */
 export function laboresOficioPorCodigo(codigo: string | null | undefined): LaboresOficioContrato | null {
   const c = String(codigo ?? '').trim();
   if (!c) return null;
   const hit = LABORES_POR_CODIGO[c];
   if (hit) return hit;
-  // Preferir tareas de ficha gaceta si el mapa está desfasado
   const ficha = fichaRequisitosPorCodigo(c);
   const cargo = cargoPorCodigo(c);
   if (ficha.estado === 'detallada' && ficha.tareas?.trim()) {
@@ -662,24 +318,15 @@ export function laboresOficioPorCodigo(codigo: string | null | undefined): Labor
       fuente: 'gaceta',
     };
   }
-  if (cargo) {
-    return {
-      codigo: c,
-      nombre: cargo.nombre,
-      labores: `Ejecutar las labores propias del oficio ${cargo.nombre} conforme al tabulador de la Convención Colectiva de la Construcción y las instrucciones de la entidad de trabajo.`,
-      fuente: 'generica',
-    };
-  }
   return null;
 }
 
-/** Resolver por nombre de cargo (p. ej. fila de `ci_config_nomina.cargo_nombre`). */
+/** Resolver por nombre de cargo (solo oficios con labores gaceta). */
 export function laboresOficioPorNombre(nombre: string | null | undefined): LaboresOficioContrato | null {
   const n = normNombre(nombre ?? '');
   if (!n) return null;
   const exact = _byNombre.get(n);
   if (exact) return exact;
-  // coincidencia parcial
   for (const row of Object.values(LABORES_POR_CODIGO)) {
     const rn = normNombre(row.nombre);
     if (rn.includes(n) || n.includes(rn)) return row;
@@ -687,19 +334,23 @@ export function laboresOficioPorNombre(nombre: string | null | undefined): Labor
   return null;
 }
 
+const FALLBACK_GENERICO =
+  'las tareas inherentes a su cargo y aquellas asignadas por su supervisor inmediato';
+
 /**
- * Texto de labores para contrato: prioriza código tabulador, luego nombre,
- * luego `funciones_oficiales` / override explícito.
+ * Texto de labores para contrato (solo gaceta u override explícito).
+ * Si el oficio no tiene ficha gaceta y no hay override, devuelve cadena vacía.
  */
 export function laboresContratoDesdeCargo(opts: {
   cargoCodigo?: string | null;
   cargoNombre?: string | null;
   funcionesOficiales?: string | null;
   tareasEspecificas?: string | null;
+  /** Si true, cuando no hay ficha/override usa el texto genérico (API markdown). */
+  conFallbackGenerico?: boolean;
 }): string {
   const override =
     String(opts.funcionesOficiales ?? '').trim() || String(opts.tareasEspecificas ?? '').trim();
-  // Si ya hay texto guardado en BD/planilla y no es solo el nombre del cargo, respetarlo
   const nom = String(opts.cargoNombre ?? '').trim();
   if (override && (!nom || normNombre(override) !== normNombre(nom))) {
     return override;
@@ -708,13 +359,27 @@ export function laboresContratoDesdeCargo(opts: {
   if (byCod?.labores) return byCod.labores;
   const byNom = laboresOficioPorNombre(opts.cargoNombre);
   if (byNom?.labores) return byNom.labores;
-  return (
-    override ||
-    'las tareas inherentes a su cargo y aquellas asignadas por su supervisor inmediato'
-  );
+  if (opts.conFallbackGenerico) return override || FALLBACK_GENERICO;
+  return '';
 }
 
-/** Catálogo completo (102 oficios) — útil para auditoría / UI. */
+/** Frase lista para insertar en cláusula PRIMERA (vacía si no hay labores gaceta/override). */
+export function fraseLaboresOficioContrato(opts: {
+  cargoCodigo?: string | null;
+  cargoNombre?: string | null;
+  funcionesOficiales?: string | null;
+  tareasEspecificas?: string | null;
+}): string {
+  const labores = laboresContratoDesdeCargo(opts);
+  if (!labores) return '';
+  return ` Las labores principales del oficio son: ${labores}.`;
+}
+
+/** Catálogo de oficios con labores gaceta (45). */
 export function listarLaboresOficiosContrato(): LaboresOficioContrato[] {
-  return CARGOS_OBREROS.map((c) => LABORES_POR_CODIGO[c.codigo]!).filter(Boolean);
+  return Object.values(LABORES_POR_CODIGO).sort((a, b) => {
+    const [a1, a2] = a.codigo.split('.').map(Number);
+    const [b1, b2] = b.codigo.split('.').map(Number);
+    return a1 - b1 || a2 - b2;
+  });
 }

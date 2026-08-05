@@ -503,6 +503,9 @@ export function ContratoObreroPDF({
     funcionesOficiales: configNomina.funciones_oficiales ?? empleado.funciones_oficiales,
     tareasEspecificas: empleado.tareas_especificas,
   });
+  const fraseLaboresOficio = laboresOficioTxt
+    ? ` Las labores principales del oficio son: `
+    : '';
   const fechaCierreIso = parametros.fechaFirmaContratoIso ?? parametros.fechaIngreso;
   const { dia: diaFirma, mes: mesFirma, anio: anioFirma } = partesFechaCierreFirma(fechaCierreIso);
 
@@ -668,9 +671,14 @@ export function ContratoObreroPDF({
         <Text style={styles.bold}>{obraDenomTxt}</Text>
         {`. LA ENTIDAD DE TRABAJO tiene como objeto la explotación de actividades comerciales y de la industria de la construcción, y a tales efectos contrata a EL TRABAJADOR para que desempeñe el cargo de: `}
         <Text style={styles.bold}>{oficioStr}</Text>
-        {`, cargo establecido en el Tabulador de Oficios y Salarios Básicos de la Convención Colectiva vigente. Las labores principales del oficio son: `}
-        <Text style={styles.bold}>{laboresOficioTxt}</Text>
-        {`. EL TRABAJADOR se obliga a: 1.- Poner a disposición su capacidad normal de trabajo en forma exclusiva y en las labores anexas complementarias. 2.- Ejecutar las actividades inherentes al cargo, incluyendo recibir, procesar y pesar materia prima cuando sea requerido. 3.- Usar obligatoriamente el uniforme y equipos de protección (guantes, lentes, botas, etc.) según la LOPCYMAT. 4.- Mantener el orden del área asignada y el buen estado de maquinarias y herramientas. 5.- No prestar servicios a otros empleadores ni trabajar por cuenta propia en funciones inherentes al cargo.`}
+        {`, cargo establecido en el Tabulador de Oficios y Salarios Básicos de la Convención Colectiva vigente.`}
+        {laboresOficioTxt ? (
+          <>
+            {fraseLaboresOficio}
+            <Text style={styles.bold}>{laboresOficioTxt}</Text>.
+          </>
+        ) : null}
+        {` EL TRABAJADOR se obliga a: 1.- Poner a disposición su capacidad normal de trabajo en forma exclusiva y en las labores anexas complementarias. 2.- Ejecutar las actividades inherentes al cargo, incluyendo recibir, procesar y pesar materia prima cuando sea requerido. 3.- Usar obligatoriamente el uniforme y equipos de protección (guantes, lentes, botas, etc.) según la LOPCYMAT. 4.- Mantener el orden del área asignada y el buen estado de maquinarias y herramientas. 5.- No prestar servicios a otros empleadores ni trabajar por cuenta propia en funciones inherentes al cargo.`}
       </Text>
 
       <Text style={[styles.paragraph, styles.paragraphIntro]}>
