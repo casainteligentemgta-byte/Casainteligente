@@ -5,8 +5,10 @@ import { razonSocialPatronoParaContratoPdf } from '@/lib/talento/razonSocialCont
 import { textoPuntoEncuentroTransporteClausulaSex } from '@/lib/talento/puntoEncuentroTransporteClausulaSex';
 import { textoInscripcionRegistroMercantilComparecencia } from '@/lib/talento/textoInscripcionRegistroMercantilContrato';
 import {
+  inferirFemeninoRepresentante,
   inferirFemeninoTrabajador,
   nacionalidadAcordada,
+  tratoRepresentanteContrato,
   tratoTrabajadorContrato,
 } from '@/lib/talento/generoContratoLaboral';
 
@@ -284,7 +286,7 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
   const estadoCivil = str(dp?.estadoCivil);
   const trabFemenino = inferirFemeninoTrabajador({
     estadoCivil,
-    nacionalidad: nacionalidadRaw,
+    nombre: nombreCompleto,
   });
   const tratoTrab = tratoTrabajadorContrato(trabFemenino);
   const nacionalidad = nacionalidadAcordada(nacionalidadRaw || null, trabFemenino);
@@ -318,12 +320,17 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
   const repCed = str(f.patron.rep_legal_cedula);
   const repCedFmt = repCed ? cedulaVenezuelaGuion(repCed) : '_______________';
   const repCargo = str(f.patron.rep_legal_cargo) || 'Representante Legal';
-  const repFemenino = f.patron.rep_legal_femenino === true;
-  const repArticulo = repFemenino ? 'la Ciudadana' : 'el Ciudadano';
+  const repFemenino = inferirFemeninoRepresentante({
+    femenino: f.patron.rep_legal_femenino,
+    estadoCivil: f.patron.rep_estado_civil,
+    nacionalidad: f.patron.rep_nacionalidad,
+    nombre: repNombre,
+  });
+  const repArticulo = tratoRepresentanteContrato(repFemenino).articuloCiudadano;
   const repNacionalidadRaw = str(f.patron.rep_nacionalidad);
   const repNacionalidad = repNacionalidadRaw
     ? nacionalidadAcordada(repNacionalidadRaw, repFemenino)
-    : phRepNat;
+    : nacionalidadAcordada(null, repFemenino);
 
   const salMensualEst =
     Number.isFinite(salNum) && salNum > 0 ? salNum * DIAS_MES_REF_SALARIO_PLANTILLA : null;

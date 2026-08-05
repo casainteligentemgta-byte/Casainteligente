@@ -17,8 +17,11 @@ import {
 import { resolvePlanillaPatronoParaEmpleado } from '@/lib/talento/resolvePlanillaPatronoPdf';
 import { numeroALetrasHastaMiles } from '@/lib/talento/numeroALetrasVe';
 import {
+  inferirFemeninoRepresentante,
   inferirFemeninoTrabajador,
   nacionalidadAcordada,
+  tratoRepresentanteContrato,
+  tratoTrabajadorContrato,
 } from '@/lib/talento/generoContratoLaboral';
 
 function strOrNull(value: unknown): string | null {
@@ -59,6 +62,9 @@ function primerRepresentanteRegistroMercantil(raw: unknown): {
   cargo?: string;
   profesion?: string;
   domicilio?: string;
+  nacionalidad?: string;
+  estado_civil?: string;
+  genero?: 'M' | 'F';
 } {
   try {
     let o: unknown = raw;
@@ -73,12 +79,27 @@ function primerRepresentanteRegistroMercantil(raw: unknown): {
     const arr = (o as { representantes?: unknown }).representantes;
     if (!Array.isArray(arr) || !arr[0] || typeof arr[0] !== 'object' || Array.isArray(arr[0])) return {};
     const r = arr[0] as Record<string, unknown>;
+    const gRaw = String(r.genero ?? r.sexo ?? '').trim().toUpperCase();
+    const genero: 'M' | 'F' | undefined =
+      gRaw === 'F' || gRaw === 'FEMENINO' || gRaw === 'FEMENINA' || gRaw === 'SRA' || gRaw === 'SRA.'
+        ? 'F'
+        : gRaw === 'M' || gRaw === 'MASCULINO' || gRaw === 'SR' || gRaw === 'SR.'
+          ? 'M'
+          : undefined;
     return {
       nombre: typeof r.nombre === 'string' ? r.nombre : undefined,
       cedula: typeof r.cedula === 'string' ? r.cedula : undefined,
       cargo: typeof r.cargo === 'string' ? r.cargo : undefined,
       profesion: typeof r.profesion === 'string' ? r.profesion : undefined,
       domicilio: typeof r.domicilio === 'string' ? r.domicilio : undefined,
+      nacionalidad: typeof r.nacionalidad === 'string' ? r.nacionalidad : undefined,
+      estado_civil:
+        typeof r.estado_civil === 'string'
+          ? r.estado_civil
+          : typeof r.estadoCivil === 'string'
+            ? r.estadoCivil
+            : undefined,
+      genero,
     };
   } catch {
     return {};
@@ -430,14 +451,15 @@ export async function POST(req: Request) {
     const hvPlanilla = parseHojaVidaObrero(worker.hoja_vida_obrero) ?? emptyHojaVidaObreroCompleta();
     const empPlanilla = fusionarEmpleadoContratoDesdePlanilla(worker, hvPlanilla);
 
+    const nombreTrabajador =
+      empPlanilla.nombre_completo ?? worker.nombres ?? worker.nombre_completo ?? 'TRABAJADOR NO REGISTRADO';
     const nacionalidadRaw = empPlanilla.nacionalidad ?? strOrNull(worker.nacionalidad);
-    const nacionalidad = nacionalidadAcordada(
-      nacionalidadRaw,
-      inferirFemeninoTrabajador({
-        estadoCivil: empPlanilla.estado_civil,
-        nacionalidad: nacionalidadRaw,
-      }),
-    );
+    const trabFemenino = inferirFemeninoTrabajador({
+      estadoCivil: empPlanilla.estado_civil,
+      nombre: nombreTrabajador,
+    });
+    const tratoTrab = tratoTrabajadorContrato(trabFemenino);
+    const nacionalidad = nacionalidadAcordada(nacionalidadRaw, trabFemenino);
     const domicilioTrabajador =
       empPlanilla.direccion ??
       strOrNull(worker.direccion_domicilio) ??
@@ -466,7 +488,6 @@ export async function POST(req: Request) {
         ? ` La duración pactada es de **${Math.floor(dv)}** ${du === 'meses' ? 'mes(es) calendario' : 'día(s) calendario'}.`
         : '';
     const fecha = strOrNull(fechaIngreso ?? fecha_ingreso) ?? 'POR DEFINIR';
-    const nombreTrabajador = empPlanilla.nombre_completo ?? worker.nombres ?? worker.nombre_completo ?? 'TRABAJADOR NO REGISTRADO';
     const cedula = empPlanilla.cedula ?? empPlanilla.documento ?? worker.cedula ?? worker.documento ?? 'NO REGISTRADA';
     const codigoTabulador = strOrNull(conf?.cargo_codigo) ?? strOrNull(worker.cargo_codigo) ?? 'NO DEFINIDO';
     const denominacionGaceta = denominacionOficioGaceta(strOrNull(worker.cargo_codigo) ?? strOrNull(conf?.cargo_codigo)) ?? cargoMayus;
@@ -485,6 +506,14 @@ export async function POST(req: Request) {
       '[REPRESENTANTE NO REGISTRADO]';
     const cedulaRep =
       strOrNull(entPatrono?.rep_legal_cedula) ?? strOrNull(rmRep.cedula) ?? '[CÉDULA NO REGISTRADA]';
+    const repFemenino = inferirFemeninoRepresentante({
+      genero: rmRep.genero,
+      estadoCivil: strOrNull(rmRep.estado_civil),
+      nacionalidad: strOrNull(rmRep.nacionalidad),
+      nombre: nombreRep,
+    });
+    const articuloRep = tratoRepresentanteContrato(repFemenino).articuloCiudadano;
+    const nacionalidadRep = nacionalidadAcordada(strOrNull(rmRep.nacionalidad), repFemenino);
     const rmCampos = camposRegistroMercantilContrato(entPatrono?.registro_mercantil);
     const fechaRmMd = fechaLargaEsDesdeCampoRm(rmCampos.fecha) ?? '[FECHA NO REGISTRADA]';
     const numeroRmMd = rmCampos.numero.trim() || '[Nº NO REGISTRADO]';
@@ -506,13 +535,13 @@ export async function POST(req: Request) {
 
     const rifLine = strOrNull(entPatrono?.rif)?.trim() || '_____________';
 
-    const parrafoAperturaRm = `Entre, la sociedad mercantil **${nombreLegalEntidadParrafo}**, inscrita por ante la Oficina de **${textoOficinaRm}**, constando en el Tomo **${tomoRmMd}**, bajo el Nº **${numeroRmMd}**, de fecha **${fechaRmMd}**, de los Libros de Registro de Comercio, inscrita en el Registro de Información Fiscal bajo el número: **${rifLine}**, representada en este acto por su **${cargoRep}**, ciudadano **"${nombreRep}"**, venezolano, mayor de edad, titular de la cédula de identidad Nº **${cedulaRep}**, quien en lo sucesivo y a los solos efectos del presente contrato se denominará **EL EMPLEADOR**, por una parte y por la otra, el ciudadano **"${nombreTrabajador}"**, de nacionalidad **${nacionalidad}**, mayor de edad, titular de la cédula de identidad **${cedula}** y domiciliado en **"${domicilioTrabajador}"**, quien a los mismos efectos se denominará **EL TRABAJADOR**; y en virtud de la naturaleza del servicio que prestará EL TRABAJADOR y conforme al carácter especialísimo de la naturaleza de los servicios a desempeñarse por parte de él, se ha convenido en celebrar el presente contrato laboral, el cual se regirá por las siguientes cláusulas:`;
+    const parrafoAperturaRm = `Entre, la sociedad mercantil **${nombreLegalEntidadParrafo}**, inscrita por ante la Oficina de **${textoOficinaRm}**, constando en el Tomo **${tomoRmMd}**, bajo el Nº **${numeroRmMd}**, de fecha **${fechaRmMd}**, de los Libros de Registro de Comercio, inscrita en el Registro de Información Fiscal bajo el número: **${rifLine}**, representada en este acto por su **${cargoRep}**, ${articuloRep} **"${nombreRep}"**, ${nacionalidadRep}, mayor de edad, titular de la cédula de identidad Nº **${cedulaRep}**, quien en lo sucesivo y a los solos efectos del presente contrato se denominará **EL EMPLEADOR**, por una parte y por la otra, ${tratoTrab.articuloCiudadano} **"${nombreTrabajador}"**, de nacionalidad **${nacionalidad}**, mayor de edad, titular de la cédula de identidad **${cedula}** y domiciliado en **"${domicilioTrabajador}"**, quien a los mismos efectos se denominará **${tratoTrab.denominacion}**; y en virtud de la naturaleza del servicio que prestará ${tratoTrab.denominacion} y conforme al carácter especialísimo de la naturaleza de los servicios a desempeñarse, se ha convenido en celebrar el presente contrato laboral, el cual se regirá por las siguientes cláusulas:`;
 
     const clausulaObjeto = `### PRIMERA: OBJETO
-**EL TRABAJADOR** se obliga a prestar sus servicios personales en el cargo u oficio de **${cargoMayus}**, con las funciones inherentes al mismo, tales como: **${funcionesManual}**, de conformidad con el Manual de Cargos y las instrucciones de **EL EMPLEADOR**.`;
+**${tratoTrab.denominacion}** se obliga a prestar sus servicios personales en el cargo u oficio de **${cargoMayus}**, con las funciones inherentes al mismo, tales como: **${funcionesManual}**, de conformidad con el Manual de Cargos y las instrucciones de **EL EMPLEADOR**.`;
 
     const clausulaJornadaLugar = `### SEGUNDA: JORNADA Y LUGAR
-**EL TRABAJADOR** cumplirá una jornada **${jornada}** en el proyecto **${nombreProyecto}**, ubicado en **${ubicacionProyecto}**.`;
+**${tratoTrab.denominacion}** cumplirá una jornada **${jornada}** en el proyecto **${nombreProyecto}**, ubicado en **${ubicacionProyecto}**.`;
 
     const hv = (worker.hoja_vida_obrero ?? null) as Record<string, unknown> | null;
     const pagoBanco = strOrNull(banco) ?? strOrNull((hv?.['banco'] as string | undefined) ?? '');
@@ -558,7 +587,7 @@ Forma de pago: **${formaPago}**. Detalle: **${detallePago}**.
 Lugar del pago: **${lugarPago}**.
 
 ### OCTAVA: FECHA DE INGRESO
-**EL TRABAJADOR** iniciará la prestación de sus servicios a partir del **${fecha}**, sin perjuicio del lugar de trabajo indicado en la cláusula segunda.
+**${tratoTrab.denominacion}** iniciará la prestación de sus servicios a partir del **${fecha}**, sin perjuicio del lugar de trabajo indicado en la cláusula segunda.
 `;
 
     return NextResponse.json({ success: true, expediente, contrato: contratoMarkdown.trim() });

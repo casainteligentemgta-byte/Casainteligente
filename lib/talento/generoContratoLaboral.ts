@@ -40,27 +40,162 @@ export function normalizarGeneroContrato(v: unknown): GeneroContrato | undefined
   return undefined;
 }
 
+function primerNombreNormalizado(nombre: string | null | undefined): string {
+  const raw = (nombre ?? '').trim().split(/\s+/)[0] ?? '';
+  return raw
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+/** Nombres femeninos frecuentes en VE (refuerzo cuando no hay genero en BD). */
+const NOMBRES_FEMENINOS = new Set([
+  'carla',
+  'maria',
+  'ana',
+  'carmen',
+  'rosa',
+  'lucia',
+  'laura',
+  'andrea',
+  'patricia',
+  'jennifer',
+  'gabriela',
+  'valentina',
+  'isabella',
+  'daniela',
+  'alejandra',
+  'mariana',
+  'sofia',
+  'camila',
+  'paola',
+  'yolanda',
+  'mercedes',
+  'beatriz',
+  'gloria',
+  'irene',
+  'veronica',
+  'elizabeth',
+  'karina',
+  'karla',
+  'yessica',
+  'jessica',
+  'nancy',
+  'yanet',
+  'yaneth',
+  'lisbeth',
+  'mileidy',
+  'genesis',
+  'genesis',
+  'thais',
+  'thaís',
+]);
+
+const NOMBRES_MASCULINOS = new Set([
+  'jose',
+  'juan',
+  'luis',
+  'carlos',
+  'jesus',
+  'pedro',
+  'miguel',
+  'angel',
+  'andres',
+  'diego',
+  'daniel',
+  'david',
+  'alejandro',
+  'francisco',
+  'antonio',
+  'manuel',
+  'rafael',
+  'ricardo',
+  'roberto',
+  'sebastian',
+  'victor',
+  'edgar',
+  'hector',
+  'ivan',
+  'jorge',
+  'julio',
+  'omar',
+  'oscar',
+  'pablo',
+  'ramon',
+  'sergio',
+  'tomas',
+  'william',
+  'yosmar',
+  'josue',
+]);
+
 /**
- * Infere género del trabajador cuando no hay campo explícito.
- * Orden: genero/femenino → estado civil → nacionalidad flexionada → masculino.
+ * Heurística de primer nombre. `undefined` = sin indicios claros.
+ * No usar sola como verdad absoluta; va detrás de genero/estado civil.
+ */
+export function pareceNombreFemenino(nombre: string | null | undefined): boolean | undefined {
+  const p = primerNombreNormalizado(nombre);
+  if (!p) return undefined;
+  if (NOMBRES_FEMENINOS.has(p)) return true;
+  if (NOMBRES_MASCULINOS.has(p)) return false;
+  // Terminación en -a muy frecuente en femeninos (Carla, María…).
+  if (p.length >= 3 && p.endsWith('a')) return true;
+  return undefined;
+}
+
+function estadoCivilFemenino(estadoCivil: string | null | undefined): boolean | undefined {
+  const ec = (estadoCivil ?? '').trim().toLowerCase();
+  if (!ec) return undefined;
+  if (/\b(soltera|casada|divorciada|viuda|concubina)\b/.test(ec)) return true;
+  if (/\b(soltero|casado|divorciado|viudo|concubino)\b/.test(ec)) return false;
+  return undefined;
+}
+
+/**
+ * Género del trabajador para el contrato.
+ * No usa la nacionalidad guardada (el default histórico «venezolana» sesgaba a femenino).
+ * Orden: flag/genero → estado civil → primer nombre → masculino.
  */
 export function inferirFemeninoTrabajador(opts: {
   genero?: GeneroContrato | string | null;
   femenino?: boolean | null;
   estadoCivil?: string | null;
   nacionalidad?: string | null;
+  nombre?: string | null;
 }): boolean {
   const g = normalizarGeneroContrato(opts.genero);
   if (g === 'F' || opts.femenino === true) return true;
   if (g === 'M' || opts.femenino === false) return false;
 
-  const ec = (opts.estadoCivil ?? '').trim().toLowerCase();
-  if (/\b(soltera|casada|divorciada|viuda|concubina)\b/.test(ec)) return true;
-  if (/\b(soltero|casado|divorciado|viudo|concubino)\b/.test(ec)) return false;
+  const ec = estadoCivilFemenino(opts.estadoCivil);
+  if (ec != null) return ec;
 
-  const nat = (opts.nacionalidad ?? '').trim().toLowerCase();
-  if (/^venezolana$/.test(nat)) return true;
-  if (/^venezolano$/.test(nat)) return false;
+  const porNombre = pareceNombreFemenino(opts.nombre);
+  if (porNombre != null) return porNombre;
+
+  return false;
+}
+
+/**
+ * Género del representante legal (Sra / Sr).
+ * Orden: flag/genero → estado civil → primer nombre → masculino.
+ */
+export function inferirFemeninoRepresentante(opts: {
+  genero?: GeneroContrato | string | null;
+  femenino?: boolean | null;
+  estadoCivil?: string | null;
+  nacionalidad?: string | null;
+  nombre?: string | null;
+}): boolean {
+  const g = normalizarGeneroContrato(opts.genero);
+  if (g === 'F' || opts.femenino === true) return true;
+  if (g === 'M' || opts.femenino === false) return false;
+
+  const ec = estadoCivilFemenino(opts.estadoCivil);
+  if (ec != null) return ec;
+
+  const porNombre = pareceNombreFemenino(opts.nombre);
+  if (porNombre != null) return porNombre;
 
   return false;
 }
@@ -74,7 +209,8 @@ export function nacionalidadAcordada(
   femenino: boolean,
 ): string {
   const raw = (nacionalidad ?? '').trim();
-  if (!raw || /^venezolan[oa]$/i.test(raw)) {
+  // «Venezolano», «venezolana», «Venezolano(a)», etc.
+  if (!raw || /^venezolan[oa](\(a\))?$/i.test(raw)) {
     return femenino ? 'venezolana' : 'venezolano';
   }
 
@@ -108,5 +244,13 @@ export function tratoTrabajadorContrato(femenino: boolean): TratoTrabajadorContr
     denominacion: 'EL TRABAJADOR',
     denominacionFirma: 'POR EL TRABAJADOR',
     trabajadorMinuscula: 'el trabajador',
+  };
+}
+
+export function tratoRepresentanteContrato(femenino: boolean): {
+  articuloCiudadano: string;
+} {
+  return {
+    articuloCiudadano: femenino ? 'la Ciudadana' : 'el Ciudadano',
   };
 }

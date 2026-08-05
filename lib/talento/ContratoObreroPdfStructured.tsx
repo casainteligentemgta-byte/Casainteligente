@@ -7,8 +7,10 @@ import { fechaLargaRegistroMercantilContratoVe } from '@/lib/talento/registroMer
 import { CESTATICKET_SEMANAL_USD } from '@/lib/nomina/cestaticketLegalUsd';
 import { TASA_BCV_VES_POR_USD_TABULADOR_2023_06_20 } from '@/lib/nomina/tabuladorSalariosConstruccion2023';
 import {
+  inferirFemeninoRepresentante,
   inferirFemeninoTrabajador,
   nacionalidadAcordada,
+  tratoRepresentanteContrato,
   tratoTrabajadorContrato,
 } from '@/lib/talento/generoContratoLaboral';
 
@@ -530,7 +532,6 @@ export function ContratoObreroPDF({
   );
   const repCedulaGuion = cedulaConGuion(entidad.rep_legal_cedula);
   const repCargoLinea = str(entidad.rep_legal_cargo, 'Representante Legal');
-  const repArticuloLinea = entidad.rep_legal_femenino ? 'la Ciudadana' : 'el Ciudadano';
   const inscripcionRmLinea = (() => {
     const oficina = oficinaRegistroMercantilComparecencia(entidad.rm_oficina);
     const fecha = fechaLargaRegistroMercantilContratoVe(entidad.rm_fecha) ?? '___';
@@ -554,17 +555,20 @@ export function ContratoObreroPDF({
     str(entidad.sector_domicilio_registro, ZONA_COMPARECENCIA_PDF_DEFAULT),
   );
   const zonaPdf = quitarPalabraSectorEnDomicilio(zonaComparecencia).trim();
-  const repFemenino = entidad.rep_legal_femenino === true;
-  const nacionalidadRepRaw = (entidad.rep_legal_nacionalidad ?? '').trim();
-  const nacionalidadRep = nacionalidadRepRaw
-    ? nacionalidadAcordada(nacionalidadRepRaw, repFemenino)
-    : phRepNat;
   const estadoCivilRep = str(entidad.rep_legal_estado_civil, phRepEc);
+  const repFemenino = inferirFemeninoRepresentante({
+    femenino: entidad.rep_legal_femenino,
+    estadoCivil: entidad.rep_legal_estado_civil,
+    nacionalidad: entidad.rep_legal_nacionalidad,
+    nombre: rep,
+  });
+  const repArticuloLinea = tratoRepresentanteContrato(repFemenino).articuloCiudadano;
+  const nacionalidadRep = nacionalidadAcordada(entidad.rep_legal_nacionalidad, repFemenino);
   const trabFemenino = inferirFemeninoTrabajador({
     femenino: empleado.femenino,
     genero: empleado.genero,
     estadoCivil: empleado.estado_civil,
-    nacionalidad: empleado.nacionalidad,
+    nombre: nombreTrabajador,
   });
   const tratoTrab = tratoTrabajadorContrato(trabFemenino);
   const nacionalidadTrab = nacionalidadAcordada(empleado.nacionalidad, trabFemenino);

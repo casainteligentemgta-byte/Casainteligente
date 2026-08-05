@@ -12,6 +12,7 @@ import { obtenerCuerpoPlantillaContratoObrero } from '@/lib/talento/plantillaCon
 import { CONTRATO_OBRERO_CUERPO_DEFAULT } from '@/lib/talento/plantillas/contratoObreroDefaultCuerpo';
 import type { ContratoObreroPdfStructuredProps } from '@/lib/talento/ContratoObreroPdfStructured';
 import type { RepresentanteMercantilCi } from '@/types/ci-entidad';
+import { inferirFemeninoRepresentante } from '@/lib/talento/generoContratoLaboral';
 import {
   domicilioLineaComparecenciaPatrono,
   domicilioPatronoParaEntidad,
@@ -351,22 +352,25 @@ async function fetchPatronoEntidadExtraParaPlantilla(
       direccion_fiscal: strOpt(r.direccion_fiscal as string | null | undefined),
       domicilio_fiscal: strOpt(r.domicilio_fiscal as string | null | undefined),
     });
-    const rmRep = (() => {
-      const rm = r.registro_mercantil;
-      if (!rm || typeof rm !== 'object' || Array.isArray(rm)) return null;
-      const arr = (rm as { representantes?: unknown }).representantes;
-      if (!Array.isArray(arr) || !arr[0] || typeof arr[0] !== 'object') return null;
-      return arr[0] as Record<string, unknown>;
-    })();
+    const nombreRepPreferido = strOpt(r.rep_legal_nombre);
+    const rmRep = primerRepresentanteRegistro(r.registro_mercantil, nombreRepPreferido);
+    const nombreRep =
+      nombreRepPreferido ?? strOpt(rmRep?.nombre) ?? undefined;
     return {
       nombre_legal: strOpt(r.nombre_legal) ?? undefined,
       rif: strOpt(r.rif) ?? undefined,
-      rep_legal_nombre: strOpt(r.rep_legal_nombre) ?? strOpt(rmRep?.nombre as string | undefined) ?? undefined,
-      rep_legal_cedula: strOpt(r.rep_legal_cedula) ?? strOpt(rmRep?.cedula as string | undefined) ?? undefined,
-      rep_legal_cargo: strOpt(r.rep_legal_cargo) ?? strOpt(rmRep?.cargo as string | undefined) ?? undefined,
-      rep_nacionalidad: strOpt(rmRep?.nacionalidad as string | undefined) ?? undefined,
-      rep_estado_civil: strOpt(rmRep?.estado_civil as string | undefined) ?? undefined,
-      rep_legal_femenino: rmRep?.genero === 'F' || r.rep_legal_femenino === true,
+      rep_legal_nombre: nombreRep,
+      rep_legal_cedula: strOpt(r.rep_legal_cedula) ?? strOpt(rmRep?.cedula) ?? undefined,
+      rep_legal_cargo: strOpt(r.rep_legal_cargo) ?? strOpt(rmRep?.cargo) ?? undefined,
+      rep_nacionalidad: strOpt(rmRep?.nacionalidad) ?? undefined,
+      rep_estado_civil: strOpt(rmRep?.estado_civil) ?? undefined,
+      rep_legal_femenino: resolverRepLegalFemenino({
+        rmRep,
+        flagEntidad: r.rep_legal_femenino,
+        nombre: nombreRep,
+        estadoCivil: strOpt(rmRep?.estado_civil),
+        nacionalidad: strOpt(rmRep?.nacionalidad),
+      }),
       registro_mercantil: r.registro_mercantil,
       municipio: ubi.municipio ?? strOpt(r.municipio_fiscal) ?? undefined,
       estado_geo: ubi.estado ?? strOpt(r.estado_fiscal) ?? undefined,
@@ -391,25 +395,12 @@ function pickRepCampoLoose(rep: Record<string, unknown>, ...candidatos: string[]
 function normalizarGeneroRepresentanteRM(v: unknown): 'M' | 'F' | undefined {
   const s = String(v ?? '').trim().toUpperCase();
   if (!s) return undefined;
-  if (s === 'F' || s === 'FEMENINO' || s === 'FEMENINA') return 'F';
-  if (s === 'M' || s === 'MASCULINO') return 'M';
+  if (s === 'F' || s === 'FEMENINO' || s === 'FEMENINA' || s === 'SRA' || s === 'SRA.') return 'F';
+  if (s === 'M' || s === 'MASCULINO' || s === 'SR' || s === 'SR.') return 'M';
   return undefined;
 }
 
-function primerRepresentanteRegistro(raw: unknown): RepresentanteMercantilCi | undefined {
-  if (!raw) return undefined;
-  let o: unknown = raw;
-  if (typeof raw === 'string') {
-    try {
-      o = JSON.parse(raw) as unknown;
-    } catch {
-      return undefined;
-    }
-  }
-  if (!o || typeof o !== 'object' || Array.isArray(o)) return undefined;
-  const reps = (o as { representantes?: unknown }).representantes;
-  if (!Array.isArray(reps) || !reps[0] || typeof reps[0] !== 'object' || Array.isArray(reps[0])) return undefined;
-  const row = reps[0] as Record<string, unknown>;
+function mapRepresentanteRegistroRow(row: Record<string, unknown>): RepresentanteMercantilCi {
   const genero =
     normalizarGeneroRepresentanteRM(pickRepCampoLoose(row, 'genero', 'sexo')) ??
     normalizarGeneroRepresentanteRM(row.genero) ??
@@ -425,8 +416,66 @@ function primerRepresentanteRegistro(raw: unknown): RepresentanteMercantilCi | u
     municipio_residencia: pickRepCampoLoose(row, 'municipio_residencia', 'municipioResidencia'),
     estado_residencia: pickRepCampoLoose(row, 'estado_residencia', 'estadoResidencia'),
     profesion: pickRepCampoLoose(row, 'profesion'),
-    genero: genero ?? 'M',
+    // Sin default 'M': si falta, el PDF infiere por nombre (p. ej. Carla → femenino).
+    genero: genero,
   };
+}
+
+function listRepresentantesRegistro(raw: unknown): RepresentanteMercantilCi[] {
+  if (!raw) return [];
+  let o: unknown = raw;
+  if (typeof raw === 'string') {
+    try {
+      o = JSON.parse(raw) as unknown;
+    } catch {
+      return [];
+    }
+  }
+  if (!o || typeof o !== 'object' || Array.isArray(o)) return [];
+  const reps = (o as { representantes?: unknown }).representantes;
+  if (!Array.isArray(reps)) return [];
+  const out: RepresentanteMercantilCi[] = [];
+  for (const item of reps) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+    out.push(mapRepresentanteRegistroRow(item as Record<string, unknown>));
+  }
+  return out;
+}
+
+/** Primer representante; si hay `nombrePreferido`, prioriza coincidencia por nombre. */
+function primerRepresentanteRegistro(
+  raw: unknown,
+  nombrePreferido?: string | null,
+): RepresentanteMercantilCi | undefined {
+  const list = listRepresentantesRegistro(raw);
+  if (!list.length) return undefined;
+  const pref = (nombrePreferido ?? '').trim().toLowerCase();
+  if (pref) {
+    const match = list.find((r) => (r.nombre ?? '').trim().toLowerCase() === pref);
+    if (match) return match;
+    const parcial = list.find((r) => {
+      const n = (r.nombre ?? '').trim().toLowerCase();
+      return n.includes(pref) || pref.includes(n);
+    });
+    if (parcial) return parcial;
+  }
+  return list[0];
+}
+
+function resolverRepLegalFemenino(opts: {
+  rmRep?: RepresentanteMercantilCi | null;
+  flagEntidad?: unknown;
+  nombre?: string | null;
+  estadoCivil?: string | null;
+  nacionalidad?: string | null;
+}): boolean {
+  return inferirFemeninoRepresentante({
+    genero: opts.rmRep?.genero,
+    femenino: opts.flagEntidad === true || opts.rmRep?.genero === 'F',
+    estadoCivil: opts.estadoCivil ?? opts.rmRep?.estado_civil,
+    nacionalidad: opts.nacionalidad ?? opts.rmRep?.nacionalidad,
+    nombre: opts.nombre ?? opts.rmRep?.nombre,
+  });
 }
 
 /**
@@ -748,9 +797,16 @@ export async function cargarPropsContratoObreroPdfEstructurado(
     : { estado: null, municipio: null, sector: null };
   const municipioComparecencia = ubiRm.municipio ?? strOpt(entidadRow?.municipio_fiscal);
   const estadoComparecencia = ubiRm.estado ?? strOpt(entidadRow?.estado_fiscal);
-  const rmRep = primerRepresentanteRegistro(entidadRow?.registro_mercantil);
+  const nombreRepPreferido =
+    strOpt(entidadRow?.rep_legal_nombre) ?? strOpt(entidadRow?.representante_legal) ?? f.patron.representante;
+  const rmRep = primerRepresentanteRegistro(entidadRow?.registro_mercantil, nombreRepPreferido);
   const rm = parseRegistroMercantilRecord(entidadRow?.registro_mercantil);
   const rmCampos = camposRegistroMercantilDesdeRecord(rm);
+  const nombreRep = nombreRepPreferido ?? strOpt(rmRep?.nombre);
+  const natRep =
+    strOpt(entidadRow?.['rep_legal_nacionalidad']) ?? strOpt(rmRep?.nacionalidad) ?? undefined;
+  const ecRep =
+    strOpt(entidadRow?.['rep_legal_estado_civil']) ?? strOpt(rmRep?.estado_civil) ?? undefined;
 
   const entidad: ContratoObreroPdfStructuredProps['entidad'] = {
     nombre_legal: strOpt(entidadRow?.nombre_legal) ?? strOpt(entidadRow?.nombre) ?? f.patron.nombre,
@@ -761,14 +817,18 @@ export async function cargarPropsContratoObreroPdfEstructurado(
     estado_fiscal: estadoComparecencia ?? undefined,
     sector_domicilio_registro: ubiRm.sector ?? undefined,
     representante_legal: strOpt(entidadRow?.representante_legal) ?? f.patron.representante,
-    rep_legal_nombre: strOpt(entidadRow?.rep_legal_nombre) ?? strOpt(rmRep?.nombre),
+    rep_legal_nombre: nombreRep,
     rep_legal_cedula: strOpt(entidadRow?.rep_legal_cedula) ?? strOpt(rmRep?.cedula),
     rep_legal_cargo: strOpt(entidadRow?.rep_legal_cargo) ?? strOpt(rmRep?.cargo),
-    rep_legal_nacionalidad:
-      strOpt(entidadRow?.['rep_legal_nacionalidad']) ?? strOpt(rmRep?.nacionalidad) ?? undefined,
-    rep_legal_estado_civil:
-      strOpt(entidadRow?.['rep_legal_estado_civil']) ?? strOpt(rmRep?.estado_civil) ?? undefined,
-    rep_legal_femenino: rmRep?.genero === 'F' || entidadRow?.['rep_legal_femenino'] === true,
+    rep_legal_nacionalidad: natRep,
+    rep_legal_estado_civil: ecRep,
+    rep_legal_femenino: resolverRepLegalFemenino({
+      rmRep,
+      flagEntidad: entidadRow?.['rep_legal_femenino'],
+      nombre: nombreRep,
+      estadoCivil: ecRep,
+      nacionalidad: natRep,
+    }),
     rep_legal_domicilio: strOpt(rmRep?.domicilio) || undefined,
     rep_legal_municipio_residencia: strOpt(rmRep?.municipio_residencia) || undefined,
     rep_legal_estado_residencia: strOpt(rmRep?.estado_residencia) || undefined,
@@ -975,10 +1035,19 @@ export async function cargarPropsContratoObreroPdfExpress(
     : { estado: null, municipio: null, sector: null };
   const municipioComparecencia = ubiRm.municipio ?? strOpt(entidadRow?.municipio_fiscal);
   const estadoComparecencia = ubiRm.estado ?? strOpt(entidadRow?.estado_fiscal);
-  const rmRep = primerRepresentanteRegistro(entidadRow?.registro_mercantil);
+  const patronExtra = await fetchPatronoEntidadExtraParaPlantilla(supabase, entidadId);
+  const nombreRepPreferido =
+    strOpt(entidadRow?.rep_legal_nombre) ??
+    patronExtra.rep_legal_nombre ??
+    patronBase.representante;
+  const rmRep = primerRepresentanteRegistro(entidadRow?.registro_mercantil, nombreRepPreferido);
   const rm = parseRegistroMercantilRecord(entidadRow?.registro_mercantil);
   const rmCampos = camposRegistroMercantilDesdeRecord(rm);
-  const patronExtra = await fetchPatronoEntidadExtraParaPlantilla(supabase, entidadId);
+  const nombreRep = nombreRepPreferido ?? strOpt(rmRep?.nombre) ?? patronExtra.rep_legal_nombre;
+  const natRep =
+    strOpt(entidadRow?.['rep_legal_nacionalidad']) ?? strOpt(rmRep?.nacionalidad) ?? undefined;
+  const ecRep =
+    strOpt(entidadRow?.['rep_legal_estado_civil']) ?? strOpt(rmRep?.estado_civil) ?? undefined;
 
   const entidad: ContratoObreroPdfStructuredProps['entidad'] = {
     nombre_legal: strOpt(entidadRow?.nombre_legal) ?? strOpt(entidadRow?.nombre) ?? patronBase.nombre,
@@ -989,14 +1058,18 @@ export async function cargarPropsContratoObreroPdfExpress(
     estado_fiscal: estadoComparecencia ?? undefined,
     sector_domicilio_registro: ubiRm.sector ?? undefined,
     representante_legal: patronBase.representante,
-    rep_legal_nombre: strOpt(entidadRow?.rep_legal_nombre) ?? strOpt(rmRep?.nombre) ?? patronExtra.rep_legal_nombre,
+    rep_legal_nombre: nombreRep,
     rep_legal_cedula: strOpt(entidadRow?.rep_legal_cedula) ?? strOpt(rmRep?.cedula) ?? patronExtra.rep_legal_cedula,
     rep_legal_cargo: strOpt(entidadRow?.rep_legal_cargo) ?? strOpt(rmRep?.cargo),
-    rep_legal_nacionalidad:
-      strOpt(entidadRow?.['rep_legal_nacionalidad']) ?? strOpt(rmRep?.nacionalidad) ?? undefined,
-    rep_legal_estado_civil:
-      strOpt(entidadRow?.['rep_legal_estado_civil']) ?? strOpt(rmRep?.estado_civil) ?? undefined,
-    rep_legal_femenino: rmRep?.genero === 'F' || entidadRow?.['rep_legal_femenino'] === true,
+    rep_legal_nacionalidad: natRep,
+    rep_legal_estado_civil: ecRep,
+    rep_legal_femenino: resolverRepLegalFemenino({
+      rmRep,
+      flagEntidad: entidadRow?.['rep_legal_femenino'] === true || patronExtra.rep_legal_femenino === true,
+      nombre: nombreRep,
+      estadoCivil: ecRep ?? patronExtra.rep_estado_civil,
+      nacionalidad: natRep ?? patronExtra.rep_nacionalidad,
+    }),
     rep_legal_domicilio: strOpt(rmRep?.domicilio) || undefined,
     rep_legal_municipio_residencia: strOpt(rmRep?.municipio_residencia) || undefined,
     rep_legal_estado_residencia: strOpt(rmRep?.estado_residencia) || undefined,
