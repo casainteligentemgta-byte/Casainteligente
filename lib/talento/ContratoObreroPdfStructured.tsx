@@ -6,6 +6,7 @@ import {
 import { fechaLargaRegistroMercantilContratoVe } from '@/lib/talento/registroMercantilCamposPdf';
 import { CESTATICKET_SEMANAL_USD } from '@/lib/nomina/cestaticketLegalUsd';
 import { TASA_BCV_VES_POR_USD_TABULADOR_2023_06_20 } from '@/lib/nomina/tabuladorSalariosConstruccion2023';
+import { nacionalidadRepresentanteSegunGenero } from '@/lib/talento/nacionalidadRepresentanteSegunGenero';
 
 /**
  * Tipografía del contrato (PDF estándar vía @react-pdf/renderer).
@@ -548,7 +549,6 @@ export function ContratoObreroPDF({
   const domicilioComparecenciaPdf = preprocessLineaDomicilioComparecenciaPdf(domicilioEmpresa);
   const phMun = '___________';
   const phEdo = '___________';
-  const phRepNat = '________________';
   const phRepEc = '____________';
   const municipioEmpresa = str(entidad.municipio_fiscal, phMun);
   const estadoEmpresa = str(entidad.estado_fiscal, phEdo);
@@ -556,7 +556,10 @@ export function ContratoObreroPDF({
     str(entidad.sector_domicilio_registro, ZONA_COMPARECENCIA_PDF_DEFAULT),
   );
   const zonaPdf = quitarPalabraSectorEnDomicilio(zonaComparecencia).trim();
-  const nacionalidadRep = str(entidad.rep_legal_nacionalidad, phRepNat);
+  const nacionalidadRep = nacionalidadRepresentanteSegunGenero(
+    entidad.rep_legal_nacionalidad,
+    Boolean(entidad.rep_legal_femenino),
+  );
   const estadoCivilRep = str(entidad.rep_legal_estado_civil, phRepEc);
   const nacionalidadTrab = str(empleado.nacionalidad, 'venezolana');
   const repCedulaLinea = str(repCedulaGuion, '_______________');

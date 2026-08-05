@@ -16,6 +16,7 @@ import {
 } from '@/lib/talento/empleadoContratoDesdeHojaPlanilla';
 import { resolvePlanillaPatronoParaEmpleado } from '@/lib/talento/resolvePlanillaPatronoPdf';
 import { numeroALetrasHastaMiles } from '@/lib/talento/numeroALetrasVe';
+import { nacionalidadRepresentanteSegunGenero } from '@/lib/talento/nacionalidadRepresentanteSegunGenero';
 
 function strOrNull(value: unknown): string | null {
   if (typeof value !== 'string') return null;
@@ -55,6 +56,8 @@ function primerRepresentanteRegistroMercantil(raw: unknown): {
   cargo?: string;
   profesion?: string;
   domicilio?: string;
+  genero?: string;
+  nacionalidad?: string;
 } {
   try {
     let o: unknown = raw;
@@ -75,6 +78,8 @@ function primerRepresentanteRegistroMercantil(raw: unknown): {
       cargo: typeof r.cargo === 'string' ? r.cargo : undefined,
       profesion: typeof r.profesion === 'string' ? r.profesion : undefined,
       domicilio: typeof r.domicilio === 'string' ? r.domicilio : undefined,
+      genero: typeof r.genero === 'string' ? r.genero : undefined,
+      nacionalidad: typeof r.nacionalidad === 'string' ? r.nacionalidad : undefined,
     };
   } catch {
     return {};
@@ -193,6 +198,7 @@ export async function POST(req: Request) {
       rep_legal_nombre?: string | null;
       rep_legal_cedula?: string | null;
       rep_legal_cargo?: string | null;
+      rep_legal_femenino?: boolean | null;
       registro_mercantil?: unknown;
     };
 
@@ -474,6 +480,9 @@ export async function POST(req: Request) {
       '[REPRESENTANTE NO REGISTRADO]';
     const cedulaRep =
       strOrNull(entPatrono?.rep_legal_cedula) ?? strOrNull(rmRep.cedula) ?? '[CÉDULA NO REGISTRADA]';
+    const repFemenino = rmRep.genero === 'F' || entPatrono?.rep_legal_femenino === true;
+    const articuloCiudadanoRep = repFemenino ? 'ciudadana' : 'ciudadano';
+    const nacionalidadRep = nacionalidadRepresentanteSegunGenero(rmRep.nacionalidad, repFemenino);
     const rmCampos = camposRegistroMercantilContrato(entPatrono?.registro_mercantil);
     const fechaRmMd = fechaLargaEsDesdeCampoRm(rmCampos.fecha) ?? '[FECHA NO REGISTRADA]';
     const numeroRmMd = rmCampos.numero.trim() || '[Nº NO REGISTRADO]';
@@ -495,7 +504,7 @@ export async function POST(req: Request) {
 
     const rifLine = strOrNull(entPatrono?.rif)?.trim() || '_____________';
 
-    const parrafoAperturaRm = `Entre, la sociedad mercantil **${nombreLegalEntidadParrafo}**, inscrita por ante la Oficina de **${textoOficinaRm}**, constando en el Tomo **${tomoRmMd}**, bajo el Nº **${numeroRmMd}**, de fecha **${fechaRmMd}**, de los Libros de Registro de Comercio, inscrita en el Registro de Información Fiscal bajo el número: **${rifLine}**, representada en este acto por su **${cargoRep}**, ciudadano **"${nombreRep}"**, venezolano, mayor de edad, titular de la cédula de identidad Nº **${cedulaRep}**, quien en lo sucesivo y a los solos efectos del presente contrato se denominará **EL EMPLEADOR**, por una parte y por la otra, el ciudadano **"${nombreTrabajador}"**, de nacionalidad **${nacionalidad}**, mayor de edad, titular de la cédula de identidad **${cedula}** y domiciliado en **"${domicilioTrabajador}"**, quien a los mismos efectos se denominará **EL TRABAJADOR**; y en virtud de la naturaleza del servicio que prestará EL TRABAJADOR y conforme al carácter especialísimo de la naturaleza de los servicios a desempeñarse por parte de él, se ha convenido en celebrar el presente contrato laboral, el cual se regirá por las siguientes cláusulas:`;
+    const parrafoAperturaRm = `Entre, la sociedad mercantil **${nombreLegalEntidadParrafo}**, inscrita por ante la Oficina de **${textoOficinaRm}**, constando en el Tomo **${tomoRmMd}**, bajo el Nº **${numeroRmMd}**, de fecha **${fechaRmMd}**, de los Libros de Registro de Comercio, inscrita en el Registro de Información Fiscal bajo el número: **${rifLine}**, representada en este acto por su **${cargoRep}**, ${articuloCiudadanoRep} **"${nombreRep}"**, ${nacionalidadRep}, mayor de edad, titular de la cédula de identidad Nº **${cedulaRep}**, quien en lo sucesivo y a los solos efectos del presente contrato se denominará **EL EMPLEADOR**, por una parte y por la otra, el ciudadano **"${nombreTrabajador}"**, de nacionalidad **${nacionalidad}**, mayor de edad, titular de la cédula de identidad **${cedula}** y domiciliado en **"${domicilioTrabajador}"**, quien a los mismos efectos se denominará **EL TRABAJADOR**; y en virtud de la naturaleza del servicio que prestará EL TRABAJADOR y conforme al carácter especialísimo de la naturaleza de los servicios a desempeñarse por parte de él, se ha convenido en celebrar el presente contrato laboral, el cual se regirá por las siguientes cláusulas:`;
 
     const clausulaObjeto = `### PRIMERA: OBJETO
 **EL TRABAJADOR** se obliga a prestar sus servicios personales en el cargo u oficio de **${cargoMayus}**, con las funciones inherentes al mismo, tales como: **${funcionesManual}**, de conformidad con el Manual de Cargos y las instrucciones de **EL EMPLEADOR**.`;

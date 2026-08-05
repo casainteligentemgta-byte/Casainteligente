@@ -8,6 +8,7 @@ import {
 import { CONTRATO_OBRERO_HORARIO_CUARTA_DEFAULT } from '@/lib/talento/plantillas/contratoObreroDefaultCuerpo';
 import { razonSocialPatronoParaContratoPdf } from '@/lib/talento/razonSocialContratoPdf';
 import { textoInscripcionRegistroMercantilComparecencia } from '@/lib/talento/textoInscripcionRegistroMercantilContrato';
+import { nacionalidadRepresentanteSegunGenero } from '@/lib/talento/nacionalidadRepresentanteSegunGenero';
 
 export type DatoContratoFaltante = {
   id: string;
@@ -344,7 +345,11 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
     PATRON_ESTADO: str(f.patron.estado_geo) || phEdo,
     REP_LEGAL_NOMBRE: repNombre,
     REP_LEGAL_CEDULA: repCedFmt,
-    REP_LEGAL_NACIONALIDAD: str(f.patron.rep_nacionalidad) || phRepNat,
+    REP_LEGAL_NACIONALIDAD: (() => {
+      const raw = str(f.patron.rep_nacionalidad);
+      if (!raw) return phRepNat;
+      return nacionalidadRepresentanteSegunGenero(raw, Boolean(f.patron.rep_legal_femenino));
+    })(),
     REP_LEGAL_ESTADO_CIVIL: str(f.patron.rep_estado_civil) || phRepEc,
     EMPLEADO_MUNICIPIO: str(f.empleado.municipio_domicilio) || phMun,
     EMPLEADO_ESTADO_GEO: str(f.empleado.estado_geografico) || phEdo,
