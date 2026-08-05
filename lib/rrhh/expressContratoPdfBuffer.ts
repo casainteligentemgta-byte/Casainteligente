@@ -6,11 +6,8 @@ import {
   type ContratoExpressManualInput,
 } from '@/lib/talento/contratoObreroPdfContext';
 import { ContratoObreroPDF } from '@/lib/talento/ContratoObreroPdfStructured';
-import {
-  estadoCivilContratoObrero,
-  nacionalidadDesdeCedula,
-  trabajadorFemeninoDesdeEstadoCivil,
-} from '@/lib/talento/cedulaAuth';
+import { estadoCivilContratoObrero, nacionalidadDesdeCedula, trabajadorFemeninoDesdeEstadoCivil } from '@/lib/talento/cedulaAuth';
+import { resolverCodigoExpedienteContrato } from '@/lib/talento/codigoExpedienteContrato';
 import { BUCKET_CONTRATOS_OBREROS } from '@/lib/talento/contratoLaboralRegistroStorage';
 
 type ExpressRow = {
@@ -80,7 +77,11 @@ export async function generarBufferContratoExpressPdf(
   const loaded = await cargarPropsContratoObreroPdfExpress(supabase, proyectoId, configNominaId, manual);
   if (!loaded.ok) return { ok: false, error: loaded.error };
 
-  const expedienteLabel = `EXPRESS-${id.replace(/-/g, '').slice(0, 12).toUpperCase()}`;
+  const expedienteLabel = await resolverCodigoExpedienteContrato(supabase, {
+    proyectoId,
+    fecha: new Date(),
+    expressId: id,
+  });
 
   try {
     const node = createElement(ContratoObreroPDF, {

@@ -16,6 +16,7 @@ import {
 } from '@/lib/talento/contratoLaboralRegistroStorage';
 import { ContratoObreroPDF } from '@/lib/talento/ContratoObreroPdfStructured';
 import { CEDULA_VE_NORMALIZADA_REGEX, estadoCivilContratoObrero, nacionalidadDesdeCedula, normCedulaToken, trabajadorFemeninoDesdeEstadoCivil } from '@/lib/talento/cedulaAuth';
+import { resolverCodigoExpedienteContrato } from '@/lib/talento/codigoExpedienteContrato';
 
 export type GenerarContratoTrabajoObreroInput = {
   proyecto_id: string;
@@ -127,7 +128,12 @@ export async function generarContratoTrabajoObrero(
   }
 
   const expressId = crypto.randomUUID();
-  const expedienteLabel = `CTO-${expressId.replace(/-/g, '').slice(0, 12).toUpperCase()}`;
+  const expedienteLabel = await resolverCodigoExpedienteContrato(admin, {
+    proyectoId: input.proyecto_id.trim(),
+    entidadPatronoId: input.entidad_patrono_id?.trim() || null,
+    fecha: fechaFirmaIso,
+    expressId: null,
+  });
 
   let buf: Buffer;
   try {

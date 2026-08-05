@@ -8,6 +8,7 @@ import { CESTATICKET_SEMANAL_USD } from '@/lib/nomina/cestaticketLegalUsd';
 import { TASA_BCV_VES_POR_USD_TABULADOR_2023_06_20 } from '@/lib/nomina/tabuladorSalariosConstruccion2023';
 import { nacionalidadRepresentanteSegunGenero } from '@/lib/talento/nacionalidadRepresentanteSegunGenero';
 import { trabajadorFemeninoDesdeEstadoCivil } from '@/lib/talento/cedulaAuth';
+import { laboresContratoDesdeCargo } from '@/lib/talento/laboresOficioContrato';
 
 /**
  * Tipografía del contrato (PDF estándar vía @react-pdf/renderer).
@@ -157,7 +158,10 @@ export type EmpleadoContratoPdf = {
   /** Opcional: estado del domicilio del trabajador (comparecencia). */
   estado_domicilio?: string | null;
   cargo_nombre?: string | null;
+  /** Código tabulador (ej. 5.1) para auto-relleno de labores. */
+  cargo_codigo?: string | null;
   tareas_especificas?: string | null;
+  funciones_oficiales?: string | null;
 };
 
 export type ConfigNominaContratoPdf = {
@@ -493,6 +497,15 @@ export function ContratoObreroPDF({
     const c = (empleado.cargo_nombre ?? '').trim();
     return c ? c.toUpperCase() : '______________________________';
   })();
+  const laboresOficioTxt = laboresContratoDesdeCargo({
+    cargoCodigo: empleado.cargo_codigo,
+    cargoNombre: empleado.cargo_nombre,
+    funcionesOficiales: configNomina.funciones_oficiales ?? empleado.funciones_oficiales,
+    tareasEspecificas: empleado.tareas_especificas,
+  });
+  const fraseLaboresOficio = laboresOficioTxt
+    ? ` Las labores principales del oficio son: `
+    : '';
   const fechaCierreIso = parametros.fechaFirmaContratoIso ?? parametros.fechaIngreso;
   const { dia: diaFirma, mes: mesFirma, anio: anioFirma } = partesFechaCierreFirma(fechaCierreIso);
 
@@ -658,7 +671,14 @@ export function ContratoObreroPDF({
         <Text style={styles.bold}>{obraDenomTxt}</Text>
         {`. LA ENTIDAD DE TRABAJO tiene como objeto la explotación de actividades comerciales y de la industria de la construcción, y a tales efectos contrata a EL TRABAJADOR para que desempeñe el cargo de: `}
         <Text style={styles.bold}>{oficioStr}</Text>
-        {`, cargo establecido en el Tabulador de Oficios y Salarios Básicos de la Convención Colectiva vigente. EL TRABAJADOR se obliga a: 1.- Poner a disposición su capacidad normal de trabajo en forma exclusiva y en las labores anexas complementarias. 2.- Ejecutar las actividades inherentes al cargo, incluyendo recibir, procesar y pesar materia prima cuando sea requerido. 3.- Usar obligatoriamente el uniforme y equipos de protección (guantes, lentes, botas, etc.) según la LOPCYMAT. 4.- Mantener el orden del área asignada y el buen estado de maquinarias y herramientas. 5.- No prestar servicios a otros empleadores ni trabajar por cuenta propia en funciones inherentes al cargo.`}
+        {`, cargo establecido en el Tabulador de Oficios y Salarios Básicos de la Convención Colectiva vigente.`}
+        {laboresOficioTxt ? (
+          <>
+            {fraseLaboresOficio}
+            <Text style={styles.bold}>{laboresOficioTxt}</Text>.
+          </>
+        ) : null}
+        {` EL TRABAJADOR se obliga a: 1.- Poner a disposición su capacidad normal de trabajo en forma exclusiva y en las labores anexas complementarias. 2.- Ejecutar las actividades inherentes al cargo, incluyendo recibir, procesar y pesar materia prima cuando sea requerido. 3.- Usar obligatoriamente el uniforme y equipos de protección (guantes, lentes, botas, etc.) según la LOPCYMAT. 4.- Mantener el orden del área asignada y el buen estado de maquinarias y herramientas. 5.- No prestar servicios a otros empleadores ni trabajar por cuenta propia en funciones inherentes al cargo.`}
       </Text>
 
       <Text style={[styles.paragraph, styles.paragraphIntro]}>

@@ -14,6 +14,7 @@ import {
   trabajadorFemeninoDesdeEstadoCivil,
   estadoCivilContratoObrero,
 } from '@/lib/talento/cedulaAuth';
+import { laboresContratoDesdeCargo, fraseLaboresOficioContrato } from '@/lib/talento/laboresOficioContrato';
 
 export type DatoContratoFaltante = {
   id: string;
@@ -106,6 +107,14 @@ const ETIQUETAS: Record<string, { etiqueta: string; ayuda: string }> = {
   EMPLEADO_LUGAR_NACIMIENTO: { etiqueta: 'Lugar de nacimiento', ayuda: 'Planilla de empleo.' },
   EMPLEADO_CELULAR: { etiqueta: 'Teléfono celular', ayuda: 'Planilla de empleo.' },
   CONTRATO_CARGO_OFICIO: { etiqueta: 'Cargo u oficio del contrato', ayuda: 'RRHH al generar el contrato o tabulador.' },
+  CONTRATO_LABORES_OFICIO: {
+    etiqueta: 'Labores del oficio (gaceta)',
+    ayuda: 'Solo si el cargo tiene ficha de labores en la referencia de gaceta.',
+  },
+  CONTRATO_LABORES_OFICIO_FRASE: {
+    etiqueta: 'Frase de labores del oficio',
+    ayuda: 'Vacía si el oficio no tiene labores gaceta; si no, «Las labores principales…».',
+  },
   CONTRATO_LUGAR_PRESTACION: { etiqueta: 'Lugar de prestación de servicios', ayuda: 'Obra / proyecto en el contrato.' },
   CONTRATO_OBJETO: { etiqueta: 'Objeto del contrato', ayuda: 'Campo objeto en expediente del contrato.' },
   CONTRATO_TIPO_PLAZO: { etiqueta: 'Tipo de plazo (determinado/indeterminado)', ayuda: 'Datos laborales del contrato.' },
@@ -380,6 +389,14 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
     EMPLEADO_LUGAR_NACIMIENTO: lugarNac,
     EMPLEADO_CELULAR: celular,
     CONTRATO_CARGO_OFICIO: str(f.contrato.cargo_oficio_desempeño) || str(hv?.contratacion?.cargoUOficio),
+    CONTRATO_LABORES_OFICIO: laboresContratoDesdeCargo({
+      cargoCodigo: str(f.contrato.numero_oficio_tabulador),
+      cargoNombre: str(f.contrato.cargo_oficio_desempeño) || str(hv?.contratacion?.cargoUOficio),
+    }),
+    CONTRATO_LABORES_OFICIO_FRASE: fraseLaboresOficioContrato({
+      cargoCodigo: str(f.contrato.numero_oficio_tabulador),
+      cargoNombre: str(f.contrato.cargo_oficio_desempeño) || str(hv?.contratacion?.cargoUOficio),
+    }),
     CONTRATO_LUGAR_PRESTACION: str(f.contrato.lugar_prestacion_servicio) || str(f.obra.ubicacion),
     CONTRATO_OBJETO: str(f.contrato.objeto_contrato) ? ` ${str(f.contrato.objeto_contrato)}` : '',
     CONTRATO_TIPO_PLAZO: tipoPlazoHuman(f.contrato.tipo_contrato),
