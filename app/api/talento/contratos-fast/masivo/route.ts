@@ -1,0 +1,269 @@
+import { NextResponse } from 'next/server';
+import { z } from 'zod';
+import { crearContratoExpress } from '@/lib/talento/crearContratoExpress';
+import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
+import { createClient } from '@/lib/supabase/server';
+import { CEDULA_VE_NORMALIZADA_REGEX, normCedulaToken } from '@/lib/talento/cedulaAuth';
+import {
+  ingresoSemanalConsolidadoUsdDesdeConfigNominaCestaticketUsd40,
+  type ConfigNominaTabuladorLike,
+} from '@/lib/nomina/ingresoSemanalDesdeConfigNomina';
+
+export const runtime = 'nodejs';
+/** Generación de PDFs en lote puede tardar. */
+export const maxDuration = 300;
+
+const MAX_FILAS = 40;
+
+const filaSchema = z.object({
+  fila: z.number().int().positive().optional(),
+  obrero_nombre: z.string().max(220).optional().nullable(),
+  obrero_nombres: z.string().max(120).optional().nullable(),
+  obrero_apellidos: z.string().max(120).optional().nullable(),
+  obrero_cedula: z.string().min(1).max(32),
+  obrero_direccion: z.string().max(500).optional().nullable(),
+  /** Complemento USD (si no se envía remuneracion_semanal). */
+  bono_manual_usd: z.coerce.number().nonnegative().optional(),
+  /**
+   * Remuneración semanal total en USD.
+   * Se convierte a bono = max(0, remuneracion − ingreso semanal del tabulador del cargo).
+   */
+  remuneracion_semanal: z.coerce.number().nonnegative().optional().nullable(),
+  fecha_ingreso: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional()
+    .nullable(),
+  /** Nombre de cargo en tabulador (`ci_config_nomina.cargo_nombre`). */
+  cargo: z.string().max(160).optional().nullable(),
+  oficio: z.string().max(160).optional().nullable(),
+  config_nomina_id: z.string().uuid().optional().nullable(),
+});
+
+const bodySchema = z.object({
+  proyecto_id: z.string().uuid(),
+  /** Tabulador por defecto si una fila no trae cargo. */
+  config_nomina_id: z.string().uuid().optional().nullable(),
+  entidad_patrono_id: z.string().uuid().optional().nullable(),
+  filas: z.array(filaSchema).min(1).max(MAX_FILAS),
+});
+
+function normKey(s: string): string {
+  return s
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+/**
+ * POST — Carga masiva de contratos express (mismo PDF/storage que contratos-fast).
+ * Columnas típicas: nombres, apellidos, cédula, cargo, remuneración semanal, fecha de ingreso.
+ */
+export async function POST(req: Request) {
+  const admin = supabaseAdminForRoute();
+  if (!admin.ok) return admin.response;
+
+  let raw: unknown;
+  try {
+    raw = await req.json();
+  } catch {
+    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
+  }
+
+  const parsed = bodySchema.safeParse(raw);
+  if (!parsed.success) {
+    return NextResponse.json(
+      {
+        error: `Datos inválidos (máx. ${MAX_FILAS} filas por lote)`,
+        details: parsed.error.flatten().fieldErrors,
+      },
+      { status: 400 },
+    );
+  }
+
+  const { proyecto_id, config_nomina_id: defaultConfigId, entidad_patrono_id, filas } = parsed.data;
+
+  const { data: configs, error: cfgErr } = await admin.client
+    .from('ci_config_nomina')
+    .select('id,cargo_nombre,cargo_codigo,nivel_salarial,salario_base_mensual,cestaticket_mensual');
+  if (cfgErr) {
+    return NextResponse.json({ error: cfgErr.message }, { status: 500 });
+  }
+
+  const byId = new Map<string, ConfigNominaTabuladorLike & { id: string; cargo_nombre: string }>();
+  const byNombre = new Map<string, string>();
+  for (const c of configs ?? []) {
+    const row = c as {
+      id: string;
+      cargo_nombre?: string | null;
+      cargo_codigo?: string | null;
+      nivel_salarial?: number | null;
+      salario_base_mensual?: unknown;
+      cestaticket_mensual?: unknown;
+    };
+    const cfg = {
+      id: row.id,
+      cargo_nombre: (row.cargo_nombre ?? '').trim() || 'Sin nombre',
+      cargo_codigo: row.cargo_codigo ?? null,
+      nivel_salarial: row.nivel_salarial ?? null,
+      salario_base_mensual: Number(row.salario_base_mensual) || 0,
+      cestaticket_mensual: Number(row.cestaticket_mensual) || 0,
+    };
+    byId.set(row.id, cfg);
+    if (cfg.cargo_nombre) byNombre.set(normKey(cfg.cargo_nombre), row.id);
+  }
+
+  if (defaultConfigId && !byId.has(defaultConfigId)) {
+    return NextResponse.json(
+      { error: 'El oficio / tabulador por defecto no existe en ci_config_nomina.' },
+      { status: 400 },
+    );
+  }
+
+  let createdBy: string | null = null;
+  try {
+    const sb = await createClient();
+    const { data: u } = await sb.auth.getUser();
+    createdBy = u.user?.id ?? null;
+  } catch {
+    /* sin sesión */
+  }
+
+  type ResultadoFila =
+    | { fila: number; ok: true; id: string; obrero: string; cedula: string; cargo?: string }
+    | { fila: number; ok: false; error: string; obrero?: string; cedula?: string };
+
+  const resultados: ResultadoFila[] = [];
+  let okCount = 0;
+  let failCount = 0;
+
+  for (let i = 0; i < filas.length; i++) {
+    const f = filas[i];
+    const filaN = f.fila ?? i + 1;
+    const cedRaw = f.obrero_cedula;
+    const ced = normCedulaToken(cedRaw);
+    const nom = (f.obrero_nombres ?? '').trim();
+    const ape = (f.obrero_apellidos ?? '').trim();
+    const full = (f.obrero_nombre ?? '').trim() || (nom && ape ? `${nom} ${ape}` : '');
+
+    if (!CEDULA_VE_NORMALIZADA_REGEX.test(ced)) {
+      failCount++;
+      resultados.push({
+        fila: filaN,
+        ok: false,
+        error: 'Cédula inválida (Ej: V-12345678)',
+        obrero: full || undefined,
+        cedula: cedRaw,
+      });
+      continue;
+    }
+
+    if (full.length < 2) {
+      failCount++;
+      resultados.push({
+        fila: filaN,
+        ok: false,
+        error: 'Faltan nombres/apellidos',
+        cedula: ced,
+      });
+      continue;
+    }
+
+    let configId = defaultConfigId?.trim() || '';
+    if (f.config_nomina_id && byId.has(f.config_nomina_id)) {
+      configId = f.config_nomina_id;
+    } else {
+      const cargoLabel = (f.cargo ?? f.oficio ?? '').trim();
+      if (cargoLabel) {
+        const matched = byNombre.get(normKey(cargoLabel));
+        if (!matched) {
+          failCount++;
+          resultados.push({
+            fila: filaN,
+            ok: false,
+            error: `Cargo «${cargoLabel}» no encontrado en el tabulador`,
+            obrero: full,
+            cedula: ced,
+          });
+          continue;
+        }
+        configId = matched;
+      }
+    }
+
+    if (!configId || !byId.has(configId)) {
+      failCount++;
+      resultados.push({
+        fila: filaN,
+        ok: false,
+        error: 'Indique el cargo en la fila (o un oficio por defecto en el lote)',
+        obrero: full,
+        cedula: ced,
+      });
+      continue;
+    }
+
+    const cfg = byId.get(configId)!;
+    const baseSemanal =
+      ingresoSemanalConsolidadoUsdDesdeConfigNominaCestaticketUsd40(cfg) ?? 0;
+
+    let bono = 0;
+    if (f.remuneracion_semanal != null && Number.isFinite(Number(f.remuneracion_semanal))) {
+      const rem = Math.max(0, Number(f.remuneracion_semanal));
+      bono = Math.max(0, Math.round((rem - baseSemanal) * 100) / 100);
+    } else if (f.bono_manual_usd != null) {
+      bono = Math.max(0, Number(f.bono_manual_usd) || 0);
+    }
+
+    const fecha =
+      f.fecha_ingreso?.trim() && /^\d{4}-\d{2}-\d{2}$/.test(f.fecha_ingreso.trim())
+        ? f.fecha_ingreso.trim()
+        : null;
+
+    const result = await crearContratoExpress(admin.client, {
+      proyecto_id,
+      config_nomina_id: configId,
+      obrero_nombres: nom || null,
+      obrero_apellidos: ape || null,
+      obrero_nombre: full,
+      obrero_cedula: ced,
+      obrero_direccion: f.obrero_direccion?.trim() || null,
+      bono_manual_usd: bono,
+      fecha_ingreso: fecha,
+      entidad_patrono_id: entidad_patrono_id ?? null,
+      created_by: createdBy,
+      incluir_signed_url: false,
+    });
+
+    if (!result.ok) {
+      failCount++;
+      resultados.push({
+        fila: filaN,
+        ok: false,
+        error: result.error,
+        obrero: full,
+        cedula: ced,
+      });
+      continue;
+    }
+
+    okCount++;
+    resultados.push({
+      fila: filaN,
+      ok: true,
+      id: result.id,
+      obrero: full,
+      cedula: ced,
+      cargo: cfg.cargo_nombre,
+    });
+  }
+
+  return NextResponse.json({
+    ok: failCount === 0,
+    creados: okCount,
+    fallidos: failCount,
+    total: filas.length,
+    resultados,
+  });
+}

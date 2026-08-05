@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client';
 import { idsObrasHijasDesdeModuloIntegral } from '@/lib/proyectos/obraHijasDesdeModulo';
 import AccionesContratoPdfFila from '@/components/rrhh/AccionesContratoPdfFila';
 import { Button } from '@/components/ui/button';
+import { hrefListaContratosExpress } from '@/lib/talento/hrefListaContratosExpress';
 
 type ExpressRow = {
   id: string;
@@ -33,6 +34,14 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId, proyecto
   const [err, setErr] = useState<string | null>(null);
   const [rows, setRows] = useState<ExpressRow[]>([]);
   const [busyDeleteId, setBusyDeleteId] = useState<string | null>(null);
+
+  const hrefExpress = useMemo(() => {
+    const base = hrefListaContratosExpress();
+    const first = (proyectoIdsAlcance?.[0] ?? moduloIntegralId).trim();
+    if (!first || base.startsWith('http')) return base;
+    const sep = base.includes('?') ? '&' : '?';
+    return `${base}${sep}proyecto=${encodeURIComponent(first)}`;
+  }, [moduloIntegralId, proyectoIdsAlcance]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -137,9 +146,11 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId, proyecto
               Cuadro de obreros — contratos express (fast-track)
             </h2>
             <p className="mt-0.5 max-w-2xl text-[11px] text-zinc-500">
-              Contratados por Talento sin expediente previo en <span className="font-mono text-zinc-400">ci_empleados</span>
-              ; mismo módulo integral y obras/proyectos hijos vinculados. Desde Talento: PDF, compartir enlace y
-              formalizar.
+              Contratados por Talento sin expediente previo. La carga masiva (CSV) está en{' '}
+              <Link href={hrefExpress} className="font-semibold text-amber-300 underline underline-offset-2">
+                RRHH → Express
+              </Link>{' '}
+              (obra + entidad patrono).
             </p>
           </div>
         </div>
@@ -157,11 +168,11 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId, proyecto
             <span className="ml-1.5 hidden sm:inline">Actualizar</span>
           </Button>
           <Link
-            href="/rrhh/registro"
+            href={hrefExpress}
             className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/45 bg-amber-950/50 px-3 py-2 text-xs font-bold text-amber-50 transition hover:border-amber-400/70 hover:bg-amber-900/55"
           >
             <FileText className="size-3.5 shrink-0" aria-hidden />
-            Nuevo express
+            Carga masiva
             <ExternalLink className="size-3.5 shrink-0 opacity-80" aria-hidden />
           </Link>
         </div>
@@ -174,11 +185,11 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId, proyecto
           <p className="rounded-lg border border-red-500/30 bg-red-950/30 px-4 py-3 text-sm text-red-300">{err}</p>
         ) : rows.length === 0 ? (
           <p className="rounded-lg border border-zinc-700/50 bg-zinc-900/40 px-4 py-6 text-center text-sm text-zinc-500">
-            No hay contratos express en este alcance. Crea uno en{' '}
-            <Link href="/rrhh/registro" className="font-semibold text-amber-300 underline underline-offset-2 hover:text-amber-200">
-              Talento → Nuevo express
-            </Link>
-            .
+            No hay contratos express en este alcance. Use{' '}
+            <Link href={hrefExpress} className="font-semibold text-amber-300 underline underline-offset-2 hover:text-amber-200">
+              RRHH → Express
+            </Link>{' '}
+            para la carga masiva.
           </p>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-amber-500/20 bg-black/25">
@@ -247,7 +258,7 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId, proyecto
 
       {!loading && !err && rows.length > 0 ? (
         <p className="mt-3 text-center text-[11px] text-zinc-600">
-          {rows.length} registro{rows.length === 1 ? '' : 's'} — PDF, firmado y formalizar en la vista completa de Talento.
+          {rows.length} registro{rows.length === 1 ? '' : 's'} — carga masiva en RRHH → Express.
         </p>
       ) : null}
     </section>
