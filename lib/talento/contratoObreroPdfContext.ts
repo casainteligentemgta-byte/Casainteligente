@@ -1045,7 +1045,7 @@ export async function cargarPropsContratoObreroPdfExpress(
     direccion_domicilio: dirObrero ?? undefined,
     direccion_habitacion: dirObrero ?? undefined,
     estado_civil: strOpt(manual.estadoCivil) || 'Soltero',
-    nacionalidad: strOpt(manual.nacionalidad) || 'venezolana',
+    nacionalidad: strOpt(manual.nacionalidad) || 'venezolanas',
     municipio_domicilio: strOpt(manual.obreroMunicipioResidencia) ?? undefined,
     estado_domicilio: strOpt(manual.obreroEstadoResidencia) ?? undefined,
     cargo_nombre: cargoNom,

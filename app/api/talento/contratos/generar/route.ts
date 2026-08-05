@@ -426,7 +426,7 @@ export async function POST(req: Request) {
     const hvPlanilla = parseHojaVidaObrero(worker.hoja_vida_obrero) ?? emptyHojaVidaObreroCompleta();
     const empPlanilla = fusionarEmpleadoContratoDesdePlanilla(worker, hvPlanilla);
 
-    const nacionalidad = empPlanilla.nacionalidad ?? strOrNull(worker.nacionalidad) ?? 'venezolana';
+    const nacionalidad = empPlanilla.nacionalidad ?? strOrNull(worker.nacionalidad) ?? 'venezolanas';
     const domicilioTrabajador =
       empPlanilla.direccion ??
       strOrNull(worker.direccion_domicilio) ??

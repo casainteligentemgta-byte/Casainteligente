@@ -152,7 +152,7 @@ export default function ContratoTrabajoObreroClient() {
   const [bonoUsd, setBonoUsd] = useState('0');
   const [guardandoUno, setGuardandoUno] = useState(false);
   const nacionalidadDesdeDoc =
-    nacionalidadDesdeCedula(cedula) ?? (cedula.trim() ? 'venezolana' : '—');
+    nacionalidadDesdeCedula(cedula) ?? (cedula.trim() ? 'venezolanas' : '—');
 
   const [filas, setFilas] = useState<FilaContratoTrabajoObrero[]>([]);
   const [avisosParse, setAvisosParse] = useState<string[]>([]);
@@ -678,7 +678,7 @@ export default function ContratoTrabajoObreroClient() {
             <option value="Viuda" />
           </datalist>
           <p className="text-[10px] text-zinc-500">
-            Si el Excel no trae estado civil, se usa este valor. Nacionalidad: V → venezolana, E → extranjero.
+            Si el Excel no trae estado civil, se usa este valor. Nacionalidad: V → venezolanas, E → extranjeras.
           </p>
         </label>
       </div>
@@ -957,7 +957,7 @@ export default function ContratoTrabajoObreroClient() {
                     className={`${inputClass} bg-zinc-900/50 text-zinc-300`}
                     value={nacionalidadDesdeDoc}
                     readOnly
-                    title="V → venezolana; E → extranjero"
+                    title="V → venezolanas; E → extranjeras"
                   />
                 </label>
                 <label className="block space-y-1.5">
@@ -1066,8 +1066,8 @@ export default function ContratoTrabajoObreroClient() {
               <p className="mt-1">
                 Lugar de trabajo, nombre de obra, fase técnica, punto de encuentro y domicilio procesal
                 salen de la <span className="text-zinc-200">obra seleccionada</span> (datos PM). Completa
-                estado civil en el Excel (si falta → Soltero). Nacionalidad según cédula: V = venezolana, E =
-                extranjero.
+                estado civil en el Excel (si falta → Soltero). Nacionalidad según cédula: V = venezolanas, E =
+                extranjeras.
               </p>
               <p className="mt-1">
                 Si una fila no trae fecha, jornada o bono, se usan los valores por defecto de abajo.

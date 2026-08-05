@@ -14,12 +14,15 @@ export const CEDULA_VE_NORMALIZADA_REGEX = /^[VE]\d{6,9}$/;
 
 /**
  * Nacionalidad para contrato según prefijo de cédula:
- * V → venezolana; E → extranjero. Sin letra reconocible → null.
+ * V → venezolanas (forma genérica, hombres y mujeres); E → extranjeras.
+ * Sin letra reconocible → null.
  */
-export function nacionalidadDesdeCedula(cedula: string | null | undefined): 'venezolana' | 'extranjero' | null {
+export function nacionalidadDesdeCedula(
+  cedula: string | null | undefined,
+): 'venezolanas' | 'extranjeras' | null {
   const t = normCedulaToken(cedula ?? '');
-  if (t.startsWith('V')) return 'venezolana';
-  if (t.startsWith('E')) return 'extranjero';
+  if (t.startsWith('V')) return 'venezolanas';
+  if (t.startsWith('E')) return 'extranjeras';
   return null;
 }
 
