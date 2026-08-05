@@ -4,6 +4,25 @@ import { calcularReciboSemanal, InputCalculoRecibo } from '@/lib/nomina/motorCal
 
 export const dynamic = 'force-dynamic';
 
+type EmpleadoRel = {
+  id: string;
+  nombre_completo: string | null;
+  documento: string | null;
+  estatus: string | null;
+};
+
+type ContratoConEmpleado = {
+  id: string;
+  empleado_id: string;
+  cargo_nombre: string | null;
+  sueldo_semanal_usd: number | string | null;
+  ci_empleados: EmpleadoRel | EmpleadoRel[];
+};
+
+function unwrapEmpleado(rel: EmpleadoRel | EmpleadoRel[]): EmpleadoRel {
+  return Array.isArray(rel) ? rel[0] : rel;
+}
+
 export async function POST(req: Request) {
   try {
     const supabase = await createClient();
@@ -29,7 +48,7 @@ export async function POST(req: Request) {
     }
 
     // 1. Buscar a los trabajadores asignados a este proyecto
-    const { data: contratos, error: errContratos } = await supabase
+    const { data: contratosRaw, error: errContratos } = await supabase
       .from('ci_contratos_empleado_obra')
       .select(`
         id,
@@ -42,7 +61,9 @@ export async function POST(req: Request) {
       .eq('ci_empleados.estatus', 'asignado')
       .is('fecha_fin_real', null); // Contratos activos
 
-    if (errContratos || !contratos || contratos.length === 0) {
+    const contratos = (contratosRaw ?? []) as unknown as ContratoConEmpleado[];
+
+    if (errContratos || contratos.length === 0) {
       return NextResponse.json({ 
         error: 'No se encontraron contratos activos en esta obra.' 
       }, { status: 404 });
@@ -80,6 +101,7 @@ export async function POST(req: Request) {
       // Por simplicidad del MVP de generación masiva, asumimos asistencia perfecta (5 días)
       // En una Fase posterior, aquí se consultaría la tabla rrhh_asistencias_diarias
       const diasLaborados = 5;
+      const empleado = unwrapEmpleado(c.ci_empleados);
       
       const input: InputCalculoRecibo = {
         empleadoId: c.empleado_id,
@@ -99,8 +121,8 @@ export async function POST(req: Request) {
           periodo_id: periodo.id,
           empleado_id: c.empleado_id,
           contrato_id: c.id,
-          empleado_nombre: Array.isArray(c.ci_empleados) ? c.ci_empleados[0].nombre_completo : c.ci_empleados.nombre_completo,
-          empleado_cedula: Array.isArray(c.ci_empleados) ? c.ci_empleados[0].documento : c.ci_empleados.documento,
+          empleado_nombre: empleado?.nombre_completo ?? null,
+          empleado_cedula: empleado?.documento ?? null,
           empleado_cargo: c.cargo_nombre,
           dias_laborados: diasLaborados,
           salario_base_mensual: calculo.salario_base_bs * 4,
