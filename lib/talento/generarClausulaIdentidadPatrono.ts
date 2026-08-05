@@ -7,6 +7,7 @@ import {
 } from '@/lib/talento/registroMercantilCamposPdf';
 import { textoTrasLaPalabraOficinaDe } from '@/lib/talento/textoOficinaRegistroMercantil';
 import type { CiEntidad, RegistroMercantilCi, RepresentanteMercantilCi } from '@/types/ci-entidad';
+import { nacionalidadRepresentanteSegunGenero } from '@/lib/talento/nacionalidadRepresentanteSegunGenero';
 
 /**
  * Entrada flexible: columnas reales de `ci_entidades` o alias legados usados en borradores.
@@ -124,8 +125,9 @@ export function generarClausulaIdentidadPatrono(entidad: EntidadPatronoClausulaI
   const bloqueRep = repNombre ? repNombre.toUpperCase() : '[REPRESENTANTE NO REGISTRADO]';
   const bloqueCi = repCedula || '[CÉDULA NO REGISTRADA]';
   const bloqueCargo = repCargo || 'Presidente';
-  const bloqueTratamiento = repRm?.genero === 'F' ? 'Sra.' : 'Sr.';
-  const bloqueNac = repNacionalidad || 'venezolano(a)';
+  const repFemenino = repRm?.genero === 'F';
+  const bloqueTratamiento = repFemenino ? 'Sra.' : 'Sr.';
+  const bloqueNac = nacionalidadRepresentanteSegunGenero(repNacionalidad || null, repFemenino);
   const fragEstadoCivil = repEstadoCivil ? `, de estado civil ${repEstadoCivil}` : '';
   const fragDomicilioRep = repDomicilio ? `, con domicilio en ${repDomicilio}` : '';
   const fragResidenciaRep =
