@@ -18,7 +18,6 @@ type ExpressRow = {
   obrero_direccion?: string | null;
   horario_semanal_texto?: string | null;
   bono_manual_usd?: number | null;
-  bono_manual_ves?: number | null;
   pdf_storage_path?: string | null;
 };
 
@@ -48,7 +47,7 @@ export async function generarBufferContratoExpressPdf(
   const { data, error } = await supabase
     .from('ci_contratos_express')
     .select(
-      'id,proyecto_id,config_nomina_id,obrero_nombre,obrero_cedula,obrero_direccion,horario_semanal_texto,bono_manual_usd,bono_manual_ves,pdf_storage_path',
+      'id,proyecto_id,config_nomina_id,obrero_nombre,obrero_cedula,obrero_direccion,horario_semanal_texto,bono_manual_usd,pdf_storage_path',
     )
     .eq('id', id)
     .maybeSingle();
