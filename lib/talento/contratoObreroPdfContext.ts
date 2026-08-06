@@ -25,7 +25,6 @@ import {
 } from '@/lib/talento/empleadoContratoDesdeHojaPlanilla';
 import { resolvePlanillaPatronoParaEmpleado } from '@/lib/talento/resolvePlanillaPatronoPdf';
 import { resolverTextoHorarioSemanalObra } from '@/lib/talento/horarioSemanalContratoPdf';
-import { oficioRasoParaContrato } from '@/lib/talento/resolverConfigNominaPorCargo';
 import { camposRegistroMercantilDesdeRecord, parseRegistroMercantilRecord } from '@/lib/talento/registroMercantilCamposPdf';
 import {
   formatearUsdContratoPdf,
@@ -956,8 +955,8 @@ export type ContratoExpressManualInput = {
   /** Bono especial no salarial en USD (cláusula SEXTA del PDF). */
   bonoManualUsd?: number | null;
   /**
-   * Oficio del listado (raso, sin 1era/2da). Tiene prioridad sobre el nombre del tabulador
-   * para el cargo en el PDF y las obligaciones.
+   * Oficio del listado/Excel (opcional, para obligaciones).
+   * El cargo impreso en el PDF es la denominación Gaceta/tabulador.
    */
   cargoNombreListado?: string | null;
 };
@@ -1096,11 +1095,11 @@ export async function cargarPropsContratoObreroPdfExpress(
     jornadaTrabajo: manual.jornadaTrabajo,
   });
 
+  // Denominación oficial según Gaceta / tabulador (p. ej. Ayudante, Carpintero de 1ra.).
   const cargoNomTab = strOpt(nom.cargo_nombre);
-  const cargoNom =
-    strOpt(manual.cargoNombreListado) ||
-    oficioRasoParaContrato(cargoNomTab) ||
-    cargoNomTab;
+  const cargoNom = cargoNomTab;
+  // Para obligaciones: listado o tabulador (se normaliza grado al buscar ficha).
+  const cargoParaObligaciones = strOpt(manual.cargoNombreListado) || cargoNomTab;
   const nombreObrero = manual.obreroNombre.trim();
   const cedulaObrero = manual.obreroCedula.trim();
   const dirObrero = strOpt(manual.obreroDireccion);
@@ -1117,7 +1116,7 @@ export async function cargarPropsContratoObreroPdfExpress(
     municipio_domicilio: strOpt(manual.obreroMunicipioResidencia) ?? undefined,
     estado_domicilio: strOpt(manual.obreroEstadoResidencia) ?? undefined,
     cargo_nombre: cargoNom,
-    tareas_especificas: cargoNom,
+    tareas_especificas: cargoParaObligaciones ?? cargoNom,
   };
 
   const smRaw = Number(nom.salario_base_mensual);

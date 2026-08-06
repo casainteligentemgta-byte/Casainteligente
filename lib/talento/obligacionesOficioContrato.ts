@@ -6,7 +6,7 @@
 
 import { CARGOS_OBREROS, cargoPorCodigo } from '@/lib/constants/cargosObreros';
 import { fichaRequisitosPorCodigo } from '@/lib/constants/requisitosOficiosGaceta';
-import { fichaOficioRaso, stripGradoOficio } from '@/lib/talento/oficiosRasosObligaciones';
+import { fichaOficioRaso } from '@/lib/talento/oficiosRasosObligaciones';
 
 /** Puntos 1–5 fijos (texto tras «se obliga a:»). */
 export const OBLIGACIONES_GENERICAS_NUMERADAS =
@@ -71,13 +71,16 @@ export type ObligacionesOficioOpts = {
 type ComplementoParts = { tareas: string; conocimientos: string; denominacion: string };
 
 function complementoDesdeFuentes(opts: ObligacionesOficioOpts): ComplementoParts | null {
+  const nombreGaceta = String(opts.cargoNombre ?? '').trim();
+
   // 1) Oficio raso (sin grado): preferido para listados de obra.
   const raso = fichaOficioRaso(opts.cargoNombre);
   if (raso) {
     return {
       tareas: raso.tareas,
       conocimientos: raso.conocimientos,
-      denominacion: raso.denominacion,
+      // Si ya viene denominación Gaceta (p. ej. «Carpintero de 1ra.»), respetarla.
+      denominacion: nombreGaceta || raso.denominacion,
     };
   }
 
@@ -89,12 +92,11 @@ function complementoDesdeFuentes(opts: ObligacionesOficioOpts): ComplementoParts
       const tareas = (ficha.tareas ?? '').trim();
       const conocimientos = (ficha.conocimientos ?? '').trim();
       if (tareas || conocimientos) {
-        const denomRaso = stripGradoOficio(opts.cargoNombre ?? '') || stripGradoOficio(cargoPorCodigo(codigo)?.nombre);
         return {
           tareas,
           conocimientos,
           denominacion:
-            denomRaso ||
+            nombreGaceta ||
             cargoPorCodigo(codigo)?.nombre ||
             `código ${codigo}`,
         };

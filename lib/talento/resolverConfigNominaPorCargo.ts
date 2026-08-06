@@ -1,9 +1,10 @@
 /**
  * Resuelve un cargo de listado de obra (p. ej. AYUDANTE, CARPINTERO, TOPOGRAFO)
- * contra filas de `ci_config_nomina` (tabulador GOE / Convención Colectiva).
+ * contra filas de `ci_config_nomina` (tabulador GOE / Convención Colectiva / Gaceta).
  *
- * Los oficios del listado se mantienen «rasos» (sin forzar 1era/2da/3era).
- * Si el Excel sí indica grado, se respeta.
+ * La denominación del contrato es la de la Gaceta (p. ej. «Ayudante», «Carpintero de 1ra.»).
+ * Si el Excel indica grado (2da), se respeta; si no, se empareja al oficio del tabulador
+ * sin inventar grados en oficios que en Gaceta van sin nivel (Ayudante, Caporal, etc.).
  */
 
 export type ConfigNominaMatchRow = {

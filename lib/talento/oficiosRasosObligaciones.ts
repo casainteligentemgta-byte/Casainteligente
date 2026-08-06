@@ -1,7 +1,7 @@
 /**
- * Obligaciones / ficha técnica por oficio «raso» (sin 1era/2da/3era).
- * Se usan en la cláusula PRIMERA del contrato cuando el listado trae el oficio
- * sin grado, o cuando se normaliza quitando el grado del tabulador.
+ * Obligaciones / ficha técnica por oficio «raso» (sin forzar grado).
+ * Ayuda a mapear listados (AYUDANTE, CARPINTERO) a tareas del manual.
+ * En el contrato el cargo impreso sigue siendo la denominación Gaceta/tabulador.
  */
 
 export type FichaOficioRaso = {

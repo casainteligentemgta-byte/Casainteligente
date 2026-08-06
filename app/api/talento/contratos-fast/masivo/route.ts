@@ -272,7 +272,7 @@ export async function POST(req: Request) {
       id: result.id,
       obrero: full,
       cedula: ced,
-      cargo: cargoLabel || cfg.cargo_nombre,
+      cargo: cfg.cargo_nombre,
     });
   }
 

@@ -21,7 +21,6 @@ import {
   trimFaseTecnica,
 } from '@/lib/talento/fasesTecnicasContrato';
 import { construirExpedienteContratoExpress } from '@/lib/talento/nomenclaturaExpedienteContrato';
-import { oficioRasoParaContrato } from '@/lib/talento/resolverConfigNominaPorCargo';
 
 export type CrearContratoExpressInput = {
   proyecto_id: string;
@@ -43,8 +42,8 @@ export type CrearContratoExpressInput = {
   obrero_municipio_residencia?: string | null;
   obrero_estado_residencia?: string | null;
   /**
-   * Oficio tal como vino en el listado/Excel (raso, sin 1era/2da).
-   * Si se envía, se usa en el PDF en lugar de la denominación graduada del tabulador.
+   * Oficio del listado/Excel (opcional). Solo para emparejar; en el PDF se usa
+   * la denominación del tabulador/Gaceta (`ci_config_nomina.cargo_nombre`).
    */
   cargo_nombre_listado?: string | null;
   created_by?: string | null;
@@ -109,8 +108,7 @@ function manualDesdeInput(
     obreroMunicipioResidencia: input.obrero_municipio_residencia?.trim() || null,
     obreroEstadoResidencia: input.obrero_estado_residencia?.trim() || null,
     bonoManualUsd: Number(input.bono_manual_usd ?? 0) || 0,
-    cargoNombreListado:
-      oficioRasoParaContrato(input.cargo_nombre_listado) || input.cargo_nombre_listado?.trim() || null,
+    cargoNombreListado: input.cargo_nombre_listado?.trim() || null,
   };
 }
 
@@ -199,11 +197,8 @@ export async function crearContratoExpress(
     .maybeSingle();
   const snap = nomSnap as { cargo_nombre?: string | null; salario_base_mensual?: unknown } | null;
   const salSnap = snap?.salario_base_mensual != null ? Number(snap.salario_base_mensual) : null;
-  const cargoSnapshot =
-    oficioRasoParaContrato(input.cargo_nombre_listado) ||
-    oficioRasoParaContrato(snap?.cargo_nombre) ||
-    snap?.cargo_nombre?.trim() ||
-    null;
+  // Denominación oficial Gaceta / tabulador (p. ej. «Ayudante», «Carpintero de 1ra.»).
+  const cargoSnapshot = snap?.cargo_nombre?.trim() || null;
 
   const horarioVal =
     (input.horario_semanal_texto?.trim() || loaded.props.parametros.horarioSemanal?.trim() || null) as
