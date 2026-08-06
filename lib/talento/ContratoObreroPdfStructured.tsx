@@ -825,6 +825,10 @@ export function ContratoObreroPDF({
           <Text style={styles.signatureLine}>{nombreTrabajador}</Text>
           <Text style={styles.signatureLine}>C.I. {cedulaTrabGuion}</Text>
           <Text style={[styles.signatureLine, { marginTop: 2 }]}>(Huella Dactilar)</Text>
+          <View style={styles.huellasRow}>
+            <View style={styles.huellaBox} />
+            <View style={styles.huellaBox} />
+          </View>
         </View>
       </View>
     </>
