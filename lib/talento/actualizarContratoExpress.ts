@@ -5,6 +5,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { CEDULA_VE_NORMALIZADA_REGEX, estadoCivilContratoObrero, normCedulaToken } from '@/lib/talento/cedulaAuth';
 import { regenerarYPersistirPdfContratoExpress } from '@/lib/rrhh/expressContratoPdfBuffer';
+import { recordarFaseTecnicaUsada, trimFaseTecnica } from '@/lib/talento/fasesTecnicasContrato';
 
 export type ActualizarContratoExpressInput = {
   obrero_nombre?: string | null;
@@ -52,7 +53,7 @@ export async function actualizarContratoExpress(
 
   const { data: existing, error: selErr } = await admin
     .from('ci_contratos_express')
-    .select('id,obrero_nombre,config_nomina_id,cargo_nombre_snapshot')
+    .select('id,obrero_nombre,config_nomina_id,cargo_nombre_snapshot,proyecto_id')
     .eq('id', id)
     .maybeSingle();
   if (selErr) return { ok: false, error: selErr.message, status: 500 };
@@ -61,6 +62,7 @@ export async function actualizarContratoExpress(
   const prev = existing as {
     obrero_nombre?: string | null;
     config_nomina_id?: string | null;
+    proyecto_id?: string | null;
   };
 
   const patch: Record<string, unknown> = {};
@@ -104,7 +106,7 @@ export async function actualizarContratoExpress(
     const n = Number(input.bono_manual_usd);
     patch.bono_manual_usd = Number.isFinite(n) && n >= 0 ? n : 0;
   }
-  if (input.objeto_contrato !== undefined) patch.objeto_contrato = trimOrNull(input.objeto_contrato);
+  if (input.objeto_contrato !== undefined) patch.objeto_contrato = trimFaseTecnica(input.objeto_contrato);
   if (input.jornada_trabajo !== undefined) patch.jornada_trabajo = trimOrNull(input.jornada_trabajo);
   if (input.obrero_municipio_residencia !== undefined) {
     patch.obrero_municipio_residencia = trimOrNull(input.obrero_municipio_residencia);
@@ -170,6 +172,13 @@ export async function actualizarContratoExpress(
     }
 
     if (updErr) return { ok: false, error: updErr.message, status: 500 };
+  }
+
+  if (input.objeto_contrato !== undefined) {
+    const fase = trimFaseTecnica(input.objeto_contrato);
+    if (fase) {
+      await recordarFaseTecnicaUsada(admin, fase, { proyectoId: prev.proyecto_id });
+    }
   }
 
   if (input.regenerar_pdf === false) {

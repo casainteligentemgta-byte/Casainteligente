@@ -8,6 +8,7 @@ import {
 import { ContratoObreroPDF } from '@/lib/talento/ContratoObreroPdfStructured';
 import { BUCKET_CONTRATOS_OBREROS } from '@/lib/talento/contratoLaboralRegistroStorage';
 import { estadoCivilContratoObrero } from '@/lib/talento/cedulaAuth';
+import { faseTecnicaDefaultProyecto } from '@/lib/talento/fasesTecnicasContrato';
 
 export type ExpressRowPdf = {
   id: string;
@@ -116,6 +117,9 @@ export async function generarBufferContratoExpressPdf(
   const manual = manualDesdeExpressRow(row);
   if (!manual.obreroNombre || !manual.obreroCedula) {
     return { ok: false, error: 'Faltan nombre o cédula del obrero en el contrato express.' };
+  }
+  if (!manual.objetoContrato) {
+    manual.objetoContrato = await faseTecnicaDefaultProyecto(supabase, proyectoId);
   }
 
   const loaded = await cargarPropsContratoObreroPdfExpress(supabase, proyectoId, configNominaId, manual);

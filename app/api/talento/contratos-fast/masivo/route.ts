@@ -9,6 +9,7 @@ import {
   type ConfigNominaTabuladorLike,
 } from '@/lib/nomina/ingresoSemanalDesdeConfigNomina';
 import { resolverConfigNominaPorCargo } from '@/lib/talento/resolverConfigNominaPorCargo';
+import { recordarFaseTecnicaUsada, trimFaseTecnica } from '@/lib/talento/fasesTecnicasContrato';
 
 export const runtime = 'nodejs';
 /** Generación de PDFs en lote puede tardar. */
@@ -48,6 +49,8 @@ const bodySchema = z.object({
   /** Tabulador por defecto si una fila no trae cargo. */
   config_nomina_id: z.string().uuid().optional().nullable(),
   entidad_patrono_id: z.string().uuid().optional().nullable(),
+  /** Fase técnica compartida (cláusula PRIMERA) para todo el lote. */
+  objeto_contrato: z.string().max(2000).optional().nullable(),
   filas: z.array(filaSchema).min(1).max(MAX_FILAS),
 });
 
@@ -78,7 +81,13 @@ export async function POST(req: Request) {
     );
   }
 
-  const { proyecto_id, config_nomina_id: defaultConfigId, entidad_patrono_id, filas } = parsed.data;
+  const {
+    proyecto_id,
+    config_nomina_id: defaultConfigId,
+    entidad_patrono_id,
+    objeto_contrato,
+    filas,
+  } = parsed.data;
 
   const { data: configs, error: cfgErr } = await admin.client
     .from('ci_config_nomina')
@@ -238,9 +247,11 @@ export async function POST(req: Request) {
       estado_civil: 'Soltero',
       bono_manual_usd: bono,
       fecha_ingreso: fecha,
+      objeto_contrato: objeto_contrato?.trim() || null,
       entidad_patrono_id: entidad_patrono_id ?? null,
       created_by: createdBy,
       incluir_signed_url: false,
+      recordar_fase_tecnica: false,
     });
 
     if (!result.ok) {
@@ -264,6 +275,11 @@ export async function POST(req: Request) {
       cedula: ced,
       cargo: cfg.cargo_nombre,
     });
+  }
+
+  const faseLote = trimFaseTecnica(objeto_contrato);
+  if (okCount > 0 && faseLote) {
+    await recordarFaseTecnicaUsada(admin.client, faseLote, { proyectoId: proyecto_id });
   }
 
   return NextResponse.json({

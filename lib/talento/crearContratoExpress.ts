@@ -11,6 +11,11 @@ import {
 } from '@/lib/talento/contratoLaboralRegistroStorage';
 import { ContratoObreroPDF } from '@/lib/talento/ContratoObreroPdfStructured';
 import { CEDULA_VE_NORMALIZADA_REGEX, estadoCivilContratoObrero, normCedulaToken } from '@/lib/talento/cedulaAuth';
+import {
+  faseTecnicaDefaultProyecto,
+  recordarFaseTecnicaUsada,
+  trimFaseTecnica,
+} from '@/lib/talento/fasesTecnicasContrato';
 
 export type CrearContratoExpressInput = {
   proyecto_id: string;
@@ -34,6 +39,8 @@ export type CrearContratoExpressInput = {
   created_by?: string | null;
   /** Si false, no genera signed URL (más rápido en lote). Default true. */
   incluir_signed_url?: boolean;
+  /** Si false, no escribe en catálogo de fases (p. ej. lote: se graba una sola vez al final). Default true. */
+  recordar_fase_tecnica?: boolean;
 };
 
 export type CrearContratoExpressOk = {
@@ -108,7 +115,16 @@ export async function crearContratoExpress(
     })();
 
   const cedula = normCedulaToken(String(input.obrero_cedula));
-  const manual = manualDesdeInput({ ...input, obrero_cedula: cedula }, fechaFirmaIso);
+  let objetoContrato = trimFaseTecnica(input.objeto_contrato);
+  if (!objetoContrato) {
+    objetoContrato = await faseTecnicaDefaultProyecto(admin, input.proyecto_id);
+  }
+  const inputConFase: CrearContratoExpressInput = {
+    ...input,
+    obrero_cedula: cedula,
+    objeto_contrato: objetoContrato,
+  };
+  const manual = manualDesdeInput(inputConFase, fechaFirmaIso);
 
   const loaded = await cargarPropsContratoObreroPdfExpress(
     admin,
@@ -178,7 +194,7 @@ export async function crearContratoExpress(
     estado_civil: estadoCivilContratoObrero(input.estado_civil),
     nacionalidad: input.nacionalidad?.trim() || null,
     fecha_ingreso: fechaFirmaIso,
-    objeto_contrato: input.objeto_contrato?.trim() || null,
+    objeto_contrato: objetoContrato,
     jornada_trabajo: input.jornada_trabajo?.trim() || null,
     obrero_municipio_residencia: input.obrero_municipio_residencia?.trim() || null,
     obrero_estado_residencia: input.obrero_estado_residencia?.trim() || null,
@@ -224,6 +240,10 @@ export async function crearContratoExpress(
       ok: false,
       error: 'El INSERT no devolvió el id del contrato express o no se pudo confirmar.',
     };
+  }
+
+  if (objetoContrato && input.recordar_fase_tecnica !== false) {
+    await recordarFaseTecnicaUsada(admin, objetoContrato, { proyectoId: input.proyecto_id });
   }
 
   let signed_url: string | null = null;

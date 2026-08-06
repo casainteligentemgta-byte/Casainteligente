@@ -63,6 +63,7 @@ export default function ModalEditarContratoExpress({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [oficios, setOficios] = useState<OficioOpt[]>([]);
+  const [fasesSugeridas, setFasesSugeridas] = useState<string[]>([]);
   const [form, setForm] = useState<ContratoEditable | null>(null);
   const [schemaParcial, setSchemaParcial] = useState(false);
 
@@ -70,9 +71,10 @@ export default function ModalEditarContratoExpress({
     if (!contratoId) return;
     setLoading(true);
     try {
-      const [ctrRes, ofiRes] = await Promise.all([
+      const [ctrRes, ofiRes, fasesRes] = await Promise.all([
         fetch(`/api/talento/contratos-express/${encodeURIComponent(contratoId)}`),
         supabase.from('ci_config_nomina').select('id,cargo_nombre').order('cargo_nombre').limit(500),
+        fetch('/api/talento/fases-tecnicas'),
       ]);
       const j = (await ctrRes.json()) as {
         ok?: boolean;
@@ -85,10 +87,22 @@ export default function ModalEditarContratoExpress({
         onOpenChange(false);
         return;
       }
+      let objeto = (j.contrato.objeto_contrato ?? '').trim();
+      if (!objeto && j.contrato.proyecto_id) {
+        const { data: proy } = await supabase
+          .from('ci_proyectos')
+          .select('fase_tecnica_contrato_default')
+          .eq('id', j.contrato.proyecto_id)
+          .maybeSingle();
+        objeto =
+          ((proy as { fase_tecnica_contrato_default?: string | null } | null)
+            ?.fase_tecnica_contrato_default ?? '').trim();
+      }
       setForm({
         ...j.contrato,
         estado_civil: (j.contrato.estado_civil ?? '').trim() || 'Soltero',
         obrero_direccion: (j.contrato.obrero_direccion ?? '').trim() || 'de este domicilio',
+        objeto_contrato: objeto || null,
       });
       setSchemaParcial(Boolean(j.schema_parcial));
       if (!ofiRes.error && ofiRes.data) {
@@ -98,6 +112,15 @@ export default function ModalEditarContratoExpress({
             cargo_nombre: (o.cargo_nombre ?? '').trim() || o.id.slice(0, 8),
           })),
         );
+      }
+      try {
+        const fj = (await fasesRes.json()) as { fases?: { texto?: string }[] };
+        const textos = (fj.fases ?? [])
+          .map((f) => (f.texto ?? '').trim())
+          .filter((t) => t.length >= 2);
+        setFasesSugeridas(Array.from(new Set(textos)));
+      } catch {
+        setFasesSugeridas([]);
       }
     } catch {
       toast.error('Error de red al cargar el contrato');
@@ -187,7 +210,8 @@ export default function ModalEditarContratoExpress({
             {schemaParcial ? (
               <p className="sm:col-span-2 rounded-md border border-amber-500/30 bg-amber-950/30 px-3 py-2 text-[11px] text-amber-100/90">
                 Algunas columnas nuevas aún no están en la BD. Ejecute{' '}
-                <code className="text-amber-50">sql_editor_312_ci_contratos_express_campos_editables.sql</code>{' '}
+                <code className="text-amber-50">sql_editor_312_ci_contratos_express_campos_editables.sql</code> y{' '}
+                <code className="text-amber-50">sql_editor_313_ci_fases_tecnicas_contrato.sql</code>{' '}
                 para editar estado civil, fecha, fase técnica, etc.
               </p>
             ) : null}
@@ -304,11 +328,32 @@ export default function ModalEditarContratoExpress({
             </label>
             <label className="block space-y-1 text-[10px] font-bold uppercase tracking-wide text-zinc-500 sm:col-span-2">
               Fase técnica / objeto (cláusula PRIMERA)
+              {fasesSugeridas.length > 0 ? (
+                <select
+                  className={inputClass}
+                  value=""
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v) setField('objeto_contrato', v);
+                  }}
+                >
+                  <option value="">— Usar fase guardada —</option>
+                  {fasesSugeridas.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
               <textarea
                 className={`${inputClass} min-h-[4rem]`}
                 value={form.objeto_contrato ?? ''}
+                placeholder="Ej.: estructura de concreto armado"
                 onChange={(e) => setField('objeto_contrato', e.target.value)}
               />
+              <span className="block font-normal normal-case tracking-normal text-zinc-600">
+                Editable. Al guardar queda grabada para próximas obras y contratos.
+              </span>
             </label>
             <label className="block space-y-1 text-[10px] font-bold uppercase tracking-wide text-zinc-500 sm:col-span-2">
               Horario semanal (cláusula CUARTA)
