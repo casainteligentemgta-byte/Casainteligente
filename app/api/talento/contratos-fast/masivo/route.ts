@@ -198,7 +198,7 @@ export async function POST(req: Request) {
           resultados.push({
             fila: filaN,
             ok: false,
-            error: `Cargo «${cargoLabel}» no encontrado en el tabulador (revise Oficios y salarios o elija oficio por defecto)`,
+            error: `Cargo «${cargoLabel}» no encontrado en el tabulador (revise Oficios y salarios o elija oficio por defecto arriba). Sugerencia: CARPINTERO/ALBAÑIL/OPERADOR/TOPOGRAFO/UTILITIS ya se emparejan automáticamente si el oficio existe en el tabulador.`,
             obrero: full,
             cedula: ced,
           });
