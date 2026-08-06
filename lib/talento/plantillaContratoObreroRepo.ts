@@ -15,6 +15,32 @@ export function migrarObligacionesPlantillaSiFijas(cuerpo: string): string {
   return c.replace(OBLIGACIONES_GENERICAS_NUMERADAS, '{{CONTRATO_OBLIGACIONES_TRABAJADOR}}');
 }
 
+const COMPARECENCIA_REP_VIEJA =
+  '{{REP_LEGAL_NACIONALIDAD}}, mayor de edad, hábil en derecho, {{REP_LEGAL_ESTADO_CIVIL}}, de este domicilio, titular de la cédula de Identidad número {{REP_LEGAL_CEDULA}}';
+const COMPARECENCIA_REP_NUEVA =
+  '{{REP_LEGAL_NACIONALIDAD}}, mayor de edad, titular de la cédula de Identidad número {{REP_LEGAL_CEDULA}}, hábil en derecho, {{REP_LEGAL_ESTADO_CIVIL}} y de este domicilio';
+const COMPARECENCIA_TRAB_VIEJA =
+  '{{EMPLEADO_NACIONALIDAD}}, mayor de edad, hábil en derecho, {{EMPLEADO_ESTADO_CIVIL}}, titular de la cédula de identidad número {{EMPLEADO_CEDULA}}, de este domicilio';
+const COMPARECENCIA_TRAB_NUEVA =
+  '{{EMPLEADO_NACIONALIDAD}}, mayor de edad, titular de la cédula de identidad número {{EMPLEADO_CEDULA}}, hábil en derecho, {{EMPLEADO_ESTADO_CIVIL}} y de este domicilio';
+
+/** Reordena la comparecencia del representante y del trabajador al orden lógico acordado. */
+export function migrarOrdenComparecenciaPlantilla(cuerpo: string): string {
+  let c = cuerpo.trim();
+  if (!c) return c;
+  if (c.includes(COMPARECENCIA_REP_VIEJA)) {
+    c = c.replace(COMPARECENCIA_REP_VIEJA, COMPARECENCIA_REP_NUEVA);
+  }
+  if (c.includes(COMPARECENCIA_TRAB_VIEJA)) {
+    c = c.replace(COMPARECENCIA_TRAB_VIEJA, COMPARECENCIA_TRAB_NUEVA);
+  }
+  return c;
+}
+
+function migrarCuerpoPlantillaContratoObrero(cuerpo: string): string {
+  return migrarOrdenComparecenciaPlantilla(migrarObligacionesPlantillaSiFijas(cuerpo));
+}
+
 export async function obtenerCuerpoPlantillaContratoObrero(client: SupabaseClient): Promise<string> {
   const { data, error } = await client
     .from('ci_documento_plantillas')
@@ -25,7 +51,7 @@ export async function obtenerCuerpoPlantillaContratoObrero(client: SupabaseClien
 
   if (!error && data && typeof (data as { cuerpo?: string }).cuerpo === 'string') {
     const c = String((data as { cuerpo: string }).cuerpo).trim();
-    if (c.length > 80) return migrarObligacionesPlantillaSiFijas(c);
+    if (c.length > 80) return migrarCuerpoPlantillaContratoObrero(c);
   }
 
   const ins = await client.from('ci_documento_plantillas').upsert(
@@ -48,7 +74,7 @@ export async function obtenerCuerpoPlantillaContratoObrero(client: SupabaseClien
 
   const { data: again } = await client.from('ci_documento_plantillas').select('cuerpo').eq('codigo', CODIGO).maybeSingle();
   const c2 = String((again as { cuerpo?: string } | null)?.cuerpo ?? '').trim();
-  return migrarObligacionesPlantillaSiFijas(c2.length > 80 ? c2 : CONTRATO_OBRERO_CUERPO_DEFAULT);
+  return migrarCuerpoPlantillaContratoObrero(c2.length > 80 ? c2 : CONTRATO_OBRERO_CUERPO_DEFAULT);
 }
 
 export async function listarPlantillasDocumento(client: SupabaseClient) {

@@ -641,15 +641,14 @@ export function ContratoObreroPDF({
           </>
         )}
         representada en este acto por su <Text style={styles.bold}>{repCargoLinea}</Text>{' '}
-        {repArticuloLinea} <Text style={styles.bold}>{rep}</Text>,{' '}
-        <Text style={styles.bold}>{nacionalidadRep}</Text>, mayor de edad, hábil en derecho,{' '}
-        <Text style={styles.bold}>{estadoCivilRep}</Text>, de este domicilio, titular de la cédula de Identidad número{' '}
-        <Text style={styles.bold}>{repCedulaLinea}</Text>, quien a los efectos de este contrato se denominará{' '}
+        {repArticuloLinea} <Text style={styles.bold}>{rep}</Text>, {nacionalidadRep}, mayor de edad, titular de la
+        cédula de Identidad número <Text style={styles.bold}>{repCedulaLinea}</Text>, hábil en derecho,{' '}
+        <Text style={styles.bold}>{estadoCivilRep}</Text> y de este domicilio, quien a los efectos de este contrato se denominará{' '}
         <Text style={styles.bold}>LA ENTIDAD DE TRABAJO</Text>, por una parte y por la otra {tratoTrab.articuloCiudadano}{' '}
-        <Text style={styles.bold}>{nombreTrabajador}</Text>, <Text style={styles.bold}>{nacionalidadTrab}</Text>, mayor de edad, hábil en
-        derecho, <Text style={styles.bold}>{estadoCivilTrab}</Text>, titular de la cédula de identidad número{' '}
-        <Text style={styles.bold}>{cedulaTrabGuion}</Text>, de este domicilio; quien en lo
-        sucesivo se denominará <Text style={styles.bold}>{tratoTrab.denominacion}</Text>, se ha convenido en celebrar, como en efecto se celebra, el
+        <Text style={styles.bold}>{nombreTrabajador}</Text>, {nacionalidadTrab}, mayor de edad, titular de la cédula de identidad
+        número <Text style={styles.bold}>{cedulaTrabGuion}</Text>, hábil en derecho,{' '}
+        <Text style={styles.bold}>{estadoCivilTrab}</Text> y de este domicilio; quien en lo sucesivo se denominará{' '}
+        <Text style={styles.bold}>{tratoTrab.denominacion}</Text>, se ha convenido en celebrar, como en efecto se celebra, el
         presente Contrato de Trabajo para una Obra Determinada, conforme a lo establecido en el Artículo 63 de la Ley Orgánica de Trabajo de
         los Trabajadores y Trabajadoras, y las cláusulas 18 y 19 de la vigente Convención Colectiva de Trabajo para la Rama de la Industria de
         la Construcción, conexos, afines y similares de la República Bolivariana de Venezuela, el cual se regirá por las Cláusulas que se
