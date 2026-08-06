@@ -2,9 +2,10 @@
  * Resuelve un cargo de listado de obra (p. ej. AYUDANTE, CARPINTERO, TOPOGRAFO)
  * contra filas de `ci_config_nomina` (tabulador GOE / Convención Colectiva / Gaceta).
  *
- * La denominación del contrato es la de la Gaceta (p. ej. «Ayudante», «Carpintero de 1ra.»).
- * Si el Excel indica grado (2da), se respeta; si no, se empareja al oficio del tabulador
- * sin inventar grados en oficios que en Gaceta van sin nivel (Ayudante, Caporal, etc.).
+ * Regla de grado:
+ * - Si el listado trae grado (2da, 1era…) → se respeta.
+ * - Si viene SIN nivel y en Gaceta ese oficio SÍ tiene 1era/2da/3era → se toma **de 1era**.
+ * - Si en Gaceta el oficio no tiene nivel (Ayudante, Caporal…) → se deja como figura.
  */
 
 export type ConfigNominaMatchRow = {
@@ -76,30 +77,65 @@ const ALIAS_LISTADO_A_BUSQUEDA: Record<string, string> = {
   'maestro de obras': 'maestro de obra',
 };
 
-/** Preferencia solo de oficio compuesto / alias; sin empujar 1era sobre 2da. */
+/**
+ * Preferencia cuando el listado no trae grado.
+ * Oficios con nivel en Gaceta: 1era primero.
+ * Oficios sin nivel: la forma rasa (Ayudante, Caporal).
+ */
 const SINONIMOS_PREFERIDOS: Record<string, string[]> = {
   operador: ['operador de equipo liviano', 'operador de equipo', 'operador'],
   'operador de equipo liviano': ['operador de equipo liviano', 'operador de equipo', 'operador'],
-  carpintero: ['carpintero', 'carpintero de 1era', 'carpintero de 1ra', 'carpintero de 2da'],
-  albanil: ['albanil', 'albanil de 1era', 'albanil de 1ra', 'albanil de 2da'],
-  obrero: ['obrero', 'obrero de 1era', 'obrero de 1ra'],
-  cabillero: ['cabillero', 'cabillero de 1era', 'cabillero de 1ra', 'cabillero de 2da'],
-  plomero: ['plomero', 'plomero de 1era', 'plomero de 1ra', 'plomero de 2da'],
-  electricista: ['electricista', 'electricista de 1era', 'electricista de 1ra', 'electricista de 2da'],
-  pintor: ['pintor', 'pintor de 1era', 'pintor de 1ra', 'pintor de 2da'],
-  soldador: ['soldador', 'soldador de 1era', 'soldador de 1ra', 'soldador de 2da', 'soldador de 3ra'],
-  granitero: ['granitero', 'granitero de 1era', 'granitero de 1ra', 'granitero de 2da'],
+  carpintero: ['carpintero de 1era', 'carpintero de 1ra', 'carpintero de 2da', 'carpintero'],
+  albanil: ['albanil de 1era', 'albanil de 1ra', 'albanil de 2da', 'albanil'],
+  obrero: ['obrero de 1era', 'obrero de 1ra', 'obrero'],
+  cabillero: ['cabillero de 1era', 'cabillero de 1ra', 'cabillero de 2da', 'cabillero'],
+  plomero: ['plomero de 1era', 'plomero de 1ra', 'plomero de 2da', 'plomero'],
+  electricista: ['electricista de 1era', 'electricista de 1ra', 'electricista de 2da', 'electricista'],
+  pintor: ['pintor de 1era', 'pintor de 1ra', 'pintor de 2da', 'pintor'],
+  soldador: ['soldador de 1era', 'soldador de 1ra', 'soldador de 2da', 'soldador de 3ra', 'soldador'],
+  granitero: ['granitero de 1era', 'granitero de 1ra', 'granitero de 2da', 'granitero'],
   impermeabilizador: [
-    'impermeabilizador',
     'impermeabilizador de 1era',
     'impermeabilizador de 1ra',
     'impermeabilizador de 2da',
+    'impermeabilizador',
   ],
   ayudante: ['ayudante'],
   'ayudante de topografo': ['ayudante de topografo'],
-  'maestro de obra': ['maestro de obra', 'maestro de obra de 1ra', 'maestro de obra de 1era', 'maestro de obra de 2da'],
+  'maestro de obra': ['maestro de obra de 1ra', 'maestro de obra de 1era', 'maestro de obra de 2da', 'maestro de obra'],
   caporal: ['caporal'],
 };
+
+function filaCoincideConBase(base: string, cargoNombreNorm: string): boolean {
+  if (!base || !cargoNombreNorm) return false;
+  return (
+    cargoNombreNorm === base ||
+    cargoNombreNorm.startsWith(`${base} `) ||
+    cargoNombreNorm.startsWith(`${base} de`)
+  );
+}
+
+/**
+ * True si en el tabulador hay variantes con grado (1era/2da/…) para ese oficio base.
+ * Ej.: Carpintero sí; Ayudante no.
+ */
+export function oficioTieneGradosEnTabulador(
+  cargoLabel: string,
+  configs: ConfigNominaMatchRow[],
+): boolean {
+  const bases = expandLabelsParaBusqueda(cargoLabel)
+    .map((l) => l.replace(/\s+de\s+(?:1(?:era|ra)|2(?:da)|3(?:era|ra)|4(?:ta))$/, ''))
+    .filter(Boolean);
+  for (const row of configs) {
+    const N = normCargoKey(row.cargo_nombre);
+    const g = gradoDesdeDenominacionTabulador(N);
+    if (g == null) continue;
+    for (const base of bases) {
+      if (filaCoincideConBase(base, N)) return true;
+    }
+  }
+  return false;
+}
 
 function expandLabelsParaBusqueda(cargoLabel: string): string[] {
   const raw = normCargoKey(cargoLabel);
@@ -129,13 +165,27 @@ function expandLabelsParaBusqueda(cargoLabel: string): string[] {
     }
   }
 
+  // Sin grado y el oficio tiene niveles → también buscar «… de 1era/1ra»
+  if (grado == null) {
+    for (const base of [...out]) {
+      if (gradoDesdeCargoLabel(base) != null) continue;
+      out.push(`${base} de 1era`);
+      out.push(`${base} de 1ra`);
+    }
+  }
+
   return Array.from(new Set(out));
 }
 
 function scoreMatch(
   labelNorm: string,
   row: ConfigNominaMatchRow,
-  opts: { nivelPreferido: number | null; gradoPedido: 1 | 2 | 3 | 4 | null },
+  opts: {
+    nivelPreferido: number | null;
+    gradoPedido: 1 | 2 | 3 | 4 | null;
+    /** Listado sin grado + oficio con 1era/2da en Gaceta → preferir 1era. */
+    preferirPrimera: boolean;
+  },
 ): number {
   const L = labelNorm;
   const N = normCargoKey(row.cargo_nombre);
@@ -156,13 +206,20 @@ function scoreMatch(
       const P = normCargoKey(p);
       return N === P || N.startsWith(`${P} `) || N.startsWith(`${P}.`);
     });
-    if (idx >= 0) score += 20 - idx * 2;
+    if (idx >= 0) score += 25 - idx * 2;
   }
 
   const gradoFila = gradoDesdeDenominacionTabulador(N);
-  if (opts.gradoPedido != null && gradoFila != null) {
-    if (gradoFila === opts.gradoPedido) score += 40;
-    else score -= 35;
+
+  if (opts.gradoPedido != null) {
+    if (gradoFila != null) {
+      if (gradoFila === opts.gradoPedido) score += 40;
+      else score -= 35;
+    }
+  } else if (opts.preferirPrimera) {
+    // Listado sin nivel + oficio con grados en Gaceta → igual a 1era.
+    if (gradoFila === 1) score += 30;
+    else if (gradoFila === 2 || gradoFila === 3 || gradoFila === 4) score -= 15;
   }
 
   if (opts.nivelPreferido != null) {
@@ -171,18 +228,23 @@ function scoreMatch(
     }
   }
 
-  // Preferir denominaciones más cortas (rasas) ante empate.
-  if (!Lbase.includes(' ')) {
-    score += Math.max(0, 12 - Math.min(12, N.length / 6));
-  } else {
-    score += Math.max(0, 6 - Math.min(6, Math.abs(N.length - Lbase.length) / 10));
+  // Ante empate: preferir nombres más cortos (Ayudante > Ayudante de Operadores),
+  // salvo cuando estamos forzando 1era (entonces no premiar 2da por ser más corta).
+  if (!opts.preferirPrimera) {
+    if (!Lbase.includes(' ')) {
+      score += Math.max(0, 12 - Math.min(12, N.length / 6));
+    } else {
+      score += Math.max(0, 6 - Math.min(6, Math.abs(N.length - Lbase.length) / 10));
+    }
+  } else if (!Lbase.includes(' ') && gradoFila == null) {
+    score += Math.max(0, 8 - Math.min(8, N.length / 8));
   }
   return score;
 }
 
 /**
  * Devuelve el id de config_nomina que mejor encaja con el cargo del Excel.
- * No fuerza grado 1era/2da/3era cuando el listado trae el oficio raso.
+ * Denominación resultante = la de Gaceta/tabulador.
  */
 export function resolverConfigNominaPorCargo(
   cargoLabel: string,
@@ -198,12 +260,18 @@ export function resolverConfigNominaPorCargo(
       : null;
 
   const gradoPedido = gradoDesdeCargoLabel(label);
+  const preferirPrimera =
+    gradoPedido == null && oficioTieneGradosEnTabulador(label, configs);
   const labels = expandLabelsParaBusqueda(label);
   let best: { id: string; cargo_nombre: string; score: number } | null = null;
 
   for (const L of labels) {
     for (const row of configs) {
-      const score = scoreMatch(L, row, { nivelPreferido: nivel, gradoPedido });
+      const score = scoreMatch(L, row, {
+        nivelPreferido: nivel,
+        gradoPedido,
+        preferirPrimera,
+      });
       if (score < 40) continue;
       if (!best || score > best.score) {
         best = { id: row.id, cargo_nombre: row.cargo_nombre, score };
@@ -213,7 +281,7 @@ export function resolverConfigNominaPorCargo(
   return best;
 }
 
-/** Denominación rasa para contrato/PDF: quita de 1era/2da/3era/4ta. */
+/** Quita sufijo de grado (uso auxiliar; el PDF usa la denominación Gaceta). */
 export function oficioRasoParaContrato(cargoLabel: string | null | undefined): string | null {
   const raw = String(cargoLabel ?? '').trim().replace(/\s+/g, ' ');
   if (raw.length < 2) return null;
