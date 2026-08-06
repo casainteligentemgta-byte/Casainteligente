@@ -24,11 +24,7 @@ const postBodySchema = z.object({
   bono_manual_usd: z.coerce.number().nonnegative().default(0),
   /** Si se envía, sustituye a `ci_proyectos.entidad_id` como patrono del PDF (razón social, RM, domicilio). */
   entidad_patrono_id: z.string().uuid().optional().nullable(),
-  fecha_ingreso: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional()
-    .nullable(),
+  fecha_ingreso: z.string().max(40).optional().nullable(),
   objeto_contrato: z.string().max(4000).optional().nullable(),
   jornada_trabajo: z.enum(['DIURNA', 'NOCTURNA', 'MIXTA', 'diurna', 'nocturna', 'mixta']).optional().nullable(),
   tipo_contrato: z.string().max(120).optional().nullable(),
@@ -84,6 +80,7 @@ export async function POST(req: Request) {
 
   const result = await crearContratoExpress(admin.client, {
     ...parsed.data,
+    fecha_ingreso: normalizarFechaIngresoIso(parsed.data.fecha_ingreso ?? '') || parsed.data.fecha_ingreso,
     created_by: createdBy,
   });
 
