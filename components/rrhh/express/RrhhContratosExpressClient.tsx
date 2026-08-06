@@ -689,7 +689,7 @@ export default function RrhhContratosExpressClient() {
                       <th className="px-2 py-2">Cédula</th>
                       <th className="px-2 py-2">Cargo</th>
                       <th className="px-2 py-2">Remun. semanal (USD)</th>
-                      <th className="px-2 py-2">Fecha ingreso</th>
+                      <th className="px-2 py-2">Fecha ingreso (d/m/a)</th>
                       <th className="px-2 py-2" />
                     </tr>
                   </thead>

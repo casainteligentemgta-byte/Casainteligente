@@ -326,7 +326,7 @@ export default function ModalEditarContratoExpress({
               </select>
             </label>
             <label className="block space-y-1 text-[10px] font-bold uppercase tracking-wide text-zinc-500">
-              Bono especial (USD)
+              Remuneración semanal (USD)
               <input
                 type="number"
                 min={0}
@@ -335,6 +335,9 @@ export default function ModalEditarContratoExpress({
                 value={form.bono_manual_usd ?? 0}
                 onChange={(e) => setField('bono_manual_usd', Number(e.target.value) || 0)}
               />
+              <span className="mt-0.5 block text-[9px] font-normal normal-case tracking-normal text-zinc-500">
+                Mismo monto de la columna Excel; aparece en BONO ESPECIAL del contrato.
+              </span>
             </label>
             <label className="block space-y-1 text-[10px] font-bold uppercase tracking-wide text-zinc-500">
               Jornada

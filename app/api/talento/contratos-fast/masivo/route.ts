@@ -4,10 +4,7 @@ import { crearContratoExpress } from '@/lib/talento/crearContratoExpress';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import { createClient } from '@/lib/supabase/server';
 import { CEDULA_VE_NORMALIZADA_REGEX, normCedulaToken } from '@/lib/talento/cedulaAuth';
-import {
-  ingresoSemanalConsolidadoUsdDesdeConfigNominaCestaticketUsd40,
-  type ConfigNominaTabuladorLike,
-} from '@/lib/nomina/ingresoSemanalDesdeConfigNomina';
+import type { ConfigNominaTabuladorLike } from '@/lib/nomina/ingresoSemanalDesdeConfigNomina';
 import { resolverConfigNominaPorCargo } from '@/lib/talento/resolverConfigNominaPorCargo';
 import { recordarFaseTecnicaUsada, trimFaseTecnica } from '@/lib/talento/fasesTecnicasContrato';
 import { normalizarFechaIngresoIso } from '@/lib/talento/parseCsvContratosExpress';
@@ -25,13 +22,13 @@ const filaSchema = z.object({
   obrero_apellidos: z.string().max(120).optional().nullable(),
   obrero_cedula: z.string().min(1).max(32),
   obrero_direccion: z.string().max(500).optional().nullable(),
-  /** Complemento USD (si no se envía remuneracion_semanal). */
-  bono_manual_usd: z.coerce.number().nonnegative().optional(),
   /**
-   * Remuneración semanal total en USD.
-   * Se convierte a bono = max(0, remuneracion − ingreso semanal del tabulador del cargo).
+   * Remuneración semanal total en USD (columna Excel).
+   * Se guarda tal cual y aparece en la cláusula BONO ESPECIAL del PDF.
    */
   remuneracion_semanal: z.coerce.number().nonnegative().optional().nullable(),
+  /** Alias legacy: mismo significado que remuneracion_semanal en express. */
+  bono_manual_usd: z.coerce.number().nonnegative().optional(),
   fecha_ingreso: z.string().max(40).optional().nullable(),
   /** Nombre de cargo en tabulador (`ci_config_nomina.cargo_nombre`). */
   cargo: z.string().max(160).optional().nullable(),
@@ -215,15 +212,12 @@ export async function POST(req: Request) {
     }
 
     const cfg = byId.get(configId)!;
-    const baseSemanal =
-      ingresoSemanalConsolidadoUsdDesdeConfigNominaCestaticketUsd40(cfg) ?? 0;
-
-    let bono = 0;
+    // Remuneración semanal del Excel = monto que va en BONO ESPECIAL del PDF (sin restar tabulador).
+    let remuneracionSemanalUsd = 0;
     if (f.remuneracion_semanal != null && Number.isFinite(Number(f.remuneracion_semanal))) {
-      const rem = Math.max(0, Number(f.remuneracion_semanal));
-      bono = Math.max(0, Math.round((rem - baseSemanal) * 100) / 100);
+      remuneracionSemanalUsd = Math.max(0, Number(f.remuneracion_semanal));
     } else if (f.bono_manual_usd != null) {
-      bono = Math.max(0, Number(f.bono_manual_usd) || 0);
+      remuneracionSemanalUsd = Math.max(0, Number(f.bono_manual_usd) || 0);
     }
 
     const fechaNorm = normalizarFechaIngresoIso(f.fecha_ingreso ?? '');
@@ -243,7 +237,7 @@ export async function POST(req: Request) {
       obrero_cedula: ced,
       obrero_direccion: f.obrero_direccion?.trim() || 'de este domicilio',
       estado_civil: 'Soltero',
-      bono_manual_usd: bono,
+      bono_manual_usd: remuneracionSemanalUsd,
       fecha_ingreso: fecha,
       objeto_contrato: objeto_contrato?.trim() || null,
       entidad_patrono_id: entidad_patrono_id ?? null,

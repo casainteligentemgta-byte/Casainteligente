@@ -195,8 +195,9 @@ function dateObjectToIso(d: Date): string {
 }
 
 /**
- * Convierte fechas Excel / texto comunes a YYYY-MM-DD (acepta 3/6/24, 05-08-2026, serial Excel).
- * Formato día/mes/año (Venezuela) cuando ambos ≤ 12.
+ * Convierte fechas Excel / texto comunes a YYYY-MM-DD.
+ * Orden fijo día/mes/año (como se presenta en el Excel de obra en Venezuela).
+ * Acepta: 5/8/2026, 05-08-2026, 3/6/24, «5 de agosto de 2026», serial Excel.
  */
 export function normalizarFechaIngresoIso(raw: unknown): string {
   if (raw == null || raw === '') return '';
@@ -258,21 +259,11 @@ export function normalizarFechaIngresoIso(raw: unknown): string {
 
   const m = t.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
   if (m) {
-    const a = Number(m[1]);
-    const b = Number(m[2]);
+    // Siempre día / mes / año, como en el Excel venezolano (ej. 5/8/2026 = 5 de agosto).
+    const day = Number(m[1]);
+    const month = Number(m[2]);
     let y = m[3]!;
     if (y.length === 2) y = Number(y) >= 70 ? `19${y}` : `20${y}`;
-    // Preferir D/M/Y (VE). Si el 1.er número > 12, seguro es día.
-    // Si el 2.º > 12, interpretar M/D/Y.
-    let day: number;
-    let month: number;
-    if (b > 12 && a >= 1 && a <= 12) {
-      month = a;
-      day = b;
-    } else {
-      day = a;
-      month = b;
-    }
     if (month < 1 || month > 12 || day < 1 || day > 31) return '';
     return `${y}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
   }
