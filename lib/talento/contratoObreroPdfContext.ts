@@ -34,6 +34,7 @@ import {
   nivelGacetaDesdeSalarioBasicoDiarioVes,
 } from '@/lib/talento/ingresoSemanalUsdTabuladorConstruccion';
 import { textoPuntoEncuentroTransporteClausulaSex } from '@/lib/talento/puntoEncuentroTransporteClausulaSex';
+import { estadoCivilContratoObrero } from '@/lib/talento/cedulaAuth';
 
 /**
  * Patrono para contrato / planilla: nombre y domicilio desde `ci_entidades`
@@ -213,7 +214,7 @@ export async function cargarFuentesContratoObreroPdf(
       cedula: empleado.cedula,
       direccion: empleado.direccion,
       nacionalidad: empleado.nacionalidad,
-      estado_civil: empleado.estado_civil,
+      estado_civil: estadoCivilContratoObrero(empleado.estado_civil),
       celular: empleado.celular,
       telefono: empleado.telefono,
     },
@@ -637,7 +638,7 @@ export async function cargarFuentesContratoObreroPorEmpleadoId(
       cedula: empleado.cedula,
       direccion: empleado.direccion,
       nacionalidad: empleado.nacionalidad,
-      estado_civil: empleado.estado_civil,
+      estado_civil: estadoCivilContratoObrero(empleado.estado_civil),
       celular: empleado.celular,
       telefono: empleado.telefono,
     },
@@ -843,7 +844,7 @@ export async function cargarPropsContratoObreroPdfEstructurado(
   const empleado: ContratoObreroPdfStructuredProps['empleado'] = {
     nombres: f.empleado.nombre_completo,
     nacionalidad,
-    estado_civil: strOpt(f.empleado.estado_civil),
+    estado_civil: estadoCivilContratoObrero(f.empleado.estado_civil),
     cedula: f.empleado.cedula ?? f.empleado.documento,
     direccion_domicilio: direccionHab,
     cargo_nombre: cargoNom,
