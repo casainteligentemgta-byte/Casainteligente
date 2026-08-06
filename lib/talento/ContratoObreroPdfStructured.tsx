@@ -641,7 +641,7 @@ export function ContratoObreroPDF({
           </>
         )}
         representada en este acto por su <Text style={styles.bold}>{repCargoLinea}</Text>{' '}
-        <Text style={styles.bold}>{repArticuloLinea}</Text> <Text style={styles.bold}>{rep}</Text>,{' '}
+        {repArticuloLinea} <Text style={styles.bold}>{rep}</Text>,{' '}
         <Text style={styles.bold}>{nacionalidadRep}</Text>, mayor de edad, hábil en derecho,{' '}
         <Text style={styles.bold}>{estadoCivilRep}</Text>, de este domicilio, titular de la cédula de Identidad número{' '}
         <Text style={styles.bold}>{repCedulaLinea}</Text>, quien a los efectos de este contrato se denominará{' '}
