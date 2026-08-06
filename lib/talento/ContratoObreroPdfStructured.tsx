@@ -13,6 +13,7 @@ import {
   tratoRepresentanteContrato,
   tratoTrabajadorContrato,
 } from '@/lib/talento/generoContratoLaboral';
+import { textoObligacionesTrabajadorContrato } from '@/lib/talento/obligacionesOficioContrato';
 
 /**
  * Tipografía unificada del contrato (PDF estándar vía @react-pdf/renderer).
@@ -167,6 +168,8 @@ export type EmpleadoContratoPdf = {
 
 export type ConfigNominaContratoPdf = {
   funciones_oficiales?: string | null;
+  /** Código tabulador Gaceta (ej. 2.1) para complementar obligaciones por oficio. */
+  cargo_codigo?: string | null;
   salario_base_mensual?: number | null;
   cestaticket_mensual?: number | null;
   salario_basico_diario_ves?: number | null;
@@ -489,6 +492,10 @@ export function ContratoObreroPDF({
     const c = (empleado.cargo_nombre ?? '').trim();
     return c ? c.toUpperCase() : '______________________________';
   })();
+  const obligacionesTrabTxt = textoObligacionesTrabajadorContrato({
+    cargoCodigo: configNomina.cargo_codigo,
+    cargoNombre: empleado.cargo_nombre ?? configNomina.funciones_oficiales,
+  });
   const fechaCierreIso = parametros.fechaFirmaContratoIso ?? parametros.fechaIngreso;
   const { dia: diaFirma, mes: mesFirma, anio: anioFirma } = partesFechaCierreFirma(fechaCierreIso);
 
@@ -661,7 +668,7 @@ export function ContratoObreroPDF({
         <Text style={styles.bold}>{obraDenomTxt}</Text>
         {`. LA ENTIDAD DE TRABAJO tiene como objeto la explotación de actividades comerciales y de la industria de la construcción, y a tales efectos contrata a ${tratoTrab.denominacion} para que desempeñe el cargo de: `}
         <Text style={styles.bold}>{oficioStr}</Text>
-        {`, cargo establecido en el Tabulador de Oficios y Salarios Básicos de la Convención Colectiva vigente. ${tratoTrab.denominacion} se obliga a: 1.- Poner a disposición su capacidad normal de trabajo en forma exclusiva y en las labores anexas complementarias. 2.- Ejecutar las actividades inherentes al cargo, incluyendo recibir, procesar y pesar materia prima cuando sea requerido. 3.- Usar obligatoriamente el uniforme y equipos de protección (guantes, lentes, botas, etc.) según la LOPCYMAT. 4.- Mantener el orden del área asignada y el buen estado de maquinarias y herramientas. 5.- No prestar servicios a otros empleadores ni trabajar por cuenta propia en funciones inherentes al cargo.`}
+        {`, cargo establecido en el Tabulador de Oficios y Salarios Básicos de la Convención Colectiva vigente. ${tratoTrab.denominacion} se obliga a: ${obligacionesTrabTxt}`}
       </Text>
 
       <Text style={[styles.paragraph, styles.paragraphIntro]}>
