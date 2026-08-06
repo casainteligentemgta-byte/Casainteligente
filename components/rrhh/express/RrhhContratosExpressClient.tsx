@@ -498,9 +498,12 @@ export default function RrhhContratosExpressClient() {
             <h2 className="text-sm font-bold text-amber-100">Carga masiva</h2>
           </div>
           <p className="mt-1 text-[11px] text-zinc-500">
-            Acepta <span className="font-semibold text-zinc-400">.xlsx / .xls / .csv</span>. Columnas:{' '}
+            Acepta <span className="font-semibold text-zinc-400">.xlsx / .xls / .csv</span>. Plantilla:{' '}
             <span className="font-mono text-zinc-400">nombres · apellidos · cedula · cargo · remuneracion_semanal · fecha_ingreso</span>
-            . La remuneración semanal es el total en USD; el bono del contrato = total − tabulador del cargo.
+            . También listados de obra con{' '}
+            <span className="font-mono text-zinc-400">NOMBRES Y APELLIDOS · C.I. · FECHA INI · CARGO</span>
+            {' '}(título arriba de la cabecera OK; remuneración opcional). Si hay remuneración semanal en USD, el
+            bono del contrato = total − tabulador del cargo.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Button
