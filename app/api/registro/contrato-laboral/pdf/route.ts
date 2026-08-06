@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { buildContratoLaboralPlantillaPdfBuffer } from '@/lib/talento/contratoLaboralPlantillaPdfBuffer';
 import { persistLaboralPlantillaPdfIfMissing } from '@/lib/talento/contratoLaboralRegistroStorage';
 import { contratoObreroPorToken } from '@/lib/talento/contratoObreroToken';
+import { construirExpedienteRefPorEmpleado } from '@/lib/talento/contratoExpedienteRef';
+import { nombreArchivoPdfContratoIndividual } from '@/lib/talento/nombreArchivoContratoIndividual';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
 export const runtime = 'nodejs';
@@ -36,11 +38,23 @@ export async function GET(req: Request) {
     console.warn('[contrato-laboral pdf] no se pudo archivar en Storage:', persist.error);
   }
 
+  const expedienteRef = await construirExpedienteRefPorEmpleado(admin.client, v.empleadoId);
+  const { data: emp } = await admin.client
+    .from('ci_empleados')
+    .select('nombre_completo,nombres')
+    .eq('id', v.empleadoId)
+    .maybeSingle();
+  const row = emp as { nombre_completo?: string | null; nombres?: string | null } | null;
+  const filename = nombreArchivoPdfContratoIndividual(expedienteRef, {
+    nombres: row?.nombres,
+    nombreCompleto: row?.nombre_completo,
+  });
+
   return new NextResponse(new Uint8Array(built.buffer), {
     status: 200,
     headers: {
       'Content-Type': 'application/pdf',
-      'Content-Disposition': `inline; filename="contrato-laboral-${contratoId.slice(0, 8)}.pdf"`,
+      'Content-Disposition': `inline; filename="${filename.replace(/[\r\n"]/g, '_')}"`,
       'Cache-Control': 'private, no-store',
     },
   });

@@ -21,6 +21,10 @@ import {
   trimFaseTecnica,
 } from '@/lib/talento/fasesTecnicasContrato';
 import { construirExpedienteContratoExpress } from '@/lib/talento/nomenclaturaExpedienteContrato';
+import {
+  nombreArchivoPdfContratoIndividual,
+  storagePathPdfContratoExpress,
+} from '@/lib/talento/nombreArchivoContratoIndividual';
 import { normalizarFechaIngresoIso } from '@/lib/talento/parseCsvContratosExpress';
 
 export type CrearContratoExpressInput = {
@@ -185,7 +189,12 @@ export async function crearContratoExpress(
     return { ok: false, error: 'No se pudo generar el PDF' };
   }
 
-  const storagePath = `express/${expressId}/contrato-estructurado.pdf`;
+  const pdfFilename = nombreArchivoPdfContratoIndividual(expedienteLabel, {
+    nombres: input.obrero_nombres,
+    apellidos: input.obrero_apellidos,
+    nombreCompleto: nombreCompletoObrero(input),
+  });
+  const storagePath = storagePathPdfContratoExpress(expressId, pdfFilename);
   const { error: upErr } = await admin.storage.from(BUCKET_CONTRATOS_OBREROS).upload(storagePath, buf, {
     contentType: 'application/pdf',
     upsert: true,

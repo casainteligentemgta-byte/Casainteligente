@@ -8,6 +8,23 @@ import {
 import { construirExpedienteRefPorEmpleado } from '@/lib/talento/contratoExpedienteRef';
 import { ContratoObreroPDF } from '@/lib/talento/ContratoObreroPdfStructured';
 import { ContratoLaboralObreroPdfDocument } from '@/lib/talento/ContratoLaboralObreroPdfStub';
+import { nombreArchivoPdfContratoIndividual } from '@/lib/talento/nombreArchivoContratoIndividual';
+
+async function datosNombreEmpleado(
+  supabase: SupabaseClient,
+  empleadoId: string,
+): Promise<{ nombres?: string | null; nombreCompleto?: string | null }> {
+  const { data } = await supabase
+    .from('ci_empleados')
+    .select('nombre_completo,nombres')
+    .eq('id', empleadoId)
+    .maybeSingle();
+  const row = data as { nombre_completo?: string | null; nombres?: string | null } | null;
+  return {
+    nombres: row?.nombres ?? null,
+    nombreCompleto: row?.nombre_completo ?? null,
+  };
+}
 
 export async function generarBufferContratoLaboralEmpleado(
   supabase: SupabaseClient,
@@ -22,6 +39,11 @@ export async function generarBufferContratoLaboralEmpleado(
 
   try {
     const expedienteRef = await construirExpedienteRefPorEmpleado(supabase, id);
+    const nom = await datosNombreEmpleado(supabase, id);
+    const filename = nombreArchivoPdfContratoIndividual(expedienteRef, {
+      nombres: nom.nombres,
+      nombreCompleto: nom.nombreCompleto,
+    });
 
     if (formato === 'estructurado') {
       if (overrides && Object.keys(overrides).length > 0) {
@@ -38,11 +60,7 @@ export async function generarBufferContratoLaboralEmpleado(
       });
       const blob = await pdf(node as Parameters<typeof pdf>[0]).toBlob();
       const buf = Buffer.from(await blob.arrayBuffer());
-      return {
-        ok: true,
-        buf,
-        filename: `contrato-obrero-estructurado-${id.slice(0, 8)}.pdf`,
-      };
+      return { ok: true, buf, filename };
     }
 
     const out = await compilarContratoObreroDesdeEmpleadoId(supabase, id, overrides);
@@ -59,7 +77,7 @@ export async function generarBufferContratoLaboralEmpleado(
     });
     const blob = await pdf(node as Parameters<typeof pdf>[0]).toBlob();
     const buf = Buffer.from(await blob.arrayBuffer());
-    return { ok: true, buf, filename: `contrato-obrero-${id.slice(0, 8)}.pdf` };
+    return { ok: true, buf, filename };
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Error interno';
     if (msg.includes('NEXT_PUBLIC_SUPABASE')) {

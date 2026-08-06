@@ -14,6 +14,10 @@ import {
   resolverEstadoCivilContrato,
 } from '@/lib/talento/estadoCivilDesdeHojaVida';
 import { construirExpedienteContratoExpress } from '@/lib/talento/nomenclaturaExpedienteContrato';
+import {
+  nombreArchivoPdfContratoIndividual,
+  storagePathPdfContratoExpress,
+} from '@/lib/talento/nombreArchivoContratoIndividual';
 
 export type ExpressRowPdf = {
   id: string;
@@ -188,7 +192,12 @@ export async function generarBufferContratoExpressPdf(
     });
     const blob = await pdf(node as Parameters<typeof pdf>[0]).toBlob();
     const buf = Buffer.from(await blob.arrayBuffer());
-    return { ok: true, buf, filename: `contrato-${expedienteLabel}.pdf` };
+    const filename = nombreArchivoPdfContratoIndividual(expedienteLabel, {
+      nombres: row.obrero_nombres,
+      apellidos: row.obrero_apellidos,
+      nombreCompleto: row.obrero_nombre,
+    });
+    return { ok: true, buf, filename };
   } catch (e) {
     console.error('[generarBufferContratoExpressPdf]', e);
     return { ok: false, error: 'No se pudo generar el PDF del contrato express.' };
@@ -218,7 +227,7 @@ export async function regenerarYPersistirPdfContratoExpress(
   if (!built.ok) return { ok: false, error: built.error, status: 400 };
 
   const prevPath = String(fetched.row.pdf_storage_path ?? '').trim();
-  const storagePath = prevPath || `express/${id}/contrato-estructurado.pdf`;
+  const storagePath = storagePathPdfContratoExpress(id, built.filename);
 
   const { error: upErr } = await admin.storage.from(BUCKET_CONTRATOS_OBREROS).upload(storagePath, built.buf, {
     contentType: 'application/pdf',
@@ -237,6 +246,12 @@ export async function regenerarYPersistirPdfContratoExpress(
     if (updErr) {
       console.error('[regenerarYPersistirPdfContratoExpress] update', updErr.message);
       return { ok: false, error: updErr.message, status: 500 };
+    }
+    if (prevPath && prevPath !== storagePath) {
+      const { error: rmErr } = await admin.storage.from(BUCKET_CONTRATOS_OBREROS).remove([prevPath]);
+      if (rmErr) {
+        console.warn('[regenerarYPersistirPdfContratoExpress] remove old', rmErr.message);
+      }
     }
   }
 
