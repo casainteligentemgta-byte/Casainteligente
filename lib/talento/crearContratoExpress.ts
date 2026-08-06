@@ -123,12 +123,14 @@ export async function crearContratoExpress(
   const validacion = validarInput(input);
   if (validacion) return { ok: false, error: validacion };
 
+  const fechaNorm = normalizarFechaIngresoIso(input.fecha_ingreso ?? '');
   const fechaFirmaIso =
-    input.fecha_ingreso?.trim() ||
-    (() => {
-      const d = new Date();
-      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    })();
+    /^\d{4}-\d{2}-\d{2}$/.test(fechaNorm)
+      ? fechaNorm
+      : (() => {
+          const d = new Date();
+          return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        })();
 
   const cedula = normCedulaToken(String(input.obrero_cedula));
   let objetoContrato = trimFaseTecnica(input.objeto_contrato);
