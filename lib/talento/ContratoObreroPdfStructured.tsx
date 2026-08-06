@@ -30,19 +30,30 @@ const CONTRATO_PDF_FONT_BOLD = 'Times-Bold';
 const CONTRATO_PDF_FONT_SIZE = 12;
 const CONTRATO_PDF_LINE_HEIGHT = 1.5;
 
+/** 1 cm → puntos PDF (72 pt = 1"). */
+const CM_PT = 72 / 2.54;
+/** Márgenes: superior/inferior/derecho 2,5 cm; izquierdo 3,0 cm. */
+const MARGEN_SUP_PT = 2.5 * CM_PT;
+const MARGEN_INF_PT = 2.5 * CM_PT;
+const MARGEN_IZQ_PT = 3.0 * CM_PT;
+const MARGEN_DER_PT = 2.5 * CM_PT;
+
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 36,
-    paddingBottom: 40,
-    paddingHorizontal: 48,
+    paddingTop: MARGEN_SUP_PT,
+    paddingBottom: MARGEN_INF_PT,
+    paddingLeft: MARGEN_IZQ_PT,
+    paddingRight: MARGEN_DER_PT,
     fontFamily: CONTRATO_PDF_FONT_FAMILY,
     fontSize: CONTRATO_PDF_FONT_SIZE,
     lineHeight: CONTRATO_PDF_LINE_HEIGHT,
     color: '#000',
   },
   pageFirst: {
-    paddingTop: 28,
-    paddingBottom: 36,
+    paddingTop: MARGEN_SUP_PT,
+    paddingBottom: MARGEN_INF_PT,
+    paddingLeft: MARGEN_IZQ_PT,
+    paddingRight: MARGEN_DER_PT,
   },
   header: {
     fontFamily: CONTRATO_PDF_FONT_BOLD,
