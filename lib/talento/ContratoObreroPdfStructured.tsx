@@ -736,7 +736,7 @@ export function ContratoObreroPDF({
 
       <Text style={[styles.paragraph, styles.paragraphIntro]}>
         <Text style={styles.bold}>SEGUNDA: PERIODO DE PRUEBA.</Text>
-        {` Conforme al Art. 25 del Reglamento de la LOTTT, se acuerda un PERIODO DE PRUEBA DE NOVENTA (90) DÍAS. Durante este lapso, LA ENTIDAD DE TRABAJO apreciará los conocimientos y aptitudes de ${tratoTrab.denominacion}. Cualquiera de las partes podrá dar por extinguida la relación sin lugar a indemnización alguna.`}
+        {` Conforme al Art. 25 del Reglamento de la LOTTT, se acuerda un PERIODO DE PRUEBA DE TREINTA (30) DÍAS. Durante este lapso, LA ENTIDAD DE TRABAJO apreciará los conocimientos y aptitudes de ${tratoTrab.denominacion}. Cualquiera de las partes podrá dar por extinguida la relación sin lugar a indemnización alguna.`}
       </Text>
 
       <Text style={[styles.paragraph, styles.paragraphIntro]}>
