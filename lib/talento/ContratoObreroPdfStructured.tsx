@@ -17,6 +17,7 @@ import { textoObligacionesTrabajadorContrato } from '@/lib/talento/obligacionesO
 import {
   fmtCompensacionCulminacionUsdPlano,
   montoCompensacionCulminacionUsd,
+  remuneracionSemanalUsdExpress,
 } from '@/lib/talento/compensacionCulminacionContrato';
 
 /**
@@ -548,25 +549,21 @@ export function ContratoObreroPDF({
       ? Math.max(0, Number(parametros.bonoManualUsd))
       : 0;
   /**
-   * Express: el monto de la columna Excel / edición (`bono_manual_usd` = remuneración semanal)
-   * va directo a BONO ESPECIAL (no se suma otra vez el tabulador).
-   * Otros flujos: tabulador + complemento.
+   * Remuneración semanal USD (Excel / edición).
+   * En express: SEXTA (BONO ESPECIAL) y SÉPTIMA (compensación) usan siempre la misma cifra.
    */
-  const totalIngresoSemanalUsdNum = esContratoExpress
-    ? bonoManualUsdNum > 0
-      ? bonoManualUsdNum
-      : ingresoSemanalBaseUsdNum
+  const remuneracionSemanalUsdNum = esContratoExpress
+    ? remuneracionSemanalUsdExpress({
+        storedUsd: bonoManualUsdNum,
+        ingresoTabuladorSemanalUsd: ingresoSemanalBaseUsdNum,
+      })
     : ingresoSemanalBaseUsdNum != null || bonoManualUsdNum > 0
-      ? (ingresoSemanalBaseUsdNum ?? 0) + bonoManualUsdNum
-      : null;
+      ? Math.round(((ingresoSemanalBaseUsdNum ?? 0) + bonoManualUsdNum) * 100) / 100
+      : 0;
   const totalIngresoSemanalUsdClausulaSexTxt =
-    totalIngresoSemanalUsdNum != null && totalIngresoSemanalUsdNum > 0
-      ? `${fmtUsdNumeroPlano(totalIngresoSemanalUsdNum)} USD`
+    remuneracionSemanalUsdNum > 0
+      ? `${fmtUsdNumeroPlano(remuneracionSemanalUsdNum)} USD`
       : '__________ USD';
-  /** Compensación SÉPTIMA: misma cifra semanal que BONO ESPECIAL en express. */
-  const bonoSemanalParaCompensacion = esContratoExpress
-    ? totalIngresoSemanalUsdNum ?? bonoManualUsdNum
-    : bonoManualUsdNum;
 
   const HORARIO_DETALLE_PDF_DEFAULT =
     'Lunes a Jueves: De 7:00 a.m. a 5:00 p.m. (1 hora de descanso de 12:00 p.m. a 1:00 p.m., no imputable a la jornada). Viernes: De 7:00 a.m. a 11:00 a.m. (Jornada continua). ';
@@ -618,9 +615,9 @@ export function ContratoObreroPDF({
   const tratoTrab = tratoTrabajadorContrato(trabFemenino);
   const nacionalidadTrab = nacionalidadAcordada(empleado.nacionalidad, trabFemenino);
   const repCedulaLinea = str(repCedulaGuion, '_______________');
-  // SÉPTIMA: 1 semana de bono especial por cada mes trabajado → mismo monto del bono semanal.
+  // SÉPTIMA: siempre = remuneración semanal USD (misma cifra que BONO ESPECIAL).
   const compUsdMes = montoCompensacionCulminacionUsd({
-    bonoSemanalUsd: bonoSemanalParaCompensacion,
+    remuneracionSemanalUsd: remuneracionSemanalUsdNum,
     compensacionExplicitUsd: parametros.compensacionCulminacionUsdPorMes,
   });
   const compUsdMesTxt = fmtCompensacionCulminacionUsdPlano(compUsdMes);
