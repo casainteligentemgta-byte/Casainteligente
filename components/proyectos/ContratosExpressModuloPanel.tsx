@@ -2,13 +2,14 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ExternalLink, FileText, Pencil, RefreshCw, Trash2, Users } from 'lucide-react';
+import { ExternalLink, FileText, Files, Loader2, Pencil, Printer, RefreshCw, Trash2, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import { idsObrasHijasDesdeModuloIntegral } from '@/lib/proyectos/obraHijasDesdeModulo';
 import AccionesContratoPdfFila from '@/components/rrhh/AccionesContratoPdfFila';
 import ModalEditarContratoExpress from '@/components/rrhh/express/ModalEditarContratoExpress';
 import { Button } from '@/components/ui/button';
+import { descargarPdfUnicoContratosExpress } from '@/lib/rrhh/descargarPdfUnicoCliente';
 import { hrefListaContratosExpress } from '@/lib/talento/hrefListaContratosExpress';
 
 type ExpressRow = {
@@ -36,6 +37,8 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId, proyecto
   const [rows, setRows] = useState<ExpressRow[]>([]);
   const [busyDeleteId, setBusyDeleteId] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [busyPdfLote, setBusyPdfLote] = useState(false);
 
   const hrefExpress = useMemo(() => {
     const base = hrefListaContratosExpress();
@@ -48,6 +51,7 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId, proyecto
   const load = useCallback(async () => {
     setLoading(true);
     setErr(null);
+    setSelectedIds(new Set());
     try {
       let proyectoIds: string[];
       if (proyectoIdsAlcance?.length) {
@@ -118,6 +122,12 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId, proyecto
         return;
       }
       setRows((prev) => prev.filter((r) => r.id !== id));
+      setSelectedIds((prev) => {
+        if (!prev.has(id)) return prev;
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('ci-resumen-obreros-refresh'));
       }
@@ -126,6 +136,54 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId, proyecto
       toast.error('Error de red');
     } finally {
       setBusyDeleteId(null);
+    }
+  }
+
+  const todosSeleccionados = rows.length > 0 && selectedIds.size === rows.length;
+  const algunoSeleccionado = selectedIds.size > 0;
+
+  function toggleTodos() {
+    if (todosSeleccionados) {
+      setSelectedIds(new Set());
+      return;
+    }
+    setSelectedIds(new Set(rows.map((r) => r.id)));
+  }
+
+  function toggleUno(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function pdfUnico(abrirParaImprimir: boolean) {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) {
+      toast.error('Seleccione al menos un contrato.');
+      return;
+    }
+    setBusyPdfLote(true);
+    try {
+      const out = await descargarPdfUnicoContratosExpress(ids, {
+        abrirParaImprimir,
+        nombreArchivo: `contratos-obra-${ids.length}.pdf`,
+      });
+      if (!out.ok) {
+        toast.error(out.error);
+        return;
+      }
+      toast.success(
+        abrirParaImprimir
+          ? `PDF único abierto (${ids.length}).`
+          : `PDF único descargado (${ids.length}).`,
+      );
+    } catch {
+      toast.error('Error al generar el PDF único.');
+    } finally {
+      setBusyPdfLote(false);
     }
   }
 
@@ -157,6 +215,40 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId, proyecto
           </div>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {rows.length > 0 ? (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={busyPdfLote || !algunoSeleccionado}
+                onClick={() => void pdfUnico(false)}
+                className="border-emerald-500/45 bg-emerald-950/40 text-emerald-100 hover:bg-emerald-900/50"
+                title="Descargar un solo PDF con los contratos seleccionados"
+              >
+                {busyPdfLote ? (
+                  <Loader2 className="size-4 animate-spin" aria-hidden />
+                ) : (
+                  <Files className="size-4" aria-hidden />
+                )}
+                <span className="ml-1.5 hidden sm:inline">
+                  PDF único{algunoSeleccionado ? ` (${selectedIds.size})` : ''}
+                </span>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={busyPdfLote || !algunoSeleccionado}
+                onClick={() => void pdfUnico(true)}
+                className="border-emerald-500/35 text-emerald-100/90"
+                title="Abrir PDF único para imprimir"
+              >
+                <Printer className="size-4" aria-hidden />
+                <span className="ml-1.5 hidden md:inline">Imprimir</span>
+              </Button>
+            </>
+          ) : null}
           <Button
             type="button"
             variant="outline"
@@ -198,6 +290,15 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId, proyecto
             <table className="w-full min-w-[560px] text-left text-sm">
               <thead>
                 <tr className="border-b border-amber-500/25 text-[10px] font-bold uppercase tracking-wide text-amber-200/90">
+                  <th className="w-10 px-2 py-3 text-center">
+                    <input
+                      type="checkbox"
+                      checked={todosSeleccionados}
+                      onChange={toggleTodos}
+                      aria-label="Seleccionar todos"
+                      className="size-3.5 accent-amber-500"
+                    />
+                  </th>
                   <th className="px-4 py-3">Fecha</th>
                   <th className="px-4 py-3">Obrero</th>
                   <th className="px-4 py-3">Cédula</th>
@@ -213,6 +314,15 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId, proyecto
                   const busy = busyDeleteId === r.id;
                   return (
                     <tr key={r.id} className="border-b border-white/[0.06] last:border-0 hover:bg-white/[0.03]">
+                      <td className="px-2 py-2.5 text-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(r.id)}
+                          onChange={() => toggleUno(r.id)}
+                          aria-label={`Seleccionar ${r.obrero_nombre}`}
+                          className="size-3.5 accent-amber-500"
+                        />
+                      </td>
                       <td className="whitespace-nowrap px-4 py-2.5 text-zinc-500">
                         {new Date(r.created_at).toLocaleDateString('es-VE')}
                       </td>
@@ -274,8 +384,8 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId, proyecto
 
       {!loading && !err && rows.length > 0 ? (
         <p className="mt-3 text-center text-[11px] text-zinc-600">
-          {rows.length} registro{rows.length === 1 ? '' : 's'} — carga masiva en RRHH → Express. Use Editar
-          para corregir datos y regenerar el PDF.
+          {rows.length} registro{rows.length === 1 ? '' : 's'} — marque y use PDF único para imprimir el
+          lote. Carga masiva en RRHH → Express.
         </p>
       ) : null}
 

@@ -3,7 +3,17 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Download, FileSpreadsheet, Pencil, RefreshCw, Trash2, Upload } from 'lucide-react';
+import {
+  Download,
+  FileSpreadsheet,
+  Files,
+  Loader2,
+  Pencil,
+  Printer,
+  RefreshCw,
+  Trash2,
+  Upload,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import AccionesContratoPdfFila from '@/components/rrhh/AccionesContratoPdfFila';
@@ -11,6 +21,7 @@ import ModalEditarContratoExpress from '@/components/rrhh/express/ModalEditarCon
 import { SelectorFaseTecnicaContrato } from '@/components/rrhh/express/SelectorFaseTecnicaContrato';
 import RrhhSubnavEnlaces from '@/components/rrhh/RrhhSubnavEnlaces';
 import { Button } from '@/components/ui/button';
+import { descargarPdfUnicoContratosExpress } from '@/lib/rrhh/descargarPdfUnicoCliente';
 import {
   descargarPlantillaXlsxContratosExpress,
   normalizarFechaIngresoIso,
@@ -83,6 +94,8 @@ export default function RrhhContratosExpressClient() {
   const [loadingLista, setLoadingLista] = useState(false);
   const [errLista, setErrLista] = useState<string | null>(null);
   const [busyDeleteId, setBusyDeleteId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [busyPdfLote, setBusyPdfLote] = useState(false);
 
   const [tabla, setTabla] = useState<FilaEditable[] | null>(null);
   const [importando, setImportando] = useState(false);
@@ -253,9 +266,11 @@ export default function RrhhContratosExpressClient() {
   const loadLista = useCallback(async () => {
     if (!proyectoId) {
       setRows([]);
+      setSelectedIds(new Set());
       return;
     }
     setLoadingLista(true);
+    setSelectedIds(new Set());
     setErrLista(null);
     try {
       const res = await supabase
@@ -504,11 +519,70 @@ export default function RrhhContratosExpressClient() {
         return;
       }
       setRows((prev) => prev.filter((r) => r.id !== id));
+      setSelectedIds((prev) => {
+        if (!prev.has(id)) return prev;
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
       toast.success('Eliminado');
     } catch {
       toast.error('Error de red');
     } finally {
       setBusyDeleteId(null);
+    }
+  }
+
+  const todosSeleccionados = rows.length > 0 && selectedIds.size === rows.length;
+  const algunoSeleccionado = selectedIds.size > 0;
+
+  function toggleTodos() {
+    if (todosSeleccionados) {
+      setSelectedIds(new Set());
+      return;
+    }
+    setSelectedIds(new Set(rows.map((r) => r.id)));
+  }
+
+  function toggleUno(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function pdfUnico(abrirParaImprimir: boolean) {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) {
+      toast.error('Seleccione al menos un contrato.');
+      return;
+    }
+    setBusyPdfLote(true);
+    try {
+      const slug = (proyectoNombre ?? 'obra')
+        .toLowerCase()
+        .replace(/[^a-z0-9áéíóúñ]+/gi, '-')
+        .replace(/^-|-$/g, '')
+        .slice(0, 40);
+      const out = await descargarPdfUnicoContratosExpress(ids, {
+        abrirParaImprimir,
+        nombreArchivo: `contratos-${slug || 'obra'}-${ids.length}.pdf`,
+      });
+      if (!out.ok) {
+        toast.error(out.error);
+        return;
+      }
+      toast.success(
+        abrirParaImprimir
+          ? `PDF único abierto (${ids.length} contrato${ids.length === 1 ? '' : 's'}).`
+          : `PDF único descargado (${ids.length} contrato${ids.length === 1 ? '' : 's'}).`,
+      );
+    } catch {
+      toast.error('Error al generar el PDF único.');
+    } finally {
+      setBusyPdfLote(false);
     }
   }
 
@@ -786,19 +860,55 @@ export default function RrhhContratosExpressClient() {
           ) : null}
         </div>
 
-        <div className="mt-5 flex items-center justify-between gap-2">
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-bold text-white">Contratos en esta obra</h2>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={loadingLista || !proyectoId}
-            onClick={() => void loadLista()}
-            className="border-amber-500/40 text-amber-100"
-          >
-            <RefreshCw className={`size-3.5 ${loadingLista ? 'animate-spin' : ''}`} aria-hidden />
-            <span className="ml-1.5">Actualizar</span>
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {rows.length > 0 ? (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={busyPdfLote || !algunoSeleccionado}
+                  onClick={() => void pdfUnico(false)}
+                  className="border-emerald-500/45 bg-emerald-950/35 text-emerald-100"
+                  title="Descargar un solo PDF con los contratos seleccionados"
+                >
+                  {busyPdfLote ? (
+                    <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                  ) : (
+                    <Files className="size-3.5" aria-hidden />
+                  )}
+                  <span className="ml-1.5">
+                    PDF único{algunoSeleccionado ? ` (${selectedIds.size})` : ''}
+                  </span>
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={busyPdfLote || !algunoSeleccionado}
+                  onClick={() => void pdfUnico(true)}
+                  className="border-emerald-500/35 text-emerald-100/90"
+                  title="Abrir PDF único para imprimir"
+                >
+                  <Printer className="size-3.5" aria-hidden />
+                  <span className="ml-1.5 hidden sm:inline">Imprimir lote</span>
+                </Button>
+              </>
+            ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={loadingLista || !proyectoId}
+              onClick={() => void loadLista()}
+              className="border-amber-500/40 text-amber-100"
+            >
+              <RefreshCw className={`size-3.5 ${loadingLista ? 'animate-spin' : ''}`} aria-hidden />
+              <span className="ml-1.5">Actualizar</span>
+            </Button>
+          </div>
         </div>
 
         <div className="mt-3">
@@ -819,6 +929,15 @@ export default function RrhhContratosExpressClient() {
               <table className="w-full min-w-[640px] text-left text-sm">
                 <thead>
                   <tr className="border-b border-amber-500/25 text-[10px] font-bold uppercase tracking-wide text-amber-200/90">
+                    <th className="w-10 px-2 py-2.5 text-center">
+                      <input
+                        type="checkbox"
+                        checked={todosSeleccionados}
+                        onChange={toggleTodos}
+                        aria-label="Seleccionar todos"
+                        className="size-3.5 accent-amber-500"
+                      />
+                    </th>
                     <th className="px-3 py-2.5">Fecha</th>
                     <th className="px-3 py-2.5">Obrero</th>
                     <th className="px-3 py-2.5">Cédula</th>
@@ -831,6 +950,15 @@ export default function RrhhContratosExpressClient() {
                 <tbody>
                   {rows.map((r) => (
                     <tr key={r.id} className="border-b border-white/[0.06] last:border-0">
+                      <td className="px-2 py-2 text-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(r.id)}
+                          onChange={() => toggleUno(r.id)}
+                          aria-label={`Seleccionar ${r.obrero_nombre}`}
+                          className="size-3.5 accent-amber-500"
+                        />
+                      </td>
                       <td className="whitespace-nowrap px-3 py-2 text-zinc-500">
                         {new Date(r.created_at).toLocaleDateString('es-VE')}
                       </td>
@@ -883,7 +1011,8 @@ export default function RrhhContratosExpressClient() {
           <Link href="/rrhh/oficios-salarios" className="text-amber-300/90 underline underline-offset-2">
             Oficios y salarios
           </Link>
-          . Tras ensamblar, use <span className="text-zinc-400">Editar</span> para corregir datos y
+          . Marque contratos y use <span className="text-zinc-400">PDF único</span> para imprimir el
+          lote. Tras ensamblar, use <span className="text-zinc-400">Editar</span> para corregir datos y
           regenerar el PDF.
         </p>
       </section>
