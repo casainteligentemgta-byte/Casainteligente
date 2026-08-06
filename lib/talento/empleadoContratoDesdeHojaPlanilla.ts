@@ -63,7 +63,7 @@ export function fusionarEmpleadoContratoDesdePlanilla(
   const celular = str(dp?.celular) ?? str(row.celular);
   const telefono = str(dp?.telHabitacion) ?? str(row.telefono);
   const nacionalidad = str(dp?.nacionalidad) ?? str(row.nacionalidad);
-  const estado_civil = estadoCivilContratoObrero(str(dp?.estadoCivil) ?? str(row.estado_civil));
+  const estado_civil = estadoCivilContratoObrero(str(dp?.estadoCivil), str(row.estado_civil));
 
   return {
     nombre_completo,

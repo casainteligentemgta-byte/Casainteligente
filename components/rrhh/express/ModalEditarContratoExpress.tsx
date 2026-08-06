@@ -262,7 +262,14 @@ export default function ModalEditarContratoExpress({
                 <option value="Soltera" />
                 <option value="Casado" />
                 <option value="Casada" />
+                <option value="Viudo" />
+                <option value="Viuda" />
+                <option value="Divorciado" />
+                <option value="Divorciada" />
               </datalist>
+              <span className="block font-normal normal-case tracking-normal text-zinc-600">
+                Por defecto Soltero. Si hay hoja de vida con otro estado civil, el PDF usa el de la hoja.
+              </span>
             </label>
             <label className="block space-y-1 text-[10px] font-bold uppercase tracking-wide text-zinc-500 sm:col-span-2">
               Domicilio
