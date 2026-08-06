@@ -133,6 +133,8 @@ type Proyecto = {
   entidad_id?: string | null;
   /** Horario por defecto en contratos PDF si el contrato no trae texto propio. */
   horario_semanal_obra_default?: string | null;
+  /** Fase técnica por defecto (cláusula PRIMERA) para contratos de esta obra. */
+  fase_tecnica_contrato_default?: string | null;
   /** Parada del transporte gratuito (cláusula SEXTA del contrato laboral). */
   punto_encuentro_transporte_contrato?: string | null;
   updated_at?: string;
@@ -266,7 +268,9 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
   const [peLng, setPeLng] = useState('');
   const [peEntidadId, setPeEntidadId] = useState('');
   const [peHorarioSemanalObra, setPeHorarioSemanalObra] = useState('');
+  const [peFaseTecnica, setPeFaseTecnica] = useState('');
   const [pePuntoEncTransporteContrato, setPePuntoEncTransporteContrato] = useState('');
+  const [fasesTecnicasSugeridas, setFasesTecnicasSugeridas] = useState<string[]>([]);
   const [entidades, setEntidades] = useState<EntidadOpt[]>([]);
   const [savingProyecto, setSavingProyecto] = useState(false);
   const [proyectoSaveError, setProyectoSaveError] = useState<string | null>(null);
@@ -280,6 +284,18 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
       setEntidades((data ?? []) as EntidadOpt[]);
     })();
   }, [supabase]);
+
+  useEffect(() => {
+    void fetch('/api/talento/fases-tecnicas')
+      .then(async (r) => {
+        const j = (await r.json()) as { fases?: { texto?: string }[] };
+        const textos = (j.fases ?? [])
+          .map((f) => (f.texto ?? '').trim())
+          .filter((t) => t.length >= 2);
+        setFasesTecnicasSugeridas(Array.from(new Set(textos)));
+      })
+      .catch(() => setFasesTecnicasSugeridas([]));
+  }, []);
 
   const load = useCallback(async () => {
     if (!id) {
@@ -479,6 +495,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
     setPeLng(proyecto.lng != null ? String(proyecto.lng) : '');
     setPeEntidadId(proyecto.entidad_id ? String(proyecto.entidad_id) : '');
     setPeHorarioSemanalObra(proyecto.horario_semanal_obra_default ?? '');
+    setPeFaseTecnica(proyecto.fase_tecnica_contrato_default ?? '');
     setPePuntoEncTransporteContrato(proyecto.punto_encuentro_transporte_contrato ?? '');
     setProyectoSaveError(null);
   }, [proyecto]);
@@ -519,27 +536,52 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
     }
     setSavingProyecto(true);
     setProyectoSaveError(null);
-    const { error: upErr } = await supabase
-      .from('ci_proyectos')
-      .update({
-        nombre: n,
-        estado: peEstado,
-        ubicacion_texto: u,
-        monto_aproximado: m,
-        moneda: (peMoneda.trim() || 'USD').slice(0, 8),
-        observaciones: peObs.trim() || null,
-        lat,
-        lng,
-        entidad_id: peEntidadId.trim() || null,
-        horario_semanal_obra_default: peHorarioSemanalObra.trim() || null,
-        punto_encuentro_transporte_contrato: pePuntoEncTransporteContrato.trim() || null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', id);
+    const patchBase = {
+      nombre: n,
+      estado: peEstado,
+      ubicacion_texto: u,
+      monto_aproximado: m,
+      moneda: (peMoneda.trim() || 'USD').slice(0, 8),
+      observaciones: peObs.trim() || null,
+      lat,
+      lng,
+      entidad_id: peEntidadId.trim() || null,
+      horario_semanal_obra_default: peHorarioSemanalObra.trim() || null,
+      punto_encuentro_transporte_contrato: pePuntoEncTransporteContrato.trim() || null,
+      updated_at: new Date().toISOString(),
+    };
+    let upErr = (
+      await supabase
+        .from('ci_proyectos')
+        .update({
+          ...patchBase,
+          fase_tecnica_contrato_default: peFaseTecnica.trim() || null,
+        })
+        .eq('id', id)
+    ).error;
+    if (upErr && /fase_tecnica_contrato_default|42703|column|schema cache/i.test(upErr.message)) {
+      upErr = (await supabase.from('ci_proyectos').update(patchBase).eq('id', id)).error;
+      if (!upErr) {
+        setProyectoSaveError(
+          'Proyecto guardado, pero falta la columna fase técnica. Ejecute sql_editor_313_ci_fases_tecnicas_contrato.sql',
+        );
+        setSavingProyecto(false);
+        router.replace(`/proyectos/modulo/${id}`);
+        void load();
+        return;
+      }
+    }
     setSavingProyecto(false);
     if (upErr) {
       setProyectoSaveError(upErr.message);
       return;
+    }
+    if (peFaseTecnica.trim().length >= 2) {
+      void fetch('/api/talento/fases-tecnicas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texto: peFaseTecnica.trim(), proyecto_id: id }),
+      }).catch(() => undefined);
     }
     router.replace(`/proyectos/modulo/${id}`);
     void load();
@@ -956,6 +998,42 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                       onChange={setPeHorarioSemanalObra}
                     />
                   </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-500">
+                    Fase técnica (contratos laborales, cláusula PRIMERA)
+                  </label>
+                  <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-500">
+                    Texto de la fase técnica por defecto para los contratos de esta obra. Editable; las fases usadas
+                    quedan grabadas para próximas obras y contratos.
+                  </p>
+                  {fasesTecnicasSugeridas.length > 0 ? (
+                    <select
+                      className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-sky-500/40"
+                      style={{ colorScheme: 'dark' }}
+                      value=""
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v) setPeFaseTecnica(v);
+                      }}
+                    >
+                      <option value="" className="bg-zinc-900">
+                        — Usar fase guardada —
+                      </option>
+                      {fasesTecnicasSugeridas.map((t) => (
+                        <option key={t} value={t} className="bg-zinc-900">
+                          {t}
+                        </option>
+                      ))}
+                    </select>
+                  ) : null}
+                  <textarea
+                    value={peFaseTecnica}
+                    onChange={(e) => setPeFaseTecnica(e.target.value)}
+                    rows={3}
+                    placeholder="Ej.: estructura de concreto armado"
+                    className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-sky-500/40"
+                  />
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-500">

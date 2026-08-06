@@ -72,6 +72,8 @@ export default function RrhhContratosExpressClient() {
   const [entidadId, setEntidadId] = useState('');
   const [proyectoId, setProyectoId] = useState('');
   const [configNominaDefaultId, setConfigNominaDefaultId] = useState('');
+  const [faseTecnica, setFaseTecnica] = useState('');
+  const [fasesSugeridas, setFasesSugeridas] = useState<string[]>([]);
   const [entidadNombre, setEntidadNombre] = useState<string | null>(null);
 
   const [rows, setRows] = useState<ExpressRow[]>([]);
@@ -99,6 +101,15 @@ export default function RrhhContratosExpressClient() {
         .select('id,cargo_nombre')
         .order('cargo_nombre')
         .limit(500);
+      void fetch('/api/talento/fases-tecnicas')
+        .then(async (r) => {
+          const j = (await r.json()) as { fases?: { texto?: string }[] };
+          const textos = (j.fases ?? [])
+            .map((f) => (f.texto ?? '').trim())
+            .filter((t) => t.length >= 2);
+          setFasesSugeridas(Array.from(new Set(textos)));
+        })
+        .catch(() => setFasesSugeridas([]));
       if (!ofiRes.error && ofiRes.data) {
         setOficios(
           (ofiRes.data as { id: string; cargo_nombre?: string | null }[])
@@ -221,6 +232,17 @@ export default function RrhhContratosExpressClient() {
       setEntidadId(nextEnt);
       setProyectoId(nextProy);
       setEntidadNombre(ents.find((e) => e.id === nextEnt)?.nombre ?? null);
+      if (nextProy) {
+        const { data: proyFase } = await supabase
+          .from('ci_proyectos')
+          .select('fase_tecnica_contrato_default')
+          .eq('id', nextProy)
+          .maybeSingle();
+        const def =
+          ((proyFase as { fase_tecnica_contrato_default?: string | null } | null)
+            ?.fase_tecnica_contrato_default ?? '').trim();
+        if (def) setFaseTecnica(def);
+      }
     } finally {
       setLoadingMeta(false);
     }
@@ -303,6 +325,17 @@ export default function RrhhContratosExpressClient() {
     setTabla(null);
     setResultados(null);
     const p = proyectos.find((x) => x.id === id);
+    if (id) {
+      const { data: proy } = await supabase
+        .from('ci_proyectos')
+        .select('fase_tecnica_contrato_default')
+        .eq('id', id)
+        .maybeSingle();
+      const def =
+        ((proy as { fase_tecnica_contrato_default?: string | null } | null)
+          ?.fase_tecnica_contrato_default ?? '').trim();
+      if (def) setFaseTecnica(def);
+    }
     if (!p) return;
     if (p.entidad_id) {
       setEntidadId(p.entidad_id);
@@ -399,6 +432,7 @@ export default function RrhhContratosExpressClient() {
           proyecto_id: proyectoId,
           entidad_patrono_id: entidadId,
           config_nomina_id: configNominaDefaultId.trim() || null,
+          objeto_contrato: faseTecnica.trim() || null,
           filas: tabla.map((f) => ({
             fila: f.fila,
             obrero_nombres: f.nombres,
@@ -428,6 +462,17 @@ export default function RrhhContratosExpressClient() {
         toast.success(`${creados} contrato(s) creado(s)${fallidos ? ` · ${fallidos} con error` : ''}`);
         setTabla(null);
         await loadLista();
+        if (faseTecnica.trim().length >= 2) {
+          void fetch('/api/talento/fases-tecnicas')
+            .then(async (r) => {
+              const fj = (await r.json()) as { fases?: { texto?: string }[] };
+              const textos = (fj.fases ?? [])
+                .map((f) => (f.texto ?? '').trim())
+                .filter((t) => t.length >= 2);
+              setFasesSugeridas(Array.from(new Set(textos)));
+            })
+            .catch(() => undefined);
+        }
       } else {
         const primerErr =
           (j.resultados ?? []).find((r): r is Extract<ResultadoMasivo, { ok: false }> => !r.ok)?.error ??
@@ -550,6 +595,35 @@ export default function RrhhContratosExpressClient() {
                 </option>
               ))}
             </select>
+          </label>
+          <label className="mt-3 flex max-w-xl flex-col gap-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+            Fase técnica (cláusula PRIMERA — todos los contratos del lote)
+            {fasesSugeridas.length > 0 ? (
+              <select
+                className={selectClass}
+                value=""
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v) setFaseTecnica(v);
+                }}
+              >
+                <option value="">— Usar fase guardada —</option>
+                {fasesSugeridas.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+            <textarea
+              className={`${selectClass} min-h-[3.5rem]`}
+              value={faseTecnica}
+              placeholder="Ej.: asfaltado y obras de vialidad"
+              onChange={(e) => setFaseTecnica(e.target.value)}
+            />
+            <span className="font-normal normal-case tracking-normal text-zinc-600">
+              Editable. Al generar queda grabada para próximas obras y contratos.
+            </span>
           </label>
           <div className="mt-3 flex flex-wrap gap-2">
             <Button
