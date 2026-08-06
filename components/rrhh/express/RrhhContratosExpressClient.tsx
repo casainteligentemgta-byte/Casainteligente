@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import AccionesContratoPdfFila from '@/components/rrhh/AccionesContratoPdfFila';
 import ModalEditarContratoExpress from '@/components/rrhh/express/ModalEditarContratoExpress';
+import { SelectorFaseTecnicaContrato } from '@/components/rrhh/express/SelectorFaseTecnicaContrato';
 import RrhhSubnavEnlaces from '@/components/rrhh/RrhhSubnavEnlaces';
 import { Button } from '@/components/ui/button';
 import {
@@ -596,35 +597,16 @@ export default function RrhhContratosExpressClient() {
               ))}
             </select>
           </label>
-          <label className="mt-3 flex max-w-xl flex-col gap-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
-            Fase técnica (cláusula PRIMERA — todos los contratos del lote)
-            {fasesSugeridas.length > 0 ? (
-              <select
-                className={selectClass}
-                value=""
-                onChange={(e) => {
-                  const v = e.target.value;
-                  if (v) setFaseTecnica(v);
-                }}
-              >
-                <option value="">— Usar fase guardada —</option>
-                {fasesSugeridas.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            ) : null}
-            <textarea
-              className={`${selectClass} min-h-[3.5rem]`}
+          <div className="mt-3 max-w-xl space-y-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+            <span>Fase técnica (cláusula PRIMERA — todos los contratos del lote)</span>
+            <SelectorFaseTecnicaContrato
               value={faseTecnica}
-              placeholder="Ej.: asfaltado y obras de vialidad"
-              onChange={(e) => setFaseTecnica(e.target.value)}
+              onChange={setFaseTecnica}
+              controlClassName={selectClass}
+              recientes={fasesSugeridas}
+              helperText="Elija categoría y marque una o varias fases. Al generar quedan grabadas para próximas obras."
             />
-            <span className="font-normal normal-case tracking-normal text-zinc-600">
-              Editable. Al generar queda grabada para próximas obras y contratos.
-            </span>
-          </label>
+          </div>
           <div className="mt-3 flex flex-wrap gap-2">
             <Button
               type="button"

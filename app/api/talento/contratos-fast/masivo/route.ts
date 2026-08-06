@@ -50,7 +50,7 @@ const bodySchema = z.object({
   config_nomina_id: z.string().uuid().optional().nullable(),
   entidad_patrono_id: z.string().uuid().optional().nullable(),
   /** Fase técnica compartida (cláusula PRIMERA) para todo el lote. */
-  objeto_contrato: z.string().max(2000).optional().nullable(),
+  objeto_contrato: z.string().max(4000).optional().nullable(),
   filas: z.array(filaSchema).min(1).max(MAX_FILAS),
 });
 

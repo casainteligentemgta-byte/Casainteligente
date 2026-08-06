@@ -28,6 +28,7 @@ import ImportarPresupuestoLulo from '@/components/proyectos/ImportarPresupuestoL
 import ControlPlanosObra from '@/components/proyectos/ControlPlanosObra';
 import SeccionTituloHover from '@/components/proyectos/SeccionTituloHover';
 import HorarioObraEditor from '@/components/proyectos/HorarioObraEditor';
+import { SelectorFaseTecnicaContrato } from '@/components/rrhh/express/SelectorFaseTecnicaContrato';
 
 const LOAD_TIMEOUT_MS = 45_000;
 
@@ -1004,36 +1005,17 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                     Fase técnica (contratos laborales, cláusula PRIMERA)
                   </label>
                   <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-500">
-                    Texto de la fase técnica por defecto para los contratos de esta obra. Editable; las fases usadas
-                    quedan grabadas para próximas obras y contratos.
+                    Seleccione del catálogo la fase (o fases) por defecto para los contratos de esta obra. El texto
+                    queda editable y se graba para próximas obras.
                   </p>
-                  {fasesTecnicasSugeridas.length > 0 ? (
-                    <select
-                      className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-sky-500/40"
-                      style={{ colorScheme: 'dark' }}
-                      value=""
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        if (v) setPeFaseTecnica(v);
-                      }}
-                    >
-                      <option value="" className="bg-zinc-900">
-                        — Usar fase guardada —
-                      </option>
-                      {fasesTecnicasSugeridas.map((t) => (
-                        <option key={t} value={t} className="bg-zinc-900">
-                          {t}
-                        </option>
-                      ))}
-                    </select>
-                  ) : null}
-                  <textarea
-                    value={peFaseTecnica}
-                    onChange={(e) => setPeFaseTecnica(e.target.value)}
-                    rows={3}
-                    placeholder="Ej.: estructura de concreto armado"
-                    className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-sky-500/40"
-                  />
+                  <div className="mt-2">
+                    <SelectorFaseTecnicaContrato
+                      value={peFaseTecnica}
+                      onChange={setPeFaseTecnica}
+                      controlClassName="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-sky-500/40"
+                      recientes={fasesTecnicasSugeridas}
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-500">
