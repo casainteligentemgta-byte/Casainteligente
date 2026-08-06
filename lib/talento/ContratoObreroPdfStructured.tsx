@@ -20,70 +20,73 @@ import {
 } from '@/lib/talento/compensacionCulminacionContrato';
 
 /**
- * Tipografía unificada del contrato (PDF estándar vía @react-pdf/renderer).
- * Helvetica / Times-Roman / Courier son las fuentes embebidas; para otro cuerpo hay que registrar fuente con Font.register.
+ * Tipografía del contrato individual (PDF vía @react-pdf/renderer).
+ * Times-Roman / Times-Bold = fuentes estándar PDF (métrica / aspecto Times New Roman).
+ * Cuerpo 12 pt, interlineado 1.5.
  */
-const CONTRATO_PDF_FONT_FAMILY = 'Helvetica';
-/** Negrita en PDF vía familia explícita (anidar `fontWeight` con Helvetica falla en @react-pdf 4.x). */
-const CONTRATO_PDF_FONT_BOLD = 'Helvetica-Bold';
-const CONTRATO_PDF_FONT_SIZE = 9.5;
+const CONTRATO_PDF_FONT_FAMILY = 'Times-Roman';
+/** Negrita en PDF vía familia explícita (anidar `fontWeight` falla en @react-pdf 4.x). */
+const CONTRATO_PDF_FONT_BOLD = 'Times-Bold';
+const CONTRATO_PDF_FONT_SIZE = 12;
+const CONTRATO_PDF_LINE_HEIGHT = 1.5;
 
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 28,
-    paddingBottom: 32,
-    paddingHorizontal: 40,
+    paddingTop: 36,
+    paddingBottom: 40,
+    paddingHorizontal: 48,
     fontFamily: CONTRATO_PDF_FONT_FAMILY,
     fontSize: CONTRATO_PDF_FONT_SIZE,
+    lineHeight: CONTRATO_PDF_LINE_HEIGHT,
     color: '#000',
   },
   pageFirst: {
-    paddingTop: 14,
-    paddingBottom: 26,
+    paddingTop: 28,
+    paddingBottom: 36,
   },
   header: {
     fontFamily: CONTRATO_PDF_FONT_BOLD,
     fontSize: CONTRATO_PDF_FONT_SIZE,
     textAlign: 'center',
-    marginBottom: 8,
-    lineHeight: 1.16,
+    marginBottom: 10,
+    lineHeight: CONTRATO_PDF_LINE_HEIGHT,
     color: '#000',
   },
   paragraph: {
-    marginBottom: 5,
+    marginBottom: 8,
     textAlign: 'justify',
-    lineHeight: 1.26,
+    lineHeight: CONTRATO_PDF_LINE_HEIGHT,
     fontFamily: CONTRATO_PDF_FONT_FAMILY,
     fontSize: CONTRATO_PDF_FONT_SIZE,
     color: '#000',
   },
-  paragraphIntro: { marginBottom: 3, lineHeight: 1.2 },
+  paragraphIntro: { marginBottom: 6, lineHeight: CONTRATO_PDF_LINE_HEIGHT },
   bold: {
     fontFamily: CONTRATO_PDF_FONT_BOLD,
     fontSize: CONTRATO_PDF_FONT_SIZE,
-    lineHeight: 1.22,
+    lineHeight: CONTRATO_PDF_LINE_HEIGHT,
     color: '#000',
   },
-  /** Comparecencia: tramo «(El) centro comercial …» en Helvetica normal (no Helvetica-Bold). */
+  /** Comparecencia: tramo «(El) centro comercial …» en Times-Roman (no Times-Bold). */
   introComparecenciaRegular: {
     fontFamily: CONTRATO_PDF_FONT_FAMILY,
     fontSize: CONTRATO_PDF_FONT_SIZE,
-    lineHeight: 1.22,
+    lineHeight: CONTRATO_PDF_LINE_HEIGHT,
     color: '#000',
   },
-  signatureSection: { flexDirection: 'row', marginTop: 12, justifyContent: 'space-between' },
-  signatureBox: { width: '48%', paddingTop: 4, textAlign: 'left', lineHeight: 1.22 },
+  signatureSection: { flexDirection: 'row', marginTop: 16, justifyContent: 'space-between' },
+  signatureBox: { width: '48%', paddingTop: 6, textAlign: 'left', lineHeight: CONTRATO_PDF_LINE_HEIGHT },
   signatureLine: {
-    marginBottom: 1,
-    lineHeight: 1.2,
+    marginBottom: 2,
+    lineHeight: CONTRATO_PDF_LINE_HEIGHT,
     fontFamily: CONTRATO_PDF_FONT_FAMILY,
     fontSize: CONTRATO_PDF_FONT_SIZE,
     color: '#000',
   },
   /** Etiquetas «POR LA ENTIDAD…» en negrita sin pisar la fuente con `signatureLine`. */
   signatureLabelBold: {
-    marginBottom: 1,
-    lineHeight: 1.2,
+    marginBottom: 2,
+    lineHeight: CONTRATO_PDF_LINE_HEIGHT,
     fontFamily: CONTRATO_PDF_FONT_BOLD,
     fontSize: CONTRATO_PDF_FONT_SIZE,
     color: '#000',
@@ -92,24 +95,24 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderColor: '#000',
     width: '100%',
-    height: 14,
-    marginTop: 2,
-    marginBottom: 4,
+    height: 18,
+    marginTop: 4,
+    marginBottom: 6,
   },
   meta: {
     fontFamily: CONTRATO_PDF_FONT_FAMILY,
     fontSize: CONTRATO_PDF_FONT_SIZE,
-    marginBottom: 8,
+    marginBottom: 10,
     textAlign: 'center',
     color: '#000',
-    lineHeight: 1.22,
+    lineHeight: CONTRATO_PDF_LINE_HEIGHT,
   },
-  metaFirst: { marginBottom: 3 },
-  /** Misma base tipográfica; solo ajusta interlineado en bloques largos (sin reducir cuerpo). */
+  metaFirst: { marginBottom: 6 },
+  /** Misma base tipográfica e interlineado 1.5 en cláusulas. */
   clauseDense: {
     fontFamily: CONTRATO_PDF_FONT_FAMILY,
     fontSize: CONTRATO_PDF_FONT_SIZE,
-    lineHeight: 1.22,
+    lineHeight: CONTRATO_PDF_LINE_HEIGHT,
     textAlign: 'justify',
     color: '#000',
   },
