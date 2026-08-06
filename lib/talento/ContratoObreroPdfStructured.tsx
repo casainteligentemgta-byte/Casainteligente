@@ -14,6 +14,10 @@ import {
   tratoTrabajadorContrato,
 } from '@/lib/talento/generoContratoLaboral';
 import { textoObligacionesTrabajadorContrato } from '@/lib/talento/obligacionesOficioContrato';
+import {
+  fmtCompensacionCulminacionUsdPlano,
+  montoCompensacionCulminacionUsd,
+} from '@/lib/talento/compensacionCulminacionContrato';
 
 /**
  * Tipografía unificada del contrato (PDF estándar vía @react-pdf/renderer).
@@ -186,6 +190,10 @@ export type ParametrosContratoPdf = {
   /** Bono especial no salarial en USD (express u otros flujos); se suma al ingreso tabulador en cláusula SEXTA. */
   bonoManualUsd?: number | null;
   textoPuntoEncuentroTransporteSex?: string | null;
+  /**
+   * Override opcional de compensación por culminación (USD por mes).
+   * Por defecto = bono semanal (1 semana por cada mes trabajado).
+   */
   compensacionCulminacionUsdPorMes?: number | null;
 };
 
@@ -580,13 +588,12 @@ export function ContratoObreroPDF({
   const tratoTrab = tratoTrabajadorContrato(trabFemenino);
   const nacionalidadTrab = nacionalidadAcordada(empleado.nacionalidad, trabFemenino);
   const repCedulaLinea = str(repCedulaGuion, '_______________');
-  const compUsdMes =
-    parametros.compensacionCulminacionUsdPorMes != null &&
-    Number.isFinite(Number(parametros.compensacionCulminacionUsdPorMes)) &&
-    Number(parametros.compensacionCulminacionUsdPorMes) > 0
-      ? Number(parametros.compensacionCulminacionUsdPorMes)
-      : 100;
-  const compUsdMesTxt = fmtUsdNumeroPlano(compUsdMes);
+  // SÉPTIMA: 1 semana de bono especial por cada mes trabajado → mismo monto del bono semanal.
+  const compUsdMes = montoCompensacionCulminacionUsd({
+    bonoSemanalUsd: bonoManualUsdNum,
+    compensacionExplicitUsd: parametros.compensacionCulminacionUsdPorMes,
+  });
+  const compUsdMesTxt = fmtCompensacionCulminacionUsdPlano(compUsdMes);
   const puntoEncTransporte = fragmentoPuntoEncuentroTransporte(parametros.textoPuntoEncuentroTransporteSex);
   const fragDomCentroComercial = fragmentosDomicilioCentroComercial(domicilioComparecenciaPdf);
   const textoRegularDomPdf = fragDomCentroComercial
