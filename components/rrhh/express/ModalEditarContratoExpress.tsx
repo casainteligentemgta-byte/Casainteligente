@@ -13,6 +13,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { SelectorFaseTecnicaContrato } from '@/components/rrhh/express/SelectorFaseTecnicaContrato';
+import {
+  ESTADO_CIVIL_CONTRATO_DEFAULT,
+  ESTADOS_CIVILES_CONTRATO,
+} from '@/lib/talento/estadosCivilesContrato';
 
 type OficioOpt = { id: string; cargo_nombre: string };
 
@@ -101,7 +105,7 @@ export default function ModalEditarContratoExpress({
       }
       setForm({
         ...j.contrato,
-        estado_civil: (j.contrato.estado_civil ?? '').trim() || 'Soltero',
+        estado_civil: (j.contrato.estado_civil ?? '').trim() || ESTADO_CIVIL_CONTRATO_DEFAULT,
         obrero_direccion: (j.contrato.obrero_direccion ?? '').trim() || 'de este domicilio',
         objeto_contrato: objeto || null,
       });
@@ -156,7 +160,7 @@ export default function ModalEditarContratoExpress({
           obrero_nombre: form.obrero_nombre ?? null,
           obrero_cedula: form.obrero_cedula ?? null,
           obrero_direccion: form.obrero_direccion ?? null,
-          estado_civil: form.estado_civil?.trim() || 'Soltero',
+          estado_civil: form.estado_civil?.trim() || ESTADO_CIVIL_CONTRATO_DEFAULT,
           nacionalidad: form.nacionalidad ?? null,
           fecha_ingreso: form.fecha_ingreso || null,
           horario_semanal_texto: form.horario_semanal_texto ?? null,
@@ -251,25 +255,32 @@ export default function ModalEditarContratoExpress({
             </label>
             <label className="block space-y-1 text-[10px] font-bold uppercase tracking-wide text-zinc-500">
               Estado civil
-              <input
+              <select
                 className={inputClass}
-                value={form.estado_civil?.trim() ? form.estado_civil : 'Soltero'}
-                placeholder="Soltero"
+                value={(() => {
+                  const cur = (form.estado_civil ?? '').trim();
+                  if (!cur) return ESTADO_CIVIL_CONTRATO_DEFAULT;
+                  if ((ESTADOS_CIVILES_CONTRATO as readonly string[]).includes(cur)) return cur;
+                  return cur;
+                })()}
                 onChange={(e) => setField('estado_civil', e.target.value)}
-                list="ci-estado-civil-edit"
-              />
-              <datalist id="ci-estado-civil-edit">
-                <option value="Soltero" />
-                <option value="Soltera" />
-                <option value="Casado" />
-                <option value="Casada" />
-                <option value="Viudo" />
-                <option value="Viuda" />
-                <option value="Divorciado" />
-                <option value="Divorciada" />
-              </datalist>
+              >
+                {ESTADOS_CIVILES_CONTRATO.map((ec) => (
+                  <option key={ec} value={ec}>
+                    {ec}
+                  </option>
+                ))}
+                {(form.estado_civil ?? '').trim() &&
+                !(ESTADOS_CIVILES_CONTRATO as readonly string[]).includes(
+                  (form.estado_civil ?? '').trim(),
+                ) ? (
+                  <option value={(form.estado_civil ?? '').trim()}>
+                    {(form.estado_civil ?? '').trim()}
+                  </option>
+                ) : null}
+              </select>
               <span className="block font-normal normal-case tracking-normal text-zinc-600">
-                Por defecto Soltero. Si hay hoja de vida con otro estado civil, el PDF usa el de la hoja.
+                Por defecto Soltero. Elija el que corresponda (incluye formas en femenino).
               </span>
             </label>
             <label className="block space-y-1 text-[10px] font-bold uppercase tracking-wide text-zinc-500 sm:col-span-2">
