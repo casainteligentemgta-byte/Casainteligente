@@ -36,7 +36,7 @@ export function trabajadorFemeninoDesdeEstadoCivil(raw: string | null | undefine
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
   if (!t) return false;
-  return /^(soltera|casada|viuda|divorciada|separada)\b/.test(t);
+  return /^(soltera|casada|viuda|divorciada|separada|concubina)\b/.test(t);
 }
 
 /**
