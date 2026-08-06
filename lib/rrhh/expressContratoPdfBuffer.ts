@@ -26,7 +26,6 @@ export type ExpressRowPdf = {
   obrero_direccion?: string | null;
   horario_semanal_texto?: string | null;
   bono_manual_usd?: number | null;
-  bono_manual_ves?: number | null;
   pdf_storage_path?: string | null;
   estado_civil?: string | null;
   nacionalidad?: string | null;
@@ -39,11 +38,15 @@ export type ExpressRowPdf = {
   cargo_nombre_snapshot?: string | null;
 };
 
+/** Tras migración 122 la columna es `bono_manual_usd` (antes `bono_manual_ves`). */
 const SELECT_FULL =
-  'id,proyecto_id,config_nomina_id,obrero_nombre,obrero_nombres,obrero_apellidos,obrero_cedula,obrero_direccion,horario_semanal_texto,bono_manual_usd,bono_manual_ves,pdf_storage_path,estado_civil,nacionalidad,fecha_ingreso,objeto_contrato,jornada_trabajo,obrero_municipio_residencia,obrero_estado_residencia,expediente_label,cargo_nombre_snapshot';
+  'id,proyecto_id,config_nomina_id,obrero_nombre,obrero_nombres,obrero_apellidos,obrero_cedula,obrero_direccion,horario_semanal_texto,bono_manual_usd,pdf_storage_path,estado_civil,nacionalidad,fecha_ingreso,objeto_contrato,jornada_trabajo,obrero_municipio_residencia,obrero_estado_residencia,expediente_label,cargo_nombre_snapshot';
 
 const SELECT_BASE =
-  'id,proyecto_id,config_nomina_id,obrero_nombre,obrero_cedula,obrero_direccion,horario_semanal_texto,bono_manual_usd,bono_manual_ves,pdf_storage_path,cargo_nombre_snapshot';
+  'id,proyecto_id,config_nomina_id,obrero_nombre,obrero_cedula,obrero_direccion,horario_semanal_texto,bono_manual_usd,pdf_storage_path,cargo_nombre_snapshot';
+
+const SELECT_MIN =
+  'id,proyecto_id,config_nomina_id,obrero_nombre,obrero_cedula,obrero_direccion,horario_semanal_texto,pdf_storage_path';
 
 function strOpt(v: unknown): string | null {
   if (v == null) return null;
@@ -78,9 +81,7 @@ export function manualDesdeExpressRow(row: ExpressRowPdf): ContratoExpressManual
     bonoManualUsd:
       row.bono_manual_usd != null && Number.isFinite(Number(row.bono_manual_usd))
         ? Number(row.bono_manual_usd)
-        : row.bono_manual_ves != null && Number.isFinite(Number(row.bono_manual_ves))
-          ? Number(row.bono_manual_ves)
-          : null,
+        : null,
     cargoNombreListado: strOpt(row.cargo_nombre_snapshot),
   };
 }
@@ -109,15 +110,25 @@ async function fetchExpressRow(
   id: string,
 ): Promise<{ ok: true; row: ExpressRowPdf } | { ok: false; error: string }> {
   const full = await supabase.from('ci_contratos_express').select(SELECT_FULL).eq('id', id).maybeSingle();
-  if (full.error && /column|42703|schema cache|Could not find/i.test(full.error.message)) {
-    const base = await supabase.from('ci_contratos_express').select(SELECT_BASE).eq('id', id).maybeSingle();
-    if (base.error) return { ok: false, error: base.error.message };
-    if (!base.data) return { ok: false, error: 'Contrato express no encontrado.' };
+  if (!full.error && full.data) {
+    return { ok: true, row: full.data as ExpressRowPdf };
+  }
+  if (full.error && !/column|42703|schema cache|Could not find|does not exist/i.test(full.error.message)) {
+    return { ok: false, error: full.error.message };
+  }
+
+  const base = await supabase.from('ci_contratos_express').select(SELECT_BASE).eq('id', id).maybeSingle();
+  if (!base.error && base.data) {
     return { ok: true, row: base.data as ExpressRowPdf };
   }
-  if (full.error) return { ok: false, error: full.error.message };
-  if (!full.data) return { ok: false, error: 'Contrato express no encontrado.' };
-  return { ok: true, row: full.data as ExpressRowPdf };
+  if (base.error && !/column|42703|schema cache|Could not find|does not exist/i.test(base.error.message)) {
+    return { ok: false, error: base.error.message };
+  }
+
+  const min = await supabase.from('ci_contratos_express').select(SELECT_MIN).eq('id', id).maybeSingle();
+  if (min.error) return { ok: false, error: min.error.message };
+  if (!min.data) return { ok: false, error: 'Contrato express no encontrado.' };
+  return { ok: true, row: min.data as ExpressRowPdf };
 }
 
 export async function generarBufferContratoExpressPdf(
