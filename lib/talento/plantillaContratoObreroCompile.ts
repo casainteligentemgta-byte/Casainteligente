@@ -13,6 +13,10 @@ import {
 } from '@/lib/talento/generoContratoLaboral';
 import { estadoCivilContratoObrero } from '@/lib/talento/cedulaAuth';
 import { textoObligacionesTrabajadorContrato } from '@/lib/talento/obligacionesOficioContrato';
+import {
+  fmtCompensacionCulminacionUsdPlano,
+  montoCompensacionCulminacionUsd,
+} from '@/lib/talento/compensacionCulminacionContrato';
 
 export type DatoContratoFaltante = {
   id: string;
@@ -66,7 +70,10 @@ const ETIQUETAS: Record<string, { etiqueta: string; ayuda: string }> = {
   CONTRATO_SALARIO_SEMANAL_VES: { etiqueta: 'Salario semanal en Bs.', ayuda: 'Salario mensual tabulador ÷ 4.' },
   CONTRATO_CESTA_TICKET_USD_SEMANAL: { etiqueta: 'Cesta ticket semanal USD', ayuda: 'Por defecto 10 USD.' },
   CONTRATO_INGRESO_SEMANAL_USD_TOTAL: { etiqueta: 'Ingreso semanal total USD', ayuda: 'Tabulador + bono especial.' },
-  CONTRATO_COMPENSACION_CULMINACION_USD: { etiqueta: 'Compensación por culminación USD/mes', ayuda: 'Canon mensual al cierre.' },
+  CONTRATO_COMPENSACION_CULMINACION_USD: {
+    etiqueta: 'Compensación por culminación USD/mes',
+    ayuda: 'Igual al bono semanal (1 semana por cada mes trabajado o fracción).',
+  },
   CONTRATO_DOMICILIO_PROCESAL: { etiqueta: 'Domicilio procesal', ayuda: 'Por defecto Pampatar.' },
   CONTRATO_DIA_FIRMA: { etiqueta: 'Día de firma', ayuda: 'Fecha de firma o ingreso.' },
   CONTRATO_MES_FIRMA: { etiqueta: 'Mes de firma', ayuda: 'Fecha de firma o ingreso.' },
@@ -176,6 +183,8 @@ export type FuentesContratoObrero = {
     duracion_referencial_semanas?: string | null;
     horario_semanal_texto?: string | null;
     fecha_firma_contrato?: string | null;
+    /** Bono especial semanal USD; la compensación por culminación usa el mismo monto (1 semana/mes). */
+    bono_especial_usd?: number | null;
   };
   obra: {
     nombre: string;
@@ -417,7 +426,11 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
     CONTRATO_SALARIO_SEMANAL_VES: salSemanalTxt,
     CONTRATO_CESTA_TICKET_USD_SEMANAL: `${CESTATICKET_SEMANAL_USD} USD`,
     CONTRATO_INGRESO_SEMANAL_USD_TOTAL: '__________ USD',
-    CONTRATO_COMPENSACION_CULMINACION_USD: '100,00',
+    CONTRATO_COMPENSACION_CULMINACION_USD: fmtCompensacionCulminacionUsdPlano(
+      montoCompensacionCulminacionUsd({
+        bonoSemanalUsd: f.contrato.bono_especial_usd,
+      }),
+    ),
     CONTRATO_DOMICILIO_PROCESAL: 'Pampatar',
     CONTRATO_DIA_FIRMA: diaFirma,
     CONTRATO_MES_FIRMA: mesFirma,
