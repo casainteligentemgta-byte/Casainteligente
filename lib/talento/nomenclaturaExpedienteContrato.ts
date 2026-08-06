@@ -2,6 +2,9 @@
  * Nomenclatura de expediente en contratos individuales de trabajo:
  * AÑO-MES-ENTIDAD-OBRA-Número (sin prefijo EXPRESS).
  * Ej.: 2026-08-DIMA-ASFALT-0001
+ *
+ * ENTIDAD = abreviatura derivada del nombre de la entidad contratante.
+ * OBRA = `obra_codigo` del proyecto o abreviatura de su nombre.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -13,6 +16,10 @@ export type PartesExpedienteContrato = {
   obraCodigo: string;
   numero: number;
 };
+
+/** Códigos genéricos que no deben aparecer en expedientes reales. */
+const PLACEHOLDER_ENTIDAD = new Set(['ENT', 'ENTE', 'XXX']);
+const PLACEHOLDER_OBRA = new Set(['OBRA', 'XXX']);
 
 /** Código corto estable a partir de un nombre (entidad u obra). */
 export function codigoCortoDesdeNombre(nombre: string | null | undefined, maxLen = 6): string {
@@ -41,13 +48,50 @@ export function codigoCortoDesdeNombre(nombre: string | null | undefined, maxLen
   return (first + initials).slice(0, maxLen) || 'XXX';
 }
 
+/** Sanea un código ya corto (p. ej. `obra_codigo`) sin inventar placeholders. */
+export function sanearCodigoExpediente(codigo: string | null | undefined, maxLen: number): string {
+  const c = String(codigo ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, maxLen);
+  return c || 'XXX';
+}
+
 export function formatearExpedienteContrato(p: PartesExpedienteContrato): string {
   const anio = Math.trunc(p.anio);
   const mes = String(Math.max(1, Math.min(12, Math.trunc(p.mes)))).padStart(2, '0');
-  const ent = (p.entidadCodigo || 'ENT').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) || 'ENT';
-  const obra = (p.obraCodigo || 'OBRA').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10) || 'OBRA';
+  const ent = sanearCodigoExpediente(p.entidadCodigo, 8);
+  const obra = sanearCodigoExpediente(p.obraCodigo, 10);
   const num = String(Math.max(1, Math.trunc(p.numero))).padStart(4, '0');
   return `${anio}-${mes}-${ent}-${obra}-${num}`;
+}
+
+/** Parsea `2026-08-DIMA-ASFALT-0001` (obra puede tener varios segmentos). */
+export function parsearExpedienteContrato(label: string | null | undefined): PartesExpedienteContrato | null {
+  const t = String(label ?? '').trim();
+  if (!t || /^EXPRESS-/i.test(t)) return null;
+  const parts = t.split('-').filter(Boolean);
+  if (parts.length < 5) return null;
+  const anio = Number(parts[0]);
+  const mes = Number(parts[1]);
+  const numero = Number(parts[parts.length - 1]);
+  if (!Number.isFinite(anio) || !Number.isFinite(mes) || mes < 1 || mes > 12) return null;
+  if (!Number.isFinite(numero) || numero < 1) return null;
+  const entidadCodigo = parts[2] ?? '';
+  const obraCodigo = parts.slice(3, -1).join('') || parts[3] || '';
+  if (!entidadCodigo || !obraCodigo) return null;
+  return { anio, mes, entidadCodigo, obraCodigo, numero };
+}
+
+/** True si el label usa los fallbacks genéricos ENT/ENTE + OBRA (o XXX). */
+export function esExpedientePlaceholder(label: string | null | undefined): boolean {
+  const p = parsearExpedienteContrato(label);
+  if (!p) return !String(label ?? '').trim() || /^EXPRESS-/i.test(String(label ?? ''));
+  const ent = sanearCodigoExpediente(p.entidadCodigo, 8);
+  const obra = sanearCodigoExpediente(p.obraCodigo, 10);
+  return PLACEHOLDER_ENTIDAD.has(ent) || PLACEHOLDER_OBRA.has(obra);
 }
 
 function partesFechaIso(iso: string | null | undefined): { anio: number; mes: number } {
@@ -66,10 +110,10 @@ function partesFechaIso(iso: string | null | undefined): { anio: number; mes: nu
 async function resolverNombresExpediente(
   admin: SupabaseClient,
   opts: { proyectoId: string; entidadId?: string | null },
-): Promise<{ entidadNombre: string; obraNombre: string; entidadId: string | null }> {
+): Promise<{ entidadNombre: string; obraCodigoFuente: string; entidadId: string | null }> {
   const proyectoId = opts.proyectoId.trim();
   let entidadId = (opts.entidadId ?? '').trim() || null;
-  let obraNombre = '';
+  let obraCodigoFuente = '';
   let entidadNombre = '';
 
   if (proyectoId) {
@@ -83,21 +127,68 @@ async function resolverNombresExpediente(
       obra_codigo?: string | null;
       entidad_id?: string | null;
     } | null;
-    obraNombre = (p?.obra_codigo ?? '').trim() || (p?.nombre ?? '').trim();
+    const codigo = (p?.obra_codigo ?? '').trim();
+    const nombreObra = (p?.nombre ?? '').trim();
+    // Preferir obra_codigo tal cual; si no hay, derivar del nombre del proyecto.
+    obraCodigoFuente = codigo || nombreObra;
     if (!entidadId) entidadId = (p?.entidad_id ?? '').trim() || null;
   }
 
   if (entidadId) {
-    const { data: ent } = await admin
-      .from('ci_entidades')
-      .select('nombre,nombre_legal')
-      .eq('id', entidadId)
-      .maybeSingle();
-    const e = ent as { nombre?: string | null; nombre_legal?: string | null } | null;
-    entidadNombre = (e?.nombre ?? '').trim() || (e?.nombre_legal ?? '').trim();
+    entidadNombre = await cargarNombreEntidad(admin, entidadId);
   }
 
-  return { entidadNombre, obraNombre, entidadId };
+  return { entidadNombre, obraCodigoFuente, entidadId };
+}
+
+async function cargarNombreEntidad(admin: SupabaseClient, entidadId: string): Promise<string> {
+  const selects = [
+    'nombre,nombre_comercial,nombre_legal',
+    'nombre,nombre_comercial',
+    'nombre,nombre_legal',
+    'nombre',
+  ];
+  for (const sel of selects) {
+    const { data, error } = await admin.from('ci_entidades').select(sel).eq('id', entidadId).maybeSingle();
+    if (error) {
+      if (/column|42703|schema cache/i.test(error.message)) continue;
+      console.warn('[cargarNombreEntidad]', error.message);
+      return '';
+    }
+    const e = data as {
+      nombre?: string | null;
+      nombre_comercial?: string | null;
+      nombre_legal?: string | null;
+    } | null;
+    const n =
+      (e?.nombre ?? '').trim() ||
+      (e?.nombre_comercial ?? '').trim() ||
+      (e?.nombre_legal ?? '').trim();
+    if (n) return n;
+  }
+  return '';
+}
+
+/**
+ * Código de entidad: abreviatura del nombre (DIMA, CASA, …).
+ * Código de obra: si ya es código corto (`obra_codigo`), se sanea; si es nombre largo, se abrevia.
+ */
+export function codigosDesdeNombresExpediente(opts: {
+  entidadNombre: string;
+  obraCodigoFuente: string;
+}): { entidadCodigo: string; obraCodigo: string } {
+  const entidadCodigo = codigoCortoDesdeNombre(opts.entidadNombre, 6);
+  const fuente = opts.obraCodigoFuente.trim();
+  let obraCodigo: string;
+  if (!fuente) {
+    obraCodigo = 'XXX';
+  } else if (/^[A-Za-z0-9._-]{1,12}$/.test(fuente) && !/\s/.test(fuente)) {
+    // Ya parece un código de obra almacenado.
+    obraCodigo = sanearCodigoExpediente(fuente, 10);
+  } else {
+    obraCodigo = codigoCortoDesdeNombre(fuente, 8);
+  }
+  return { entidadCodigo, obraCodigo };
 }
 
 /**
@@ -111,20 +202,13 @@ async function correlativoExpressEnObraMes(
   mes: number,
   excludeId?: string | null,
 ): Promise<number> {
-  const mesStr = String(mes).padStart(2, '0');
-  const desde = `${anio}-${mesStr}-01`;
-  const hastaMes = mes === 12 ? 1 : mes + 1;
-  const hastaAnio = mes === 12 ? anio + 1 : anio;
-  const hasta = `${hastaAnio}-${String(hastaMes).padStart(2, '0')}-01`;
-
   // Preferir fecha_ingreso; si la columna no existe, created_at.
-  let q = admin
+  const { data, error } = await admin
     .from('ci_contratos_express')
     .select('id,fecha_ingreso,created_at')
     .eq('proyecto_id', proyectoId)
     .limit(500);
 
-  const { data, error } = await q;
   if (error && /fecha_ingreso|42703|column|schema cache/i.test(error.message)) {
     const bare = await admin
       .from('ci_contratos_express')
@@ -137,8 +221,6 @@ async function correlativoExpressEnObraMes(
     console.warn('[correlativoExpressEnObraMes]', error.message);
     return 1;
   }
-  void desde;
-  void hasta;
   return contarEnRango(data ?? [], anio, mes, excludeId, false);
 }
 
@@ -171,7 +253,7 @@ export type ConstruirExpedienteExpressOpts = {
   fechaIso?: string | null;
   /** Al regenerar: id del contrato para no duplicar correlativo y reusar label guardado. */
   expressId?: string | null;
-  /** Si ya hay label persistido, se reutiliza. */
+  /** Si ya hay label persistido, se reutiliza (salvo placeholders ENTE/OBRA). */
   expedienteLabelExistente?: string | null;
 };
 
@@ -184,22 +266,29 @@ export async function construirExpedienteContratoExpress(
   opts: ConstruirExpedienteExpressOpts,
 ): Promise<string> {
   const existente = String(opts.expedienteLabelExistente ?? '').trim();
-  if (existente && !/^EXPRESS-/i.test(existente)) return existente;
+  if (existente && !/^EXPRESS-/i.test(existente) && !esExpedientePlaceholder(existente)) {
+    return existente;
+  }
 
-  const { anio, mes } = partesFechaIso(opts.fechaIso);
+  const parsedBad = esExpedientePlaceholder(existente) ? parsearExpedienteContrato(existente) : null;
+  const fecha = partesFechaIso(opts.fechaIso);
+  const anio = String(opts.fechaIso ?? '').trim() ? fecha.anio : (parsedBad?.anio ?? fecha.anio);
+  const mes = String(opts.fechaIso ?? '').trim() ? fecha.mes : (parsedBad?.mes ?? fecha.mes);
+
   const nombres = await resolverNombresExpediente(admin, {
     proyectoId: opts.proyectoId,
     entidadId: opts.entidadId,
   });
-  const entidadCodigo = codigoCortoDesdeNombre(nombres.entidadNombre || 'ENT', 6);
-  const obraCodigo = codigoCortoDesdeNombre(nombres.obraNombre || 'OBRA', 8);
-  const numero = await correlativoExpressEnObraMes(
-    admin,
-    opts.proyectoId,
-    anio,
-    mes,
-    opts.expressId,
-  );
+  const { entidadCodigo, obraCodigo } = codigosDesdeNombresExpediente({
+    entidadNombre: nombres.entidadNombre,
+    obraCodigoFuente: nombres.obraCodigoFuente,
+  });
+
+  // Si regeneramos un placeholder, conservar el correlativo ya impreso (p. ej. 0018).
+  const numero =
+    parsedBad?.numero && parsedBad.numero >= 1
+      ? parsedBad.numero
+      : await correlativoExpressEnObraMes(admin, opts.proyectoId, anio, mes, opts.expressId);
 
   return formatearExpedienteContrato({
     anio,

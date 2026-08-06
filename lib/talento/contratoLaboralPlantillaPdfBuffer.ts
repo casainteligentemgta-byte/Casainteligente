@@ -10,7 +10,7 @@ import {
 } from '@/lib/talento/plantillaContratoObreroCompile';
 import { obtenerCuerpoPlantillaContratoObrero } from '@/lib/talento/plantillaContratoObreroRepo';
 import {
-  codigoCortoDesdeNombre,
+  codigosDesdeNombresExpediente,
   formatearExpedienteContrato,
 } from '@/lib/talento/nomenclaturaExpedienteContrato';
 
@@ -41,8 +41,8 @@ export async function expedienteRefContratoLaboralRegistro(
     return formatearExpedienteContrato({
       anio: now.getFullYear(),
       mes: now.getMonth() + 1,
-      entidadCodigo: 'ENT',
-      obraCodigo: 'OBRA',
+      entidadCodigo: 'XXX',
+      obraCodigo: 'XXX',
       numero: 1,
     });
   }
@@ -57,7 +57,7 @@ export async function expedienteRefContratoLaboralRegistro(
     mes = Number(day.slice(5, 7));
   }
 
-  let obraNombre = '';
+  let obraCodigoFuente = '';
   let entidadId: string | null = null;
   if (sitioId) {
     const { data: proy } = await supabase
@@ -70,19 +70,30 @@ export async function expedienteRefContratoLaboralRegistro(
       obra_codigo?: string | null;
       entidad_id?: string | null;
     } | null;
-    obraNombre = (p?.obra_codigo ?? '').trim() || (p?.nombre ?? '').trim();
+    obraCodigoFuente = (p?.obra_codigo ?? '').trim() || (p?.nombre ?? '').trim();
     entidadId = (p?.entidad_id ?? '').trim() || null;
   }
 
   let entidadNombre = '';
   if (entidadId) {
-    const { data: ent } = await supabase
-      .from('ci_entidades')
-      .select('nombre,nombre_legal')
-      .eq('id', entidadId)
-      .maybeSingle();
-    const e = ent as { nombre?: string | null; nombre_legal?: string | null } | null;
-    entidadNombre = (e?.nombre ?? '').trim() || (e?.nombre_legal ?? '').trim();
+    for (const sel of ['nombre,nombre_comercial,nombre_legal', 'nombre,nombre_comercial', 'nombre'] as const) {
+      const { data: ent, error } = await supabase
+        .from('ci_entidades')
+        .select(sel)
+        .eq('id', entidadId)
+        .maybeSingle();
+      if (error && /column|42703|schema cache/i.test(error.message)) continue;
+      const e = ent as {
+        nombre?: string | null;
+        nombre_comercial?: string | null;
+        nombre_legal?: string | null;
+      } | null;
+      entidadNombre =
+        (e?.nombre ?? '').trim() ||
+        (e?.nombre_comercial ?? '').trim() ||
+        (e?.nombre_legal ?? '').trim();
+      if (entidadNombre) break;
+    }
   }
 
   let numero = 1;
@@ -113,11 +124,15 @@ export async function expedienteRefContratoLaboralRegistro(
     numero = idx >= 0 ? idx + 1 : same.length || 1;
   }
 
+  const { entidadCodigo, obraCodigo } = codigosDesdeNombresExpediente({
+    entidadNombre,
+    obraCodigoFuente,
+  });
   return formatearExpedienteContrato({
     anio,
     mes,
-    entidadCodigo: codigoCortoDesdeNombre(entidadNombre || 'ENT', 6),
-    obraCodigo: codigoCortoDesdeNombre(obraNombre || 'OBRA', 8),
+    entidadCodigo,
+    obraCodigo,
     numero,
   });
 }
