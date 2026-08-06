@@ -1,11 +1,12 @@
 /**
  * Obligaciones del trabajador en cláusula PRIMERA del contrato laboral.
  * Las 1–5 son genéricas (plantilla); se complementan con tareas/conocimientos
- * del oficio según ficha Gaceta (`requisitosOficiosGaceta`) cuando existan.
+ * del oficio (ficha rasa o Gaceta por código) cuando existan.
  */
 
 import { CARGOS_OBREROS, cargoPorCodigo } from '@/lib/constants/cargosObreros';
 import { fichaRequisitosPorCodigo } from '@/lib/constants/requisitosOficiosGaceta';
+import { fichaOficioRaso } from '@/lib/talento/oficiosRasosObligaciones';
 
 /** Puntos 1–5 fijos (texto tras «se obliga a:»). */
 export const OBLIGACIONES_GENERICAS_NUMERADAS =
@@ -67,28 +68,60 @@ export type ObligacionesOficioOpts = {
   desdeNumero?: number;
 };
 
+type ComplementoParts = { tareas: string; conocimientos: string; denominacion: string };
+
+function complementoDesdeFuentes(opts: ObligacionesOficioOpts): ComplementoParts | null {
+  const nombreGaceta = String(opts.cargoNombre ?? '').trim();
+
+  // 1) Oficio raso (sin grado): preferido para listados de obra.
+  const raso = fichaOficioRaso(opts.cargoNombre);
+  if (raso) {
+    return {
+      tareas: raso.tareas,
+      conocimientos: raso.conocimientos,
+      // Si ya viene denominación Gaceta (p. ej. «Carpintero de 1ra.»), respetarla.
+      denominacion: nombreGaceta || raso.denominacion,
+    };
+  }
+
+  // 2) Ficha Gaceta por código (cuando está detallada).
+  const codigo = resolverCodigoOficioParaObligaciones(opts);
+  if (codigo) {
+    const ficha = fichaRequisitosPorCodigo(codigo);
+    if (ficha.estado === 'detallada') {
+      const tareas = (ficha.tareas ?? '').trim();
+      const conocimientos = (ficha.conocimientos ?? '').trim();
+      if (tareas || conocimientos) {
+        return {
+          tareas,
+          conocimientos,
+          denominacion:
+            nombreGaceta ||
+            cargoPorCodigo(codigo)?.nombre ||
+            `código ${codigo}`,
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
 /**
- * Texto complementario (puntos 6+) según ficha del oficio.
- * Vacío si no hay tareas/conocimientos en la referencia Gaceta.
+ * Texto complementario (puntos 6+) según ficha del oficio (rasa o Gaceta).
+ * Vacío si no hay tareas/conocimientos.
  */
 export function obligacionesComplementariasPorOficio(opts: ObligacionesOficioOpts): string {
-  const codigo = resolverCodigoOficioParaObligaciones(opts);
-  if (!codigo) return '';
+  const src = complementoDesdeFuentes(opts);
+  if (!src) return '';
 
-  const ficha = fichaRequisitosPorCodigo(codigo);
-  if (ficha.estado !== 'detallada') return '';
-
-  const tareas = (ficha.tareas ?? '').trim();
-  const conocimientos = (ficha.conocimientos ?? '').trim();
+  const tareas = src.tareas.trim();
+  const conocimientos = src.conocimientos.trim();
   if (!tareas && !conocimientos) return '';
-
-  const denom =
-    (opts.cargoNombre ?? '').trim() ||
-    cargoPorCodigo(codigo)?.nombre ||
-    `código ${codigo}`;
 
   let n = Math.max(6, Math.floor(opts.desdeNumero ?? 6));
   const parts: string[] = [];
+  const denom = src.denominacion.trim() || 'su oficio';
 
   if (tareas) {
     parts.push(

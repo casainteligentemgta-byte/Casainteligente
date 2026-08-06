@@ -41,6 +41,11 @@ export type CrearContratoExpressInput = {
   horario_semanal_texto?: string | null;
   obrero_municipio_residencia?: string | null;
   obrero_estado_residencia?: string | null;
+  /**
+   * Oficio del listado/Excel (opcional). Solo para emparejar; en el PDF se usa
+   * la denominación del tabulador/Gaceta (`ci_config_nomina.cargo_nombre`).
+   */
+  cargo_nombre_listado?: string | null;
   created_by?: string | null;
   /** Si false, no genera signed URL (más rápido en lote). Default true. */
   incluir_signed_url?: boolean;
@@ -103,6 +108,7 @@ function manualDesdeInput(
     obreroMunicipioResidencia: input.obrero_municipio_residencia?.trim() || null,
     obreroEstadoResidencia: input.obrero_estado_residencia?.trim() || null,
     bonoManualUsd: Number(input.bono_manual_usd ?? 0) || 0,
+    cargoNombreListado: input.cargo_nombre_listado?.trim() || null,
   };
 }
 
@@ -191,6 +197,8 @@ export async function crearContratoExpress(
     .maybeSingle();
   const snap = nomSnap as { cargo_nombre?: string | null; salario_base_mensual?: unknown } | null;
   const salSnap = snap?.salario_base_mensual != null ? Number(snap.salario_base_mensual) : null;
+  // Denominación oficial Gaceta / tabulador (p. ej. «Ayudante», «Carpintero de 1ra.»).
+  const cargoSnapshot = snap?.cargo_nombre?.trim() || null;
 
   const horarioVal =
     (input.horario_semanal_texto?.trim() || loaded.props.parametros.horarioSemanal?.trim() || null) as
@@ -207,7 +215,7 @@ export async function crearContratoExpress(
     obrero_cedula: cedula,
     obrero_direccion: input.obrero_direccion?.trim() || 'de este domicilio',
     salario_base_mensual_snapshot: salSnap != null && Number.isFinite(salSnap) ? salSnap : null,
-    cargo_nombre_snapshot: snap?.cargo_nombre?.trim() || null,
+    cargo_nombre_snapshot: cargoSnapshot,
     pdf_storage_path: storagePath,
     expediente_label: expedienteLabel,
     created_by: input.created_by ?? null,
@@ -237,7 +245,7 @@ export async function crearContratoExpress(
       obrero_cedula: cedula,
       obrero_direccion: input.obrero_direccion?.trim() || null,
       salario_base_mensual_snapshot: salSnap != null && Number.isFinite(salSnap) ? salSnap : null,
-      cargo_nombre_snapshot: snap?.cargo_nombre?.trim() || null,
+      cargo_nombre_snapshot: cargoSnapshot,
       pdf_storage_path: storagePath,
       created_by: input.created_by ?? null,
       bono_manual_usd: Number(input.bono_manual_usd ?? 0) || 0,

@@ -502,7 +502,8 @@ export function ContratoObreroPDF({
   })();
   const obligacionesTrabTxt = textoObligacionesTrabajadorContrato({
     cargoCodigo: configNomina.cargo_codigo,
-    cargoNombre: empleado.cargo_nombre ?? configNomina.funciones_oficiales,
+    cargoNombre:
+      empleado.tareas_especificas ?? empleado.cargo_nombre ?? configNomina.funciones_oficiales,
   });
   const fechaCierreIso = parametros.fechaFirmaContratoIso ?? parametros.fechaIngreso;
   const { dia: diaFirma, mes: mesFirma, anio: anioFirma } = partesFechaCierreFirma(fechaCierreIso);

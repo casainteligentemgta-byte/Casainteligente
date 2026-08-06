@@ -179,31 +179,29 @@ export async function POST(req: Request) {
       continue;
     }
 
+    const cargoLabel = (f.cargo ?? f.oficio ?? '').trim();
     let configId = defaultConfigId?.trim() || '';
     if (f.config_nomina_id && byId.has(f.config_nomina_id)) {
       configId = f.config_nomina_id;
-    } else {
-      const cargoLabel = (f.cargo ?? f.oficio ?? '').trim();
-      if (cargoLabel) {
-        const matched = resolverConfigNominaPorCargo(cargoLabel, configsMatch, {
-          nivelGenerico: f.nivel_generico ?? null,
+    } else if (cargoLabel) {
+      const matched = resolverConfigNominaPorCargo(cargoLabel, configsMatch, {
+        nivelGenerico: f.nivel_generico ?? null,
+      });
+      if (matched) {
+        configId = matched.id;
+      } else if (defaultConfigId?.trim() && byId.has(defaultConfigId.trim())) {
+        // Sin match: usar oficio por defecto del lote (si RRHH lo eligió).
+        configId = defaultConfigId.trim();
+      } else {
+        failCount++;
+        resultados.push({
+          fila: filaN,
+          ok: false,
+          error: `Cargo «${cargoLabel}» no encontrado en el tabulador (revise Oficios y salarios o elija oficio por defecto arriba). Sugerencia: CARPINTERO/ALBAÑIL/OPERADOR/TOPOGRAFO/UTILITIS ya se emparejan automáticamente si el oficio existe en el tabulador.`,
+          obrero: full,
+          cedula: ced,
         });
-        if (matched) {
-          configId = matched.id;
-        } else if (defaultConfigId?.trim() && byId.has(defaultConfigId.trim())) {
-          // Sin match: usar oficio por defecto del lote (si RRHH lo eligió).
-          configId = defaultConfigId.trim();
-        } else {
-          failCount++;
-          resultados.push({
-            fila: filaN,
-            ok: false,
-            error: `Cargo «${cargoLabel}» no encontrado en el tabulador (revise Oficios y salarios o elija oficio por defecto arriba). Sugerencia: CARPINTERO/ALBAÑIL/OPERADOR/TOPOGRAFO/UTILITIS ya se emparejan automáticamente si el oficio existe en el tabulador.`,
-            obrero: full,
-            cedula: ced,
-          });
-          continue;
-        }
+        continue;
       }
     }
 
@@ -249,6 +247,7 @@ export async function POST(req: Request) {
       fecha_ingreso: fecha,
       objeto_contrato: objeto_contrato?.trim() || null,
       entidad_patrono_id: entidad_patrono_id ?? null,
+      cargo_nombre_listado: cargoLabel || null,
       created_by: createdBy,
       incluir_signed_url: false,
       recordar_fase_tecnica: false,

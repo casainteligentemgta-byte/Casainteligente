@@ -36,13 +36,14 @@ export type ExpressRowPdf = {
   obrero_municipio_residencia?: string | null;
   obrero_estado_residencia?: string | null;
   expediente_label?: string | null;
+  cargo_nombre_snapshot?: string | null;
 };
 
 const SELECT_FULL =
-  'id,proyecto_id,config_nomina_id,obrero_nombre,obrero_nombres,obrero_apellidos,obrero_cedula,obrero_direccion,horario_semanal_texto,bono_manual_usd,bono_manual_ves,pdf_storage_path,estado_civil,nacionalidad,fecha_ingreso,objeto_contrato,jornada_trabajo,obrero_municipio_residencia,obrero_estado_residencia,expediente_label';
+  'id,proyecto_id,config_nomina_id,obrero_nombre,obrero_nombres,obrero_apellidos,obrero_cedula,obrero_direccion,horario_semanal_texto,bono_manual_usd,bono_manual_ves,pdf_storage_path,estado_civil,nacionalidad,fecha_ingreso,objeto_contrato,jornada_trabajo,obrero_municipio_residencia,obrero_estado_residencia,expediente_label,cargo_nombre_snapshot';
 
 const SELECT_BASE =
-  'id,proyecto_id,config_nomina_id,obrero_nombre,obrero_cedula,obrero_direccion,horario_semanal_texto,bono_manual_usd,bono_manual_ves,pdf_storage_path';
+  'id,proyecto_id,config_nomina_id,obrero_nombre,obrero_cedula,obrero_direccion,horario_semanal_texto,bono_manual_usd,bono_manual_ves,pdf_storage_path,cargo_nombre_snapshot';
 
 function strOpt(v: unknown): string | null {
   if (v == null) return null;
@@ -80,6 +81,7 @@ export function manualDesdeExpressRow(row: ExpressRowPdf): ContratoExpressManual
         : row.bono_manual_ves != null && Number.isFinite(Number(row.bono_manual_ves))
           ? Number(row.bono_manual_ves)
           : null,
+    cargoNombreListado: strOpt(row.cargo_nombre_snapshot),
   };
 }
 

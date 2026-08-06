@@ -954,6 +954,11 @@ export type ContratoExpressManualInput = {
   obreroEstadoResidencia?: string | null;
   /** Bono especial no salarial en USD (cláusula SEXTA del PDF). */
   bonoManualUsd?: number | null;
+  /**
+   * Oficio del listado/Excel (opcional, para obligaciones).
+   * El cargo impreso en el PDF es la denominación Gaceta/tabulador.
+   */
+  cargoNombreListado?: string | null;
 };
 
 /**
@@ -1090,7 +1095,11 @@ export async function cargarPropsContratoObreroPdfExpress(
     jornadaTrabajo: manual.jornadaTrabajo,
   });
 
-  const cargoNom = strOpt(nom.cargo_nombre);
+  // Denominación oficial según Gaceta / tabulador (p. ej. Ayudante, Carpintero de 1ra.).
+  const cargoNomTab = strOpt(nom.cargo_nombre);
+  const cargoNom = cargoNomTab;
+  // Para obligaciones: listado o tabulador (se normaliza grado al buscar ficha).
+  const cargoParaObligaciones = strOpt(manual.cargoNombreListado) || cargoNomTab;
   const nombreObrero = manual.obreroNombre.trim();
   const cedulaObrero = manual.obreroCedula.trim();
   const dirObrero = strOpt(manual.obreroDireccion);
@@ -1107,7 +1116,7 @@ export async function cargarPropsContratoObreroPdfExpress(
     municipio_domicilio: strOpt(manual.obreroMunicipioResidencia) ?? undefined,
     estado_domicilio: strOpt(manual.obreroEstadoResidencia) ?? undefined,
     cargo_nombre: cargoNom,
-    tareas_especificas: cargoNom,
+    tareas_especificas: cargoParaObligaciones ?? cargoNom,
   };
 
   const smRaw = Number(nom.salario_base_mensual);
