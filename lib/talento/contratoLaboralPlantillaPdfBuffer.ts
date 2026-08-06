@@ -60,18 +60,30 @@ export async function expedienteRefContratoLaboralRegistro(
   let obraCodigoFuente = '';
   let entidadId: string | null = null;
   if (sitioId) {
-    const { data: proy } = await supabase
-      .from('ci_proyectos')
-      .select('nombre,obra_codigo,entidad_id')
-      .eq('id', sitioId)
-      .maybeSingle();
-    const p = proy as {
-      nombre?: string | null;
-      obra_codigo?: string | null;
-      entidad_id?: string | null;
-    } | null;
-    obraCodigoFuente = (p?.obra_codigo ?? '').trim() || (p?.nombre ?? '').trim();
-    entidadId = (p?.entidad_id ?? '').trim() || null;
+    for (const sel of [
+      'nombre,codigo_nomenclatura,obra_codigo,entidad_id',
+      'nombre,obra_codigo,entidad_id',
+      'nombre,entidad_id',
+    ] as const) {
+      const { data: proy, error } = await supabase
+        .from('ci_proyectos')
+        .select(sel)
+        .eq('id', sitioId)
+        .maybeSingle();
+      if (error && /column|42703|schema cache/i.test(error.message)) continue;
+      const p = proy as {
+        nombre?: string | null;
+        codigo_nomenclatura?: string | null;
+        obra_codigo?: string | null;
+        entidad_id?: string | null;
+      } | null;
+      obraCodigoFuente =
+        (p?.codigo_nomenclatura ?? '').trim() ||
+        (p?.obra_codigo ?? '').trim() ||
+        (p?.nombre ?? '').trim();
+      entidadId = (p?.entidad_id ?? '').trim() || null;
+      break;
+    }
   }
 
   let entidadNombre = '';

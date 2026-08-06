@@ -1,10 +1,10 @@
 /**
  * Nomenclatura de expediente en contratos individuales de trabajo:
  * AÑO-MES-ENTIDAD-OBRA-Número (sin prefijo EXPRESS).
- * Ej.: 2026-08-DIMA-ASFALT-0001
+ * Ej.: 2026-08-DIMA-ASFJG-0001
  *
  * ENTIDAD = abreviatura derivada del nombre de la entidad contratante.
- * OBRA = `obra_codigo` del proyecto o abreviatura de su nombre.
+ * OBRA = `ci_proyectos.codigo_nomenclatura` (preferido), luego `obra_codigo`, luego abreviatura del nombre.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -63,7 +63,7 @@ export function formatearExpedienteContrato(p: PartesExpedienteContrato): string
   const anio = Math.trunc(p.anio);
   const mes = String(Math.max(1, Math.min(12, Math.trunc(p.mes)))).padStart(2, '0');
   const ent = sanearCodigoExpediente(p.entidadCodigo, 8);
-  const obra = sanearCodigoExpediente(p.obraCodigo, 10);
+  const obra = sanearCodigoExpediente(p.obraCodigo, 12);
   const num = String(Math.max(1, Math.trunc(p.numero))).padStart(4, '0');
   return `${anio}-${mes}-${ent}-${obra}-${num}`;
 }
@@ -90,7 +90,7 @@ export function esExpedientePlaceholder(label: string | null | undefined): boole
   const p = parsearExpedienteContrato(label);
   if (!p) return !String(label ?? '').trim() || /^EXPRESS-/i.test(String(label ?? ''));
   const ent = sanearCodigoExpediente(p.entidadCodigo, 8);
-  const obra = sanearCodigoExpediente(p.obraCodigo, 10);
+  const obra = sanearCodigoExpediente(p.obraCodigo, 12);
   return PLACEHOLDER_ENTIDAD.has(ent) || PLACEHOLDER_OBRA.has(obra);
 }
 
@@ -117,21 +117,32 @@ async function resolverNombresExpediente(
   let entidadNombre = '';
 
   if (proyectoId) {
-    const { data: proy } = await admin
-      .from('ci_proyectos')
-      .select('nombre,obra_codigo,entidad_id')
-      .eq('id', proyectoId)
-      .maybeSingle();
-    const p = proy as {
-      nombre?: string | null;
-      obra_codigo?: string | null;
-      entidad_id?: string | null;
-    } | null;
-    const codigo = (p?.obra_codigo ?? '').trim();
-    const nombreObra = (p?.nombre ?? '').trim();
-    // Preferir obra_codigo tal cual; si no hay, derivar del nombre del proyecto.
-    obraCodigoFuente = codigo || nombreObra;
-    if (!entidadId) entidadId = (p?.entidad_id ?? '').trim() || null;
+    const selects = [
+      'nombre,codigo_nomenclatura,obra_codigo,entidad_id',
+      'nombre,obra_codigo,entidad_id',
+      'nombre,entidad_id',
+    ];
+    for (const sel of selects) {
+      const { data: proy, error } = await admin.from('ci_proyectos').select(sel).eq('id', proyectoId).maybeSingle();
+      if (error) {
+        if (/column|42703|schema cache/i.test(error.message)) continue;
+        console.warn('[resolverNombresExpediente] proyecto', error.message);
+        break;
+      }
+      const p = proy as {
+        nombre?: string | null;
+        codigo_nomenclatura?: string | null;
+        obra_codigo?: string | null;
+        entidad_id?: string | null;
+      } | null;
+      const codigoNom = (p?.codigo_nomenclatura ?? '').trim();
+      const codigoObra = (p?.obra_codigo ?? '').trim();
+      const nombreObra = (p?.nombre ?? '').trim();
+      // Preferir código de nomenclatura del proyecto (ej. ASFJG).
+      obraCodigoFuente = codigoNom || codigoObra || nombreObra;
+      if (!entidadId) entidadId = (p?.entidad_id ?? '').trim() || null;
+      break;
+    }
   }
 
   if (entidadId) {
@@ -171,7 +182,7 @@ async function cargarNombreEntidad(admin: SupabaseClient, entidadId: string): Pr
 
 /**
  * Código de entidad: abreviatura del nombre (DIMA, CASA, …).
- * Código de obra: si ya es código corto (`obra_codigo`), se sanea; si es nombre largo, se abrevia.
+ * Código de obra: `codigo_nomenclatura` / `obra_codigo` saneado; si es nombre largo, se abrevia.
  */
 export function codigosDesdeNombresExpediente(opts: {
   entidadNombre: string;
@@ -182,9 +193,9 @@ export function codigosDesdeNombresExpediente(opts: {
   let obraCodigo: string;
   if (!fuente) {
     obraCodigo = 'XXX';
-  } else if (/^[A-Za-z0-9._-]{1,12}$/.test(fuente) && !/\s/.test(fuente)) {
-    // Ya parece un código de obra almacenado.
-    obraCodigo = sanearCodigoExpediente(fuente, 10);
+  } else if (/^[A-Za-z0-9._-]{1,16}$/.test(fuente) && !/\s/.test(fuente)) {
+    // Código de nomenclatura / obra almacenado (ej. ASFJG).
+    obraCodigo = sanearCodigoExpediente(fuente, 12);
   } else {
     obraCodigo = codigoCortoDesdeNombre(fuente, 8);
   }

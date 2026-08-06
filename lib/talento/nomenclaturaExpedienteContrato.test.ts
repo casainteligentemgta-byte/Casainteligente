@@ -19,10 +19,10 @@ describe('nomenclaturaExpedienteContrato', () => {
   it('codigosDesdeNombresExpediente deriva entidad y usa obra_codigo', () => {
     const a = codigosDesdeNombresExpediente({
       entidadNombre: 'DIMAQUINAS, C.A.',
-      obraCodigoFuente: 'ASFALT',
+      obraCodigoFuente: 'ASFJG',
     });
     assert.equal(a.entidadCodigo, 'DIMA');
-    assert.equal(a.obraCodigo, 'ASFALT');
+    assert.equal(a.obraCodigo, 'ASFJG');
 
     const b = codigosDesdeNombresExpediente({
       entidadNombre: 'Casa Inteligente MGTA',

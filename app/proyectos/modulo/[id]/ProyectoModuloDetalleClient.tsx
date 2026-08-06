@@ -132,6 +132,9 @@ type Proyecto = {
   moneda: string;
   observaciones: string | null;
   entidad_id?: string | null;
+  /** Código corto para expediente de contratos / documentos (ej. ASFJG). */
+  codigo_nomenclatura?: string | null;
+  obra_codigo?: string | null;
   /** Horario por defecto en contratos PDF si el contrato no trae texto propio. */
   horario_semanal_obra_default?: string | null;
   /** Fase técnica por defecto (cláusula PRIMERA) para contratos de esta obra. */
@@ -269,6 +272,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
   const [peLng, setPeLng] = useState('');
   const [peEntidadId, setPeEntidadId] = useState('');
   const [peHorarioSemanalObra, setPeHorarioSemanalObra] = useState('');
+  const [peCodigoNomenclatura, setPeCodigoNomenclatura] = useState('');
   const [peFaseTecnica, setPeFaseTecnica] = useState('');
   const [pePuntoEncTransporteContrato, setPePuntoEncTransporteContrato] = useState('');
   const [fasesTecnicasSugeridas, setFasesTecnicasSugeridas] = useState<string[]>([]);
@@ -496,6 +500,9 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
     setPeLng(proyecto.lng != null ? String(proyecto.lng) : '');
     setPeEntidadId(proyecto.entidad_id ? String(proyecto.entidad_id) : '');
     setPeHorarioSemanalObra(proyecto.horario_semanal_obra_default ?? '');
+    setPeCodigoNomenclatura(
+      (proyecto.codigo_nomenclatura ?? '').trim() || (proyecto.obra_codigo ?? '').trim(),
+    );
     setPeFaseTecnica(proyecto.fase_tecnica_contrato_default ?? '');
     setPePuntoEncTransporteContrato(proyecto.punto_encuentro_transporte_contrato ?? '');
     setProyectoSaveError(null);
@@ -535,6 +542,13 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
         return;
       }
     }
+    const codigoNom = peCodigoNomenclatura
+      .trim()
+      .toUpperCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^A-Z0-9]/g, '')
+      .slice(0, 12);
     setSavingProyecto(true);
     setProyectoSaveError(null);
     const patchBase = {
@@ -557,18 +571,48 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
         .update({
           ...patchBase,
           fase_tecnica_contrato_default: peFaseTecnica.trim() || null,
+          codigo_nomenclatura: codigoNom || null,
+          ...(codigoNom ? { obra_codigo: codigoNom } : {}),
         })
         .eq('id', id)
     ).error;
+    if (
+      upErr &&
+      /codigo_nomenclatura|42703|column|schema cache|Could not find/i.test(upErr.message)
+    ) {
+      // Columna 316 aún no aplicada: al menos guardar en obra_codigo.
+      upErr = (
+        await supabase
+          .from('ci_proyectos')
+          .update({
+            ...patchBase,
+            fase_tecnica_contrato_default: peFaseTecnica.trim() || null,
+            ...(codigoNom ? { obra_codigo: codigoNom } : {}),
+          })
+          .eq('id', id)
+      ).error;
+      if (!upErr) {
+        setProyectoSaveError(
+          'Proyecto guardado. Para el campo dedicado de nomenclatura ejecute sql_editor_316_ci_proyectos_codigo_nomenclatura.sql',
+        );
+      }
+    }
     if (upErr && /fase_tecnica_contrato_default|42703|column|schema cache/i.test(upErr.message)) {
-      upErr = (await supabase.from('ci_proyectos').update(patchBase).eq('id', id)).error;
+      upErr = (
+        await supabase
+          .from('ci_proyectos')
+          .update({
+            ...patchBase,
+            ...(codigoNom ? { obra_codigo: codigoNom, codigo_nomenclatura: codigoNom } : {}),
+          })
+          .eq('id', id)
+      ).error;
       if (!upErr) {
         setProyectoSaveError(
           'Proyecto guardado, pero falta la columna fase técnica. Ejecute sql_editor_313_ci_fases_tecnicas_contrato.sql',
         );
         setSavingProyecto(false);
-        router.replace(`/proyectos/modulo/${id}`);
-        void load();
+        await load();
         return;
       }
     }
@@ -982,6 +1026,22 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                     value={peUbicacion}
                     onChange={(e) => setPeUbicacion(e.target.value)}
                     className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-sky-500/40"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-500">
+                    Código nomenclatura (contratos / documentos)
+                  </label>
+                  <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-500">
+                    Sigla de la obra en expedientes (ej. <span className="font-mono text-zinc-400">ASFJG</span> →{' '}
+                    <span className="font-mono text-zinc-400">2026-08-DIMA-ASFJG-0001</span>). Solo letras y números.
+                  </p>
+                  <input
+                    value={peCodigoNomenclatura}
+                    onChange={(e) => setPeCodigoNomenclatura(e.target.value.toUpperCase())}
+                    maxLength={12}
+                    placeholder="ASFJG"
+                    className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 font-mono text-sm uppercase text-white placeholder:text-zinc-500 outline-none focus:border-sky-500/40"
                   />
                 </div>
                 <div>
