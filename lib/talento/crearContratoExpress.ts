@@ -21,6 +21,7 @@ import {
   trimFaseTecnica,
 } from '@/lib/talento/fasesTecnicasContrato';
 import { construirExpedienteContratoExpress } from '@/lib/talento/nomenclaturaExpedienteContrato';
+import { oficioRasoParaContrato } from '@/lib/talento/resolverConfigNominaPorCargo';
 
 export type CrearContratoExpressInput = {
   proyecto_id: string;
@@ -41,6 +42,11 @@ export type CrearContratoExpressInput = {
   horario_semanal_texto?: string | null;
   obrero_municipio_residencia?: string | null;
   obrero_estado_residencia?: string | null;
+  /**
+   * Oficio tal como vino en el listado/Excel (raso, sin 1era/2da).
+   * Si se envía, se usa en el PDF en lugar de la denominación graduada del tabulador.
+   */
+  cargo_nombre_listado?: string | null;
   created_by?: string | null;
   /** Si false, no genera signed URL (más rápido en lote). Default true. */
   incluir_signed_url?: boolean;
@@ -103,6 +109,8 @@ function manualDesdeInput(
     obreroMunicipioResidencia: input.obrero_municipio_residencia?.trim() || null,
     obreroEstadoResidencia: input.obrero_estado_residencia?.trim() || null,
     bonoManualUsd: Number(input.bono_manual_usd ?? 0) || 0,
+    cargoNombreListado:
+      oficioRasoParaContrato(input.cargo_nombre_listado) || input.cargo_nombre_listado?.trim() || null,
   };
 }
 
@@ -191,6 +199,11 @@ export async function crearContratoExpress(
     .maybeSingle();
   const snap = nomSnap as { cargo_nombre?: string | null; salario_base_mensual?: unknown } | null;
   const salSnap = snap?.salario_base_mensual != null ? Number(snap.salario_base_mensual) : null;
+  const cargoSnapshot =
+    oficioRasoParaContrato(input.cargo_nombre_listado) ||
+    oficioRasoParaContrato(snap?.cargo_nombre) ||
+    snap?.cargo_nombre?.trim() ||
+    null;
 
   const horarioVal =
     (input.horario_semanal_texto?.trim() || loaded.props.parametros.horarioSemanal?.trim() || null) as
@@ -207,7 +220,7 @@ export async function crearContratoExpress(
     obrero_cedula: cedula,
     obrero_direccion: input.obrero_direccion?.trim() || 'de este domicilio',
     salario_base_mensual_snapshot: salSnap != null && Number.isFinite(salSnap) ? salSnap : null,
-    cargo_nombre_snapshot: snap?.cargo_nombre?.trim() || null,
+    cargo_nombre_snapshot: cargoSnapshot,
     pdf_storage_path: storagePath,
     expediente_label: expedienteLabel,
     created_by: input.created_by ?? null,
@@ -237,7 +250,7 @@ export async function crearContratoExpress(
       obrero_cedula: cedula,
       obrero_direccion: input.obrero_direccion?.trim() || null,
       salario_base_mensual_snapshot: salSnap != null && Number.isFinite(salSnap) ? salSnap : null,
-      cargo_nombre_snapshot: snap?.cargo_nombre?.trim() || null,
+      cargo_nombre_snapshot: cargoSnapshot,
       pdf_storage_path: storagePath,
       created_by: input.created_by ?? null,
       bono_manual_usd: Number(input.bono_manual_usd ?? 0) || 0,

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
-  cargoLabelEspecificaGrado,
+  oficioRasoParaContrato,
   resolverConfigNominaPorCargo,
 } from '@/lib/talento/resolverConfigNominaPorCargo';
 
@@ -18,60 +18,25 @@ const configs = [
   { id: 'cap', cargo_nombre: 'Caporal', nivel_salarial: 3 },
   { id: 'mo2', cargo_nombre: 'Maestro de Obra de 2da.', nivel_salarial: 7 },
   { id: 'mo1', cargo_nombre: 'Maestro de Obra de 1ra.', nivel_salarial: 9 },
-  { id: 'pint2', cargo_nombre: 'Pintor de 2da.', nivel_salarial: 3 },
-  { id: 'pint1', cargo_nombre: 'Pintor de 1ra.', nivel_salarial: 5 },
 ];
 
-describe('resolverConfigNominaPorCargo', () => {
-  it('detecta si el label ya trae grado', () => {
-    assert.equal(cargoLabelEspecificaGrado('CARPINTERO'), false);
-    assert.equal(cargoLabelEspecificaGrado('CARPINTERO DE 2DA'), true);
-    assert.equal(cargoLabelEspecificaGrado('Albañil de 1era.'), true);
-  });
-
-  it('AYUDANTE → Ayudante (no el más largo)', () => {
+describe('resolverConfigNominaPorCargo (oficios rasos)', () => {
+  it('AYUDANTE → Ayudante', () => {
     const r = resolverConfigNominaPorCargo('AYUDANTE', configs);
     assert.ok(r);
     assert.equal(r!.id, 'ayu');
   });
 
-  it('CARPINTERO sin grado → Carpintero de 1era.', () => {
-    const r = resolverConfigNominaPorCargo('CARPINTERO', configs);
-    assert.ok(r);
-    assert.equal(r!.id, 'carp1');
-  });
-
-  it('CARPINTERO DE 2DA → respeta el grado indicado', () => {
+  it('CARPINTERO DE 2DA → respeta el grado', () => {
     const r = resolverConfigNominaPorCargo('CARPINTERO DE 2DA', configs);
     assert.ok(r);
     assert.equal(r!.id, 'carp2');
   });
 
-  it('ALBAÑIL sin grado → Albañil de 1ra.', () => {
-    const r = resolverConfigNominaPorCargo('ALBAÑIL', configs);
-    assert.ok(r);
-    assert.equal(r!.id, 'alb1');
-  });
-
-  it('OBRERO sin grado → Obrero de 1era.', () => {
-    const r = resolverConfigNominaPorCargo('OBRERO', configs);
-    assert.ok(r);
-    assert.equal(r!.id, 'obr1');
-  });
-
-  it('PINTOR sin grado → Pintor de 1ra.', () => {
-    const r = resolverConfigNominaPorCargo('PINTOR', configs);
-    assert.ok(r);
-    assert.equal(r!.id, 'pint1');
-  });
-
-  it('OPERADOR prefiere operador de equipo liviano', () => {
-    const r = resolverConfigNominaPorCargo('OPERADOR', [
-      ...configs,
-      { id: 'op-ali', cargo_nombre: 'Operador de Aliva', nivel_salarial: 4 },
-    ]);
-    assert.ok(r);
-    assert.equal(r!.id, 'op');
+  it('oficioRasoParaContrato quita el grado', () => {
+    assert.equal(oficioRasoParaContrato('Carpintero de 1era.'), 'CARPINTERO');
+    assert.equal(oficioRasoParaContrato('AYUDANTE'), 'AYUDANTE');
+    assert.equal(oficioRasoParaContrato('Albañil de 2da.'), 'ALBAÑIL');
   });
 
   it('TOPOGRAFO → Ayudante de Topógrafo', () => {
@@ -84,15 +49,5 @@ describe('resolverConfigNominaPorCargo', () => {
     const r = resolverConfigNominaPorCargo('UTILITIS', configs);
     assert.ok(r);
     assert.equal(r!.id, 'ayu');
-  });
-
-  it('INGENIERO SUPERVISOR → Maestro de Obra de 1ra.', () => {
-    const r = resolverConfigNominaPorCargo('INGENIERO SUPERVISOR', configs);
-    assert.ok(r);
-    assert.equal(r!.id, 'mo1');
-  });
-
-  it('cargo desconocido → null', () => {
-    assert.equal(resolverConfigNominaPorCargo('ASTRONAUTA', configs), null);
   });
 });

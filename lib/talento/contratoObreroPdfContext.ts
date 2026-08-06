@@ -25,6 +25,7 @@ import {
 } from '@/lib/talento/empleadoContratoDesdeHojaPlanilla';
 import { resolvePlanillaPatronoParaEmpleado } from '@/lib/talento/resolvePlanillaPatronoPdf';
 import { resolverTextoHorarioSemanalObra } from '@/lib/talento/horarioSemanalContratoPdf';
+import { oficioRasoParaContrato } from '@/lib/talento/resolverConfigNominaPorCargo';
 import { camposRegistroMercantilDesdeRecord, parseRegistroMercantilRecord } from '@/lib/talento/registroMercantilCamposPdf';
 import {
   formatearUsdContratoPdf,
@@ -954,6 +955,11 @@ export type ContratoExpressManualInput = {
   obreroEstadoResidencia?: string | null;
   /** Bono especial no salarial en USD (cláusula SEXTA del PDF). */
   bonoManualUsd?: number | null;
+  /**
+   * Oficio del listado (raso, sin 1era/2da). Tiene prioridad sobre el nombre del tabulador
+   * para el cargo en el PDF y las obligaciones.
+   */
+  cargoNombreListado?: string | null;
 };
 
 /**
@@ -1090,7 +1096,11 @@ export async function cargarPropsContratoObreroPdfExpress(
     jornadaTrabajo: manual.jornadaTrabajo,
   });
 
-  const cargoNom = strOpt(nom.cargo_nombre);
+  const cargoNomTab = strOpt(nom.cargo_nombre);
+  const cargoNom =
+    strOpt(manual.cargoNombreListado) ||
+    oficioRasoParaContrato(cargoNomTab) ||
+    cargoNomTab;
   const nombreObrero = manual.obreroNombre.trim();
   const cedulaObrero = manual.obreroCedula.trim();
   const dirObrero = strOpt(manual.obreroDireccion);

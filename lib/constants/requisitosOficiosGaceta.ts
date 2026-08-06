@@ -32,6 +32,13 @@ const DETALLADAS: Readonly<Record<string, Omit<FichaRequisitosOficio, 'codigo' |
     conocimientos: 'Herramientas manuales, mezclas básicas y seguridad.',
     tareas: 'Excavaciones, carga/descarga, apoyo general en obra.',
   },
+  '2.1': {
+    instruccion: 'Saber leer y escribir.',
+    experiencia: 'Iniciación en obra / labores de apoyo.',
+    conocimientos: 'Herramientas manuales básicas, materiales de construcción y normas mínimas de seguridad (LOPCYMAT).',
+    tareas:
+      'Apoyo general en obra: carga y descarga, acarreo de materiales, limpieza, asistencia a oficios especializados y labores complementarias asignadas por el supervisor.',
+  },
   '1.2': {
     instruccion: 'Saber leer y escribir.',
     experiencia: '4 años como Obrero de 1era. Buena conducta.',
@@ -324,7 +331,6 @@ const DETALLADAS: Readonly<Record<string, Omit<FichaRequisitosOficio, 'codigo' |
 
 /** Códigos que el texto fuente marcó explícitamente sin descripción técnica. */
 const SOLO_SIN_DESCRIPCION_FUENTE = new Set([
-  '2.1',
   '2.5',
   '2.10',
   '3.14',
