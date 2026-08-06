@@ -13,6 +13,7 @@ import {
   buscarEstadoCivilExpedientePorCedula,
   resolverEstadoCivilContrato,
 } from '@/lib/talento/estadoCivilDesdeHojaVida';
+import { construirExpedienteContratoExpress } from '@/lib/talento/nomenclaturaExpedienteContrato';
 
 export type ExpressRowPdf = {
   id: string;
@@ -34,10 +35,11 @@ export type ExpressRowPdf = {
   jornada_trabajo?: string | null;
   obrero_municipio_residencia?: string | null;
   obrero_estado_residencia?: string | null;
+  expediente_label?: string | null;
 };
 
 const SELECT_FULL =
-  'id,proyecto_id,config_nomina_id,obrero_nombre,obrero_nombres,obrero_apellidos,obrero_cedula,obrero_direccion,horario_semanal_texto,bono_manual_usd,bono_manual_ves,pdf_storage_path,estado_civil,nacionalidad,fecha_ingreso,objeto_contrato,jornada_trabajo,obrero_municipio_residencia,obrero_estado_residencia';
+  'id,proyecto_id,config_nomina_id,obrero_nombre,obrero_nombres,obrero_apellidos,obrero_cedula,obrero_direccion,horario_semanal_texto,bono_manual_usd,bono_manual_ves,pdf_storage_path,estado_civil,nacionalidad,fecha_ingreso,objeto_contrato,jornada_trabajo,obrero_municipio_residencia,obrero_estado_residencia,expediente_label';
 
 const SELECT_BASE =
   'id,proyecto_id,config_nomina_id,obrero_nombre,obrero_cedula,obrero_direccion,horario_semanal_texto,bono_manual_usd,bono_manual_ves,pdf_storage_path';
@@ -148,7 +150,23 @@ export async function generarBufferContratoExpressPdf(
   const loaded = await cargarPropsContratoObreroPdfExpress(supabase, proyectoId, configNominaId, manual);
   if (!loaded.ok) return { ok: false, error: loaded.error };
 
-  const expedienteLabel = `EXPRESS-${id.replace(/-/g, '').slice(0, 12).toUpperCase()}`;
+  const expedienteLabel = await construirExpedienteContratoExpress(supabase, {
+    proyectoId,
+    fechaIso: strOpt(row.fecha_ingreso) || manual.fechaIngreso,
+    expressId: id,
+    expedienteLabelExistente: strOpt(row.expediente_label),
+  });
+
+  // Persist label if missing / was EXPRESS- legacy
+  if (strOpt(row.expediente_label) !== expedienteLabel) {
+    const { error: labErr } = await supabase
+      .from('ci_contratos_express')
+      .update({ expediente_label: expedienteLabel } as never)
+      .eq('id', id);
+    if (labErr && !/column|42703|schema cache|Could not find/i.test(labErr.message)) {
+      console.warn('[generarBufferContratoExpressPdf] expediente_label', labErr.message);
+    }
+  }
 
   try {
     const node = createElement(ContratoObreroPDF, {
@@ -157,7 +175,7 @@ export async function generarBufferContratoExpressPdf(
     });
     const blob = await pdf(node as Parameters<typeof pdf>[0]).toBlob();
     const buf = Buffer.from(await blob.arrayBuffer());
-    return { ok: true, buf, filename: `contrato-express-${id.slice(0, 8)}.pdf` };
+    return { ok: true, buf, filename: `contrato-${expedienteLabel}.pdf` };
   } catch (e) {
     console.error('[generarBufferContratoExpressPdf]', e);
     return { ok: false, error: 'No se pudo generar el PDF del contrato express.' };

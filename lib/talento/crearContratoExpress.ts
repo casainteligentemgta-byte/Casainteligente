@@ -20,6 +20,7 @@ import {
   recordarFaseTecnicaUsada,
   trimFaseTecnica,
 } from '@/lib/talento/fasesTecnicasContrato';
+import { construirExpedienteContratoExpress } from '@/lib/talento/nomenclaturaExpedienteContrato';
 
 export type CrearContratoExpressInput = {
   proyecto_id: string;
@@ -153,7 +154,12 @@ export async function crearContratoExpress(
   }
 
   const expressId = crypto.randomUUID();
-  const expedienteLabel = `EXPRESS-${expressId.replace(/-/g, '').slice(0, 12).toUpperCase()}`;
+  const expedienteLabel = await construirExpedienteContratoExpress(admin, {
+    proyectoId: input.proyecto_id,
+    entidadId: input.entidad_patrono_id,
+    fechaIso: fechaFirmaIso,
+    expressId,
+  });
 
   let buf: Buffer;
   try {
@@ -203,6 +209,7 @@ export async function crearContratoExpress(
     salario_base_mensual_snapshot: salSnap != null && Number.isFinite(salSnap) ? salSnap : null,
     cargo_nombre_snapshot: snap?.cargo_nombre?.trim() || null,
     pdf_storage_path: storagePath,
+    expediente_label: expedienteLabel,
     created_by: input.created_by ?? null,
     bono_manual_usd: Number(input.bono_manual_usd ?? 0) || 0,
     horario_semanal_texto: horarioVal,
