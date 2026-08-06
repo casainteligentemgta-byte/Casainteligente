@@ -1,4 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import {
+  codigoCortoDesdeNombre,
+  formatearExpedienteContrato,
+} from '@/lib/talento/nomenclaturaExpedienteContrato';
 
 type ContratoRowRef = {
   id: string;
@@ -6,54 +10,105 @@ type ContratoRowRef = {
   proyecto_id?: string | null;
   fecha_ingreso?: string | null;
   fecha_firma_contrato?: string | null;
+  created_at?: string | null;
 };
 
-function anioDesdeContratoRow(r: ContratoRowRef): number {
-  const iso = (r.fecha_firma_contrato ?? r.fecha_ingreso ?? '').trim();
-  if (iso.length >= 4) {
-    const y = Number(iso.slice(0, 4));
-    if (Number.isFinite(y) && y >= 1990 && y <= 2100) return y;
-  }
-  return new Date().getFullYear();
-}
-
-function tiempoOrdenContrato(r: ContratoRowRef): number {
-  const iso = (r.fecha_firma_contrato ?? r.fecha_ingreso ?? '').trim();
+function partesFechaDesdeContrato(r: ContratoRowRef): { anio: number; mes: number; t: number } {
+  const iso = (r.fecha_firma_contrato ?? r.fecha_ingreso ?? r.created_at ?? '').trim();
   if (iso) {
-    const t = new Date(iso.includes('T') ? iso : `${iso}T12:00:00`).getTime();
-    if (!Number.isNaN(t)) return t;
+    const day = iso.includes('T') ? iso.slice(0, 10) : iso.slice(0, 10);
+    if (/^\d{4}-\d{2}/.test(day)) {
+      const anio = Number(day.slice(0, 4));
+      const mes = Number(day.slice(5, 7));
+      const t = new Date(iso.includes('T') ? iso : `${day}T12:00:00`).getTime();
+      if (Number.isFinite(anio) && mes >= 1 && mes <= 12) {
+        return { anio, mes, t: Number.isNaN(t) ? 0 : t };
+      }
+    }
   }
-  return 0;
+  const d = new Date();
+  return { anio: d.getFullYear(), mes: d.getMonth() + 1, t: 0 };
 }
 
-/** Referencia tipo AÑO-NNNN según contratos del empleado en la obra/proyecto vinculada. */
-export async function construirExpedienteRefPorEmpleado(supabase: SupabaseClient, empleadoId: string): Promise<string> {
-  const nowYear = new Date().getFullYear();
+/**
+ * Expediente contrato individual: AÑO-MES-ENTIDAD-OBRA-Número (sin prefijo EXPRESS).
+ */
+export async function construirExpedienteRefPorEmpleado(
+  supabase: SupabaseClient,
+  empleadoId: string,
+): Promise<string> {
+  const now = new Date();
   const { data: ctr } = await supabase
     .from('ci_contratos_empleado_obra')
-    .select('id,obra_id,proyecto_id,fecha_ingreso,fecha_firma_contrato')
+    .select('id,obra_id,proyecto_id,fecha_ingreso,fecha_firma_contrato,created_at')
     .eq('empleado_id', empleadoId)
     .order('id', { ascending: false })
     .limit(1)
     .maybeSingle();
 
   const c = ctr as ContratoRowRef | null;
-  if (!c) return `${nowYear}-0001`;
+  if (!c) {
+    return formatearExpedienteContrato({
+      anio: now.getFullYear(),
+      mes: now.getMonth() + 1,
+      entidadCodigo: 'ENT',
+      obraCodigo: 'OBRA',
+      numero: 1,
+    });
+  }
 
   const sitioId = String(c.obra_id ?? c.proyecto_id ?? '').trim();
-  const year = anioDesdeContratoRow(c);
-  if (!sitioId || !Number.isFinite(year)) return `${nowYear}-0001`;
+  const { anio, mes } = partesFechaDesdeContrato(c);
 
-  const { data: rows } = await supabase
-    .from('ci_contratos_empleado_obra')
-    .select('id,fecha_ingreso,fecha_firma_contrato')
-    .or(`obra_id.eq.${sitioId},proyecto_id.eq.${sitioId}`);
+  let obraNombre = '';
+  let entidadId: string | null = null;
+  if (sitioId) {
+    const { data: proy } = await supabase
+      .from('ci_proyectos')
+      .select('nombre,obra_codigo,entidad_id')
+      .eq('id', sitioId)
+      .maybeSingle();
+    const p = proy as {
+      nombre?: string | null;
+      obra_codigo?: string | null;
+      entidad_id?: string | null;
+    } | null;
+    obraNombre = (p?.obra_codigo ?? '').trim() || (p?.nombre ?? '').trim();
+    entidadId = (p?.entidad_id ?? '').trim() || null;
+  }
 
-  const sameYear = ((rows ?? []) as ContratoRowRef[])
-    .filter((r) => anioDesdeContratoRow(r) === year)
-    .sort((a, b) => tiempoOrdenContrato(a) - tiempoOrdenContrato(b) || String(a.id).localeCompare(String(b.id)));
+  let entidadNombre = '';
+  if (entidadId) {
+    const { data: ent } = await supabase
+      .from('ci_entidades')
+      .select('nombre,nombre_legal')
+      .eq('id', entidadId)
+      .maybeSingle();
+    const e = ent as { nombre?: string | null; nombre_legal?: string | null } | null;
+    entidadNombre = (e?.nombre ?? '').trim() || (e?.nombre_legal ?? '').trim();
+  }
 
-  const idx = sameYear.findIndex((r) => String(r.id ?? '') === c.id);
-  const seq = String(idx >= 0 ? idx + 1 : sameYear.length || 1).padStart(4, '0');
-  return `${year}-${seq}`;
+  let numero = 1;
+  if (sitioId) {
+    const { data: rows } = await supabase
+      .from('ci_contratos_empleado_obra')
+      .select('id,fecha_ingreso,fecha_firma_contrato,created_at')
+      .or(`obra_id.eq.${sitioId},proyecto_id.eq.${sitioId}`);
+
+    const same = ((rows ?? []) as ContratoRowRef[])
+      .map((r) => ({ r, p: partesFechaDesdeContrato(r) }))
+      .filter((x) => x.p.anio === anio && x.p.mes === mes)
+      .sort((a, b) => a.p.t - b.p.t || String(a.r.id).localeCompare(String(b.r.id)));
+
+    const idx = same.findIndex((x) => String(x.r.id ?? '') === c.id);
+    numero = idx >= 0 ? idx + 1 : same.length || 1;
+  }
+
+  return formatearExpedienteContrato({
+    anio,
+    mes,
+    entidadCodigo: codigoCortoDesdeNombre(entidadNombre || 'ENT', 6),
+    obraCodigo: codigoCortoDesdeNombre(obraNombre || 'OBRA', 8),
+    numero,
+  });
 }
