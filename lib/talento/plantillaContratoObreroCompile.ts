@@ -12,6 +12,7 @@ import {
   tratoTrabajadorContrato,
 } from '@/lib/talento/generoContratoLaboral';
 import { estadoCivilContratoObrero } from '@/lib/talento/cedulaAuth';
+import { textoObligacionesTrabajadorContrato } from '@/lib/talento/obligacionesOficioContrato';
 
 export type DatoContratoFaltante = {
   id: string;
@@ -56,6 +57,10 @@ const ETIQUETAS: Record<string, { etiqueta: string; ayuda: string }> = {
     ayuda: 'Tomo, número y fecha desde `ci_entidades.registro_mercantil`.',
   },
   CONTRATO_FASE_TECNICA: { etiqueta: 'Fase técnica (cláusula primera)', ayuda: 'Campo objeto del contrato / fase de obra.' },
+  CONTRATO_OBLIGACIONES_TRABAJADOR: {
+    etiqueta: 'Obligaciones del trabajador (cláusula primera)',
+    ayuda: 'Genéricas 1–5 más tareas/conocimientos del oficio (Gaceta) cuando existan.',
+  },
   CONTRATO_HORARIO_CUARTA: { etiqueta: 'Horario detallado (cláusula cuarta)', ayuda: 'Horario semanal del contrato o del proyecto.' },
   CONTRATO_LUGAR_QUINTA: { etiqueta: 'Lugar de prestación (cláusula quinta)', ayuda: 'Obra / ubicación del proyecto.' },
   CONTRATO_SALARIO_SEMANAL_VES: { etiqueta: 'Salario semanal en Bs.', ayuda: 'Salario mensual tabulador ÷ 4.' },
@@ -342,6 +347,12 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
 
   const horarioCuarta = str(f.contrato.horario_semanal_texto) || CONTRATO_OBRERO_HORARIO_CUARTA_DEFAULT;
   const faseTecnica = str(f.contrato.objeto_contrato) || '_______________________________________________';
+  const cargoOficio =
+    str(f.contrato.cargo_oficio_desempeño) || str(hv?.contratacion?.cargoUOficio);
+  const obligacionesTrabajador = textoObligacionesTrabajadorContrato({
+    cargoCodigo: str(f.contrato.numero_oficio_tabulador),
+    cargoNombre: cargoOficio,
+  });
   const lugarQuinta =
     str(f.contrato.lugar_prestacion_servicio) || str(f.obra.ubicacion) || str(f.obra.nombre) || '______________________________';
 
@@ -381,7 +392,7 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
     EMPLEADO_DENOMINACION: tratoTrab.denominacion,
     EMPLEADO_DENOMINACION_FIRMA: tratoTrab.denominacionFirma,
     EMPLEADO_TRATO_MINUSCULA: tratoTrab.trabajadorMinuscula,
-    CONTRATO_CARGO_OFICIO: str(f.contrato.cargo_oficio_desempeño) || str(hv?.contratacion?.cargoUOficio),
+    CONTRATO_CARGO_OFICIO: cargoOficio,
     CONTRATO_LUGAR_PRESTACION: str(f.contrato.lugar_prestacion_servicio) || str(f.obra.nombre),
     CONTRATO_OBJETO: str(f.contrato.objeto_contrato) ? ` ${str(f.contrato.objeto_contrato)}` : '',
     CONTRATO_TIPO_PLAZO: tipoPlazoHuman(f.contrato.tipo_contrato),
@@ -400,6 +411,7 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
     OBRA_UBICACION: str(f.obra.ubicacion),
     OBRA_PUNTO_ENC_TRANSPORTE: puntoEncFragmento,
     CONTRATO_FASE_TECNICA: faseTecnica,
+    CONTRATO_OBLIGACIONES_TRABAJADOR: obligacionesTrabajador,
     CONTRATO_HORARIO_CUARTA: horarioCuarta,
     CONTRATO_LUGAR_QUINTA: lugarQuinta,
     CONTRATO_SALARIO_SEMANAL_VES: salSemanalTxt,

@@ -1,7 +1,19 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { CONTRATO_OBRERO_CUERPO_DEFAULT } from '@/lib/talento/plantillas/contratoObreroDefaultCuerpo';
+import { OBLIGACIONES_GENERICAS_NUMERADAS } from '@/lib/talento/obligacionesOficioContrato';
 
 const CODIGO = 'contrato_obrero';
+
+/**
+ * Si la plantilla en BD aún tiene las obligaciones 1–5 fijas, las sustituye por
+ * `{{CONTRATO_OBLIGACIONES_TRABAJADOR}}` para complementar por oficio.
+ */
+export function migrarObligacionesPlantillaSiFijas(cuerpo: string): string {
+  const c = cuerpo.trim();
+  if (!c || c.includes('{{CONTRATO_OBLIGACIONES_TRABAJADOR}}')) return c;
+  if (!c.includes(OBLIGACIONES_GENERICAS_NUMERADAS)) return c;
+  return c.replace(OBLIGACIONES_GENERICAS_NUMERADAS, '{{CONTRATO_OBLIGACIONES_TRABAJADOR}}');
+}
 
 export async function obtenerCuerpoPlantillaContratoObrero(client: SupabaseClient): Promise<string> {
   const { data, error } = await client
@@ -13,7 +25,7 @@ export async function obtenerCuerpoPlantillaContratoObrero(client: SupabaseClien
 
   if (!error && data && typeof (data as { cuerpo?: string }).cuerpo === 'string') {
     const c = String((data as { cuerpo: string }).cuerpo).trim();
-    if (c.length > 80) return c;
+    if (c.length > 80) return migrarObligacionesPlantillaSiFijas(c);
   }
 
   const ins = await client.from('ci_documento_plantillas').upsert(
@@ -36,7 +48,7 @@ export async function obtenerCuerpoPlantillaContratoObrero(client: SupabaseClien
 
   const { data: again } = await client.from('ci_documento_plantillas').select('cuerpo').eq('codigo', CODIGO).maybeSingle();
   const c2 = String((again as { cuerpo?: string } | null)?.cuerpo ?? '').trim();
-  return c2.length > 80 ? c2 : CONTRATO_OBRERO_CUERPO_DEFAULT;
+  return migrarObligacionesPlantillaSiFijas(c2.length > 80 ? c2 : CONTRATO_OBRERO_CUERPO_DEFAULT);
 }
 
 export async function listarPlantillasDocumento(client: SupabaseClient) {

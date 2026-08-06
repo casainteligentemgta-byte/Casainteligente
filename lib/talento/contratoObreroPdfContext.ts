@@ -893,6 +893,7 @@ export async function cargarPropsContratoObreroPdfEstructurado(
 
   const configNomina: ContratoObreroPdfStructuredProps['configNomina'] = {
     funciones_oficiales: funcionesOficiales,
+    cargo_codigo: codTab,
     salario_base_mensual: salarioMensual,
     cestaticket_mensual: cestaMensual,
     salario_basico_diario_ves: salarioDiarioNum,
@@ -1137,6 +1138,7 @@ export async function cargarPropsContratoObreroPdfExpress(
 
   const configNomina: ContratoObreroPdfStructuredProps['configNomina'] = {
     funciones_oficiales: cargoNom,
+    cargo_codigo: codTab,
     salario_base_mensual: salarioMensual,
     cestaticket_mensual: cestaMensual,
     salario_basico_diario_ves: salarioDiarioNum,
