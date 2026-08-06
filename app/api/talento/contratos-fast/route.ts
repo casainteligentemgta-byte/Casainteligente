@@ -28,7 +28,7 @@ const postBodySchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .optional()
     .nullable(),
-  objeto_contrato: z.string().max(2000).optional().nullable(),
+  objeto_contrato: z.string().max(4000).optional().nullable(),
   jornada_trabajo: z.enum(['DIURNA', 'NOCTURNA', 'MIXTA', 'diurna', 'nocturna', 'mixta']).optional().nullable(),
   tipo_contrato: z.string().max(120).optional().nullable(),
   nacionalidad: z.string().max(80).optional().nullable(),

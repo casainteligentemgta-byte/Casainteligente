@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { SelectorFaseTecnicaContrato } from '@/components/rrhh/express/SelectorFaseTecnicaContrato';
 
 type OficioOpt = { id: string; cargo_nombre: string };
 
@@ -333,35 +334,15 @@ export default function ModalEditarContratoExpress({
                 onChange={(e) => setField('jornada_trabajo', e.target.value)}
               />
             </label>
-            <label className="block space-y-1 text-[10px] font-bold uppercase tracking-wide text-zinc-500 sm:col-span-2">
+            <div className="block space-y-1 text-[10px] font-bold uppercase tracking-wide text-zinc-500 sm:col-span-2">
               Fase técnica / objeto (cláusula PRIMERA)
-              {fasesSugeridas.length > 0 ? (
-                <select
-                  className={inputClass}
-                  value=""
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    if (v) setField('objeto_contrato', v);
-                  }}
-                >
-                  <option value="">— Usar fase guardada —</option>
-                  {fasesSugeridas.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-              ) : null}
-              <textarea
-                className={`${inputClass} min-h-[4rem]`}
+              <SelectorFaseTecnicaContrato
                 value={form.objeto_contrato ?? ''}
-                placeholder="Ej.: estructura de concreto armado"
-                onChange={(e) => setField('objeto_contrato', e.target.value)}
+                onChange={(v) => setField('objeto_contrato', v)}
+                controlClassName={inputClass}
+                recientes={fasesSugeridas}
               />
-              <span className="block font-normal normal-case tracking-normal text-zinc-600">
-                Editable. Al guardar queda grabada para próximas obras y contratos.
-              </span>
-            </label>
+            </div>
             <label className="block space-y-1 text-[10px] font-bold uppercase tracking-wide text-zinc-500 sm:col-span-2">
               Horario semanal (cláusula CUARTA)
               <textarea

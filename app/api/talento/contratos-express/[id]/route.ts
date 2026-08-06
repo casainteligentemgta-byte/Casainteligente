@@ -28,7 +28,7 @@ const patchSchema = z.object({
   horario_semanal_texto: z.string().max(2000).optional().nullable(),
   bono_manual_usd: z.coerce.number().nonnegative().optional().nullable(),
   config_nomina_id: z.string().uuid().optional().nullable(),
-  objeto_contrato: z.string().max(2000).optional().nullable(),
+  objeto_contrato: z.string().max(4000).optional().nullable(),
   jornada_trabajo: z.string().max(80).optional().nullable(),
   obrero_municipio_residencia: z.string().max(120).optional().nullable(),
   obrero_estado_residencia: z.string().max(120).optional().nullable(),

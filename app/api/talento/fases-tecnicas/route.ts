@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
+import { CATALOGO_FASES_TECNICAS_OBRA } from '@/lib/talento/catalogoFasesTecnicasObra';
 import {
   listarFasesTecnicasContrato,
   recordarFaseTecnicaUsada,
@@ -11,15 +12,19 @@ import {
 export const runtime = 'nodejs';
 
 const postSchema = z.object({
-  texto: z.string().min(2).max(2000),
+  texto: z.string().min(2).max(4000),
   proyecto_id: z.string().uuid().optional().nullable(),
 });
 
-/** GET — catálogo de fases técnicas usadas (sugerencias para contratos/obras). */
+/** GET — catálogo fijo + fases usadas (sugerencias para contratos/obras). */
 export async function GET() {
   const supabase = await createClient();
-  const fases = await listarFasesTecnicasContrato(supabase, 50);
-  return NextResponse.json({ ok: true, fases });
+  const fases = await listarFasesTecnicasContrato(supabase, 100);
+  return NextResponse.json({
+    ok: true,
+    fases,
+    catalogo: CATALOGO_FASES_TECNICAS_OBRA,
+  });
 }
 
 /**
@@ -39,7 +44,7 @@ export async function POST(req: Request) {
 
   const parsed = postSchema.safeParse(raw);
   if (!parsed.success) {
-    return NextResponse.json({ error: 'texto requerido (2–2000 caracteres)' }, { status: 400 });
+    return NextResponse.json({ error: 'texto requerido (2–4000 caracteres)' }, { status: 400 });
   }
 
   const texto = trimFaseTecnica(parsed.data.texto);
@@ -54,6 +59,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: result.error }, { status: 500 });
   }
 
-  const fases = await listarFasesTecnicasContrato(admin.client, 50);
-  return NextResponse.json({ ok: true, texto: result.texto, fases });
+  const fases = await listarFasesTecnicasContrato(admin.client, 100);
+  return NextResponse.json({
+    ok: true,
+    texto: result.texto,
+    fases,
+    catalogo: CATALOGO_FASES_TECNICAS_OBRA,
+  });
 }
