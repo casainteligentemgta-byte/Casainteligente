@@ -111,6 +111,19 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 6,
   },
+  /** Contenedor de las dos casillas de huella dactilar. */
+  huellasRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    gap: 12,
+    marginTop: 6,
+  },
+  huellaBox: {
+    width: 72,
+    height: 88,
+    borderWidth: 1,
+    borderColor: '#000',
+  },
   meta: {
     fontFamily: CONTRATO_PDF_FONT_FAMILY,
     fontSize: CONTRATO_PDF_FONT_SIZE,
