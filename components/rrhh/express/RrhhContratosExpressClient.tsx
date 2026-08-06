@@ -13,6 +13,7 @@ import RrhhSubnavEnlaces from '@/components/rrhh/RrhhSubnavEnlaces';
 import { Button } from '@/components/ui/button';
 import {
   descargarPlantillaXlsxContratosExpress,
+  normalizarFechaIngresoIso,
   parseArchivoContratosExpress,
   PLANTILLA_CSV_CONTRATOS_EXPRESS,
   type FilaCsvContratoExpress,
@@ -441,7 +442,7 @@ export default function RrhhContratosExpressClient() {
             obrero_cedula: f.cedula,
             cargo: f.cargo || null,
             remuneracion_semanal: f.remuneracion_semanal,
-            fecha_ingreso: f.fecha_ingreso || null,
+            fecha_ingreso: normalizarFechaIngresoIso(f.fecha_ingreso) || f.fecha_ingreso || null,
             nivel_generico: f.nivel_generico,
           })),
         }),

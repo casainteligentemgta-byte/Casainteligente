@@ -182,15 +182,10 @@ function excelSerialToIso(serial: number): string {
 
 function dateObjectToIso(d: Date): string {
   if (Number.isNaN(d.getTime())) return '';
-  // Excel/SheetJS suele entregar medianoche UTC; usar UTC evita correr un día en VE.
-  const usaUtc =
-    d.getUTCHours() === 0 &&
-    d.getUTCMinutes() === 0 &&
-    d.getUTCSeconds() === 0 &&
-    d.getUTCMilliseconds() === 0;
-  const y = usaUtc ? d.getUTCFullYear() : d.getFullYear();
-  const m = String((usaUtc ? d.getUTCMonth() : d.getMonth()) + 1).padStart(2, '0');
-  const day = String(usaUtc ? d.getUTCDate() : d.getDate()).padStart(2, '0');
+  // SheetJS / Excel serial → Date en medianoche UTC del día civil; siempre UTC.
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
 }
 
@@ -247,7 +242,10 @@ export function normalizarFechaIngresoIso(raw: unknown): string {
     .replace(/,/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-  const mTxt = textual.match(/^(\d{1,2})\s*(?:de\s+)?([a-z]+)\s*(?:de\s+)?(\d{2,4})$/);
+  // «lunes 3 de agosto de 2026» / «3 de agosto de 2026» / «3 ago 2026»
+  const mTxt = textual.match(
+    /^(?:lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo)\s+(\d{1,2})\s*(?:de\s+)?([a-z]+)\s*(?:de\s+)?(\d{2,4})$/,
+  ) ?? textual.match(/^(\d{1,2})\s*(?:de\s+)?([a-z]+)\s*(?:de\s+)?(\d{2,4})$/);
   if (mTxt) {
     const mo = meses[mTxt[2]!];
     if (mo) {

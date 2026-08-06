@@ -124,13 +124,15 @@ export async function crearContratoExpress(
   if (validacion) return { ok: false, error: validacion };
 
   const fechaNorm = normalizarFechaIngresoIso(input.fecha_ingreso ?? '');
-  const fechaFirmaIso =
-    /^\d{4}-\d{2}-\d{2}$/.test(fechaNorm)
-      ? fechaNorm
-      : (() => {
-          const d = new Date();
-          return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        })();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaNorm)) {
+    return {
+      ok: false,
+      error: input.fecha_ingreso?.trim()
+        ? `Fecha de ingreso inválida «${input.fecha_ingreso}». Use YYYY-MM-DD o día/mes/año (ej. 3/8/2026).`
+        : 'Falta fecha de ingreso (requerida para la fecha de cierre del contrato).',
+    };
+  }
+  const fechaFirmaIso = fechaNorm;
 
   const cedula = normCedulaToken(String(input.obrero_cedula));
   let objetoContrato = trimFaseTecnica(input.objeto_contrato);

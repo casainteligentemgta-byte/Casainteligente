@@ -220,12 +220,30 @@ export async function POST(req: Request) {
       remuneracionSemanalUsd = Math.max(0, Number(f.bono_manual_usd) || 0);
     }
 
-    const fechaNorm = normalizarFechaIngresoIso(f.fecha_ingreso ?? '');
+    const fechaRaw = (f.fecha_ingreso ?? '').trim();
+    const fechaNorm = normalizarFechaIngresoIso(fechaRaw);
     const fecha = /^\d{4}-\d{2}-\d{2}$/.test(fechaNorm) ? fechaNorm : null;
-    if ((f.fecha_ingreso ?? '').trim() && !fecha) {
-      console.warn(
-        `[contratos-fast/masivo] fila ${filaN}: fecha_ingreso no reconocida «${f.fecha_ingreso}»; se usará la fecha de hoy`,
-      );
+    if (fechaRaw && !fecha) {
+      failCount++;
+      resultados.push({
+        fila: filaN,
+        ok: false,
+        error: `Fecha de ingreso no reconocida «${fechaRaw}». Use día/mes/año (ej. 3/8/2026 o 2026-08-03).`,
+        obrero: full,
+        cedula: ced,
+      });
+      continue;
+    }
+    if (!fecha) {
+      failCount++;
+      resultados.push({
+        fila: filaN,
+        ok: false,
+        error: 'Falta fecha de ingreso (columna FECHA INI / fecha_ingreso). No se usa la fecha de hoy.',
+        obrero: full,
+        cedula: ced,
+      });
+      continue;
     }
 
     const result = await crearContratoExpress(admin.client, {

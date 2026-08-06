@@ -51,6 +51,8 @@ describe('parseCsvContratosExpress', () => {
     assert.equal(normalizarFechaIngresoIso('5/8/2026'), '2026-08-05');
     assert.equal(normalizarFechaIngresoIso('3/6/24'), '2024-06-03');
     assert.equal(normalizarFechaIngresoIso('5 de agosto de 2026'), '2026-08-05');
+    assert.equal(normalizarFechaIngresoIso('lunes 3 de agosto de 2026'), '2026-08-03');
+    assert.equal(normalizarFechaIngresoIso('3/8/2026'), '2026-08-03');
     assert.equal(normalizarFechaIngresoIso('13/1/2026'), '2026-01-13');
     // Mes 13 inválido en orden día/mes/año
     assert.equal(normalizarFechaIngresoIso('1/13/2026'), '');

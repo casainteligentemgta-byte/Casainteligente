@@ -360,16 +360,37 @@ function normZonaComparecenciaPdf(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
+const MESES_ES_VE = [
+  'enero',
+  'febrero',
+  'marzo',
+  'abril',
+  'mayo',
+  'junio',
+  'julio',
+  'agosto',
+  'septiembre',
+  'octubre',
+  'noviembre',
+  'diciembre',
+] as const;
+
+/**
+ * Partes de fecha para el cierre del PDF («a los N días del mes de …»).
+ * Usa solo el calendario YYYY-MM-DD (sin Date/locale) para no correr el día por zona horaria.
+ */
 function partesFechaCierreFirma(iso: string | null | undefined): { dia: string; mes: string; anio: string } {
   const t = (iso ?? '').trim();
   const ymd = t.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (ymd) {
-    const d = new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]), 12, 0, 0);
-    if (!Number.isNaN(d.getTime())) {
+    const anio = ymd[1]!;
+    const mesNum = Number(ymd[2]);
+    const diaNum = Number(ymd[3]);
+    if (mesNum >= 1 && mesNum <= 12 && diaNum >= 1 && diaNum <= 31) {
       return {
-        dia: d.toLocaleDateString('es-VE', { day: 'numeric' }),
-        mes: d.toLocaleDateString('es-VE', { month: 'long' }),
-        anio: d.toLocaleDateString('es-VE', { year: 'numeric' }),
+        dia: String(diaNum),
+        mes: MESES_ES_VE[mesNum - 1]!,
+        anio,
       };
     }
   }

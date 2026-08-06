@@ -4,6 +4,7 @@ import { crearContratoExpress } from '@/lib/talento/crearContratoExpress';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import { createClient } from '@/lib/supabase/server';
 import { CEDULA_VE_NORMALIZADA_REGEX, normCedulaToken } from '@/lib/talento/cedulaAuth';
+import { normalizarFechaIngresoIso } from '@/lib/talento/parseCsvContratosExpress';
 
 export const runtime = 'nodejs';
 
