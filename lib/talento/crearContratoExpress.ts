@@ -10,7 +10,11 @@ import {
   signedUrlContratoLaboralBucket,
 } from '@/lib/talento/contratoLaboralRegistroStorage';
 import { ContratoObreroPDF } from '@/lib/talento/ContratoObreroPdfStructured';
-import { CEDULA_VE_NORMALIZADA_REGEX, estadoCivilContratoObrero, normCedulaToken } from '@/lib/talento/cedulaAuth';
+import { CEDULA_VE_NORMALIZADA_REGEX, normCedulaToken } from '@/lib/talento/cedulaAuth';
+import {
+  buscarEstadoCivilExpedientePorCedula,
+  resolverEstadoCivilContrato,
+} from '@/lib/talento/estadoCivilDesdeHojaVida';
 import {
   faseTecnicaDefaultProyecto,
   recordarFaseTecnicaUsada,
@@ -78,13 +82,17 @@ function validarInput(input: CrearContratoExpressInput): string | null {
   return null;
 }
 
-function manualDesdeInput(input: CrearContratoExpressInput, fechaFirmaIso: string): ContratoExpressManualInput {
+function manualDesdeInput(
+  input: CrearContratoExpressInput,
+  fechaFirmaIso: string,
+  estadoCivilResuelto: string,
+): ContratoExpressManualInput {
   return {
     obreroNombre: nombreCompletoObrero(input),
     obreroCedula: normCedulaToken(String(input.obrero_cedula)),
     obreroDireccion: input.obrero_direccion?.trim() || null,
     nacionalidad: input.nacionalidad?.trim() || null,
-    estadoCivil: estadoCivilContratoObrero(input.estado_civil),
+    estadoCivil: estadoCivilResuelto,
     fechaIngreso: input.fecha_ingreso?.trim() || fechaFirmaIso,
     fechaFirmaContratoIso: fechaFirmaIso,
     objetoContrato: input.objeto_contrato?.trim() || null,
@@ -119,12 +127,19 @@ export async function crearContratoExpress(
   if (!objetoContrato) {
     objetoContrato = await faseTecnicaDefaultProyecto(admin, input.proyecto_id);
   }
+  const expedienteEc = await buscarEstadoCivilExpedientePorCedula(admin, cedula);
+  const estadoCivilResuelto = resolverEstadoCivilContrato({
+    desdeHoja: expedienteEc.desdeHoja,
+    desdeColumna: expedienteEc.desdeColumna,
+    manual: input.estado_civil,
+  });
   const inputConFase: CrearContratoExpressInput = {
     ...input,
     obrero_cedula: cedula,
     objeto_contrato: objetoContrato,
+    estado_civil: estadoCivilResuelto,
   };
-  const manual = manualDesdeInput(inputConFase, fechaFirmaIso);
+  const manual = manualDesdeInput(inputConFase, fechaFirmaIso, estadoCivilResuelto);
 
   const loaded = await cargarPropsContratoObreroPdfExpress(
     admin,
@@ -191,7 +206,7 @@ export async function crearContratoExpress(
     created_by: input.created_by ?? null,
     bono_manual_usd: Number(input.bono_manual_usd ?? 0) || 0,
     horario_semanal_texto: horarioVal,
-    estado_civil: estadoCivilContratoObrero(input.estado_civil),
+    estado_civil: estadoCivilResuelto,
     nacionalidad: input.nacionalidad?.trim() || null,
     fecha_ingreso: fechaFirmaIso,
     objeto_contrato: objetoContrato,

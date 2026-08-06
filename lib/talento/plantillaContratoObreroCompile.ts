@@ -289,7 +289,7 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
   const direccion = str(dp?.direccionDomicilio) || str(f.empleado.direccion);
   const celular = str(dp?.celular) || str(f.empleado.celular);
   const nacionalidadRaw = str(dp?.nacionalidad) || str(f.empleado.nacionalidad);
-  const estadoCivil = estadoCivilContratoObrero(str(dp?.estadoCivil) || str(f.empleado.estado_civil));
+  const estadoCivil = estadoCivilContratoObrero(str(dp?.estadoCivil), str(f.empleado.estado_civil));
   const trabFemenino = inferirFemeninoTrabajador({
     estadoCivil,
     nombre: nombreCompleto,

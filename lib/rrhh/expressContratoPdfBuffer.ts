@@ -9,6 +9,10 @@ import { ContratoObreroPDF } from '@/lib/talento/ContratoObreroPdfStructured';
 import { BUCKET_CONTRATOS_OBREROS } from '@/lib/talento/contratoLaboralRegistroStorage';
 import { estadoCivilContratoObrero } from '@/lib/talento/cedulaAuth';
 import { faseTecnicaDefaultProyecto } from '@/lib/talento/fasesTecnicasContrato';
+import {
+  buscarEstadoCivilExpedientePorCedula,
+  resolverEstadoCivilContrato,
+} from '@/lib/talento/estadoCivilDesdeHojaVida';
 
 export type ExpressRowPdf = {
   id: string;
@@ -77,6 +81,25 @@ export function manualDesdeExpressRow(row: ExpressRowPdf): ContratoExpressManual
   };
 }
 
+/** Como {@link manualDesdeExpressRow}, pero prioriza estado civil de hoja de vida si existe. */
+export async function manualDesdeExpressRowConHojaVida(
+  client: SupabaseClient,
+  row: ExpressRowPdf,
+): Promise<ContratoExpressManualInput> {
+  const base = manualDesdeExpressRow(row);
+  const ced = (base.obreroCedula ?? '').trim();
+  if (!ced) return base;
+  const exp = await buscarEstadoCivilExpedientePorCedula(client, ced);
+  return {
+    ...base,
+    estadoCivil: resolverEstadoCivilContrato({
+      desdeHoja: exp.desdeHoja,
+      desdeColumna: exp.desdeColumna,
+      manual: base.estadoCivil,
+    }),
+  };
+}
+
 async function fetchExpressRow(
   supabase: SupabaseClient,
   id: string,
@@ -114,7 +137,7 @@ export async function generarBufferContratoExpressPdf(
     };
   }
 
-  const manual = manualDesdeExpressRow(row);
+  const manual = await manualDesdeExpressRowConHojaVida(supabase, row);
   if (!manual.obreroNombre || !manual.obreroCedula) {
     return { ok: false, error: 'Faltan nombre o cédula del obrero en el contrato express.' };
   }

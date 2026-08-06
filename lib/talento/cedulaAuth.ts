@@ -12,10 +12,17 @@ export function normCedulaToken(s: string): string {
 /** Tras {@link normCedulaToken}: letra V o E y 6–9 dígitos (ej. `V12345678`). */
 export const CEDULA_VE_NORMALIZADA_REGEX = /^[VE]\d{6,9}$/;
 
-/** Estado civil del obrero en contrato: si falta en hoja de vida / planilla, «Soltero». */
-export function estadoCivilContratoObrero(raw: string | null | undefined): string {
-  const t = String(raw ?? '').trim();
-  return t || 'Soltero';
+/** Estado civil del obrero en contrato individual.
+ * Preferir hoja de vida si está llenada; si no, el siguiente valor no vacío; si nada, «Soltero».
+ */
+export function estadoCivilContratoObrero(
+  ...candidatos: Array<string | null | undefined>
+): string {
+  for (const raw of candidatos) {
+    const t = String(raw ?? '').trim();
+    if (t) return t;
+  }
+  return 'Soltero';
 }
 
 /**
