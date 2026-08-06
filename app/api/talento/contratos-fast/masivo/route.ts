@@ -8,6 +8,7 @@ import {
   ingresoSemanalConsolidadoUsdDesdeConfigNominaCestaticketUsd40,
   type ConfigNominaTabuladorLike,
 } from '@/lib/nomina/ingresoSemanalDesdeConfigNomina';
+import { resolverConfigNominaPorCargo } from '@/lib/talento/resolverConfigNominaPorCargo';
 
 export const runtime = 'nodejs';
 /** Generación de PDFs en lote puede tardar. */
@@ -37,6 +38,8 @@ const filaSchema = z.object({
   /** Nombre de cargo en tabulador (`ci_config_nomina.cargo_nombre`). */
   cargo: z.string().max(160).optional().nullable(),
   oficio: z.string().max(160).optional().nullable(),
+  /** Nivel genérico del listado de obra (ayuda a desambiguar Carpintero 1era/2da, etc.). */
+  nivel_generico: z.coerce.number().int().min(1).max(9).optional().nullable(),
   config_nomina_id: z.string().uuid().optional().nullable(),
 });
 
@@ -48,17 +51,10 @@ const bodySchema = z.object({
   filas: z.array(filaSchema).min(1).max(MAX_FILAS),
 });
 
-function normKey(s: string): string {
-  return s
-    .trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');
-}
-
 /**
  * POST — Carga masiva de contratos express (mismo PDF/storage que contratos-fast).
  * Columnas típicas: nombres, apellidos, cédula, cargo, remuneración semanal, fecha de ingreso.
+ * También listados de obra (AYUDANTE / CARPINTERO + nivel genérico).
  */
 export async function POST(req: Request) {
   const admin = supabaseAdminForRoute();
@@ -92,7 +88,7 @@ export async function POST(req: Request) {
   }
 
   const byId = new Map<string, ConfigNominaTabuladorLike & { id: string; cargo_nombre: string }>();
-  const byNombre = new Map<string, string>();
+  const configsMatch: Array<{ id: string; cargo_nombre: string; nivel_salarial: number | null }> = [];
   for (const c of configs ?? []) {
     const row = c as {
       id: string;
@@ -111,7 +107,11 @@ export async function POST(req: Request) {
       cestaticket_mensual: Number(row.cestaticket_mensual) || 0,
     };
     byId.set(row.id, cfg);
-    if (cfg.cargo_nombre) byNombre.set(normKey(cfg.cargo_nombre), row.id);
+    configsMatch.push({
+      id: row.id,
+      cargo_nombre: cfg.cargo_nombre,
+      nivel_salarial: cfg.nivel_salarial,
+    });
   }
 
   if (defaultConfigId && !byId.has(defaultConfigId)) {
@@ -176,19 +176,21 @@ export async function POST(req: Request) {
     } else {
       const cargoLabel = (f.cargo ?? f.oficio ?? '').trim();
       if (cargoLabel) {
-        const matched = byNombre.get(normKey(cargoLabel));
+        const matched = resolverConfigNominaPorCargo(cargoLabel, configsMatch, {
+          nivelGenerico: f.nivel_generico ?? null,
+        });
         if (!matched) {
           failCount++;
           resultados.push({
             fila: filaN,
             ok: false,
-            error: `Cargo «${cargoLabel}» no encontrado en el tabulador`,
+            error: `Cargo «${cargoLabel}» no encontrado en el tabulador (revise Oficios y salarios)`,
             obrero: full,
             cedula: ced,
           });
           continue;
         }
-        configId = matched;
+        configId = matched.id;
       }
     }
 

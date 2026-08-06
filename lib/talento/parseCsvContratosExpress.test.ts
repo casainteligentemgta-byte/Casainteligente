@@ -39,8 +39,10 @@ describe('parseCsvContratosExpress', () => {
     assert.equal(r.filas[0]!.cargo, 'AYUDANTE');
     assert.equal(r.filas[0]!.fecha_ingreso, '2024-06-03');
     assert.equal(r.filas[0]!.remuneracion_semanal, 0);
+    assert.equal(r.filas[0]!.nivel_generico, 5);
     assert.equal(r.filas[1]!.cargo, 'CARPINTERO');
     assert.equal(r.filas[1]!.cedula, 'V-18296258');
+    assert.equal(r.filas[1]!.nivel_generico, 8);
   });
 
   it('partirNombreCompleto (heurística VE)', () => {

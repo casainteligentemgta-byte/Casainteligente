@@ -18,6 +18,8 @@ export type FilaCsvContratoExpress = {
   cargo: string;
   remuneracion_semanal: number;
   fecha_ingreso: string;
+  /** Nivel genérico del listado (1–9), si viene en el Excel. */
+  nivel_generico: number | null;
 };
 
 export type ParseCsvExpressResult =
@@ -31,7 +33,8 @@ type ColKey =
   | 'cedula'
   | 'cargo'
   | 'remuneracion'
-  | 'fecha_ingreso';
+  | 'fecha_ingreso'
+  | 'nivel_generico';
 
 /** Normaliza encabezado: minúsculas, sin acentos, puntuación → espacio. */
 function normHeader(h: string): string {
@@ -93,6 +96,13 @@ function resolveAlias(norm: string): ColKey | null {
     return 'fecha_ingreso';
   }
   if (norm === 'fecha') return 'fecha_ingreso';
+
+  if (
+    /^(nivel generico|nivel|nivel salarial|nivel gen)$/.test(norm) ||
+    (norm.includes('nivel') && (norm.includes('generico') || norm.includes('salarial')))
+  ) {
+    return 'nivel_generico';
+  }
 
   return null;
 }
@@ -309,6 +319,16 @@ function filasDesdeMatriz(matrix: unknown[][], etiquetaArchivo: string): ParseCs
         ? Math.max(0, remRaw)
         : parseNumero(get('remuneracion'));
 
+    const nivelRaw = getRaw('nivel_generico');
+    let nivel_generico: number | null = null;
+    if (typeof nivelRaw === 'number' && Number.isFinite(nivelRaw)) {
+      const n = Math.round(nivelRaw);
+      if (n >= 1 && n <= 9) nivel_generico = n;
+    } else {
+      const n = Math.round(parseNumero(get('nivel_generico')));
+      if (n >= 1 && n <= 9) nivel_generico = n;
+    }
+
     filas.push({
       fila: li + 1,
       nombres,
@@ -317,6 +337,7 @@ function filasDesdeMatriz(matrix: unknown[][], etiquetaArchivo: string): ParseCs
       cargo: get('cargo'),
       remuneracion_semanal,
       fecha_ingreso: normalizeFecha(getRaw('fecha_ingreso') ?? get('fecha_ingreso')),
+      nivel_generico,
     });
   }
 

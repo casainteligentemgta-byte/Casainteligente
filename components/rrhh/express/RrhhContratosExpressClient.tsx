@@ -384,6 +384,7 @@ export default function RrhhContratosExpressClient() {
             cargo: f.cargo || null,
             remuneracion_semanal: f.remuneracion_semanal,
             fecha_ingreso: f.fecha_ingreso || null,
+            nivel_generico: f.nivel_generico,
           })),
         }),
       });
@@ -405,7 +406,15 @@ export default function RrhhContratosExpressClient() {
         setTabla(null);
         await loadLista();
       } else {
-        toast.error(`Ningún contrato creado (${fallidos} error(es))`);
+        const primerErr =
+          (j.resultados ?? []).find((r): r is Extract<ResultadoMasivo, { ok: false }> => !r.ok)?.error ??
+          null;
+        toast.error(
+          primerErr
+            ? `Ningún contrato creado (${fallidos} error(es)): ${primerErr}`
+            : `Ningún contrato creado (${fallidos} error(es))`,
+          { duration: 12_000 },
+        );
       }
     } catch {
       toast.error('Error de red');
@@ -663,12 +672,15 @@ export default function RrhhContratosExpressClient() {
           ) : null}
 
           {resultados && resultados.length > 0 ? (
-            <div className="mt-3 max-h-44 overflow-y-auto rounded-lg border border-white/10 bg-zinc-950/50 text-[11px]">
+            <div className="mt-3 max-h-52 overflow-y-auto rounded-lg border border-red-500/30 bg-red-950/20 text-[11px]">
+              <p className="sticky top-0 border-b border-red-500/20 bg-red-950/80 px-3 py-1.5 font-semibold text-red-100">
+                Detalle de errores / resultados
+              </p>
               <ul className="divide-y divide-white/5">
                 {resultados.map((r) => (
                   <li
                     key={`${r.fila}-${r.ok ? r.id : r.error}`}
-                    className={`px-3 py-1.5 ${r.ok ? 'text-emerald-300/90' : 'text-red-300/90'}`}
+                    className={`px-3 py-1.5 ${r.ok ? 'text-emerald-300/90' : 'text-red-200'}`}
                   >
                     Fila {r.fila}
                     {r.obrero ? ` · ${r.obrero}` : ''}
