@@ -20,6 +20,14 @@ export function normCargoKey(s: string): string {
     .trim();
 }
 
+/** Sinónimos frecuentes del listado de obra → preferencia en tabulador GOE. */
+const SINONIMOS_PREFERIDOS: Record<string, string[]> = {
+  operador: ['operador de equipo liviano', 'operador de equipo', 'operador'],
+  carpintero: ['carpintero de 1era', 'carpintero de 1ra', 'carpintero de 2da', 'carpintero'],
+  albanil: ['albanil de 1era', 'albanil de 1ra', 'albanil de 2da', 'albanil'],
+  ayudante: ['ayudante'],
+};
+
 function scoreMatch(
   label: string,
   row: ConfigNominaMatchRow,
@@ -36,11 +44,22 @@ function scoreMatch(
   else if (N.includes(L) && L.length >= 5) score = 40;
   else return -1;
 
-  if (nivelPreferido != null && row.nivel_salarial != null && Number(row.nivel_salarial) === nivelPreferido) {
-    score += 15;
+  const prefs = SINONIMOS_PREFERIDOS[L];
+  if (prefs?.length) {
+    const idx = prefs.findIndex((p) => N === normCargoKey(p) || N.startsWith(`${normCargoKey(p)} `));
+    if (idx >= 0) score += 20 - idx * 2;
   }
-  // Preferir denominaciones más cortas (menos específicas) ante empate cercano:
-  // p. ej. «Ayudante» sobre «Ayudante de Operadores» cuando el listado dice AYUDANTE.
+
+  // Preferir 1era cuando el nivel del listado es alto (≥5); 2da cuando es bajo.
+  if (nivelPreferido != null) {
+    if (nivelPreferido >= 5 && /\b1(era|ra|ª)\b/.test(N)) score += 12;
+    if (nivelPreferido <= 4 && /\b2(da|ª)\b/.test(N)) score += 12;
+    if (row.nivel_salarial != null && Number(row.nivel_salarial) === nivelPreferido) {
+      score += 8;
+    }
+  }
+
+  // Preferir denominaciones más cortas ante empate (Ayudante > Ayudante de Operadores).
   score += Math.max(0, 10 - Math.min(10, N.length / 8));
   return score;
 }

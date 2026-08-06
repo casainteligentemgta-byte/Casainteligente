@@ -179,18 +179,22 @@ export async function POST(req: Request) {
         const matched = resolverConfigNominaPorCargo(cargoLabel, configsMatch, {
           nivelGenerico: f.nivel_generico ?? null,
         });
-        if (!matched) {
+        if (matched) {
+          configId = matched.id;
+        } else if (defaultConfigId?.trim() && byId.has(defaultConfigId.trim())) {
+          // Sin match: usar oficio por defecto del lote (si RRHH lo eligió).
+          configId = defaultConfigId.trim();
+        } else {
           failCount++;
           resultados.push({
             fila: filaN,
             ok: false,
-            error: `Cargo «${cargoLabel}» no encontrado en el tabulador (revise Oficios y salarios)`,
+            error: `Cargo «${cargoLabel}» no encontrado en el tabulador (revise Oficios y salarios o elija oficio por defecto)`,
             obrero: full,
             cedula: ced,
           });
           continue;
         }
-        configId = matched.id;
       }
     }
 
@@ -199,7 +203,7 @@ export async function POST(req: Request) {
       resultados.push({
         fila: filaN,
         ok: false,
-        error: 'Indique el cargo en la fila (o un oficio por defecto en el lote)',
+        error: 'Indique el cargo en la fila o elija un oficio por defecto arriba',
         obrero: full,
         cedula: ced,
       });

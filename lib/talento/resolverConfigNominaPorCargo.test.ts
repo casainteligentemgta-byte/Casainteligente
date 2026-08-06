@@ -30,8 +30,11 @@ describe('resolverConfigNominaPorCargo', () => {
     assert.equal(r!.id, 'alb');
   });
 
-  it('OPERADOR encuentra operador de equipo', () => {
-    const r = resolverConfigNominaPorCargo('OPERADOR', configs);
+  it('OPERADOR prefiere operador de equipo liviano', () => {
+    const r = resolverConfigNominaPorCargo('OPERADOR', [
+      ...configs,
+      { id: 'op-ali', cargo_nombre: 'Operador de Aliva', nivel_salarial: 4 },
+    ]);
     assert.ok(r);
     assert.equal(r!.id, 'op');
   });

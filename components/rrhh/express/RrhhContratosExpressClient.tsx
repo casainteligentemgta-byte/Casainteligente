@@ -17,6 +17,7 @@ import {
 } from '@/lib/talento/parseCsvContratosExpress';
 
 type EntidadOpt = { id: string; nombre: string };
+type OficioOpt = { id: string; cargo_nombre: string };
 type ProyectoOpt = {
   id: string;
   nombre: string;
@@ -65,9 +66,11 @@ export default function RrhhContratosExpressClient() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [entidades, setEntidades] = useState<EntidadOpt[]>([]);
+  const [oficios, setOficios] = useState<OficioOpt[]>([]);
   const [proyectos, setProyectos] = useState<ProyectoOpt[]>([]);
   const [entidadId, setEntidadId] = useState('');
   const [proyectoId, setProyectoId] = useState('');
+  const [configNominaDefaultId, setConfigNominaDefaultId] = useState('');
   const [entidadNombre, setEntidadNombre] = useState<string | null>(null);
 
   const [rows, setRows] = useState<ExpressRow[]>([]);
@@ -89,6 +92,23 @@ export default function RrhhContratosExpressClient() {
     setLoadingMeta(true);
     try {
       const entRes = await supabase.from('ci_entidades').select('id,nombre,nombre_legal').order('nombre');
+      const ofiRes = await supabase
+        .from('ci_config_nomina')
+        .select('id,cargo_nombre')
+        .order('cargo_nombre')
+        .limit(500);
+      if (!ofiRes.error && ofiRes.data) {
+        setOficios(
+          (ofiRes.data as { id: string; cargo_nombre?: string | null }[])
+            .map((o) => ({
+              id: o.id,
+              cargo_nombre: (o.cargo_nombre ?? '').trim() || o.id.slice(0, 8),
+            }))
+            .filter((o) => o.cargo_nombre),
+        );
+      } else {
+        setOficios([]);
+      }
 
       let proyData: unknown[] | null = null;
       let proyErr: { message?: string } | null = null;
@@ -376,6 +396,7 @@ export default function RrhhContratosExpressClient() {
         body: JSON.stringify({
           proyecto_id: proyectoId,
           entidad_patrono_id: entidadId,
+          config_nomina_id: configNominaDefaultId.trim() || null,
           filas: tabla.map((f) => ({
             fila: f.fila,
             obrero_nombres: f.nombres,
@@ -511,9 +532,23 @@ export default function RrhhContratosExpressClient() {
             <span className="font-mono text-zinc-400">nombres · apellidos · cedula · cargo · remuneracion_semanal · fecha_ingreso</span>
             . También listados de obra con{' '}
             <span className="font-mono text-zinc-400">NOMBRES Y APELLIDOS · C.I. · FECHA INI · CARGO</span>
-            {' '}(título arriba de la cabecera OK; remuneración opcional). Si hay remuneración semanal en USD, el
-            bono del contrato = total − tabulador del cargo.
+            {' '}(título arriba OK). El cargo se empareja con el tabulador; si no calza, usa el oficio por defecto.
           </p>
+          <label className="mt-3 flex max-w-md flex-col gap-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+            Oficio por defecto (si el cargo del Excel no está en el tabulador)
+            <select
+              className={selectClass}
+              value={configNominaDefaultId}
+              onChange={(e) => setConfigNominaDefaultId(e.target.value)}
+            >
+              <option value="">— Opcional —</option>
+              {oficios.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.cargo_nombre}
+                </option>
+              ))}
+            </select>
+          </label>
           <div className="mt-3 flex flex-wrap gap-2">
             <Button
               type="button"
