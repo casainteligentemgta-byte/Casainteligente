@@ -3,7 +3,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { CEDULA_VE_NORMALIZADA_REGEX, normCedulaToken } from '@/lib/talento/cedulaAuth';
+import { CEDULA_VE_NORMALIZADA_REGEX, estadoCivilContratoObrero, normCedulaToken } from '@/lib/talento/cedulaAuth';
 import { regenerarYPersistirPdfContratoExpress } from '@/lib/rrhh/expressContratoPdfBuffer';
 
 export type ActualizarContratoExpressInput = {
@@ -87,7 +87,7 @@ export async function actualizarContratoExpress(
     patch.obrero_direccion = trimOrNull(input.obrero_direccion) || 'de este domicilio';
   }
   if (input.estado_civil !== undefined) {
-    patch.estado_civil = trimOrNull(input.estado_civil) || 'Soltero';
+    patch.estado_civil = estadoCivilContratoObrero(input.estado_civil);
   }
   if (input.nacionalidad !== undefined) patch.nacionalidad = trimOrNull(input.nacionalidad);
   if (input.fecha_ingreso !== undefined) {

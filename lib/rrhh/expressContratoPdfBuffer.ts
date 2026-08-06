@@ -7,6 +7,7 @@ import {
 } from '@/lib/talento/contratoObreroPdfContext';
 import { ContratoObreroPDF } from '@/lib/talento/ContratoObreroPdfStructured';
 import { BUCKET_CONTRATOS_OBREROS } from '@/lib/talento/contratoLaboralRegistroStorage';
+import { estadoCivilContratoObrero } from '@/lib/talento/cedulaAuth';
 
 export type ExpressRowPdf = {
   id: string;
@@ -48,7 +49,7 @@ export function manualDesdeExpressRow(row: ExpressRowPdf): ContratoExpressManual
   const nombre =
     nombres && apellidos ? `${nombres} ${apellidos}` : strOpt(row.obrero_nombre) || '';
   const cedula = strOpt(row.obrero_cedula) || '';
-  const estadoCivil = strOpt(row.estado_civil) || 'Soltero';
+  const estadoCivil = estadoCivilContratoObrero(row.estado_civil);
   const direccion = strOpt(row.obrero_direccion) || 'de este domicilio';
   const nacionalidad = strOpt(row.nacionalidad);
   const fecha = strOpt(row.fecha_ingreso);

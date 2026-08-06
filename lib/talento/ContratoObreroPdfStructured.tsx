@@ -476,7 +476,7 @@ export function ContratoObreroPDF({
     '________________________________________________',
   );
   const nombreTrabajador = str(empleado.nombres ?? empleado.nombre_completo, '__________________________________________________');
-  const estadoCivilTrab = str(empleado.estado_civil, '_______________');
+  const estadoCivilTrab = str(empleado.estado_civil, 'Soltero');
   const cedulaTrabGuion = cedulaConGuion(empleado.cedula ?? empleado.documento);
   const domicilioTrab = str(
     empleado.direccion_domicilio ?? empleado.direccion_habitacion,

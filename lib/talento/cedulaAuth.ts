@@ -12,6 +12,26 @@ export function normCedulaToken(s: string): string {
 /** Tras {@link normCedulaToken}: letra V o E y 6–9 dígitos (ej. `V12345678`). */
 export const CEDULA_VE_NORMALIZADA_REGEX = /^[VE]\d{6,9}$/;
 
+/** Estado civil del obrero en contrato: si falta en hoja de vida / planilla, «Soltero». */
+export function estadoCivilContratoObrero(raw: string | null | undefined): string {
+  const t = String(raw ?? '').trim();
+  return t || 'Soltero';
+}
+
+/**
+ * True si el estado civil indica trabajadora (Soltera, Casada, etc.).
+ * Vacío / Soltero / Casado → masculino (concuerda con «el ciudadano»).
+ */
+export function trabajadorFemeninoDesdeEstadoCivil(raw: string | null | undefined): boolean {
+  const t = String(raw ?? '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  if (!t) return false;
+  return /^(soltera|casada|viuda|divorciada|separada)\b/.test(t);
+}
+
 /**
  * Número nacional sin prefijo (cédula VE: letra V/E opcional + dígitos).
  * Permite coincidir `V13848186` con `13848186` cuando el expediente y la URL difieren solo en el prefijo.

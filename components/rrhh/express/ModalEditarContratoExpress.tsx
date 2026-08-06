@@ -85,7 +85,11 @@ export default function ModalEditarContratoExpress({
         onOpenChange(false);
         return;
       }
-      setForm(j.contrato);
+      setForm({
+        ...j.contrato,
+        estado_civil: (j.contrato.estado_civil ?? '').trim() || 'Soltero',
+        obrero_direccion: (j.contrato.obrero_direccion ?? '').trim() || 'de este domicilio',
+      });
       setSchemaParcial(Boolean(j.schema_parcial));
       if (!ofiRes.error && ofiRes.data) {
         setOficios(
@@ -128,7 +132,7 @@ export default function ModalEditarContratoExpress({
           obrero_nombre: form.obrero_nombre ?? null,
           obrero_cedula: form.obrero_cedula ?? null,
           obrero_direccion: form.obrero_direccion ?? null,
-          estado_civil: form.estado_civil ?? null,
+          estado_civil: form.estado_civil?.trim() || 'Soltero',
           nacionalidad: form.nacionalidad ?? null,
           fecha_ingreso: form.fecha_ingreso || null,
           horario_semanal_texto: form.horario_semanal_texto ?? null,
@@ -224,7 +228,7 @@ export default function ModalEditarContratoExpress({
               Estado civil
               <input
                 className={inputClass}
-                value={form.estado_civil ?? ''}
+                value={form.estado_civil?.trim() ? form.estado_civil : 'Soltero'}
                 placeholder="Soltero"
                 onChange={(e) => setField('estado_civil', e.target.value)}
                 list="ci-estado-civil-edit"

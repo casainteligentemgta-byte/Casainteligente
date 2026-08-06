@@ -10,7 +10,7 @@ import {
   signedUrlContratoLaboralBucket,
 } from '@/lib/talento/contratoLaboralRegistroStorage';
 import { ContratoObreroPDF } from '@/lib/talento/ContratoObreroPdfStructured';
-import { CEDULA_VE_NORMALIZADA_REGEX, normCedulaToken } from '@/lib/talento/cedulaAuth';
+import { CEDULA_VE_NORMALIZADA_REGEX, estadoCivilContratoObrero, normCedulaToken } from '@/lib/talento/cedulaAuth';
 
 export type CrearContratoExpressInput = {
   proyecto_id: string;
@@ -77,7 +77,7 @@ function manualDesdeInput(input: CrearContratoExpressInput, fechaFirmaIso: strin
     obreroCedula: normCedulaToken(String(input.obrero_cedula)),
     obreroDireccion: input.obrero_direccion?.trim() || null,
     nacionalidad: input.nacionalidad?.trim() || null,
-    estadoCivil: input.estado_civil?.trim() || null,
+    estadoCivil: estadoCivilContratoObrero(input.estado_civil),
     fechaIngreso: input.fecha_ingreso?.trim() || fechaFirmaIso,
     fechaFirmaContratoIso: fechaFirmaIso,
     objetoContrato: input.objeto_contrato?.trim() || null,
@@ -175,7 +175,7 @@ export async function crearContratoExpress(
     created_by: input.created_by ?? null,
     bono_manual_usd: Number(input.bono_manual_usd ?? 0) || 0,
     horario_semanal_texto: horarioVal,
-    estado_civil: input.estado_civil?.trim() || 'Soltero',
+    estado_civil: estadoCivilContratoObrero(input.estado_civil),
     nacionalidad: input.nacionalidad?.trim() || null,
     fecha_ingreso: fechaFirmaIso,
     objeto_contrato: input.objeto_contrato?.trim() || null,
