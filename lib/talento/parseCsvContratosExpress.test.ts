@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import {
   parseCsvContratosExpress,
   partirNombreCompleto,
+  normalizarFechaIngresoIso,
 } from '@/lib/talento/parseCsvContratosExpress';
 
 describe('parseCsvContratosExpress', () => {
@@ -43,6 +44,17 @@ describe('parseCsvContratosExpress', () => {
     assert.equal(r.filas[1]!.cargo, 'CARPINTERO');
     assert.equal(r.filas[1]!.cedula, 'V-18296258');
     assert.equal(r.filas[1]!.nivel_generico, 8);
+  });
+
+  it('normalizarFechaIngresoIso (VE, textual, serial)', () => {
+    assert.equal(normalizarFechaIngresoIso('2026-08-05'), '2026-08-05');
+    assert.equal(normalizarFechaIngresoIso('5/8/2026'), '2026-08-05');
+    assert.equal(normalizarFechaIngresoIso('3/6/24'), '2024-06-03');
+    assert.equal(normalizarFechaIngresoIso('5 de agosto de 2026'), '2026-08-05');
+    assert.equal(normalizarFechaIngresoIso('13/1/2026'), '2026-01-13'); // día > 12
+    assert.equal(normalizarFechaIngresoIso('1/13/2026'), '2026-01-13'); // mes US > 12 en 2.º
+    assert.equal(normalizarFechaIngresoIso(''), '');
+    assert.equal(normalizarFechaIngresoIso('no-es-fecha'), '');
   });
 
   it('partirNombreCompleto (heurística VE)', () => {

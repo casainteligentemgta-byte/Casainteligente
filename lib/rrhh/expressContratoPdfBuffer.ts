@@ -43,10 +43,10 @@ const SELECT_FULL =
   'id,proyecto_id,config_nomina_id,obrero_nombre,obrero_nombres,obrero_apellidos,obrero_cedula,obrero_direccion,horario_semanal_texto,bono_manual_usd,pdf_storage_path,estado_civil,nacionalidad,fecha_ingreso,objeto_contrato,jornada_trabajo,obrero_municipio_residencia,obrero_estado_residencia,expediente_label,cargo_nombre_snapshot';
 
 const SELECT_BASE =
-  'id,proyecto_id,config_nomina_id,obrero_nombre,obrero_cedula,obrero_direccion,horario_semanal_texto,bono_manual_usd,pdf_storage_path,cargo_nombre_snapshot';
+  'id,proyecto_id,config_nomina_id,obrero_nombre,obrero_cedula,obrero_direccion,horario_semanal_texto,bono_manual_usd,pdf_storage_path,cargo_nombre_snapshot,fecha_ingreso,estado_civil,nacionalidad,objeto_contrato';
 
 const SELECT_MIN =
-  'id,proyecto_id,config_nomina_id,obrero_nombre,obrero_cedula,obrero_direccion,horario_semanal_texto,pdf_storage_path';
+  'id,proyecto_id,config_nomina_id,obrero_nombre,obrero_cedula,obrero_direccion,horario_semanal_texto,pdf_storage_path,fecha_ingreso';
 
 function strOpt(v: unknown): string | null {
   if (v == null) return null;

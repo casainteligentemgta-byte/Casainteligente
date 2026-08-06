@@ -20,11 +20,7 @@ const patchSchema = z.object({
   obrero_direccion: z.string().max(500).optional().nullable(),
   estado_civil: z.string().max(80).optional().nullable(),
   nacionalidad: z.string().max(80).optional().nullable(),
-  fecha_ingreso: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional()
-    .nullable(),
+  fecha_ingreso: z.string().max(40).optional().nullable(),
   horario_semanal_texto: z.string().max(2000).optional().nullable(),
   bono_manual_usd: z.coerce.number().nonnegative().optional().nullable(),
   config_nomina_id: z.string().uuid().optional().nullable(),
@@ -57,7 +53,7 @@ export async function GET(_req: Request, context: { params: { id: string } }) {
     const bare = await admin.client
       .from('ci_contratos_express')
       .select(
-        'id,proyecto_id,config_nomina_id,obrero_nombre,obrero_cedula,obrero_direccion,horario_semanal_texto,bono_manual_usd,cargo_nombre_snapshot,created_at',
+        'id,proyecto_id,config_nomina_id,obrero_nombre,obrero_cedula,obrero_direccion,horario_semanal_texto,bono_manual_usd,cargo_nombre_snapshot,fecha_ingreso,created_at',
       )
       .eq('id', id)
       .maybeSingle();

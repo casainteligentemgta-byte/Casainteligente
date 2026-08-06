@@ -21,6 +21,7 @@ import {
   trimFaseTecnica,
 } from '@/lib/talento/fasesTecnicasContrato';
 import { construirExpedienteContratoExpress } from '@/lib/talento/nomenclaturaExpedienteContrato';
+import { normalizarFechaIngresoIso } from '@/lib/talento/parseCsvContratosExpress';
 
 export type CrearContratoExpressInput = {
   proyecto_id: string;

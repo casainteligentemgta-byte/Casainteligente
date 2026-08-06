@@ -180,34 +180,107 @@ function excelSerialToIso(serial: number): string {
   return `${y}-${m}-${day}`;
 }
 
-/** Convierte fechas Excel / texto comunes a YYYY-MM-DD (acepta 3/6/24). */
-function normalizeFecha(raw: unknown): string {
+function dateObjectToIso(d: Date): string {
+  if (Number.isNaN(d.getTime())) return '';
+  // Excel/SheetJS suele entregar medianoche UTC; usar UTC evita correr un día en VE.
+  const usaUtc =
+    d.getUTCHours() === 0 &&
+    d.getUTCMinutes() === 0 &&
+    d.getUTCSeconds() === 0 &&
+    d.getUTCMilliseconds() === 0;
+  const y = usaUtc ? d.getUTCFullYear() : d.getFullYear();
+  const m = String((usaUtc ? d.getUTCMonth() : d.getMonth()) + 1).padStart(2, '0');
+  const day = String(usaUtc ? d.getUTCDate() : d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/**
+ * Convierte fechas Excel / texto comunes a YYYY-MM-DD (acepta 3/6/24, 05-08-2026, serial Excel).
+ * Formato día/mes/año (Venezuela) cuando ambos ≤ 12.
+ */
+export function normalizarFechaIngresoIso(raw: unknown): string {
   if (raw == null || raw === '') return '';
   if (typeof raw === 'number' && Number.isFinite(raw)) {
     return excelSerialToIso(raw);
   }
-  if (raw instanceof Date && !Number.isNaN(raw.getTime())) {
-    const y = raw.getFullYear();
-    const m = String(raw.getMonth() + 1).padStart(2, '0');
-    const day = String(raw.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
+  if (raw instanceof Date) {
+    return dateObjectToIso(raw);
   }
   const t = String(raw).trim();
   if (!t) return '';
   if (/^\d{4}-\d{2}-\d{2}/.test(t)) return t.slice(0, 10);
+
+  // 5 de agosto de 2026 / 5 ago 2026
+  const meses: Record<string, string> = {
+    enero: '01',
+    ene: '01',
+    febrero: '02',
+    feb: '02',
+    marzo: '03',
+    mar: '03',
+    abril: '04',
+    abr: '04',
+    mayo: '05',
+    may: '05',
+    junio: '06',
+    jun: '06',
+    julio: '07',
+    jul: '07',
+    agosto: '08',
+    ago: '08',
+    septiembre: '09',
+    setiembre: '09',
+    sep: '09',
+    set: '09',
+    octubre: '10',
+    oct: '10',
+    noviembre: '11',
+    nov: '11',
+    diciembre: '12',
+    dic: '12',
+  };
+  const textual = t
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/,/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const mTxt = textual.match(/^(\d{1,2})\s*(?:de\s+)?([a-z]+)\s*(?:de\s+)?(\d{2,4})$/);
+  if (mTxt) {
+    const mo = meses[mTxt[2]!];
+    if (mo) {
+      let y = mTxt[3]!;
+      if (y.length === 2) y = Number(y) >= 70 ? `19${y}` : `20${y}`;
+      return `${y}-${mo}-${mTxt[1]!.padStart(2, '0')}`;
+    }
+  }
+
   const m = t.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
   if (m) {
-    const d = m[1]!.padStart(2, '0');
-    const mo = m[2]!.padStart(2, '0');
+    const a = Number(m[1]);
+    const b = Number(m[2]);
     let y = m[3]!;
     if (y.length === 2) y = Number(y) >= 70 ? `19${y}` : `20${y}`;
-    return `${y}-${mo}-${d}`;
+    // Preferir D/M/Y (VE). Si el 1.er número > 12, seguro es día.
+    // Si el 2.º > 12, interpretar M/D/Y.
+    let day: number;
+    let month: number;
+    if (b > 12 && a >= 1 && a <= 12) {
+      month = a;
+      day = b;
+    } else {
+      day = a;
+      month = b;
+    }
+    if (month < 1 || month > 12 || day < 1 || day > 31) return '';
+    return `${y}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
   }
   if (/^\d+(\.\d+)?$/.test(t)) {
     const n = Number(t);
     if (n > 20000 && n < 80000) return excelSerialToIso(n);
   }
-  return t;
+  return '';
 }
 
 function cellToString(v: unknown): string {
@@ -216,7 +289,7 @@ function cellToString(v: unknown): string {
     if (Number.isInteger(v) && Math.abs(v) >= 1e6) return String(Math.trunc(v));
     return String(v);
   }
-  if (v instanceof Date) return normalizeFecha(v);
+  if (v instanceof Date) return normalizarFechaIngresoIso(v);
   return String(v).trim();
 }
 
@@ -336,7 +409,7 @@ function filasDesdeMatriz(matrix: unknown[][], etiquetaArchivo: string): ParseCs
       cedula,
       cargo: get('cargo'),
       remuneracion_semanal,
-      fecha_ingreso: normalizeFecha(getRaw('fecha_ingreso') ?? get('fecha_ingreso')),
+      fecha_ingreso: normalizarFechaIngresoIso(getRaw('fecha_ingreso') ?? get('fecha_ingreso')),
       nivel_generico,
     });
   }

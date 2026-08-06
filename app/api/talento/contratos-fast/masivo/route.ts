@@ -10,6 +10,7 @@ import {
 } from '@/lib/nomina/ingresoSemanalDesdeConfigNomina';
 import { resolverConfigNominaPorCargo } from '@/lib/talento/resolverConfigNominaPorCargo';
 import { recordarFaseTecnicaUsada, trimFaseTecnica } from '@/lib/talento/fasesTecnicasContrato';
+import { normalizarFechaIngresoIso } from '@/lib/talento/parseCsvContratosExpress';
 
 export const runtime = 'nodejs';
 /** Generación de PDFs en lote puede tardar. */
@@ -31,11 +32,7 @@ const filaSchema = z.object({
    * Se convierte a bono = max(0, remuneracion − ingreso semanal del tabulador del cargo).
    */
   remuneracion_semanal: z.coerce.number().nonnegative().optional().nullable(),
-  fecha_ingreso: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional()
-    .nullable(),
+  fecha_ingreso: z.string().max(40).optional().nullable(),
   /** Nombre de cargo en tabulador (`ci_config_nomina.cargo_nombre`). */
   cargo: z.string().max(160).optional().nullable(),
   oficio: z.string().max(160).optional().nullable(),
@@ -229,10 +226,13 @@ export async function POST(req: Request) {
       bono = Math.max(0, Number(f.bono_manual_usd) || 0);
     }
 
-    const fecha =
-      f.fecha_ingreso?.trim() && /^\d{4}-\d{2}-\d{2}$/.test(f.fecha_ingreso.trim())
-        ? f.fecha_ingreso.trim()
-        : null;
+    const fechaNorm = normalizarFechaIngresoIso(f.fecha_ingreso ?? '');
+    const fecha = /^\d{4}-\d{2}-\d{2}$/.test(fechaNorm) ? fechaNorm : null;
+    if ((f.fecha_ingreso ?? '').trim() && !fecha) {
+      console.warn(
+        `[contratos-fast/masivo] fila ${filaN}: fecha_ingreso no reconocida «${f.fecha_ingreso}»; se usará la fecha de hoy`,
+      );
+    }
 
     const result = await crearContratoExpress(admin.client, {
       proyecto_id,

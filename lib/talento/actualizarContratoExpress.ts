@@ -6,6 +6,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { CEDULA_VE_NORMALIZADA_REGEX, estadoCivilContratoObrero, normCedulaToken } from '@/lib/talento/cedulaAuth';
 import { regenerarYPersistirPdfContratoExpress } from '@/lib/rrhh/expressContratoPdfBuffer';
 import { recordarFaseTecnicaUsada, trimFaseTecnica } from '@/lib/talento/fasesTecnicasContrato';
+import { normalizarFechaIngresoIso } from '@/lib/talento/parseCsvContratosExpress';
 
 export type ActualizarContratoExpressInput = {
   obrero_nombre?: string | null;
@@ -93,11 +94,16 @@ export async function actualizarContratoExpress(
   }
   if (input.nacionalidad !== undefined) patch.nacionalidad = trimOrNull(input.nacionalidad);
   if (input.fecha_ingreso !== undefined) {
-    const f = trimOrNull(input.fecha_ingreso);
-    if (f && !/^\d{4}-\d{2}-\d{2}$/.test(f)) {
-      return { ok: false, error: 'fecha_ingreso debe ser YYYY-MM-DD', status: 400 };
+    const raw = trimOrNull(input.fecha_ingreso);
+    if (!raw) {
+      patch.fecha_ingreso = null;
+    } else {
+      const f = normalizarFechaIngresoIso(raw);
+      if (!f || !/^\d{4}-\d{2}-\d{2}$/.test(f)) {
+        return { ok: false, error: 'fecha_ingreso debe ser YYYY-MM-DD', status: 400 };
+      }
+      patch.fecha_ingreso = f;
     }
-    patch.fecha_ingreso = f;
   }
   if (input.horario_semanal_texto !== undefined) {
     patch.horario_semanal_texto = trimOrNull(input.horario_semanal_texto);
@@ -149,6 +155,8 @@ export async function actualizarContratoExpress(
       const safe: Record<string, unknown> = {};
       for (const k of [
         'obrero_nombre',
+        'obrero_nombres',
+        'obrero_apellidos',
         'obrero_cedula',
         'obrero_direccion',
         'horario_semanal_texto',
@@ -156,6 +164,11 @@ export async function actualizarContratoExpress(
         'config_nomina_id',
         'cargo_nombre_snapshot',
         'salario_base_mensual_snapshot',
+        'fecha_ingreso',
+        'estado_civil',
+        'nacionalidad',
+        'objeto_contrato',
+        'jornada_trabajo',
       ]) {
         if (k in patch) safe[k] = patch[k];
       }
