@@ -15,8 +15,6 @@ import {
 } from '@/lib/talento/generoContratoLaboral';
 import { textoObligacionesTrabajadorContrato } from '@/lib/talento/obligacionesOficioContrato';
 import {
-  fmtCompensacionCulminacionUsdPlano,
-  montoCompensacionCulminacionUsd,
   remuneracionSemanalUsdExpress,
 } from '@/lib/talento/compensacionCulminacionContrato';
 
@@ -584,7 +582,7 @@ export function ContratoObreroPDF({
       : 0;
   /**
    * Remuneración semanal USD (Excel / edición).
-   * En express: SEXTA (BONO ESPECIAL) y SÉPTIMA (compensación) usan siempre la misma cifra.
+   * SEXTA (BONO ESPECIAL) y SÉPTIMA (compensación) usan SIEMPRE esta misma cifra.
    */
   const remuneracionSemanalUsdNum = esContratoExpress
     ? remuneracionSemanalUsdExpress({
@@ -594,10 +592,13 @@ export function ContratoObreroPDF({
     : ingresoSemanalBaseUsdNum != null || bonoManualUsdNum > 0
       ? Math.round(((ingresoSemanalBaseUsdNum ?? 0) + bonoManualUsdNum) * 100) / 100
       : 0;
-  const totalIngresoSemanalUsdClausulaSexTxt =
-    remuneracionSemanalUsdNum > 0
-      ? `${fmtUsdNumeroPlano(remuneracionSemanalUsdNum)} USD`
-      : '__________ USD';
+  /** Mismo texto numérico para SEXTA y SÉPTIMA (no puede divergir). */
+  const montoSemanalClausulasTxt =
+    remuneracionSemanalUsdNum > 0 ? fmtUsdNumeroPlano(remuneracionSemanalUsdNum) : null;
+  const totalIngresoSemanalUsdClausulaSexTxt = montoSemanalClausulasTxt
+    ? `${montoSemanalClausulasTxt} USD`
+    : '__________ USD';
+  const compUsdMesTxt = montoSemanalClausulasTxt ?? '________';
 
   const HORARIO_DETALLE_PDF_DEFAULT =
     'Lunes a Jueves: De 7:00 a.m. a 5:00 p.m. (1 hora de descanso de 12:00 p.m. a 1:00 p.m., no imputable a la jornada). Viernes: De 7:00 a.m. a 11:00 a.m. (Jornada continua). ';
@@ -649,12 +650,7 @@ export function ContratoObreroPDF({
   const tratoTrab = tratoTrabajadorContrato(trabFemenino);
   const nacionalidadTrab = nacionalidadAcordada(empleado.nacionalidad, trabFemenino);
   const repCedulaLinea = str(repCedulaGuion, '_______________');
-  // SÉPTIMA: siempre = remuneración semanal USD (misma cifra que BONO ESPECIAL).
-  const compUsdMes = montoCompensacionCulminacionUsd({
-    remuneracionSemanalUsd: remuneracionSemanalUsdNum,
-    compensacionExplicitUsd: parametros.compensacionCulminacionUsdPorMes,
-  });
-  const compUsdMesTxt = fmtCompensacionCulminacionUsdPlano(compUsdMes);
+  // SÉPTIMA: mismo monto que SEXTA (remuneración semanal). No recalcular aparte.
   const puntoEncTransporte = fragmentoPuntoEncuentroTransporte(parametros.textoPuntoEncuentroTransporteSex);
   const fragDomCentroComercial = fragmentosDomicilioCentroComercial(domicilioComparecenciaPdf);
   const textoRegularDomPdf = fragDomCentroComercial

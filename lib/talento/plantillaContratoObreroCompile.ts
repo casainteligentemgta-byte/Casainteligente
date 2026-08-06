@@ -425,7 +425,12 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
     CONTRATO_LUGAR_QUINTA: lugarQuinta,
     CONTRATO_SALARIO_SEMANAL_VES: salSemanalTxt,
     CONTRATO_CESTA_TICKET_USD_SEMANAL: `${CESTATICKET_SEMANAL_USD} USD`,
-    CONTRATO_INGRESO_SEMANAL_USD_TOTAL: '__________ USD',
+    CONTRATO_INGRESO_SEMANAL_USD_TOTAL: (() => {
+      const rem = montoCompensacionCulminacionUsd({
+        bonoSemanalUsd: f.contrato.bono_especial_usd,
+      });
+      return rem > 0 ? `${fmtCompensacionCulminacionUsdPlano(rem)} USD` : '__________ USD';
+    })(),
     CONTRATO_COMPENSACION_CULMINACION_USD: fmtCompensacionCulminacionUsdPlano(
       montoCompensacionCulminacionUsd({
         bonoSemanalUsd: f.contrato.bono_especial_usd,

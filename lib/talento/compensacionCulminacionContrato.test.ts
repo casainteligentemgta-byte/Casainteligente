@@ -21,16 +21,25 @@ describe('compensacionCulminacionContrato', () => {
     assert.equal(montoCompensacionCulminacionUsd({}), 0);
   });
 
-  it('reconstruye rem legacy (complemento < tabulador)', () => {
-    // 70 rem − 37.08 base = 32.92 complemento guardado
+  it('reconstruye rem legacy (complemento < tabulador) → SEXTA=SÉPTIMA', () => {
+    // 90 rem − 48.85 base (nivel 8) = 41.15 complemento guardado
     assert.equal(
-      remuneracionSemanalUsdExpress({ storedUsd: 32.92, ingresoTabuladorSemanalUsd: 37.08 }),
-      70,
+      remuneracionSemanalUsdExpress({ storedUsd: 41.15, ingresoTabuladorSemanalUsd: 48.85 }),
+      90,
     );
     // Nuevo: ya guardaron la rem completa
     assert.equal(
-      remuneracionSemanalUsdExpress({ storedUsd: 70, ingresoTabuladorSemanalUsd: 37.08 }),
-      70,
+      remuneracionSemanalUsdExpress({ storedUsd: 90, ingresoTabuladorSemanalUsd: 48.85 }),
+      90,
+    );
+    assert.equal(
+      montoCompensacionCulminacionUsd({
+        remuneracionSemanalUsd: remuneracionSemanalUsdExpress({
+          storedUsd: 41.15,
+          ingresoTabuladorSemanalUsd: 48.85,
+        }),
+      }),
+      90,
     );
   });
 
