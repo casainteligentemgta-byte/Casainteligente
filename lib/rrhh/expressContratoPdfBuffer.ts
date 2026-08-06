@@ -6,30 +6,89 @@ import {
   type ContratoExpressManualInput,
 } from '@/lib/talento/contratoObreroPdfContext';
 import { ContratoObreroPDF } from '@/lib/talento/ContratoObreroPdfStructured';
+import { BUCKET_CONTRATOS_OBREROS } from '@/lib/talento/contratoLaboralRegistroStorage';
 
-type ExpressRow = {
+export type ExpressRowPdf = {
   id: string;
   proyecto_id: string;
   config_nomina_id?: string | null;
   obrero_nombre?: string | null;
+  obrero_nombres?: string | null;
+  obrero_apellidos?: string | null;
   obrero_cedula?: string | null;
   obrero_direccion?: string | null;
   horario_semanal_texto?: string | null;
   bono_manual_usd?: number | null;
   bono_manual_ves?: number | null;
+  pdf_storage_path?: string | null;
+  estado_civil?: string | null;
+  nacionalidad?: string | null;
+  fecha_ingreso?: string | null;
+  objeto_contrato?: string | null;
+  jornada_trabajo?: string | null;
+  obrero_municipio_residencia?: string | null;
+  obrero_estado_residencia?: string | null;
 };
 
-function manualDesdeExpressRow(row: ExpressRow): ContratoExpressManualInput {
+const SELECT_FULL =
+  'id,proyecto_id,config_nomina_id,obrero_nombre,obrero_nombres,obrero_apellidos,obrero_cedula,obrero_direccion,horario_semanal_texto,bono_manual_usd,bono_manual_ves,pdf_storage_path,estado_civil,nacionalidad,fecha_ingreso,objeto_contrato,jornada_trabajo,obrero_municipio_residencia,obrero_estado_residencia';
+
+const SELECT_BASE =
+  'id,proyecto_id,config_nomina_id,obrero_nombre,obrero_cedula,obrero_direccion,horario_semanal_texto,bono_manual_usd,bono_manual_ves,pdf_storage_path';
+
+function strOpt(v: unknown): string | null {
+  if (v == null) return null;
+  const t = String(v).trim();
+  return t || null;
+}
+
+export function manualDesdeExpressRow(row: ExpressRowPdf): ContratoExpressManualInput {
+  const nombres = strOpt(row.obrero_nombres);
+  const apellidos = strOpt(row.obrero_apellidos);
+  const nombre =
+    nombres && apellidos ? `${nombres} ${apellidos}` : strOpt(row.obrero_nombre) || '';
+  const cedula = strOpt(row.obrero_cedula) || '';
+  const estadoCivil = strOpt(row.estado_civil) || 'Soltero';
+  const direccion = strOpt(row.obrero_direccion) || 'de este domicilio';
+  const nacionalidad = strOpt(row.nacionalidad);
+  const fecha = strOpt(row.fecha_ingreso);
+
   return {
-    obreroNombre: String(row.obrero_nombre ?? '').trim(),
-    obreroCedula: String(row.obrero_cedula ?? '').trim(),
-    obreroDireccion: row.obrero_direccion?.trim() || null,
-    horarioSemanalTexto: row.horario_semanal_texto?.trim() || null,
+    obreroNombre: nombre,
+    obreroCedula: cedula,
+    obreroDireccion: direccion,
+    horarioSemanalTexto: strOpt(row.horario_semanal_texto),
+    estadoCivil,
+    nacionalidad,
+    fechaIngreso: fecha,
+    fechaFirmaContratoIso: fecha,
+    objetoContrato: strOpt(row.objeto_contrato),
+    jornadaTrabajo: strOpt(row.jornada_trabajo),
+    obreroMunicipioResidencia: strOpt(row.obrero_municipio_residencia),
+    obreroEstadoResidencia: strOpt(row.obrero_estado_residencia),
     bonoManualUsd:
       row.bono_manual_usd != null && Number.isFinite(Number(row.bono_manual_usd))
         ? Number(row.bono_manual_usd)
-        : null,
+        : row.bono_manual_ves != null && Number.isFinite(Number(row.bono_manual_ves))
+          ? Number(row.bono_manual_ves)
+          : null,
   };
+}
+
+async function fetchExpressRow(
+  supabase: SupabaseClient,
+  id: string,
+): Promise<{ ok: true; row: ExpressRowPdf } | { ok: false; error: string }> {
+  const full = await supabase.from('ci_contratos_express').select(SELECT_FULL).eq('id', id).maybeSingle();
+  if (full.error && /column|42703|schema cache|Could not find/i.test(full.error.message)) {
+    const base = await supabase.from('ci_contratos_express').select(SELECT_BASE).eq('id', id).maybeSingle();
+    if (base.error) return { ok: false, error: base.error.message };
+    if (!base.data) return { ok: false, error: 'Contrato express no encontrado.' };
+    return { ok: true, row: base.data as ExpressRowPdf };
+  }
+  if (full.error) return { ok: false, error: full.error.message };
+  if (!full.data) return { ok: false, error: 'Contrato express no encontrado.' };
+  return { ok: true, row: full.data as ExpressRowPdf };
 }
 
 export async function generarBufferContratoExpressPdf(
@@ -39,18 +98,10 @@ export async function generarBufferContratoExpressPdf(
   const id = expressId.trim();
   if (!id) return { ok: false, error: 'Falta id de contrato express.' };
 
-  const { data, error } = await supabase
-    .from('ci_contratos_express')
-    .select(
-      'id,proyecto_id,config_nomina_id,obrero_nombre,obrero_cedula,obrero_direccion,horario_semanal_texto,bono_manual_usd,bono_manual_ves',
-    )
-    .eq('id', id)
-    .maybeSingle();
+  const fetched = await fetchExpressRow(supabase, id);
+  if (!fetched.ok) return fetched;
 
-  if (error) return { ok: false, error: error.message };
-  if (!data) return { ok: false, error: 'Contrato express no encontrado.' };
-
-  const row = data as ExpressRow;
+  const row = fetched.row;
   const proyectoId = String(row.proyecto_id ?? '').trim();
   const configNominaId = String(row.config_nomina_id ?? '').trim();
   if (!proyectoId || !configNominaId) {
@@ -83,4 +134,63 @@ export async function generarBufferContratoExpressPdf(
     console.error('[generarBufferContratoExpressPdf]', e);
     return { ok: false, error: 'No se pudo generar el PDF del contrato express.' };
   }
+}
+
+/**
+ * Regenera el PDF estructurado del contrato express y lo sobrescribe en Storage.
+ */
+export async function regenerarYPersistirPdfContratoExpress(
+  admin: SupabaseClient,
+  expressId: string,
+): Promise<
+  | { ok: true; pdf_storage_path: string; signed_url: string | null }
+  | { ok: false; error: string; status: number }
+> {
+  const id = expressId.trim();
+  if (!id) return { ok: false, error: 'Falta id de contrato.', status: 400 };
+
+  const fetched = await fetchExpressRow(admin, id);
+  if (!fetched.ok) {
+    const status = /no encontrado/i.test(fetched.error) ? 404 : 500;
+    return { ok: false, error: fetched.error, status };
+  }
+
+  const built = await generarBufferContratoExpressPdf(admin, id);
+  if (!built.ok) return { ok: false, error: built.error, status: 400 };
+
+  const prevPath = String(fetched.row.pdf_storage_path ?? '').trim();
+  const storagePath = prevPath || `express/${id}/contrato-estructurado.pdf`;
+
+  const { error: upErr } = await admin.storage.from(BUCKET_CONTRATOS_OBREROS).upload(storagePath, built.buf, {
+    contentType: 'application/pdf',
+    upsert: true,
+  });
+  if (upErr) {
+    console.error('[regenerarYPersistirPdfContratoExpress] storage', upErr.message);
+    return { ok: false, error: upErr.message, status: 500 };
+  }
+
+  if (!prevPath || prevPath !== storagePath) {
+    const { error: updErr } = await admin
+      .from('ci_contratos_express')
+      .update({ pdf_storage_path: storagePath } as never)
+      .eq('id', id);
+    if (updErr) {
+      console.error('[regenerarYPersistirPdfContratoExpress] update', updErr.message);
+      return { ok: false, error: updErr.message, status: 500 };
+    }
+  }
+
+  const { data: signed, error: signErr } = await admin.storage
+    .from(BUCKET_CONTRATOS_OBREROS)
+    .createSignedUrl(storagePath, 60 * 30);
+  if (signErr) {
+    console.warn('[regenerarYPersistirPdfContratoExpress] signed url', signErr.message);
+  }
+
+  return {
+    ok: true,
+    pdf_storage_path: storagePath,
+    signed_url: signed?.signedUrl ?? null,
+  };
 }

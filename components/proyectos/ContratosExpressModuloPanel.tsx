@@ -2,11 +2,12 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ExternalLink, FileText, RefreshCw, Trash2, Users } from 'lucide-react';
+import { ExternalLink, FileText, Pencil, RefreshCw, Trash2, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import { idsObrasHijasDesdeModuloIntegral } from '@/lib/proyectos/obraHijasDesdeModulo';
 import AccionesContratoPdfFila from '@/components/rrhh/AccionesContratoPdfFila';
+import ModalEditarContratoExpress from '@/components/rrhh/express/ModalEditarContratoExpress';
 import { Button } from '@/components/ui/button';
 import { hrefListaContratosExpress } from '@/lib/talento/hrefListaContratosExpress';
 
@@ -34,6 +35,7 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId, proyecto
   const [err, setErr] = useState<string | null>(null);
   const [rows, setRows] = useState<ExpressRow[]>([]);
   const [busyDeleteId, setBusyDeleteId] = useState<string | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
 
   const hrefExpress = useMemo(() => {
     const base = hrefListaContratosExpress();
@@ -201,6 +203,7 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId, proyecto
                   <th className="px-4 py-3">Cédula</th>
                   <th className="px-4 py-3">Estado</th>
                   <th className="px-4 py-3 text-center">Contrato</th>
+                  <th className="px-4 py-3 text-center">Editar</th>
                   <th className="px-4 py-3 text-right">Borrar</th>
                 </tr>
               </thead>
@@ -232,6 +235,19 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId, proyecto
                           nombreObrero={r.obrero_nombre}
                         />
                       </td>
+                      <td className="px-4 py-2.5 text-center">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-8 border-amber-700/50 bg-amber-950/25 px-2 text-xs text-amber-100"
+                          title="Editar datos del contrato y regenerar PDF"
+                          aria-label={`Editar contrato ${r.obrero_nombre}`}
+                          onClick={() => setEditId(r.id)}
+                        >
+                          <Pencil className="size-3.5" aria-hidden />
+                        </Button>
+                      </td>
                       <td className="whitespace-nowrap px-4 py-2.5 text-right">
                         <Button
                           type="button"
@@ -258,9 +274,19 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId, proyecto
 
       {!loading && !err && rows.length > 0 ? (
         <p className="mt-3 text-center text-[11px] text-zinc-600">
-          {rows.length} registro{rows.length === 1 ? '' : 's'} — carga masiva en RRHH → Express.
+          {rows.length} registro{rows.length === 1 ? '' : 's'} — carga masiva en RRHH → Express. Use Editar
+          para corregir datos y regenerar el PDF.
         </p>
       ) : null}
+
+      <ModalEditarContratoExpress
+        open={Boolean(editId)}
+        contratoId={editId}
+        onOpenChange={(open) => {
+          if (!open) setEditId(null);
+        }}
+        onGuardado={() => void load()}
+      />
     </section>
   );
 }

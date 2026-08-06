@@ -160,7 +160,7 @@ export async function crearContratoExpress(
       | string
       | null;
 
-  const payload = {
+  const payloadFull = {
     id: expressId,
     proyecto_id: input.proyecto_id,
     config_nomina_id: input.config_nomina_id,
@@ -168,20 +168,51 @@ export async function crearContratoExpress(
     obrero_nombres: input.obrero_nombres?.trim() || null,
     obrero_apellidos: input.obrero_apellidos?.trim() || null,
     obrero_cedula: cedula,
-    obrero_direccion: input.obrero_direccion?.trim() || null,
+    obrero_direccion: input.obrero_direccion?.trim() || 'de este domicilio',
     salario_base_mensual_snapshot: salSnap != null && Number.isFinite(salSnap) ? salSnap : null,
     cargo_nombre_snapshot: snap?.cargo_nombre?.trim() || null,
     pdf_storage_path: storagePath,
     created_by: input.created_by ?? null,
     bono_manual_usd: Number(input.bono_manual_usd ?? 0) || 0,
     horario_semanal_texto: horarioVal,
+    estado_civil: input.estado_civil?.trim() || 'Soltero',
+    nacionalidad: input.nacionalidad?.trim() || null,
+    fecha_ingreso: fechaFirmaIso,
+    objeto_contrato: input.objeto_contrato?.trim() || null,
+    jornada_trabajo: input.jornada_trabajo?.trim() || null,
+    obrero_municipio_residencia: input.obrero_municipio_residencia?.trim() || null,
+    obrero_estado_residencia: input.obrero_estado_residencia?.trim() || null,
   };
 
-  const { data, error: insErr } = await admin
+  let { data, error: insErr } = await admin
     .from('ci_contratos_express')
-    .insert(payload as never)
+    .insert(payloadFull as never)
     .select('id')
     .maybeSingle();
+
+  if (insErr && /column|42703|schema cache|Could not find/i.test(insErr.message)) {
+    const payloadLite = {
+      id: expressId,
+      proyecto_id: input.proyecto_id,
+      config_nomina_id: input.config_nomina_id,
+      obrero_nombre: nombreCompletoObrero(input),
+      obrero_cedula: cedula,
+      obrero_direccion: input.obrero_direccion?.trim() || null,
+      salario_base_mensual_snapshot: salSnap != null && Number.isFinite(salSnap) ? salSnap : null,
+      cargo_nombre_snapshot: snap?.cargo_nombre?.trim() || null,
+      pdf_storage_path: storagePath,
+      created_by: input.created_by ?? null,
+      bono_manual_usd: Number(input.bono_manual_usd ?? 0) || 0,
+      horario_semanal_texto: horarioVal,
+    };
+    const retry = await admin
+      .from('ci_contratos_express')
+      .insert(payloadLite as never)
+      .select('id')
+      .maybeSingle();
+    data = retry.data;
+    insErr = retry.error;
+  }
 
   if (insErr) {
     console.error('[crearContratoExpress] insert', insErr.message);

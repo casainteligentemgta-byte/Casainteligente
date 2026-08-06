@@ -3,10 +3,11 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Download, FileSpreadsheet, RefreshCw, Trash2, Upload } from 'lucide-react';
+import { Download, FileSpreadsheet, Pencil, RefreshCw, Trash2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import AccionesContratoPdfFila from '@/components/rrhh/AccionesContratoPdfFila';
+import ModalEditarContratoExpress from '@/components/rrhh/express/ModalEditarContratoExpress';
 import RrhhSubnavEnlaces from '@/components/rrhh/RrhhSubnavEnlaces';
 import { Button } from '@/components/ui/button';
 import {
@@ -82,6 +83,7 @@ export default function RrhhContratosExpressClient() {
   const [tabla, setTabla] = useState<FilaEditable[] | null>(null);
   const [importando, setImportando] = useState(false);
   const [resultados, setResultados] = useState<ResultadoMasivo[] | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
 
   const proyectoNombre = useMemo(
     () => proyectos.find((p) => p.id === proyectoId)?.nombre ?? null,
@@ -765,6 +767,7 @@ export default function RrhhContratosExpressClient() {
                     <th className="px-3 py-2.5">Cédula</th>
                     <th className="px-3 py-2.5">Cargo</th>
                     <th className="px-3 py-2.5 text-center">PDF</th>
+                    <th className="px-3 py-2.5 text-center">Editar</th>
                     <th className="px-3 py-2.5 text-right">Borrar</th>
                   </tr>
                 </thead>
@@ -784,6 +787,19 @@ export default function RrhhContratosExpressClient() {
                           empleadoRowId={`ci-express-${r.id}`}
                           nombreObrero={r.obrero_nombre}
                         />
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-8 border-amber-700/50 bg-amber-950/25 px-2 text-xs text-amber-100"
+                          onClick={() => setEditId(r.id)}
+                          title="Editar datos del contrato"
+                          aria-label={`Editar datos de ${r.obrero_nombre}`}
+                        >
+                          <Pencil className="size-3.5" />
+                        </Button>
                       </td>
                       <td className="px-3 py-2 text-right">
                         <Button
@@ -810,9 +826,19 @@ export default function RrhhContratosExpressClient() {
           <Link href="/rrhh/oficios-salarios" className="text-amber-300/90 underline underline-offset-2">
             Oficios y salarios
           </Link>
-          . El cargo del CSV debe coincidir con el nombre del tabulador.
+          . Tras ensamblar, use <span className="text-zinc-400">Editar</span> para corregir datos y
+          regenerar el PDF.
         </p>
       </section>
+
+      <ModalEditarContratoExpress
+        open={Boolean(editId)}
+        contratoId={editId}
+        onOpenChange={(open) => {
+          if (!open) setEditId(null);
+        }}
+        onGuardado={() => void loadLista()}
+      />
     </div>
   );
 }
