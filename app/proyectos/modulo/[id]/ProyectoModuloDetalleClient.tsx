@@ -7,44 +7,95 @@ import { createClient } from '@/lib/supabase/client';
 import { uploadProjectAsset } from '@/lib/supabase/project-media';
 
 import ResumenObrerosProyectoModulo from '@/components/proyectos/ResumenObrerosProyectoModulo';
+import InventarioEquiposProyecto from '@/components/proyectos/InventarioEquiposProyecto';
+import {
+  PROYECTO_EQUIPO_SELECT,
+  PROYECTO_EQUIPO_SELECT_LEGACY,
+  isMaquinariaColumnMissing,
+  mapProyectoEquipoRow,
+  type ProyectoEquipoRow,
+} from '@/lib/proyectos/proyectoEquipos';
 import ModalNuevaVacante from './components/ModalNuevaVacante';
 import ProyectoAdLogisticaBanner from '@/components/proyectos/ProyectoAdLogisticaBanner';
 import { useContratoAdProyecto } from '@/hooks/useContratoAdProyecto';
+import SugerenciaCuadrilla from '@/components/proyectos/SugerenciaCuadrilla';
 import DashboardUtilidadReal from '@/components/finanzas/DashboardUtilidadReal';
 import CuadroNominaContratados from '@/components/nomina/CuadroNominaContratados';
 import ImportarPresupuestoLulo from '@/components/proyectos/ImportarPresupuestoLulo';
 import ControlPlanosObra from '@/components/proyectos/ControlPlanosObra';
-import MetronPlanosClient from '@/components/metron/MetronPlanosClient';
 import SeccionTituloHover from '@/components/proyectos/SeccionTituloHover';
 import HorarioObraEditor from '@/components/proyectos/HorarioObraEditor';
-import { hrefRrhhHub } from '@/lib/rrhh/hrefSolicitudPersonal';
-import { hrefCcoProyecto } from '@/lib/contabilidad/cco/hrefCcoProyecto';
-import { guardarProyectoRrhhContexto } from '@/lib/rrhh/proyectoRrhhContexto';
-import { evaluarChecklistObraContratoPm } from '@/lib/talento/datosObraContratoPm';
-import dynamic from 'next/dynamic';
-
-const ProjectLocationPicker = dynamic(
-  () => import('@/components/proyectos/ProjectLocationPicker'),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="h-72 w-full animate-pulse rounded-xl border border-white/10 bg-white/[0.04]" />
-    ),
-  },
-);
+import { SelectorFaseTecnicaContrato } from '@/components/rrhh/express/SelectorFaseTecnicaContrato';
 
 const LOAD_TIMEOUT_MS = 45_000;
 
-/** Mismo hub RRHH que el icono del menú inferior, con la obra preseleccionada. */
-function RrhhHubLink({ proyectoModuloId }: { proyectoModuloId: string }) {
+type RrhhMenuDropdownProps = {
+  irRrhhPanel: () => void;
+  irCuadroSolicitados: () => void;
+};
+
+/** Botón RRHH con menú: panel personal y cuadro de obreros (solicitados). */
+function RrhhMenuDropdown({ irRrhhPanel, irCuadroSolicitados }: RrhhMenuDropdownProps) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open]);
+
+  const btnClass =
+    'rounded-xl border border-fuchsia-500/45 bg-fuchsia-950/50 px-3 py-2 text-xs font-bold text-fuchsia-100 shadow-sm hover:bg-fuchsia-900/60';
+
   return (
-    <Link
-      href={hrefRrhhHub({ proyectoModuloId })}
-      className="rounded-xl border border-fuchsia-500/45 bg-fuchsia-950/50 px-3 py-2 text-xs font-bold text-fuchsia-100 shadow-sm hover:bg-fuchsia-900/60"
-      title="Abrir RRHH (mismo módulo del menú inferior)"
-    >
-      RRHH
-    </Link>
+    <div ref={rootRef} className="relative inline-block text-left">
+      <button
+        type="button"
+        className={`${btnClass} inline-flex items-center gap-1.5`}
+        title="RRHH: panel personal y cuadro de obreros"
+        aria-expanded={open}
+        aria-haspopup="menu"
+        onClick={() => setOpen((o) => !o)}
+      >
+        RRHH
+        <span className="text-[10px] font-normal opacity-80" aria-hidden>
+          ▾
+        </span>
+      </button>
+      {open ? (
+        <div
+          role="menu"
+          className="absolute right-0 z-50 mt-1 min-w-[13.5rem] overflow-hidden rounded-xl border border-white/15 bg-zinc-900 py-1 shadow-xl"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            className="block w-full px-3 py-2 text-left text-xs font-semibold text-fuchsia-100 hover:bg-fuchsia-950/60"
+            onClick={() => {
+              irRrhhPanel();
+              setOpen(false);
+            }}
+          >
+            Panel personal
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="block w-full px-3 py-2 text-left text-xs font-semibold text-[#FF9500] hover:bg-[#FF9500]/10"
+            onClick={() => {
+              irCuadroSolicitados();
+              setOpen(false);
+            }}
+          >
+            Cuadro de obreros
+          </button>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -78,14 +129,15 @@ type Proyecto = {
   moneda: string;
   observaciones: string | null;
   entidad_id?: string | null;
+  /** Código corto para expediente de contratos / documentos (ej. ASFJG). */
+  codigo_nomenclatura?: string | null;
+  obra_codigo?: string | null;
   /** Horario por defecto en contratos PDF si el contrato no trae texto propio. */
   horario_semanal_obra_default?: string | null;
+  /** Fase técnica por defecto (cláusula PRIMERA) para contratos de esta obra. */
+  fase_tecnica_contrato_default?: string | null;
   /** Parada del transporte gratuito (cláusula SEXTA del contrato laboral). */
   punto_encuentro_transporte_contrato?: string | null;
-  /** Fase técnica / objeto de obra determinada (cláusula PRIMERA). PM una vez por obra. */
-  fase_tecnica_contrato?: string | null;
-  /** Ciudad domicilio procesal (cláusula DÉCIMA). Default Pampatar. */
-  domicilio_procesal_contrato?: string | null;
   updated_at?: string;
 };
 
@@ -99,6 +151,8 @@ type EntidadOpt = {
   rep_legal_cargo?: string | null;
   registro_mercantil?: unknown;
 };
+
+type Equipo = ProyectoEquipoRow;
 
 type Archivo = {
   id: string;
@@ -135,6 +189,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [proyecto, setProyecto] = useState<Proyecto | null>(null);
+  const [equipos, setEquipos] = useState<Equipo[]>([]);
   const [archivos, setArchivos] = useState<Archivo[]>([]);
   const [visitas, setVisitas] = useState<Visita[]>([]);
 
@@ -169,19 +224,32 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
   const [borrandoProyecto, setBorrandoProyecto] = useState(false);
   const rrhhPanelRef = useRef<HTMLDivElement>(null);
 
-  /** RRHH/talento/solicitados → hub unificado; finanzas → CCO de esta obra. */
+  const irRrhhPanel = useCallback(() => {
+    router.replace(`/proyectos/modulo/${id}?tab=rrhh`, { scroll: false });
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        rrhhPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+  }, [id, router]);
+
+  const irCuadroSolicitados = useCallback(() => {
+    router.replace(`/proyectos/modulo/${id}?tab=solicitados`, { scroll: false });
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        rrhhPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+  }, [id, router]);
+
   useEffect(() => {
-    guardarProyectoRrhhContexto(id);
     const t = searchParams.get('tab');
-    if (t === 'solicitados' || t === 'rrhh' || t === 'talento') {
-      router.replace(hrefRrhhHub({ proyectoModuloId: id }));
-      return;
-    }
-    if (t === 'finanzas') {
-      router.replace(hrefCcoProyecto(id));
-      return;
-    }
-  }, [searchParams, id, router]);
+    if (t !== 'rrhh' && t !== 'talento' && t !== 'solicitados' && t !== 'finanzas') return;
+    const timer = window.setTimeout(() => {
+      rrhhPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [searchParams, id]);
 
   const [peNombre, setPeNombre] = useState('');
   const [peEstado, setPeEstado] = useState('');
@@ -193,9 +261,10 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
   const [peLng, setPeLng] = useState('');
   const [peEntidadId, setPeEntidadId] = useState('');
   const [peHorarioSemanalObra, setPeHorarioSemanalObra] = useState('');
+  const [peCodigoNomenclatura, setPeCodigoNomenclatura] = useState('');
+  const [peFaseTecnica, setPeFaseTecnica] = useState('');
   const [pePuntoEncTransporteContrato, setPePuntoEncTransporteContrato] = useState('');
-  const [peFaseTecnicaContrato, setPeFaseTecnicaContrato] = useState('');
-  const [peDomicilioProcesalContrato, setPeDomicilioProcesalContrato] = useState('');
+  const [fasesTecnicasSugeridas, setFasesTecnicasSugeridas] = useState<string[]>([]);
   const [entidades, setEntidades] = useState<EntidadOpt[]>([]);
   const [savingProyecto, setSavingProyecto] = useState(false);
   const [proyectoSaveError, setProyectoSaveError] = useState<string | null>(null);
@@ -210,6 +279,18 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
     })();
   }, [supabase]);
 
+  useEffect(() => {
+    void fetch('/api/talento/fases-tecnicas')
+      .then(async (r) => {
+        const j = (await r.json()) as { fases?: { texto?: string }[] };
+        const textos = (j.fases ?? [])
+          .map((f) => (f.texto ?? '').trim())
+          .filter((t) => t.length >= 2);
+        setFasesTecnicasSugeridas(Array.from(new Set(textos)));
+      })
+      .catch(() => setFasesTecnicasSugeridas([]));
+  }, []);
+
   const load = useCallback(async () => {
     if (!id) {
       setLoading(false);
@@ -219,9 +300,14 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
     setLoading(true);
     setError(null);
     try {
-      const [p, a, v] = await withTimeout(
+      const [p, e0, a, v] = await withTimeout(
         Promise.all([
           supabase.from('ci_proyectos').select('*').eq('id', id).maybeSingle(),
+          supabase
+            .from('ci_proyecto_equipos')
+            .select(PROYECTO_EQUIPO_SELECT)
+            .eq('proyecto_id', id)
+            .order('created_at', { ascending: false }),
           supabase
             .from('ci_proyecto_archivos')
             .select('id,tipo,titulo,public_url,created_at')
@@ -235,20 +321,35 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
         ]),
         LOAD_TIMEOUT_MS,
       );
+      let equiposData: unknown[] | null = e0.data;
+      let equiposErr = e0.error;
+      if (equiposErr && isMaquinariaColumnMissing(equiposErr.message)) {
+        const legacy = await supabase
+          .from('ci_proyecto_equipos')
+          .select(PROYECTO_EQUIPO_SELECT_LEGACY)
+          .eq('proyecto_id', id)
+          .order('created_at', { ascending: false });
+        equiposData = legacy.data;
+        equiposErr = legacy.error;
+      }
       if (p.error || !p.data) {
         setProyecto(null);
+        setEquipos([]);
         setArchivos([]);
         setVisitas([]);
         setError(p.error?.message ?? 'Proyecto no encontrado.');
         return;
       }
       setProyecto(p.data as Proyecto);
+      setEquipos((equiposData ?? []).map((r) => mapProyectoEquipoRow(r as Record<string, unknown>)));
       setArchivos((a.data ?? []) as Archivo[]);
       setVisitas((v.data ?? []) as Visita[]);
+      if (equiposErr?.message) setError((prev) => prev ?? equiposErr.message);
       if (a.error?.message) setError((prev) => prev ?? a.error.message);
       if (v.error?.message) setError((prev) => prev ?? v.error.message);
     } catch (err) {
       setProyecto(null);
+      setEquipos([]);
       setArchivos([]);
       setVisitas([]);
       setError(err instanceof Error ? err.message : 'Error cargando el proyecto.');
@@ -358,7 +459,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
   async function borrarProyectoActual() {
     if (!proyecto) return;
     const ok = window.confirm(
-      `¿Eliminar permanentemente el proyecto «${proyecto.nombre}»?\n\nEsta acción no se puede deshacer. Se eliminan archivos y visitas vinculados.`,
+      `¿Eliminar permanentemente el proyecto «${proyecto.nombre}»?\n\nEsta acción no se puede deshacer. Se eliminan equipos, archivos y visitas vinculados.`,
     );
     if (!ok) return;
     setBorrandoProyecto(true);
@@ -381,20 +482,18 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
         : 'nuevo',
     );
     setPeUbicacion(proyecto.ubicacion_texto);
-    setPeMonto(
-      proyecto.monto_aproximado != null && Number(proyecto.monto_aproximado) > 0
-        ? String(proyecto.monto_aproximado)
-        : '',
-    );
+    setPeMonto(String(proyecto.monto_aproximado ?? 0));
     setPeMoneda(proyecto.moneda || 'USD');
     setPeObs(proyecto.observaciones ?? '');
     setPeLat(proyecto.lat != null ? String(proyecto.lat) : '');
     setPeLng(proyecto.lng != null ? String(proyecto.lng) : '');
     setPeEntidadId(proyecto.entidad_id ? String(proyecto.entidad_id) : '');
     setPeHorarioSemanalObra(proyecto.horario_semanal_obra_default ?? '');
+    setPeCodigoNomenclatura(
+      (proyecto.codigo_nomenclatura ?? '').trim() || (proyecto.obra_codigo ?? '').trim(),
+    );
+    setPeFaseTecnica(proyecto.fase_tecnica_contrato_default ?? '');
     setPePuntoEncTransporteContrato(proyecto.punto_encuentro_transporte_contrato ?? '');
-    setPeFaseTecnicaContrato(proyecto.fase_tecnica_contrato ?? '');
-    setPeDomicilioProcesalContrato(proyecto.domicilio_procesal_contrato ?? '');
     setProyectoSaveError(null);
   }, [proyecto]);
 
@@ -411,14 +510,10 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
       setProyectoSaveError('Selecciona el patrono / empresa ejecutora.');
       return;
     }
-    const montoRaw = String(peMonto).trim().replace(',', '.');
-    let m = 0;
-    if (montoRaw !== '') {
-      m = Number(montoRaw);
-      if (!Number.isFinite(m) || m < 0) {
-        setProyectoSaveError('Monto aproximado no válido (usa un número ≥ 0 o déjalo vacío).');
-        return;
-      }
+    const m = Number(String(peMonto).replace(',', '.'));
+    if (!Number.isFinite(m) || m < 0) {
+      setProyectoSaveError('Monto aproximado no válido.');
+      return;
     }
     let lat: number | null = null;
     let lng: number | null = null;
@@ -436,9 +531,16 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
         return;
       }
     }
+    const codigoNom = peCodigoNomenclatura
+      .trim()
+      .toUpperCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^A-Z0-9]/g, '')
+      .slice(0, 12);
     setSavingProyecto(true);
     setProyectoSaveError(null);
-    const payloadCore = {
+    const patchBase = {
       nombre: n,
       estado: peEstado,
       ubicacion_texto: u,
@@ -448,83 +550,72 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
       lat,
       lng,
       entidad_id: peEntidadId.trim() || null,
-      updated_at: new Date().toISOString(),
-    };
-    const payloadContrato = {
       horario_semanal_obra_default: peHorarioSemanalObra.trim() || null,
       punto_encuentro_transporte_contrato: pePuntoEncTransporteContrato.trim() || null,
-      fase_tecnica_contrato: peFaseTecnicaContrato.trim() || null,
-      domicilio_procesal_contrato: peDomicilioProcesalContrato.trim() || null,
+      updated_at: new Date().toISOString(),
     };
-
-    const intentos: Array<{ patch: Record<string, unknown>; aviso: string | null }> = [
-      { patch: { ...payloadCore, ...payloadContrato }, aviso: null },
-      {
-        patch: {
-          ...payloadCore,
-          horario_semanal_obra_default: payloadContrato.horario_semanal_obra_default,
-          punto_encuentro_transporte_contrato:
-            payloadContrato.punto_encuentro_transporte_contrato,
-          fase_tecnica_contrato: payloadContrato.fase_tecnica_contrato,
-        },
-        aviso:
-          'Guardado parcial: aplica sql_editor_310_… (domicilio procesal) en Supabase SQL Editor.',
-      },
-      {
-        patch: {
-          ...payloadCore,
-          horario_semanal_obra_default: payloadContrato.horario_semanal_obra_default,
-          punto_encuentro_transporte_contrato:
-            payloadContrato.punto_encuentro_transporte_contrato,
-        },
-        aviso:
-          'Guardado parcial: aplica la migración 307/308 (fase técnica) en Supabase SQL Editor.',
-      },
-      {
-        patch: {
-          ...payloadCore,
-          horario_semanal_obra_default: payloadContrato.horario_semanal_obra_default,
-        },
-        aviso:
-          'Guardado parcial: falta la columna punto_encuentro_transporte_contrato. Ejecute sql_editor_308_… + notify pgrst.',
-      },
-      {
-        patch: payloadCore,
-        aviso:
-          'Guardado parcial: faltan columnas de contrato en ci_proyectos. Ejecute sql_editor_308_ci_proyectos_punto_encuentro_transporte_ensure.sql en Supabase.',
-      },
-    ];
-
-    let upErr: { message: string } | null = null;
-    let avisoParcial: string | null = null;
-    for (const intento of intentos) {
-      const res = await supabase.from('ci_proyectos').update(intento.patch).eq('id', id);
-      upErr = res.error;
+    let upErr = (
+      await supabase
+        .from('ci_proyectos')
+        .update({
+          ...patchBase,
+          fase_tecnica_contrato_default: peFaseTecnica.trim() || null,
+          codigo_nomenclatura: codigoNom || null,
+          ...(codigoNom ? { obra_codigo: codigoNom } : {}),
+        })
+        .eq('id', id)
+    ).error;
+    if (
+      upErr &&
+      /codigo_nomenclatura|42703|column|schema cache|Could not find/i.test(upErr.message)
+    ) {
+      // Columna 316 aún no aplicada: al menos guardar en obra_codigo.
+      upErr = (
+        await supabase
+          .from('ci_proyectos')
+          .update({
+            ...patchBase,
+            fase_tecnica_contrato_default: peFaseTecnica.trim() || null,
+            ...(codigoNom ? { obra_codigo: codigoNom } : {}),
+          })
+          .eq('id', id)
+      ).error;
       if (!upErr) {
-        avisoParcial = intento.aviso;
-        break;
-      }
-      const msg = upErr.message ?? '';
-      const esSchema =
-        /schema cache|column|punto_encuentro_transporte_contrato|horario_semanal_obra_default|fase_tecnica_contrato|domicilio_procesal_contrato/i.test(
-          msg,
+        setProyectoSaveError(
+          'Proyecto guardado. Para el campo dedicado de nomenclatura ejecute sql_editor_316_ci_proyectos_codigo_nomenclatura.sql',
         );
-      if (!esSchema) break;
+      }
     }
-
+    if (upErr && /fase_tecnica_contrato_default|42703|column|schema cache/i.test(upErr.message)) {
+      upErr = (
+        await supabase
+          .from('ci_proyectos')
+          .update({
+            ...patchBase,
+            ...(codigoNom ? { obra_codigo: codigoNom, codigo_nomenclatura: codigoNom } : {}),
+          })
+          .eq('id', id)
+      ).error;
+      if (!upErr) {
+        setProyectoSaveError(
+          'Proyecto guardado, pero falta la columna fase técnica. Ejecute sql_editor_313_ci_fases_tecnicas_contrato.sql',
+        );
+        setSavingProyecto(false);
+        await load();
+        return;
+      }
+    }
     setSavingProyecto(false);
     if (upErr) {
-      setProyectoSaveError(
-        /punto_encuentro_transporte_contrato|domicilio_procesal_contrato|schema cache/i.test(upErr.message)
-          ? `${upErr.message} — Ejecute en SQL Editor: supabase/sql_editor_310_ci_proyectos_domicilio_procesal_contrato.sql (y 308 si falta).`
-          : upErr.message,
-      );
+      setProyectoSaveError(upErr.message);
       return;
     }
-    if (avisoParcial) {
-      setProyectoSaveError(avisoParcial);
-      void load();
-      return;
+    if (peFaseTecnica.trim().length >= 2) {
+      void fetch('/api/talento/fases-tecnicas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texto: peFaseTecnica.trim(), proyecto_id: id }),
+      }).catch(() => undefined);
     }
     router.replace(`/proyectos/modulo/${id}`);
     void load();
@@ -566,23 +657,13 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
     void load();
   }
 
+
   const nombrePatronoVista = useMemo(() => {
     const eid = proyecto?.entidad_id;
     if (!eid) return null;
     const row = entidades.find((en) => en.id === String(eid).trim());
     return row?.nombre?.trim() || null;
   }, [proyecto?.entidad_id, entidades]);
-
-  const checklistContratoPm = useMemo(() => {
-    if (!proyecto) return null;
-    return evaluarChecklistObraContratoPm({
-      ubicacion: proyecto.ubicacion_texto,
-      fase_tecnica_contrato: proyecto.fase_tecnica_contrato,
-      horario_semanal_obra_default: proyecto.horario_semanal_obra_default,
-      punto_encuentro_transporte_contrato: proyecto.punto_encuentro_transporte_contrato,
-      domicilio_procesal_contrato: proyecto.domicilio_procesal_contrato,
-    });
-  }, [proyecto]);
 
   /** Enlace directo ?tab=rrhh|talento|solicitados|finanzas: vistas compactas / cuadro RRHH / utilidad real. */
   const tabVistaTalento =
@@ -620,12 +701,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
           </Link>
           <ImportarPresupuestoLulo proyectoId={id} onSuccess={() => void load()} />
           <ControlPlanosObra proyectoId={id} />
-          <MetronPlanosClient
-            proyectoId={id}
-            nombreObra={proyecto.nombre}
-            className="mt-4"
-          />
-          <CuadroNominaContratados proyectoModuloId={id} titulo="Contratados activos" />
+          <CuadroNominaContratados proyectoModuloId={id} titulo="Contratados — nómina del proyecto" />
           <DashboardUtilidadReal proyectoId={id} className="" />
         </div>
       );
@@ -643,20 +719,17 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
       );
     }
     return (
-      <div className="rounded-2xl border border-violet-500/25 bg-violet-950/20 px-4 py-4">
-        <p className="text-sm font-semibold text-violet-100">Configuración de equipo recomendada</p>
-        <p className="mt-1 text-xs text-violet-100/75">
-          La composición ideal de cuadrilla (DISC + fase de obra) está en RRHH.
-        </p>
-        <Link
-          href={`${hrefRrhhHub({ proyectoModuloId: id })}#equipo-recomendado`}
-          className="mt-3 inline-flex rounded-xl border border-violet-400/40 bg-violet-600/30 px-3 py-2 text-xs font-bold text-violet-50 hover:bg-violet-600/45"
-        >
-          Abrir en RRHH →
-        </Link>
-      </div>
+      <>
+
+        <SugerenciaCuadrilla
+          nombreObra={proyecto.nombre}
+          ubicacionObra={proyecto.ubicacion_texto}
+          proyectoModuloId={id}
+        />
+      </>
     );
   }, [proyecto, id, rrhhVacantesTick, tabUrl, tabSolicitados]);
+
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] px-4 pb-28 pt-4">
@@ -701,9 +774,9 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                 >
                   Nueva vacante
                 </button>
-                <RrhhHubLink proyectoModuloId={id} />
+                <RrhhMenuDropdown irRrhhPanel={irRrhhPanel} irCuadroSolicitados={irCuadroSolicitados} />
                 <Link
-                  href="/rrhh/reclutamiento"
+                  href="/reclutamiento"
                   className="rounded-xl border border-sky-500/40 bg-sky-500/15 px-3 py-2 text-xs font-semibold text-sky-200 hover:bg-sky-500/25"
                 >
                   Reclutamiento
@@ -714,10 +787,22 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                 >
                   Gestión laboral
                 </Link>
+                <Link
+                  href={`/proyectos/modulo/${encodeURIComponent(id)}/nomina`}
+                  className="rounded-xl border border-teal-500/40 bg-teal-950/40 px-3 py-2 text-xs font-semibold text-teal-100 hover:bg-teal-900/55"
+                >
+                  Nómina y Asistencia
+                </Link>
               </>
             ) : null}
             {!tabCabeceraMinimaSinAcciones && !modoEdicion && !fichaModuloSinPestaña ? (
               <>
+                <Link
+                  href={`/proyectos/modulo/${encodeURIComponent(id)}?editar=1`}
+                  className="rounded-xl border border-sky-500/40 bg-sky-500/15 px-3 py-2 text-xs font-semibold text-sky-100 hover:bg-sky-500/25"
+                >
+                  Modificar proyecto
+                </Link>
                 <button
                   type="button"
                   onClick={() => setVacanteModalOpen(true)}
@@ -725,9 +810,9 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                 >
                   Nueva vacante
                 </button>
-                <RrhhHubLink proyectoModuloId={id} />
+                <RrhhMenuDropdown irRrhhPanel={irRrhhPanel} irCuadroSolicitados={irCuadroSolicitados} />
                 <Link
-                  href="/rrhh/reclutamiento"
+                  href="/reclutamiento"
                   className="rounded-xl border border-sky-500/40 bg-sky-500/15 px-3 py-2 text-xs font-semibold text-sky-200 hover:bg-sky-500/25"
                 >
                   Reclutamiento
@@ -738,13 +823,25 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                 >
                   Gestión laboral
                 </Link>
+                <Link
+                  href={`/proyectos/modulo/${encodeURIComponent(id)}/nomina`}
+                  className="rounded-xl border border-teal-500/40 bg-teal-950/40 px-3 py-2 text-xs font-semibold text-teal-100 hover:bg-teal-900/55"
+                >
+                  Nómina y Asistencia
+                </Link>
               </>
             ) : null}
           </div>
         </div>
         {proyecto && tabVistaTalento && !modoEdicion && tabUrl !== 'solicitados' && tabUrl !== 'rrhh' && tabUrl !== 'finanzas' ? (
           <div className="mt-3 flex flex-wrap items-center gap-2 border-b border-white/10 pb-3">
-            <RrhhHubLink proyectoModuloId={id} />
+            <RrhhMenuDropdown irRrhhPanel={irRrhhPanel} irCuadroSolicitados={irCuadroSolicitados} />
+            <Link
+              href={`/proyectos/modulo/${id}?editar=1`}
+              className="rounded-xl border border-sky-500/40 bg-sky-500/15 px-3 py-2 text-xs font-semibold text-sky-100 hover:bg-sky-500/25"
+            >
+              Modificar / renombrar
+            </Link>
             <Link
               href={`/proyectos/modulo/${id}`}
               className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-white/10"
@@ -819,93 +916,81 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-500">
-                    Lugar de trabajo / ubicación *
+                    Ubicación (texto) *
                   </label>
-                  <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-500">
-                    Va a la cláusula QUINTA del contrato. Ej.: Alcaldía de Chacao; instalaciones del cliente…
-                  </p>
                   <input
                     required
                     value={peUbicacion}
                     onChange={(e) => setPeUbicacion(e.target.value)}
-                    placeholder="Ej.: Alcaldía de Chacao"
-                    className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-sky-500/40"
+                    className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-sky-500/40"
                   />
                 </div>
-
-                <div className="rounded-2xl border border-sky-500/25 bg-sky-950/20 p-4 space-y-4">
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-sky-300/90">
-                      Datos de obra para contrato (PM · una vez)
-                    </p>
-                    <p className="mt-1 text-[11px] leading-relaxed text-zinc-400">
-                      Completa estos campos al abrir la obra. RRHH los reutiliza al generar cada contrato; no hace falta
-                      pedirlos por obrero. El nombre del proyecto va como «obra denominada» en la PRIMERA.
-                    </p>
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-500">
-                      Fase técnica (cláusula PRIMERA)
-                    </label>
-                    <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-500">
-                      Objeto de la obra determinada. Ej.: estructura y fundaciones; acabados; instalaciones eléctricas.
-                    </p>
-                    <textarea
-                      value={peFaseTecnicaContrato}
-                      onChange={(e) => setPeFaseTecnicaContrato(e.target.value)}
-                      rows={2}
-                      placeholder="Ej.: ejecución de estructura y fundaciones de la obra"
-                      className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-sky-500/40"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-500">
-                      Horario semanal en obra (contratos laborales)
-                    </label>
-                    <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-500">
-                      Se usa en el PDF si el contrato del obrero no define otro horario. Elige días y hora de inicio y
-                      culminación por franja; puedes añadir otra (p. ej. viernes corto).
-                    </p>
-                    <div className="mt-2">
-                      <HorarioObraEditor
-                        key={`${id}:${proyecto.updated_at ?? ''}`}
-                        value={peHorarioSemanalObra}
-                        onChange={setPeHorarioSemanalObra}
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-500">
-                      Parada del transporte (contrato laboral)
-                    </label>
-                    <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-500">
-                      Texto tras «desde el punto de encuentro» hasta el sitio de la obra. Ej.:{' '}
-                      <span className="text-zinc-400">en el sector Jorge Coll (Municipio Maneiro)</span>.
-                    </p>
-                    <textarea
-                      value={pePuntoEncTransporteContrato}
-                      onChange={(e) => setPePuntoEncTransporteContrato(e.target.value)}
-                      rows={2}
-                      placeholder="en el sector Jorge Coll (Municipio Maneiro)"
-                      className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-sky-500/40"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-500">
-                      Domicilio procesal (ciudad)
-                    </label>
-                    <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-500">
-                      Cláusula DÉCIMA. Si lo dejas vacío, el PDF usa Pampatar.
-                    </p>
-                    <input
-                      value={peDomicilioProcesalContrato}
-                      onChange={(e) => setPeDomicilioProcesalContrato(e.target.value)}
-                      placeholder="Pampatar"
-                      className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-sky-500/40"
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-500">
+                    Código nomenclatura (contratos / documentos)
+                  </label>
+                  <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-500">
+                    Sigla de la obra en expedientes (ej. <span className="font-mono text-zinc-400">ASFJG</span> →{' '}
+                    <span className="font-mono text-zinc-400">2026-08-DIMA-ASFJG-0001</span>). Solo letras y números.
+                  </p>
+                  <input
+                    value={peCodigoNomenclatura}
+                    onChange={(e) => setPeCodigoNomenclatura(e.target.value.toUpperCase())}
+                    maxLength={12}
+                    placeholder="ASFJG"
+                    className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 font-mono text-sm uppercase text-white placeholder:text-zinc-500 outline-none focus:border-sky-500/40"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-500">
+                    Horario semanal en obra (contratos laborales)
+                  </label>
+                  <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-500">
+                    Se usa en el PDF estructurado si el contrato del obrero no define otro horario. Elige días y hora de
+                    inicio y culminación por franja; puedes añadir otra franja (p. ej. viernes corto).
+                  </p>
+                  <div className="mt-2">
+                    <HorarioObraEditor
+                      key={`${id}:${proyecto.updated_at ?? ''}`}
+                      value={peHorarioSemanalObra}
+                      onChange={setPeHorarioSemanalObra}
                     />
                   </div>
                 </div>
-
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-500">
+                    Fase técnica (contratos laborales, cláusula PRIMERA)
+                  </label>
+                  <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-500">
+                    Seleccione del catálogo la fase (o fases) por defecto para los contratos de esta obra. El texto
+                    queda editable y se graba para próximas obras.
+                  </p>
+                  <div className="mt-2">
+                    <SelectorFaseTecnicaContrato
+                      value={peFaseTecnica}
+                      onChange={setPeFaseTecnica}
+                      controlClassName="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-sky-500/40"
+                      recientes={fasesTecnicasSugeridas}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-500">
+                    Parada del transporte (contrato laboral, cláusula SEXTA)
+                  </label>
+                  <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-500">
+                    Texto que aparece en el PDF tras «desde el punto de encuentro» (hasta «hasta el sitio de la obra»).
+                    Ej.: <span className="text-zinc-400">en el sector Jorge Coll (Municipio Maneiro)</span>. Si lo dejas
+                    vacío, se usa ese ejemplo por defecto.
+                  </p>
+                  <textarea
+                    value={pePuntoEncTransporteContrato}
+                    onChange={(e) => setPePuntoEncTransporteContrato(e.target.value)}
+                    rows={2}
+                    placeholder="en el sector Jorge Coll (Municipio Maneiro)"
+                    className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-sky-500/40"
+                  />
+                </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-500">Estado</label>
@@ -933,17 +1018,12 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-500">
-                    Monto aproximado (USD)
+                    Monto aproximado
                   </label>
-                  <p className="mt-0.5 text-[11px] text-zinc-500">
-                    Puedes dejarlo vacío y completarlo cuando tengas el monto.
-                  </p>
                   <input
                     value={peMonto}
                     onChange={(e) => setPeMonto(e.target.value)}
-                    placeholder="Opcional"
-                    inputMode="decimal"
-                    className="mt-1 w-full max-w-xs rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-sky-500/40"
+                    className="mt-1 w-full max-w-xs rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-sky-500/40"
                   />
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
@@ -967,23 +1047,6 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                       className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-sky-500/40"
                     />
                   </div>
-                </div>
-                <div>
-                  <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-zinc-500">
-                    Mapa / pegar ubicación
-                  </p>
-                  <ProjectLocationPicker
-                    lat={peLat.trim() ? Number(peLat) : null}
-                    lng={peLng.trim() ? Number(peLng) : null}
-                    onChange={(v) => {
-                      setPeLat(String(v.lat));
-                      setPeLng(String(v.lng));
-                      if (v.label && !peUbicacion.trim()) setPeUbicacion(v.label);
-                    }}
-                    onLabelFromShare={(label) => {
-                      if (!peUbicacion.trim()) setPeUbicacion(label);
-                    }}
-                  />
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-500">
@@ -1013,107 +1076,47 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
             {!modoEdicion && !tabVistaTalento ? (
               <>
                 <div className="mt-4 rounded-2xl border border-white/10 bg-zinc-900/70 p-5 shadow-lg backdrop-blur-xl">
-                  {/* Columna en móvil: el título usa todo el ancho; acciones abajo (sin solapar). */}
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-5">
-                    <div className="min-w-0 w-full flex-1 space-y-2">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
                       <h1 className="w-full text-pretty break-words text-2xl font-bold leading-snug text-white [overflow-wrap:anywhere]">
                         {proyecto.nombre}
                       </h1>
-                      <p className="text-pretty break-words text-sm leading-relaxed text-zinc-400">
-                        {proyecto.ubicacion_texto}
-                      </p>
-                      <p className="text-xs text-zinc-400">
+                      <p className="mt-1 text-sm text-zinc-400">{proyecto.ubicacion_texto}</p>
+                      <p className="mt-1 text-xs text-zinc-400">
                         Patrono:{' '}
                         <span className="font-semibold text-zinc-200">
                           {nombrePatronoVista ?? 'Sin asignar — Modificar proyecto'}
                         </span>
                       </p>
-                      <p className="text-xs text-zinc-500">
+                      <p className="mt-1 text-xs text-zinc-500">
                         GPS: {proyecto.lat ?? '—'}, {proyecto.lng ?? '—'} · Estado: {proyecto.estado}
                       </p>
                     </div>
-                    <div className="flex w-full shrink-0 flex-row flex-wrap gap-2 sm:w-auto sm:flex-col sm:items-stretch">
+                    <div className="flex shrink-0 flex-wrap items-center gap-2">
                       <Link
-                        href={`/proyectos/modulo/${id}?editar=1`}
-                        className="inline-flex flex-1 justify-center rounded-xl border border-sky-500/40 bg-sky-950/40 px-3 py-2 text-xs font-semibold text-sky-200 hover:bg-sky-900/55 sm:flex-none"
-                        title="Cambiar nombre y datos del proyecto"
+                        href={`/proyectos/modulo/${encodeURIComponent(id)}?editar=1`}
+                        className="rounded-xl border border-sky-500/40 bg-sky-500/15 px-3 py-2 text-xs font-semibold text-sky-100 hover:bg-sky-500/25"
                       >
-                        Editar / renombrar
+                        Modificar / renombrar
                       </Link>
                       <button
                         type="button"
                         onClick={() => void borrarProyectoActual()}
                         disabled={borrandoProyecto}
-                        className="inline-flex flex-1 justify-center rounded-xl border border-red-500/40 bg-red-950/40 px-3 py-2 text-xs font-semibold text-red-300 hover:bg-red-950/70 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
+                        className="rounded-xl border border-red-500/40 bg-red-950/40 px-3 py-2 text-xs font-semibold text-red-300 hover:bg-red-950/70 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {borrandoProyecto ? 'Borrando…' : 'Borrar proyecto'}
                       </button>
                     </div>
                   </div>
                 </div>
-                {checklistContratoPm ? (
-                  <div
-                    className={`mt-4 rounded-2xl border p-4 ${
-                      checklistContratoPm.listos
-                        ? 'border-emerald-500/30 bg-emerald-950/20'
-                        : 'border-amber-500/30 bg-amber-950/20'
-                    }`}
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <p
-                          className={`text-[10px] font-bold uppercase tracking-[0.14em] ${
-                            checklistContratoPm.listos ? 'text-emerald-300/90' : 'text-amber-300/90'
-                          }`}
-                        >
-                          Contrato laboral · datos PM
-                        </p>
-                        <p className="mt-1 text-xs text-zinc-400">
-                          {checklistContratoPm.listos
-                            ? 'Listos: RRHH puede generar contratos sin pedirte más datos de obra.'
-                            : `Faltan ${checklistContratoPm.faltantes.length} dato(s) de obra. Completa una sola vez en Modificar proyecto.`}
-                        </p>
-                        <ul className="mt-2 grid gap-1 sm:grid-cols-2">
-                          {checklistContratoPm.campos.map((c) => (
-                            <li key={c.id} className="text-[11px] text-zinc-300">
-                              <span className={c.completo ? 'text-emerald-400' : 'text-amber-400'}>
-                                {c.completo ? '✓' : '○'}
-                              </span>{' '}
-                              {c.etiqueta}
-                              {!c.completo ? null : c.valor ? (
-                                <span className="block truncate pl-4 text-zinc-500" title={c.valor}>
-                                  {c.valor}
-                                </span>
-                              ) : null}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                      {!checklistContratoPm.listos ? (
-                        <Link
-                          href={`/proyectos/modulo/${id}?editar=1`}
-                          className="shrink-0 rounded-xl border border-amber-500/40 bg-amber-500/15 px-3 py-2 text-xs font-semibold text-amber-100 hover:bg-amber-500/25"
-                        >
-                          Completar datos PM
-                        </Link>
-                      ) : null}
-                    </div>
-                  </div>
-                ) : null}
                 <div className="mt-4 flex flex-wrap items-start gap-4">
                   <ImportarPresupuestoLulo proyectoId={id} />
                   <Link
-                    href={`/proyectos/modulo/${id}/control-obra/equipo`}
-                    className="rounded-xl border border-indigo-500/40 bg-indigo-950/35 px-4 py-3 text-xs font-semibold text-indigo-100 hover:bg-indigo-900/45"
-                  >
-                    Equipo →
-                  </Link>
-                  <Link
-                    href={hrefCcoProyecto(id)}
+                    href={`/proyectos/modulo/${id}?tab=finanzas`}
                     className="rounded-xl border border-emerald-500/35 bg-emerald-950/30 px-4 py-3 text-xs font-semibold text-emerald-100 hover:bg-emerald-900/40"
-                    title="Control Contable de Obra (CCO)"
                   >
-                    Finanzas · CCO de esta obra →
+                    Utilidad real y finanzas del módulo →
                   </Link>
                 </div>
               </>
@@ -1123,20 +1126,36 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
               {modoEdicion || !tabVistaTalento ? (
               <>
             <div className="mt-6 grid gap-6 lg:grid-cols-2">
-              <div className="lg:col-span-2">
-                <ControlPlanosObra proyectoId={id} className="mb-2" />
+              <div className="lg:col-span-2 space-y-4">
+                <div className="rounded-2xl border border-sky-500/25 bg-sky-950/20 px-4 py-3 text-sm text-sky-100">
+                  <p className="font-semibold">Inventario de equipos y maquinarias propias</p>
+                  <p className="mt-1 text-xs text-sky-100/75">
+                    Se gestionan en Entidades (patrono): pestañas «Inventario equipos» y «Maquinaria propia»,
+                    incluyendo transmisión al trabajador.
+                  </p>
+                  <Link
+                    href="/configuracion/entidades"
+                    className="mt-2 inline-flex rounded-xl border border-sky-400/40 bg-sky-600/25 px-3 py-2 text-xs font-bold text-sky-50 hover:bg-sky-600/40"
+                  >
+                    Abrir Entidades →
+                  </Link>
+                </div>
+                <InventarioEquiposProyecto
+                  proyectoId={id}
+                  equipos={equipos}
+                  onRefresh={() => void load()}
+                  onError={setError}
+                  secciones={['maquinaria_alquilada']}
+                />
               </div>
-              <MetronPlanosClient
-                proyectoId={id}
-                nombreObra={proyecto?.nombre}
-                className="mb-6 lg:col-span-2"
-              />
+
+              <ControlPlanosObra proyectoId={id} className="mb-6" />
 
               <SeccionTituloHover
-                className="border border-white/10 bg-zinc-900/70 p-5 shadow-lg backdrop-blur-xl lg:col-span-2"
-                titulo="Fotos de obra"
+                className="border border-white/10 bg-zinc-900/70 p-5 shadow-lg backdrop-blur-xl"
+                titulo="Fotos / planos"
                 hint="Pasa el cursor sobre el título para subir foto o archivo"
-                descripcion="Fotos y documentos de campo. Los planos técnicos van en Planos y especificaciones."
+                descripcion="Fotos de obra, planos sueltos y documentos del proyecto."
                 panelOculto={
                   <form onSubmit={(e) => void addArchivo(e)} className="grid gap-2">
                     <select
@@ -1146,6 +1165,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                       className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-sky-500/40"
                     >
                       <option value="foto_proyecto">Foto de proyecto</option>
+                      <option value="plano">Plano</option>
                       <option value="documento">Documento</option>
                       <option value="otro">Otro</option>
                     </select>
@@ -1178,6 +1198,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                             className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-white"
                           >
                             <option value="foto_proyecto">foto_proyecto</option>
+                            <option value="plano">plano</option>
                             <option value="documento">documento</option>
                             <option value="otro">otro</option>
                           </select>
