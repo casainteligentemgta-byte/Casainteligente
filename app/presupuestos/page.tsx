@@ -365,7 +365,6 @@ export default function PresupuestosPage() {
     });
     const [fallbackById, setFallbackById] = useState<Record<string, number>>({});
     const [filtrosAbiertos, setFiltrosAbiertos] = useState(false);
-    const [statusMenuAbierto, setStatusMenuAbierto] = useState(false);
     /** Lista siempre en filas; se eliminó el selector 1 filas / 3 cols. */
     const vista: VistaPresupuestos = 'filas';
 
@@ -709,136 +708,97 @@ export default function PresupuestosPage() {
                     </div>
                 </div>
 
-                {/* Filtro por estado: un botón abre el menú con todos los status */}
-                <div style={{ marginBottom: '16px', position: 'relative' }}>
-                    {(() => {
-                        const statusOptions = [
-                            'todos',
-                            'no_enviado',
-                            'enviado',
-                            'aprobado',
-                            'no_aprobado',
-                            'cobrado',
-                            'pagado',
-                        ] as const;
-                        const labelActual =
-                            filter === 'todos' ? 'Todos' : CLASIFICACION_COLORS[filter].label;
-                        const iconActual =
-                            filter === 'todos' ? '📋' : CLASIFICACION_COLORS[filter].icon;
-                        const triggerBg =
-                            filter !== 'todos'
-                                ? CLASIFICACION_COLORS[filter].bg
-                                : statusMenuAbierto
-                                  ? 'rgba(0,122,255,0.15)'
-                                  : 'rgba(255,255,255,0.06)';
-                        const triggerText =
-                            filter !== 'todos'
-                                ? CLASIFICACION_COLORS[filter].text
-                                : statusMenuAbierto
-                                  ? '#007AFF'
-                                  : 'rgba(255,255,255,0.85)';
-                        const triggerBorder =
-                            filter !== 'todos'
-                                ? `1px solid ${CLASIFICACION_COLORS[filter].text}55`
-                                : statusMenuAbierto
-                                  ? '1px solid rgba(0,122,255,0.35)'
-                                  : '1px solid rgba(255,255,255,0.1)';
-                        return (
-                            <>
-                                <button
-                                    type="button"
-                                    onClick={() => setStatusMenuAbierto((v) => !v)}
-                                    aria-expanded={statusMenuAbierto}
-                                    aria-haspopup="listbox"
-                                    style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '6px',
-                                        background: triggerBg,
-                                        color: triggerText,
-                                        border: triggerBorder,
-                                        borderRadius: '999px',
-                                        padding: '7px 12px',
-                                        fontSize: '11px',
-                                        fontWeight: 700,
-                                        cursor: 'pointer',
-                                    }}
-                                >
-                                    <span aria-hidden>{iconActual}</span>
-                                    Status: {labelActual}
-                                    <span aria-hidden style={{ opacity: 0.7, fontSize: '10px' }}>
-                                        {statusMenuAbierto ? '▴' : '▾'}
-                                    </span>
-                                </button>
-                                {statusMenuAbierto ? (
-                                    <div
-                                        role="listbox"
+                {/* Filtro por estado: dos líneas justificadas (sin scroll lateral) */}
+                <div
+                    className="presupuestos-status-filters"
+                    role="listbox"
+                    aria-label="Filtrar por status"
+                    style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px',
+                        marginBottom: '16px',
+                        width: '100%',
+                        maxWidth: '100%',
+                        boxSizing: 'border-box',
+                    }}
+                >
+                    {([
+                        ['todos', 'no_enviado', 'enviado', 'aprobado'],
+                        ['no_aprobado', 'cobrado', 'pagado'],
+                    ] as const).map((row, rowIdx) => (
+                        <div
+                            key={rowIdx}
+                            style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'stretch',
+                                gap: '6px',
+                                width: '100%',
+                                minWidth: 0,
+                            }}
+                        >
+                            {row.map((f) => {
+                                const active = filter === f;
+                                const label = f === 'todos' ? 'Todos' : CLASIFICACION_COLORS[f].label;
+                                const icon = f === 'todos' ? '📋' : CLASIFICACION_COLORS[f].icon;
+                                const text =
+                                    f !== 'todos' && active
+                                        ? CLASIFICACION_COLORS[f].text
+                                        : active
+                                          ? '#007AFF'
+                                          : 'rgba(255,255,255,0.75)';
+                                const bg =
+                                    f !== 'todos' && active
+                                        ? CLASIFICACION_COLORS[f].bg
+                                        : active
+                                          ? 'rgba(0,122,255,0.15)'
+                                          : 'rgba(255,255,255,0.06)';
+                                const border =
+                                    f !== 'todos' && active
+                                        ? `1px solid ${CLASIFICACION_COLORS[f].text}55`
+                                        : active
+                                          ? '1px solid rgba(0,122,255,0.35)'
+                                          : '1px solid rgba(255,255,255,0.1)';
+                                return (
+                                    <button
+                                        key={f}
+                                        type="button"
+                                        role="option"
+                                        aria-selected={active}
+                                        onClick={() => setFilter(f)}
                                         style={{
-                                            ...glass,
-                                            position: 'absolute',
-                                            left: 0,
-                                            top: 'calc(100% + 6px)',
-                                            zIndex: 40,
-                                            minWidth: '200px',
-                                            padding: '6px',
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            gap: '2px',
-                                            boxShadow: '0 12px 32px rgba(0,0,0,0.45)',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: '4px',
+                                            flex: '1 1 0',
+                                            width: 0,
+                                            minWidth: 0,
+                                            boxSizing: 'border-box',
+                                            background: bg,
+                                            color: text,
+                                            border,
+                                            borderRadius: '999px',
+                                            padding: '8px 4px',
+                                            fontSize: '11px',
+                                            fontWeight: 700,
+                                            cursor: 'pointer',
+                                            textAlign: 'center',
+                                            lineHeight: 1.15,
+                                            whiteSpace: 'normal',
+                                            wordBreak: 'break-word',
                                         }}
                                     >
-                                        {statusOptions.map((f) => {
-                                            const active = filter === f;
-                                            const text =
-                                                f !== 'todos' && active
-                                                    ? CLASIFICACION_COLORS[f].text
-                                                    : active
-                                                      ? '#007AFF'
-                                                      : 'rgba(255,255,255,0.8)';
-                                            const bg =
-                                                f !== 'todos' && active
-                                                    ? CLASIFICACION_COLORS[f].bg
-                                                    : active
-                                                      ? 'rgba(0,122,255,0.15)'
-                                                      : 'transparent';
-                                            return (
-                                                <button
-                                                    key={f}
-                                                    type="button"
-                                                    role="option"
-                                                    aria-selected={active}
-                                                    onClick={() => {
-                                                        setFilter(f);
-                                                        setStatusMenuAbierto(false);
-                                                    }}
-                                                    style={{
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: '8px',
-                                                        width: '100%',
-                                                        textAlign: 'left',
-                                                        background: bg,
-                                                        color: text,
-                                                        border: 'none',
-                                                        borderRadius: '10px',
-                                                        padding: '9px 12px',
-                                                        fontSize: '12px',
-                                                        fontWeight: 600,
-                                                        cursor: 'pointer',
-                                                    }}
-                                                >
-                                                    <span aria-hidden>
-                                                        {f === 'todos' ? '📋' : CLASIFICACION_COLORS[f].icon}
-                                                    </span>
-                                                    {f === 'todos' ? 'Todos' : CLASIFICACION_COLORS[f].label}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                ) : null}
-                            </>
-                        );
-                    })()}
+                                        <span aria-hidden style={{ flexShrink: 0, fontSize: '12px', lineHeight: 1 }}>
+                                            {icon}
+                                        </span>
+                                        <span style={{ minWidth: 0 }}>{label}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    ))}
                 </div>
 
                 {/* Ordenar */}

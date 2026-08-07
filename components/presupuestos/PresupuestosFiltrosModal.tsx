@@ -189,26 +189,57 @@ export default function PresupuestosFiltrosModal({
                 </div>
 
                 <label style={labelStyle}>Status</label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '18px' }}>
-                    {(['todos', 'no_enviado', 'enviado', 'aprobado', 'no_aprobado', 'cobrado', 'pagado'] as const).map((f) => (
-                        <button
-                            key={f}
-                            type="button"
-                            onClick={() => onFilterChange(f)}
+                <div
+                    style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px',
+                        marginBottom: '18px',
+                        width: '100%',
+                    }}
+                >
+                    {([
+                        ['todos', 'no_enviado', 'enviado', 'aprobado'],
+                        ['no_aprobado', 'cobrado', 'pagado'],
+                    ] as const).map((row, rowIdx) => (
+                        <div
+                            key={rowIdx}
                             style={{
-                                background: filter === f ? 'rgba(0,122,255,0.15)' : 'rgba(255,255,255,0.04)',
-                                color: filter === f ? '#007AFF' : 'rgba(255,255,255,0.55)',
-                                border: filter === f ? '1px solid rgba(0,122,255,0.35)' : '1px solid rgba(255,255,255,0.08)',
-                                borderRadius: '999px',
-                                padding: '6px 12px',
-                                fontSize: '11px',
-                                fontWeight: 700,
-                                cursor: 'pointer',
-                                whiteSpace: 'nowrap',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                gap: '6px',
+                                width: '100%',
+                                minWidth: 0,
                             }}
                         >
-                            {f === 'todos' ? 'Todos' : CLASIFICACION_LABELS[f]}
-                        </button>
+                            {row.map((f) => (
+                                <button
+                                    key={f}
+                                    type="button"
+                                    onClick={() => onFilterChange(f)}
+                                    style={{
+                                        flex: '1 1 0',
+                                        width: 0,
+                                        minWidth: 0,
+                                        boxSizing: 'border-box',
+                                        background: filter === f ? 'rgba(0,122,255,0.15)' : 'rgba(255,255,255,0.04)',
+                                        color: filter === f ? '#007AFF' : 'rgba(255,255,255,0.55)',
+                                        border: filter === f ? '1px solid rgba(0,122,255,0.35)' : '1px solid rgba(255,255,255,0.08)',
+                                        borderRadius: '999px',
+                                        padding: '8px 4px',
+                                        fontSize: '11px',
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                        textAlign: 'center',
+                                        lineHeight: 1.15,
+                                        whiteSpace: 'normal',
+                                        wordBreak: 'break-word',
+                                    }}
+                                >
+                                    {f === 'todos' ? 'Todos' : CLASIFICACION_LABELS[f]}
+                                </button>
+                            ))}
+                        </div>
                     ))}
                 </div>
 
