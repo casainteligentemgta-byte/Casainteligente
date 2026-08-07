@@ -1072,3 +1072,37 @@
     min-width: 960px;
   }
 }
+
+
+/* ── Presupuestos: encuadre móvil (tema claro) ── */
+@media (max-width: 639px) {
+  .presupuestos-header {
+    padding: 12px !important;
+    gap: 8px !important;
+  }
+
+  .presupuestos-title {
+    font-size: 20px !important;
+  }
+
+  .presupuestos-body {
+    padding: 12px !important;
+  }
+
+  .presupuestos-kpis p:last-child {
+    font-size: 13px !important;
+  }
+
+  .presupuesto-tarjeta {
+    padding: 14px !important;
+  }
+
+  .presupuesto-tarjeta-monto {
+    font-size: 15px !important;
+  }
+
+  .presupuestos-status-filters button {
+    font-size: 10px !important;
+    padding: 8px 2px !important;
+  }
+}

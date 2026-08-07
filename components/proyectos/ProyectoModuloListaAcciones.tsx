@@ -26,9 +26,9 @@ const btnSecundario: CSSProperties = {
   alignItems: 'center',
   justifyContent: 'center',
   boxSizing: 'border-box',
-  background: 'rgba(255,255,255,0.06)',
-  color: 'rgba(255,255,255,0.88)',
-  border: '1px solid rgba(255,255,255,0.12)',
+  background: '#F8FAFC',
+  color: '#334155',
+  border: '1px solid #E2E8F0',
   borderRadius: '10px',
   padding: '9px 8px',
   fontSize: '12px',
@@ -45,7 +45,7 @@ const menuItemBase: CSSProperties = {
   textAlign: 'left',
   border: 'none',
   background: 'transparent',
-  color: 'rgba(255,255,255,0.9)',
+  color: '#0F172A',
   padding: '10px 12px',
   borderRadius: '8px',
   fontSize: '13px',
@@ -57,7 +57,7 @@ const menuItemBase: CSSProperties = {
 
 /**
  * Acciones de tarjeta en lista de proyectos: CTA + 3 módulos + menú ···
- * (evita el arcoíris de botones que saturaba la vista móvil).
+ * Variante fondo blanco.
  */
 export default function ProyectoModuloListaAcciones({
   id,
@@ -124,9 +124,9 @@ export default function ProyectoModuloListaAcciones({
               height: '100%',
               minHeight: '40px',
               borderRadius: '10px',
-              border: '1px solid rgba(255,255,255,0.12)',
-              background: menuAbierto ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.06)',
-              color: 'rgba(255,255,255,0.9)',
+              border: '1px solid #E2E8F0',
+              background: menuAbierto ? '#F1F5F9' : '#FFFFFF',
+              color: '#334155',
               fontSize: '16px',
               fontWeight: 700,
               cursor: 'pointer',
@@ -145,11 +145,11 @@ export default function ProyectoModuloListaAcciones({
                 bottom: 'calc(100% + 6px)',
                 zIndex: 40,
                 minWidth: '200px',
-                background: 'rgba(22,22,24,0.98)',
-                border: '1px solid rgba(255,255,255,0.12)',
+                background: '#FFFFFF',
+                border: '1px solid #E2E8F0',
                 borderRadius: '12px',
                 padding: '6px',
-                boxShadow: '0 14px 32px rgba(0,0,0,0.5)',
+                boxShadow: '0 14px 32px rgba(15,23,42,0.12)',
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '2px',
@@ -188,7 +188,7 @@ export default function ProyectoModuloListaAcciones({
                   <ModalBotUsuariosProyecto
                     proyectoId={id}
                     proyectoNombre={nombre}
-                    triggerClassName="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-[13px] font-semibold text-[#6ee7a0] hover:bg-white/5"
+                    triggerClassName="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-[13px] font-semibold text-emerald-700 hover:bg-slate-50"
                   />
                 </div>
               ) : null}
@@ -200,7 +200,7 @@ export default function ProyectoModuloListaAcciones({
                     limiteInicial={limiteFastTrackUsd}
                     onGuardado={onGuardadoFastTrack}
                     triggerLabel="Configuración"
-                    triggerClassName="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-[13px] font-semibold text-zinc-200 hover:bg-white/5"
+                    triggerClassName="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-[13px] font-semibold text-slate-700 hover:bg-slate-50"
                   />
                 </div>
               ) : null}
@@ -214,7 +214,7 @@ export default function ProyectoModuloListaAcciones({
                 }}
                 style={{
                   ...menuItemBase,
-                  color: '#fca5a5',
+                  color: '#DC2626',
                   opacity: deleting ? 0.6 : 1,
                   cursor: deleting ? 'wait' : 'pointer',
                 }}
