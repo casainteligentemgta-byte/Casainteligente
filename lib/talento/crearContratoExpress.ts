@@ -26,6 +26,7 @@ import {
   storagePathPdfContratoExpress,
 } from '@/lib/talento/nombreArchivoContratoIndividual';
 import { normalizarFechaIngresoIso } from '@/lib/talento/parseCsvContratosExpress';
+import { esContratoExpressAdministracionDelegada } from '@/lib/talento/filtrarContratosExpressObrero';
 
 export type CrearContratoExpressInput = {
   proyecto_id: string;
@@ -139,6 +140,37 @@ export async function crearContratoExpress(
   const fechaFirmaIso = fechaNorm;
 
   const cedula = normCedulaToken(String(input.obrero_cedula));
+
+  // Anti-duplicado: misma cédula en el mismo proyecto (salvo filas AD).
+  {
+    const dupFull = await admin
+      .from('ci_contratos_express')
+      .select('id,obrero_cedula,obrero_nombre,tipo_contrato')
+      .eq('proyecto_id', input.proyecto_id.trim())
+      .limit(500);
+    let dupRows = (!dupFull.error ? dupFull.data : null) as
+      | { id?: string; obrero_cedula?: string | null; obrero_nombre?: string | null; tipo_contrato?: string | null }[]
+      | null;
+    if (dupFull.error && /tipo_contrato|42703|schema cache|column/i.test(dupFull.error.message ?? '')) {
+      const dupLite = await admin
+        .from('ci_contratos_express')
+        .select('id,obrero_cedula,obrero_nombre')
+        .eq('proyecto_id', input.proyecto_id.trim())
+        .limit(500);
+      dupRows = (!dupLite.error ? dupLite.data : null) as typeof dupRows;
+    }
+    const yaExiste = (dupRows ?? []).some((r) => {
+      if (esContratoExpressAdministracionDelegada(r)) return false;
+      return normCedulaToken(r.obrero_cedula ?? '') === cedula;
+    });
+    if (yaExiste) {
+      return {
+        ok: false,
+        error: `Ya existe un contrato express con la cédula ${cedula} en este proyecto.`,
+      };
+    }
+  }
+
   let objetoContrato = trimFaseTecnica(input.objeto_contrato);
   if (!objetoContrato) {
     objetoContrato = await faseTecnicaDefaultProyecto(admin, input.proyecto_id);

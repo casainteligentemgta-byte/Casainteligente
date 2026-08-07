@@ -32,6 +32,7 @@ import {
   PLANTILLA_CSV_CONTRATOS_EXPRESS,
   type FilaCsvContratoExpress,
 } from '@/lib/talento/parseCsvContratosExpress';
+import { normalizarListaContratosExpressObrero } from '@/lib/talento/filtrarContratosExpressObrero';
 
 type EntidadOpt = { id: string; nombre: string };
 type OficioOpt = { id: string; cargo_nombre: string };
@@ -51,6 +52,7 @@ type ExpressRow = {
   formalizado_empleado_id?: string | null;
   pdf_firmado_storage_path?: string | null;
   pdf_firmado_subido_at?: string | null;
+  tipo_contrato?: string | null;
 };
 
 type ResultadoEscaneoMasivo =
@@ -304,14 +306,14 @@ export default function RrhhContratosExpressClient() {
       const res = await supabase
         .from('ci_contratos_express')
         .select(
-          'id,created_at,obrero_nombre,obrero_cedula,cargo_nombre_snapshot,bono_manual_usd,formalizado_empleado_id,pdf_firmado_storage_path,pdf_firmado_subido_at',
+          'id,created_at,obrero_nombre,obrero_cedula,cargo_nombre_snapshot,bono_manual_usd,formalizado_empleado_id,pdf_firmado_storage_path,pdf_firmado_subido_at,tipo_contrato',
         )
         .eq('proyecto_id', proyectoId)
         .order('created_at', { ascending: false });
 
       if (res.error) {
         if (
-          /cargo_nombre_snapshot|bono_manual_usd|formalizado_empleado_id|pdf_firmado|42703/i.test(
+          /cargo_nombre_snapshot|bono_manual_usd|formalizado_empleado_id|pdf_firmado|tipo_contrato|42703/i.test(
             res.error.message,
           )
         ) {
@@ -324,14 +326,14 @@ export default function RrhhContratosExpressClient() {
             setErrLista(bare.error.message);
             setRows([]);
           } else {
-            setRows((bare.data ?? []) as ExpressRow[]);
+            setRows(normalizarListaContratosExpressObrero((bare.data ?? []) as ExpressRow[]));
           }
         } else {
           setErrLista(res.error.message);
           setRows([]);
         }
       } else {
-        setRows((res.data ?? []) as ExpressRow[]);
+        setRows(normalizarListaContratosExpressObrero((res.data ?? []) as ExpressRow[]));
       }
     } catch {
       setErrLista('No se pudo cargar la lista.');

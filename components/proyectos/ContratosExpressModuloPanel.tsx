@@ -11,6 +11,7 @@ import ModalEditarContratoExpress from '@/components/rrhh/express/ModalEditarCon
 import { Button } from '@/components/ui/button';
 import { descargarPdfUnicoContratosExpress } from '@/lib/rrhh/descargarPdfUnicoCliente';
 import { hrefListaContratosExpress } from '@/lib/talento/hrefListaContratosExpress';
+import { normalizarListaContratosExpressObrero } from '@/lib/talento/filtrarContratosExpressObrero';
 
 type ExpressRow = {
   id: string;
@@ -18,6 +19,7 @@ type ExpressRow = {
   obrero_nombre: string;
   obrero_cedula: string;
   formalizado_empleado_id?: string | null;
+  tipo_contrato?: string | null;
 };
 
 type Props = {
@@ -73,7 +75,7 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId, proyecto
 
       const resFull = await supabase
         .from('ci_contratos_express')
-        .select('id,created_at,obrero_nombre,obrero_cedula,formalizado_empleado_id')
+        .select('id,created_at,obrero_nombre,obrero_cedula,formalizado_empleado_id,tipo_contrato')
         .in('proyecto_id', proyectoIds)
         .order('created_at', { ascending: false });
 
@@ -82,7 +84,9 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId, proyecto
 
       if (
         error &&
-        /formalizado_empleado_id|42703|column|does not exist|schema cache/i.test(error.message ?? '')
+        /formalizado_empleado_id|tipo_contrato|42703|column|does not exist|schema cache/i.test(
+          error.message ?? '',
+        )
       ) {
         const resBare = await supabase
           .from('ci_contratos_express')
@@ -99,7 +103,7 @@ export default function ContratosExpressModuloPanel({ moduloIntegralId, proyecto
         return;
       }
 
-      setRows((data ?? []) as ExpressRow[]);
+      setRows(normalizarListaContratosExpressObrero((data ?? []) as ExpressRow[]));
     } catch {
       setErr('No se pudo cargar la lista de contratos express.');
       setRows([]);
