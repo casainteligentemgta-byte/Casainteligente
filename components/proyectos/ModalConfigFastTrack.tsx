@@ -21,6 +21,8 @@ type Props = {
   onGuardado?: (limite: number) => void;
   /** Botón trigger compacto para la fila de la tarjeta. */
   triggerClassName?: string;
+  /** Texto visible junto al icono (p. ej. en menús). */
+  triggerLabel?: string;
 };
 
 const inputClass =
@@ -32,6 +34,7 @@ export default function ModalConfigFastTrack({
   limiteInicial,
   onGuardado,
   triggerClassName,
+  triggerLabel,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [limite, setLimite] = useState(String(limiteInicial));
@@ -76,8 +79,12 @@ export default function ModalConfigFastTrack({
           'inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[11px] font-bold text-zinc-300 backdrop-blur-xl transition hover:border-[#FF9500]/40 hover:text-[#FF9500]'
         }
       >
-        <Settings className="h-4 w-4" aria-hidden />
-        <span className="sr-only">Configuración del proyecto</span>
+        <Settings className="h-4 w-4 shrink-0" aria-hidden />
+        {triggerLabel ? (
+          <span>{triggerLabel}</span>
+        ) : (
+          <span className="sr-only">Configuración del proyecto</span>
+        )}
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>

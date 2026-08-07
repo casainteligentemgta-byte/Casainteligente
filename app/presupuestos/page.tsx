@@ -26,12 +26,12 @@ type ClasificacionPresupuesto =
     | 'pagado';
 
 const CLASIFICACION_COLORS: Record<ClasificacionPresupuesto, { bg: string; text: string; label: string; short: string }> = {
-    no_enviado: { bg: 'rgba(148,163,184,0.15)', text: '#94A3B8', label: 'No enviado', short: 'Sin env.' },
-    enviado: { bg: 'rgba(59,130,246,0.15)', text: '#3B82F6', label: 'Enviado', short: 'Enviado' },
-    aprobado: { bg: 'rgba(52,199,89,0.15)', text: '#34C759', label: 'Aprobado', short: 'Aprobado' },
-    no_aprobado: { bg: 'rgba(239,68,68,0.15)', text: '#EF4444', label: 'No aprobado', short: 'Rechaz.' },
-    cobrado: { bg: 'rgba(245,158,11,0.15)', text: '#F59E0B', label: 'Por Pagar', short: 'Por pagar' },
-    pagado: { bg: 'rgba(16,185,129,0.15)', text: '#10B981', label: 'Pagado', short: 'Pagado' },
+    no_enviado: { bg: '#F1F5F9', text: '#64748B', label: 'No enviado', short: 'Sin env.' },
+    enviado: { bg: '#DBEAFE', text: '#1D4ED8', label: 'Enviado', short: 'Enviado' },
+    aprobado: { bg: '#DCFCE7', text: '#15803D', label: 'Aprobado', short: 'Aprobado' },
+    no_aprobado: { bg: '#FEE2E2', text: '#B91C1C', label: 'No aprobado', short: 'Rechaz.' },
+    cobrado: { bg: '#FEF3C7', text: '#B45309', label: 'Por Pagar', short: 'Por pagar' },
+    pagado: { bg: '#D1FAE5', text: '#047857', label: 'Pagado', short: 'Pagado' },
 };
 
 /** Orden de status para ordenar la lista. */
@@ -149,7 +149,7 @@ function TarjetaPresupuesto({
                 <div style={{ flex: 1, minWidth: 0 }}>
                     <h3
                         style={{
-                            color: 'white',
+                            color: '#0F172A',
                             fontSize: '16px',
                             fontWeight: 700,
                             margin: 0,
@@ -164,7 +164,7 @@ function TarjetaPresupuesto({
                     </h3>
                     <p
                         style={{
-                            color: 'rgba(255,255,255,0.45)',
+                            color: '#64748B',
                             fontSize: '12px',
                             fontWeight: 600,
                             margin: '5px 0 0',
@@ -172,14 +172,14 @@ function TarjetaPresupuesto({
                         }}
                     >
                         {numero}
-                        <span style={{ color: 'rgba(255,255,255,0.2)', margin: '0 6px' }}>·</span>
+                        <span style={{ color: '#CBD5E1', margin: '0 6px' }}>·</span>
                         <span style={{ fontFamily: 'inherit', fontWeight: 500 }}>{fecha}</span>
                     </p>
                 </div>
                 <span
                     className="presupuesto-tarjeta-monto"
                     style={{
-                        color: '#34C759',
+                        color: '#15803D',
                         fontSize: '17px',
                         fontWeight: 800,
                         lineHeight: 1.2,
@@ -252,8 +252,8 @@ function TarjetaPresupuesto({
                             fontSize: '12px',
                             fontWeight: 700,
                             cursor: 'pointer',
-                            background: 'rgba(0,122,255,0.14)',
-                            color: '#5AC8FA',
+                            background: '#DBEAFE',
+                            color: '#1D4ED8',
                         }}
                     >
                         Editar
@@ -265,15 +265,15 @@ function TarjetaPresupuesto({
                         aria-haspopup="menu"
                         aria-label="Más acciones"
                         style={{
-                            border: '1px solid rgba(255,255,255,0.12)',
+                            border: '1px solid #E2E8F0',
                             borderRadius: '10px',
                             width: '36px',
                             height: '36px',
                             fontSize: '16px',
                             fontWeight: 700,
                             cursor: 'pointer',
-                            background: 'rgba(255,255,255,0.06)',
-                            color: 'rgba(255,255,255,0.85)',
+                            background: '#FFFFFF',
+                            color: '#334155',
                             lineHeight: 1,
                         }}
                     >
@@ -288,11 +288,11 @@ function TarjetaPresupuesto({
                                 bottom: 'calc(100% + 6px)',
                                 zIndex: 30,
                                 minWidth: '160px',
-                                background: 'rgba(28,28,30,0.98)',
-                                border: '1px solid rgba(255,255,255,0.12)',
+                                background: '#FFFFFF',
+                                border: '1px solid #E2E8F0',
                                 borderRadius: '12px',
                                 padding: '6px',
-                                boxShadow: '0 12px 28px rgba(0,0,0,0.45)',
+                                boxShadow: '0 12px 28px rgba(15,23,42,0.12)',
                                 display: 'flex',
                                 flexDirection: 'column',
                                 gap: '2px',
@@ -308,7 +308,7 @@ function TarjetaPresupuesto({
                                 style={{
                                     border: 'none',
                                     background: 'transparent',
-                                    color: 'rgba(255,255,255,0.9)',
+                                    color: '#0F172A',
                                     textAlign: 'left',
                                     padding: '10px 12px',
                                     borderRadius: '8px',
@@ -329,7 +329,7 @@ function TarjetaPresupuesto({
                                 style={{
                                     border: 'none',
                                     background: 'transparent',
-                                    color: '#34C759',
+                                    color: '#15803D',
                                     textAlign: 'left',
                                     padding: '10px 12px',
                                     borderRadius: '8px',
@@ -350,7 +350,7 @@ function TarjetaPresupuesto({
                                 style={{
                                     border: 'none',
                                     background: 'transparent',
-                                    color: '#FF3B30',
+                                    color: '#DC2626',
                                     textAlign: 'left',
                                     padding: '10px 12px',
                                     borderRadius: '8px',
@@ -511,17 +511,17 @@ export default function PresupuestosPage() {
 
     const inputFiltroStyle: CSSProperties = {
         width: '100%',
-        background: 'rgba(255,255,255,0.05)',
-        border: '1px solid rgba(255,255,255,0.1)',
+        background: '#F8FAFC',
+        border: '1px solid #E2E8F0',
         borderRadius: '10px',
         padding: '10px 12px',
-        color: 'white',
+        color: '#0F172A',
         fontSize: '13px',
         outline: 'none',
     };
 
     const labelFiltroStyle: CSSProperties = {
-        color: 'rgba(255,255,255,0.45)',
+        color: '#64748B',
         fontSize: '10px',
         fontWeight: 700,
         textTransform: 'uppercase',
@@ -548,10 +548,10 @@ export default function PresupuestosPage() {
     };
 
     const glass = {
-        background: 'rgba(28, 28, 30, 0.7)',
-        backdropFilter: 'blur(20px)',
-        border: '1px solid rgba(255, 255, 255, 0.1)',
+        background: '#FFFFFF',
+        border: '1px solid #E2E8F0',
         borderRadius: '20px',
+        boxShadow: '0 8px 24px rgba(15,23,42,0.06)',
     };
 
     return (
@@ -559,7 +559,7 @@ export default function PresupuestosPage() {
             className="presupuestos-page"
             style={{
                 minHeight: '100vh',
-                background: 'var(--bg-primary)',
+                background: '#F3F4F6',
                 paddingBottom: '110px',
                 width: '100%',
                 maxWidth: '100%',
@@ -571,8 +571,8 @@ export default function PresupuestosPage() {
                 className="presupuestos-header"
                 style={{
                 position: 'sticky', top: 0, zIndex: 50,
-                background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(20px)',
-                padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.1)',
+                background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(20px)',
+                padding: '14px 16px', borderBottom: '1px solid #E2E8F0',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
@@ -581,7 +581,7 @@ export default function PresupuestosPage() {
                 maxWidth: '100%',
                 boxSizing: 'border-box',
             }}>
-                <h1 className="presupuestos-title" style={{ color: 'white', fontSize: '22px', fontWeight: 800, margin: 0, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Presupuestos</h1>
+                <h1 className="presupuestos-title" style={{ color: '#0F172A', fontSize: '22px', fontWeight: 800, margin: 0, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Presupuestos</h1>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
                     <button
                         type="button"
@@ -590,9 +590,9 @@ export default function PresupuestosPage() {
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: '5px',
-                            background: hayFiltrosActivos ? 'rgba(0,122,255,0.15)' : 'rgba(255,255,255,0.06)',
-                            color: hayFiltrosActivos ? '#007AFF' : 'rgba(255,255,255,0.85)',
-                            border: hayFiltrosActivos ? '1px solid rgba(0,122,255,0.35)' : '1px solid rgba(255,255,255,0.1)',
+                            background: hayFiltrosActivos ? 'rgba(0,122,255,0.12)' : '#FFFFFF',
+                            color: hayFiltrosActivos ? '#007AFF' : '#334155',
+                            border: hayFiltrosActivos ? '1px solid rgba(0,122,255,0.35)' : '1px solid #E2E8F0',
                             borderRadius: '10px',
                             padding: '8px 12px',
                             fontSize: '12px',
@@ -658,11 +658,11 @@ export default function PresupuestosPage() {
                             style={{
                                 padding: '0 10px',
                                 minWidth: 0,
-                                borderLeft: i === 0 ? 'none' : '1px solid rgba(255,255,255,0.08)',
+                                borderLeft: i === 0 ? 'none' : '1px solid #E2E8F0',
                             }}
                         >
                             <p style={{
-                                color: 'rgba(255,255,255,0.4)',
+                                color: '#94A3B8',
                                 fontSize: '10px',
                                 fontWeight: 700,
                                 textTransform: 'uppercase',
@@ -722,19 +722,19 @@ export default function PresupuestosPage() {
                                         ? CLASIFICACION_COLORS[f].text
                                         : active
                                           ? '#007AFF'
-                                          : 'rgba(255,255,255,0.7)';
+                                          : '#475569';
                                 const bg =
                                     f !== 'todos' && active
                                         ? CLASIFICACION_COLORS[f].bg
                                         : active
-                                          ? 'rgba(0,122,255,0.15)'
-                                          : 'rgba(255,255,255,0.05)';
+                                          ? '#DBEAFE'
+                                          : '#FFFFFF';
                                 const border =
                                     f !== 'todos' && active
                                         ? `1px solid ${CLASIFICACION_COLORS[f].text}55`
                                         : active
                                           ? '1px solid rgba(0,122,255,0.35)'
-                                          : '1px solid transparent';
+                                          : '1px solid #E2E8F0';
                                 return (
                                     <button
                                         key={f}
@@ -798,10 +798,10 @@ export default function PresupuestosPage() {
                     labelStyle={labelFiltroStyle}
                 />
                 {loading ? (
-                    <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.3)', marginTop: '40px' }}>Cargando...</p>
+                    <p style={{ textAlign: 'center', color: '#94A3B8', marginTop: '40px' }}>Cargando...</p>
                 ) : budgets.length === 0 ? (
                     <div style={{ textAlign: 'center', marginTop: '60px' }}>
-                        <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '15px', fontWeight: 600 }}>
+                        <p style={{ color: '#64748B', fontSize: '15px', fontWeight: 600 }}>
                             {hayFiltrosActivos ? 'Ningún presupuesto coincide con los filtros' : 'No hay presupuestos'}
                         </p>
                     </div>

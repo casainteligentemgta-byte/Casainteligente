@@ -13,8 +13,7 @@ import {
 } from '@/lib/ui/moduloProyectosTheme';
 import { etiquetaFuenteProyecto } from '@/lib/proyectos/proyectosUnificados';
 import { withTimeout } from '@/lib/http/withTimeout';
-import ProyectoAccionesConfigRoles from '@/components/proyectos/ProyectoAccionesConfigRoles';
-import { hrefCcoProyecto } from '@/lib/contabilidad/cco/hrefCcoProyecto';
+import ProyectoModuloListaAcciones from '@/components/proyectos/ProyectoModuloListaAcciones';
 
 /** `modulo` = ci_proyectos integral; `obra_talento` = misma tabla con tipo_proyecto = talento (ex ci_obras). */
 type ProyectoOrigen = 'modulo' | 'obra_talento';
@@ -105,15 +104,15 @@ async function contarObrerosPorModuloIntegral(
 }
 
 const estadoChip: Record<string, { bg: string; text: string }> = {
-  nuevo: { bg: 'rgba(148,163,184,0.2)', text: '#94A3B8' },
-  levantamiento: { bg: 'rgba(90,200,250,0.15)', text: '#5AC8FA' },
-  presupuestado: { bg: 'rgba(0,122,255,0.18)', text: '#64B5FF' },
-  ejecucion: { bg: 'rgba(245,158,11,0.18)', text: '#FBBF24' },
-  entregado: { bg: 'rgba(52,199,89,0.18)', text: '#4ADE80' },
-  cerrado: { bg: 'rgba(142,142,147,0.2)', text: '#A1A1AA' },
-  cancelado: { bg: 'rgba(239,68,68,0.18)', text: '#FCA5A5' },
-  activa: { bg: 'rgba(52,199,89,0.15)', text: '#4ADE80' },
-  cerrada: { bg: 'rgba(142,142,147,0.25)', text: '#A1A1AA' },
+  nuevo: { bg: '#F1F5F9', text: '#64748B' },
+  levantamiento: { bg: '#E0F2FE', text: '#0284C7' },
+  presupuestado: { bg: '#DBEAFE', text: '#1D4ED8' },
+  ejecucion: { bg: '#FEF3C7', text: '#B45309' },
+  entregado: { bg: '#DCFCE7', text: '#15803D' },
+  cerrado: { bg: '#F1F5F9', text: '#64748B' },
+  cancelado: { bg: '#FEE2E2', text: '#B91C1C' },
+  activa: { bg: '#DCFCE7', text: '#15803D' },
+  cerrada: { bg: '#F1F5F9', text: '#64748B' },
 };
 
 const LISTA_TIMEOUT_MS = 38_000;
@@ -445,7 +444,7 @@ export default function ModuloProyectosPage() {
     <div style={moduloProyectosPageShell}>
       <div style={moduloProyectosStickyHeader}>
         <div>
-          <h1 style={{ color: 'white', fontSize: '22px', fontWeight: 800, margin: 0 }}>Proyectos</h1>
+          <h1 style={{ color: '#0F172A', fontSize: '22px', fontWeight: 800, margin: 0 }}>Proyectos</h1>
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
           <Link href="/proyectos/modulo/nuevo">
@@ -462,7 +461,7 @@ export default function ModuloProyectosPage() {
                 cursor: 'pointer',
               }}
             >
-              Nuevo Proyecto
+              + Nuevo Proyecto
             </button>
           </Link>
         </div>
@@ -479,33 +478,33 @@ export default function ModuloProyectosPage() {
         </div>
 
         {loading ? (
-          <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.35)', marginTop: '28px' }}>Cargando proyectos…</p>
+          <p style={{ textAlign: 'center', color: '#94A3B8', marginTop: '28px' }}>Cargando proyectos…</p>
         ) : null}
-        {error ? <p style={{ color: '#f87171', fontSize: '14px', marginTop: '12px' }}>{error}</p> : null}
+        {error ? <p style={{ color: '#DC2626', fontSize: '14px', marginTop: '12px' }}>{error}</p> : null}
         {avisoIntegral && !error ? (
-          <p style={{ color: 'rgba(251,191,36,0.95)', fontSize: '12px', marginTop: '10px' }}>{avisoIntegral}</p>
+          <p style={{ color: '#B45309', fontSize: '12px', marginTop: '10px' }}>{avisoIntegral}</p>
         ) : null}
         {avisoObras && !error ? (
-          <p style={{ color: 'rgba(251,191,36,0.95)', fontSize: '12px', marginTop: '10px' }}>{avisoObras}</p>
+          <p style={{ color: '#B45309', fontSize: '12px', marginTop: '10px' }}>{avisoObras}</p>
         ) : null}
 
         {!loading && !error ? (
           <div style={{ display: 'grid', gap: '12px' }}>
             {filtered.length === 0 ? (
-              <div style={{ ...moduloProyectosGlass, padding: '24px', color: 'rgba(255,255,255,0.4)', fontSize: '14px' }}>
+              <div style={{ ...moduloProyectosGlass, padding: '24px', color: '#64748B', fontSize: '14px' }}>
                 Sin proyectos ni obras en la base. Usa{' '}
-                <Link href="/proyectos/modulo/nuevo" style={{ color: '#93C5FD', fontWeight: 700, textDecoration: 'underline' }}>
+                <Link href="/proyectos/modulo/nuevo" style={{ color: '#007AFF', fontWeight: 700, textDecoration: 'underline' }}>
                   Nuevo Proyecto
                 </Link>{' '}
                 (integral) o{' '}
-                <Link href="/proyectos/nuevo" style={{ color: '#93C5FD', fontWeight: 700, textDecoration: 'underline' }}>
+                <Link href="/proyectos/nuevo" style={{ color: '#007AFF', fontWeight: 700, textDecoration: 'underline' }}>
                   Solicitar personal
                 </Link>{' '}
                 según el flujo que necesites.
               </div>
             ) : (
               filtered.map((r) => {
-                const chip = estadoChip[r.estado] ?? { bg: 'rgba(255,255,255,0.08)', text: 'rgba(255,255,255,0.7)' };
+                const chip = estadoChip[r.estado] ?? { bg: '#F1F5F9', text: '#64748B' };
                 return (
                   <div key={r.id} style={{ ...moduloProyectosGlass, padding: '16px' }}>
                     <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: '10px' }}>
@@ -516,23 +515,23 @@ export default function ModuloProyectosPage() {
                             fontWeight: 700,
                             letterSpacing: '0.06em',
                             textTransform: 'uppercase',
-                            color: r.origen === 'modulo' ? 'rgba(96,165,250,0.95)' : 'rgba(167,139,250,0.95)',
+                            color: r.origen === 'modulo' ? '#2563EB' : '#7C3AED',
                             margin: '0 0 6px 0',
                           }}
                         >
                           {r.origen === 'modulo' ? etiquetaFuenteProyecto('integral') : etiquetaFuenteProyecto('talento')}
                         </p>
-                        <h2 style={{ color: 'white', fontSize: '17px', fontWeight: 700, margin: 0 }}>{r.nombre}</h2>
-                        <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '13px', marginTop: '6px', marginBottom: 0 }}>
+                        <h2 style={{ color: '#0F172A', fontSize: '17px', fontWeight: 700, margin: 0 }}>{r.nombre}</h2>
+                        <p style={{ color: '#64748B', fontSize: '13px', marginTop: '6px', marginBottom: 0 }}>
                           {customerName(r)}
                         </p>
-                        <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '12px', marginTop: '4px', marginBottom: 0 }}>
+                        <p style={{ color: '#64748B', fontSize: '12px', marginTop: '4px', marginBottom: 0 }}>
                           Patrono:{' '}
-                          <span style={{ fontWeight: 700, color: 'rgba(255,255,255,0.82)' }}>
+                          <span style={{ fontWeight: 700, color: '#334155' }}>
                             {r.patrono_nombre?.trim() || 'No asignado'}
                           </span>
                         </p>
-                        <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '12px', marginTop: '4px', marginBottom: 0 }}>
+                        <p style={{ color: '#94A3B8', fontSize: '12px', marginTop: '4px', marginBottom: 0 }}>
                           {r.ubicacion_texto}
                         </p>
                       </div>
@@ -551,183 +550,44 @@ export default function ModuloProyectosPage() {
                         {r.estado}
                       </span>
                     </div>
-                    <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '13px', marginTop: '12px', marginBottom: 0 }}>
-                      Monto aprox.:{' '}
-                      <span style={{ fontWeight: 700, color: 'white' }}>
-                        {formatoVES(Number(r.monto_aproximado || 0))} {r.moneda || 'USD'}
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: '8px 16px',
+                        marginTop: '12px',
+                        color: '#64748B',
+                        fontSize: '12px',
+                      }}
+                    >
+                      <span>
+                        Monto:{' '}
+                        <strong style={{ color: '#0F172A', fontWeight: 700 }}>
+                          {formatoVES(Number(r.monto_aproximado || 0))} {r.moneda || 'USD'}
+                        </strong>
                       </span>
-                    </p>
-                    <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '13px', marginTop: '8px', marginBottom: 0 }}>
-                      Obreros contratados:{' '}
-                      <span style={{ fontWeight: 700, color: 'white' }}>
-                        {r.obrerosContratados == null ? '—' : etiquetaObrerosContratados(r.obrerosContratados)}
+                      <span>
+                        Obreros:{' '}
+                        <strong style={{ color: '#0F172A', fontWeight: 700 }}>
+                          {r.obrerosContratados == null ? '—' : etiquetaObrerosContratados(r.obrerosContratados)}
+                        </strong>
                       </span>
-                    </p>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '14px' }}>
-                      <Link href={r.origen === 'modulo' ? `/proyectos/modulo/${r.id}` : `/proyectos/${r.id}/finanzas`}>
-                        <button
-                          type="button"
-                          style={{
-                            background: '#007AFF',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '10px',
-                            padding: '8px 14px',
-                            fontSize: '12px',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          {r.origen === 'modulo' ? 'Abrir gestión' : 'Abrir finanzas / obra'}
-                        </button>
-                      </Link>
-                      {r.origen === 'modulo' ? (
-                        <Link
-                          href={`/rrhh/hojas-vida?proyecto_modulo=${encodeURIComponent(r.id)}`}
-                          title="RRHH del proyecto (vacantes, cuadro, reclutamiento, nómina)"
-                        >
-                          <button
-                            type="button"
-                            style={{
-                              background: 'rgba(192, 38, 211, 0.22)',
-                              color: '#f5d0fe',
-                              border: '1px solid rgba(217, 70, 239, 0.55)',
-                              borderRadius: '10px',
-                              padding: '8px 14px',
-                              fontSize: '12px',
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                            }}
-                          >
-                            RRHH
-                          </button>
-                        </Link>
-                      ) : null}
-                      {r.origen === 'modulo' ? (
-                        <Link
-                          href={hrefCcoProyecto(r.id)}
-                          title="Control Contable de Obra (CCO) de este proyecto"
-                        >
-                          <button
-                            type="button"
-                            style={{
-                              background: 'rgba(16, 185, 129, 0.2)',
-                              color: '#a7f3d0',
-                              border: '1px solid rgba(52, 211, 153, 0.55)',
-                              borderRadius: '10px',
-                              padding: '8px 14px',
-                              fontSize: '12px',
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                            }}
-                          >
-                            Finanzas
-                          </button>
-                        </Link>
-                      ) : null}
-                      <Link href={`/proyectos/modulo/${r.id}/control-obra`}>
-                        <button
-                          type="button"
-                          style={{
-                            background: 'rgba(245, 158, 11, 0.2)',
-                            color: '#fde68a',
-                            border: '1px solid rgba(251, 191, 36, 0.55)',
-                            borderRadius: '10px',
-                            padding: '8px 14px',
-                            fontSize: '12px',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          Control de obra
-                        </button>
-                      </Link>
-                      {r.origen === 'modulo' ? (
-                        <Link href={`/proyectos/modulo/${r.id}/control-obra/equipo`}>
-                          <button
-                            type="button"
-                            style={{
-                              background: 'rgba(99, 102, 241, 0.22)',
-                              color: '#c7d2fe',
-                              border: '1px solid rgba(129, 140, 248, 0.55)',
-                              borderRadius: '10px',
-                              padding: '8px 14px',
-                              fontSize: '12px',
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                            }}
-                          >
-                            Equipo
-                          </button>
-                        </Link>
-                      ) : null}
-                      <Link href={`/proyectos/modulo/${r.id}/control-obra/tours`}>
-                        <button
-                          type="button"
-                          style={{
-                            background: 'rgba(14, 165, 233, 0.2)',
-                            color: '#bae6fd',
-                            border: '1px solid rgba(56, 189, 248, 0.55)',
-                            borderRadius: '10px',
-                            padding: '8px 14px',
-                            fontSize: '12px',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          Tours 3D
-                        </button>
-                      </Link>
-                      {r.origen === 'modulo' ? (
-                        <Link href={`/proyectos/modulo/${r.id}?editar=1`} title="Cambiar nombre y datos del proyecto">
-                          <button
-                            type="button"
-                            style={{
-                              background: 'rgba(56, 189, 248, 0.15)',
-                              color: '#bae6fd',
-                              border: '1px solid rgba(56, 189, 248, 0.5)',
-                              borderRadius: '10px',
-                              padding: '8px 14px',
-                              fontSize: '12px',
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                            }}
-                          >
-                            Modificar
-                          </button>
-                        </Link>
-                      ) : null}
-                      <ProyectoAccionesConfigRoles
-                        proyectoId={r.id}
-                        proyectoNombre={r.nombre}
-                        limiteFastTrackUsd={r.limite_fast_track_usd}
-                        onGuardadoFastTrack={(limite) => {
-                          setItems((prev) =>
-                            prev.map((p) =>
-                              p.id === r.id ? { ...p, limite_fast_track_usd: limite } : p,
-                            ),
-                          );
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => void borrarProyecto(r)}
-                        disabled={deletingId === r.id}
-                        style={{
-                          background: 'rgba(239,68,68,0.12)',
-                          color: '#fca5a5',
-                          border: '1px solid rgba(239,68,68,0.45)',
-                          borderRadius: '10px',
-                          padding: '8px 14px',
-                          fontSize: '12px',
-                          fontWeight: 700,
-                          cursor: deletingId === r.id ? 'wait' : 'pointer',
-                          opacity: deletingId === r.id ? 0.6 : 1,
-                        }}
-                      >
-                        {deletingId === r.id ? 'Borrando…' : 'Borrar proyecto'}
-                      </button>
                     </div>
+                    <ProyectoModuloListaAcciones
+                      id={r.id}
+                      nombre={r.nombre}
+                      origen={r.origen}
+                      limiteFastTrackUsd={r.limite_fast_track_usd}
+                      deleting={deletingId === r.id}
+                      onBorrar={() => void borrarProyecto(r)}
+                      onGuardadoFastTrack={(limite) => {
+                        setItems((prev) =>
+                          prev.map((p) =>
+                            p.id === r.id ? { ...p, limite_fast_track_usd: limite } : p,
+                          ),
+                        );
+                      }}
+                    />
                   </div>
                 );
               })
