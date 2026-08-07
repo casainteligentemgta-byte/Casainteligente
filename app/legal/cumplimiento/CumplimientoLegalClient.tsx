@@ -217,6 +217,27 @@ export default function CumplimientoLegalClient() {
         </p>
       </div>
 
+      <section className="space-y-3 rounded-2xl border border-amber-500/25 bg-amber-500/[0.04] p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="flex items-center gap-2 text-sm font-bold text-white">
+              <Scale className="h-4 w-4 text-amber-300" />
+              Legal de la entidad · Contratos AD
+            </h3>
+            <p className="mt-1 text-xs text-zinc-500">
+              Generación del contrato de administración delegada por obra (entidad ejecutora + %
+              honorarios). Requisito para compras y despacho.
+            </p>
+          </div>
+          <Link
+            href="/legal/contratos-ad"
+            className="rounded-lg border border-amber-500/40 bg-amber-500/15 px-3 py-1.5 text-xs font-semibold text-amber-100 hover:bg-amber-500/25"
+          >
+            Generar contrato AD
+          </Link>
+        </div>
+      </section>
+
       <section className="space-y-3 rounded-2xl border border-[#FF9500]/25 bg-[#FF9500]/[0.04] p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>

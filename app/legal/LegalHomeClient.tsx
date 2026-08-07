@@ -8,6 +8,7 @@ import {
   Brain,
   CheckCircle2,
   Clock3,
+  FileSignature,
   FolderOpen,
   Loader2,
   Mic,
@@ -317,6 +318,22 @@ export default function LegalHomeClient() {
             {' '}
             (IVSS / INCES / solvencia) en patronos. Ver en Cumplimiento — también se notifican por
             Telegram.
+          </p>
+          <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 opacity-80" />
+        </Link>
+      ) : null}
+
+      {!acceso.standalone ? (
+        <Link
+          href="/legal/contratos-ad"
+          className="flex flex-wrap items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100 transition hover:bg-amber-500/15"
+        >
+          <FileSignature className="mt-0.5 h-4 w-4 shrink-0" />
+          <p className="min-w-0 flex-1">
+            <span className="font-semibold">Legal de la entidad · Contratos AD</span>
+            {' '}
+            — genere el contrato de administración delegada por obra para habilitar compras y
+            despacho.
           </p>
           <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 opacity-80" />
         </Link>

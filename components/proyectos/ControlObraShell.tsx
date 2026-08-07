@@ -1,11 +1,9 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Construction, Package, ShoppingCart } from 'lucide-react';
 import ControlObraSubnav from '@/components/proyectos/ControlObraSubnav';
-import GenerarContratoDelegadoModal from '@/components/proyectos/GenerarContratoDelegadoModal';
 import ProyectoAdLogisticaBanner from '@/components/proyectos/ProyectoAdLogisticaBanner';
 import ModuloPageTitle from '@/components/ui/ModuloPageTitle';
 import { useContratoAdProyecto } from '@/hooks/useContratoAdProyecto';
@@ -19,8 +17,7 @@ export default function ControlObraShell({ proyectoId, children }: Props) {
   const pathname = usePathname() ?? '';
   const esSeccionEquipo = pathname.includes('/control-obra/equipo');
   const pid = encodeURIComponent(proyectoId);
-  const { autorizado, loading, refrescar } = useContratoAdProyecto(proyectoId);
-  const [contratoAdModalOpen, setContratoAdModalOpen] = useState(false);
+  const { autorizado, loading } = useContratoAdProyecto(proyectoId);
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-5 text-white">
@@ -43,7 +40,6 @@ export default function ControlObraShell({ proyectoId, children }: Props) {
           proyectoId={proyectoId}
           autorizado={autorizado}
           loading={loading}
-          onAbrirContratoAd={() => setContratoAdModalOpen(true)}
           className="mb-1"
         />
       ) : null}
@@ -81,13 +77,6 @@ export default function ControlObraShell({ proyectoId, children }: Props) {
           </>
         )}
       </div>
-
-      <GenerarContratoDelegadoModal
-        open={contratoAdModalOpen}
-        onClose={() => setContratoAdModalOpen(false)}
-        proyectoId={proyectoId}
-        onContratoGenerado={() => void refrescar()}
-      />
     </div>
   );
 }

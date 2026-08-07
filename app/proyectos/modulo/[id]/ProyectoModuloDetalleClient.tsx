@@ -8,7 +8,6 @@ import { uploadProjectAsset } from '@/lib/supabase/project-media';
 
 import ResumenObrerosProyectoModulo from '@/components/proyectos/ResumenObrerosProyectoModulo';
 import ModalNuevaVacante from './components/ModalNuevaVacante';
-import GenerarContratoDelegadoModal from '@/components/proyectos/GenerarContratoDelegadoModal';
 import ProyectoAdLogisticaBanner from '@/components/proyectos/ProyectoAdLogisticaBanner';
 import { useContratoAdProyecto } from '@/hooks/useContratoAdProyecto';
 import DashboardUtilidadReal from '@/components/finanzas/DashboardUtilidadReal';
@@ -161,12 +160,10 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
   const [eaTitulo, setEaTitulo] = useState('');
   const [eaTipo, setEaTipo] = useState('foto_proyecto');
   const [vacanteModalOpen, setVacanteModalOpen] = useState(false);
-  const [contratoAdModalOpen, setContratoAdModalOpen] = useState(false);
   const {
     autorizado: logisticaAutorizada,
     loading: cargandoContratoAd,
     contrato: contratoAd,
-    refrescar: refrescarContratoAd,
   } = useContratoAdProyecto(id);
   const [rrhhVacantesTick, setRrhhVacantesTick] = useState(0);
   const [borrandoProyecto, setBorrandoProyecto] = useState(false);
@@ -671,14 +668,13 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
           <div className="flex flex-wrap items-center gap-2">
             {proyecto ? (
               <>
-                <button
-                  type="button"
-                  onClick={() => setContratoAdModalOpen(true)}
+                <Link
+                  href={`/legal/contratos-ad?proyectoId=${encodeURIComponent(id)}`}
                   className="rounded-xl border border-amber-500/40 bg-amber-950/45 px-3 py-2 text-xs font-semibold text-amber-200 hover:bg-amber-900/60"
-                  title="Contrato de Administración Delegada"
+                  title="Generar o ver Contrato AD en Legal de la entidad"
                 >
-                  {contratoAd?.estado === 'exitoso' ? 'Contrato AD ✓' : 'Contrato AD'}
-                </button>
+                  {contratoAd?.estado === 'exitoso' ? 'Contrato AD ✓' : 'Legal · Contrato AD'}
+                </Link>
                 {logisticaAutorizada ? (
                   <Link
                     href={`/almacen/procurement?proyectoId=${encodeURIComponent(id)}&fromProject=1&bloquearProyecto=1`}
@@ -761,7 +757,6 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
           <ProyectoAdLogisticaBanner
             proyectoId={id}
             autorizado={logisticaAutorizada}
-            onAbrirContratoAd={() => setContratoAdModalOpen(true)}
             className="mt-4"
           />
         ) : null}
@@ -1346,13 +1341,6 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
         proyectoModuloId={id}
         proyectoNombre={proyecto?.nombre ?? null}
         onVacanteCreada={() => setRrhhVacantesTick((n) => n + 1)}
-      />
-      <GenerarContratoDelegadoModal
-        open={contratoAdModalOpen}
-        onClose={() => setContratoAdModalOpen(false)}
-        proyectoId={id}
-        proyectoNombre={proyecto?.nombre ?? null}
-        onContratoGenerado={() => void refrescarContratoAd()}
       />
     </div>
   );
