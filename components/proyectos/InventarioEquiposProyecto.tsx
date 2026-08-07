@@ -18,11 +18,15 @@ const inputCls =
 const inputSmCls =
   'rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-white placeholder:text-zinc-500 outline-none focus:border-sky-500/40';
 
+export type SeccionInventarioEquipos = 'equipo' | 'maquinaria_propia' | 'maquinaria_alquilada';
+
 type Props = {
   proyectoId: string;
   equipos: ProyectoEquipoRow[];
   onRefresh: () => void;
   onError?: (msg: string) => void;
+  /** Por defecto solo alquiladas en obra; propias/equipos viven en Entidad. */
+  secciones?: SeccionInventarioEquipos[];
 };
 
 type EditState = {
@@ -257,11 +261,21 @@ function FormEquipoGenerico({
   );
 }
 
-export default function InventarioEquiposProyecto({ proyectoId, equipos, onRefresh, onError }: Props) {
+export default function InventarioEquiposProyecto({
+  proyectoId,
+  equipos,
+  onRefresh,
+  onError,
+  secciones = ['maquinaria_alquilada'],
+}: Props) {
   const supabase = useMemo(() => createClient(), []);
   const [savingCat, setSavingCat] = useState<CategoriaEquipoProyecto | null>(null);
   const [edit, setEdit] = useState<EditState | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+
+  const showEquipo = secciones.includes('equipo');
+  const showPropias = secciones.includes('maquinaria_propia');
+  const showAlquiladas = secciones.includes('maquinaria_alquilada');
 
   const equiposGen = useMemo(() => filtrarEquiposPorCategoria(equipos, 'equipo'), [equipos]);
   const maqPropias = useMemo(() => filtrarEquiposPorCategoria(equipos, 'maquinaria_propia'), [equipos]);
@@ -384,37 +398,42 @@ export default function InventarioEquiposProyecto({ proyectoId, equipos, onRefre
 
   return (
     <div className="space-y-6">
-      <section className="rounded-2xl border border-white/10 bg-zinc-900/70 p-5 shadow-lg backdrop-blur-xl">
-        <h2 className="text-sm font-bold uppercase text-zinc-500">Inventario de equipos</h2>
-        <FormEquipoGenerico
-          categoria="equipo"
-          titulo="Equipo"
-          descripcion="Herramientas y equipos menores del proyecto."
-          saving={savingCat === 'equipo'}
-          onSubmit={(f) => insertar('equipo', f)}
-        />
-        {renderListaSimple(equiposGen, 'equipo')}
-      </section>
-
-      <SeccionTituloHover
-        titulo="Maquinarias propias"
-        tituloClassName="text-emerald-400/90"
-        className="border border-emerald-500/25 bg-emerald-950/15 p-5 shadow-lg backdrop-blur-xl"
-        hint="Pasa el cursor sobre el título para registrar maquinaria propia"
-        descripcion="Maquinaria de la empresa asignada a esta obra."
-        panelOculto={
+      {showEquipo ? (
+        <section className="rounded-2xl border border-white/10 bg-zinc-900/70 p-5 shadow-lg backdrop-blur-xl">
+          <h2 className="text-sm font-bold uppercase text-zinc-500">Inventario de equipos</h2>
           <FormEquipoGenerico
-            categoria="maquinaria_propia"
-            titulo="Maquinaria propia"
-            descripcion="Registra equipo propio con fecha de asignación al proyecto."
-            saving={savingCat === 'maquinaria_propia'}
-            onSubmit={(f) => insertar('maquinaria_propia', f)}
+            categoria="equipo"
+            titulo="Equipo"
+            descripcion="Herramientas y equipos menores del proyecto."
+            saving={savingCat === 'equipo'}
+            onSubmit={(f) => insertar('equipo', f)}
           />
-        }
-      >
-        {renderListaSimple(maqPropias, 'maquinaria_propia')}
-      </SeccionTituloHover>
+          {renderListaSimple(equiposGen, 'equipo')}
+        </section>
+      ) : null}
 
+      {showPropias ? (
+        <SeccionTituloHover
+          titulo="Maquinarias propias"
+          tituloClassName="text-emerald-400/90"
+          className="border border-emerald-500/25 bg-emerald-950/15 p-5 shadow-lg backdrop-blur-xl"
+          hint="Pasa el cursor sobre el título para registrar maquinaria propia"
+          descripcion="Maquinaria de la empresa. El catálogo vive en Entidades."
+          panelOculto={
+            <FormEquipoGenerico
+              categoria="maquinaria_propia"
+              titulo="Maquinaria propia"
+              descripcion="Registra equipo propio con fecha de asignación."
+              saving={savingCat === 'maquinaria_propia'}
+              onSubmit={(f) => insertar('maquinaria_propia', f)}
+            />
+          }
+        >
+          {renderListaSimple(maqPropias, 'maquinaria_propia')}
+        </SeccionTituloHover>
+      ) : null}
+
+      {showAlquiladas ? (
       <SeccionTituloHover
         titulo="Maquinarias alquiladas"
         tituloClassName="text-amber-300/90"
@@ -495,6 +514,7 @@ export default function InventarioEquiposProyecto({ proyectoId, equipos, onRefre
           </div>
         )}
       </SeccionTituloHover>
+      ) : null}
     </div>
   );
 }

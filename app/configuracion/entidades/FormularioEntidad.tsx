@@ -1,9 +1,11 @@
 'use client';
 
 import * as Tabs from '@radix-ui/react-tabs';
-import { Building2, Calendar, FileText, Plus, ShieldCheck, Trash2, X } from 'lucide-react';
+import { Building2, Calendar, FileText, Package, Plus, ShieldCheck, Trash2, Truck, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import EquiposEntidadPanel from '@/components/configuracion/EquiposEntidadPanel';
+import MaquinariaPropiaEntidadPanel from '@/components/configuracion/MaquinariaPropiaEntidadPanel';
 import {
   formatRifMascara,
   permisologiaDesdeCampos,
@@ -14,6 +16,8 @@ import {
 import { uploadEntidadAsset } from '@/lib/supabase/entidad-assets';
 import { createClient } from '@/lib/supabase/client';
 import type { CiEntidad, PermisologiaCi, RegistroMercantilCi, RepresentanteMercantilCi } from '@/types/ci-entidad';
+
+const TABS_ACTIVOS = new Set(['maquinaria', 'equipos']);
 
 const inputClass =
   'mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 outline-none transition focus:border-orange-500 focus:ring-1 focus:ring-orange-500/40';
@@ -468,7 +472,7 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
           </button>
         </div>
 
-        <form onSubmit={(e) => void onSubmit(e)} className="flex max-h-[calc(92vh-5rem)] flex-col">
+        <div className="flex max-h-[calc(92vh-5rem)] flex-col">
           <Tabs.Root value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
             <Tabs.List className="flex shrink-0 flex-wrap gap-1 border-b border-white/10 bg-white/[0.02] px-3 py-2">
               <Tabs.Trigger value="datos" className={tabTriggerClass}>
@@ -490,9 +494,26 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
               <Tabs.Trigger value="medios" className={tabTriggerClass}>
                 Logo / sello
               </Tabs.Trigger>
+              {esEdicion && entidad?.id ? (
+                <>
+                  <Tabs.Trigger value="maquinaria" className={tabTriggerClass}>
+                    <Truck className="h-3.5 w-3.5" />
+                    Maquinaria propia
+                  </Tabs.Trigger>
+                  <Tabs.Trigger value="equipos" className={tabTriggerClass}>
+                    <Package className="h-3.5 w-3.5" />
+                    Inventario equipos
+                  </Tabs.Trigger>
+                </>
+              ) : null}
             </Tabs.List>
 
             <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+              <form
+                id="form-entidad-patrono"
+                onSubmit={(e) => void onSubmit(e)}
+                className={TABS_ACTIVOS.has(tab) ? 'hidden' : 'contents'}
+              >
               <Tabs.Content value="datos" className="space-y-4 outline-none">
                 <div>
                   <label className={labelClass}>Nombre legal *</label>
@@ -1015,6 +1036,24 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
                   />
                 </div>
               </Tabs.Content>
+              </form>
+
+              {esEdicion && entidad?.id ? (
+                <>
+                  <Tabs.Content value="maquinaria" className="outline-none">
+                    <MaquinariaPropiaEntidadPanel
+                      entidadId={entidad.id}
+                      entidadNombre={entidad.nombre}
+                    />
+                  </Tabs.Content>
+                  <Tabs.Content value="equipos" className="outline-none">
+                    <EquiposEntidadPanel
+                      entidadId={entidad.id}
+                      entidadNombre={entidad.nombre}
+                    />
+                  </Tabs.Content>
+                </>
+              ) : null}
             </div>
           </Tabs.Root>
 
@@ -1024,17 +1063,20 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
               onClick={onClose}
               className="rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-semibold text-zinc-300 hover:bg-white/10"
             >
-              Cancelar
+              {TABS_ACTIVOS.has(tab) ? 'Cerrar' : 'Cancelar'}
             </button>
-            <button
-              type="submit"
-              disabled={guardando}
-              className="rounded-xl bg-gradient-to-r from-orange-500 to-orange-700 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-orange-900/30 hover:opacity-95 disabled:opacity-50"
-            >
-              {guardando ? 'Guardando…' : 'Guardar'}
-            </button>
+            {!TABS_ACTIVOS.has(tab) ? (
+              <button
+                type="submit"
+                form="form-entidad-patrono"
+                disabled={guardando}
+                className="rounded-xl bg-gradient-to-r from-orange-500 to-orange-700 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-orange-900/30 hover:opacity-95 disabled:opacity-50"
+              >
+                {guardando ? 'Guardando…' : 'Guardar'}
+              </button>
+            ) : null}
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );
