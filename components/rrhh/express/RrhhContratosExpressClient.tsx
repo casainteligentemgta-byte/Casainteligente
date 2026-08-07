@@ -4,13 +4,16 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
+  CheckCircle2,
   Download,
+  Eye,
   FileSpreadsheet,
   Files,
   Loader2,
   Pencil,
   Printer,
   RefreshCw,
+  ScanLine,
   Trash2,
   Upload,
 } from 'lucide-react';
@@ -46,7 +49,24 @@ type ExpressRow = {
   cargo_nombre_snapshot?: string | null;
   bono_manual_usd?: number | null;
   formalizado_empleado_id?: string | null;
+  pdf_firmado_storage_path?: string | null;
+  pdf_firmado_subido_at?: string | null;
 };
+
+type ResultadoEscaneoMasivo =
+  | {
+      ok: true;
+      archivo: string;
+      contrato_id: string;
+      obrero: string;
+      cedula: string;
+    }
+  | {
+      ok: false;
+      archivo: string;
+      error: string;
+      cedula_detectada?: string | null;
+    };
 
 /** Entidad patrono de la obra; si falta, toma la del módulo integral padre. */
 async function resolverEntidadIdProyecto(
@@ -78,6 +98,8 @@ export default function RrhhContratosExpressClient() {
   const supabase = useMemo(() => createClient(), []);
   const searchParams = useSearchParams();
   const fileRef = useRef<HTMLInputElement>(null);
+  const escaneoIndividualRef = useRef<HTMLInputElement>(null);
+  const escaneoMasivoRef = useRef<HTMLInputElement>(null);
 
   const [entidades, setEntidades] = useState<EntidadOpt[]>([]);
   const [oficios, setOficios] = useState<OficioOpt[]>([]);
@@ -101,6 +123,12 @@ export default function RrhhContratosExpressClient() {
   const [importando, setImportando] = useState(false);
   const [resultados, setResultados] = useState<ResultadoMasivo[] | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
+  const [escaneoPendienteId, setEscaneoPendienteId] = useState<string | null>(null);
+  const [busyEscaneoId, setBusyEscaneoId] = useState<string | null>(null);
+  const [importandoEscaneos, setImportandoEscaneos] = useState(false);
+  const [resultadosEscaneo, setResultadosEscaneo] = useState<ResultadoEscaneoMasivo[] | null>(
+    null,
+  );
 
   const proyectoNombre = useMemo(
     () => proyectos.find((p) => p.id === proyectoId)?.nombre ?? null,
@@ -276,13 +304,17 @@ export default function RrhhContratosExpressClient() {
       const res = await supabase
         .from('ci_contratos_express')
         .select(
-          'id,created_at,obrero_nombre,obrero_cedula,cargo_nombre_snapshot,bono_manual_usd,formalizado_empleado_id',
+          'id,created_at,obrero_nombre,obrero_cedula,cargo_nombre_snapshot,bono_manual_usd,formalizado_empleado_id,pdf_firmado_storage_path,pdf_firmado_subido_at',
         )
         .eq('proyecto_id', proyectoId)
         .order('created_at', { ascending: false });
 
       if (res.error) {
-        if (/cargo_nombre_snapshot|bono_manual_usd|formalizado_empleado_id|42703/i.test(res.error.message)) {
+        if (
+          /cargo_nombre_snapshot|bono_manual_usd|formalizado_empleado_id|pdf_firmado|42703/i.test(
+            res.error.message,
+          )
+        ) {
           const bare = await supabase
             .from('ci_contratos_express')
             .select('id,created_at,obrero_nombre,obrero_cedula')
@@ -586,15 +618,143 @@ export default function RrhhContratosExpressClient() {
     }
   }
 
+  function pedirEscaneoIndividual(contratoId: string) {
+    setEscaneoPendienteId(contratoId);
+    queueMicrotask(() => escaneoIndividualRef.current?.click());
+  }
+
+  async function subirEscaneoIndividual(file: File, contratoId: string) {
+    setBusyEscaneoId(contratoId);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch(`/api/talento/contratos-express/${encodeURIComponent(contratoId)}/pdf-firmado`, {
+        method: 'POST',
+        body: fd,
+      });
+      const data = (await res.json()) as {
+        error?: string;
+        pdf_firmado_storage_path?: string;
+        pdf_firmado_subido_at?: string;
+      };
+      if (!res.ok) {
+        toast.error(data.error ?? 'No se pudo subir el escaneo.');
+        return;
+      }
+      setRows((prev) =>
+        prev.map((r) =>
+          r.id === contratoId
+            ? {
+                ...r,
+                pdf_firmado_storage_path: data.pdf_firmado_storage_path ?? 'ok',
+                pdf_firmado_subido_at: data.pdf_firmado_subido_at ?? new Date().toISOString(),
+              }
+            : r,
+        ),
+      );
+      toast.success('Contrato firmado escaneado cargado.');
+    } catch {
+      toast.error('Error de red al subir el escaneo.');
+    } finally {
+      setBusyEscaneoId(null);
+      setEscaneoPendienteId(null);
+    }
+  }
+
+  async function verEscaneoFirmado(contratoId: string) {
+    try {
+      const res = await fetch(
+        `/api/talento/contratos-express/${encodeURIComponent(contratoId)}/pdf-url?doc=firmado`,
+      );
+      const data = (await res.json()) as { url?: string; error?: string };
+      if (!res.ok || !data.url) {
+        toast.error(data.error ?? 'No se pudo abrir el escaneo firmado.');
+        return;
+      }
+      window.open(data.url, '_blank', 'noopener,noreferrer');
+    } catch {
+      toast.error('Error de red al abrir el escaneo.');
+    }
+  }
+
+  async function subirEscaneosMasivos(fileList: FileList | File[]) {
+    if (!proyectoId) {
+      toast.error('Seleccione la obra primero.');
+      return;
+    }
+    const files = Array.from(fileList).filter((f) => f.size > 0);
+    if (files.length === 0) {
+      toast.error('Seleccione al menos un archivo.');
+      return;
+    }
+    setImportandoEscaneos(true);
+    setResultadosEscaneo(null);
+    try {
+      const fd = new FormData();
+      fd.append('proyecto_id', proyectoId);
+      for (const f of files) fd.append('files', f);
+      const res = await fetch('/api/talento/contratos-express/pdf-firmado/masivo', {
+        method: 'POST',
+        body: fd,
+      });
+      const data = (await res.json()) as {
+        error?: string;
+        cargados?: number;
+        fallidos?: number;
+        resultados?: ResultadoEscaneoMasivo[];
+      };
+      if (!res.ok) {
+        toast.error(data.error ?? 'No se pudo cargar el lote de escaneos.');
+        return;
+      }
+      setResultadosEscaneo(data.resultados ?? []);
+      const ok = data.cargados ?? 0;
+      const fail = data.fallidos ?? 0;
+      if (ok > 0) toast.success(`${ok} escaneo(s) cargado(s).${fail ? ` ${fail} con error.` : ''}`);
+      else toast.error(fail ? `${fail} archivo(s) sin coincidencia.` : 'Ningún archivo cargado.');
+      void loadLista();
+    } catch {
+      toast.error('Error de red en la carga masiva de escaneos.');
+    } finally {
+      setImportandoEscaneos(false);
+    }
+  }
+
   const inputCell =
     'w-full min-w-[7rem] rounded-md border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-zinc-100 outline-none focus:border-amber-500/50';
 
   return (
     <div className="mx-auto max-w-6xl px-4 pb-28 pt-6">
+      <input
+        ref={escaneoIndividualRef}
+        type="file"
+        accept="application/pdf,image/jpeg,image/png,image/webp"
+        className="sr-only"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          const id = escaneoPendienteId;
+          e.target.value = '';
+          if (f && id) void subirEscaneoIndividual(f, id);
+          else setEscaneoPendienteId(null);
+        }}
+      />
+      <input
+        ref={escaneoMasivoRef}
+        type="file"
+        accept="application/pdf,image/jpeg,image/png,image/webp"
+        multiple
+        className="sr-only"
+        onChange={(e) => {
+          const list = e.target.files;
+          e.target.value = '';
+          if (list?.length) void subirEscaneosMasivos(list);
+        }}
+      />
       <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Casa Inteligente</p>
       <h1 className="text-2xl font-bold tracking-tight text-white">Contratos express</h1>
       <p className="mt-1 max-w-2xl text-sm text-zinc-500">
-        RRHH · carga masiva por obra y entidad patrono. Ejemplo: obra Asfaltado · entidad DIMAQUINAS, C.A.
+        RRHH · carga masiva por obra y entidad patrono. Tras la firma en papel, suba el escaneo
+        firmado (individual o por lote).
       </p>
 
       <header className="mb-6 mt-8">
@@ -860,6 +1020,52 @@ export default function RrhhContratosExpressClient() {
           ) : null}
         </div>
 
+        <div className="mt-5 rounded-xl border border-violet-500/30 bg-violet-950/20 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="flex items-center gap-2 text-sm font-bold text-violet-100">
+                <ScanLine className="size-4 text-violet-300" aria-hidden />
+                Escaneos firmados
+              </p>
+              <p className="mt-1 max-w-xl text-xs text-zinc-500">
+                Cuando el obrero firme el contrato, suba el PDF o foto escaneada. En lote, nombre cada
+                archivo con la cédula (ej. <span className="font-mono text-zinc-400">V-12345678.pdf</span>
+                ).
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!proyectoId || importandoEscaneos || rows.length === 0}
+              onClick={() => escaneoMasivoRef.current?.click()}
+              className="border-violet-500/45 bg-violet-950/40 text-violet-100"
+            >
+              {importandoEscaneos ? (
+                <Loader2 className="size-3.5 animate-spin" aria-hidden />
+              ) : (
+                <Upload className="size-3.5" aria-hidden />
+              )}
+              <span className="ml-1.5">
+                {importandoEscaneos ? 'Cargando…' : 'Carga masiva de escaneos'}
+              </span>
+            </Button>
+          </div>
+          {resultadosEscaneo && resultadosEscaneo.length > 0 ? (
+            <ul className="mt-3 max-h-40 overflow-y-auto divide-y divide-white/5 rounded-lg border border-white/10 bg-black/30 text-[11px]">
+              {resultadosEscaneo.map((r, idx) => (
+                <li
+                  key={`${r.archivo}-${idx}`}
+                  className={`px-3 py-1.5 ${r.ok ? 'text-emerald-300/90' : 'text-red-200'}`}
+                >
+                  {r.archivo}
+                  {r.ok ? ` · ${r.obrero} · OK` : ` · ${r.error}`}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+
         <div className="mt-5 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-bold text-white">Contratos en esta obra</h2>
           <div className="flex flex-wrap items-center gap-2">
@@ -943,12 +1149,15 @@ export default function RrhhContratosExpressClient() {
                     <th className="px-3 py-2.5">Cédula</th>
                     <th className="px-3 py-2.5">Cargo</th>
                     <th className="px-3 py-2.5 text-center">PDF</th>
+                    <th className="px-3 py-2.5 text-center">Firmado</th>
                     <th className="px-3 py-2.5 text-center">Editar</th>
                     <th className="px-3 py-2.5 text-right">Borrar</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((r) => (
+                  {rows.map((r) => {
+                    const tieneFirmado = Boolean(String(r.pdf_firmado_storage_path ?? '').trim());
+                    return (
                     <tr key={r.id} className="border-b border-white/[0.06] last:border-0">
                       <td className="px-2 py-2 text-center">
                         <input
@@ -972,6 +1181,56 @@ export default function RrhhContratosExpressClient() {
                           empleadoRowId={`ci-express-${r.id}`}
                           nombreObrero={r.obrero_nombre}
                         />
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        <div className="inline-flex items-center justify-center gap-1">
+                          {tieneFirmado ? (
+                            <>
+                              <span
+                                className="inline-flex items-center gap-1 rounded-md border border-emerald-500/35 bg-emerald-950/40 px-1.5 py-1 text-[10px] font-bold text-emerald-200"
+                                title={
+                                  r.pdf_firmado_subido_at
+                                    ? `Subido ${new Date(r.pdf_firmado_subido_at).toLocaleString('es-VE')}`
+                                    : 'Escaneo firmado cargado'
+                                }
+                              >
+                                <CheckCircle2 className="size-3" aria-hidden />
+                                Sí
+                              </span>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-8 border-emerald-700/45 bg-emerald-950/20 px-2 text-xs text-emerald-100"
+                                onClick={() => void verEscaneoFirmado(r.id)}
+                                title="Ver escaneo firmado"
+                                aria-label={`Ver escaneo firmado de ${r.obrero_nombre}`}
+                              >
+                                <Eye className="size-3.5" />
+                              </Button>
+                            </>
+                          ) : null}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={busyEscaneoId === r.id}
+                            className="h-8 border-violet-700/50 bg-violet-950/30 px-2 text-xs text-violet-100"
+                            onClick={() => pedirEscaneoIndividual(r.id)}
+                            title={
+                              tieneFirmado
+                                ? 'Reemplazar escaneo firmado'
+                                : 'Subir contrato escaneado firmado'
+                            }
+                            aria-label={`Subir escaneo firmado de ${r.obrero_nombre}`}
+                          >
+                            {busyEscaneoId === r.id ? (
+                              <Loader2 className="size-3.5 animate-spin" />
+                            ) : (
+                              <Upload className="size-3.5" />
+                            )}
+                          </Button>
+                        </div>
                       </td>
                       <td className="px-3 py-2 text-center">
                         <Button
@@ -999,7 +1258,8 @@ export default function RrhhContratosExpressClient() {
                         </Button>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1011,9 +1271,8 @@ export default function RrhhContratosExpressClient() {
           <Link href="/rrhh/oficios-salarios" className="text-amber-300/90 underline underline-offset-2">
             Oficios y salarios
           </Link>
-          . Marque contratos y use <span className="text-zinc-400">PDF único</span> para imprimir el
-          lote. Tras ensamblar, use <span className="text-zinc-400">Editar</span> para corregir datos y
-          regenerar el PDF.
+          . Imprima con <span className="text-zinc-400">PDF único</span>, recoja firmas y cargue el
+          escaneo en <span className="text-zinc-400">Firmado</span> (uno a uno o por lote).
         </p>
       </section>
 
