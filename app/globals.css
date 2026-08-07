@@ -1208,16 +1208,11 @@
   }
 
   .presupuesto-tarjeta {
-    padding: 10px !important;
-  }
-
-  .presupuesto-tarjeta-top {
-    gap: 8px !important;
+    padding: 14px !important;
   }
 
   .presupuesto-tarjeta-monto {
-    font-size: 13px !important;
-    max-width: 38% !important;
+    font-size: 15px !important;
   }
 
   .presupuesto-tarjeta-actions {
@@ -1226,7 +1221,10 @@
 
   .presupuestos-status-filters button {
     font-size: 10px !important;
-    padding: 7px 3px !important;
-    gap: 3px !important;
+    padding: 8px 2px !important;
+  }
+
+  .presupuestos-kpis p:last-child {
+    font-size: 13px !important;
   }
 }
