@@ -26,7 +26,7 @@ export function esContratoExpressAdministracionDelegada(row: ExpressLike): boole
     .trim()
     .toLowerCase()
     .normalize('NFD')
-    .replace(/\p{M}/gu, '');
+    .replace(/[\u0300-\u036f]/g, '');
   if (nom.includes('administracion delegada')) return true;
 
   return false;
