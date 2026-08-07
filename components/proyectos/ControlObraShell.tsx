@@ -1,9 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowLeft, Construction, Package, ShoppingCart } from 'lucide-react';
+import { usePathname } from 'next/navigation';
+import { Construction, Package, ShoppingCart } from 'lucide-react';
 import ControlObraSubnav from '@/components/proyectos/ControlObraSubnav';
 import ProyectoAdLogisticaBanner from '@/components/proyectos/ProyectoAdLogisticaBanner';
+import ModuloPageTitle from '@/components/ui/ModuloPageTitle';
 import { useContratoAdProyecto } from '@/hooks/useContratoAdProyecto';
 
 type Props = {
@@ -12,47 +14,39 @@ type Props = {
 };
 
 export default function ControlObraShell({ proyectoId, children }: Props) {
+  const pathname = usePathname() ?? '';
+  const esSeccionEquipo = pathname.includes('/control-obra/equipo');
   const pid = encodeURIComponent(proyectoId);
   const { autorizado, loading } = useContratoAdProyecto(proyectoId);
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-5 text-white">
-      <div className="flex flex-wrap items-center gap-3">
-        <Link
-          href="/proyectos/modulo"
-          className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-3 py-2 text-xs text-zinc-400 hover:bg-white/5"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Proyectos
-        </Link>
-        <Link
-          href={`/proyectos/modulo/${pid}`}
-          className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-3 py-2 text-xs text-zinc-400 hover:bg-white/5"
-        >
-          Módulo del proyecto
-        </Link>
-      </div>
-
-      <header className="flex flex-wrap items-center gap-3">
-        <Construction className="h-7 w-7 text-amber-400 shrink-0" />
-        <div>
-          <h1 className="text-xl font-bold tracking-tight">Control de obra</h1>
-          <p className="text-sm text-zinc-500 mt-0.5">
-            Presupuesto, agua, maquinaria intercompany, informes y cronograma
-          </p>
-        </div>
+      <header className="space-y-1">
+        <ModuloPageTitle
+          title="Control de obra"
+          icon={Construction}
+          iconClassName="text-amber-400"
+          uppercase
+        />
+        <p className="text-sm text-zinc-500 pl-[2.375rem]">
+          Presupuesto, equipo, agua, maquinaria, informes, cronograma y tours 3D
+        </p>
       </header>
 
       <ControlObraSubnav proyectoId={proyectoId} />
 
-      <ProyectoAdLogisticaBanner
-        proyectoId={proyectoId}
-        autorizado={autorizado}
-        loading={loading}
-        className="mb-1"
-      />
+      {!esSeccionEquipo ? (
+        <ProyectoAdLogisticaBanner
+          proyectoId={proyectoId}
+          autorizado={autorizado}
+          loading={loading}
+          className="mb-1"
+        />
+      ) : null}
 
-      <div className="flex flex-wrap gap-2">
+      {children}
+
+      <div className="flex flex-wrap gap-2 pt-2 border-t border-white/10">
         {autorizado ? (
           <>
             <Link
@@ -83,8 +77,6 @@ export default function ControlObraShell({ proyectoId, children }: Props) {
           </>
         )}
       </div>
-
-      {children}
     </div>
   );
 }
