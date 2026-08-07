@@ -1018,41 +1018,38 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
             {!modoEdicion && !tabVistaTalento ? (
               <>
                 <div className="mt-4 rounded-2xl border border-white/10 bg-zinc-900/70 p-5 shadow-lg backdrop-blur-xl">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h1 className="text-2xl font-bold text-white">{proyecto.nombre}</h1>
-                        <Link
-                          href={`/proyectos/modulo/${id}?editar=1`}
-                          className="rounded-lg border border-white/15 bg-white/5 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-300 hover:bg-white/10 hover:text-white"
-                          title="Cambiar nombre y datos del proyecto"
-                        >
-                          Editar nombre
-                        </Link>
-                      </div>
-                      <p className="mt-1 text-sm text-zinc-400">{proyecto.ubicacion_texto}</p>
-                      <p className="mt-1 text-xs text-zinc-400">
+                  {/* Columna en móvil: el título usa todo el ancho; acciones abajo (sin solapar). */}
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-5">
+                    <div className="min-w-0 w-full flex-1 space-y-2">
+                      <h1 className="w-full text-pretty break-words text-2xl font-bold leading-snug text-white [overflow-wrap:anywhere]">
+                        {proyecto.nombre}
+                      </h1>
+                      <p className="text-pretty break-words text-sm leading-relaxed text-zinc-400">
+                        {proyecto.ubicacion_texto}
+                      </p>
+                      <p className="text-xs text-zinc-400">
                         Patrono:{' '}
                         <span className="font-semibold text-zinc-200">
                           {nombrePatronoVista ?? 'Sin asignar — Modificar proyecto'}
                         </span>
                       </p>
-                      <p className="mt-1 text-xs text-zinc-500">
+                      <p className="text-xs text-zinc-500">
                         GPS: {proyecto.lat ?? '—'}, {proyecto.lng ?? '—'} · Estado: {proyecto.estado}
                       </p>
                     </div>
-                    <div className="flex shrink-0 flex-col items-stretch gap-2 sm:items-end">
+                    <div className="flex w-full shrink-0 flex-row flex-wrap gap-2 sm:w-auto sm:flex-col sm:items-stretch">
                       <Link
                         href={`/proyectos/modulo/${id}?editar=1`}
-                        className="inline-flex justify-center rounded-xl border border-sky-500/40 bg-sky-950/40 px-3 py-2 text-xs font-semibold text-sky-200 hover:bg-sky-900/55"
+                        className="inline-flex flex-1 justify-center rounded-xl border border-sky-500/40 bg-sky-950/40 px-3 py-2 text-xs font-semibold text-sky-200 hover:bg-sky-900/55 sm:flex-none"
+                        title="Cambiar nombre y datos del proyecto"
                       >
-                        Modificar proyecto
+                        Editar / renombrar
                       </Link>
                       <button
                         type="button"
                         onClick={() => void borrarProyectoActual()}
                         disabled={borrandoProyecto}
-                        className="inline-flex justify-center rounded-xl border border-red-500/40 bg-red-950/40 px-3 py-2 text-xs font-semibold text-red-300 hover:bg-red-950/70 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="inline-flex flex-1 justify-center rounded-xl border border-red-500/40 bg-red-950/40 px-3 py-2 text-xs font-semibold text-red-300 hover:bg-red-950/70 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
                       >
                         {borrandoProyecto ? 'Borrando…' : 'Borrar proyecto'}
                       </button>
