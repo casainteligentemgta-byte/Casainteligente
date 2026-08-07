@@ -25,13 +25,13 @@ type ClasificacionPresupuesto =
     | 'cobrado'
     | 'pagado';
 
-const CLASIFICACION_COLORS: Record<ClasificacionPresupuesto, { bg: string; text: string; label: string; icon: string }> = {
-    no_enviado: { bg: 'rgba(148,163,184,0.15)', text: '#94A3B8', label: 'No enviado', icon: '📭' },
-    enviado: { bg: 'rgba(59,130,246,0.15)', text: '#3B82F6', label: 'Enviado', icon: '📨' },
-    aprobado: { bg: 'rgba(52,199,89,0.15)', text: '#34C759', label: 'Aprobado', icon: '✅' },
-    no_aprobado: { bg: 'rgba(239,68,68,0.15)', text: '#EF4444', label: 'No aprobado', icon: '⛔' },
-    cobrado: { bg: 'rgba(245,158,11,0.15)', text: '#F59E0B', label: 'Por Pagar', icon: '💰' },
-    pagado: { bg: 'rgba(16,185,129,0.15)', text: '#10B981', label: 'Pagado', icon: '💸' },
+const CLASIFICACION_COLORS: Record<ClasificacionPresupuesto, { bg: string; text: string; label: string; short: string }> = {
+    no_enviado: { bg: 'rgba(148,163,184,0.15)', text: '#94A3B8', label: 'No enviado', short: 'Sin env.' },
+    enviado: { bg: 'rgba(59,130,246,0.15)', text: '#3B82F6', label: 'Enviado', short: 'Enviado' },
+    aprobado: { bg: 'rgba(52,199,89,0.15)', text: '#34C759', label: 'Aprobado', short: 'Aprobado' },
+    no_aprobado: { bg: 'rgba(239,68,68,0.15)', text: '#EF4444', label: 'No aprobado', short: 'Rechaz.' },
+    cobrado: { bg: 'rgba(245,158,11,0.15)', text: '#F59E0B', label: 'Por Pagar', short: 'Por pagar' },
+    pagado: { bg: 'rgba(16,185,129,0.15)', text: '#10B981', label: 'Pagado', short: 'Pagado' },
 };
 
 /** Orden de status para ordenar la lista. */
@@ -83,11 +83,8 @@ function getNumeroValor(b: Budget, fallbackById: Record<string, number>) {
     return fallbackById[b.id] ?? 0;
 }
 
-type VistaPresupuestos = 'filas' | 'columnas';
-
 function TarjetaPresupuesto({
     b,
-    vista,
     fallbackById,
     glass,
     onEditar,
@@ -97,7 +94,6 @@ function TarjetaPresupuesto({
     onUpdateStatus,
 }: {
     b: Budget;
-    vista: VistaPresupuestos;
     fallbackById: Record<string, number>;
     glass: CSSProperties;
     onEditar: () => void;
@@ -106,50 +102,22 @@ function TarjetaPresupuesto({
     onDelete: () => void;
     onUpdateStatus: (status: ClasificacionPresupuesto) => void;
 }) {
+    const [menuAbierto, setMenuAbierto] = useState(false);
     const clasif = clasificarPresupuesto(b);
     const clasifStyle = CLASIFICACION_COLORS[clasif];
     const fecha = formatFechaCorta(b.created_at);
     const numero = getPresupuestoNumero(b, fallbackById[b.id]);
-    const compacto = vista === 'columnas';
-
-    const btnBase: CSSProperties = {
-        border: 'none',
-        borderRadius: '8px',
-        fontWeight: 600,
-        cursor: 'pointer',
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '4px',
-        flexShrink: 0,
-        whiteSpace: 'nowrap',
-    };
-
-    const btnAccion: CSSProperties = {
-        ...btnBase,
-        padding: compacto ? '5px 7px' : '6px 10px',
-        fontSize: compacto ? '10px' : '11px',
-    };
-
-    const metaChip: CSSProperties = {
-        color: 'rgba(255,255,255,0.55)',
-        fontSize: '11px',
-        fontWeight: 600,
-        margin: 0,
-        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-    };
 
     return (
         <div
             className="presupuesto-tarjeta"
             style={{
                 ...glass,
-                padding: compacto ? '10px' : '12px',
-                borderRadius: '14px',
+                padding: '14px',
+                borderRadius: '16px',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '10px',
-                height: '100%',
+                gap: '12px',
                 width: '100%',
                 maxWidth: '100%',
                 boxSizing: 'border-box',
@@ -157,39 +125,32 @@ function TarjetaPresupuesto({
                 overflow: 'hidden',
             }}
         >
-            {/* Orden móvil: Visualizar → Cliente → Nº → Fecha → Status */}
-            <div
-                className="presupuesto-tarjeta-top"
+            {/* Cabecera tappable → visualizar */}
+            <button
+                type="button"
+                onClick={onPreview}
+                className="presupuesto-tarjeta-main"
                 style={{
                     display: 'flex',
                     alignItems: 'flex-start',
-                    gap: '10px',
-                    minWidth: 0,
+                    justifyContent: 'space-between',
+                    gap: '12px',
                     width: '100%',
+                    minWidth: 0,
+                    padding: 0,
+                    margin: 0,
+                    border: 'none',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    fontFamily: 'inherit',
                 }}
             >
-                <button
-                    type="button"
-                    onClick={onPreview}
-                    style={{
-                        ...btnBase,
-                        padding: '8px 10px',
-                        fontSize: '11px',
-                        background: 'rgba(0,122,255,0.18)',
-                        color: '#5AC8FA',
-                        border: '1px solid rgba(90,200,250,0.35)',
-                        minHeight: '40px',
-                    }}
-                    title="Visualizar presupuesto"
-                >
-                    👁{compacto ? '' : ' Visualizar'}
-                </button>
-
                 <div style={{ flex: 1, minWidth: 0 }}>
                     <h3
                         style={{
                             color: 'white',
-                            fontSize: compacto ? '14px' : '15px',
+                            fontSize: '16px',
                             fontWeight: 700,
                             margin: 0,
                             lineHeight: 1.25,
@@ -201,67 +162,43 @@ function TarjetaPresupuesto({
                     >
                         {b.customer_name || 'Sin cliente'}
                     </h3>
-                    <div
+                    <p
                         style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            flexWrap: 'wrap',
-                            marginTop: '5px',
+                            color: 'rgba(255,255,255,0.45)',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            margin: '5px 0 0',
+                            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                         }}
                     >
-                        <p style={metaChip} title="Número de presupuesto">
-                            {numero}
-                        </p>
-                        <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: '10px' }}>·</span>
-                        <p style={{ ...metaChip, fontFamily: 'inherit' }} title="Fecha">
-                            {fecha}
-                        </p>
-                        {b.customer_rif ? (
-                            <>
-                                <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: '10px' }}>·</span>
-                                <p
-                                    style={{
-                                        ...metaChip,
-                                        fontFamily: 'inherit',
-                                        color: 'rgba(255,255,255,0.35)',
-                                        fontWeight: 500,
-                                    }}
-                                    title="Identificación"
-                                >
-                                    {b.customer_rif}
-                                </p>
-                            </>
-                        ) : null}
-                    </div>
+                        {numero}
+                        <span style={{ color: 'rgba(255,255,255,0.2)', margin: '0 6px' }}>·</span>
+                        <span style={{ fontFamily: 'inherit', fontWeight: 500 }}>{fecha}</span>
+                    </p>
                 </div>
-
                 <span
                     className="presupuesto-tarjeta-monto"
                     style={{
                         color: '#34C759',
-                        fontSize: compacto ? '13px' : '15px',
+                        fontSize: '17px',
                         fontWeight: 800,
                         lineHeight: 1.2,
                         flexShrink: 0,
                         whiteSpace: 'nowrap',
-                        paddingTop: '2px',
-                        maxWidth: '42%',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
+                        paddingTop: '1px',
                     }}
                 >
                     ${formatUSD(b.subtotal)}
                 </span>
-            </div>
+            </button>
 
+            {/* Status + acciones mínimas */}
             <div
                 className="presupuesto-tarjeta-actions"
                 style={{
                     display: 'flex',
                     alignItems: 'center',
                     gap: '8px',
-                    flexWrap: 'wrap',
                     minWidth: 0,
                     width: '100%',
                 }}
@@ -270,17 +207,14 @@ function TarjetaPresupuesto({
                     style={{
                         display: 'inline-flex',
                         alignItems: 'center',
-                        gap: '6px',
                         background: clasifStyle.bg,
                         border: `1px solid ${clasifStyle.text}44`,
                         borderRadius: '999px',
-                        padding: '4px 6px 4px 8px',
+                        padding: '5px 10px 5px 12px',
                         minWidth: 0,
+                        flex: '0 1 auto',
                     }}
                 >
-                    <span aria-hidden style={{ fontSize: '12px', lineHeight: 1 }}>
-                        {clasifStyle.icon}
-                    </span>
                     <select
                         aria-label="Status del presupuesto"
                         value={b.status}
@@ -291,12 +225,12 @@ function TarjetaPresupuesto({
                             background: 'transparent',
                             border: 'none',
                             color: clasifStyle.text,
-                            fontSize: '11px',
+                            fontSize: '12px',
                             fontWeight: 700,
-                            padding: '2px 14px 2px 0',
+                            padding: '0 12px 0 0',
                             outline: 'none',
                             cursor: 'pointer',
-                            maxWidth: '160px',
+                            maxWidth: '140px',
                         }}
                     >
                         {(Object.keys(CLASIFICACION_COLORS) as ClasificacionPresupuesto[]).map((k) => (
@@ -307,31 +241,128 @@ function TarjetaPresupuesto({
                     </select>
                 </label>
 
-                <div style={{ display: 'flex', gap: '4px', marginLeft: 'auto' }}>
+                <div style={{ display: 'flex', gap: '6px', marginLeft: 'auto', position: 'relative' }}>
                     <button
                         type="button"
                         onClick={onEditar}
-                        style={{ ...btnAccion, background: 'rgba(0,122,255,0.12)', color: '#007AFF' }}
-                        title="Editar"
+                        style={{
+                            border: 'none',
+                            borderRadius: '10px',
+                            padding: '8px 12px',
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            background: 'rgba(0,122,255,0.14)',
+                            color: '#5AC8FA',
+                        }}
                     >
-                        ✏️{compacto ? '' : ' Editar'}
+                        Editar
                     </button>
                     <button
                         type="button"
-                        onClick={onShare}
-                        style={{ ...btnAccion, background: 'rgba(52,199,89,0.1)', color: '#34C759' }}
-                        title="WhatsApp"
+                        onClick={() => setMenuAbierto((v) => !v)}
+                        aria-expanded={menuAbierto}
+                        aria-haspopup="menu"
+                        aria-label="Más acciones"
+                        style={{
+                            border: '1px solid rgba(255,255,255,0.12)',
+                            borderRadius: '10px',
+                            width: '36px',
+                            height: '36px',
+                            fontSize: '16px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            background: 'rgba(255,255,255,0.06)',
+                            color: 'rgba(255,255,255,0.85)',
+                            lineHeight: 1,
+                        }}
                     >
-                        📲
+                        ···
                     </button>
-                    <button
-                        type="button"
-                        onClick={onDelete}
-                        style={{ ...btnAccion, background: 'rgba(255,59,48,0.1)', color: '#FF3B30' }}
-                        title="Eliminar"
-                    >
-                        🗑️
-                    </button>
+                    {menuAbierto ? (
+                        <div
+                            role="menu"
+                            style={{
+                                position: 'absolute',
+                                right: 0,
+                                bottom: 'calc(100% + 6px)',
+                                zIndex: 30,
+                                minWidth: '160px',
+                                background: 'rgba(28,28,30,0.98)',
+                                border: '1px solid rgba(255,255,255,0.12)',
+                                borderRadius: '12px',
+                                padding: '6px',
+                                boxShadow: '0 12px 28px rgba(0,0,0,0.45)',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '2px',
+                            }}
+                        >
+                            <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                    setMenuAbierto(false);
+                                    onPreview();
+                                }}
+                                style={{
+                                    border: 'none',
+                                    background: 'transparent',
+                                    color: 'rgba(255,255,255,0.9)',
+                                    textAlign: 'left',
+                                    padding: '10px 12px',
+                                    borderRadius: '8px',
+                                    fontSize: '13px',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                Ver documento
+                            </button>
+                            <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                    setMenuAbierto(false);
+                                    onShare();
+                                }}
+                                style={{
+                                    border: 'none',
+                                    background: 'transparent',
+                                    color: '#34C759',
+                                    textAlign: 'left',
+                                    padding: '10px 12px',
+                                    borderRadius: '8px',
+                                    fontSize: '13px',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                WhatsApp
+                            </button>
+                            <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                    setMenuAbierto(false);
+                                    onDelete();
+                                }}
+                                style={{
+                                    border: 'none',
+                                    background: 'transparent',
+                                    color: '#FF3B30',
+                                    textAlign: 'left',
+                                    padding: '10px 12px',
+                                    borderRadius: '8px',
+                                    fontSize: '13px',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                Eliminar
+                            </button>
+                        </div>
+                    ) : null}
                 </div>
             </div>
         </div>
@@ -365,8 +396,6 @@ export default function PresupuestosPage() {
     });
     const [fallbackById, setFallbackById] = useState<Record<string, number>>({});
     const [filtrosAbiertos, setFiltrosAbiertos] = useState(false);
-    /** Lista siempre en filas; se eliminó el selector 1 filas / 3 cols. */
-    const vista: VistaPresupuestos = 'filas';
 
     const fetchBudgets = async () => {
         setLoading(true);
@@ -543,57 +572,50 @@ export default function PresupuestosPage() {
                 style={{
                 position: 'sticky', top: 0, zIndex: 50,
                 background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(20px)',
-                padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.1)',
-                display: 'grid',
-                gridTemplateColumns: 'minmax(0, 1fr) auto minmax(0, 1fr)',
+                padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.1)',
+                display: 'flex',
                 alignItems: 'center',
-                gap: '12px',
+                justifyContent: 'space-between',
+                gap: '10px',
                 width: '100%',
                 maxWidth: '100%',
                 boxSizing: 'border-box',
             }}>
-                <h1 className="presupuestos-title" style={{ color: 'white', fontSize: '24px', fontWeight: 800, margin: 0, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Presupuestos</h1>
-                <button
-                    type="button"
-                    onClick={() => setFiltrosAbiertos(true)}
-                    style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '5px',
-                        background: hayFiltrosActivos ? 'rgba(0,122,255,0.15)' : 'rgba(255,255,255,0.06)',
-                        color: hayFiltrosActivos ? '#007AFF' : 'rgba(255,255,255,0.85)',
-                        border: hayFiltrosActivos ? '1px solid rgba(0,122,255,0.35)' : '1px solid rgba(255,255,255,0.1)',
-                        borderRadius: '9px',
-                        padding: '6px 10px',
-                        fontSize: '11px',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        justifySelf: 'center',
-                    }}
-                >
-                    <span aria-hidden style={{ fontSize: '12px' }}>🔍</span>
-                    Filtrar
-                    {hayFiltrosActivos ? (
-                        <span style={{
-                            background: '#007AFF',
-                            color: 'white',
-                            fontSize: '9px',
-                            fontWeight: 800,
-                            borderRadius: '999px',
-                            padding: '1px 5px',
-                            minWidth: '14px',
-                            textAlign: 'center',
-                        }}>
-                            ●
-                        </span>
-                    ) : null}
-                </button>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifySelf: 'end' }}>
+                <h1 className="presupuestos-title" style={{ color: 'white', fontSize: '22px', fontWeight: 800, margin: 0, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Presupuestos</h1>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                    <button
+                        type="button"
+                        onClick={() => setFiltrosAbiertos(true)}
+                        style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                            background: hayFiltrosActivos ? 'rgba(0,122,255,0.15)' : 'rgba(255,255,255,0.06)',
+                            color: hayFiltrosActivos ? '#007AFF' : 'rgba(255,255,255,0.85)',
+                            border: hayFiltrosActivos ? '1px solid rgba(0,122,255,0.35)' : '1px solid rgba(255,255,255,0.1)',
+                            borderRadius: '10px',
+                            padding: '8px 12px',
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                        }}
+                    >
+                        Filtrar
+                        {hayFiltrosActivos ? (
+                            <span style={{
+                                width: '6px',
+                                height: '6px',
+                                borderRadius: '999px',
+                                background: '#007AFF',
+                                display: 'inline-block',
+                            }} />
+                        ) : null}
+                    </button>
                     <Link href="/ventas">
                         <button style={{
                             background: '#007AFF', color: 'white', border: 'none',
-                            borderRadius: '9px', padding: '6px 10px', fontWeight: 700,
-                            fontSize: '11px', cursor: 'pointer'
+                            borderRadius: '10px', padding: '8px 12px', fontWeight: 700,
+                            fontSize: '12px', cursor: 'pointer'
                         }}>
                             + Nuevo
                         </button>
@@ -611,101 +633,55 @@ export default function PresupuestosPage() {
                     overflowX: 'hidden',
                 }}
             >
-                {/* KPIs comerciales: aprobado / por pagar / pagado */}
+                {/* KPIs compactos */}
                 <div
                     className="presupuestos-kpis"
                     style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-                    gap: '10px',
-                    marginBottom: '20px',
-                    width: '100%',
-                    boxSizing: 'border-box',
-                }}>
-                    <div style={{
                         ...glass,
-                        padding: '12px 10px',
-                        background: 'linear-gradient(135deg, rgba(52,199,89,0.12) 0%, rgba(0,0,0,0) 100%)',
-                        minWidth: 0,
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+                        gap: '0',
+                        marginBottom: '14px',
+                        width: '100%',
                         boxSizing: 'border-box',
+                        padding: '12px 4px',
                         overflow: 'hidden',
-                    }}>
-                        <p style={{
-                            color: 'rgba(255,255,255,0.45)',
-                            fontSize: '10px',
-                            fontWeight: 700,
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.02em',
-                            lineHeight: 1.2,
-                        }}>
-                            Total aprobado
-                        </p>
-                        <p style={{
-                            color: '#34C759',
-                            fontSize: '15px',
-                            fontWeight: 800,
-                            marginTop: '6px',
-                            wordBreak: 'break-word',
-                        }}>
-                            ${formatUSD(stats.totalAprobado)}
-                        </p>
-                    </div>
-                    <div style={{
-                        ...glass,
-                        padding: '12px 10px',
-                        background: 'linear-gradient(135deg, rgba(245,158,11,0.12) 0%, rgba(0,0,0,0) 100%)',
-                        minWidth: 0,
-                        boxSizing: 'border-box',
-                        overflow: 'hidden',
-                    }}>
-                        <p style={{
-                            color: 'rgba(255,255,255,0.45)',
-                            fontSize: '10px',
-                            fontWeight: 700,
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.02em',
-                            lineHeight: 1.2,
-                        }}>
-                            Por pagar
-                        </p>
-                        <p style={{
-                            color: '#F59E0B',
-                            fontSize: '15px',
-                            fontWeight: 800,
-                            marginTop: '6px',
-                            wordBreak: 'break-word',
-                        }}>
-                            ${formatUSD(stats.totalPorPagar)}
-                        </p>
-                    </div>
-                    <div style={{
-                        ...glass,
-                        padding: '12px 10px',
-                        background: 'linear-gradient(135deg, rgba(16,185,129,0.12) 0%, rgba(0,0,0,0) 100%)',
-                        minWidth: 0,
-                        boxSizing: 'border-box',
-                        overflow: 'hidden',
-                    }}>
-                        <p style={{
-                            color: 'rgba(255,255,255,0.45)',
-                            fontSize: '10px',
-                            fontWeight: 700,
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.02em',
-                            lineHeight: 1.2,
-                        }}>
-                            Total pagado
-                        </p>
-                        <p style={{
-                            color: '#10B981',
-                            fontSize: '15px',
-                            fontWeight: 800,
-                            marginTop: '6px',
-                            wordBreak: 'break-word',
-                        }}>
-                            ${formatUSD(stats.totalPagado)}
-                        </p>
-                    </div>
+                    }}
+                >
+                    {[
+                        { label: 'Aprobado', value: `$${formatUSD(stats.totalAprobado)}`, color: '#34C759' },
+                        { label: 'Por pagar', value: `$${formatUSD(stats.totalPorPagar)}`, color: '#F59E0B' },
+                        { label: 'Pagado', value: `$${formatUSD(stats.totalPagado)}`, color: '#10B981' },
+                    ].map((kpi, i) => (
+                        <div
+                            key={kpi.label}
+                            style={{
+                                padding: '0 10px',
+                                minWidth: 0,
+                                borderLeft: i === 0 ? 'none' : '1px solid rgba(255,255,255,0.08)',
+                            }}
+                        >
+                            <p style={{
+                                color: 'rgba(255,255,255,0.4)',
+                                fontSize: '10px',
+                                fontWeight: 700,
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.03em',
+                                margin: 0,
+                            }}>
+                                {kpi.label}
+                            </p>
+                            <p style={{
+                                color: kpi.color,
+                                fontSize: '15px',
+                                fontWeight: 800,
+                                margin: '4px 0 0',
+                                wordBreak: 'break-word',
+                            }}>
+                                {kpi.value}
+                            </p>
+                        </div>
+                    ))}
                 </div>
 
                 {/* Filtro por estado: dos líneas justificadas (sin scroll lateral) */}
@@ -717,7 +693,7 @@ export default function PresupuestosPage() {
                         display: 'flex',
                         flexDirection: 'column',
                         gap: '8px',
-                        marginBottom: '16px',
+                        marginBottom: '14px',
                         width: '100%',
                         maxWidth: '100%',
                         boxSizing: 'border-box',
@@ -740,38 +716,37 @@ export default function PresupuestosPage() {
                         >
                             {row.map((f) => {
                                 const active = filter === f;
-                                const label = f === 'todos' ? 'Todos' : CLASIFICACION_COLORS[f].label;
-                                const icon = f === 'todos' ? '📋' : CLASIFICACION_COLORS[f].icon;
+                                const label = f === 'todos' ? 'Todos' : CLASIFICACION_COLORS[f].short;
                                 const text =
                                     f !== 'todos' && active
                                         ? CLASIFICACION_COLORS[f].text
                                         : active
                                           ? '#007AFF'
-                                          : 'rgba(255,255,255,0.75)';
+                                          : 'rgba(255,255,255,0.7)';
                                 const bg =
                                     f !== 'todos' && active
                                         ? CLASIFICACION_COLORS[f].bg
                                         : active
                                           ? 'rgba(0,122,255,0.15)'
-                                          : 'rgba(255,255,255,0.06)';
+                                          : 'rgba(255,255,255,0.05)';
                                 const border =
                                     f !== 'todos' && active
                                         ? `1px solid ${CLASIFICACION_COLORS[f].text}55`
                                         : active
                                           ? '1px solid rgba(0,122,255,0.35)'
-                                          : '1px solid rgba(255,255,255,0.1)';
+                                          : '1px solid transparent';
                                 return (
                                     <button
                                         key={f}
                                         type="button"
                                         role="option"
                                         aria-selected={active}
+                                        aria-label={f === 'todos' ? 'Todos' : CLASIFICACION_COLORS[f].label}
                                         onClick={() => setFilter(f)}
                                         style={{
                                             display: 'inline-flex',
                                             alignItems: 'center',
                                             justifyContent: 'center',
-                                            gap: '4px',
                                             flex: '1 1 0',
                                             width: 0,
                                             minWidth: 0,
@@ -780,20 +755,18 @@ export default function PresupuestosPage() {
                                             color: text,
                                             border,
                                             borderRadius: '999px',
-                                            padding: '8px 4px',
+                                            padding: '9px 4px',
                                             fontSize: '11px',
                                             fontWeight: 700,
                                             cursor: 'pointer',
                                             textAlign: 'center',
                                             lineHeight: 1.15,
-                                            whiteSpace: 'normal',
-                                            wordBreak: 'break-word',
+                                            whiteSpace: 'nowrap',
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
                                         }}
                                     >
-                                        <span aria-hidden style={{ flexShrink: 0, fontSize: '12px', lineHeight: 1 }}>
-                                            {icon}
-                                        </span>
-                                        <span style={{ minWidth: 0 }}>{label}</span>
+                                        {label}
                                     </button>
                                 );
                             })}
@@ -801,51 +774,13 @@ export default function PresupuestosPage() {
                     ))}
                 </div>
 
-                {/* Ordenar */}
-                <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '8px' }}>
-                    <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '11px', margin: 0 }}>Ordenar</p>
-                    <div style={{ display: 'flex', gap: '4px', background: 'rgba(255,255,255,0.05)', padding: '4px', borderRadius: '10px' }}>
-                        <button
-                            type="button"
-                            onClick={() => setSortBy('fecha')}
-                            style={{
-                                background: sortBy === 'fecha' ? 'rgba(255,255,255,0.1)' : 'transparent',
-                                color: sortBy === 'fecha' ? 'white' : 'rgba(255,255,255,0.3)',
-                                border: 'none', borderRadius: '8px', padding: '6px 10px', fontSize: '11px', fontWeight: 600, cursor: 'pointer'
-                            }}
-                        >
-                            Fecha
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setSortBy('status')}
-                            style={{
-                                background: sortBy === 'status' ? 'rgba(255,255,255,0.1)' : 'transparent',
-                                color: sortBy === 'status' ? 'white' : 'rgba(255,255,255,0.3)',
-                                border: 'none', borderRadius: '8px', padding: '6px 10px', fontSize: '11px', fontWeight: 600, cursor: 'pointer'
-                            }}
-                        >
-                            Status
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setSortBy('nomenclatura')}
-                            style={{
-                                background: sortBy === 'nomenclatura' ? 'rgba(255,255,255,0.1)' : 'transparent',
-                                color: sortBy === 'nomenclatura' ? 'white' : 'rgba(255,255,255,0.3)',
-                                border: 'none', borderRadius: '8px', padding: '6px 10px', fontSize: '11px', fontWeight: 600, cursor: 'pointer'
-                            }}
-                        >
-                            Nro
-                        </button>
-                    </div>
-                </div>
-
                 <PresupuestosFiltrosModal
                     open={filtrosAbiertos}
                     onClose={() => setFiltrosAbiertos(false)}
                     filter={filter}
                     onFilterChange={setFilter}
+                    sortBy={sortBy}
+                    onSortByChange={setSortBy}
                     filtroNombre={filtroNombre}
                     onFiltroNombreChange={setFiltroNombre}
                     filtroRif={filtroRif}
@@ -866,8 +801,7 @@ export default function PresupuestosPage() {
                     <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.3)', marginTop: '40px' }}>Cargando...</p>
                 ) : budgets.length === 0 ? (
                     <div style={{ textAlign: 'center', marginTop: '60px' }}>
-                        <p style={{ fontSize: '40px' }}>📄</p>
-                        <p style={{ color: 'rgba(255,255,255,0.3)', marginTop: '10px' }}>
+                        <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '15px', fontWeight: 600 }}>
                             {hayFiltrosActivos ? 'Ningún presupuesto coincide con los filtros' : 'No hay presupuestos'}
                         </p>
                     </div>
@@ -877,7 +811,7 @@ export default function PresupuestosPage() {
                         style={{
                             display: 'grid',
                             gridTemplateColumns: 'minmax(0, 1fr)',
-                            gap: '8px',
+                            gap: '10px',
                             width: '100%',
                             boxSizing: 'border-box',
                         }}
@@ -886,7 +820,6 @@ export default function PresupuestosPage() {
                             <TarjetaPresupuesto
                                 key={b.id}
                                 b={b}
-                                vista={vista}
                                 fallbackById={fallbackById}
                                 glass={glass}
                                 onEditar={() => router.push(`/ventas?id=${b.id}`)}
