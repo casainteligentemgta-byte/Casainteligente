@@ -5,7 +5,7 @@ import { resolverAccesoLegal } from '@/lib/legal/accesoLegal';
 
 export const dynamic = 'force-dynamic';
 
-/** GET — ¿puede usar Departamento Legal? (icono + gate). */
+/** GET — ¿puede usar Departamento Legal? (icono + gate + modo producto). */
 export async function GET() {
   const supabase = await createClient();
   const {
@@ -25,5 +25,10 @@ export async function GET() {
     motivo: acceso.motivo,
     org_id: acceso.orgId,
     rol_legal: acceso.rolLegal,
+    plan: acceso.plan,
+    org_nombre: acceso.orgNombre,
+    modo_producto: acceso.modoProducto,
+    /** Alias claro para el cliente: producto solo abogado. */
+    standalone: acceso.modoProducto === 'standalone',
   });
 }
