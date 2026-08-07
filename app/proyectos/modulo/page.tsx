@@ -13,8 +13,7 @@ import {
 } from '@/lib/ui/moduloProyectosTheme';
 import { etiquetaFuenteProyecto } from '@/lib/proyectos/proyectosUnificados';
 import { withTimeout } from '@/lib/http/withTimeout';
-import ProyectoAccionesConfigRoles from '@/components/proyectos/ProyectoAccionesConfigRoles';
-import { hrefCcoProyecto } from '@/lib/contabilidad/cco/hrefCcoProyecto';
+import ProyectoModuloListaAcciones from '@/components/proyectos/ProyectoModuloListaAcciones';
 
 /** `modulo` = ci_proyectos integral; `obra_talento` = misma tabla con tipo_proyecto = talento (ex ci_obras). */
 type ProyectoOrigen = 'modulo' | 'obra_talento';
@@ -551,183 +550,44 @@ export default function ModuloProyectosPage() {
                         {r.estado}
                       </span>
                     </div>
-                    <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '13px', marginTop: '12px', marginBottom: 0 }}>
-                      Monto aprox.:{' '}
-                      <span style={{ fontWeight: 700, color: 'white' }}>
-                        {formatoVES(Number(r.monto_aproximado || 0))} {r.moneda || 'USD'}
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: '8px 16px',
+                        marginTop: '12px',
+                        color: 'rgba(255,255,255,0.55)',
+                        fontSize: '12px',
+                      }}
+                    >
+                      <span>
+                        Monto:{' '}
+                        <strong style={{ color: 'white', fontWeight: 700 }}>
+                          {formatoVES(Number(r.monto_aproximado || 0))} {r.moneda || 'USD'}
+                        </strong>
                       </span>
-                    </p>
-                    <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '13px', marginTop: '8px', marginBottom: 0 }}>
-                      Obreros contratados:{' '}
-                      <span style={{ fontWeight: 700, color: 'white' }}>
-                        {r.obrerosContratados == null ? '—' : etiquetaObrerosContratados(r.obrerosContratados)}
+                      <span>
+                        Obreros:{' '}
+                        <strong style={{ color: 'white', fontWeight: 700 }}>
+                          {r.obrerosContratados == null ? '—' : etiquetaObrerosContratados(r.obrerosContratados)}
+                        </strong>
                       </span>
-                    </p>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '14px' }}>
-                      <Link href={r.origen === 'modulo' ? `/proyectos/modulo/${r.id}` : `/proyectos/${r.id}/finanzas`}>
-                        <button
-                          type="button"
-                          style={{
-                            background: '#007AFF',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '10px',
-                            padding: '8px 14px',
-                            fontSize: '12px',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          {r.origen === 'modulo' ? 'Abrir gestión' : 'Abrir finanzas / obra'}
-                        </button>
-                      </Link>
-                      {r.origen === 'modulo' ? (
-                        <Link
-                          href={`/rrhh/hojas-vida?proyecto_modulo=${encodeURIComponent(r.id)}`}
-                          title="RRHH del proyecto (vacantes, cuadro, reclutamiento, nómina)"
-                        >
-                          <button
-                            type="button"
-                            style={{
-                              background: 'rgba(192, 38, 211, 0.22)',
-                              color: '#f5d0fe',
-                              border: '1px solid rgba(217, 70, 239, 0.55)',
-                              borderRadius: '10px',
-                              padding: '8px 14px',
-                              fontSize: '12px',
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                            }}
-                          >
-                            RRHH
-                          </button>
-                        </Link>
-                      ) : null}
-                      {r.origen === 'modulo' ? (
-                        <Link
-                          href={hrefCcoProyecto(r.id)}
-                          title="Control Contable de Obra (CCO) de este proyecto"
-                        >
-                          <button
-                            type="button"
-                            style={{
-                              background: 'rgba(16, 185, 129, 0.2)',
-                              color: '#a7f3d0',
-                              border: '1px solid rgba(52, 211, 153, 0.55)',
-                              borderRadius: '10px',
-                              padding: '8px 14px',
-                              fontSize: '12px',
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                            }}
-                          >
-                            Finanzas
-                          </button>
-                        </Link>
-                      ) : null}
-                      <Link href={`/proyectos/modulo/${r.id}/control-obra`}>
-                        <button
-                          type="button"
-                          style={{
-                            background: 'rgba(245, 158, 11, 0.2)',
-                            color: '#fde68a',
-                            border: '1px solid rgba(251, 191, 36, 0.55)',
-                            borderRadius: '10px',
-                            padding: '8px 14px',
-                            fontSize: '12px',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          Control de obra
-                        </button>
-                      </Link>
-                      {r.origen === 'modulo' ? (
-                        <Link href={`/proyectos/modulo/${r.id}/control-obra/equipo`}>
-                          <button
-                            type="button"
-                            style={{
-                              background: 'rgba(99, 102, 241, 0.22)',
-                              color: '#c7d2fe',
-                              border: '1px solid rgba(129, 140, 248, 0.55)',
-                              borderRadius: '10px',
-                              padding: '8px 14px',
-                              fontSize: '12px',
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                            }}
-                          >
-                            Equipo
-                          </button>
-                        </Link>
-                      ) : null}
-                      <Link href={`/proyectos/modulo/${r.id}/control-obra/tours`}>
-                        <button
-                          type="button"
-                          style={{
-                            background: 'rgba(14, 165, 233, 0.2)',
-                            color: '#bae6fd',
-                            border: '1px solid rgba(56, 189, 248, 0.55)',
-                            borderRadius: '10px',
-                            padding: '8px 14px',
-                            fontSize: '12px',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          Tours 3D
-                        </button>
-                      </Link>
-                      {r.origen === 'modulo' ? (
-                        <Link href={`/proyectos/modulo/${r.id}?editar=1`} title="Cambiar nombre y datos del proyecto">
-                          <button
-                            type="button"
-                            style={{
-                              background: 'rgba(56, 189, 248, 0.15)',
-                              color: '#bae6fd',
-                              border: '1px solid rgba(56, 189, 248, 0.5)',
-                              borderRadius: '10px',
-                              padding: '8px 14px',
-                              fontSize: '12px',
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                            }}
-                          >
-                            Modificar
-                          </button>
-                        </Link>
-                      ) : null}
-                      <ProyectoAccionesConfigRoles
-                        proyectoId={r.id}
-                        proyectoNombre={r.nombre}
-                        limiteFastTrackUsd={r.limite_fast_track_usd}
-                        onGuardadoFastTrack={(limite) => {
-                          setItems((prev) =>
-                            prev.map((p) =>
-                              p.id === r.id ? { ...p, limite_fast_track_usd: limite } : p,
-                            ),
-                          );
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => void borrarProyecto(r)}
-                        disabled={deletingId === r.id}
-                        style={{
-                          background: 'rgba(239,68,68,0.12)',
-                          color: '#fca5a5',
-                          border: '1px solid rgba(239,68,68,0.45)',
-                          borderRadius: '10px',
-                          padding: '8px 14px',
-                          fontSize: '12px',
-                          fontWeight: 700,
-                          cursor: deletingId === r.id ? 'wait' : 'pointer',
-                          opacity: deletingId === r.id ? 0.6 : 1,
-                        }}
-                      >
-                        {deletingId === r.id ? 'Borrando…' : 'Borrar proyecto'}
-                      </button>
                     </div>
+                    <ProyectoModuloListaAcciones
+                      id={r.id}
+                      nombre={r.nombre}
+                      origen={r.origen}
+                      limiteFastTrackUsd={r.limite_fast_track_usd}
+                      deleting={deletingId === r.id}
+                      onBorrar={() => void borrarProyecto(r)}
+                      onGuardadoFastTrack={(limite) => {
+                        setItems((prev) =>
+                          prev.map((p) =>
+                            p.id === r.id ? { ...p, limite_fast_track_usd: limite } : p,
+                          ),
+                        );
+                      }}
+                    />
                   </div>
                 );
               })
