@@ -31,6 +31,7 @@ import {
 } from '@/lib/rrhh/evaluacionObrero';
 import { apiUrl } from '@/lib/http/apiUrl';
 import { hrefListaContratosExpress } from '@/lib/talento/hrefListaContratosExpress';
+import { normalizarListaContratosExpressObrero } from '@/lib/talento/filtrarContratosExpressObrero';
 import { createClient } from '@/lib/supabase/client';
 import type { RolExamen } from '@/types/talento';
 import {
@@ -109,6 +110,8 @@ export default function RrhhReclutamientoClient() {
         .limit(400);
       if (!bare.error && bare.data) exData = bare.data as typeof exData;
     }
+
+    exData = normalizarListaContratosExpressObrero(exData);
 
     const porCedula = new Map<string, EmpleadoHojaVidaRow>();
     for (const e of emps) {

@@ -8,8 +8,12 @@ import IngenieroResidenteObraCard from '@/components/proyectos/IngenieroResident
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { hrefGestionPersonalSolicitados } from '@/lib/rrhh/hrefSolicitudPersonal';
-import { idsObrasHijasDesdeModuloIntegral } from '@/lib/proyectos/obraHijasDesdeModulo';
 import { projectIdsAlcanceLaborDesdeModulos } from '@/lib/rrhh/alcanceLaborProyectos';
+import {
+  esContratoExpressObrero,
+  normalizarListaContratosExpressObrero,
+} from '@/lib/talento/filtrarContratosExpressObrero';
+import { normCedulaToken } from '@/lib/talento/cedulaAuth';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -554,15 +558,19 @@ export default function ResumenObrerosProyectoModulo({
         if (proyectoIdsExpress.length > 0) {
           const rExFull = await supabase
             .from('ci_contratos_express')
-            .select('id,obrero_nombre,obrero_cedula,proyecto_id,formalizado_empleado_id,cargo_nombre_snapshot')
+            .select(
+              'id,created_at,obrero_nombre,obrero_cedula,proyecto_id,formalizado_empleado_id,cargo_nombre_snapshot,tipo_contrato',
+            )
             .in('proyecto_id', proyectoIdsExpress);
           const exMsgFull = (rExFull.error?.message ?? '').toLowerCase();
           const rExMid =
             rExFull.error &&
-            /formalizado_empleado_id|cargo_nombre_snapshot|42703|column|does not exist|schema cache/i.test(exMsgFull)
+            /formalizado_empleado_id|cargo_nombre_snapshot|tipo_contrato|42703|column|does not exist|schema cache/i.test(
+              exMsgFull,
+            )
               ? await supabase
                   .from('ci_contratos_express')
-                  .select('id,obrero_nombre,obrero_cedula,proyecto_id,formalizado_empleado_id')
+                  .select('id,created_at,obrero_nombre,obrero_cedula,proyecto_id,formalizado_empleado_id')
                   .in('proyecto_id', proyectoIdsExpress)
               : null;
           const exMsgMid = (rExMid?.error?.message ?? '').toLowerCase();
@@ -570,7 +578,7 @@ export default function ResumenObrerosProyectoModulo({
             rExMid?.error && /formalizado_empleado_id|42703|column|does not exist|schema cache/i.test(exMsgMid)
               ? await supabase
                   .from('ci_contratos_express')
-                  .select('id,obrero_nombre,obrero_cedula,proyecto_id')
+                  .select('id,created_at,obrero_nombre,obrero_cedula,proyecto_id')
                   .in('proyecto_id', proyectoIdsExpress)
               : null;
 
@@ -581,17 +589,41 @@ export default function ResumenObrerosProyectoModulo({
                 ? rExMid
                 : rExBare;
 
-          const exData = exChosen && !exChosen.error ? (exChosen.data ?? []) : [];
+          const exRaw = exChosen && !exChosen.error ? (exChosen.data ?? []) : [];
+          // Excluye AD y cuenta 1 por cédula (mismo obrero en Flamboyant + Juan no suma 2).
+          const exData = normalizarListaContratosExpressObrero(
+            exRaw as {
+              id?: string;
+              created_at?: string;
+              obrero_nombre?: string | null;
+              obrero_cedula?: string | null;
+              tipo_contrato?: string | null;
+              formalizado_empleado_id?: string | null;
+              cargo_nombre_snapshot?: string | null;
+            }[],
+          );
           expressTotalFilas = exData.length;
           if (exData.length > 0) {
-            const cedNorm = (v: string) => v.replace(/\s/g, '').toLowerCase();
-            const cedulasEmp = new Set(emps.map((e) => cedNorm(sTrim(e.cedula ?? e.documento))).filter(Boolean));
+            const cedulasEmp = new Set(
+              emps.map((e) => normCedulaToken(sTrim(e.cedula ?? e.documento))).filter(Boolean),
+            );
             const expressExtras: EmpleadoLite[] = [];
             for (const raw of exData as Record<string, unknown>[]) {
+              if (
+                !esContratoExpressObrero(
+                  raw as {
+                    obrero_nombre?: string | null;
+                    obrero_cedula?: string | null;
+                    tipo_contrato?: string | null;
+                  },
+                )
+              ) {
+                continue;
+              }
               if (raw.formalizado_empleado_id) continue;
               const rowLite = empleadoLiteDesdeContratoExpress(raw);
               if (!rowLite) continue;
-              const ck = cedNorm(sTrim(rowLite.cedula ?? rowLite.documento));
+              const ck = normCedulaToken(sTrim(rowLite.cedula ?? rowLite.documento));
               if (ck && cedulasEmp.has(ck)) continue;
               if (ck) cedulasEmp.add(ck);
               expressExtras.push(rowLite);

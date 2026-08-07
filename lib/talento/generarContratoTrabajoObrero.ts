@@ -17,6 +17,7 @@ import {
 import { ContratoObreroPDF } from '@/lib/talento/ContratoObreroPdfStructured';
 import { CEDULA_VE_NORMALIZADA_REGEX, estadoCivilContratoObrero, nacionalidadDesdeCedula, normCedulaToken, trabajadorFemeninoDesdeEstadoCivil } from '@/lib/talento/cedulaAuth';
 import { resolverCodigoExpedienteContrato } from '@/lib/talento/codigoExpedienteContrato';
+import { esContratoExpressAdministracionDelegada } from '@/lib/talento/filtrarContratosExpressObrero';
 
 export type GenerarContratoTrabajoObreroInput = {
   proyecto_id: string;
@@ -93,6 +94,38 @@ export async function generarContratoTrabajoObrero(
   const cedula = normCedulaToken(input.obrero_cedula);
   const fechaFirmaIso = input.fecha_ingreso?.trim() || hoyIsoLocal();
   const obreroNombreCompleto = nombreCompleto(input);
+
+  // Anti-duplicado: misma cédula en el mismo proyecto (salvo filas AD).
+  {
+    const dupFull = await admin
+      .from('ci_contratos_express')
+      .select('id,obrero_cedula,obrero_nombre,tipo_contrato')
+      .eq('proyecto_id', input.proyecto_id.trim())
+      .limit(500);
+    let dupRows = (!dupFull.error ? dupFull.data : null) as
+      | { id?: string; obrero_cedula?: string | null; obrero_nombre?: string | null; tipo_contrato?: string | null }[]
+      | null;
+    if (dupFull.error && /tipo_contrato|42703|schema cache|column/i.test(dupFull.error.message ?? '')) {
+      const dupLite = await admin
+        .from('ci_contratos_express')
+        .select('id,obrero_cedula,obrero_nombre')
+        .eq('proyecto_id', input.proyecto_id.trim())
+        .limit(500);
+      dupRows = (!dupLite.error ? dupLite.data : null) as typeof dupRows;
+    }
+    const yaExiste = (dupRows ?? []).some((r) => {
+      if (esContratoExpressAdministracionDelegada(r)) return false;
+      return normCedulaToken(r.obrero_cedula ?? '') === cedula;
+    });
+    if (yaExiste) {
+      return {
+        ok: false,
+        error: `Ya existe un contrato de trabajo (express) con la cédula ${cedula} en este proyecto.`,
+        status: 409,
+      };
+    }
+  }
+
   const nacionalidad =
     nacionalidadDesdeCedula(cedula, trabajadorFemeninoDesdeEstadoCivil(input.estado_civil)) ??
     (input.nacionalidad?.trim() ||

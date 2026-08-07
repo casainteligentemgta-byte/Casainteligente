@@ -31,6 +31,7 @@ import {
   type FilaContratoTrabajoObrero,
 } from '@/lib/talento/parseContratoTrabajoObreroTabla';
 import { nacionalidadDesdeCedula, trabajadorFemeninoDesdeEstadoCivil } from '@/lib/talento/cedulaAuth';
+import { normalizarListaContratosExpressObrero } from '@/lib/talento/filtrarContratosExpressObrero';
 
 type Vista = 'lista' | 'nuevo' | 'masiva';
 
@@ -44,6 +45,7 @@ type ContratoRow = {
   obrero_cedula: string;
   cargo_nombre_snapshot?: string | null;
   formalizado_empleado_id?: string | null;
+  tipo_contrato?: string | null;
 };
 
 type ResultadoFila = {
@@ -214,7 +216,7 @@ export default function ContratoTrabajoObreroClient() {
       const full = await supabase
         .from('ci_contratos_express')
         .select(
-          'id,created_at,obrero_nombre,obrero_cedula,cargo_nombre_snapshot,formalizado_empleado_id',
+          'id,created_at,obrero_nombre,obrero_cedula,cargo_nombre_snapshot,formalizado_empleado_id,tipo_contrato',
         )
         .eq('proyecto_id', proyectoId.trim())
         .order('created_at', { ascending: false });
@@ -224,7 +226,7 @@ export default function ContratoTrabajoObreroClient() {
 
       if (
         error &&
-        /formalizado_empleado_id|cargo_nombre_snapshot|42703|column|schema cache/i.test(
+        /formalizado_empleado_id|cargo_nombre_snapshot|tipo_contrato|42703|column|schema cache/i.test(
           error.message ?? '',
         )
       ) {
@@ -241,7 +243,7 @@ export default function ContratoTrabajoObreroClient() {
         setErrorLista(error.message);
         setContratos([]);
       } else {
-        setContratos(data ?? []);
+        setContratos(normalizarListaContratosExpressObrero(data ?? []));
       }
     } catch {
       setErrorLista('No se pudo cargar la lista de contratados.');
