@@ -7,7 +7,6 @@ type Props = {
   proyectoId: string;
   autorizado: boolean;
   loading?: boolean;
-  onAbrirContratoAd?: () => void;
   className?: string;
 };
 
@@ -16,10 +15,11 @@ export default function ProyectoAdLogisticaBanner({
   proyectoId,
   autorizado,
   loading,
-  onAbrirContratoAd,
   className = '',
 }: Props) {
   if (loading || autorizado) return null;
+
+  const hrefLegal = `/legal/contratos-ad?proyectoId=${encodeURIComponent(proyectoId)}`;
 
   return (
     <div
@@ -33,19 +33,17 @@ export default function ProyectoAdLogisticaBanner({
             Protección logística: falta Contrato de Administración Delegada
           </p>
           <p className="text-xs text-amber-200/80">
-            Registre el contrato AD (entidad ejecutora + % honorarios) antes de autorizar compras o
-            despachos. Evita que la constructora financie la obra de su propio bolsillo.
+            Genere el contrato AD en Legal de la entidad (entidad ejecutora + % honorarios) antes de
+            autorizar compras o despachos. Evita que la constructora financie la obra de su propio
+            bolsillo.
           </p>
           <div className="flex flex-wrap gap-2 pt-1">
-            {onAbrirContratoAd ? (
-              <button
-                type="button"
-                onClick={onAbrirContratoAd}
-                className="rounded-lg border border-amber-500/50 bg-amber-500/15 px-3 py-2 text-xs font-bold text-amber-100 hover:bg-amber-500/25"
-              >
-                Generar contrato AD
-              </button>
-            ) : null}
+            <Link
+              href={hrefLegal}
+              className="rounded-lg border border-amber-500/50 bg-amber-500/15 px-3 py-2 text-xs font-bold text-amber-100 hover:bg-amber-500/25"
+            >
+              Generar en Legal de la entidad
+            </Link>
             <Link
               href={`/proyectos/modulo/${encodeURIComponent(proyectoId)}`}
               className="rounded-lg border border-white/15 bg-black/20 px-3 py-2 text-xs font-bold text-zinc-300 hover:bg-white/5"

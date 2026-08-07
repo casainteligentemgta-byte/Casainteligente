@@ -12,6 +12,7 @@ import {
   Camera,
   FileText,
   FileUp,
+  FileSignature,
   Inbox,
   ShieldCheck,
   Mic,
@@ -33,15 +34,31 @@ const NAV_BASE = [
   { href: '/legal/psique', label: 'Psique', icon: Brain, exact: false },
 ];
 
+/** Solo Legal integrado (CRM / entidad): contratos AD por obra. */
+const NAV_LEGAL_ENTIDAD = {
+  href: '/legal/contratos-ad',
+  label: 'Legal entidad',
+  icon: FileSignature,
+  exact: false,
+};
+
 export default function LegalShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? '';
   const acceso = useAccesoLegal();
   const standalone = acceso.standalone;
   const esDuenio = acceso.plan === 'owner' || acceso.motivo === 'owner';
 
+  const navBase = standalone
+    ? NAV_BASE
+    : [
+        ...NAV_BASE.slice(0, 3),
+        NAV_LEGAL_ENTIDAD,
+        ...NAV_BASE.slice(3),
+      ];
+
   const NAV = esDuenio
-    ? [...NAV_BASE, { href: '/legal/admin', label: 'Solicitudes', icon: Inbox, exact: false }]
-    : NAV_BASE;
+    ? [...navBase, { href: '/legal/admin', label: 'Solicitudes', icon: Inbox, exact: false }]
+    : navBase;
 
   useEffect(() => {
     if (acceso.unauthorized) {
