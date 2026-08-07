@@ -10,6 +10,8 @@ type ClasificacionPresupuesto =
     | 'cobrado'
     | 'pagado';
 
+type SortBy = 'fecha' | 'status' | 'nomenclatura';
+
 const CLASIFICACION_LABELS: Record<ClasificacionPresupuesto, string> = {
     no_enviado: 'No enviado',
     enviado: 'Enviado',
@@ -24,6 +26,8 @@ type Props = {
     onClose: () => void;
     filter: 'todos' | ClasificacionPresupuesto;
     onFilterChange: (f: 'todos' | ClasificacionPresupuesto) => void;
+    sortBy: SortBy;
+    onSortByChange: (s: SortBy) => void;
     filtroNombre: string;
     onFiltroNombreChange: (v: string) => void;
     filtroRif: string;
@@ -46,6 +50,8 @@ export default function PresupuestosFiltrosModal({
     onClose,
     filter,
     onFilterChange,
+    sortBy,
+    onSortByChange,
     filtroNombre,
     onFiltroNombreChange,
     filtroRif,
@@ -106,7 +112,7 @@ export default function PresupuestosFiltrosModal({
             >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                     <h2 id="filtros-presupuestos-titulo" style={{ color: 'white', fontSize: '18px', fontWeight: 800, margin: 0 }}>
-                        Filtrar presupuestos
+                        Filtrar y ordenar
                     </h2>
                     <button
                         type="button"
@@ -188,27 +194,98 @@ export default function PresupuestosFiltrosModal({
                     </div>
                 </div>
 
-                <label style={labelStyle}>Status</label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '18px' }}>
-                    {(['todos', 'no_enviado', 'enviado', 'aprobado', 'no_aprobado', 'cobrado', 'pagado'] as const).map((f) => (
+                <label style={labelStyle}>Ordenar por</label>
+                <div
+                    style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        gap: '6px',
+                        marginBottom: '14px',
+                        width: '100%',
+                    }}
+                >
+                    {(
+                        [
+                            { id: 'fecha', label: 'Fecha' },
+                            { id: 'status', label: 'Status' },
+                            { id: 'nomenclatura', label: 'Número' },
+                        ] as const
+                    ).map((opt) => (
                         <button
-                            key={f}
+                            key={opt.id}
                             type="button"
-                            onClick={() => onFilterChange(f)}
+                            onClick={() => onSortByChange(opt.id)}
                             style={{
-                                background: filter === f ? 'rgba(0,122,255,0.15)' : 'rgba(255,255,255,0.04)',
-                                color: filter === f ? '#007AFF' : 'rgba(255,255,255,0.55)',
-                                border: filter === f ? '1px solid rgba(0,122,255,0.35)' : '1px solid rgba(255,255,255,0.08)',
+                                flex: '1 1 0',
+                                width: 0,
+                                minWidth: 0,
+                                background: sortBy === opt.id ? 'rgba(0,122,255,0.15)' : 'rgba(255,255,255,0.04)',
+                                color: sortBy === opt.id ? '#007AFF' : 'rgba(255,255,255,0.55)',
+                                border: sortBy === opt.id ? '1px solid rgba(0,122,255,0.35)' : '1px solid rgba(255,255,255,0.08)',
                                 borderRadius: '999px',
-                                padding: '6px 12px',
-                                fontSize: '11px',
+                                padding: '8px 6px',
+                                fontSize: '12px',
                                 fontWeight: 700,
                                 cursor: 'pointer',
-                                whiteSpace: 'nowrap',
                             }}
                         >
-                            {f === 'todos' ? 'Todos' : CLASIFICACION_LABELS[f]}
+                            {opt.label}
                         </button>
+                    ))}
+                </div>
+
+                <label style={labelStyle}>Status</label>
+                <div
+                    style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px',
+                        marginBottom: '18px',
+                        width: '100%',
+                    }}
+                >
+                    {([
+                        ['todos', 'no_enviado', 'enviado', 'aprobado'],
+                        ['no_aprobado', 'cobrado', 'pagado'],
+                    ] as const).map((row, rowIdx) => (
+                        <div
+                            key={rowIdx}
+                            style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                gap: '6px',
+                                width: '100%',
+                                minWidth: 0,
+                            }}
+                        >
+                            {row.map((f) => (
+                                <button
+                                    key={f}
+                                    type="button"
+                                    onClick={() => onFilterChange(f)}
+                                    style={{
+                                        flex: '1 1 0',
+                                        width: 0,
+                                        minWidth: 0,
+                                        boxSizing: 'border-box',
+                                        background: filter === f ? 'rgba(0,122,255,0.15)' : 'rgba(255,255,255,0.04)',
+                                        color: filter === f ? '#007AFF' : 'rgba(255,255,255,0.55)',
+                                        border: filter === f ? '1px solid rgba(0,122,255,0.35)' : '1px solid rgba(255,255,255,0.08)',
+                                        borderRadius: '999px',
+                                        padding: '8px 4px',
+                                        fontSize: '11px',
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                        textAlign: 'center',
+                                        lineHeight: 1.15,
+                                        whiteSpace: 'normal',
+                                        wordBreak: 'break-word',
+                                    }}
+                                >
+                                    {f === 'todos' ? 'Todos' : CLASIFICACION_LABELS[f]}
+                                </button>
+                            ))}
+                        </div>
                     ))}
                 </div>
 
