@@ -87,7 +87,7 @@ export default function PresupuestosFiltrosModal({
                 position: 'fixed',
                 inset: 0,
                 zIndex: 200,
-                background: 'rgba(0,0,0,0.65)',
+                background: 'rgba(15,23,42,0.45)',
                 backdropFilter: 'blur(4px)',
                 display: 'flex',
                 alignItems: 'flex-end',
@@ -111,7 +111,7 @@ export default function PresupuestosFiltrosModal({
                 }}
             >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                    <h2 id="filtros-presupuestos-titulo" style={{ color: 'white', fontSize: '18px', fontWeight: 800, margin: 0 }}>
+                    <h2 id="filtros-presupuestos-titulo" style={{ color: '#0F172A', fontSize: '18px', fontWeight: 800, margin: 0 }}>
                         Filtrar y ordenar
                     </h2>
                     <button
@@ -119,8 +119,8 @@ export default function PresupuestosFiltrosModal({
                         onClick={onClose}
                         aria-label="Cerrar filtros"
                         style={{
-                            background: 'rgba(255,255,255,0.08)',
-                            color: 'rgba(255,255,255,0.7)',
+                            background: '#F1F5F9',
+                            color: '#64748B',
                             border: 'none',
                             borderRadius: '10px',
                             width: '36px',
@@ -219,9 +219,9 @@ export default function PresupuestosFiltrosModal({
                                 flex: '1 1 0',
                                 width: 0,
                                 minWidth: 0,
-                                background: sortBy === opt.id ? 'rgba(0,122,255,0.15)' : 'rgba(255,255,255,0.04)',
-                                color: sortBy === opt.id ? '#007AFF' : 'rgba(255,255,255,0.55)',
-                                border: sortBy === opt.id ? '1px solid rgba(0,122,255,0.35)' : '1px solid rgba(255,255,255,0.08)',
+                                background: sortBy === opt.id ? '#DBEAFE' : '#F8FAFC',
+                                color: sortBy === opt.id ? '#007AFF' : '#475569',
+                                border: sortBy === opt.id ? '1px solid rgba(0,122,255,0.35)' : '1px solid #E2E8F0',
                                 borderRadius: '999px',
                                 padding: '8px 6px',
                                 fontSize: '12px',
@@ -268,9 +268,9 @@ export default function PresupuestosFiltrosModal({
                                         width: 0,
                                         minWidth: 0,
                                         boxSizing: 'border-box',
-                                        background: filter === f ? 'rgba(0,122,255,0.15)' : 'rgba(255,255,255,0.04)',
-                                        color: filter === f ? '#007AFF' : 'rgba(255,255,255,0.55)',
-                                        border: filter === f ? '1px solid rgba(0,122,255,0.35)' : '1px solid rgba(255,255,255,0.08)',
+                                        background: filter === f ? '#DBEAFE' : '#F8FAFC',
+                                        color: filter === f ? '#007AFF' : '#475569',
+                                        border: filter === f ? '1px solid rgba(0,122,255,0.35)' : '1px solid #E2E8F0',
                                         borderRadius: '999px',
                                         padding: '8px 4px',
                                         fontSize: '11px',
@@ -296,9 +296,9 @@ export default function PresupuestosFiltrosModal({
                             onClick={onLimpiar}
                             style={{
                                 flex: 1,
-                                background: 'rgba(255,255,255,0.06)',
-                                color: 'rgba(255,255,255,0.75)',
-                                border: '1px solid rgba(255,255,255,0.12)',
+                                background: '#F8FAFC',
+                                color: '#475569',
+                                border: '1px solid #E2E8F0',
                                 borderRadius: '12px',
                                 padding: '12px',
                                 fontSize: '14px',
