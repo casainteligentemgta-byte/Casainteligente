@@ -13,7 +13,7 @@ import {
 } from '@/lib/ui/moduloProyectosTheme';
 import { etiquetaFuenteProyecto } from '@/lib/proyectos/proyectosUnificados';
 import { withTimeout } from '@/lib/http/withTimeout';
-import ProyectoAccionesConfigRoles from '@/components/proyectos/ProyectoAccionesConfigRoles';
+import ProyectoModuloListaAcciones from '@/components/proyectos/ProyectoModuloListaAcciones';
 
 /** `modulo` = ci_proyectos integral; `obra_talento` = misma tabla con tipo_proyecto = talento (ex ci_obras). */
 type ProyectoOrigen = 'modulo' | 'obra_talento';
@@ -58,6 +58,46 @@ async function contarObrerosPorObra(
     for (const row of (data ?? []) as { obra_id: string }[]) {
       const id = row.obra_id;
       out[id] = (out[id] ?? 0) + 1;
+    }
+  }
+  return out;
+}
+
+/** Conteo por módulo integral: express + empleados con ese `proyecto_modulo_id` (sin mezclar otras obras). */
+async function contarObrerosPorModuloIntegral(
+  supabase: ReturnType<typeof createClient>,
+  moduloIds: string[],
+): Promise<Record<string, number>> {
+  const out: Record<string, number> = Object.fromEntries(moduloIds.map((id) => [id, 0]));
+  if (moduloIds.length === 0) return out;
+  const chunk = 80;
+  for (let i = 0; i < moduloIds.length; i += chunk) {
+    const slice = moduloIds.slice(i, i + chunk);
+    const idsUnicos = new Map<string, Set<string>>();
+    for (const id of slice) idsUnicos.set(id, new Set());
+
+    const ex = await supabase
+      .from('ci_contratos_express')
+      .select('id,proyecto_id')
+      .in('proyecto_id', slice);
+    if (!ex.error) {
+      for (const row of (ex.data ?? []) as { id: string; proyecto_id: string }[]) {
+        idsUnicos.get(row.proyecto_id)?.add(`ex:${row.id}`);
+      }
+    }
+
+    const emp = await supabase
+      .from('ci_empleados')
+      .select('id,proyecto_modulo_id')
+      .in('proyecto_modulo_id', slice);
+    if (!emp.error) {
+      for (const row of (emp.data ?? []) as { id: string; proyecto_modulo_id: string }[]) {
+        idsUnicos.get(row.proyecto_modulo_id)?.add(`em:${row.id}`);
+      }
+    }
+
+    for (const id of slice) {
+      out[id] = idsUnicos.get(id)?.size ?? 0;
     }
   }
   return out;
@@ -279,6 +319,14 @@ export default function ModuloProyectosPage() {
         );
       }
 
+      const moduloIds = integralRows.map((r) => r.id);
+      const porModulo = await withTimeout(
+        contarObrerosPorModuloIntegral(supabase, moduloIds),
+        25_000,
+        'Conteo de obreros por módulo integral',
+      );
+      if (stale()) return;
+
       const desdeModulo: ProyectoRow[] = integralRows.map((r) => ({
         id: r.id,
         nombre: r.nombre ?? 'Sin nombre',
@@ -291,7 +339,7 @@ export default function ModuloProyectosPage() {
         entidad_id: r.entidad_id ?? null,
         origen: 'modulo' as const,
         customer_name: byId[r.customer_id] || null,
-        obrerosContratados: null,
+        obrerosContratados: porModulo[r.id] ?? 0,
         patrono_nombre: r.entidad_id ? patronoPorId[String(r.entidad_id)] ?? null : null,
         limite_fast_track_usd: parseLimiteFastTrackUsd(r.limite_fast_track_usd),
       }));
@@ -502,145 +550,44 @@ export default function ModuloProyectosPage() {
                         {r.estado}
                       </span>
                     </div>
-                    <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '13px', marginTop: '12px', marginBottom: 0 }}>
-                      Monto aprox.:{' '}
-                      <span style={{ fontWeight: 700, color: 'white' }}>
-                        {formatoVES(Number(r.monto_aproximado || 0))} {r.moneda || 'USD'}
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: '8px 16px',
+                        marginTop: '12px',
+                        color: 'rgba(255,255,255,0.55)',
+                        fontSize: '12px',
+                      }}
+                    >
+                      <span>
+                        Monto:{' '}
+                        <strong style={{ color: 'white', fontWeight: 700 }}>
+                          {formatoVES(Number(r.monto_aproximado || 0))} {r.moneda || 'USD'}
+                        </strong>
                       </span>
-                    </p>
-                    <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '13px', marginTop: '8px', marginBottom: 0 }}>
-                      Obreros contratados:{' '}
-                      <span style={{ fontWeight: 700, color: 'white' }}>
-                        {r.obrerosContratados == null ? '—' : etiquetaObrerosContratados(r.obrerosContratados)}
+                      <span>
+                        Obreros:{' '}
+                        <strong style={{ color: 'white', fontWeight: 700 }}>
+                          {r.obrerosContratados == null ? '—' : etiquetaObrerosContratados(r.obrerosContratados)}
+                        </strong>
                       </span>
-                    </p>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '14px' }}>
-                      <Link href={r.origen === 'modulo' ? `/proyectos/modulo/${r.id}` : `/proyectos/${r.id}/finanzas`}>
-                        <button
-                          type="button"
-                          style={{
-                            background: '#007AFF',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '10px',
-                            padding: '8px 14px',
-                            fontSize: '12px',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          {r.origen === 'modulo' ? 'Abrir gestión' : 'Abrir finanzas / obra'}
-                        </button>
-                      </Link>
-                      <Link
-                        href={
-                          r.origen === 'modulo'
-                            ? `/proyectos/modulo/${r.id}?editar=1`
-                            : `/proyectos/${r.id}/editar`
-                        }
-                      >
-                        <button
-                          type="button"
-                          style={{
-                            background: 'rgba(56, 189, 248, 0.18)',
-                            color: '#bae6fd',
-                            border: '1px solid rgba(56, 189, 248, 0.5)',
-                            borderRadius: '10px',
-                            padding: '8px 14px',
-                            fontSize: '12px',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          Modificar nombre
-                        </button>
-                      </Link>
-                      {r.origen === 'modulo' ? (
-                        <Link href={`/proyectos/modulo/${r.id}?tab=solicitados`} title="Activos, solicitados y listas del cuadro">
-                          <button
-                            type="button"
-                            style={{
-                              background: 'rgba(192, 38, 211, 0.22)',
-                              color: '#f5d0fe',
-                              border: '1px solid rgba(217, 70, 239, 0.55)',
-                              borderRadius: '10px',
-                              padding: '8px 14px',
-                              fontSize: '12px',
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                            }}
-                          >
-                            RRHH
-                          </button>
-                        </Link>
-                      ) : null}
-                      {r.origen === 'modulo' ? (
-                        <Link href={`/proyectos/modulo/${r.id}?tab=finanzas`}>
-                          <button
-                            type="button"
-                            style={{
-                              background: 'rgba(16, 185, 129, 0.2)',
-                              color: '#a7f3d0',
-                              border: '1px solid rgba(52, 211, 153, 0.55)',
-                              borderRadius: '10px',
-                              padding: '8px 14px',
-                              fontSize: '12px',
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                            }}
-                          >
-                            Finanzas
-                          </button>
-                        </Link>
-                      ) : null}
-                      <Link href={`/proyectos/modulo/${r.id}/control-obra`}>
-                        <button
-                          type="button"
-                          style={{
-                            background: 'rgba(245, 158, 11, 0.2)',
-                            color: '#fde68a',
-                            border: '1px solid rgba(251, 191, 36, 0.55)',
-                            borderRadius: '10px',
-                            padding: '8px 14px',
-                            fontSize: '12px',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          Control de obra
-                        </button>
-                      </Link>
-                      <ProyectoAccionesConfigRoles
-                        proyectoId={r.id}
-                        proyectoNombre={r.nombre}
-                        limiteFastTrackUsd={r.limite_fast_track_usd}
-                        onGuardadoFastTrack={(limite) => {
-                          setItems((prev) =>
-                            prev.map((p) =>
-                              p.id === r.id ? { ...p, limite_fast_track_usd: limite } : p,
-                            ),
-                          );
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => void borrarProyecto(r)}
-                        disabled={deletingId === r.id}
-                        style={{
-                          background: 'rgba(239,68,68,0.12)',
-                          color: '#fca5a5',
-                          border: '1px solid rgba(239,68,68,0.45)',
-                          borderRadius: '10px',
-                          padding: '8px 14px',
-                          fontSize: '12px',
-                          fontWeight: 700,
-                          cursor: deletingId === r.id ? 'wait' : 'pointer',
-                          opacity: deletingId === r.id ? 0.6 : 1,
-                        }}
-                      >
-                        {deletingId === r.id ? 'Borrando…' : 'Borrar proyecto'}
-                      </button>
                     </div>
+                    <ProyectoModuloListaAcciones
+                      id={r.id}
+                      nombre={r.nombre}
+                      origen={r.origen}
+                      limiteFastTrackUsd={r.limite_fast_track_usd}
+                      deleting={deletingId === r.id}
+                      onBorrar={() => void borrarProyecto(r)}
+                      onGuardadoFastTrack={(limite) => {
+                        setItems((prev) =>
+                          prev.map((p) =>
+                            p.id === r.id ? { ...p, limite_fast_track_usd: limite } : p,
+                          ),
+                        );
+                      }}
+                    />
                   </div>
                 );
               })
