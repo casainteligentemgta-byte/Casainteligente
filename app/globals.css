@@ -1223,4 +1223,10 @@
   .presupuesto-tarjeta-actions {
     gap: 6px !important;
   }
+
+  .presupuestos-status-filters button {
+    font-size: 10px !important;
+    padding: 7px 3px !important;
+    gap: 3px !important;
+  }
 }

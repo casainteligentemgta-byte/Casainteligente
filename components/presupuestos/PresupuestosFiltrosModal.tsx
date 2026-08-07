@@ -15,7 +15,7 @@ const CLASIFICACION_LABELS: Record<ClasificacionPresupuesto, string> = {
     enviado: 'Enviado',
     aprobado: 'Aprobado',
     no_aprobado: 'No aprobado',
-    cobrado: 'Cobrado',
+    cobrado: 'Por Pagar',
     pagado: 'Pagado',
 };
 
@@ -28,6 +28,8 @@ type Props = {
     onFiltroNombreChange: (v: string) => void;
     filtroRif: string;
     onFiltroRifChange: (v: string) => void;
+    filtroNumero: string;
+    onFiltroNumeroChange: (v: string) => void;
     filtroFechaDesde: string;
     onFiltroFechaDesdeChange: (v: string) => void;
     filtroFechaHasta: string;
@@ -48,6 +50,8 @@ export default function PresupuestosFiltrosModal({
     onFiltroNombreChange,
     filtroRif,
     onFiltroRifChange,
+    filtroNumero,
+    onFiltroNumeroChange,
     filtroFechaDesde,
     onFiltroFechaDesdeChange,
     filtroFechaHasta,
@@ -126,30 +130,45 @@ export default function PresupuestosFiltrosModal({
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '14px' }}>
                     <div>
-                        <label style={labelStyle}>Nombre / cliente</label>
+                        <label style={labelStyle}>Cliente</label>
                         <input
                             type="text"
-                            placeholder="Ej. María Pérez"
+                            placeholder="Nombre del cliente"
                             value={filtroNombre}
                             onChange={(e) => onFiltroNombreChange(e.target.value)}
                             style={inputStyle}
+                            autoComplete="off"
                         />
                     </div>
                     <div>
-                        <label style={labelStyle}>RIF</label>
+                        <label style={labelStyle}>Identificación</label>
                         <input
                             type="text"
-                            placeholder="Ej. J-12345678"
+                            placeholder="RIF / cédula / ID"
                             value={filtroRif}
                             onChange={(e) => onFiltroRifChange(e.target.value)}
                             style={inputStyle}
+                            autoComplete="off"
+                        />
+                    </div>
+                    <div>
+                        <label style={labelStyle}>Número de presupuesto</label>
+                        <input
+                            type="text"
+                            inputMode="numeric"
+                            placeholder="Ej. 565 o P-565"
+                            value={filtroNumero}
+                            onChange={(e) => onFiltroNumeroChange(e.target.value)}
+                            style={inputStyle}
+                            autoComplete="off"
                         />
                     </div>
                 </div>
 
+                <p style={{ ...labelStyle, marginBottom: '8px' }}>Fecha y lapso</p>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
                     <div>
-                        <label style={labelStyle}>Fecha desde</label>
+                        <label style={labelStyle}>Desde</label>
                         <input
                             type="date"
                             value={filtroFechaDesde}
@@ -158,7 +177,7 @@ export default function PresupuestosFiltrosModal({
                         />
                     </div>
                     <div>
-                        <label style={labelStyle}>Fecha hasta</label>
+                        <label style={labelStyle}>Hasta</label>
                         <input
                             type="date"
                             value={filtroFechaHasta}
@@ -169,27 +188,58 @@ export default function PresupuestosFiltrosModal({
                     </div>
                 </div>
 
-                <label style={labelStyle}>Clasificación</label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '18px' }}>
-                    {(['todos', 'no_enviado', 'enviado', 'aprobado', 'no_aprobado', 'cobrado', 'pagado'] as const).map((f) => (
-                        <button
-                            key={f}
-                            type="button"
-                            onClick={() => onFilterChange(f)}
+                <label style={labelStyle}>Status</label>
+                <div
+                    style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px',
+                        marginBottom: '18px',
+                        width: '100%',
+                    }}
+                >
+                    {([
+                        ['todos', 'no_enviado', 'enviado', 'aprobado'],
+                        ['no_aprobado', 'cobrado', 'pagado'],
+                    ] as const).map((row, rowIdx) => (
+                        <div
+                            key={rowIdx}
                             style={{
-                                background: filter === f ? 'rgba(0,122,255,0.15)' : 'rgba(255,255,255,0.04)',
-                                color: filter === f ? '#007AFF' : 'rgba(255,255,255,0.55)',
-                                border: filter === f ? '1px solid rgba(0,122,255,0.35)' : '1px solid rgba(255,255,255,0.08)',
-                                borderRadius: '999px',
-                                padding: '6px 12px',
-                                fontSize: '11px',
-                                fontWeight: 700,
-                                cursor: 'pointer',
-                                whiteSpace: 'nowrap',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                gap: '6px',
+                                width: '100%',
+                                minWidth: 0,
                             }}
                         >
-                            {f === 'todos' ? 'Todos' : CLASIFICACION_LABELS[f]}
-                        </button>
+                            {row.map((f) => (
+                                <button
+                                    key={f}
+                                    type="button"
+                                    onClick={() => onFilterChange(f)}
+                                    style={{
+                                        flex: '1 1 0',
+                                        width: 0,
+                                        minWidth: 0,
+                                        boxSizing: 'border-box',
+                                        background: filter === f ? 'rgba(0,122,255,0.15)' : 'rgba(255,255,255,0.04)',
+                                        color: filter === f ? '#007AFF' : 'rgba(255,255,255,0.55)',
+                                        border: filter === f ? '1px solid rgba(0,122,255,0.35)' : '1px solid rgba(255,255,255,0.08)',
+                                        borderRadius: '999px',
+                                        padding: '8px 4px',
+                                        fontSize: '11px',
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                        textAlign: 'center',
+                                        lineHeight: 1.15,
+                                        whiteSpace: 'normal',
+                                        wordBreak: 'break-word',
+                                    }}
+                                >
+                                    {f === 'todos' ? 'Todos' : CLASIFICACION_LABELS[f]}
+                                </button>
+                            ))}
+                        </div>
                     ))}
                 </div>
 
@@ -228,7 +278,7 @@ export default function PresupuestosFiltrosModal({
                             cursor: 'pointer',
                         }}
                     >
-                        Cerrar
+                        Aplicar
                     </button>
                 </div>
             </div>
