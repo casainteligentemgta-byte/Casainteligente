@@ -98,8 +98,14 @@ export default function EntidadesPatronoClient() {
                 <Building2 className="h-6 w-6 text-[#FFD60A]" aria-hidden />
               </div>
               <div>
-                <h1 className="text-2xl font-bold tracking-tight text-white">ENTIDADES</h1>
-              </div>
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight text-white">ENTIDADES</h1>
+              <p className="mt-1 max-w-md text-xs text-zinc-500">
+                En MENÚ de cada patrono: inventario de equipos, maquinarias propias y transmisión al
+                trabajador.
+              </p>
+            </div>
+          </div>
             </div>
           </div>
           <button
