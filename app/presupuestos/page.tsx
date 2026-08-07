@@ -141,6 +141,7 @@ function TarjetaPresupuesto({
 
     return (
         <div
+            className="presupuesto-tarjeta"
             style={{
                 ...glass,
                 padding: compacto ? '10px' : '12px',
@@ -149,14 +150,22 @@ function TarjetaPresupuesto({
                 flexDirection: 'column',
                 gap: '10px',
                 height: '100%',
+                width: '100%',
+                maxWidth: '100%',
+                boxSizing: 'border-box',
+                minWidth: 0,
+                overflow: 'hidden',
             }}
         >
             {/* Orden móvil: Visualizar → Cliente → Nº → Fecha → Status */}
             <div
+                className="presupuesto-tarjeta-top"
                 style={{
                     display: 'flex',
                     alignItems: 'flex-start',
                     gap: '10px',
+                    minWidth: 0,
+                    width: '100%',
                 }}
             >
                 <button
@@ -228,6 +237,7 @@ function TarjetaPresupuesto({
                 </div>
 
                 <span
+                    className="presupuesto-tarjeta-monto"
                     style={{
                         color: '#34C759',
                         fontSize: compacto ? '13px' : '15px',
@@ -236,6 +246,9 @@ function TarjetaPresupuesto({
                         flexShrink: 0,
                         whiteSpace: 'nowrap',
                         paddingTop: '2px',
+                        maxWidth: '42%',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
                     }}
                 >
                     ${formatUSD(b.subtotal)}
@@ -243,11 +256,14 @@ function TarjetaPresupuesto({
             </div>
 
             <div
+                className="presupuesto-tarjeta-actions"
                 style={{
                     display: 'flex',
                     alignItems: 'center',
                     gap: '8px',
                     flexWrap: 'wrap',
+                    minWidth: 0,
+                    width: '100%',
                 }}
             >
                 <label
@@ -511,17 +527,33 @@ export default function PresupuestosPage() {
     };
 
     return (
-        <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', paddingBottom: '110px' }}>
-            <div style={{
+        <div
+            className="presupuestos-page"
+            style={{
+                minHeight: '100vh',
+                background: 'var(--bg-primary)',
+                paddingBottom: '110px',
+                width: '100%',
+                maxWidth: '100%',
+                boxSizing: 'border-box',
+                overflowX: 'hidden',
+            }}
+        >
+            <div
+                className="presupuestos-header"
+                style={{
                 position: 'sticky', top: 0, zIndex: 50,
                 background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(20px)',
                 padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.1)',
                 display: 'grid',
-                gridTemplateColumns: '1fr auto 1fr',
+                gridTemplateColumns: 'minmax(0, 1fr) auto minmax(0, 1fr)',
                 alignItems: 'center',
                 gap: '12px',
+                width: '100%',
+                maxWidth: '100%',
+                boxSizing: 'border-box',
             }}>
-                <h1 style={{ color: 'white', fontSize: '24px', fontWeight: 800, margin: 0 }}>Presupuestos</h1>
+                <h1 className="presupuestos-title" style={{ color: 'white', fontSize: '24px', fontWeight: 800, margin: 0, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Presupuestos</h1>
                 <button
                     type="button"
                     onClick={() => setFiltrosAbiertos(true)}
@@ -570,18 +602,34 @@ export default function PresupuestosPage() {
                 </div>
             </div>
 
-            <div style={{ padding: '16px' }}>
+            <div
+                className="presupuestos-body"
+                style={{
+                    padding: '16px',
+                    width: '100%',
+                    maxWidth: '100%',
+                    boxSizing: 'border-box',
+                    overflowX: 'hidden',
+                }}
+            >
                 {/* KPIs comerciales: aprobado / por pagar / pagado */}
-                <div style={{
+                <div
+                    className="presupuestos-kpis"
+                    style={{
                     display: 'grid',
                     gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
                     gap: '10px',
                     marginBottom: '20px',
+                    width: '100%',
+                    boxSizing: 'border-box',
                 }}>
                     <div style={{
                         ...glass,
                         padding: '12px 10px',
                         background: 'linear-gradient(135deg, rgba(52,199,89,0.12) 0%, rgba(0,0,0,0) 100%)',
+                        minWidth: 0,
+                        boxSizing: 'border-box',
+                        overflow: 'hidden',
                     }}>
                         <p style={{
                             color: 'rgba(255,255,255,0.45)',
@@ -607,6 +655,9 @@ export default function PresupuestosPage() {
                         ...glass,
                         padding: '12px 10px',
                         background: 'linear-gradient(135deg, rgba(245,158,11,0.12) 0%, rgba(0,0,0,0) 100%)',
+                        minWidth: 0,
+                        boxSizing: 'border-box',
+                        overflow: 'hidden',
                     }}>
                         <p style={{
                             color: 'rgba(255,255,255,0.45)',
@@ -632,6 +683,9 @@ export default function PresupuestosPage() {
                         ...glass,
                         padding: '12px 10px',
                         background: 'linear-gradient(135deg, rgba(16,185,129,0.12) 0%, rgba(0,0,0,0) 100%)',
+                        minWidth: 0,
+                        boxSizing: 'border-box',
+                        overflow: 'hidden',
                     }}>
                         <p style={{
                             color: 'rgba(255,255,255,0.45)',
@@ -859,10 +913,13 @@ export default function PresupuestosPage() {
                     </div>
                 ) : (
                     <div
+                        className="presupuestos-lista"
                         style={{
                             display: 'grid',
-                            gridTemplateColumns: '1fr',
+                            gridTemplateColumns: 'minmax(0, 1fr)',
                             gap: '8px',
+                            width: '100%',
+                            boxSizing: 'border-box',
                         }}
                     >
                         {budgets.map((b) => (

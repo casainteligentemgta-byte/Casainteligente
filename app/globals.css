@@ -1072,3 +1072,48 @@
     min-width: 960px;
   }
 }
+
+/* ── Presupuestos: encuadre móvil ── */
+@media (max-width: 639px) {
+  .presupuestos-header {
+    padding: 12px !important;
+    gap: 8px !important;
+  }
+
+  .presupuestos-title {
+    font-size: 20px !important;
+  }
+
+  .presupuestos-body {
+    padding: 12px !important;
+  }
+
+  .presupuestos-kpis {
+    gap: 8px !important;
+  }
+
+  .presupuestos-kpis > div {
+    padding: 10px 8px !important;
+  }
+
+  .presupuestos-kpis p:last-child {
+    font-size: 13px !important;
+  }
+
+  .presupuesto-tarjeta {
+    padding: 10px !important;
+  }
+
+  .presupuesto-tarjeta-top {
+    gap: 8px !important;
+  }
+
+  .presupuesto-tarjeta-monto {
+    font-size: 13px !important;
+    max-width: 38% !important;
+  }
+
+  .presupuesto-tarjeta-actions {
+    gap: 6px !important;
+  }
+}

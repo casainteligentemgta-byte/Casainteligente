@@ -346,33 +346,45 @@ export default function PreviewPage() {
     const descuento = 0; // puede extenderse
 
     return (
-        <div style={{
+        <div
+            className="preview-page"
+            style={{
             minHeight: '100vh',
             background: '#F3F4F6',
             fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
             color: '#0F172A',
             paddingBottom: '40px',
+            width: '100%',
+            maxWidth: '100%',
+            boxSizing: 'border-box',
+            overflowX: 'hidden',
         }}>
 
             {/* ── Toolbar (no se imprime) ── */}
-            <div className="no-print" style={{
+            <div className="no-print preview-toolbar" style={{
                 position: 'sticky', top: 0, zIndex: 50,
                 background: 'rgba(255,255,255,0.92)',
                 backdropFilter: 'blur(20px)',
                 borderBottom: '1px solid #E2E8F0',
                 padding: '12px 20px',
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                gap: '10px',
+                width: '100%',
+                maxWidth: '100%',
+                boxSizing: 'border-box',
             }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div className="preview-toolbar-left" style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: '1 1 auto' }}>
                     {isDemo ? (
                         <Link
                             href="/presupuestos"
+                            className="preview-toolbar-btn"
                             style={{
                                 background: '#F1F5F9', border: '1px solid #E2E8F0',
                                 borderRadius: '10px', padding: '8px 14px',
                                 color: '#475569', fontSize: '13px', fontWeight: 600,
                                 cursor: 'pointer', fontFamily: 'inherit',
                                 display: 'flex', alignItems: 'center', gap: '6px', textDecoration: 'none',
+                                flexShrink: 0,
                             }}
                         >
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
@@ -384,12 +396,14 @@ export default function PreviewPage() {
                         <button
                             type="button"
                             onClick={() => window.close()}
+                            className="preview-toolbar-btn"
                             style={{
                                 background: '#F1F5F9', border: '1px solid #E2E8F0',
                                 borderRadius: '10px', padding: '8px 14px',
                                 color: '#475569', fontSize: '13px', fontWeight: 600,
                                 cursor: 'pointer', fontFamily: 'inherit',
                                 display: 'flex', alignItems: 'center', gap: '6px',
+                                flexShrink: 0,
                             }}
                         >
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
@@ -398,11 +412,11 @@ export default function PreviewPage() {
                             Volver
                         </button>
                     )}
-                    <span style={{ color: '#64748B', fontSize: '13px' }}>
+                    <span className="preview-toolbar-numero" style={{ color: '#64748B', fontSize: '13px', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         Presupuesto {data.numero}
                     </span>
                 </div>
-                <div style={{ display: 'flex', gap: '10px' }}>
+                <div className="preview-toolbar-actions" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end', flex: '0 1 auto', minWidth: 0 }}>
                     <button
                         onClick={() => {
                             const notasBloque = data.notas?.trim() ? `\nNotas: ${data.notas.trim()}\n` : '';
@@ -413,6 +427,7 @@ export default function PreviewPage() {
                             }).join('\n')}\n${'─'.repeat(50)}\nTOTAL: $${fmt(data.subtotal)}`;
                             navigator.clipboard.writeText(text);
                         }}
+                        className="preview-toolbar-btn"
                         style={{
                             background: 'rgba(0,122,255,0.15)', border: '1px solid rgba(0,122,255,0.3)',
                             borderRadius: '12px', padding: '10px 18px',
@@ -438,6 +453,7 @@ export default function PreviewPage() {
                             const phone = data.telefono ? data.telefono.replace(/\D/g, '') : '';
                             window.open(`https://wa.me/${phone.startsWith('58') ? phone : '58' + phone}?text=${encodeURIComponent(text)}`, '_blank');
                         }}
+                        className="preview-toolbar-btn"
                         style={{
                             background: '#25D366', border: 'none',
                             borderRadius: '12px', padding: '10px 18px',
@@ -454,6 +470,7 @@ export default function PreviewPage() {
                     </button>
                     <button
                         onClick={() => window.print()}
+                        className="preview-toolbar-btn"
                         style={{
                             background: '#F8FAFC', borderRadius: '12px', padding: '10px 18px',
                             border: '1px solid #E2E8F0', color: '#0F172A', fontSize: '13px',
@@ -471,6 +488,7 @@ export default function PreviewPage() {
                             // Simple text download fallback or just print
                             window.print();
                         }}
+                        className="preview-toolbar-btn"
                         style={{
                             background: 'linear-gradient(135deg, #FF9500, #FF6B00)',
                             border: 'none', borderRadius: '12px', padding: '10px 20px',
@@ -489,31 +507,38 @@ export default function PreviewPage() {
             </div>
 
             {/* ── Documento ── */}
-            <div style={{
+            <div className="preview-doc-wrap" style={{
                 maxWidth: '800px', margin: '32px auto 0',
                 padding: '0 20px',
+                width: '100%',
+                boxSizing: 'border-box',
             }}>
                 <div
-                    className="presupuesto-sin-fotos-producto"
+                    className="presupuesto-sin-fotos-producto preview-doc"
                     style={{
                     background: '#FFFFFF',
                     border: '1px solid #E2E8F0',
                     borderRadius: '16px',
                     overflow: 'hidden',
                     boxShadow: '0 12px 40px rgba(15,23,42,0.08)',
+                    width: '100%',
+                    maxWidth: '100%',
+                    boxSizing: 'border-box',
                 }}
                 >
 
                     {/* ── Header del documento ── */}
-                    <div style={{
+                    <div className="preview-doc-header" style={{
                         background: '#FFFFFF',
                         padding: '28px 32px 24px',
                         borderBottom: '1px solid #E2E8F0',
+                        boxSizing: 'border-box',
                     }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                        <div className="preview-doc-brand-row" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', minWidth: 0 }}>
                             {/* Logo + empresa */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0, flex: '1 1 auto' }}>
                                 <div
+                                    className="preview-doc-logo"
                                     style={{
                                         width: '52px',
                                         height: '52px',
@@ -544,8 +569,8 @@ export default function PreviewPage() {
                                         }}
                                     />
                                 </div>
-                                <div>
-                                    <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', lineHeight: 1.1 }}>
+                                <div style={{ minWidth: 0 }}>
+                                    <h2 className="preview-doc-empresa" style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', lineHeight: 1.1, wordBreak: 'break-word' }}>
                                         {PRESUPUESTO_BRAND.nombreLegal}
                                     </h2>
                                     <p style={{ fontSize: '11px', color: '#64748B', marginTop: '3px', letterSpacing: '0.5px' }}>
@@ -555,12 +580,14 @@ export default function PreviewPage() {
                             </div>
 
                             {/* Fecha + número */}
-                            <div style={{ textAlign: 'right' }}>
+                            <div className="preview-doc-meta" style={{ textAlign: 'right', flexShrink: 0, maxWidth: '100%' }}>
                                 <p style={{ fontSize: '12px', color: '#64748B', marginBottom: '6px' }}>{data.fecha}</p>
                                 <div style={{
                                     background: 'linear-gradient(135deg, #007AFF, #5856D6)',
                                     borderRadius: '10px', padding: '6px 14px',
                                     display: 'inline-block',
+                                    maxWidth: '100%',
+                                    boxSizing: 'border-box',
                                 }}>
                                     <span style={{ fontSize: '13px', fontWeight: 700, color: 'white', letterSpacing: '0.3px' }}>
                                         Presupuesto Nro. {data.numero}
@@ -570,11 +597,11 @@ export default function PreviewPage() {
                         </div>
 
                         {/* Cliente */}
-                        <div style={{ marginTop: '24px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <div className="preview-cliente-row" style={{ marginTop: '24px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '12px', minWidth: 0 }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: 0, flex: '1 1 auto' }}>
                                 {data.cliente ? (
                                     <>
-                                        <h1 style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', marginBottom: '4px' }}>
+                                        <h1 className="preview-cliente-nombre" style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em', marginBottom: '4px', wordBreak: 'break-word' }}>
                                             {data.cliente.toUpperCase()}
                                         </h1>
 
@@ -638,9 +665,9 @@ export default function PreviewPage() {
                                     <p style={{ fontSize: '14px', color: '#94A3B8', fontStyle: 'italic' }}>Información de cliente no disponible</p>
                                 )}
                             </div>
-                            <div style={{ textAlign: 'right' }}>
+                            <div className="preview-total-block" style={{ textAlign: 'right', flexShrink: 0, minWidth: 0, maxWidth: '100%' }}>
                                 <p style={{ fontSize: '12px', color: '#64748B', marginBottom: '2px' }}>Total Pagar</p>
-                                <p style={{ fontSize: '40px', fontWeight: 800, color: '#34C759', letterSpacing: '-0.04em', lineHeight: 1 }}>
+                                <p className="preview-total-monto" style={{ fontSize: '40px', fontWeight: 800, color: '#34C759', letterSpacing: '-0.04em', lineHeight: 1, wordBreak: 'break-word' }}>
                                     <span style={{ fontSize: '20px', fontWeight: 600 }}>$</span>
                                     {fmt(data.subtotal)}
                                 </p>
@@ -649,19 +676,23 @@ export default function PreviewPage() {
                     </div>
 
                     {/* ── Tabla de productos ── */}
-                    <div style={{ padding: '0' }}>
+                    <div className="preview-table" style={{ padding: '0', width: '100%', maxWidth: '100%', boxSizing: 'border-box', overflowX: 'auto' }}>
                         {/* Encabezado tabla */}
-                        <div style={{
-                            display: 'grid', gridTemplateColumns: '1fr 100px 60px 110px',
+                        <div className="preview-table-row preview-table-head" style={{
+                            display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(64px, 100px) minmax(40px, 60px) minmax(72px, 110px)',
                             padding: '12px 32px',
                             background: '#F1F5F9',
                             borderBottom: '1px solid #E2E8F0',
+                            gap: '8px',
+                            boxSizing: 'border-box',
+                            minWidth: 0,
                         }}>
                             {['Descripción', 'Precio', 'Cant', 'SubTotal'].map((h, i) => (
                                 <span key={h} style={{
                                     fontSize: '11px', fontWeight: 700, color: '#334155',
                                     letterSpacing: '0.5px', textTransform: 'uppercase',
                                     textAlign: i > 0 ? 'right' : 'left',
+                                    minWidth: 0,
                                 }}>
                                     {h}
                                 </span>
@@ -672,16 +703,19 @@ export default function PreviewPage() {
                         {data.items.map((item, idx) => {
                             const total = lineTotal(item);
                             return (
-                                <div key={idx} style={{
-                                    display: 'grid', gridTemplateColumns: '1fr 100px 60px 110px',
+                                <div key={idx} className="preview-table-row" style={{
+                                    display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(64px, 100px) minmax(40px, 60px) minmax(72px, 110px)',
                                     padding: '14px 32px',
                                     borderBottom: '1px solid #F1F5F9',
                                     background: idx % 2 === 0 ? '#FFFFFF' : '#F8FAFC',
                                     transition: 'background 0.15s',
+                                    gap: '8px',
+                                    boxSizing: 'border-box',
+                                    minWidth: 0,
                                 }}>
                                     {/* Solo texto: sin miniatura junto a la descripción */}
                                     <div style={{ minWidth: 0 }}>
-                                        <p style={{ fontSize: '13px', fontWeight: 500, color: '#0F172A', lineHeight: 1.3 }}>
+                                        <p style={{ fontSize: '13px', fontWeight: 500, color: '#0F172A', lineHeight: 1.3, wordBreak: 'break-word' }}>
                                             {lineaPresupuestoTitulo(item.nombre)}
                                             {item.qty > 1 && (
                                                 <span style={{ color: '#94A3B8', fontSize: '11px', marginLeft: '6px' }}>
@@ -690,13 +724,13 @@ export default function PreviewPage() {
                                             )}
                                         </p>
                                     </div>
-                                    <p style={{ fontSize: '13px', color: '#475569', textAlign: 'right', alignSelf: 'center' }}>
+                                    <p style={{ fontSize: '13px', color: '#475569', textAlign: 'right', alignSelf: 'center', minWidth: 0 }}>
                                         ${fmt(item.unitPrice)}
                                     </p>
-                                    <p style={{ fontSize: '13px', color: '#475569', textAlign: 'right', alignSelf: 'center' }}>
+                                    <p style={{ fontSize: '13px', color: '#475569', textAlign: 'right', alignSelf: 'center', minWidth: 0 }}>
                                         {item.qty}
                                     </p>
-                                    <p style={{ fontSize: '14px', fontWeight: 600, color: '#0F172A', textAlign: 'right', alignSelf: 'center' }}>
+                                    <p style={{ fontSize: '14px', fontWeight: 600, color: '#0F172A', textAlign: 'right', alignSelf: 'center', minWidth: 0, wordBreak: 'break-word' }}>
                                         ${fmt(total)}
                                     </p>
                                 </div>
@@ -705,14 +739,16 @@ export default function PreviewPage() {
                     </div>
 
                     {/* ── Footer: condiciones + totales ── */}
-                    <div style={{
-                        display: 'grid', gridTemplateColumns: '1fr auto',
+                    <div className="preview-doc-footer" style={{
+                        display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto',
                         gap: '24px', padding: '24px 32px',
                         borderTop: '1px solid #E2E8F0',
                         background: '#FFFFFF',
+                        boxSizing: 'border-box',
+                        minWidth: 0,
                     }}>
                         {/* Condiciones */}
-                        <div>
+                        <div style={{ minWidth: 0 }}>
                             <p style={{ fontSize: '11px', fontWeight: 700, color: '#334155', letterSpacing: '0.5px', marginBottom: '8px' }}>
                                 CONDICIONES:
                             </p>
@@ -724,7 +760,7 @@ export default function PreviewPage() {
                                     <p style={{ fontSize: '11px', fontWeight: 700, color: '#334155', letterSpacing: '0.5px', marginTop: '12px', marginBottom: '4px' }}>
                                         MÉTODO DE PAGO:
                                     </p>
-                                    <p style={{ fontSize: '11px', color: '#64748B', lineHeight: 1.6 }}>
+                                    <p style={{ fontSize: '11px', color: '#64748B', lineHeight: 1.6, wordBreak: 'break-word' }}>
                                         {textoMetodosPago()}
                                     </p>
                                 </>
@@ -759,7 +795,7 @@ export default function PreviewPage() {
                         </div>
 
                         {/* Totales */}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '200px' }}>
+                        <div className="preview-totales-panel" style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '200px', maxWidth: '100%', boxSizing: 'border-box' }}>
                             {[
                                 { label: 'SUB-Total', value: `$${fmt(data.subtotal)}`, highlight: false },
                                 { label: 'Descuento', value: `$${fmt(descuento)}`, highlight: false },
@@ -771,9 +807,11 @@ export default function PreviewPage() {
                                     background: '#F8FAFC',
                                     border: '1px solid #E2E8F0',
                                     borderRadius: '10px', padding: '10px 14px',
+                                    gap: '10px',
+                                    minWidth: 0,
                                 }}>
                                     <span style={{ fontSize: '11px', color: '#64748B', fontWeight: 600 }}>{row.label}</span>
-                                    <span style={{ fontSize: '14px', fontWeight: 700, color: '#0F172A' }}>{row.value}</span>
+                                    <span style={{ fontSize: '14px', fontWeight: 700, color: '#0F172A', wordBreak: 'break-word' }}>{row.value}</span>
                                 </div>
                             ))}
 
@@ -784,21 +822,24 @@ export default function PreviewPage() {
                                 borderRadius: '12px', padding: '12px 14px',
                                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                                 marginTop: '4px',
+                                gap: '10px',
+                                minWidth: 0,
                             }}>
                                 <span style={{ fontSize: '13px', fontWeight: 700, color: '#15803D' }}>TOTAL</span>
-                                <span style={{ fontSize: '18px', fontWeight: 800, color: '#15803D' }}>${fmt(data.subtotal)}</span>
+                                <span style={{ fontSize: '18px', fontWeight: 800, color: '#15803D', wordBreak: 'break-word' }}>${fmt(data.subtotal)}</span>
                             </div>
                         </div>
                     </div>
 
                     {/* ── Action Buttons Footer (Mobile Friendly) ── */}
-                    <div className="no-print" style={{
+                    <div className="no-print preview-actions-footer" style={{
                         padding: '24px 32px',
                         display: 'grid',
-                        gridTemplateColumns: 'repeat(3, 1fr)',
+                        gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
                         gap: '12px',
                         background: '#F8FAFC',
                         borderTop: '1px solid #E2E8F0',
+                        boxSizing: 'border-box',
                     }}>
                         <button
                             onClick={() => window.print()}
@@ -867,6 +908,113 @@ export default function PreviewPage() {
                     visibility: hidden !important;
                     pointer-events: none !important;
                 }
+
+                @media (max-width: 640px) {
+                    .preview-toolbar {
+                        flex-wrap: wrap !important;
+                        padding: 10px 12px !important;
+                        align-items: flex-start !important;
+                    }
+                    .preview-toolbar-left {
+                        width: 100%;
+                        max-width: 100%;
+                    }
+                    .preview-toolbar-actions {
+                        width: 100%;
+                        justify-content: stretch !important;
+                    }
+                    .preview-toolbar-btn {
+                        padding: 8px 10px !important;
+                        font-size: 12px !important;
+                        border-radius: 10px !important;
+                        flex: 1 1 calc(50% - 4px);
+                        justify-content: center;
+                        min-width: 0;
+                        box-sizing: border-box;
+                    }
+                    .preview-doc-wrap {
+                        margin-top: 12px !important;
+                        padding: 0 12px !important;
+                    }
+                    .preview-doc {
+                        border-radius: 14px !important;
+                    }
+                    .preview-doc-header,
+                    .preview-table-row,
+                    .preview-doc-footer,
+                    .preview-actions-footer {
+                        padding-left: 14px !important;
+                        padding-right: 14px !important;
+                    }
+                    .preview-doc-header {
+                        padding-top: 18px !important;
+                        padding-bottom: 16px !important;
+                    }
+                    .preview-doc-brand-row {
+                        flex-direction: column !important;
+                        align-items: flex-start !important;
+                    }
+                    .preview-doc-meta {
+                        text-align: left !important;
+                        width: 100%;
+                    }
+                    .preview-doc-logo {
+                        width: 44px !important;
+                        height: 44px !important;
+                    }
+                    .preview-doc-empresa {
+                        font-size: 15px !important;
+                    }
+                    .preview-cliente-row {
+                        flex-direction: column !important;
+                        align-items: stretch !important;
+                        gap: 14px !important;
+                    }
+                    .preview-cliente-nombre {
+                        font-size: 18px !important;
+                    }
+                    .preview-total-block {
+                        text-align: left !important;
+                        width: 100%;
+                    }
+                    .preview-total-monto {
+                        font-size: 28px !important;
+                    }
+                    .preview-table-row {
+                        grid-template-columns: minmax(0, 1.4fr) minmax(52px, 0.7fr) minmax(36px, 0.45fr) minmax(64px, 0.8fr) !important;
+                        gap: 6px !important;
+                        padding-top: 12px !important;
+                        padding-bottom: 12px !important;
+                    }
+                    .preview-table-row p,
+                    .preview-table-row span {
+                        font-size: 12px !important;
+                    }
+                    .preview-doc-footer {
+                        grid-template-columns: 1fr !important;
+                        gap: 16px !important;
+                        padding-top: 16px !important;
+                        padding-bottom: 16px !important;
+                    }
+                    .preview-totales-panel {
+                        min-width: 0 !important;
+                        width: 100% !important;
+                    }
+                    .preview-notas-field {
+                        max-width: 100% !important;
+                    }
+                    .preview-actions-footer {
+                        gap: 8px !important;
+                        padding-top: 16px !important;
+                        padding-bottom: 16px !important;
+                    }
+                    .preview-actions-footer button {
+                        padding: 12px 8px !important;
+                        font-size: 11px !important;
+                        border-radius: 12px !important;
+                    }
+                }
+
                 @media print {
                     .no-print { display: none !important; }
                     body { background: #FFFFFF !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
