@@ -59,3 +59,56 @@ export async function requirePermisoWeb(
 
   return { ok: true, actor, supabase, userId: user.id };
 }
+
+/**
+ * Exige al menos uno de los permisos listados (OR).
+ * Útil para RRHH: `rrhh.obra` | `rrhh.entidad` | legacy `equipo.gestionar`.
+ */
+export async function requireAlgunPermisoWeb(
+  permisos: Permiso[],
+  ctx?: { proyectoId?: string | null; entidadId?: string | null },
+): Promise<RequirePermisoOk | RequirePermisoFail> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user?.id) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: 'Debe iniciar sesión' }, { status: 401 }),
+    };
+  }
+
+  const actor = await resolverActorWeb(supabase, user.id, user.email);
+
+  if (!permisosEnforcementActivo()) {
+    return { ok: true, actor, supabase, userId: user.id };
+  }
+
+  if (permisos.length === 0) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: 'Permiso no configurado' }, { status: 500 }),
+    };
+  }
+
+  const { actorTienePermiso } = await import('@/lib/auth/permisos');
+  const ok = permisos.some((p) => actorTienePermiso(actor, p, ctx));
+  if (!ok) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: 'No tiene permiso para esta acción',
+          permiso_requerido: permisos[0],
+          permisos_aceptados: permisos,
+          roles_empresa: actor.rolesEmpresa,
+        },
+        { status: 403 },
+      ),
+    };
+  }
+
+  return { ok: true, actor, supabase, userId: user.id };
+}

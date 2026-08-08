@@ -10,6 +10,10 @@ export const maxDuration = 60;
  * y lo sobrescribe en Storage. No crea un contrato nuevo.
  */
 export async function POST(_req: Request, context: { params: { id: string } }) {
+  const { requirePermisoRrhhObra } = await import('@/lib/rrhh/requirePermisoRrhh');
+  const gate = await requirePermisoRrhhObra();
+  if (!gate.ok) return gate.response;
+
   const id = (context.params?.id ?? '').trim();
   if (!id) {
     return NextResponse.json({ error: 'id requerido' }, { status: 400 });

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
+import { requirePermisoRrhhObra } from '@/lib/rrhh/requirePermisoRrhh';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import { CATALOGO_FASES_TECNICAS_OBRA } from '@/lib/talento/catalogoFasesTecnicasObra';
 import {
@@ -32,9 +33,6 @@ export async function GET() {
  * Body: { texto, proyecto_id? }
  */
 export async function POST(req: Request) {
-  const admin = supabaseAdminForRoute();
-  if (!admin.ok) return admin.response;
-
   let raw: unknown;
   try {
     raw = await req.json();
@@ -46,6 +44,14 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: 'texto requerido (2–4000 caracteres)' }, { status: 400 });
   }
+
+  const gate = await requirePermisoRrhhObra({
+    proyectoId: parsed.data.proyecto_id ?? null,
+  });
+  if (!gate.ok) return gate.response;
+
+  const admin = supabaseAdminForRoute();
+  if (!admin.ok) return admin.response;
 
   const texto = trimFaseTecnica(parsed.data.texto);
   if (!texto) {

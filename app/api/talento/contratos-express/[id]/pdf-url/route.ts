@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { requirePermisoRrhhAny } from '@/lib/rrhh/requirePermisoRrhh';
 import { resolverContratoPdfExpress } from '@/lib/rrhh/resolverContratoPdfServer';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -8,6 +9,9 @@ export const runtime = 'nodejs';
 
 /** GET — URL firmada temporal (`expires_sec`). `?doc=firmado` usa el archivo subido tras firma del obrero. */
 export async function GET(req: Request, context: { params: { id: string } }) {
+  const gate = await requirePermisoRrhhAny();
+  if (!gate.ok) return gate.response;
+
   const id = (context.params?.id ?? '').trim();
   if (!id) {
     return NextResponse.json({ error: 'id requerido' }, { status: 400 });

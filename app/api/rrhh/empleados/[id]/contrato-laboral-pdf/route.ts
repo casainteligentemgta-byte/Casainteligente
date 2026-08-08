@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { generarBufferContratoLaboralEmpleado } from '@/lib/rrhh/empleadoContratoLaboralPdfBuffer';
+import { requirePermisoRrhhAny } from '@/lib/rrhh/requirePermisoRrhh';
 import { parseOverridesContratoRequestBody } from '@/lib/talento/contratoObreroPdfContext';
 
 export const runtime = 'nodejs';
@@ -9,6 +10,9 @@ async function handleRequest(req: Request, empleadoId: string, overrides?: Recor
   if (!empleadoId) {
     return NextResponse.json({ error: 'Falta id de empleado' }, { status: 400 });
   }
+
+  const gate = await requirePermisoRrhhAny();
+  if (!gate.ok) return gate.response;
 
   const formato = new URL(req.url).searchParams.get('formato')?.toLowerCase() ?? '';
 

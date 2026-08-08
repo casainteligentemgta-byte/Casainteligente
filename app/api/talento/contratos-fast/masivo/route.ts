@@ -54,6 +54,10 @@ const bodySchema = z.object({
  * También listados de obra (AYUDANTE / CARPINTERO + nivel genérico).
  */
 export async function POST(req: Request) {
+  const { requirePermisoRrhhObra } = await import('@/lib/rrhh/requirePermisoRrhh');
+  const gate = await requirePermisoRrhhObra();
+  if (!gate.ok) return gate.response;
+
   const admin = supabaseAdminForRoute();
   if (!admin.ok) return admin.response;
 

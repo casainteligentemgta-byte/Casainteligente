@@ -3,6 +3,7 @@ import { pdf } from '@react-pdf/renderer';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { loadResumenSolicitadosOficios } from '@/lib/rrhh/loadResumenSolicitadosOficios';
+import { requirePermisoRrhhObra } from '@/lib/rrhh/requirePermisoRrhh';
 import { buildResumenSolicitadosPrintHtml } from '@/lib/rrhh/resumenSolicitadosPrintHtml';
 import { ResumenSolicitadosOficiosPdf } from '@/lib/rrhh/ResumenSolicitadosOficiosPdf';
 
@@ -42,6 +43,12 @@ export async function GET(request: NextRequest) {
       { status: 400 },
     );
   }
+
+  const gate = await requirePermisoRrhhObra({
+    proyectoId: proyectoObra || null,
+    entidadId: entidadId || null,
+  });
+  if (!gate.ok) return gate.response;
 
   const supabase = await createClient();
   const loaded = await loadResumenSolicitadosOficios(supabase, {

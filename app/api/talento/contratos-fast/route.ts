@@ -51,6 +51,10 @@ const postBodySchema = z.object({
  * POST — Genera PDF estructurado de contrato obrero sin expediente, lo sube a `contratos_obreros` y registra en `ci_contratos_express`.
  */
 export async function POST(req: Request) {
+  const { requirePermisoRrhhObra } = await import('@/lib/rrhh/requirePermisoRrhh');
+  const gate = await requirePermisoRrhhObra();
+  if (!gate.ok) return gate.response;
+
   const admin = supabaseAdminForRoute();
   if (!admin.ok) return admin.response;
 

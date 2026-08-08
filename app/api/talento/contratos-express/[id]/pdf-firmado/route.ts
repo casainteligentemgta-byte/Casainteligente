@@ -9,6 +9,10 @@ export const runtime = 'nodejs';
  * Cuerpo: `multipart/form-data` con campo `file`.
  */
 export async function POST(req: Request, context: { params: { id: string } }) {
+  const { requirePermisoRrhhObra } = await import('@/lib/rrhh/requirePermisoRrhh');
+  const gate = await requirePermisoRrhhObra();
+  if (!gate.ok) return gate.response;
+
   const id = (context.params?.id ?? '').trim();
   if (!id) {
     return NextResponse.json({ error: 'id requerido' }, { status: 400 });

@@ -1,28 +1,21 @@
 import { NextResponse } from 'next/server';
 import { buildEmpleadoUpdateOficioHojaEmpleo } from '@/lib/rrhh/empleadoOficioHojaEmpleo';
+import { requirePermisoRrhhObra } from '@/lib/rrhh/requirePermisoRrhh';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
-import { supabaseForRoute } from '@/lib/talento/supabase-route';
 
 export const runtime = 'nodejs';
 
 /**
  * PATCH — Actualiza «Cargo u oficio a desempeñar» en la hoja de empleo (jsonb + columnas de cargo).
- * Requiere sesión autenticada (RRHH / Admin en la app).
+ * Requiere permiso RRHH de obra (o Dirección / legacy equipo.gestionar).
  */
 export async function PATCH(req: Request, context: { params: { id: string } }) {
+  const gate = await requirePermisoRrhhObra();
+  if (!gate.ok) return gate.response;
+
   const empleadoId = (context.params?.id ?? '').trim();
   if (!empleadoId) {
     return NextResponse.json({ error: 'id de empleado requerido' }, { status: 400 });
-  }
-
-  const sb = supabaseForRoute();
-  if (!sb.ok) return sb.response;
-
-  const {
-    data: { user },
-  } = await sb.client.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
   }
 
   let body: { cargoUOficio?: string };
