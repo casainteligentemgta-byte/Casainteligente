@@ -6,16 +6,14 @@ import { useSearchParams } from 'next/navigation';
 import {
   Download,
   FileSpreadsheet,
-  Files,
   Loader2,
-  Printer,
   RefreshCw,
-  ScanLine,
   Trash2,
   Upload,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
+import ContratosExpressListaToolbar from '@/components/rrhh/express/ContratosExpressListaToolbar';
 import ContratosExpressTablaLista from '@/components/rrhh/express/ContratosExpressTablaLista';
 import ModalEditarContratoExpress from '@/components/rrhh/express/ModalEditarContratoExpress';
 import { SelectorFaseTecnicaContrato } from '@/components/rrhh/express/SelectorFaseTecnicaContrato';
@@ -1041,102 +1039,19 @@ export default function RrhhContratosExpressClient() {
           ) : null}
         </div>
 
-        <div className="mt-5 rounded-xl border border-violet-500/30 bg-violet-950/20 p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="flex items-center gap-2 text-sm font-bold text-violet-100">
-                <ScanLine className="size-4 text-violet-300" aria-hidden />
-                Escaneos firmados
-              </p>
-              <p className="mt-1 max-w-xl text-xs text-zinc-500">
-                Cuando el obrero firme el contrato, suba el PDF o foto escaneada. En lote, nombre cada
-                archivo con la cédula (ej. <span className="font-mono text-zinc-400">V-12345678.pdf</span>
-                ).
-              </p>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={!proyectoId || importandoEscaneos || rows.length === 0}
-              onClick={() => escaneoMasivoRef.current?.click()}
-              className="border-violet-500/45 bg-violet-950/40 text-violet-100"
-            >
-              {importandoEscaneos ? (
-                <Loader2 className="size-3.5 animate-spin" aria-hidden />
-              ) : (
-                <Upload className="size-3.5" aria-hidden />
-              )}
-              <span className="ml-1.5">
-                {importandoEscaneos ? 'Cargando…' : 'Carga masiva de escaneos'}
-              </span>
-            </Button>
-          </div>
-          {resultadosEscaneo && resultadosEscaneo.length > 0 ? (
-            <ul className="mt-3 max-h-40 overflow-y-auto divide-y divide-white/5 rounded-lg border border-white/10 bg-black/30 text-[11px]">
-              {resultadosEscaneo.map((r, idx) => (
-                <li
-                  key={`${r.archivo}-${idx}`}
-                  className={`px-3 py-1.5 ${r.ok ? 'text-emerald-300/90' : 'text-red-200'}`}
-                >
-                  {r.archivo}
-                  {r.ok ? ` · ${r.obrero} · OK` : ` · ${r.error}`}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </div>
-
-        <div className="mt-5 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-bold text-white">Contratos en esta obra</h2>
-          <div className="flex flex-wrap items-center gap-2">
-            {rows.length > 0 ? (
-              <>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={busyPdfLote || !algunoSeleccionado}
-                  onClick={() => void pdfUnico(false)}
-                  className="border-emerald-500/45 bg-emerald-950/35 text-emerald-100"
-                  title="Descargar un solo PDF con los contratos seleccionados"
-                >
-                  {busyPdfLote ? (
-                    <Loader2 className="size-3.5 animate-spin" aria-hidden />
-                  ) : (
-                    <Files className="size-3.5" aria-hidden />
-                  )}
-                  <span className="ml-1.5">
-                    PDF único{algunoSeleccionado ? ` (${selectedIds.size})` : ''}
-                  </span>
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={busyPdfLote || !algunoSeleccionado}
-                  onClick={() => void pdfUnico(true)}
-                  className="border-emerald-500/35 text-emerald-100/90"
-                  title="Abrir PDF único para imprimir"
-                >
-                  <Printer className="size-3.5" aria-hidden />
-                  <span className="ml-1.5 hidden sm:inline">Imprimir lote</span>
-                </Button>
-              </>
-            ) : null}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={loadingLista || !proyectoId}
-              onClick={() => void loadLista()}
-              className="border-amber-500/40 text-amber-100"
-            >
-              <RefreshCw className={`size-3.5 ${loadingLista ? 'animate-spin' : ''}`} aria-hidden />
-              <span className="ml-1.5">Actualizar</span>
-            </Button>
-          </div>
-        </div>
+        <ContratosExpressListaToolbar
+          proyectoId={proyectoId}
+          rowsCount={rows.length}
+          selectedCount={selectedIds.size}
+          algunoSeleccionado={algunoSeleccionado}
+          busyPdfLote={busyPdfLote}
+          loadingLista={loadingLista}
+          importandoEscaneos={importandoEscaneos}
+          resultadosEscaneo={resultadosEscaneo}
+          onPdfUnico={(abrir) => void pdfUnico(abrir)}
+          onActualizar={() => void loadLista()}
+          onCargaMasivaEscaneos={() => escaneoMasivoRef.current?.click()}
+        />
 
         <div className="mt-3">
           {!proyectoId ? (

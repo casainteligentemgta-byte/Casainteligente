@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
 import { generarBufferContratoExpressPdf } from '@/lib/rrhh/expressContratoPdfBuffer';
 import { generarBufferContratoLaboralEmpleado } from '@/lib/rrhh/empleadoContratoLaboralPdfBuffer';
+import { requirePermisoRrhhAny } from '@/lib/rrhh/requirePermisoRrhh';
 import {
   descargarPdfDesdeStorage,
   primeraRutaStorageEmpleado,
@@ -9,6 +9,7 @@ import {
 } from '@/lib/rrhh/resolverContratoPdfServer';
 import { construirExpedienteRefPorEmpleado } from '@/lib/talento/contratoExpedienteRef';
 import { nombreArchivoPdfContratoIndividual } from '@/lib/talento/nombreArchivoContratoIndividual';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 export const runtime = 'nodejs';
 
@@ -25,7 +26,7 @@ function pdfResponse(buf: Buffer, filename: string): NextResponse {
 }
 
 async function filenameDesdeExpress(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  supabase: SupabaseClient,
   expressId: string,
 ): Promise<string | null> {
   const full = await supabase
@@ -57,7 +58,7 @@ async function filenameDesdeExpress(
 }
 
 async function filenameDesdeEmpleado(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  supabase: SupabaseClient,
   empleadoId: string,
 ): Promise<string | null> {
   const expedienteRef = await construirExpedienteRefPorEmpleado(supabase, empleadoId);
@@ -90,7 +91,9 @@ export async function GET(req: Request) {
   }
 
   try {
-    const supabase = await createClient();
+    const gate = await requirePermisoRrhhAny();
+    if (!gate.ok) return gate.response;
+    const supabase = gate.supabase;
 
     if (expressId) {
       if (!forzarGenerar) {

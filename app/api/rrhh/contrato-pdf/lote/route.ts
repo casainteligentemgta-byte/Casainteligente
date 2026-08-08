@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requirePermisoRrhhObra } from '@/lib/rrhh/requirePermisoRrhh';
 import {
   generarPdfUnicoContratosExpress,
   MAX_CONTRATOS_PDF_LOTE,
@@ -14,6 +14,9 @@ export const maxDuration = 120;
  * para imprimir en lote (admin / obra).
  */
 export async function POST(req: Request) {
+  const gate = await requirePermisoRrhhObra();
+  if (!gate.ok) return gate.response;
+
   let body: unknown;
   try {
     body = await req.json();
@@ -47,8 +50,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const supabase = await createClient();
-    const out = await generarPdfUnicoContratosExpress(supabase, expressIds);
+    const out = await generarPdfUnicoContratosExpress(gate.supabase, expressIds);
     if (!out.ok) {
       return NextResponse.json({ error: out.error }, { status: 404 });
     }

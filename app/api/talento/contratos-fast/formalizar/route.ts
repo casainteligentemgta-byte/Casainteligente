@@ -15,6 +15,10 @@ const bodySchema = z.object({
  * pero con cuerpo JSON como en plantillas legacy (`ci_contratos_fast` → en BD es `ci_contratos_express`).
  */
 export async function POST(req: Request) {
+  const { requirePermisoRrhhObra } = await import('@/lib/rrhh/requirePermisoRrhh');
+  const gate = await requirePermisoRrhhObra();
+  if (!gate.ok) return gate.response;
+
   const admin = supabaseAdminForRoute();
   if (!admin.ok) return admin.response;
 

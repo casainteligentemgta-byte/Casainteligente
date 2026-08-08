@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requirePermisoRrhhAny } from '@/lib/rrhh/requirePermisoRrhh';
 import {
   resolverContratoPdfEmpleado,
   resolverContratoPdfExpress,
@@ -34,7 +34,9 @@ export async function GET(req: Request) {
   }
 
   try {
-    const supabase = await createClient();
+    const gate = await requirePermisoRrhhAny();
+    if (!gate.ok) return gate.response;
+    const supabase = gate.supabase;
 
     if (expressId) {
       const out = await resolverContratoPdfExpress(supabase, expressId, { preferFirmado });

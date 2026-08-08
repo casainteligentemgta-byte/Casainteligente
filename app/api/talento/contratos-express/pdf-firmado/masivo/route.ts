@@ -39,6 +39,10 @@ type ResultadoMasivo =
  * Empareja cada archivo con el contrato express de la obra por cédula en el nombre.
  */
 export async function POST(req: Request) {
+  const { requirePermisoRrhhObra } = await import('@/lib/rrhh/requirePermisoRrhh');
+  const gate = await requirePermisoRrhhObra();
+  if (!gate.ok) return gate.response;
+
   const admin = supabaseAdminForRoute();
   if (!admin.ok) return admin.response;
 

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { requirePermisoRrhhAny, requirePermisoRrhhObra } from '@/lib/rrhh/requirePermisoRrhh';
 import { BUCKET_CONTRATOS_OBREROS } from '@/lib/talento/contratoLaboralRegistroStorage';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import { actualizarContratoExpress } from '@/lib/talento/actualizarContratoExpress';
@@ -35,6 +36,9 @@ const patchSchema = z.object({
  * GET — Datos editables del contrato express (para el modal de edición).
  */
 export async function GET(_req: Request, context: { params: { id: string } }) {
+  const gate = await requirePermisoRrhhAny();
+  if (!gate.ok) return gate.response;
+
   const id = (context.params?.id ?? '').trim();
   if (!id) return NextResponse.json({ error: 'id requerido' }, { status: 400 });
 
@@ -71,6 +75,9 @@ export async function GET(_req: Request, context: { params: { id: string } }) {
  * PATCH — Edita campos que recaudan información y regenera el PDF (por defecto).
  */
 export async function PATCH(req: Request, context: { params: { id: string } }) {
+  const gate = await requirePermisoRrhhObra();
+  if (!gate.ok) return gate.response;
+
   const id = (context.params?.id ?? '').trim();
   if (!id) return NextResponse.json({ error: 'id requerido' }, { status: 400 });
 
@@ -109,6 +116,9 @@ export async function PATCH(req: Request, context: { params: { id: string } }) {
  * DELETE — Elimina la fila en `ci_contratos_express` y los objetos asociados en Storage (borrador y firmado si existen).
  */
 export async function DELETE(_req: Request, context: { params: { id: string } }) {
+  const gate = await requirePermisoRrhhObra();
+  if (!gate.ok) return gate.response;
+
   const id = (context.params?.id ?? '').trim();
   if (!id) {
     return NextResponse.json({ error: 'id requerido' }, { status: 400 });

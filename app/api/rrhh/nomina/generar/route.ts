@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requirePermisoRrhhEntidad } from '@/lib/rrhh/requirePermisoRrhh';
 import { calcularReciboSemanal, InputCalculoRecibo } from '@/lib/nomina/motorCalculo';
 
 export const dynamic = 'force-dynamic';
@@ -25,14 +25,6 @@ function unwrapEmpleado(rel: EmpleadoRel | EmpleadoRel[]): EmpleadoRel {
 
 export async function POST(req: Request) {
   try {
-    const supabase = await createClient();
-    
-    // Validar sesión
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    }
-
     const body = await req.json();
     const { 
       proyectoId, 
@@ -42,6 +34,13 @@ export async function POST(req: Request) {
       fechaFin, 
       tasaBcv 
     } = body;
+
+    const gate = await requirePermisoRrhhEntidad({
+      proyectoId: typeof proyectoId === 'string' ? proyectoId : null,
+      entidadId: typeof entidadId === 'string' ? entidadId : null,
+    });
+    if (!gate.ok) return gate.response;
+    const supabase = gate.supabase;
 
     if (!proyectoId || !numeroSemana || !fechaInicio || !fechaFin || !tasaBcv) {
       return NextResponse.json({ error: 'Faltan parámetros requeridos' }, { status: 400 });

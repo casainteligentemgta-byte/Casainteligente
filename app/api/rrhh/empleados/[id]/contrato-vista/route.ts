@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { requirePermisoRrhhAny } from '@/lib/rrhh/requirePermisoRrhh';
 import {
   compilarContratoObreroDesdeEmpleadoId,
   parseOverridesContratoRequestBody,
@@ -22,9 +23,11 @@ async function compilarJson(id: string, overrides?: Record<string, string>) {
 
 /**
  * GET — Vista previa del contrato obrero rellenado (plantilla biblioteca + expediente del empleado).
- * No exige sesión; el acceso efectivo depende de RLS/políticas del cliente Supabase del servidor.
  */
 export async function GET(_req: Request, context: { params: { id: string } }) {
+  const gate = await requirePermisoRrhhAny();
+  if (!gate.ok) return gate.response;
+
   const id = (context.params?.id ?? '').trim();
   if (!id) {
     return NextResponse.json({ error: 'Falta id de empleado' }, { status: 400 });
@@ -46,6 +49,9 @@ export async function GET(_req: Request, context: { params: { id: string } }) {
  * POST — Misma vista previa con `{ overrides: { CLAVE: "valor" } }` para simular datos manuales.
  */
 export async function POST(req: Request, context: { params: { id: string } }) {
+  const gate = await requirePermisoRrhhAny();
+  if (!gate.ok) return gate.response;
+
   const id = (context.params?.id ?? '').trim();
   if (!id) {
     return NextResponse.json({ error: 'Falta id de empleado' }, { status: 400 });

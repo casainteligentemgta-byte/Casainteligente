@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requirePermisoRrhhAny } from '@/lib/rrhh/requirePermisoRrhh';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
 export const runtime = 'nodejs';
@@ -9,6 +10,9 @@ export const dynamic = 'force-dynamic';
  * Intenta 3 estrategias en cascada para máxima compatibilidad.
  */
 export async function GET() {
+  const gate = await requirePermisoRrhhAny();
+  if (!gate.ok) return gate.response;
+
   const admin = supabaseAdminForRoute();
   if (!admin.ok) return admin.response;
 
