@@ -16,6 +16,7 @@ import {
   ScanLine,
   Trash2,
   Upload,
+  UserPlus,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
@@ -117,6 +118,7 @@ export default function RrhhContratosExpressClient() {
   const [loadingLista, setLoadingLista] = useState(false);
   const [errLista, setErrLista] = useState<string | null>(null);
   const [busyDeleteId, setBusyDeleteId] = useState<string | null>(null);
+  const [busyFormalizarId, setBusyFormalizarId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [busyPdfLote, setBusyPdfLote] = useState(false);
 
@@ -538,6 +540,33 @@ export default function RrhhContratosExpressClient() {
       toast.error('Error de red');
     } finally {
       setImportando(false);
+    }
+  }
+
+  async function formalizarFila(id: string, nombre: string) {
+    if (
+      !window.confirm(
+        `¿Formalizar el contrato de «${nombre}»?\n\nSe creará el expediente en Talento (ci_empleados) a partir de este express.`,
+      )
+    ) {
+      return;
+    }
+    setBusyFormalizarId(id);
+    try {
+      const res = await fetch(`/api/talento/contratos-express/${id}/formalizar`, {
+        method: 'POST',
+      });
+      const j = (await res.json()) as { error?: string; empleado_id?: string };
+      if (!res.ok) {
+        toast.error(j.error ?? 'No se pudo formalizar');
+        return;
+      }
+      toast.success('Formalizado: expediente creado en Talento');
+      await loadLista();
+    } catch {
+      toast.error('Error de red al formalizar');
+    } finally {
+      setBusyFormalizarId(null);
     }
   }
 
@@ -1146,6 +1175,7 @@ export default function RrhhContratosExpressClient() {
                     <th className="px-3 py-2.5">Cargo</th>
                     <th className="px-3 py-2.5 text-center">PDF</th>
                     <th className="px-3 py-2.5 text-center">Firmado</th>
+                    <th className="px-3 py-2.5 text-center">Expediente</th>
                     <th className="px-3 py-2.5 text-center">Editar</th>
                     <th className="px-3 py-2.5 text-right">Borrar</th>
                   </tr>
@@ -1153,6 +1183,7 @@ export default function RrhhContratosExpressClient() {
                 <tbody>
                   {rows.map((r) => {
                     const tieneFirmado = Boolean(String(r.pdf_firmado_storage_path ?? '').trim());
+                    const formalizado = Boolean(r.formalizado_empleado_id);
                     return (
                     <tr key={r.id} className="border-b border-white/[0.06] last:border-0">
                       <td className="px-2 py-2 text-center">
@@ -1227,6 +1258,33 @@ export default function RrhhContratosExpressClient() {
                             )}
                           </Button>
                         </div>
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        {formalizado ? (
+                          <span
+                            className="inline-flex items-center rounded-md border border-sky-500/35 bg-sky-950/40 px-1.5 py-1 text-[10px] font-bold text-sky-100"
+                            title="Ya tiene expediente en Talento"
+                          >
+                            OK
+                          </span>
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={busyFormalizarId === r.id}
+                            className="h-8 border-sky-700/50 bg-sky-950/30 px-2 text-xs text-sky-100"
+                            onClick={() => void formalizarFila(r.id, r.obrero_nombre)}
+                            title="Crear expediente en Talento (formalizar)"
+                            aria-label={`Formalizar contrato de ${r.obrero_nombre}`}
+                          >
+                            {busyFormalizarId === r.id ? (
+                              <Loader2 className="size-3.5 animate-spin" />
+                            ) : (
+                              <UserPlus className="size-3.5" />
+                            )}
+                          </Button>
+                        )}
                       </td>
                       <td className="px-3 py-2 text-center">
                         <Button
