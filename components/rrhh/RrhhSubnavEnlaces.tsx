@@ -1,13 +1,16 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname, useSearchParams } from 'next/navigation';
+import { useMemo } from 'react';
+import { resolverRrhhAlcanceDesdeUrl } from '@/lib/rrhh/rrhhAlcance';
 import {
   RRHH_NAV_SECTIONS,
-  hrefRrhhConProyecto,
+  filtrarNavPorAlcance,
+  hrefRrhhConAlcance,
   rrhhNavItemActivo,
 } from '@/lib/rrhh/rrhhNav';
 import { cn } from '@/lib/utils';
-import { usePathname } from 'next/navigation';
 
 type Props = {
   proyectoModuloId?: string | null;
@@ -16,17 +19,28 @@ type Props = {
 
 /**
  * @deprecated Preferir el shell en `app/rrhh/layout` (`RrhhShell`).
- * Se mantiene por compatibilidad si alguna vista embebida lo necesita.
+ * Se mantiene alineado al filtro por alcance.
  */
 export default function RrhhSubnavEnlaces({ proyectoModuloId = null, className = '' }: Props) {
   const pathname = usePathname() ?? '';
+  const searchParams = useSearchParams();
+  const alcance = useMemo(() => {
+    const base = resolverRrhhAlcanceDesdeUrl(searchParams);
+    if ((proyectoModuloId ?? '').trim()) {
+      return {
+        ...base,
+        mode: 'obra' as const,
+        proyectoModuloId: proyectoModuloId!.trim(),
+      };
+    }
+    return base;
+  }, [searchParams, proyectoModuloId]);
+
+  const sections = filtrarNavPorAlcance(RRHH_NAV_SECTIONS, alcance.mode);
 
   return (
-    <nav
-      className={cn('flex flex-col gap-3', className)}
-      aria-label="Accesos RRHH"
-    >
-      {RRHH_NAV_SECTIONS.map((section) => (
+    <nav className={cn('flex flex-col gap-3', className)} aria-label="Accesos RRHH">
+      {sections.map((section) => (
         <div key={section.id} className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
           <span className="w-20 shrink-0 text-[10px] font-bold uppercase tracking-wider text-zinc-500 sm:w-24">
             {section.label}
@@ -37,7 +51,7 @@ export default function RrhhSubnavEnlaces({ proyectoModuloId = null, className =
               return (
                 <Link
                   key={item.href}
-                  href={hrefRrhhConProyecto(item.href, proyectoModuloId)}
+                  href={hrefRrhhConAlcance(item.href, alcance)}
                   className={cn(
                     'rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition',
                     active
