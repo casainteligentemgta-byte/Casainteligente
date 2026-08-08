@@ -16,9 +16,31 @@ export const PERMISOS = [
   'almacen.cuarentena',
   'admin.config',
   'equipo.gestionar',
+  /** Dirección RRHH: banca, nómina, liquidaciones, tabulador (alcance entidad). */
+  'rrhh.entidad',
+  /** RRHH de obra: solicitud, gestión, contratos express (alcance obra). */
+  'rrhh.obra',
 ] as const;
 
 export type Permiso = (typeof PERMISOS)[number];
+
+/** Etiquetas cortas para UI de equipo / depuración. */
+export const PERMISO_LABELS: Record<Permiso, string> = {
+  'procura.solicitar': 'Procura · solicitar',
+  'procura.aprobar': 'Procura · aprobar',
+  'procura.ejecutar_compra': 'Procura · comprar',
+  'procura.usar_almacen': 'Procura · almacén',
+  'compra.registrar': 'Compra · registrar',
+  'compra.verificar_fecha': 'Compra · verificar fecha',
+  'compra.confirmar': 'Compra · confirmar',
+  'almacen.ingreso': 'Almacén · ingreso',
+  'almacen.despacho': 'Almacén · despacho',
+  'almacen.cuarentena': 'Almacén · cuarentena',
+  'admin.config': 'Admin · configuración',
+  'equipo.gestionar': 'Equipo · gestionar',
+  'rrhh.entidad': 'RRHH · Dirección (entidad)',
+  'rrhh.obra': 'RRHH · obra',
+};
 
 export const ROLES_EMPRESA = [
   { value: 'admin', label: 'Administrador' },
@@ -65,6 +87,7 @@ const POR_ROL_EMPRESA: Record<RolEmpresa | 'solo_lectura', Permiso[]> = {
     'compra.registrar',
     'almacen.despacho',
     'equipo.gestionar',
+    'rrhh.obra',
   ],
   contador: [
     'compra.registrar',
@@ -87,7 +110,7 @@ const POR_ROL_EMPRESA: Record<RolEmpresa | 'solo_lectura', Permiso[]> = {
     'almacen.cuarentena',
     'compra.registrar',
   ],
-  rrhh: ['equipo.gestionar'],
+  rrhh: ['equipo.gestionar', 'rrhh.entidad', 'rrhh.obra'],
   solo_lectura: [],
 };
 
@@ -103,7 +126,7 @@ export const PERMISOS_POR_ROL_OBRA: Record<string, Permiso[]> = {
   ],
   supervisor: ['procura.solicitar', 'almacen.despacho'],
   maestro_obra: ['procura.solicitar', 'almacen.despacho'],
-  coordinador: ['procura.solicitar', 'procura.aprobar', 'almacen.despacho'],
+  coordinador: ['procura.solicitar', 'procura.aprobar', 'almacen.despacho', 'rrhh.obra'],
   logistica: ['procura.usar_almacen', 'almacen.ingreso', 'almacen.despacho', 'almacen.cuarentena'],
   residente_calidad: ['almacen.cuarentena'],
   administrativo: ['procura.solicitar'],

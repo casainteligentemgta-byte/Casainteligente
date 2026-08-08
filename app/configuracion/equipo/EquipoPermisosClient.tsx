@@ -13,7 +13,7 @@ import {
 import AsignarRolUsuario from '@/components/configuracion/AsignarRolUsuario';
 import InvitarUsuarioAcceso from '@/components/configuracion/InvitarUsuarioAcceso';
 import { Badge } from '@/components/ui/badge';
-import { PERMISOS, ROLES_EMPRESA } from '@/lib/auth/permisosCatalogo';
+import { PERMISOS, PERMISO_LABELS, ROLES_EMPRESA } from '@/lib/auth/permisosCatalogo';
 
 type PermisosPayload = {
   enforcement: boolean;
@@ -193,7 +193,8 @@ export default function EquipoPermisosClient() {
               </ul>
               <p className="mt-4 text-[11px] text-zinc-600">
                 Roles de obra (ingeniero, depositario, supervisor…) se configuran en Control de obra →
-                Nómina del proyecto. Permisos disponibles: {PERMISOS.join(', ')}.
+                Nómina del proyecto. Permisos disponibles:{' '}
+                {PERMISOS.map((p) => PERMISO_LABELS[p] ?? p).join(' · ')}.
               </p>
             </section>
           </div>

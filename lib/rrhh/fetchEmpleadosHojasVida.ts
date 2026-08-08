@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { etiquetaEstadoEmpleado } from '@/lib/rrhh/empleadoEstados';
 
 export type EmpleadoHojaVidaRow = {
   id: string;
@@ -115,13 +116,5 @@ export async function fetchEmpleadosHojasVida(
 }
 
 export function etiquetaEstadoArchivo(r: EmpleadoHojaVidaRow): string {
-  const est = (r.estado ?? '').trim();
-  const ep = (r.estado_proceso ?? '').trim();
-  const ev = (r.status_evaluacion ?? '').trim();
-  const st = (r.estatus ?? '').trim();
-  if (est === 'aprobado') return 'Aprobado';
-  if (est === 'rechazado' || ev === 'rojo' || ev === 'rechazado') return 'No aprobado';
-  if (ep === 'cv_completado') return 'CV cargado';
-  if (st) return st;
-  return ep || est || 'En proceso';
+  return etiquetaEstadoEmpleado(r);
 }

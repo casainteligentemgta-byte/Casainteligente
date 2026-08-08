@@ -22,9 +22,15 @@ import {
   rrhhPathSinShell,
 } from '@/lib/rrhh/rrhhNav';
 import {
+  modeInicialPermitido,
+  resolverPermisosAlcanceRrhh,
+  type RrhhPermisosAlcance,
+} from '@/lib/rrhh/rrhhPermisosAlcance';
+import {
   loadProyectosSmartRrhhHojasVida,
   type ProyectoModuloIntegral,
 } from '@/lib/proyectos/proyectosUnificados';
+import { apiUrl } from '@/lib/http/apiUrl';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 
@@ -49,6 +55,11 @@ export default function RrhhShell({ children }: Props) {
   const [entidades, setEntidades] = useState<EntidadOpt[]>([]);
   const [obras, setObras] = useState<ProyectoModuloIntegral[]>([]);
   const [metaReady, setMetaReady] = useState(false);
+  const [permAlcance, setPermAlcance] = useState<RrhhPermisosAlcance>({
+    entidad: true,
+    obra: true,
+    ambos: true,
+  });
 
   useEffect(() => {
     setAlcance(resolverRrhhAlcanceDesdeUrl(searchParams));
@@ -57,13 +68,22 @@ export default function RrhhShell({ children }: Props) {
   useEffect(() => {
     let alive = true;
     void (async () => {
-      const [entRes, proyRes] = await Promise.all([
+      const [entRes, proyRes, permRes] = await Promise.all([
         supabase
           .from('ci_entidades')
           .select('id,nombre,es_patrono')
           .order('nombre')
           .limit(200),
         loadProyectosSmartRrhhHojasVida(supabase),
+        fetch(apiUrl('/api/auth/permisos'), { cache: 'no-store', credentials: 'include' })
+          .then(async (r) => {
+            if (!r.ok) return null;
+            return (await r.json()) as {
+              permisos?: string[];
+              enforcement?: boolean;
+            };
+          })
+          .catch(() => null),
       ]);
       if (!alive) return;
 
@@ -73,8 +93,15 @@ export default function RrhhShell({ children }: Props) {
       setEntidades(ents);
       setObras(proyRes.proyectos);
 
+      const pa = resolverPermisosAlcanceRrhh({
+        permisos: permRes?.permisos ?? [],
+        enforcement: permRes?.enforcement,
+      });
+      setPermAlcance(pa);
+
       setAlcance((prev) => {
         let next = { ...prev };
+        next = { ...next, mode: modeInicialPermitido(next.mode, pa) };
         if (!next.entidadId && ents[0]) next = { ...next, entidadId: ents[0].id };
         if (next.mode === 'obra' && !next.proyectoModuloId && proyRes.proyectos[0]) {
           next = { ...next, proyectoModuloId: proyRes.proyectos[0].id };
@@ -107,6 +134,8 @@ export default function RrhhShell({ children }: Props) {
   );
 
   const onChangeMode = (mode: RrhhAlcanceMode) => {
+    if (mode === 'entidad' && !permAlcance.entidad) return;
+    if (mode === 'obra' && !permAlcance.obra) return;
     const next: RrhhAlcanceState = {
       ...alcance,
       mode,
@@ -186,32 +215,36 @@ export default function RrhhShell({ children }: Props) {
                 role="group"
                 aria-label="Alcance RRHH"
               >
-                <button
-                  type="button"
-                  onClick={() => onChangeMode('entidad')}
-                  className={cn(
-                    'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] font-bold transition',
-                    alcance.mode === 'entidad'
-                      ? 'bg-pink-500/25 text-pink-50'
-                      : 'text-zinc-400 hover:text-zinc-200',
-                  )}
-                >
-                  <Building2 className="size-3.5" aria-hidden />
-                  Dirección
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onChangeMode('obra')}
-                  className={cn(
-                    'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] font-bold transition',
-                    alcance.mode === 'obra'
-                      ? 'bg-amber-500/25 text-amber-50'
-                      : 'text-zinc-400 hover:text-zinc-200',
-                  )}
-                >
-                  <HardHat className="size-3.5" aria-hidden />
-                  Obra
-                </button>
+                {permAlcance.entidad ? (
+                  <button
+                    type="button"
+                    onClick={() => onChangeMode('entidad')}
+                    className={cn(
+                      'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] font-bold transition',
+                      alcance.mode === 'entidad'
+                        ? 'bg-pink-500/25 text-pink-50'
+                        : 'text-zinc-400 hover:text-zinc-200',
+                    )}
+                  >
+                    <Building2 className="size-3.5" aria-hidden />
+                    Dirección
+                  </button>
+                ) : null}
+                {permAlcance.obra ? (
+                  <button
+                    type="button"
+                    onClick={() => onChangeMode('obra')}
+                    className={cn(
+                      'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] font-bold transition',
+                      alcance.mode === 'obra'
+                        ? 'bg-amber-500/25 text-amber-50'
+                        : 'text-zinc-400 hover:text-zinc-200',
+                    )}
+                  >
+                    <HardHat className="size-3.5" aria-hidden />
+                    Obra
+                  </button>
+                ) : null}
               </div>
 
               {metaReady ? (
