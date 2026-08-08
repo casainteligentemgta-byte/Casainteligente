@@ -155,7 +155,7 @@ export default async function DashboardPage() {
 
       <section style={{ marginBottom: '2rem' }}>
         <Link
-          href="/rrhh?vista=reclutamiento"
+          href="/rrhh/reclutamiento"
           style={{
             display: 'block',
             padding: '1rem 1.25rem',

@@ -112,11 +112,11 @@ export default function RrhhNominaHubClient() {
     <div className="mx-auto max-w-6xl px-4 pb-28 pt-8">
       <header className="mb-8">
         <Link
-          href="/rrhh"
+          href="/rrhh/hojas-vida"
           className="mb-2 inline-flex items-center gap-1.5 text-xs font-semibold text-sky-300 hover:text-sky-200"
         >
           <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
-          Volver a RRHH
+          Volver al cuadro obra
         </Link>
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>

@@ -1,73 +1,57 @@
+'use client';
+
 import Link from 'next/link';
-import { ClipboardList, FileText, ScrollText, UserRound, Users } from 'lucide-react';
-import { hrefListaContratosExpress } from '@/lib/talento/hrefListaContratosExpress';
-import { hrefSolicitudPersonalObrero } from '@/lib/rrhh/hrefSolicitudPersonal';
+import {
+  RRHH_NAV_SECTIONS,
+  hrefRrhhConProyecto,
+  rrhhNavItemActivo,
+} from '@/lib/rrhh/rrhhNav';
+import { cn } from '@/lib/utils';
+import { usePathname } from 'next/navigation';
 
 type Props = {
   proyectoModuloId?: string | null;
   className?: string;
 };
 
-/** Enlaces rápidos RRHH (una sola fila en hub y subpáginas). */
+/**
+ * @deprecated Preferir el shell en `app/rrhh/layout` (`RrhhShell`).
+ * Se mantiene por compatibilidad si alguna vista embebida lo necesita.
+ */
 export default function RrhhSubnavEnlaces({ proyectoModuloId = null, className = '' }: Props) {
-  const hrefSolicitud = hrefSolicitudPersonalObrero({
-    proyectoModuloId: proyectoModuloId?.trim() || null,
-  });
+  const pathname = usePathname() ?? '';
 
   return (
     <nav
-      className={`flex flex-wrap items-center justify-end gap-2 ${className}`.trim()}
+      className={cn('flex flex-col gap-3', className)}
       aria-label="Accesos RRHH"
     >
-      <Link
-        href={hrefSolicitud}
-        className="inline-flex items-center gap-2 rounded-xl border border-violet-400/50 bg-violet-600/30 px-4 py-2.5 text-sm font-bold text-violet-50 transition hover:bg-violet-600/45"
-      >
-        <ClipboardList className="h-4 w-4" aria-hidden />
-        Solicitud de personal obrero
-      </Link>
-      <Link
-        href="/rrhh/reclutamiento"
-        className="inline-flex items-center gap-2 rounded-xl border border-violet-500/40 bg-violet-950/45 px-3 py-2 text-sm font-semibold text-violet-100 transition hover:bg-violet-900/55"
-      >
-        <Users className="h-4 w-4 shrink-0" aria-hidden />
-        Reclutamiento
-      </Link>
-      <Link
-        href="/rrhh/banca"
-        className="inline-flex items-center gap-2 rounded-xl border border-teal-500/40 bg-teal-950/45 px-3 py-2 text-sm font-semibold text-teal-100 transition hover:bg-teal-900/55"
-      >
-        <Users className="h-4 w-4 shrink-0" aria-hidden />
-        Banca Obreros
-      </Link>
-      <Link
-        href="/rrhh/trabajadores"
-        className="inline-flex items-center gap-2 rounded-xl border border-fuchsia-500/40 bg-fuchsia-950/45 px-3 py-2 text-sm font-semibold text-fuchsia-100 transition hover:bg-fuchsia-900/55"
-      >
-        <Users className="h-4 w-4 shrink-0" aria-hidden />
-        Trabajadores
-      </Link>
-      <Link
-        href="/rrhh/hojas-vida/archivo"
-        className="inline-flex items-center gap-2 rounded-xl border border-sky-500/40 bg-sky-950/45 px-3 py-2 text-sm font-semibold text-sky-100 transition hover:bg-sky-900/55"
-      >
-        <UserRound className="h-4 w-4 shrink-0" aria-hidden />
-        Hojas de vida
-      </Link>
-      <Link
-        href={hrefListaContratosExpress()}
-        className="inline-flex items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-950/45 px-3 py-2 text-sm font-semibold text-amber-100 transition hover:bg-amber-900/55"
-      >
-        <FileText className="h-4 w-4 shrink-0" aria-hidden />
-        Express
-      </Link>
-      <Link
-        href="/rrhh/oficios-salarios"
-        className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm font-semibold text-emerald-200 transition hover:bg-emerald-500/20"
-      >
-        <ScrollText className="h-4 w-4" aria-hidden />
-        Oficios y salarios
-      </Link>
+      {RRHH_NAV_SECTIONS.map((section) => (
+        <div key={section.id} className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+          <span className="w-20 shrink-0 text-[10px] font-bold uppercase tracking-wider text-zinc-500 sm:w-24">
+            {section.label}
+          </span>
+          <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
+            {section.items.map((item) => {
+              const active = rrhhNavItemActivo(pathname, item);
+              return (
+                <Link
+                  key={item.href}
+                  href={hrefRrhhConProyecto(item.href, proyectoModuloId)}
+                  className={cn(
+                    'rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition',
+                    active
+                      ? 'border-pink-400/50 bg-pink-500/20 text-pink-50'
+                      : 'border-white/10 bg-white/[0.03] text-zinc-300 hover:border-white/20 hover:bg-white/[0.06]',
+                  )}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </nav>
   );
 }

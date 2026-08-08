@@ -22,7 +22,6 @@ import { createClient } from '@/lib/supabase/client';
 import AccionesContratoPdfFila from '@/components/rrhh/AccionesContratoPdfFila';
 import ModalEditarContratoExpress from '@/components/rrhh/express/ModalEditarContratoExpress';
 import { SelectorFaseTecnicaContrato } from '@/components/rrhh/express/SelectorFaseTecnicaContrato';
-import RrhhSubnavEnlaces from '@/components/rrhh/RrhhSubnavEnlaces';
 import { Button } from '@/components/ui/button';
 import { descargarPdfUnicoContratosExpress } from '@/lib/rrhh/descargarPdfUnicoCliente';
 import {
@@ -752,18 +751,13 @@ export default function RrhhContratosExpressClient() {
           if (list?.length) void subirEscaneosMasivos(list);
         }}
       />
-      <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Casa Inteligente</p>
       <h1 className="text-2xl font-bold tracking-tight text-white">Contratos express</h1>
       <p className="mt-1 max-w-2xl text-sm text-zinc-500">
-        RRHH · carga masiva por obra y entidad patrono. Tras la firma en papel, suba el escaneo
-        firmado (individual o por lote).
+        Carga masiva por obra y entidad patrono. Tras la firma en papel, suba el escaneo firmado
+        (individual o por lote).
       </p>
 
-      <header className="mb-6 mt-8">
-        <RrhhSubnavEnlaces proyectoModuloId={proyectoId || null} />
-      </header>
-
-      <section className="rounded-2xl border border-amber-500/30 bg-gradient-to-b from-amber-950/35 to-zinc-950/80 p-5">
+      <section className="mt-6 rounded-2xl border border-amber-500/30 bg-gradient-to-b from-amber-950/35 to-zinc-950/80 p-5">
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="flex flex-col gap-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
             Entidad (patrono)

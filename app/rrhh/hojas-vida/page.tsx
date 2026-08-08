@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { hrefSolicitudPersonalObrero } from '@/lib/rrhh/hrefSolicitudPersonal';
 import { useEffect, useMemo, useState } from 'react';
 import ListaEmpleosHojasVida from '@/app/rrhh/hojas-vida/components/ListaEmpleosHojasVida';
-import RrhhSubnavEnlaces from '@/components/rrhh/RrhhSubnavEnlaces';
 import ResumenObrerosProyectoModulo from '@/components/proyectos/ResumenObrerosProyectoModulo';
 import {
   entidadIdPredominante,
@@ -115,14 +114,10 @@ export default function RrhhHojasVidaPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 pb-28 pt-6">
-      <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Casa Inteligente</p>
-      <h1 className="text-2xl font-bold tracking-tight text-white">RRHH</h1>
-
-      <header className="mb-6 mt-8">
-        <RrhhSubnavEnlaces
-          proyectoModuloId={proyectoModuloIdFiltroEnlaces ?? (proyectoModuloIdPrincipal || null)}
-        />
-      </header>
+      <h1 className="text-2xl font-bold tracking-tight text-white">Cuadro por obra</h1>
+      <p className="mb-6 mt-1 max-w-2xl text-sm text-zinc-500">
+        Solicitudes, personal y contratos express del alcance seleccionado (entidad / obra).
+      </p>
 
       {cargandoProyectos ? (
         <p className="mb-8 text-sm text-zinc-500">Cargando cuadro SMART RRHH…</p>
