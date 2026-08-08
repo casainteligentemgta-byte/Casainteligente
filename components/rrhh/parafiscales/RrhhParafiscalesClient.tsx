@@ -85,11 +85,11 @@ V,87654321,Gomez,Maria,12000.00,120.00,240.00`;
     <div className="mx-auto max-w-6xl px-4 pb-28 pt-8">
       <header className="mb-8">
         <Link
-          href="/rrhh"
+          href="/rrhh/hojas-vida"
           className="mb-2 inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-400 hover:text-emerald-300"
         >
           <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
-          Volver a RRHH
+          Volver al cuadro obra
         </Link>
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>

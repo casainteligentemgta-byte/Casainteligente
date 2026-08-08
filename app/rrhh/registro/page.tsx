@@ -64,7 +64,7 @@ export default function RrhhRegistroFastTrackPage() {
     <div className="min-h-screen bg-[#0A0A0F] text-white px-4 py-6 pb-24">
       <div className="max-w-lg mx-auto space-y-6">
         <Link
-          href="/rrhh"
+          href="/rrhh/hojas-vida"
           className="inline-flex items-center gap-2 text-xs font-bold text-zinc-500 hover:text-[#FF9500]"
         >
           <ArrowLeft size={14} />
