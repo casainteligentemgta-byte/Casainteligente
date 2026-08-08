@@ -1,4 +1,5 @@
 import { CARGOS_OBREROS } from '@/lib/constants/cargosObreros';
+import { esAptoParaAsignar } from '@/lib/rrhh/empleadoEstados';
 
 const CARGO_NOMBRE_POR_CODIGO = new Map(CARGOS_OBREROS.map((c) => [c.codigo, c.nombre]));
 
@@ -6,13 +7,10 @@ const CARGO_NOMBRE_POR_CODIGO = new Map(CARGOS_OBREROS.map((c) => [c.codigo, c.n
 export function esObreroDisponible(row: {
   estado?: string | null;
   estatus?: string | null;
+  status?: string | null;
   rol_examen?: string | null;
 }): boolean {
-  if ((row.rol_examen ?? '').trim().toLowerCase() !== 'obrero') return false;
-  if ((row.estado ?? '').trim().toLowerCase() !== 'aprobado') return false;
-  const es = (row.estatus ?? '').trim().toLowerCase();
-  if (es === 'disponible' || es === '') return true;
-  return false;
+  return esAptoParaAsignar(row);
 }
 
 export function coincideEspecialidad(

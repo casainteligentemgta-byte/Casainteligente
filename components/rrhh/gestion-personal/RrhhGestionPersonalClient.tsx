@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import GestionAlcanceBanner from '@/components/rrhh/gestion-personal/GestionAlcanceBanner';
 import { coincideEspecialidad, esObreroDisponible } from '@/lib/rrhh/laborPersonnel';
 import { projectIdsAlcanceLaborDesdeModulos } from '@/lib/rrhh/alcanceLaborProyectos';
 import { loadProyectosModuloIntegralPorEntidad } from '@/lib/proyectos/proyectosUnificados';
@@ -707,21 +708,10 @@ export default function RrhhGestionPersonalClient({
   }, [loadingPending, proyectoModuloFiltro, proyectoObraFiltro]);
 
   const bannerAlcanceLabor = hayFiltroAlcance ? (
-    <div className="mb-4 flex flex-col gap-2 rounded-lg border border-sky-500/30 bg-sky-950/40 px-3 py-2 text-sm text-sky-100 sm:flex-row sm:items-center sm:justify-between">
-      <p>
-        <span className="font-semibold text-white">SOLICITADOS.</span>{' '}
-        {alcanceNombre ?? 'Seleccionado'}
-      </p>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="shrink-0 border-white/10 text-zinc-300 hover:bg-white/5 backdrop-blur-sm"
-        onClick={() => replaceGestionUrl({ proyecto_modulo: null, proyecto: null })}
-      >
-        Ver todo (todos los proyectos)
-      </Button>
-    </div>
+    <GestionAlcanceBanner
+      alcanceNombre={alcanceNombre}
+      onVerTodo={() => replaceGestionUrl({ proyecto_modulo: null, proyecto: null })}
+    />
   ) : null;
 
   const pendientesInner = (

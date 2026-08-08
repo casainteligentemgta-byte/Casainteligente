@@ -99,6 +99,9 @@ export function ampliarModulosPorPermisos(
     set.add('entidades');
     set.add('equipo');
   }
+  if (ps.has('rrhh.entidad') || ps.has('rrhh.obra') || ps.has('equipo.gestionar')) {
+    set.add('rrhh');
+  }
   if (
     ps.has('compra.registrar') ||
     ps.has('compra.confirmar') ||
