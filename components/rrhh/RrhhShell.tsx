@@ -212,25 +212,28 @@ export default function RrhhShell({ children }: Props) {
   }
 
   const sections = filtrarNavPorAlcance(RRHH_NAV_SECTIONS, alcance.mode);
-  // En Obra: mostrar obras de la entidad, sin entidad_id, o Asfaltado→DIMAQUINAS.
+  // En Obra: obras de la entidad, sin entidad_id, o Asfaltado→DIMAQUINAS.
+  // Si el filtro deja vacío, mostrar todas (evita select bloqueado en «—»).
   const obrasFiltradas = (() => {
     if (!alcance.entidadId) return obras;
     const entNombre =
       entidades.find((e) => e.id === alcance.entidadId)?.nombre ?? '';
     const entEsDimaquinas = /dimaquinas/i.test(entNombre);
-    return obras.filter((o) => {
+    const filtradas = obras.filter((o) => {
       if (!o.entidad_id || o.entidad_id === alcance.entidadId) return true;
       if (entEsDimaquinas && /asfalt/i.test(o.nombre ?? '')) return true;
       return false;
     });
+    return filtradas.length > 0 ? filtradas : obras;
   })();
 
   const selectClass =
-    'rounded-lg border border-white/15 bg-zinc-950/80 px-2.5 py-1.5 text-xs font-medium text-zinc-100 outline-none focus:border-pink-400/50';
+    'min-w-0 flex-1 rounded-lg border border-white/15 bg-zinc-950/80 px-2.5 py-1.5 text-xs font-medium text-zinc-100 outline-none focus:border-pink-400/50';
 
   return (
     <div className="min-h-screen text-zinc-100">
-      <header className="sticky top-0 z-30 border-b border-white/10 bg-zinc-950/90 backdrop-blur-xl">
+      {/* Sin sticky: el menú Dirección/Obra/Entidad sube con el scroll de la página. */}
+      <header className="border-b border-white/10 bg-zinc-950/90">
         <div className="mx-auto max-w-6xl px-4 py-3">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
@@ -245,9 +248,9 @@ export default function RrhhShell({ children }: Props) {
               />
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
               <div
-                className="inline-flex rounded-lg border border-white/10 bg-black/30 p-0.5"
+                className="inline-flex w-fit rounded-lg border border-white/10 bg-black/30 p-0.5"
                 role="group"
                 aria-label="Alcance RRHH"
               >
@@ -284,15 +287,15 @@ export default function RrhhShell({ children }: Props) {
               </div>
 
               {metaReady ? (
-                <>
-                  <label className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
+                  <label className="flex min-w-0 items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
                     Entidad
                     <select
                       className={selectClass}
                       value={alcance.entidadId ?? ''}
                       onChange={(e) => onChangeEntidad(e.target.value)}
                     >
-                      <option value="">—</option>
+                      <option value="">Seleccione entidad…</option>
                       {entidades.map((e) => (
                         <option key={e.id} value={e.id}>
                           {e.nombre}
@@ -301,14 +304,18 @@ export default function RrhhShell({ children }: Props) {
                     </select>
                   </label>
                   {alcance.mode === 'obra' ? (
-                    <label className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                    <label className="flex min-w-0 items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
                       Obra
                       <select
-                        className={cn(selectClass, 'max-w-[14rem]')}
-                        value={alcance.proyectoModuloId ?? ''}
+                        className={selectClass}
+                        value={
+                          obrasFiltradas.some((o) => o.id === alcance.proyectoModuloId)
+                            ? (alcance.proyectoModuloId ?? '')
+                            : ''
+                        }
                         onChange={(e) => onChangeObra(e.target.value)}
                       >
-                        <option value="">—</option>
+                        <option value="">Seleccione obra…</option>
                         {obrasFiltradas.map((o) => (
                           <option key={o.id} value={o.id}>
                             {o.nombre}
@@ -317,7 +324,12 @@ export default function RrhhShell({ children }: Props) {
                       </select>
                     </label>
                   ) : null}
-                </>
+                  {alcance.mode === 'obra' && metaReady && obrasFiltradas.length === 0 ? (
+                    <p className="text-[11px] text-amber-200/90">
+                      No hay obras cargadas. Revise permisos o que existan proyectos de construcción.
+                    </p>
+                  ) : null}
+                </div>
               ) : (
                 <span className="text-[11px] text-zinc-600">Cargando alcance…</span>
               )}
