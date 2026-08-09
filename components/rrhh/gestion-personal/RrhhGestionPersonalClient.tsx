@@ -18,6 +18,7 @@ import { publicRegistroOrigin } from '@/lib/registro/publicRegistroOrigin';
 import { createClient } from '@/lib/supabase/client';
 import ResumenObrerosProyectoModulo from '@/components/proyectos/ResumenObrerosProyectoModulo';
 import { hrefSolicitudPersonalObrero } from '@/lib/rrhh/hrefSolicitudPersonal';
+import { mensajeWhatsAppCandidatoNuevo } from '@/lib/rrhh/rrhhPipeline';
 import Link from 'next/link';
 import BonoUsdEditor from '@/components/rrhh/BonoUsdEditor';
 import { isBonoColumnMissingError, parseBonoUsd } from '@/lib/rrhh/projectAssignmentBono';
@@ -128,7 +129,7 @@ function hrefFormatoHojaVidaLabor(projectId: string, codigoOficio: string): stri
 
 function mensajeWhatsAppPlanilla(link: string, specialtyNombre: string | null, codigo: string): string {
   const cargo = (specialtyNombre ?? '').trim() || codigo.trim();
-  return `Hola, Casa Inteligente te invita a completar la hoja de vida / planilla para el oficio «${cargo}». Enlace:\n${link}`;
+  return mensajeWhatsAppCandidatoNuevo({ oficio: cargo, linkHv: link });
 }
 
 type RrhhGestionPersonalClientProps = {
@@ -856,10 +857,18 @@ export default function RrhhGestionPersonalClient({
                     size="sm" 
                     variant="elitePrimary" 
                     className="h-8 text-xs bg-sky-600 hover:bg-sky-700 text-white"
+                    title="Asignar desde banca (obreros aprobados y disponibles)"
                     onClick={() => void abrirAsignacion(r)}
                   >
-                    Asignar
+                    Asignar (banca)
                   </Button>
+                  <Link
+                    href="/rrhh/banca"
+                    className="inline-flex h-8 items-center rounded-md border border-violet-500/30 bg-violet-500/10 px-2.5 text-xs font-semibold text-violet-200 hover:bg-violet-500/20"
+                    title="Puerta banca: ofertar plaza por WhatsApp"
+                  >
+                    Ofertar banca
+                  </Link>
                   <Button
                     type="button"
                     size="sm"
