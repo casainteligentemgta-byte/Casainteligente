@@ -13,6 +13,8 @@ type ExpressRow = {
   obrero_cedula: string;
   obrero_direccion: string | null;
   cargo_nombre_snapshot: string | null;
+  /** Migración 127 — escaneo firmado por obrero + compañía. */
+  pdf_firmado_storage_path?: string | null;
   /** Migración 121. */
   formalizado?: boolean | null;
   /** Migración 119. */
@@ -43,14 +45,14 @@ export async function formalizarContratoExpressPorId(
   }
 
   const selectFull =
-    'id,proyecto_id,config_nomina_id,obrero_nombre,obrero_cedula,obrero_direccion,cargo_nombre_snapshot,formalizado,formalizado_empleado_id';
+    'id,proyecto_id,config_nomina_id,obrero_nombre,obrero_cedula,obrero_direccion,cargo_nombre_snapshot,pdf_firmado_storage_path,formalizado,formalizado_empleado_id';
   const selectLite =
     'id,proyecto_id,config_nomina_id,obrero_nombre,obrero_cedula,obrero_direccion,cargo_nombre_snapshot,formalizado_empleado_id';
 
   let raw: unknown = null;
   let selErr: { message: string } | null = null;
   const first = await admin.from('ci_contratos_express').select(selectFull).eq('id', id).maybeSingle();
-  if (first.error && /formalizado_empleado_id|formalizado\b|does not exist|schema cache/i.test(first.error.message)) {
+  if (first.error && /formalizado_empleado_id|formalizado\b|pdf_firmado|does not exist|schema cache/i.test(first.error.message)) {
     const second = await admin.from('ci_contratos_express').select(selectLite).eq('id', id).maybeSingle();
     raw = second.data;
     selErr = second.error;
@@ -70,6 +72,16 @@ export async function formalizarContratoExpressPorId(
       status: 409,
       error: 'Este contrato ya fue formalizado.',
       empleado_id: ex.formalizado_empleado_id ?? undefined,
+    };
+  }
+
+  // Pipeline: imprimir → firmar (obrero + compañía) → cargar escaneo → formalizar.
+  if (!String(ex.pdf_firmado_storage_path ?? '').trim()) {
+    return {
+      ok: false,
+      status: 409,
+      error:
+        'Debe cargar el contrato firmado (escaneo PDF/foto) antes de formalizar. Use «Subir escaneo» en la fila.',
     };
   }
 

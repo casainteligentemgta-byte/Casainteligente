@@ -72,10 +72,12 @@ describe('rrhhPipeline', () => {
     assert.match(m, /NO/);
   });
 
-  it('pipeline incluye evaluación y egreso', () => {
+  it('pipeline incluye evaluación, carnet y egreso', () => {
     const ids = RRHH_PIPELINE_PASOS.map((p) => p.id);
     assert.ok(ids.includes('evaluacion'));
+    assert.ok(ids.includes('carnet'));
     assert.ok(ids.includes('egreso'));
     assert.ok(ids.includes('banca'));
   });
 });
+

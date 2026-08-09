@@ -80,7 +80,15 @@ export const RRHH_PIPELINE_PASOS: RrhhPasoFlujo[] = [
     label: '4. Contrato',
     href: '/rrhh/express',
     alcances: ['obra'],
-    ayuda: 'Contrato obra determinada (HV + entidad + oficio tabulador).',
+    ayuda:
+      'Generar PDF → firmar (obrero + compañía) → cargar escaneo firmado → formalizar. Luego carnet digital.',
+  },
+  {
+    id: 'carnet',
+    label: '4b. Carnet',
+    href: '/rrhh/carnet',
+    alcances: ['entidad', 'obra'],
+    ayuda: 'Carnet digital del obrero contratado (foto, oficio, obra, QR).',
   },
   {
     id: 'expediente',

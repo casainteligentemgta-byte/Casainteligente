@@ -64,8 +64,8 @@ export default function RrhhFlujoPuente({ alcance, className = '' }: Props) {
       </ol>
       <p className="mt-2 text-[11px] text-zinc-500">
         {alcance.mode === 'obra'
-          ? 'Misma plaza, dos entradas: candidato nuevo (HV/test) o banca (oferta y aceptación). Luego evaluación → contrato → expediente → nómina.'
-          : 'Dirección: banca y evaluación, expedientes, nómina semanal, parafiscales y egreso (liquidación / PS).'}
+          ? 'Nuevo o banca → evaluación → contrato (firmar obrero + compañía → cargar escaneo → formalizar) → carnet → expediente → nómina.'
+          : 'Dirección: banca y evaluación, expedientes, carnet, nómina semanal, parafiscales y egreso (liquidación / PS).'}
       </p>
     </section>
   );

@@ -60,6 +60,12 @@ export const RRHH_NAV_SECTIONS: RrhhNavSection[] = [
         label: 'Evaluación',
         alcances: ['entidad', 'obra'],
       },
+      {
+        href: '/rrhh/carnet',
+        label: 'Carnet',
+        matchPrefixes: ['/rrhh/carnet'],
+        alcances: ['entidad', 'obra'],
+      },
     ],
   },
   {

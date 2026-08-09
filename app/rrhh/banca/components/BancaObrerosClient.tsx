@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import {
@@ -12,6 +12,8 @@ import {
   Briefcase,
   MessageCircle,
   ArrowRight,
+  Check,
+  X,
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -19,6 +21,8 @@ import {
   mensajeWhatsAppOfertaPlaza,
   puedeOfertarDesdeBanca,
 } from '@/lib/rrhh/rrhhPipeline';
+import { apiUrl } from '@/lib/http/apiUrl';
+import type { OfertaPlazaRow } from '@/lib/rrhh/ofertasPlaza';
 
 type EmpleadoBanca = {
   id: string;
@@ -30,8 +34,6 @@ type EmpleadoBanca = {
   rol_examen?: string | null;
   estado?: string | null;
   estatus: 'disponible' | 'asignado' | 'no_disponible' | 'vetado' | null;
-  evaluacion_psico_status: 'pendiente' | 'aprobada' | 'rechazada' | 'no_requerida' | null;
-  evaluacion_psico_fecha: string | null;
   status_evaluacion?: string | null;
   semaforo?: string | null;
   estado_proceso?: string | null;
@@ -49,36 +51,57 @@ function telWa(raw: string | null | undefined): string | null {
 export default function BancaObrerosClient() {
   const supabase = useMemo(() => createClient(), []);
   const [empleados, setEmpleados] = useState<EmpleadoBanca[]>([]);
+  const [ofertasByEmp, setOfertasByEmp] = useState<Map<string, OfertaPlazaRow>>(new Map());
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterEstatus, setFiltroEstatus] = useState<string>('disponible');
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('ci_empleados')
+      .select(
+        'id, nombre_completo, documento, telefono, celular, cargo_nombre, rol_examen, estado, estatus, status_evaluacion, semaforo, estado_proceso',
+      )
+      .eq('rol_examen', 'obrero')
+      .order('nombre_completo', { ascending: true });
+
+    if (error) {
+      toast.error('Error cargando la banca: ' + error.message);
+      setEmpleados([]);
+      setLoading(false);
+      return;
+    }
+
+    const list = (data ?? []) as EmpleadoBanca[];
+    setEmpleados(list);
+
+    const ids = list.map((e) => e.id);
+    if (ids.length) {
+      const { data: ofs, error: ofErr } = await supabase
+        .from('ci_ofertas_plaza')
+        .select('*')
+        .in('empleado_id', ids)
+        .in('estado', ['pendiente', 'aceptada'])
+        .order('created_at', { ascending: false })
+        .limit(500);
+      if (!ofErr && ofs) {
+        const map = new Map<string, OfertaPlazaRow>();
+        for (const row of ofs as OfertaPlazaRow[]) {
+          if (!map.has(row.empleado_id)) map.set(row.empleado_id, row);
+        }
+        setOfertasByEmp(map);
+      } else if (ofErr && /ci_ofertas_plaza|schema cache|does not exist/i.test(ofErr.message)) {
+        /* migración 319 pendiente */
+      }
+    }
+    setLoading(false);
+  }, [supabase]);
 
   useEffect(() => {
-    let alive = true;
-    async function load() {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('ci_empleados')
-        .select(
-          'id, nombre_completo, documento, telefono, celular, cargo_nombre, rol_examen, estado, estatus, evaluacion_psico_status, evaluacion_psico_fecha, status_evaluacion, semaforo, estado_proceso',
-        )
-        .eq('rol_examen', 'obrero')
-        .order('nombre_completo', { ascending: true });
-
-      if (!alive) return;
-
-      if (error) {
-        toast.error('Error cargando la banca: ' + error.message);
-      } else {
-        setEmpleados((data ?? []) as EmpleadoBanca[]);
-      }
-      setLoading(false);
-    }
     void load();
-    return () => {
-      alive = false;
-    };
-  }, [supabase]);
+  }, [load]);
 
   const filtrados = useMemo(() => {
     return empleados.filter((e) => {
@@ -120,7 +143,7 @@ export default function BancaObrerosClient() {
     }
   };
 
-  const ofertarWhatsApp = (emp: EmpleadoBanca) => {
+  const ofertarWhatsApp = async (emp: EmpleadoBanca) => {
     const oficio =
       window.prompt(
         'Oficio del tabulador a ofertar (ej. Albañil de 1ra.)',
@@ -130,15 +153,63 @@ export default function BancaObrerosClient() {
       toast.error('Indique el oficio a ofertar.');
       return;
     }
-    const text = mensajeWhatsAppOfertaPlaza({
-      nombreObrero: emp.nombre_completo,
-      oficio: oficio.trim(),
-    });
-    const phone = telWa(emp.celular) || telWa(emp.telefono);
-    const url = phone
-      ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}`
-      : `https://wa.me/?text=${encodeURIComponent(text)}`;
-    window.open(url, '_blank', 'noopener,noreferrer');
+    setBusyId(emp.id);
+    try {
+      const res = await fetch(apiUrl('/api/rrhh/ofertas-plaza'), {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          empleado_id: emp.id,
+          oficio_nombre: oficio.trim(),
+        }),
+      });
+      const j = (await res.json()) as { ok?: boolean; oferta?: OfertaPlazaRow; error?: string };
+      if (!res.ok) throw new Error(j.error || 'No se pudo crear la oferta');
+
+      if (j.oferta) {
+        setOfertasByEmp((prev) => {
+          const next = new Map(prev);
+          next.set(emp.id, j.oferta!);
+          return next;
+        });
+      }
+
+      const text = mensajeWhatsAppOfertaPlaza({
+        nombreObrero: emp.nombre_completo,
+        oficio: oficio.trim(),
+      });
+      const phone = telWa(emp.celular) || telWa(emp.telefono);
+      const url = phone
+        ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}`
+        : `https://wa.me/?text=${encodeURIComponent(text)}`;
+      window.open(url, '_blank', 'noopener,noreferrer');
+      toast.success('Oferta registrada. Complete el WhatsApp con el obrero.');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error al ofertar');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const responder = async (empId: string, ofertaId: string, estado: 'aceptada' | 'rechazada') => {
+    setBusyId(empId);
+    try {
+      const res = await fetch(apiUrl(`/api/rrhh/ofertas-plaza/${encodeURIComponent(ofertaId)}`), {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estado }),
+      });
+      const j = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(j.error || 'No se pudo actualizar');
+      toast.success(estado === 'aceptada' ? 'Plaza aceptada' : 'Oferta rechazada');
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error');
+    } finally {
+      setBusyId(null);
+    }
   };
 
   return (
@@ -150,17 +221,25 @@ export default function BancaObrerosClient() {
             Banca de obreros
           </h1>
           <p className="mt-1 text-sm text-zinc-400">
-            Puerta banca del flujo unificado: oferte plaza (WhatsApp SÍ/NO) y continúe en Gestión /
-            Evaluación / Contrato.
+            Oferte plaza (queda registrada) → el obrero acepta/rechaza → Gestión / Contrato → cargar
+            firmado → carnet.
           </p>
         </div>
-        <Link
-          href="/rrhh/gestion-personal"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-amber-400/30 bg-amber-500/15 px-3 py-2 text-xs font-bold text-amber-50 hover:border-amber-300/50"
-        >
-          Ir a Gestión (plazas)
-          <ArrowRight className="h-3.5 w-3.5" />
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/rrhh/gestion-personal"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-amber-400/30 bg-amber-500/15 px-3 py-2 text-xs font-bold text-amber-50 hover:border-amber-300/50"
+          >
+            Gestión (plazas)
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+          <Link
+            href="/rrhh/carnet"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-sky-400/30 bg-sky-500/15 px-3 py-2 text-xs font-bold text-sky-50"
+          >
+            Carnet digital
+          </Link>
+        </div>
       </div>
 
       <div className="mb-6 flex flex-col gap-3 sm:flex-row">
@@ -189,116 +268,100 @@ export default function BancaObrerosClient() {
       {loading ? (
         <div className="py-12 text-center text-zinc-500">Cargando talento…</div>
       ) : (
-        <>
-          <div className="hidden overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-900/50 md:block">
-            <table className="w-full text-left text-sm text-zinc-300">
-              <thead className="bg-zinc-900/80 text-xs uppercase text-zinc-400">
-                <tr>
-                  <th className="px-6 py-4 font-medium">Trabajador</th>
-                  <th className="px-6 py-4 font-medium">Oficio</th>
-                  <th className="px-6 py-4 font-medium">Teléfono</th>
-                  <th className="px-6 py-4 font-medium">Estado</th>
-                  <th className="px-6 py-4 font-medium">Etapa flujo</th>
-                  <th className="px-6 py-4 text-right font-medium">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-800">
-                {filtrados.map((emp) => {
-                  const etapa = etiquetaEtapaPipeline(emp);
-                  const ofertar = puedeOfertarDesdeBanca(emp);
-                  return (
-                    <tr key={emp.id} className="transition-colors hover:bg-zinc-800/50">
-                      <td className="px-6 py-4 font-medium text-zinc-100">
-                        {emp.nombre_completo}
-                        <p className="text-xs font-normal text-zinc-500">
-                          {emp.documento || '—'}
-                        </p>
-                      </td>
-                      <td className="px-6 py-4">{emp.cargo_nombre || '—'}</td>
-                      <td className="px-6 py-4">{emp.celular || emp.telefono || '—'}</td>
-                      <td className="px-6 py-4">{badgeEstatus(emp.estatus)}</td>
-                      <td className="px-6 py-4 text-xs text-zinc-400">{etapa}</td>
-                      <td className="px-6 py-4">
-                        <div className="flex flex-wrap items-center justify-end gap-2">
-                          {ofertar ? (
-                            <button
-                              type="button"
-                              onClick={() => ofertarWhatsApp(emp)}
-                              className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/20"
-                            >
-                              <MessageCircle className="h-3.5 w-3.5" />
-                              Ofertar plaza
-                            </button>
-                          ) : null}
-                          <Link
-                            href={`/rrhh/hojas-vida/archivo?q=${encodeURIComponent(emp.documento || emp.nombre_completo)}`}
-                            className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-violet-300 hover:bg-violet-400/10"
-                          >
-                            Expediente
-                          </Link>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-                {filtrados.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="px-6 py-8 text-center text-zinc-500">
-                      No se encontraron obreros.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="space-y-4 md:hidden">
-            {filtrados.map((emp) => {
-              const ofertar = puedeOfertarDesdeBanca(emp);
-              return (
-                <div
-                  key={emp.id}
-                  className="flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900/80 p-4"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <h3 className="font-bold text-zinc-100">{emp.nombre_completo}</h3>
-                      <p className="mt-0.5 text-xs text-zinc-400">
-                        CI: {emp.documento || '—'}
-                        {emp.cargo_nombre ? ` · ${emp.cargo_nombre}` : ''}
-                      </p>
-                      <p className="mt-1 text-[11px] text-zinc-500">{etiquetaEtapaPipeline(emp)}</p>
-                    </div>
-                    {badgeEstatus(emp.estatus)}
+        <div className="space-y-3">
+          {filtrados.map((emp) => {
+            const oferta = ofertasByEmp.get(emp.id) ?? null;
+            const ofertar = puedeOfertarDesdeBanca(emp) && (!oferta || oferta.estado !== 'pendiente');
+            const pipelineInput = {
+              ...emp,
+              oferta_pendiente: oferta?.estado === 'pendiente',
+              oferta_aceptada: oferta?.estado === 'aceptada',
+            };
+            return (
+              <div
+                key={emp.id}
+                className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-zinc-100">{emp.nombre_completo}</h3>
+                    <p className="mt-0.5 text-xs text-zinc-400">
+                      CI: {emp.documento || '—'}
+                      {emp.cargo_nombre ? ` · ${emp.cargo_nombre}` : ''}
+                    </p>
+                    <p className="mt-1 text-[11px] text-zinc-500">
+                      {etiquetaEtapaPipeline(pipelineInput)}
+                      {oferta ? ` · Oferta ${oferta.estado}: ${oferta.oficio_nombre}` : ''}
+                    </p>
                   </div>
-                  <div className="flex flex-wrap gap-2 border-t border-zinc-800/50 pt-3">
-                    {ofertar ? (
+                  {badgeEstatus(emp.estatus)}
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2 border-t border-zinc-800/60 pt-3">
+                  {ofertar ? (
+                    <button
+                      type="button"
+                      disabled={busyId === emp.id}
+                      onClick={() => void ofertarWhatsApp(emp)}
+                      className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 disabled:opacity-50"
+                    >
+                      <MessageCircle className="h-3.5 w-3.5" />
+                      Ofertar plaza
+                    </button>
+                  ) : null}
+                  {oferta?.estado === 'pendiente' ? (
+                    <>
                       <button
                         type="button"
-                        onClick={() => ofertarWhatsApp(emp)}
-                        className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300"
+                        disabled={busyId === emp.id}
+                        onClick={() => void responder(emp.id, oferta.id, 'aceptada')}
+                        className="inline-flex items-center gap-1 rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-1.5 text-xs font-semibold text-sky-200"
                       >
-                        <MessageCircle className="h-3.5 w-3.5" />
-                        Ofertar plaza
+                        <Check className="h-3.5 w-3.5" />
+                        Aceptó
                       </button>
-                    ) : null}
-                    <Link
-                      href={`/rrhh/gestion-personal`}
-                      className="rounded-lg bg-amber-500/15 px-3 py-1.5 text-xs font-semibold text-amber-100"
-                    >
-                      Ver plazas
-                    </Link>
-                  </div>
+                      <button
+                        type="button"
+                        disabled={busyId === emp.id}
+                        onClick={() => void responder(emp.id, oferta.id, 'rechazada')}
+                        className="inline-flex items-center gap-1 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-200"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                        Rechazó
+                      </button>
+                    </>
+                  ) : null}
+                  {oferta?.estado === 'aceptada' ? (
+                    <>
+                      <Link
+                        href="/rrhh/express"
+                        className="rounded-lg border border-amber-400/30 bg-amber-500/15 px-3 py-1.5 text-xs font-semibold text-amber-50"
+                      >
+                        Ir a contrato / firmado
+                      </Link>
+                      <Link
+                        href={`/rrhh/carnet?empleado=${encodeURIComponent(emp.id)}`}
+                        className="rounded-lg border border-violet-400/30 bg-violet-500/15 px-3 py-1.5 text-xs font-semibold text-violet-100"
+                      >
+                        Carnet
+                      </Link>
+                    </>
+                  ) : null}
+                  <Link
+                    href={`/rrhh/hojas-vida/archivo?q=${encodeURIComponent(emp.documento || emp.nombre_completo)}`}
+                    className="rounded-lg px-3 py-1.5 text-xs font-medium text-zinc-400 hover:text-zinc-200"
+                  >
+                    Expediente
+                  </Link>
                 </div>
-              );
-            })}
-            {filtrados.length === 0 && (
-              <div className="rounded-xl border border-dashed border-zinc-800 py-8 text-center text-zinc-500">
-                No se encontraron obreros.
               </div>
-            )}
-          </div>
-        </>
+            );
+          })}
+          {filtrados.length === 0 && (
+            <div className="rounded-xl border border-dashed border-zinc-800 py-8 text-center text-zinc-500">
+              No se encontraron obreros.
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
