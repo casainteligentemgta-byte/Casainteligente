@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Building2, HardHat, Users } from 'lucide-react';
 import ModuloPageTitle from '@/components/ui/ModuloPageTitle';
 import {
@@ -99,20 +99,38 @@ export default function RrhhShell({ children }: Props) {
       });
       setPermAlcance(pa);
 
+      const obraPreferida =
+        proyRes.proyectos.find((p) => /asfalt/i.test(p.nombre ?? '')) ??
+        proyRes.proyectos[0] ??
+        null;
+      const dimaquinasId =
+        ents.find((e) => /dimaquinas/i.test(e.nombre))?.id ?? null;
+
       setAlcance((prev) => {
         let next = { ...prev };
         next = { ...next, mode: modeInicialPermitido(next.mode, pa) };
-        if (!next.entidadId && ents[0]) next = { ...next, entidadId: ents[0].id };
-        if (next.mode === 'obra' && !next.proyectoModuloId && proyRes.proyectos[0]) {
-          next = { ...next, proyectoModuloId: proyRes.proyectos[0].id };
-          const entObra = (proyRes.proyectos[0].entidad_id ?? '').trim();
-          if (entObra) next = { ...next, entidadId: entObra };
-        }
-        if (next.mode === 'obra' && next.proyectoModuloId) {
-          const obra = proyRes.proyectos.find((p) => p.id === next.proyectoModuloId);
+
+        if (next.mode === 'obra') {
+          const obraActual = next.proyectoModuloId
+            ? proyRes.proyectos.find((p) => p.id === next.proyectoModuloId)
+            : null;
+          if (!obraActual && obraPreferida) {
+            next = { ...next, proyectoModuloId: obraPreferida.id };
+          }
+          const obra = proyRes.proyectos.find((p) => p.id === next.proyectoModuloId) ?? obraPreferida;
           const entObra = (obra?.entidad_id ?? '').trim();
-          if (entObra) next = { ...next, entidadId: entObra };
+          if (entObra) {
+            next = { ...next, entidadId: entObra };
+          } else if (/asfalt/i.test(obra?.nombre ?? '') && dimaquinasId) {
+            // Asfaltado sin entidad_id → patrono habitual DIMAQUINAS (mismo criterio que Express).
+            next = { ...next, entidadId: dimaquinasId };
+          } else if (!next.entidadId && ents[0]) {
+            next = { ...next, entidadId: ents[0].id };
+          }
+        } else if (!next.entidadId && ents[0]) {
+          next = { ...next, entidadId: ents[0].id };
         }
+
         return next;
       });
       setMetaReady(true);
@@ -132,6 +150,15 @@ export default function RrhhShell({ children }: Props) {
     },
     [pathname, router],
   );
+
+  /** Una vez cargadas entidades/obras, persiste el alcance resuelto en la URL (evita selects en «—»). */
+  const bootSyncedRef = useRef(false);
+  useEffect(() => {
+    if (!metaReady || bootSyncedRef.current) return;
+    if (!alcance.entidadId && !alcance.proyectoModuloId) return;
+    bootSyncedRef.current = true;
+    aplicarAlcance(alcance);
+  }, [metaReady, alcance, aplicarAlcance]);
 
   const onChangeMode = (mode: RrhhAlcanceMode) => {
     if (mode === 'entidad' && !permAlcance.entidad) return;
@@ -185,9 +212,18 @@ export default function RrhhShell({ children }: Props) {
   }
 
   const sections = filtrarNavPorAlcance(RRHH_NAV_SECTIONS, alcance.mode);
-  const obrasFiltradas = alcance.entidadId
-    ? obras.filter((o) => !o.entidad_id || o.entidad_id === alcance.entidadId)
-    : obras;
+  // En Obra: mostrar obras de la entidad, sin entidad_id, o Asfaltado→DIMAQUINAS.
+  const obrasFiltradas = (() => {
+    if (!alcance.entidadId) return obras;
+    const entNombre =
+      entidades.find((e) => e.id === alcance.entidadId)?.nombre ?? '';
+    const entEsDimaquinas = /dimaquinas/i.test(entNombre);
+    return obras.filter((o) => {
+      if (!o.entidad_id || o.entidad_id === alcance.entidadId) return true;
+      if (entEsDimaquinas && /asfalt/i.test(o.nombre ?? '')) return true;
+      return false;
+    });
+  })();
 
   const selectClass =
     'rounded-lg border border-white/15 bg-zinc-950/80 px-2.5 py-1.5 text-xs font-medium text-zinc-100 outline-none focus:border-pink-400/50';
