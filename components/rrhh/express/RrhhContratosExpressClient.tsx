@@ -538,9 +538,16 @@ export default function RrhhContratosExpressClient() {
   }
 
   async function formalizarFila(id: string, nombre: string) {
+    const row = rows.find((r) => r.id === id);
+    if (!String(row?.pdf_firmado_storage_path ?? '').trim()) {
+      toast.error(
+        'Primero cargue el contrato firmado (escaneo PDF/foto) con el botón de subir en la columna Firmado.',
+      );
+      return;
+    }
     if (
       !window.confirm(
-        `¿Formalizar el contrato de «${nombre}»?\n\nSe creará el expediente en Talento (ci_empleados) a partir de este express.`,
+        `¿Formalizar el contrato de «${nombre}»?\n\nRequisito: contrato ya firmado por el obrero y la compañía y escaneo cargado.\nSe creará el expediente y podrá emitir el carnet digital.`,
       )
     ) {
       return;
@@ -555,7 +562,11 @@ export default function RrhhContratosExpressClient() {
         toast.error(j.error ?? 'No se pudo formalizar');
         return;
       }
-      toast.success('Formalizado: expediente creado en Talento');
+      toast.success(
+        j.empleado_id
+          ? 'Formalizado. Puede emitir el carnet digital desde RRHH → Carnet.'
+          : 'Formalizado: expediente creado en Talento',
+      );
       await loadLista();
     } catch {
       toast.error('Error de red al formalizar');
@@ -1086,12 +1097,16 @@ export default function RrhhContratosExpressClient() {
         </div>
 
         <p className="mt-4 text-center text-[11px] text-zinc-600">
-          Oficios del tabulador en{' '}
+          Flujo: PDF → firmas (obrero + compañía) → subir escaneo en{' '}
+          <span className="text-zinc-400">Firmado</span> → Formalizar →{' '}
+          <Link href="/rrhh/carnet" className="text-amber-300/90 underline underline-offset-2">
+            Carnet digital
+          </Link>
+          . Oficios en{' '}
           <Link href="/rrhh/oficios-salarios" className="text-amber-300/90 underline underline-offset-2">
             Oficios y salarios
           </Link>
-          . Imprima con <span className="text-zinc-400">PDF único</span>, recoja firmas y cargue el
-          escaneo en <span className="text-zinc-400">Firmado</span> (uno a uno o por lote).
+          .
         </p>
       </section>
 
