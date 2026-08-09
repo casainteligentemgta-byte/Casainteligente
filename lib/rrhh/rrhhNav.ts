@@ -55,7 +55,11 @@ export const RRHH_NAV_SECTIONS: RrhhNavSection[] = [
         matchPrefixes: ['/rrhh/hojas-vida/archivo'],
         alcances: ['entidad', 'obra'],
       },
-      { href: '/rrhh/reclutamiento', label: 'Reclutamiento', alcances: ['entidad'] },
+      {
+        href: '/rrhh/reclutamiento',
+        label: 'Evaluación',
+        alcances: ['entidad', 'obra'],
+      },
     ],
   },
   {
@@ -86,23 +90,11 @@ export const RRHH_NAV_SECTIONS: RrhhNavSection[] = [
   },
 ];
 
-/** Pasos del puente operativo (hub). */
-export const RRHH_FLUJO_PASOS: {
-  id: string;
-  label: string;
-  href: string;
-  alcances: RrhhAlcanceMode[];
-}[] = [
-  { id: 'solicitud', label: '1. Solicitud', href: '/rrhh/solicitud-personal', alcances: ['obra'] },
-  { id: 'express', label: '2. Express', href: '/rrhh/express', alcances: ['obra'] },
-  {
-    id: 'expediente',
-    label: '3. Expediente',
-    href: '/rrhh/hojas-vida/archivo',
-    alcances: ['entidad', 'obra'],
-  },
-  { id: 'nomina', label: '4. Nómina', href: '/rrhh/nomina', alcances: ['entidad'] },
-];
+/**
+ * Pasos del puente operativo (hub).
+ * Fuente canónica: `RRHH_PIPELINE_PASOS` en `rrhhPipeline.ts` (flujo unificado).
+ */
+export { RRHH_PIPELINE_PASOS as RRHH_FLUJO_PASOS } from '@/lib/rrhh/rrhhPipeline';
 
 /** Rutas públicas o sin shell (alta rápida, etc.). */
 export function rrhhPathSinShell(pathname: string): boolean {

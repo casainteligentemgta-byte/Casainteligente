@@ -149,8 +149,8 @@ export default function RrhhHojasVidaPage() {
       <h1 className="text-2xl font-bold tracking-tight text-white">{tituloHub}</h1>
       <p className="mb-4 mt-1 max-w-2xl text-sm text-zinc-500">
         {alcanceShell.mode === 'entidad'
-          ? 'Vista de entidad: resumen de obras y personal. Cambie a «Obra» en el encabezado para operar express y solicitudes.'
-          : 'Vista de obra: solicitudes, personal y contratos express del módulo seleccionado.'}
+          ? 'Dirección: banca, evaluación, expedientes, nómina semanal y egreso. Cambie a «Obra» para plazas y contratos.'
+          : 'Obra: plaza (oficio tabulador) → candidato nuevo o banca → evaluación → contrato → expediente. Un solo flujo.'}
       </p>
 
       <RrhhFlujoPuente alcance={alcanceShell} />
