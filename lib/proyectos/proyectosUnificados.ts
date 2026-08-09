@@ -56,11 +56,12 @@ function normNombreProyecto(nombre: string): string {
     .trim();
 }
 
-/** Prioriza obras habituales en SMART RRHH (p. ej. Video de frente, Rancho Flamboyant). */
+/** Prioriza obras habituales en RRHH / SMART (Asfaltado, Video de frente, Rancho Flamboyant). */
 function prioridadSmartRrhh(nombre: string): number {
   const s = normNombreProyecto(nombre);
-  if (s.includes('frente') || s.includes('flamboyant') || s.includes('video')) return 0;
-  return 1;
+  if (s.includes('asfalt')) return 0;
+  if (s.includes('frente') || s.includes('flamboyant') || s.includes('video')) return 1;
+  return 2;
 }
 
 function filaEsModuloIntegral(tipo: string | null | undefined): boolean {
@@ -222,23 +223,61 @@ export async function loadProyectosModuloIntegral(
   return { proyectos, errors };
 }
 
-/** Proyectos visibles en `/rrhh/hojas-vida` (p. ej. Video de frente, Rancho Flamboyant). */
+/** Obras «principales» en selects (Asfaltado, Video de frente, Rancho Flamboyant). */
 export function esProyectoSmartRrhhPorNombre(nombre: string): boolean {
-  return prioridadSmartRrhh(nombre) === 0;
+  return prioridadSmartRrhh(nombre) <= 1;
 }
 
 /**
- * Cuadros SMART RRHH: prioriza obras por nombre (frente / flamboyant), integral o Talento.
+ * Obras de construcción para RRHH (selector shell + cuadros).
+ * Incluye módulo integral y obras Talento; excluye centros de costo de entidad.
+ * Orden: Asfaltado / frente / flamboyant primero, luego A–Z.
  */
+function mapFilasObrasRrhh(
+  rows: {
+    id: unknown;
+    nombre?: unknown;
+    entidad_id?: string | null;
+    naturaleza_proyecto?: string | null;
+  }[],
+): ProyectoModuloIntegral[] {
+  return rows
+    .filter((r) => parseNaturalezaProyecto(r.naturaleza_proyecto) === 'obra_construccion')
+    .map((r) => ({
+      id: String(r.id),
+      nombre: String(r.nombre ?? 'Sin nombre').trim() || 'Sin nombre',
+      entidad_id: r.entidad_id != null ? String(r.entidad_id) : null,
+    }));
+}
+
 export async function loadProyectosSmartRrhhHojasVida(
   supabase: SupabaseClient,
 ): Promise<{ proyectos: ProyectoModuloIntegral[]; errors: string[] }> {
   const errors: string[] = [];
-  const { data, error } = await supabase
-    .from('ci_proyectos')
-    .select('id,nombre,tipo_proyecto,entidad_id')
-    .order('nombre', { ascending: true })
-    .limit(250);
+  let data: unknown[] | null = null;
+  let error: { message?: string } | null = null;
+
+  {
+    const full = await supabase
+      .from('ci_proyectos')
+      .select('id,nombre,tipo_proyecto,entidad_id,naturaleza_proyecto')
+      .order('nombre', { ascending: true })
+      .limit(800);
+    data = full.data as unknown[] | null;
+    error = full.error;
+    if (
+      error &&
+      /naturaleza_proyecto|42703|column|does not exist|schema cache/i.test(error.message ?? '')
+    ) {
+      const bare = await supabase
+        .from('ci_proyectos')
+        .select('id,nombre,tipo_proyecto,entidad_id')
+        .order('nombre', { ascending: true })
+        .limit(800);
+      data = bare.data as unknown[] | null;
+      error = bare.error;
+    }
+  }
 
   if (error) {
     if (esColumnaTipoProyectoAusente(error.message ?? '')) {
@@ -248,18 +287,25 @@ export async function loadProyectosSmartRrhhHojasVida(
     return { proyectos: [], errors };
   }
 
-  const porNombre = mapFilasModuloIntegral(
-    ((data ?? []) as { id: unknown; nombre?: unknown; tipo_proyecto?: string | null; entidad_id?: string | null }[]).filter(
-      (r) => esProyectoSmartRrhhPorNombre(String(r.nombre ?? '')),
-    ),
+  const proyectos = mapFilasObrasRrhh(
+    (data ?? []) as {
+      id: unknown;
+      nombre?: unknown;
+      entidad_id?: string | null;
+      naturaleza_proyecto?: string | null;
+    }[],
   );
 
-  if (porNombre.length > 0) {
-    porNombre.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
-    return { proyectos: porNombre, errors };
+  if (proyectos.length === 0) {
+    return loadProyectosModuloIntegral(supabase);
   }
 
-  return loadProyectosModuloIntegral(supabase);
+  proyectos.sort(
+    (a, b) =>
+      prioridadSmartRrhh(a.nombre) - prioridadSmartRrhh(b.nombre) ||
+      a.nombre.localeCompare(b.nombre, 'es'),
+  );
+  return { proyectos, errors };
 }
 
 /**
@@ -422,7 +468,7 @@ export async function loadOpcionesProyectoReclutamiento(
 /** Catálogo id + nombre para selects (compras, almacén, etc.). */
 export type ProyectoCatalogo = { id: string; nombre: string; entidad_id?: string | null };
 
-/** Video de frente y Rancho Flamboyant primero; el resto por nombre. Proyectos nuevos en BD al recargar. */
+/** Asfaltado / Video de frente / Rancho Flamboyant primero; el resto por nombre. */
 export function ordenarProyectosCatalogoApp(proyectos: ProyectoCatalogo[]): ProyectoCatalogo[] {
   return [...proyectos].sort(
     (a, b) =>
