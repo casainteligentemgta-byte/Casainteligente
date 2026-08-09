@@ -5,7 +5,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { calcularReciboSemanal, type InputCalculoRecibo } from '@/lib/nomina/motorCalculo';
-import { tasaBcvVesPorUsdFromEnv } from '@/lib/nomina/tasaBcvVesPorUsd';
+import { obtenerTasaBcvVesPorUsd } from '@/lib/finanzas/bcvTasaPorFecha';
 
 export type RangoSemanaIso = {
   fechaInicio: string;
@@ -58,6 +58,8 @@ export type IncluirNominaOk = {
   yaExistia: boolean;
   fechaInicio: string;
   fechaFin: string;
+  tasaBcv: number;
+  tasaFuente: string;
 };
 
 export type IncluirNominaErr = { ok: false; error: string; status: number };
@@ -104,15 +106,22 @@ export async function incluirEmpleadoEnNominaSemanal(
     };
   }
 
-  const tasa =
-    input.tasaBcv != null && Number(input.tasaBcv) > 0
-      ? Number(input.tasaBcv)
-      : tasaBcvVesPorUsdFromEnv();
-  if (tasa == null || !(tasa > 0)) {
+  // Misma cascada que compras: APIs BCV → ci_config_nomina GLOBAL → env → fallback.
+  let tasa: number;
+  let tasaFuente = 'body';
+  if (input.tasaBcv != null && Number(input.tasaBcv) > 0) {
+    tasa = Number(input.tasaBcv);
+  } else {
+    const hoy = new Date().toISOString().slice(0, 10);
+    const res = await obtenerTasaBcvVesPorUsd(hoy, { supabase });
+    tasa = res.tasa_bcv_ves_por_usd;
+    tasaFuente = res.fuente;
+  }
+  if (!(tasa > 0)) {
     return {
       ok: false,
       error:
-        'Falta tasa BCV (pase tasaBcv o configure NEXT_PUBLIC_TASA_BCV_VES_POR_USD).',
+        'No hay tasa BCV usable. Revise la fila GLOBAL en ci_config_nomina (como en compras) o NEXT_PUBLIC_TASA_BCV_VES_POR_USD.',
       status: 400,
     };
   }
@@ -262,6 +271,8 @@ export async function incluirEmpleadoEnNominaSemanal(
       yaExistia: true,
       fechaInicio: semana.fechaInicio,
       fechaFin: semana.fechaFin,
+      tasaBcv: tasa,
+      tasaFuente,
     };
   }
 
@@ -392,5 +403,7 @@ export async function incluirEmpleadoEnNominaSemanal(
     yaExistia: false,
     fechaInicio: semana.fechaInicio,
     fechaFin: semana.fechaFin,
+    tasaBcv: tasa,
+    tasaFuente,
   };
 }
