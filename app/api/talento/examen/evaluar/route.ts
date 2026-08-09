@@ -15,10 +15,10 @@ import {
   estadoContratacionFromTripode,
   semaforoDbFromTripode,
 } from '@/lib/talento/semaphore';
+import { ESTADO_TRAS_EXAMEN } from '@/lib/rrhh/decisionEvaluacionHumana';
 import { nombresLegadoDesdeTextoLibre } from '@/lib/registro/ciEmpleadosNombresLegado';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import { supabaseForRoute } from '@/lib/talento/supabase-route';
-import { notifyTalentoWhatsAppExpiracion } from '@/lib/talento/whatsapp';
 import type { RolExamen } from '@/types/talento';
 
 const QUINCE_MIN_MS = 15 * 60 * 1000;
@@ -233,7 +233,7 @@ export async function POST(req: Request) {
       color_disc: colorDisc,
       status_evaluacion: tripode.status,
       semaforo,
-      estado,
+      estado: ESTADO_TRAS_EXAMEN,
       examen_inicio_at: new Date(inicio).toISOString(),
       examen_completado_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -259,21 +259,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Empleado no encontrado' }, { status: 404 });
     }
 
-    if (tripode.status === 'rechazado') {
-      await notifyTalentoWhatsAppExpiracion({
-        empleadoId: data.id,
-        nombre,
-        telefono: body.telefono?.trim() || null,
-        motivo: tripode.motivo,
-      });
-    }
-
     return NextResponse.json({
       id: data.id,
       status_evaluacion: tripode.status,
       motivo: tripode.motivo,
       semaforo,
-      estado,
+      estado: ESTADO_TRAS_EXAMEN,
+      recomendacion_maquina: estado,
       gma_0_5: gma0a5,
       nivel_integridad_riesgo: nivelInt,
       completo_en_tiempo: completoEnTiempo,

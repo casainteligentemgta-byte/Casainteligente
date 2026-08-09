@@ -28,7 +28,7 @@ type NominaSnap = {
 };
 
 export type FormalizarContratoExpressResult =
-  | { ok: true; empleado_id: string }
+  | { ok: true; empleado_id: string; proyecto_id: string }
   | { ok: false; status: 404 | 409 | 500; error: string; empleado_id?: string };
 
 /**
@@ -138,7 +138,9 @@ export async function formalizarContratoExpressPorId(
     domicilio_declarado: ex.obrero_direccion?.trim() || null,
     rol_examen: ESTADO_EVALUACION_EXPRESS_INICIAL.rol_examen,
     estado: 'aprobado',
-    estado_proceso: 'cv_completado',
+    /** Listo para nómina / cuadrilla (puente 1ª semana). */
+    estatus: 'asignado',
+    estado_proceso: 'contratado_activo',
     respuestas_personalidad: ESTADO_EVALUACION_EXPRESS_INICIAL.respuestas_personalidad,
     respuestas_logica: ESTADO_EVALUACION_EXPRESS_INICIAL.respuestas_logica,
     token,
@@ -171,5 +173,18 @@ export async function formalizarContratoExpressPorId(
     console.warn('[formalizarContratoExpressPorId] no se pudo marcar formalizado:', upErr.message);
   }
 
-  return { ok: true, empleado_id: empleadoId };
+  const { error: obraErr } = await admin.from('ci_obra_empleados').upsert(
+    {
+      obra_id: ex.proyecto_id,
+      empleado_id: empleadoId,
+      honorarios_acordados_usd: 0,
+      multas_acumuladas_usd: 0,
+    } as never,
+    { onConflict: 'obra_id,empleado_id' },
+  );
+  if (obraErr) {
+    console.warn('[formalizarContratoExpressPorId] ci_obra_empleados:', obraErr.message);
+  }
+
+  return { ok: true, empleado_id: empleadoId, proyecto_id: ex.proyecto_id };
 }

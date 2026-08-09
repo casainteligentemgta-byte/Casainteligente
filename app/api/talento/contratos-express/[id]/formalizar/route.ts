@@ -32,5 +32,6 @@ export async function POST(_req: Request, context: { params: { id: string } }) {
     success: true,
     empleado_id: out.empleado_id,
     empleadoId: out.empleado_id,
+    proyecto_id: out.proyecto_id,
   });
 }

@@ -75,12 +75,14 @@ export function leerEmpleadoEstados(row: EmpleadoEstadosInput): EmpleadoEstadosC
 
   let etiqueta = 'En proceso';
   if (aptitud === 'aprobado') etiqueta = 'Aprobado';
-  else if (
-    aptitud === 'rechazado' ||
-    norm(evaluacion) === 'rojo' ||
-    norm(evaluacion) === 'rechazado'
-  ) {
-    etiqueta = 'No aprobado';
+  else if (aptitud === 'aprobado_con_observaciones') etiqueta = 'Aprobado c/obs.';
+  else if (aptitud === 'rechazado') etiqueta = 'No aprobado';
+  else if (aptitud === 'evaluacion_pendiente') {
+    const tieneEval =
+      Boolean(semaforo) ||
+      Boolean(evaluacion) ||
+      norm(evaluacion) === 'completado';
+    etiqueta = tieneEval ? 'Pendiente OK RRHH' : 'Evaluación pendiente';
   } else if (proceso === 'cv_completado') {
     etiqueta = 'CV cargado';
   } else if ((row.estatus ?? '').trim()) {

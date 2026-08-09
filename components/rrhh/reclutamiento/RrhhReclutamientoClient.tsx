@@ -749,6 +749,9 @@ export default function RrhhReclutamientoClient() {
         open={detalleEmpleadoId != null}
         empleadoId={detalleEmpleadoId}
         onClose={() => setDetalleEmpleadoId(null)}
+        onDecision={() => {
+          void cargar();
+        }}
       />
 
       <ModalTestsPsicologicos

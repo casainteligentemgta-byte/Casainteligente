@@ -116,7 +116,7 @@ export const RRHH_PIPELINE_PASOS: RrhhPasoFlujo[] = [
 export const RRHH_ETAPA_LABEL: Record<RrhhEtapaPipeline, string> = {
   plaza: 'Plaza abierta',
   postulado: 'Postulado (HV/test)',
-  evaluado: 'Evaluado',
+  evaluado: 'Evaluado (pendiente OK)',
   aprobado_humano: 'Aprobado RRHH',
   rechazado: 'Rechazado',
   ofertado: 'Oferta enviada',
@@ -158,7 +158,8 @@ export function derivarEtapaPipeline(row: EmpleadoPipelineInput): RrhhEtapaPipel
   if (row.en_nomina) return 'en_nomina';
   if (row.tiene_contrato || s.disponibilidad === 'asignado') return 'contratado';
 
-  if (s.aptitud === 'rechazado' || evaluacion === 'rojo' || evaluacion === 'rechazado') {
+  // Solo rechazo humano (aptitud). El semáforo rojo queda en «evaluado» hasta OK RRHH.
+  if (s.aptitud === 'rechazado') {
     return 'rechazado';
   }
 

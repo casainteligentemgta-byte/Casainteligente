@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { PREGUNTAS_OBRERO } from '@/lib/talento/exam';
 import { evaluarSemaforoObrero } from '@/lib/talento/evaluarSemaforoObrero';
+import { ESTADO_TRAS_EXAMEN } from '@/lib/rrhh/decisionEvaluacionHumana';
 
 export type EvaluarObreroPorTokenInput = {
   token: string;
@@ -98,7 +99,8 @@ export async function evaluarObreroPorToken(
       motivo_semaforo: resultado.motivo,
       status_evaluacion: resultado.status_evaluacion,
       semaforo: resultado.semaforo,
-      estado: resultado.estado,
+      // Máquina recomienda (semaforo/status); aptitud humana queda pendiente.
+      estado: ESTADO_TRAS_EXAMEN,
       examen_completado_at: ahora,
       updated_at: ahora,
     } as never)
@@ -117,7 +119,7 @@ export async function evaluarObreroPorToken(
     id: invR.empleado_id,
     semaforo: resultado.semaforo,
     statusEvaluacion: resultado.status_evaluacion,
-    estado: resultado.estado,
+    estado: ESTADO_TRAS_EXAMEN,
     motivo: resultado.motivo,
     resumen: resultado.resumen,
   };

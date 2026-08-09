@@ -537,6 +537,47 @@ export default function RrhhContratosExpressClient() {
     }
   }
 
+  async function incluirEnNominaSemana(empleadoId: string, proyectoId?: string | null) {
+    try {
+      const res = await fetch('/api/rrhh/nomina/incluir-empleado', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          empleado_id: empleadoId,
+          proyecto_id: proyectoId || undefined,
+        }),
+      });
+      const j = (await res.json()) as {
+        error?: string;
+        ya_existia?: boolean;
+        periodo_id?: string;
+        fecha_inicio?: string;
+        fecha_fin?: string;
+      };
+      if (!res.ok) {
+        toast.error(j.error ?? 'No se pudo incluir en nómina');
+        return;
+      }
+      toast.success(
+        j.ya_existia
+          ? 'Ya estaba en la nómina de esta semana.'
+          : `Incluido en nómina ${j.fecha_inicio ?? ''} — ${j.fecha_fin ?? ''}. Revise RRHH → Nómina.`,
+        j.periodo_id
+          ? {
+              action: {
+                label: 'Abrir periodo',
+                onClick: () => {
+                  window.location.href = `/rrhh/nomina/procesar?id=${j.periodo_id}`;
+                },
+              },
+            }
+          : undefined,
+      );
+    } catch {
+      toast.error('Error de red al incluir en nómina');
+    }
+  }
+
   async function formalizarFila(id: string, nombre: string) {
     const row = rows.find((r) => r.id === id);
     if (!String(row?.pdf_firmado_storage_path ?? '').trim()) {
@@ -557,16 +598,39 @@ export default function RrhhContratosExpressClient() {
       const res = await fetch(`/api/talento/contratos-express/${id}/formalizar`, {
         method: 'POST',
       });
-      const j = (await res.json()) as { error?: string; empleado_id?: string };
+      const j = (await res.json()) as {
+        error?: string;
+        empleado_id?: string;
+        proyecto_id?: string;
+      };
       if (!res.ok) {
         toast.error(j.error ?? 'No se pudo formalizar');
         return;
       }
+      const empId = (j.empleado_id ?? '').trim();
       toast.success(
-        j.empleado_id
+        empId
           ? 'Formalizado. Puede emitir el carnet digital desde RRHH → Carnet.'
           : 'Formalizado: expediente creado en Talento',
+        empId
+          ? {
+              action: {
+                label: '1ª semana nómina',
+                onClick: () => {
+                  void incluirEnNominaSemana(empId, j.proyecto_id);
+                },
+              },
+            }
+          : undefined,
       );
+      if (
+        empId &&
+        window.confirm(
+          '¿Incluir a este obrero en la nómina semanal (borrador) de esta semana?',
+        )
+      ) {
+        await incluirEnNominaSemana(empId, j.proyecto_id);
+      }
       await loadLista();
     } catch {
       toast.error('Error de red al formalizar');

@@ -49,5 +49,6 @@ export async function POST(req: Request) {
     success: true,
     empleadoId: out.empleado_id,
     empleado_id: out.empleado_id,
+    proyecto_id: out.proyecto_id,
   });
 }

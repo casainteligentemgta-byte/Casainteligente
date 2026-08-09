@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { X, FileSearch, AlertCircle } from 'lucide-react';
+import { X, FileSearch, AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
+import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import {
   construirDetalleDesdeFilas,
@@ -9,12 +10,18 @@ import {
   preguntasParaDetalle,
   type DetalleRespuestasExamen,
 } from '@/lib/rrhh/parseRespuestasExamen';
+import {
+  etiquetaRecomendacionMaquina,
+  pendienteDecisionHumana,
+} from '@/lib/rrhh/decisionEvaluacionHumana';
 import { esPreguntaSituacionalObra, etiquetaRolExamenUI } from '@/lib/talento/exam';
 
 type Props = {
   open: boolean;
   onClose: () => void;
   empleadoId: string | null;
+  /** Tras Aprobar/Rechazar (para refrescar listados). */
+  onDecision?: (estado: 'aprobado' | 'rechazado') => void;
 };
 
 function fechaCorta(iso: string | null): string {
@@ -26,10 +33,17 @@ function fechaCorta(iso: string | null): string {
   }
 }
 
-export default function DetalleRespuestasExamenModal({ open, onClose, empleadoId }: Props) {
+export default function DetalleRespuestasExamenModal({
+  open,
+  onClose,
+  empleadoId,
+  onDecision,
+}: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detalle, setDetalle] = useState<DetalleRespuestasExamen | null>(null);
+  const [notas, setNotas] = useState('');
+  const [decidiendo, setDecidiendo] = useState<'aprobado' | 'rechazado' | null>(null);
 
   const cargar = useCallback(async (id: string) => {
     setLoading(true);
@@ -37,14 +51,14 @@ export default function DetalleRespuestasExamenModal({ open, onClose, empleadoId
     const supabase = createClient();
 
     const colsEmp =
-      'id,nombre_completo,cedula,documento,rol_examen,respuestas_personalidad,respuestas_logica,puntaje_personalidad,puntaje_logica,puntaje_total,semaforo,status_evaluacion,motivo_semaforo,perfil_color,color_disc,gma_0_5,nivel_integridad_riesgo,completo_en_tiempo,examen_inicio_at,examen_completado_at';
+      'id,nombre_completo,cedula,documento,rol_examen,estado,respuestas_personalidad,respuestas_logica,puntaje_personalidad,puntaje_logica,puntaje_total,semaforo,status_evaluacion,motivo_semaforo,perfil_color,color_disc,gma_0_5,nivel_integridad_riesgo,completo_en_tiempo,examen_inicio_at,examen_completado_at';
 
     let empRes = await supabase.from('ci_empleados').select(colsEmp).eq('id', id).maybeSingle();
     if (empRes.error && /column|42703|schema cache/i.test(empRes.error.message)) {
       empRes = await supabase
         .from('ci_empleados')
         .select(
-          'id,nombre_completo,cedula,documento,rol_examen,puntaje_total,puntaje_logica,puntaje_personalidad,semaforo,status_evaluacion,examen_completado_at',
+          'id,nombre_completo,cedula,documento,rol_examen,estado,puntaje_total,puntaje_logica,puntaje_personalidad,semaforo,status_evaluacion,examen_completado_at',
         )
         .eq('id', id)
         .maybeSingle();
@@ -82,10 +96,40 @@ export default function DetalleRespuestasExamenModal({ open, onClose, empleadoId
     if (!open || !empleadoId) {
       setDetalle(null);
       setError(null);
+      setNotas('');
+      setDecidiendo(null);
       return;
     }
     void cargar(empleadoId);
   }, [open, empleadoId, cargar]);
+
+  async function decidir(decision: 'aprobado' | 'rechazado') {
+    if (!empleadoId) return;
+    const verbo = decision === 'aprobado' ? 'aprobar' : 'rechazar';
+    if (!window.confirm(`¿Confirma ${verbo} a este candidato según el informe de evaluación?`)) {
+      return;
+    }
+    setDecidiendo(decision);
+    try {
+      const res = await fetch(`/api/rrhh/empleados/${empleadoId}/decision-evaluacion`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ decision, notas: notas.trim() || null }),
+      });
+      const j = (await res.json()) as { error?: string; estado?: 'aprobado' | 'rechazado' };
+      if (!res.ok) {
+        toast.error(j.error ?? 'No se pudo registrar la decisión');
+        return;
+      }
+      toast.success(decision === 'aprobado' ? 'Aprobado por RRHH' : 'Rechazado por RRHH');
+      onDecision?.(decision);
+      setDetalle((prev) => (prev ? { ...prev, estado: decision } : prev));
+    } catch {
+      toast.error('Error de red al registrar la decisión');
+    } finally {
+      setDecidiendo(null);
+    }
+  }
 
   if (!open) return null;
 
@@ -94,6 +138,24 @@ export default function DetalleRespuestasExamenModal({ open, onClose, empleadoId
     detalle &&
     Object.keys(detalle.respuestasPersonalidad).length === 0 &&
     Object.keys(detalle.respuestasLogica).length === 0;
+
+  const pendienteOk =
+    detalle != null &&
+    pendienteDecisionHumana({
+      estado: detalle.estado,
+      examen_completado_at: detalle.examenCompletadoAt,
+      semaforo: detalle.semaforo,
+      status_evaluacion: detalle.statusEvaluacion,
+      puntaje_total: detalle.puntajeTotal,
+    });
+
+  const reco = detalle
+    ? etiquetaRecomendacionMaquina({
+        semaforo: detalle.semaforo,
+        status_evaluacion: detalle.statusEvaluacion,
+        motivo_semaforo: detalle.motivoSemaforo,
+      })
+    : null;
 
   return (
     <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/75 p-0 sm:items-center sm:p-4">
@@ -107,7 +169,7 @@ export default function DetalleRespuestasExamenModal({ open, onClose, empleadoId
           <div className="min-w-0">
             <h2 id="detalle-examen-titulo" className="flex items-center gap-2 text-lg font-bold text-white">
               <FileSearch className="h-5 w-5 text-violet-300" aria-hidden />
-              Detalle de respuestas
+              Informe de evaluación
             </h2>
             {detalle ? (
               <p className="mt-1 truncate text-sm text-zinc-400">
@@ -133,6 +195,24 @@ export default function DetalleRespuestasExamenModal({ open, onClose, empleadoId
 
           {detalle && !loading ? (
             <div className="space-y-6">
+              {reco ? (
+                <section className="rounded-xl border border-violet-500/30 bg-violet-950/25 px-4 py-3">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-violet-300/90">
+                    Informe formal post-test
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-white">{reco.texto}</p>
+                  <p className="mt-1 text-xs text-zinc-400">
+                    Motivo: {reco.motivo}
+                    {detalle.estado ? ` · Aptitud actual: ${detalle.estado}` : ''}
+                  </p>
+                  {pendienteOk ? (
+                    <p className="mt-2 text-xs font-medium text-amber-200">
+                      Pendiente de OK humano (Aprobar / Rechazar) antes de contratar.
+                    </p>
+                  ) : null}
+                </section>
+              ) : null}
+
               {detalle.esParcial ? (
                 <p className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-950/25 px-3 py-2 text-sm text-amber-100">
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -268,6 +348,42 @@ export default function DetalleRespuestasExamenModal({ open, onClose, empleadoId
                   Invitación: {detalle.invitacion.completado ? 'cerrada' : 'abierta'} · expira{' '}
                   {fechaCorta(detalle.invitacion.expiraAt)}
                 </p>
+              ) : null}
+
+              {pendienteOk ? (
+                <section className="rounded-xl border border-emerald-500/25 bg-emerald-950/20 px-4 py-3">
+                  <p className="text-sm font-bold text-emerald-100">Decisión RRHH</p>
+                  <label className="mt-2 block text-xs text-zinc-400">
+                    Notas (opcional)
+                    <textarea
+                      value={notas}
+                      onChange={(e) => setNotas(e.target.value)}
+                      rows={2}
+                      className="mt-1 w-full rounded-lg border border-white/15 bg-black/30 px-3 py-2 text-sm text-zinc-100"
+                      placeholder="Observaciones del OK humano…"
+                    />
+                  </label>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={decidiendo != null}
+                      onClick={() => void decidir('aprobado')}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/40 bg-emerald-500/20 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30 disabled:opacity-60"
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
+                      {decidiendo === 'aprobado' ? 'Guardando…' : 'Aprobar'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={decidiendo != null}
+                      onClick={() => void decidir('rechazado')}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-rose-400/40 bg-rose-500/15 px-3 py-2 text-xs font-semibold text-rose-100 hover:bg-rose-500/25 disabled:opacity-60"
+                    >
+                      <XCircle className="h-3.5 w-3.5" aria-hidden />
+                      {decidiendo === 'rechazado' ? 'Guardando…' : 'Rechazar'}
+                    </button>
+                  </div>
+                </section>
               ) : null}
             </div>
           ) : null}
