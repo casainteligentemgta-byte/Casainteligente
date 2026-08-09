@@ -53,5 +53,7 @@ export async function POST(req: Request) {
     ya_existia: out.yaExistia,
     fecha_inicio: out.fechaInicio,
     fecha_fin: out.fechaFin,
+    tasa_bcv: out.tasaBcv,
+    tasa_fuente: out.tasaFuente,
   });
 }
