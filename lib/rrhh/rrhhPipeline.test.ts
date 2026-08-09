@@ -40,6 +40,41 @@ describe('rrhhPipeline', () => {
     );
   });
 
+  it('tras test: evaluado hasta OK humano; rojo máquina no rechaza solo', () => {
+    assert.equal(
+      derivarEtapaPipeline({
+        estado: 'evaluacion_pendiente',
+        semaforo: 'verde',
+        status_evaluacion: 'aprobado',
+      }),
+      'evaluado',
+    );
+    assert.equal(
+      derivarEtapaPipeline({
+        estado: 'evaluacion_pendiente',
+        semaforo: 'rojo',
+        status_evaluacion: 'reprobado',
+      }),
+      'evaluado',
+    );
+    assert.equal(
+      derivarEtapaPipeline({
+        estado: 'rechazado',
+        semaforo: 'rojo',
+        status_evaluacion: 'reprobado',
+      }),
+      'rechazado',
+    );
+    assert.equal(
+      derivarEtapaPipeline({
+        estado: 'aprobado',
+        estatus: 'disponible',
+        semaforo: 'amarillo',
+      }),
+      'banca_disponible',
+    );
+  });
+
   it('puede ofertar desde banca solo obrero aprobado disponible', () => {
     assert.equal(
       puedeOfertarDesdeBanca({

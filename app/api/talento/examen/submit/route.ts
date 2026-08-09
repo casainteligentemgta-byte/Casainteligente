@@ -13,6 +13,7 @@ import {
   estadoContratacionFromTripode,
   semaforoDbFromTripode,
 } from '@/lib/talento/semaphore';
+import { ESTADO_TRAS_EXAMEN } from '@/lib/rrhh/decisionEvaluacionHumana';
 import { randomUUID } from 'crypto';
 import { celularParaInserto } from '@/lib/registro/ciEmpleadosCelular';
 import { nombresLegadoDesdeTextoLibre } from '@/lib/registro/ciEmpleadosNombresLegado';
@@ -253,7 +254,8 @@ export async function POST(req: Request) {
       color_disc: colorDisc,
       status_evaluacion: tripode.status,
       semaforo,
-      estado,
+      // Recomendación máquina en semaforo/status; OK humano aparte.
+      estado: ESTADO_TRAS_EXAMEN,
       examen_inicio_at: new Date(inicio).toISOString(),
       examen_completado_at: new Date().toISOString(),
     };
@@ -304,7 +306,8 @@ export async function POST(req: Request) {
       nivel_integridad_riesgo: nivelInt,
       completo_en_tiempo: completoEnTiempo,
       semaforo,
-      estado,
+      estado: ESTADO_TRAS_EXAMEN,
+      recomendacion_maquina: estado,
       motivo: tripode.motivo,
       status_tripode: tripode.status,
     });

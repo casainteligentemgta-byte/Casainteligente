@@ -19,6 +19,8 @@ export type DetalleRespuestasExamen = {
   puntajePersonalidad: number | null;
   puntajeLogica: number | null;
   puntajeTotal: number | null;
+  /** Aptitud humana (`estado` en ci_empleados). */
+  estado: string | null;
   semaforo: string | null;
   statusEvaluacion: string | null;
   motivoSemaforo: string | null;
@@ -126,6 +128,7 @@ export function construirDetalleDesdeFilas(params: {
     puntajePersonalidad: num(e.puntaje_personalidad),
     puntajeLogica: num(e.puntaje_logica),
     puntajeTotal: num(e.puntaje_total),
+    estado: (e.estado as string | null) ?? null,
     semaforo: (e.semaforo as string | null) ?? null,
     statusEvaluacion: (e.status_evaluacion as string | null) ?? null,
     motivoSemaforo: (e.motivo_semaforo as string | null) ?? null,

@@ -12,6 +12,17 @@ describe('empleadoEstados', () => {
     assert.equal(etiquetaEstadoEmpleado({ estado: 'aprobado', estatus: 'disponible' }), 'Aprobado');
   });
 
+  it('etiqueta pendiente OK RRHH tras test', () => {
+    assert.equal(
+      etiquetaEstadoEmpleado({
+        estado: 'evaluacion_pendiente',
+        semaforo: 'verde',
+        status_evaluacion: 'aprobado',
+      }),
+      'Pendiente OK RRHH',
+    );
+  });
+
   it('apto para asignar requiere obrero + aprobado + disponible', () => {
     assert.equal(
       esAptoParaAsignar({
