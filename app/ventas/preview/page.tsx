@@ -769,11 +769,15 @@ export default function PreviewPage() {
                                 <p style={{ fontSize: '11px', fontWeight: 700, color: '#334155', letterSpacing: '0.5px', marginBottom: '4px' }}>
                                     NOTAS / CONDICIONES DEL PRESUPUESTO
                                 </p>
+                                {/* Pantalla (edición en vista previa): campo editable sin texto de ejemplo.
+                                    El ejemplo guía está en Ventas al crear el presupuesto.
+                                    En PDF/impresión se usa .preview-notas-print (escrito o vacío). */}
                                 <textarea
-                                    className="preview-notas-field"
+                                    className="preview-notas-field no-print"
                                     value={data.notas ?? ''}
                                     onChange={(e) => setNotasPresupuesto(e.target.value)}
-                                    placeholder="Ej.: plazo de entrega, horario de instalación, exclusiones…"
+                                    placeholder=""
+                                    aria-label="Notas o condiciones del presupuesto"
                                     rows={4}
                                     style={{
                                         width: '100%',
@@ -791,6 +795,23 @@ export default function PreviewPage() {
                                         outline: 'none',
                                     }}
                                 />
+                                {/* Impresión / PDF / previsualización de impresión: solo texto escrito, o vacío */}
+                                <p
+                                    className="preview-notas-print"
+                                    style={{
+                                        display: 'none',
+                                        margin: 0,
+                                        maxWidth: '420px',
+                                        fontSize: '11px',
+                                        lineHeight: 1.6,
+                                        color: '#64748B',
+                                        whiteSpace: 'pre-wrap',
+                                        wordBreak: 'break-word',
+                                        minHeight: '1.2em',
+                                    }}
+                                >
+                                    {(data.notas ?? '').trim()}
+                                </p>
                             </div>
                         </div>
 
@@ -830,18 +851,22 @@ export default function PreviewPage() {
                             </div>
                         </div>
                     </div>
+                </div>
 
-                    {/* ── Action Buttons Footer (Mobile Friendly) ── */}
+                    {/* ── Action Buttons (fuera del documento: no van al PDF) ── */}
                     <div className="no-print preview-actions-footer" style={{
+                        marginTop: '16px',
                         padding: '24px 32px',
                         display: 'grid',
                         gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
                         gap: '12px',
-                        background: '#F8FAFC',
-                        borderTop: '1px solid #E2E8F0',
+                        background: '#FFFFFF',
+                        border: '1px solid #E2E8F0',
+                        borderRadius: '16px',
                         boxSizing: 'border-box',
                     }}>
                         <button
+                            type="button"
                             onClick={() => window.print()}
                             style={{
                                 background: '#FFFFFF', border: '1px solid #E2E8F0',
@@ -858,10 +883,8 @@ export default function PreviewPage() {
                         </button>
 
                         <button
-                            onClick={() => {
-                                // Simple PDF trigger using print
-                                window.print();
-                            }}
+                            type="button"
+                            onClick={() => window.print()}
                             style={{
                                 background: 'rgba(255,149,0,0.15)', border: '1px solid rgba(255,149,0,0.3)',
                                 borderRadius: '16px', padding: '16px 12px',
@@ -876,6 +899,7 @@ export default function PreviewPage() {
                         </button>
 
                         <button
+                            type="button"
                             onClick={() => {
                                 const notasWa2 = data.notas?.trim() ? `\n*Notas:* ${data.notas.trim()}\n` : '';
                                 const text = `*PRESUPUESTO ${PRESUPUESTO_BRAND.nombreLegal}*\n\n*Nro:* ${data.numero}\n*Fecha:* ${data.fecha}\n*Cliente:* ${data.cliente} ${data.rif ? `(${data.rif})` : ''}${notasWa2}\n${data.items.map((i) => `• ${i.qty}x ${lineaPresupuestoTitulo(i.nombre)} — $${fmt(lineTotal(i))}`).join('\n')}\n\n*TOTAL: $${fmt(data.subtotal)}*`;
@@ -895,7 +919,6 @@ export default function PreviewPage() {
                             WhatsApp
                         </button>
                     </div>
-                </div>
             </div>
 
             <style>{`
@@ -1017,13 +1040,30 @@ export default function PreviewPage() {
 
                 @media print {
                     .no-print { display: none !important; }
-                    body { background: #FFFFFF !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-                    @page { margin: 12mm; size: A4; }
-                    textarea.preview-notas-field {
-                        border: none !important;
-                        background: transparent !important;
+                    body, .preview-page {
+                        background: #FFFFFF !important;
                         padding: 0 !important;
-                        resize: none !important;
+                        margin: 0 !important;
+                        -webkit-print-color-adjust: exact;
+                        print-color-adjust: exact;
+                    }
+                    @page { margin: 10mm; size: A4; }
+                    .preview-doc-wrap {
+                        max-width: none !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        width: 100% !important;
+                    }
+                    .preview-doc {
+                        box-shadow: none !important;
+                        border: none !important;
+                        border-radius: 0 !important;
+                        overflow: visible !important;
+                    }
+                    /* Solo texto escrito (o vacío); nunca el placeholder de ejemplo */
+                    .preview-notas-field { display: none !important; }
+                    .preview-notas-print {
+                        display: block !important;
                         color: #64748B !important;
                         -webkit-print-color-adjust: exact;
                         print-color-adjust: exact;
