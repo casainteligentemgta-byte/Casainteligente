@@ -1334,7 +1334,7 @@ function VentasContent() {
                     <textarea
                         value={notes}
                         onChange={e => setNotes(e.target.value)}
-                        placeholder="Condiciones de pago, tiempo de entrega, garantía, detalles del sitio…"
+                        placeholder="Ej.: plazo de entrega, horario de instalación, exclusiones, garantía…"
                         rows={3}
                         style={{
                             width: '100%', background: 'transparent', border: 'none', outline: 'none', resize: 'none',

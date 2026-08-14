@@ -241,7 +241,7 @@ export function buildPresupuestoPrintHtml(budget: BudgetRow): string {
         <h4>Condiciones</h4>
         <p>${condiciones}</p>
         ${showZelle ? `<div class="block"><h4>Método de pago</h4><p>${pago}</p></div>` : ''}
-        ${notas ? `<div class="block"><h4>Notas</h4><p>${notas}</p></div>` : ''}
+        ${notas ? `<div class="block"><h4>Notas / Condiciones del presupuesto</h4><p>${notas}</p></div>` : `<div class="block"><h4>Notas / Condiciones del presupuesto</h4><p></p></div>`}
       </div>
       <div>
         <div class="sum-line sum-total">
