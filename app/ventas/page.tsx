@@ -85,6 +85,85 @@ function formatUSD(n: number) {
     return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+/**
+ * Input numérico que permite borrar todo el valor mientras se edita.
+ * Solo confirma el número al escribir un valor válido o al salir del campo
+ * (evita el “siempre hay un 0/1” que produce montos como 0120 en móvil).
+ */
+function EditableNumberInput({
+    value,
+    onCommit,
+    emptyFallback,
+    min,
+    max,
+    step,
+    integer = false,
+    inputMode = 'decimal',
+    style,
+    'aria-label': ariaLabel,
+}: {
+    value: number;
+    onCommit: (n: number) => void;
+    emptyFallback: number;
+    min?: number;
+    max?: number;
+    step?: number | string;
+    integer?: boolean;
+    inputMode?: 'decimal' | 'numeric';
+    style?: React.CSSProperties;
+    'aria-label'?: string;
+}) {
+    const [draft, setDraft] = useState<string | null>(null);
+
+    const clamp = (n: number) => {
+        let next = n;
+        if (min !== undefined) next = Math.max(min, next);
+        if (max !== undefined) next = Math.min(max, next);
+        return next;
+    };
+
+    const parseRaw = (raw: string): number | null => {
+        if (raw === '' || raw === '-' || raw === '.' || raw === '-.') return null;
+        const n = integer ? parseInt(raw, 10) : parseFloat(raw);
+        return Number.isFinite(n) ? n : null;
+    };
+
+    const display = draft !== null ? draft : String(value);
+
+    return (
+        <input
+            type="text"
+            inputMode={inputMode}
+            step={step}
+            aria-label={ariaLabel}
+            value={display}
+            onFocus={(e) => {
+                setDraft(String(value));
+                e.target.select();
+            }}
+            onChange={(e) => {
+                let raw = e.target.value.replace(',', '.');
+                if (raw !== '' && !/^-?\d*\.?\d*$/.test(raw)) return;
+                // Evitar ceros a la izquierda tipo "0120" al teclear tras un 0 forzado.
+                if (!integer && /^0\d/.test(raw)) raw = raw.replace(/^0+/, '');
+                if (integer && /^0\d+/.test(raw)) raw = raw.replace(/^0+/, '') || '0';
+                setDraft(raw);
+                if (raw.endsWith('.')) return;
+                const n = parseRaw(raw);
+                if (n === null) return;
+                onCommit(clamp(n));
+            }}
+            onBlur={() => {
+                const raw = draft;
+                setDraft(null);
+                const n = raw === null ? value : parseRaw(raw);
+                onCommit(clamp(n === null ? emptyFallback : n));
+            }}
+            style={style}
+        />
+    );
+}
+
 function CategoryBadge({ cat }: { cat: string | null }) {
     const colorMap: Record<string, { bg: string; text: string }> = {
         'Cámaras IP': { bg: 'rgba(0,122,255,0.15)', text: '#007AFF' },
@@ -924,13 +1003,13 @@ function VentasContent() {
                                 }}
                                 title="Porcentaje personalizado"
                             >
-                                <input
-                                    type="number"
+                                <EditableNumberInput
+                                    value={globalMargin}
+                                    emptyFallback={0}
                                     min={0}
                                     max={200}
                                     inputMode="decimal"
-                                    value={globalMargin}
-                                    onChange={e => applyGlobalMargin(Number(e.target.value))}
+                                    onCommit={(n) => applyGlobalMargin(n)}
                                     aria-label="Margen personalizado"
                                     style={{
                                         width: '48px',
@@ -1081,11 +1160,14 @@ function VentasContent() {
                                         {/* Qty */}
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0', background: 'rgba(255,255,255,0.06)', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.1)', overflow: 'hidden' }}>
                                             <button onClick={() => updateQty(item.id, item.qty - 1)} style={{ width: '34px', height: '34px', background: 'none', border: 'none', cursor: 'pointer', color: 'white', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
-                                            <input
-                                                type="number"
-                                                min={1}
+                                            <EditableNumberInput
                                                 value={item.qty}
-                                                onChange={e => updateQty(item.id, parseInt(e.target.value) || 1)}
+                                                emptyFallback={1}
+                                                min={1}
+                                                integer
+                                                inputMode="numeric"
+                                                onCommit={(n) => updateQty(item.id, n)}
+                                                aria-label="Cantidad"
                                                 style={{ width: '40px', background: 'transparent', border: 'none', outline: 'none', textAlign: 'center', color: 'white', fontSize: '14px', fontWeight: 700, fontFamily: 'inherit' }}
                                             />
                                             <button onClick={() => updateQty(item.id, item.qty + 1)} style={{ width: '34px', height: '34px', background: 'none', border: 'none', cursor: 'pointer', color: '#007AFF', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
@@ -1094,12 +1176,14 @@ function VentasContent() {
                                         {/* Unit Price */}
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(255,255,255,0.06)', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.1)', padding: '0 10px', height: '34px' }}>
                                             <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '13px' }}>$</span>
-                                            <input
-                                                type="number"
+                                            <EditableNumberInput
+                                                value={item.unitPrice}
+                                                emptyFallback={0}
                                                 min={0}
                                                 step={0.01}
-                                                value={item.unitPrice}
-                                                onChange={e => updatePrice(item.id, parseFloat(e.target.value) || 0)}
+                                                inputMode="decimal"
+                                                onCommit={(n) => updatePrice(item.id, n)}
+                                                aria-label="Precio unitario"
                                                 style={{ width: '70px', background: 'transparent', border: 'none', outline: 'none', color: 'white', fontSize: '14px', fontWeight: 600, fontFamily: 'inherit' }}
                                             />
                                         </div>
@@ -1109,12 +1193,14 @@ function VentasContent() {
                                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
                                                 <path d="M19 5L5 19M9 7a2 2 0 11-4 0 2 2 0 014 0zm10 10a2 2 0 11-4 0 2 2 0 014 0z" stroke="#FF9500" strokeWidth="2" strokeLinecap="round" />
                                             </svg>
-                                            <input
-                                                type="number"
+                                            <EditableNumberInput
+                                                value={item.discount}
+                                                emptyFallback={0}
                                                 min={0}
                                                 max={100}
-                                                value={item.discount}
-                                                onChange={e => updateDiscount(item.id, parseFloat(e.target.value) || 0)}
+                                                inputMode="decimal"
+                                                onCommit={(n) => updateDiscount(item.id, n)}
+                                                aria-label="Descuento"
                                                 style={{ width: '36px', background: 'transparent', border: 'none', outline: 'none', color: '#FF9500', fontSize: '14px', fontWeight: 600, fontFamily: 'inherit' }}
                                             />
                                             <span style={{ color: '#FF9500', fontSize: '13px' }}>%</span>
