@@ -3,7 +3,11 @@
  * Objetivo: una sola hoja A4 (densidad por ítems + escala automática al imprimir).
  * Misma información de marca que la vista previa (`lib/presupuesto/brand.ts`).
  */
-import { PRESUPUESTO_BRAND, textoMetodosPago } from '@/lib/presupuesto/brand';
+import {
+  PRESUPUESTO_BRAND,
+  nombreDocumentoPresupuestoPdf,
+  textoMetodosPago,
+} from '@/lib/presupuesto/brand';
 import {
   PRESUPUESTO_PRINT_FIT_SCRIPT,
   sheetModifierForItemCount,
@@ -116,13 +120,14 @@ export function buildPresupuestoPrintHtml(budget: BudgetRow): string {
   const condiciones = escapeHtml(PRESUPUESTO_BRAND.condicionesDefault.replace(/\s+/g, ' ').trim());
   const pago = escapeHtml(textoMetodosPago());
   const notas = budget.notes ? escapeHtml(budget.notes) : '';
+  const docTitle = escapeHtml(nombreDocumentoPresupuestoPdf(idShort));
 
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Presupuesto P-${idShort}</title>
+  <title>${docTitle}</title>
   <style>
     * { box-sizing: border-box; }
     html, body { height: auto; }

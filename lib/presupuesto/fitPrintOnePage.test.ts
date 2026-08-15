@@ -1,10 +1,34 @@
 /**
- * Tests: densidad del PDF de presupuesto (una hoja A4).
+ * Tests: densidad del PDF de presupuesto (una hoja A4) y nombre de archivo.
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import {
+  filenamePresupuestoPdf,
+  nombreDocumentoPresupuestoPdf,
+} from './brand';
 import { sheetModifierForItemCount } from './fitPrintOnePage';
 import { buildPresupuestoPrintHtml, sanitizeBudgetItemsForPrint } from './html-impresion';
+
+describe('nombreDocumentoPresupuestoPdf', () => {
+  it('incluye marca y número P-', () => {
+    assert.equal(
+      nombreDocumentoPresupuestoPdf(501),
+      'Presupuesto Casa Inteligente P-501',
+    );
+    assert.equal(
+      nombreDocumentoPresupuestoPdf('P-512'),
+      'Presupuesto Casa Inteligente P-512',
+    );
+  });
+
+  it('filename con extensión', () => {
+    assert.equal(
+      filenamePresupuestoPdf('P-501', 'pdf'),
+      'Presupuesto Casa Inteligente P-501.pdf',
+    );
+  });
+});
 
 describe('sheetModifierForItemCount', () => {
   it('pocos ítems → sin modificador', () => {
@@ -44,6 +68,7 @@ describe('buildPresupuestoPrintHtml', () => {
     assert.match(html, /beforeprint/);
     assert.match(html, /@page \{\s*size: A4 portrait/);
     assert.match(html, /page-break-inside:\s*avoid/);
+    assert.match(html, /<title>Presupuesto Casa Inteligente P-501<\/title>/);
   });
 
   it('sanitize quita campos no imprimibles', () => {

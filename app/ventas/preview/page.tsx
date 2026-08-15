@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { PRESUPUESTO_BRAND, textoMetodosPago } from '@/lib/presupuesto/brand';
+import { PRESUPUESTO_BRAND, nombreDocumentoPresupuestoPdf, textoMetodosPago } from '@/lib/presupuesto/brand';
 import { DEMO_PRESUPUESTO } from '@/lib/presupuesto/demo-data';
 import { attachFitPresupuestoPrintToOnePage } from '@/lib/presupuesto/fitPrintOnePage';
 import { lineaPresupuestoTitulo, textoPresupuesto, tituloPresupuestoPlano } from '@/lib/presupuesto/presentacion';
@@ -150,6 +150,16 @@ export default function PreviewPage() {
             usableHeightMm: 297 - 12,
         });
     }, []);
+
+    /** Título del documento = nombre del PDF al “Guardar en Archivos” (iOS/Safari). */
+    useEffect(() => {
+        if (!data?.numero) return;
+        const prev = document.title;
+        document.title = nombreDocumentoPresupuestoPdf(data.numero);
+        return () => {
+            document.title = prev;
+        };
+    }, [data?.numero]);
 
     useEffect(() => {
         let cancelled = false;

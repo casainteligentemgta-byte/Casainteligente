@@ -42,3 +42,34 @@ export function textoMetodosPago(): string {
   const { email, telefonos } = PRESUPUESTO_BRAND.zelle;
   return `Zelle: ${email} · ${telefonos.join(' · ')}`;
 }
+
+/**
+ * Nombre al guardar/imprimir PDF (título del documento en iOS/Safari).
+ * Ej.: "Presupuesto Casa Inteligente P-501"
+ */
+export function nombreDocumentoPresupuestoPdf(
+  numero: string | number | null | undefined,
+): string {
+  const raw = String(numero ?? '').trim();
+  let num = raw;
+  if (!num || num === '—' || num === '-') {
+    num = 'P-—';
+  } else if (!/^p-/i.test(num)) {
+    num = `P-${num}`;
+  } else {
+    num = `P-${num.slice(2)}`;
+  }
+  return `Presupuesto Casa Inteligente ${num}`;
+}
+
+/** Nombre de archivo sugerido (sin caracteres problemáticos). */
+export function filenamePresupuestoPdf(
+  numero: string | number | null | undefined,
+  ext: 'pdf' | 'html' = 'pdf',
+): string {
+  const base = nombreDocumentoPresupuestoPdf(numero)
+    .replace(/[\\/:*?"<>|]+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return `${base}.${ext}`;
+}
