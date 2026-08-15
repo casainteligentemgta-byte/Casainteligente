@@ -615,8 +615,8 @@ export default function PreviewPage() {
                             </div>
                         </div>
 
-                        {/* Cliente */}
-                        <div className="preview-cliente-row" style={{ marginTop: '24px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '12px', minWidth: 0 }}>
+                        {/* Cliente (sin total aquí: el monto grande va solo abajo a la derecha) */}
+                        <div className="preview-cliente-row" style={{ marginTop: '24px', display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-start', gap: '12px', minWidth: 0 }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: 0, flex: '1 1 auto' }}>
                                 {data.cliente ? (
                                     <>
@@ -684,13 +684,6 @@ export default function PreviewPage() {
                                     <p style={{ fontSize: '14px', color: '#94A3B8', fontStyle: 'italic' }}>Información de cliente no disponible</p>
                                 )}
                             </div>
-                            <div className="preview-total-block" style={{ textAlign: 'right', flexShrink: 0, minWidth: 0, maxWidth: '100%' }}>
-                                <p style={{ fontSize: '12px', color: '#64748B', marginBottom: '2px' }}>Total Pagar</p>
-                                <p className="preview-total-monto" style={{ fontSize: '40px', fontWeight: 800, color: '#34C759', letterSpacing: '-0.04em', lineHeight: 1, wordBreak: 'break-word' }}>
-                                    <span style={{ fontSize: '20px', fontWeight: 600 }}>$</span>
-                                    {fmt(data.subtotal)}
-                                </p>
-                            </div>
                         </div>
                     </div>
 
@@ -732,15 +725,10 @@ export default function PreviewPage() {
                                     boxSizing: 'border-box',
                                     minWidth: 0,
                                 }}>
-                                    {/* Solo texto: sin miniatura junto a la descripción */}
+                                    {/* Solo nombre: la cantidad va en la columna Cant */}
                                     <div style={{ minWidth: 0 }}>
                                         <p style={{ fontSize: '13px', fontWeight: 500, color: '#0F172A', lineHeight: 1.3, wordBreak: 'break-word' }}>
                                             {lineaPresupuestoTitulo(item.nombre)}
-                                            {item.qty > 1 && (
-                                                <span style={{ color: '#94A3B8', fontSize: '11px', marginLeft: '6px' }}>
-                                                    (x{item.qty})
-                                                </span>
-                                            )}
                                         </p>
                                     </div>
                                     <p style={{ fontSize: '13px', color: '#475569', textAlign: 'right', alignSelf: 'center', minWidth: 0 }}>
@@ -855,18 +843,21 @@ export default function PreviewPage() {
                                 </div>
                             ))}
 
-                            {/* Total grande */}
-                            <div style={{
+                            {/* Total grande (único monto destacado del documento) */}
+                            <div className="preview-total-final" style={{
                                 background: '#ECFDF5',
                                 border: '1px solid #A7F3D0',
-                                borderRadius: '12px', padding: '12px 14px',
+                                borderRadius: '12px', padding: '14px 16px',
                                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                                 marginTop: '4px',
                                 gap: '10px',
                                 minWidth: 0,
                             }}>
                                 <span style={{ fontSize: '13px', fontWeight: 700, color: '#15803D' }}>TOTAL</span>
-                                <span style={{ fontSize: '18px', fontWeight: 800, color: '#15803D', wordBreak: 'break-word' }}>${fmt(data.subtotal)}</span>
+                                <span className="preview-total-monto" style={{ fontSize: '32px', fontWeight: 800, color: '#34C759', letterSpacing: '-0.04em', lineHeight: 1, wordBreak: 'break-word' }}>
+                                    <span style={{ fontSize: '18px', fontWeight: 600 }}>$</span>
+                                    {fmt(data.subtotal)}
+                                </span>
                             </div>
                         </div>
                     </div>
@@ -1015,10 +1006,6 @@ export default function PreviewPage() {
                     .preview-cliente-nombre {
                         font-size: 18px !important;
                     }
-                    .preview-total-block {
-                        text-align: left !important;
-                        width: 100%;
-                    }
                     .preview-total-monto {
                         font-size: 28px !important;
                     }
@@ -1099,9 +1086,6 @@ export default function PreviewPage() {
                     .preview-cliente-nombre {
                         font-size: 14px !important;
                     }
-                    .preview-total-monto {
-                        font-size: 18px !important;
-                    }
                     .preview-table-row {
                         padding-top: 3px !important;
                         padding-bottom: 3px !important;
@@ -1126,8 +1110,18 @@ export default function PreviewPage() {
                         padding: 4px 8px !important;
                         border-radius: 6px !important;
                     }
-                    .preview-totales-panel span {
+                    .preview-totales-panel > div:not(.preview-total-final) span {
                         font-size: 10px !important;
+                    }
+                    .preview-total-final {
+                        padding: 8px 10px !important;
+                    }
+                    .preview-total-monto {
+                        font-size: 22px !important;
+                        color: #34C759 !important;
+                    }
+                    .preview-total-monto > span {
+                        font-size: 12px !important;
                     }
                     /* Solo texto escrito (o vacío); nunca el placeholder de ejemplo */
                     .preview-notas-field { display: none !important; }
