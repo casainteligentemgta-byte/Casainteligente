@@ -1,8 +1,13 @@
 /**
  * HTML del presupuesto optimizado para impresión / “Guardar como PDF” desde el navegador.
- * Misma información de marca que la vista previa oscura (`lib/presupuesto/brand.ts`).
+ * Objetivo: una sola hoja A4 (densidad por ítems + escala automática al imprimir).
+ * Misma información de marca que la vista previa (`lib/presupuesto/brand.ts`).
  */
 import { PRESUPUESTO_BRAND, textoMetodosPago } from '@/lib/presupuesto/brand';
+import {
+  PRESUPUESTO_PRINT_FIT_SCRIPT,
+  sheetModifierForItemCount,
+} from '@/lib/presupuesto/fitPrintOnePage';
 import { lineaPresupuestoTitulo, tituloPresupuestoPlano } from '@/lib/presupuesto/presentacion';
 
 export type BudgetItemJson = {
@@ -72,7 +77,7 @@ export function sanitizeBudgetItemsForPrint(raw: unknown): BudgetItemJson[] {
   });
 }
 
-/** Genera documento A4 claro alineado con docs/PRESUPUESTO-DISENO.md */
+/** Genera documento A4 claro alineado con docs/PRESUPUESTO-DISENO.md (una sola página). */
 export function buildPresupuestoPrintHtml(budget: BudgetRow): string {
   const { impresion: c } = PRESUPUESTO_BRAND;
   const items = sanitizeBudgetItemsForPrint(budget.items);
@@ -105,9 +110,7 @@ export function buildPresupuestoPrintHtml(budget: BudgetRow): string {
     })
     .join('');
 
-  const nItems = items.length;
-  const sheetMod =
-    nItems > 14 ? ' sheet--compact sheet--many' : nItems > 7 ? ' sheet--compact' : '';
+  const sheetMod = sheetModifierForItemCount(items.length);
 
   const showZelle = budget.show_zelle !== false;
   const condiciones = escapeHtml(PRESUPUESTO_BRAND.condicionesDefault.replace(/\s+/g, ' ').trim());
@@ -122,79 +125,106 @@ export function buildPresupuestoPrintHtml(budget: BudgetRow): string {
   <title>Presupuesto P-${idShort}</title>
   <style>
     * { box-sizing: border-box; }
+    html, body { height: auto; }
     body {
       font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
       color: ${c.texto};
       background: ${c.fondo};
       margin: 0;
-      padding: 8mm 10mm;
-      font-size: 9.5px;
-      line-height: 1.28;
+      padding: 6mm 8mm;
+      font-size: 9px;
+      line-height: 1.22;
     }
-    .sheet { max-width: 210mm; margin: 0 auto; }
+    .sheet {
+      max-width: 210mm;
+      margin: 0 auto;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
     .sheet--compact .items-table td, .sheet--compact .items-table th {
-      padding: 2px 5px !important; font-size: 8.5px !important; line-height: 1.08 !important;
+      padding: 1.5px 4px !important; font-size: 8px !important; line-height: 1.05 !important;
     }
-    .sheet--compact .cliente-nombre { font-size: 14px !important; }
-    .sheet--compact .total-val { font-size: 20px !important; }
-    .sheet--compact .top { padding-bottom: 8px !important; margin-bottom: 10px !important; }
-    .sheet--compact .cliente-block { margin-bottom: 10px !important; }
-    .sheet--compact .items-table { margin-bottom: 10px !important; }
-    .sheet--compact .footer-grid { gap: 10px !important; margin-top: 4px !important; }
+    .sheet--compact .cliente-nombre { font-size: 13px !important; }
+    .sheet--compact .total-val { font-size: 18px !important; }
+    .sheet--compact .top { padding-bottom: 5px !important; margin-bottom: 6px !important; }
+    .sheet--compact .cliente-block { margin-bottom: 6px !important; }
+    .sheet--compact .items-table { margin-bottom: 6px !important; }
+    .sheet--compact .footer-grid { gap: 8px !important; margin-top: 2px !important; }
     .sheet--many .items-table td, .sheet--many .items-table th {
-      padding: 1px 4px !important; font-size: 8px !important; line-height: 1.05 !important;
+      padding: 1px 3px !important; font-size: 7.5px !important; line-height: 1.02 !important;
     }
-    .sheet--many .legal p { font-size: 8.5px !important; line-height: 1.35 !important; }
-    .sheet--many .logo-casa-inteligente { width: 40px !important; height: 40px !important; margin-bottom: 2px !important; }
-    .sheet--many .brand-name { font-size: 15px !important; }
-    .sheet--many .total-val { font-size: 17px !important; }
+    .sheet--many .legal p { font-size: 7.5px !important; line-height: 1.25 !important; }
+    .sheet--many .logo-casa-inteligente { width: 34px !important; height: 34px !important; margin-bottom: 1px !important; }
+    .sheet--many .brand-name { font-size: 13px !important; }
+    .sheet--many .total-val { font-size: 15px !important; }
+    .sheet--ultra .items-table td, .sheet--ultra .items-table th {
+      padding: 0 2px !important; font-size: 7px !important; line-height: 1 !important;
+    }
+    .sheet--ultra .legal p { font-size: 7px !important; line-height: 1.2 !important; }
+    .sheet--ultra .legal .block { margin-top: 3px !important; }
+    .sheet--ultra .top { padding-bottom: 3px !important; margin-bottom: 4px !important; }
+    .sheet--ultra .cliente-block { margin-bottom: 4px !important; }
+    .sheet--ultra .cliente-nombre { font-size: 12px !important; }
+    .sheet--ultra .total-val { font-size: 14px !important; }
     .top {
       display: flex; justify-content: space-between; align-items: flex-start;
       border-bottom: 2px solid ${c.acento};
-      padding-bottom: 8px; margin-bottom: 10px;
+      padding-bottom: 6px; margin-bottom: 8px;
     }
-    .brand-name { font-size: 16px; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 2px; color: ${c.texto}; }
-    .logo-casa-inteligente { width: 44px; height: 44px; object-fit: cover; border-radius: 10px; margin-bottom: 4px; }
-    .brand-sub { font-size: 8.5px; color: ${c.textoMuted}; text-transform: uppercase; letter-spacing: 0.06em; }
+    .brand-name { font-size: 15px; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 1px; color: ${c.texto}; }
+    .logo-casa-inteligente { width: 40px; height: 40px; object-fit: cover; border-radius: 8px; margin-bottom: 2px; }
+    .brand-sub { font-size: 8px; color: ${c.textoMuted}; text-transform: uppercase; letter-spacing: 0.06em; }
     .badge {
-      background: ${c.acento}; color: #fff; font-weight: 700; font-size: 9px;
-      padding: 5px 10px; border-radius: 6px; display: inline-block;
+      background: ${c.acento}; color: #fff; font-weight: 700; font-size: 8.5px;
+      padding: 4px 8px; border-radius: 5px; display: inline-block;
     }
-    .fecha { font-size: 9px; color: ${c.textoMuted}; margin-bottom: 4px; text-align: right; }
-    .cliente-block { display: flex; justify-content: space-between; align-items: flex-end; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
-    .cliente-nombre { font-size: 15px; font-weight: 800; margin: 0 0 4px; letter-spacing: -0.02em; line-height: 1.15; }
-    .cliente-meta { color: ${c.textoMuted}; font-size: 9px; }
+    .fecha { font-size: 8.5px; color: ${c.textoMuted}; margin-bottom: 3px; text-align: right; }
+    .cliente-block { display: flex; justify-content: space-between; align-items: flex-end; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+    .cliente-nombre { font-size: 14px; font-weight: 800; margin: 0 0 2px; letter-spacing: -0.02em; line-height: 1.12; }
+    .cliente-meta { color: ${c.textoMuted}; font-size: 8.5px; }
     .total-box { text-align: right; }
-    .total-label { font-size: 8px; color: ${c.textoMuted}; text-transform: uppercase; letter-spacing: 0.05em; }
-    .total-val { font-size: 22px; font-weight: 800; color: ${c.acento}; line-height: 1; }
-    .items-table { width: 100%; border-collapse: collapse; margin: 0 0 10px; }
+    .total-label { font-size: 7.5px; color: ${c.textoMuted}; text-transform: uppercase; letter-spacing: 0.05em; }
+    .total-val { font-size: 20px; font-weight: 800; color: ${c.acento}; line-height: 1; }
+    .items-table { width: 100%; border-collapse: collapse; margin: 0 0 8px; }
     .items-table th {
-      text-align: left; font-size: 8px; text-transform: uppercase; letter-spacing: 0.06em;
-      color: ${c.textoMuted}; padding: 3px 6px; background: ${c.barraTabla}; border-bottom: 1px solid ${c.borde};
-      line-height: 1.1; vertical-align: middle;
+      text-align: left; font-size: 7.5px; text-transform: uppercase; letter-spacing: 0.05em;
+      color: ${c.textoMuted}; padding: 2px 5px; background: ${c.barraTabla}; border-bottom: 1px solid ${c.borde};
+      line-height: 1.08; vertical-align: middle;
     }
     .items-table th:nth-child(n+2), .items-table td.num { text-align: right; }
     .items-table td {
-      padding: 3px 6px; border-bottom: 1px solid ${c.borde}; vertical-align: middle;
-      line-height: 1.12;
+      padding: 2px 5px; border-bottom: 1px solid ${c.borde}; vertical-align: middle;
+      line-height: 1.08;
     }
-    .items-table td strong { font-weight: 700; line-height: 1.1; }
+    .items-table td strong { font-weight: 700; line-height: 1.05; }
     .items-table td img, .items-table td picture { display: none !important; width: 0 !important; height: 0 !important; }
     .items-table tbody tr:nth-child(even) td { background: #f8fafc; }
-    .footer-grid { display: grid; grid-template-columns: 1fr minmax(120px, 160px); gap: 10px; margin-top: 4px; align-items: start; }
-    .legal h4 { font-size: 8px; text-transform: uppercase; letter-spacing: 0.06em; color: ${c.textoMuted}; margin: 0 0 3px; }
-    .legal p { margin: 0; color: ${c.textoMuted}; font-size: 8.5px; line-height: 1.35; }
-    .legal .block { margin-top: 6px; }
-    .sum-line { display: flex; justify-content: space-between; padding: 5px 8px; border: 1px solid ${c.borde}; border-radius: 6px; margin-bottom: 4px; background: #fff; }
+    .footer-grid { display: grid; grid-template-columns: 1fr minmax(110px, 150px); gap: 8px; margin-top: 2px; align-items: start; }
+    .legal h4 { font-size: 7.5px; text-transform: uppercase; letter-spacing: 0.05em; color: ${c.textoMuted}; margin: 0 0 2px; }
+    .legal p { margin: 0; color: ${c.textoMuted}; font-size: 8px; line-height: 1.28; }
+    .legal .block { margin-top: 4px; }
+    .sum-line { display: flex; justify-content: space-between; padding: 4px 6px; border: 1px solid ${c.borde}; border-radius: 5px; margin-bottom: 3px; background: #fff; }
     .sum-total {
-      background: #eff6ff; border-color: #bfdbfe; font-weight: 800; font-size: 11px; color: ${c.acento};
+      background: #eff6ff; border-color: #bfdbfe; font-weight: 800; font-size: 10px; color: ${c.acento};
     }
     .muted { color: ${c.textoMuted}; }
     @media print {
-      body { padding: 5mm 7mm !important; margin: 0 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      .sheet { max-width: none !important; }
-      /* Chrome/Edge: reduce ~4% para intentar una sola hoja A4 con mucho texto */
-      html { zoom: 0.96; }
+      html, body {
+        height: auto !important;
+        overflow: hidden !important;
+      }
+      body {
+        padding: 0 !important;
+        margin: 0 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      .sheet {
+        max-width: none !important;
+        page-break-after: avoid !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
     }
     @page { size: A4 portrait; margin: 6mm; }
   </style>
@@ -248,10 +278,11 @@ export function buildPresupuestoPrintHtml(budget: BudgetRow): string {
           <span>TOTAL</span>
           <span>$${fmt(Number(budget.subtotal ?? 0))}</span>
         </div>
-        <p class="muted" style="font-size:7.5px;margin-top:6px;text-align:right;line-height:1.2">Casa Inteligente · Documento generado electrónicamente</p>
+        <p class="muted" style="font-size:7px;margin-top:4px;text-align:right;line-height:1.15">Casa Inteligente · Documento generado electrónicamente</p>
       </div>
     </div>
   </div>
+  <script>${PRESUPUESTO_PRINT_FIT_SCRIPT}</script>
 </body>
 </html>`;
 }

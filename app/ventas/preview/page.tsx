@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { PRESUPUESTO_BRAND, textoMetodosPago } from '@/lib/presupuesto/brand';
 import { DEMO_PRESUPUESTO } from '@/lib/presupuesto/demo-data';
+import { attachFitPresupuestoPrintToOnePage } from '@/lib/presupuesto/fitPrintOnePage';
 import { lineaPresupuestoTitulo, textoPresupuesto, tituloPresupuestoPlano } from '@/lib/presupuesto/presentacion';
 import type { PresupuestoVista } from '@/lib/presupuesto/types';
 import { createClient } from '@/lib/supabase/client';
@@ -141,6 +142,14 @@ export default function PreviewPage() {
     const [data, setData] = useState<PresupuestoVista | null>(null);
     const [isDemo, setIsDemo] = useState(false);
     const [loading, setLoading] = useState(false);
+
+    /** Al imprimir / Guardar PDF: escala el documento a una sola hoja A4. */
+    useEffect(() => {
+        return attachFitPresupuestoPrintToOnePage({
+            rootSelector: '.preview-doc',
+            usableHeightMm: 297 - 12,
+        });
+    }, []);
 
     useEffect(() => {
         let cancelled = false;
@@ -1040,6 +1049,10 @@ export default function PreviewPage() {
 
                 @media print {
                     .no-print { display: none !important; }
+                    html, body {
+                        height: auto !important;
+                        overflow: hidden !important;
+                    }
                     body, .preview-page {
                         background: #FFFFFF !important;
                         padding: 0 !important;
@@ -1047,7 +1060,7 @@ export default function PreviewPage() {
                         -webkit-print-color-adjust: exact;
                         print-color-adjust: exact;
                     }
-                    @page { margin: 10mm; size: A4; }
+                    @page { margin: 6mm; size: A4 portrait; }
                     .preview-doc-wrap {
                         max-width: none !important;
                         margin: 0 !important;
@@ -1059,12 +1072,61 @@ export default function PreviewPage() {
                         border: none !important;
                         border-radius: 0 !important;
                         overflow: visible !important;
+                        page-break-inside: avoid !important;
+                        break-inside: avoid !important;
+                        page-break-after: avoid !important;
+                    }
+                    .preview-doc-header {
+                        padding: 8px 12px 6px !important;
+                    }
+                    .preview-doc-logo {
+                        width: 36px !important;
+                        height: 36px !important;
+                    }
+                    .preview-doc-empresa {
+                        font-size: 14px !important;
+                    }
+                    .preview-cliente-nombre {
+                        font-size: 14px !important;
+                    }
+                    .preview-total-monto {
+                        font-size: 18px !important;
+                    }
+                    .preview-table-row {
+                        padding-top: 3px !important;
+                        padding-bottom: 3px !important;
+                        padding-left: 12px !important;
+                        padding-right: 12px !important;
+                    }
+                    .preview-table-row p,
+                    .preview-table-row span {
+                        font-size: 9px !important;
+                        line-height: 1.15 !important;
+                    }
+                    .preview-doc-footer {
+                        padding: 8px 12px !important;
+                        gap: 10px !important;
+                    }
+                    .preview-doc-footer p {
+                        font-size: 8.5px !important;
+                        line-height: 1.25 !important;
+                        margin-bottom: 0 !important;
+                    }
+                    .preview-totales-panel > div {
+                        padding: 4px 8px !important;
+                        border-radius: 6px !important;
+                    }
+                    .preview-totales-panel span {
+                        font-size: 10px !important;
                     }
                     /* Solo texto escrito (o vacío); nunca el placeholder de ejemplo */
                     .preview-notas-field { display: none !important; }
                     .preview-notas-print {
                         display: block !important;
                         color: #64748B !important;
+                        font-size: 8.5px !important;
+                        line-height: 1.25 !important;
+                        min-height: 0 !important;
                         -webkit-print-color-adjust: exact;
                         print-color-adjust: exact;
                     }
