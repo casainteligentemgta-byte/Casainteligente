@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { filenamePresupuestoPdf } from '@/lib/presupuesto/brand';
 import { buildPresupuestoPrintHtml } from '@/lib/presupuesto/html-impresion';
 
 /**
@@ -65,17 +66,29 @@ export async function GET(
     /* ignorar */
   }
 
-  const html = buildPresupuestoPrintHtml({
+  const budgetForHtml = {
     ...budget,
     id,
     ...(numero_correlativo_override != null ? { numero_correlativo: numero_correlativo_override } : {}),
-  });
+  };
+  const html = buildPresupuestoPrintHtml(budgetForHtml);
+
+  const correlativoFinal =
+    numero_correlativo_override != null
+      ? numero_correlativo_override
+      : (() => {
+          const raw = (budget as { numero_correlativo?: unknown }).numero_correlativo;
+          const n = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : null;
+          return n != null && !Number.isNaN(n) ? n : id.slice(0, 8).toUpperCase();
+        })();
+  const fileHtml = filenamePresupuestoPdf(correlativoFinal, 'html');
+  const fileAscii = fileHtml.replace(/[^\x20-\x7E]/g, '_').replace(/"/g, '');
 
   return new NextResponse(html, {
     status: 200,
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
-      'Content-Disposition': `inline; filename="presupuesto-${id.slice(0, 8)}.html"`,
+      'Content-Disposition': `inline; filename="${fileAscii}"; filename*=UTF-8''${encodeURIComponent(fileHtml)}`,
     },
   });
 }
