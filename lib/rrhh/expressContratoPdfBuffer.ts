@@ -6,7 +6,12 @@ import {
   type ContratoExpressManualInput,
 } from '@/lib/talento/contratoObreroPdfContext';
 import { ContratoObreroPDF } from '@/lib/talento/ContratoObreroPdfStructured';
-import { estadoCivilContratoObrero, nacionalidadDesdeCedula, trabajadorFemeninoDesdeEstadoCivil } from '@/lib/talento/cedulaAuth';
+import {
+  domicilioContratoObrero,
+  estadoCivilContratoObrero,
+  nacionalidadDesdeCedula,
+  trabajadorFemeninoDesdeEstadoCivil,
+} from '@/lib/talento/cedulaAuth';
 import { resolverCodigoExpedienteContrato } from '@/lib/talento/codigoExpedienteContrato';
 import { BUCKET_CONTRATOS_OBREROS } from '@/lib/talento/contratoLaboralRegistroStorage';
 
@@ -30,7 +35,7 @@ function manualDesdeExpressRow(row: ExpressRow): ContratoExpressManualInput {
   return {
     obreroNombre: String(row.obrero_nombre ?? '').trim(),
     obreroCedula: cedula,
-    obreroDireccion: row.obrero_direccion?.trim() || null,
+    obreroDireccion: domicilioContratoObrero(row.obrero_direccion),
     horarioSemanalTexto: row.horario_semanal_texto?.trim() || null,
     nacionalidad: nacionalidadDesdeCedula(cedula, femenino) ?? (femenino ? 'venezolana' : 'venezolano'),
     estadoCivil,

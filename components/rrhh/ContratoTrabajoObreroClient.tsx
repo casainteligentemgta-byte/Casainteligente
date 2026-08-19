@@ -374,7 +374,7 @@ export default function ContratoTrabajoObreroClient() {
         obrero_nombres: nombres.trim(),
         obrero_apellidos: apellidos.trim(),
         obrero_cedula: cedula.trim(),
-        obrero_direccion: direccion.trim() || null,
+        obrero_direccion: direccion.trim() || 'de este domicilio',
         obrero_municipio_residencia: municipio.trim() || null,
         obrero_estado_residencia: estadoRes.trim() || null,
         nacionalidad: null,
@@ -466,6 +466,12 @@ export default function ContratoTrabajoObreroClient() {
         `${sinEstadoCivil} fila(s) sin estado civil: se usará «${estadoCivilDefault.trim() || 'Soltero'}».`,
       );
     }
+    const sinDomicilio = pendientes.filter((f) => !(f.direccion ?? '').trim()).length;
+    if (sinDomicilio > 0) {
+      toast.message(
+        `${sinDomicilio} fila(s) sin domicilio: se usará «de este domicilio».`,
+      );
+    }
 
     setGenerando(true);
     setProgreso({ done: 0, total: pendientes.length });
@@ -517,7 +523,7 @@ export default function ContratoTrabajoObreroClient() {
           obrero_nombres: f.nombres,
           obrero_apellidos: f.apellidos,
           obrero_nombre: f.nombreCompleto,
-          obrero_direccion: f.direccion,
+          obrero_direccion: (f.direccion ?? '').trim() || 'de este domicilio',
           bono_manual_usd: f.bonoUsd,
           fecha_ingreso: f.fechaIngreso || fechaIngreso,
           jornada_trabajo: f.jornada || jornada,
@@ -931,6 +937,7 @@ export default function ContratoTrabajoObreroClient() {
                     className={inputClass}
                     value={direccion}
                     onChange={(e) => setDireccion(e.target.value)}
+                    placeholder="de este domicilio"
                   />
                 </label>
                 <label className="block space-y-1.5">
@@ -1069,9 +1076,9 @@ export default function ContratoTrabajoObreroClient() {
               </p>
               <p className="mt-1">
                 Lugar de trabajo, nombre de obra, fase técnica, punto de encuentro y domicilio procesal
-                salen de la <span className="text-zinc-200">obra seleccionada</span> (datos PM). Completa
-                estado civil en el Excel (si falta → Soltero). Nacionalidad: ciudadano → venezolano; ciudadana →
-                venezolana (V/E según cédula).
+                salen de la <span className="text-zinc-200">obra seleccionada</span> (datos PM). Si falta
+                estado civil → Soltero; si falta domicilio/dirección → «de este domicilio». Nacionalidad:
+                ciudadano → venezolano; ciudadana → venezolana (V/E según cédula).
               </p>
               <p className="mt-1">
                 Si una fila no trae fecha, jornada o bono, se usan los valores por defecto de abajo.
