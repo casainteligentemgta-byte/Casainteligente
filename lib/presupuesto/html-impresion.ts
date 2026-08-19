@@ -146,7 +146,7 @@ export function buildPresupuestoPrintHtml(budget: BudgetRow): string {
       padding: 1.5px 4px !important; font-size: 8px !important; line-height: 1.05 !important;
     }
     .sheet--compact .cliente-nombre { font-size: 13px !important; }
-    .sheet--compact .total-val { font-size: 18px !important; }
+    .sheet--compact .sum-total .sum-total-val { font-size: 22px !important; }
     .sheet--compact .top { padding-bottom: 5px !important; margin-bottom: 6px !important; }
     .sheet--compact .cliente-block { margin-bottom: 6px !important; }
     .sheet--compact .items-table { margin-bottom: 6px !important; }
@@ -157,7 +157,7 @@ export function buildPresupuestoPrintHtml(budget: BudgetRow): string {
     .sheet--many .legal p { font-size: 7.5px !important; line-height: 1.25 !important; }
     .sheet--many .logo-casa-inteligente { width: 34px !important; height: 34px !important; margin-bottom: 1px !important; }
     .sheet--many .brand-name { font-size: 13px !important; }
-    .sheet--many .total-val { font-size: 15px !important; }
+    .sheet--many .sum-total .sum-total-val { font-size: 18px !important; }
     .sheet--ultra .items-table td, .sheet--ultra .items-table th {
       padding: 0 2px !important; font-size: 7px !important; line-height: 1 !important;
     }
@@ -166,7 +166,7 @@ export function buildPresupuestoPrintHtml(budget: BudgetRow): string {
     .sheet--ultra .top { padding-bottom: 3px !important; margin-bottom: 4px !important; }
     .sheet--ultra .cliente-block { margin-bottom: 4px !important; }
     .sheet--ultra .cliente-nombre { font-size: 12px !important; }
-    .sheet--ultra .total-val { font-size: 14px !important; }
+    .sheet--ultra .sum-total .sum-total-val { font-size: 16px !important; }
     .top {
       display: flex; justify-content: space-between; align-items: flex-start;
       border-bottom: 2px solid ${c.acento};
@@ -180,12 +180,9 @@ export function buildPresupuestoPrintHtml(budget: BudgetRow): string {
       padding: 4px 8px; border-radius: 5px; display: inline-block;
     }
     .fecha { font-size: 8.5px; color: ${c.textoMuted}; margin-bottom: 3px; text-align: right; }
-    .cliente-block { display: flex; justify-content: space-between; align-items: flex-end; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+    .cliente-block { margin-bottom: 8px; }
     .cliente-nombre { font-size: 14px; font-weight: 800; margin: 0 0 2px; letter-spacing: -0.02em; line-height: 1.12; }
     .cliente-meta { color: ${c.textoMuted}; font-size: 8.5px; }
-    .total-box { text-align: right; }
-    .total-label { font-size: 7.5px; color: ${c.textoMuted}; text-transform: uppercase; letter-spacing: 0.05em; }
-    .total-val { font-size: 20px; font-weight: 800; color: ${c.acento}; line-height: 1; }
     .items-table { width: 100%; border-collapse: collapse; margin: 0 0 8px; }
     .items-table th {
       text-align: left; font-size: 7.5px; text-transform: uppercase; letter-spacing: 0.05em;
@@ -204,10 +201,15 @@ export function buildPresupuestoPrintHtml(budget: BudgetRow): string {
     .legal h4 { font-size: 7.5px; text-transform: uppercase; letter-spacing: 0.05em; color: ${c.textoMuted}; margin: 0 0 2px; }
     .legal p { margin: 0; color: ${c.textoMuted}; font-size: 8px; line-height: 1.28; }
     .legal .block { margin-top: 4px; }
-    .sum-line { display: flex; justify-content: space-between; padding: 4px 6px; border: 1px solid ${c.borde}; border-radius: 5px; margin-bottom: 3px; background: #fff; }
+    .sum-line { display: flex; justify-content: space-between; align-items: baseline; padding: 4px 6px; border: 1px solid ${c.borde}; border-radius: 5px; margin-bottom: 3px; background: #fff; }
     .sum-total {
-      background: #eff6ff; border-color: #bfdbfe; font-weight: 800; font-size: 10px; color: ${c.acento};
+      background: #ecfdf5; border-color: #a7f3d0; font-weight: 800; color: #15803d;
+      padding: 8px 10px; align-items: center;
     }
+    .sum-total .sum-total-val {
+      font-size: 28px; font-weight: 800; color: #34c759; letter-spacing: -0.04em; line-height: 1;
+    }
+    .sum-total .sum-total-val .currency { font-size: 14px; font-weight: 600; }
     .muted { color: ${c.textoMuted}; }
     @media print {
       html, body {
@@ -245,14 +247,8 @@ export function buildPresupuestoPrintHtml(budget: BudgetRow): string {
     </div>
 
     <div class="cliente-block">
-      <div>
-        <h2 class="cliente-nombre">${escapeHtml((budget.customer_name ?? 'Cliente').toUpperCase())}</h2>
-        <p class="cliente-meta">RIF / ID: ${escapeHtml(budget.customer_rif ?? '—')}</p>
-      </div>
-      <div class="total-box">
-        <div class="total-label">Total</div>
-        <div class="total-val">$${fmt(Number(budget.subtotal ?? 0))}</div>
-      </div>
+      <h2 class="cliente-nombre">${escapeHtml((budget.customer_name ?? 'Cliente').toUpperCase())}</h2>
+      <p class="cliente-meta">RIF / ID: ${escapeHtml(budget.customer_rif ?? '—')}</p>
     </div>
 
     <table class="items-table">
@@ -277,7 +273,7 @@ export function buildPresupuestoPrintHtml(budget: BudgetRow): string {
       <div>
         <div class="sum-line sum-total">
           <span>TOTAL</span>
-          <span>$${fmt(Number(budget.subtotal ?? 0))}</span>
+          <span class="sum-total-val"><span class="currency">$</span>${fmt(Number(budget.subtotal ?? 0))}</span>
         </div>
         <p class="muted" style="font-size:7px;margin-top:4px;text-align:right;line-height:1.15">Casa Inteligente · Documento generado electrónicamente</p>
       </div>
