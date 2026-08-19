@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 import PresupuestosFiltrosModal from '@/components/presupuestos/PresupuestosFiltrosModal';
+import { fechaDocumentoDeBudget, formatFechaPresupuestoCorta } from '@/lib/presupuesto/fecha';
 
 interface Budget {
     id: string;
@@ -14,6 +15,7 @@ interface Budget {
     status: 'no_enviado' | 'enviado' | 'aprobado' | 'no_aprobado' | 'cobrado' | 'pagado';
     show_zelle?: boolean;
     numero_correlativo?: number | string | null;
+    fecha?: string | null;
     created_at: string;
 }
 
@@ -53,9 +55,7 @@ function formatUSD(n: number) {
 }
 
 function formatFechaCorta(iso: string) {
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return '—';
-    return d.toLocaleDateString('es-VE', { day: 'numeric', month: 'short' });
+    return formatFechaPresupuestoCorta(iso);
 }
 
 function getPresupuestoNumero(b: Budget, fallback?: number) {
@@ -105,7 +105,7 @@ function TarjetaPresupuesto({
     const [menuAbierto, setMenuAbierto] = useState(false);
     const clasif = clasificarPresupuesto(b);
     const clasifStyle = CLASIFICACION_COLORS[clasif];
-    const fecha = formatFechaCorta(b.created_at);
+    const fecha = formatFechaCorta(b.fecha || b.created_at);
     const numero = getPresupuestoNumero(b, fallbackById[b.id]);
 
     return (
@@ -407,8 +407,6 @@ export default function PresupuestosPage() {
         const rif = filtroRif.trim();
         if (nombre) query = query.ilike('customer_name', `%${nombre}%`);
         if (rif) query = query.ilike('customer_rif', `%${rif}%`);
-        if (filtroFechaDesde) query = query.gte('created_at', `${filtroFechaDesde}T00:00:00`);
-        if (filtroFechaHasta) query = query.lte('created_at', `${filtroFechaHasta}T23:59:59.999`);
 
         const { data, error } = await query;
         if (!error && data) {
@@ -433,6 +431,14 @@ export default function PresupuestosPage() {
 
             const numeroQ = filtroNumero.trim().toLowerCase().replace(/^p-/, '');
             let filtered = [...data] as Budget[];
+            if (filtroFechaDesde || filtroFechaHasta) {
+                filtered = filtered.filter((b) => {
+                    const f = fechaDocumentoDeBudget(b);
+                    if (filtroFechaDesde && f < filtroFechaDesde) return false;
+                    if (filtroFechaHasta && f > filtroFechaHasta) return false;
+                    return true;
+                });
+            }
             if (numeroQ) {
                 filtered = filtered.filter((b) => {
                     const label = getPresupuestoNumero(b, fallbackMap[b.id]).toLowerCase();
@@ -448,13 +454,13 @@ export default function PresupuestosPage() {
 
             let sorted = [...filtered];
             if (sortBy === 'fecha') {
-                sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+                sorted.sort((a, b) => fechaDocumentoDeBudget(b).localeCompare(fechaDocumentoDeBudget(a)));
             } else if (sortBy === 'status') {
                 sorted.sort((a, b) => {
                     const da = STATUS_SORT_ORDER[a.status] ?? 99;
                     const db = STATUS_SORT_ORDER[b.status] ?? 99;
                     if (da !== db) return da - db;
-                    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+                    return fechaDocumentoDeBudget(b).localeCompare(fechaDocumentoDeBudget(a));
                 });
             } else {
                 sorted.sort((a, b) => getNumeroOrden(a) - getNumeroOrden(b));

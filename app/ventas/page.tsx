@@ -6,6 +6,14 @@ import Link from 'next/link';
 import { withTimeout } from '@/lib/http/withTimeout';
 import { createClient } from '@/lib/supabase/client';
 import ProductSearch, { Product } from '@/components/ventas/ProductSearch';
+import {
+    esErrorColumnaFecha,
+    esFechaIso,
+    fechaACreatedAtMediodiaCaracas,
+    fechaDocumentoDeBudget,
+    formatFechaPresupuestoLarga,
+    hoyFechaPresupuesto,
+} from '@/lib/presupuesto/fecha';
 
 /** Miniatura en líneas del presupuesto (solo UI; al guardar en BD se omite `imagen` en `product_data`). */
 function LineItemProductThumb({ imagen }: { imagen?: string | null }) {
@@ -208,6 +216,7 @@ function VentasContent() {
     const customerInputRef = useRef<HTMLInputElement>(null);
     const legacyParamsResolved = useRef(false);
     const [budgetId, setBudgetId] = useState<string | null>(null);
+    const [fecha, setFecha] = useState(hoyFechaPresupuesto);
     const [notes, setNotes] = useState('');
     const [showZelle, setShowZelle] = useState(true);
     const [showSummary, setShowSummary] = useState(false);
@@ -353,6 +362,7 @@ function VentasContent() {
                         setClientRif(data.customer_rif || '');
                         setCustomerId(data.customer_id);
                         setNotes(data.notes || '');
+                        setFecha(fechaDocumentoDeBudget(data as { fecha?: unknown; created_at?: unknown }));
                         setShowZelle(data.show_zelle !== false); // Default to true if undefined
 
                         if (data.customer_id) {
@@ -470,6 +480,7 @@ function VentasContent() {
         setSaving(true);
         const supabase = createClient();
 
+        const fechaIso = esFechaIso(fecha) ? fecha : hoyFechaPresupuesto();
         const budgetDataBase = {
             customer_name: clientName,
             customer_rif: clientRif,
@@ -492,30 +503,32 @@ function VentasContent() {
             margin_pct: marginPct,
             notes: notes,
             show_zelle: showZelle,
+            fecha: fechaIso,
         };
 
-        let res;
-        if (budgetId) {
-            res = await supabase
-                .from('budgets')
-                .update(budgetDataBase)
-                .eq('id', budgetId);
-        } else {
-            const budgetData = { ...budgetDataBase, status: 'no_enviado' };
-            res = await supabase
-                .from('budgets')
-                .insert([budgetData])
-                .select()
-                .single();
-            if (!res.error && res.data) {
-                setBudgetId(res.data.id);
+        const persist = async (payload: Record<string, unknown>) => {
+            if (budgetId) {
+                return supabase.from('budgets').update(payload).eq('id', budgetId);
             }
+            return supabase.from('budgets').insert([{ ...payload, status: 'no_enviado' }]).select().single();
+        };
+
+        let res = await persist(budgetDataBase);
+        if (res.error && esErrorColumnaFecha(res.error.message)) {
+            const { fecha: _omitFecha, ...sinFecha } = budgetDataBase;
+            res = await persist({
+                ...sinFecha,
+                created_at: fechaACreatedAtMediodiaCaracas(fechaIso),
+            });
         }
 
         setSaving(false);
         if (res.error) {
             alert('Error al guardar presupuesto: ' + res.error.message);
         } else {
+            if (!budgetId && res.data && typeof (res.data as { id?: unknown }).id === 'string') {
+                setBudgetId((res.data as { id: string }).id);
+            }
             alert('✅ Presupuesto guardado correctamente');
         }
     };
@@ -762,6 +775,40 @@ function VentasContent() {
             </div>
 
             <div style={{ padding: '20px', maxWidth: '900px', margin: '0 auto' }}>
+
+                {/* ── Fecha del documento (editable al crear y al editar) ── */}
+                <div style={{ ...glass, padding: '16px', marginBottom: '16px' }}>
+                    <label
+                        htmlFor="presupuesto-fecha"
+                        style={{ fontSize: '12px', fontWeight: 600, color: 'var(--label-secondary)', letterSpacing: '0.5px', textTransform: 'uppercase', display: 'block', marginBottom: '10px' }}
+                    >
+                        Fecha del presupuesto
+                    </label>
+                    <input
+                        id="presupuesto-fecha"
+                        type="date"
+                        autoComplete="off"
+                        value={fecha}
+                        onChange={(e) => setFecha(e.target.value || hoyFechaPresupuesto())}
+                        aria-label="Fecha del presupuesto"
+                        style={{
+                            width: '100%',
+                            maxWidth: '280px',
+                            background: 'rgba(255,255,255,0.06)',
+                            border: '1px solid rgba(255,255,255,0.12)',
+                            borderRadius: '12px',
+                            padding: '12px 14px',
+                            color: 'var(--label-primary)',
+                            fontSize: '15px',
+                            fontWeight: 600,
+                            fontFamily: 'inherit',
+                            colorScheme: 'dark',
+                        }}
+                    />
+                    <p style={{ fontSize: '11px', color: 'var(--label-secondary)', marginTop: '8px', lineHeight: 1.4, opacity: 0.9 }}>
+                        Esta fecha aparece en la vista previa, el PDF y el listado. Puedes cambiarla al editar un presupuesto guardado.
+                    </p>
+                </div>
 
                 {/* ── Cliente (solo desde tabla `customers`) ── */}
                 <div style={{ ...glass, padding: '16px', marginBottom: '16px' }}>
@@ -1580,7 +1627,7 @@ function VentasContent() {
                                         totalProfit,
                                         marginPct,
                                         showZelle,
-                                        fecha: new Date().toLocaleDateString('es-VE', { day: 'numeric', month: 'long', year: 'numeric' }),
+                                        fecha: formatFechaPresupuestoLarga(fecha),
                                         numero: budgetId ? `P-${budgetId.slice(0, 4)}` : `P-${Math.floor(Math.random() * 900) + 100}`,
                                     };
                                     localStorage.setItem('presupuesto_preview', JSON.stringify(presupuesto));
