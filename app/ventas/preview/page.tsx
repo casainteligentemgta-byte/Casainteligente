@@ -6,6 +6,7 @@ import { PRESUPUESTO_BRAND, nombreDocumentoPresupuestoPdf, textoMetodosPago } fr
 import { DEMO_PRESUPUESTO } from '@/lib/presupuesto/demo-data';
 import { attachFitPresupuestoPrintToOnePage } from '@/lib/presupuesto/fitPrintOnePage';
 import { lineaPresupuestoTitulo, textoPresupuesto, tituloPresupuestoPlano } from '@/lib/presupuesto/presentacion';
+import { fechaDocumentoDeBudget, formatFechaPresupuestoLarga } from '@/lib/presupuesto/fecha';
 import type { PresupuestoVista } from '@/lib/presupuesto/types';
 import { createClient } from '@/lib/supabase/client';
 
@@ -36,7 +37,6 @@ function budgetRowToPreviewPayload(
         };
     });
     const id = String(budget.id ?? '');
-    const created = budget.created_at ? new Date(String(budget.created_at)) : new Date();
     const correlativoRaw = (budget as any).numero_correlativo as unknown;
     const correlativoNum =
         typeof correlativoRaw === 'number'
@@ -55,7 +55,7 @@ function budgetRowToPreviewPayload(
         totalProfit: Number(budget.total_profit) || 0,
         marginPct: Number(budget.margin_pct) || 0,
         showZelle: budget.show_zelle !== false,
-        fecha: created.toLocaleDateString('es-VE', { day: 'numeric', month: 'long', year: 'numeric' }),
+        fecha: formatFechaPresupuestoLarga(fechaDocumentoDeBudget(budget)),
         numero:
             correlativoNum != null && !Number.isNaN(correlativoNum)
                 ? `P-${correlativoNum}`

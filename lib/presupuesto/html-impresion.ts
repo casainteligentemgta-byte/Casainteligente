@@ -13,6 +13,7 @@ import {
   sheetModifierForItemCount,
 } from '@/lib/presupuesto/fitPrintOnePage';
 import { lineaPresupuestoTitulo, tituloPresupuestoPlano } from '@/lib/presupuesto/presentacion';
+import { fechaDocumentoDeBudget, formatFechaPresupuestoLarga } from '@/lib/presupuesto/fecha';
 
 export type BudgetItemJson = {
   product_data?: { nombre?: string; categoria?: string | null; descripcion?: string | null };
@@ -28,6 +29,7 @@ export type BudgetRow = {
   show_zelle?: boolean | null;
   subtotal?: number | null;
   items?: unknown;
+  fecha?: string | null;
   created_at?: string | null;
   id?: string;
   numero_correlativo?: number | null;
@@ -91,13 +93,7 @@ export function buildPresupuestoPrintHtml(budget: BudgetRow): string {
     numeroCorrelativo != null && !Number.isNaN(numeroCorrelativo)
       ? String(numeroCorrelativo)
       : (budget.id ?? '').slice(0, 8).toUpperCase();
-  const fecha = budget.created_at
-    ? new Date(budget.created_at).toLocaleDateString('es', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
-      })
-    : new Date().toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' });
+  const fecha = formatFechaPresupuestoLarga(fechaDocumentoDeBudget(budget));
 
   const rows = items
     .map((it) => {
