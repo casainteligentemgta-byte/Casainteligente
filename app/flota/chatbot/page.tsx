@@ -7,12 +7,11 @@ import CargaManual from '@/components/flota/chatbot/CargaManual';
 import { apiUrl } from '@/lib/http/apiUrl';
 import { parseFetchJson } from '@/lib/utils/parseFetchJson';
 import { formatApiErrorBody } from '@/lib/utils/formatErrorMessage';
-import type { FlotaManual, FragmentoManual } from '@/lib/flota/chatbot';
+import type { FlotaManual } from '@/lib/flota/chatbot';
 
 export default function FlotaChatbotPage() {
   const router = useRouter();
   const [manuales, setManuales] = useState<FlotaManual[]>([]);
-  const [sending, setSending] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
@@ -44,29 +43,7 @@ export default function FlotaChatbotPage() {
       ) : null}
       {error ? <p className="text-sm text-red-300">{error}</p> : null}
 
-      <ChatbotMecanico
-        sending={sending}
-        onAsk={async (pregunta) => {
-          setSending(true);
-          try {
-            const res = await fetch(apiUrl('/api/flota/chatbot'), {
-              method: 'POST',
-              credentials: 'include',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ pregunta }),
-            });
-            const json = await parseFetchJson<{
-              respuesta?: string;
-              fuentes?: FragmentoManual[];
-              error?: string;
-            }>(res);
-            if (!res.ok) throw new Error(formatApiErrorBody(json));
-            return { respuesta: json.respuesta ?? 'Sin respuesta', fuentes: json.fuentes ?? [] };
-          } finally {
-            setSending(false);
-          }
-        }}
-      />
+      <ChatbotMecanico />
 
       <section className="space-y-2">
         <h3 className="text-sm font-semibold text-white">Manuales</h3>
