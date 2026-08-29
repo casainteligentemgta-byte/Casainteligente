@@ -3,8 +3,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { FLOTA_INPUT, FLOTA_LABEL } from '@/components/flota/FlotaShell';
-import { ETIQUETA_TIPO_MANTENIMIENTO } from '@/lib/flota/mantenimiento';
-import { TIPOS_MANTENIMIENTO, hoyIso, type FlotaVehiculo } from '@/lib/flota/utils';
+import { ETIQUETA_TIPO_MANTENIMIENTO, TIPOS_MANTENIMIENTO, hoyIso, type FlotaVehiculo } from '@/lib/flota/utils';
 
 export type MantenimientoFormValues = {
   vehiculo_id: string;

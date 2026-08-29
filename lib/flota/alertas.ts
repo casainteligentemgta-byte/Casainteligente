@@ -4,6 +4,7 @@ import type { FlotaConductor, FlotaConductorDocumento } from '@/lib/flota/conduc
 import type { ConsumoPorVehiculo } from '@/lib/flota/gasolina';
 import type { FlotaMantenimiento } from '@/lib/flota/mantenimiento';
 import {
+  ETIQUETA_TIPO_ALERTA,
   TIPOS_ALERTA_CONFIG,
   diasHasta,
   esMigracionPendiente,
@@ -251,14 +252,7 @@ function sinColumnas<T extends string>(row: Record<string, unknown>, keys: reado
   return out;
 }
 
-export const ETIQUETA_TIPO_ALERTA: Record<TipoAlertaConfig, string> = {
-  licencia_vence: 'Licencia por vencer',
-  certificado_vence: 'Certificado médico',
-  documento_vence: 'Documento por vencer',
-  mantenimiento_fecha: 'Mantenimiento por fecha',
-  mantenimiento_km: 'Mantenimiento por km',
-  consumo_alto: 'Consumo alto',
-};
+export { ETIQUETA_TIPO_ALERTA };
 
 function configMap(configs: FlotaAlertaConfig[]): Map<TipoAlertaConfig, FlotaAlertaConfig> {
   return new Map(configs.filter((c) => c.activa).map((c) => [c.tipo, c]));

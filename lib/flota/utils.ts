@@ -63,6 +63,25 @@ export const TIPOS_ALERTA_CONFIG = [
 
 export type TipoAlertaConfig = (typeof TIPOS_ALERTA_CONFIG)[number];
 
+export const ETIQUETA_TIPO_MANTENIMIENTO: Record<TipoMantenimiento, string> = {
+  preventivo: 'Preventivo',
+  correctivo: 'Correctivo',
+  cambio_aceite: 'Cambio de aceite',
+  gomas: 'Gomas',
+  frenos: 'Frenos',
+  revision: 'Revisión',
+  otro: 'Otro',
+};
+
+export const ETIQUETA_TIPO_ALERTA: Record<TipoAlertaConfig, string> = {
+  licencia_vence: 'Licencia por vencer',
+  certificado_vence: 'Certificado médico',
+  documento_vence: 'Documento por vencer',
+  mantenimiento_fecha: 'Mantenimiento por fecha',
+  mantenimiento_km: 'Mantenimiento por km',
+  consumo_alto: 'Consumo alto',
+};
+
 export type FrecuenciaAlerta = 'km' | 'dias';
 export type SeveridadAlerta = 'info' | 'warning' | 'critica';
 export type EstadoAlerta = 'pendiente' | 'leida' | 'resuelta';

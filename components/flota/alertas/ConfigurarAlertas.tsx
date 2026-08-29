@@ -2,7 +2,8 @@
 
 import { Button } from '@/components/ui/button';
 import { FLOTA_INPUT, FLOTA_LABEL } from '@/components/flota/FlotaShell';
-import { ETIQUETA_TIPO_ALERTA, type FlotaAlertaConfig } from '@/lib/flota/alertas';
+import type { FlotaAlertaConfig } from '@/lib/flota/alertas';
+import { ETIQUETA_TIPO_ALERTA } from '@/lib/flota/utils';
 
 export default function ConfigurarAlertas({
   configs,

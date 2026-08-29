@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServerClient } from '@/lib/supabase/server';
 import {
+  ETIQUETA_TIPO_MANTENIMIENTO,
   TIPOS_MANTENIMIENTO,
   esMigracionPendiente,
   esUuid,
@@ -323,12 +324,4 @@ export async function eliminarMantenimiento(supabase: SupabaseClient, id: string
   if (error) throw new Error(error.message);
 }
 
-export const ETIQUETA_TIPO_MANTENIMIENTO: Record<TipoMantenimiento, string> = {
-  preventivo: 'Preventivo',
-  correctivo: 'Correctivo',
-  cambio_aceite: 'Cambio de aceite',
-  gomas: 'Gomas',
-  frenos: 'Frenos',
-  revision: 'Revisión',
-  otro: 'Otro',
-};
+export { ETIQUETA_TIPO_MANTENIMIENTO };

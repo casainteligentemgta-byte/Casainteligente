@@ -3,8 +3,8 @@
 import { Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ETIQUETA_TIPO_MANTENIMIENTO, type FlotaMantenimiento } from '@/lib/flota/mantenimiento';
-import { formatoFechaVe, formatoMonedaUsd } from '@/lib/flota/utils';
+import type { FlotaMantenimiento } from '@/lib/flota/mantenimiento';
+import { ETIQUETA_TIPO_MANTENIMIENTO, formatoFechaVe, formatoMonedaUsd } from '@/lib/flota/utils';
 
 export default function HistorialMantenimiento({
   items,
