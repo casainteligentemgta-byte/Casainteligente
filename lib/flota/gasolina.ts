@@ -144,6 +144,16 @@ function payloadLegacy(row: Record<string, unknown>): Record<string, unknown> {
   return out;
 }
 
+function asGasolinaRows(data: unknown): Record<string, unknown>[] {
+  return (Array.isArray(data) ? data : []) as Record<string, unknown>[];
+}
+
+function asGasolinaRow(data: unknown): Record<string, unknown> | null {
+  return data && typeof data === 'object' && !Array.isArray(data)
+    ? (data as Record<string, unknown>)
+    : null;
+}
+
 async function insertarCargaGasolina(body: Record<string, unknown>): Promise<FlotaGasolina> {
   const supabase = await createServerClient();
   const userId = (await supabase.auth.getUser()).data.user?.id ?? null;
@@ -168,7 +178,7 @@ async function insertarCargaGasolina(body: Record<string, unknown>): Promise<Flo
       .lt('odometro_km', odometro);
   }
 
-  return unwrap(result.data as Record<string, unknown>);
+  return unwrap(asGasolinaRow(result.data) ?? {});
 }
 
 export async function registrarGasolina(data: RegistrarGasolinaInput): Promise<FlotaGasolina> {
@@ -203,14 +213,12 @@ export async function obtenerGasolinaPorMaquinaria(maquinaria_id: string): Promi
       .eq(col, maquinaria_id)
       .order('created_at', { ascending: false });
 
-  let { data, error } = await query('maquinaria_id', GASOLINA_SELECT);
-  if (error && columnasNuevasFaltan(error)) {
-    const retry = await query('vehiculo_id', GASOLINA_SELECT_LEGACY);
-    data = retry.data;
-    error = retry.error;
+  let result = await query('maquinaria_id', GASOLINA_SELECT);
+  if (result.error && columnasNuevasFaltan(result.error)) {
+    result = await query('vehiculo_id', GASOLINA_SELECT_LEGACY);
   }
-  if (error) throw error;
-  return (data ?? []).map((r) => unwrap(r as Record<string, unknown>));
+  if (result.error) throw result.error;
+  return asGasolinaRows(result.data).map(unwrap);
 }
 
 export async function calcularConsumoPromedio(
@@ -228,22 +236,15 @@ export async function calcularConsumoPromedio(
       .order('created_at', { ascending: false })
       .limit(ultimos_registros);
 
-  let { data, error } = await query(
+  let result = await query(
     'maquinaria_id',
     'cantidad_litros, km_actual, litros, odometro_km, created_at',
   );
-  if (error && columnasNuevasFaltan(error)) {
-    const retry = await query('vehiculo_id', 'litros, odometro_km, created_at');
-    data = retry.data;
-    error = retry.error;
+  if (result.error && columnasNuevasFaltan(result.error)) {
+    result = await query('vehiculo_id', 'litros, odometro_km, created_at');
   }
-  if (error) throw error;
-  return calcularConsumoDesdeRegistros((data ?? []) as Array<{
-    cantidad_litros?: number | null;
-    litros?: number | null;
-    km_actual?: number | null;
-    odometro_km?: number | null;
-  }>);
+  if (result.error) throw result.error;
+  return calcularConsumoDesdeRegistros(asGasolinaRows(result.data));
 }
 
 function payload(body: Record<string, unknown>, partial = false): Record<string, unknown> {
@@ -330,38 +331,35 @@ export async function listarGasolina(
     return q.limit(500);
   };
 
-  let { data, error } = await ejecutar(GASOLINA_SELECT);
-  if (error && columnasNuevasFaltan(error)) {
-    const retry = await ejecutar(GASOLINA_SELECT_LEGACY);
-    data = retry.data;
-    error = retry.error;
+  let result = await ejecutar(GASOLINA_SELECT);
+  if (result.error && columnasNuevasFaltan(result.error)) {
+    result = await ejecutar(GASOLINA_SELECT_LEGACY);
   }
-  if (esMigracionPendiente(error)) return { items: [], migracionPendiente: true };
-  if (error) throw new Error(error.message);
-  return { items: (data ?? []).map((r) => unwrap(r as Record<string, unknown>)), migracionPendiente: false };
+  if (esMigracionPendiente(result.error)) return { items: [], migracionPendiente: true };
+  if (result.error) throw new Error(result.error.message);
+  return { items: asGasolinaRows(result.data).map(unwrap), migracionPendiente: false };
 }
 
 export async function obtenerGasolina(
   supabase: SupabaseClient,
   id: string,
 ): Promise<{ item: FlotaGasolina | null; migracionPendiente: boolean }> {
-  let { data, error } = await supabase
+  let result = await supabase
     .from('ci_flota_gasolina')
     .select(GASOLINA_SELECT)
     .eq('id', id)
     .maybeSingle();
-  if (error && columnasNuevasFaltan(error)) {
-    const retry = await supabase
+  if (result.error && columnasNuevasFaltan(result.error)) {
+    result = await supabase
       .from('ci_flota_gasolina')
       .select(GASOLINA_SELECT_LEGACY)
       .eq('id', id)
       .maybeSingle();
-    data = retry.data;
-    error = retry.error;
   }
-  if (esMigracionPendiente(error)) return { item: null, migracionPendiente: true };
-  if (error) throw new Error(error.message);
-  return { item: data ? unwrap(data as Record<string, unknown>) : null, migracionPendiente: false };
+  if (esMigracionPendiente(result.error)) return { item: null, migracionPendiente: true };
+  if (result.error) throw new Error(result.error.message);
+  const row = asGasolinaRow(result.data);
+  return { item: row ? unwrap(row) : null, migracionPendiente: false };
 }
 
 export async function crearGasolina(
@@ -378,24 +376,22 @@ export async function actualizarGasolina(
   body: Record<string, unknown>,
 ): Promise<FlotaGasolina> {
   const patch = payload(body, true);
-  let { data, error } = await supabase
+  let result = await supabase
     .from('ci_flota_gasolina')
     .update(patch)
     .eq('id', id)
     .select(GASOLINA_SELECT)
     .single();
-  if (error && columnasNuevasFaltan(error)) {
-    const retry = await supabase
+  if (result.error && columnasNuevasFaltan(result.error)) {
+    result = await supabase
       .from('ci_flota_gasolina')
       .update(payloadLegacy(patch))
       .eq('id', id)
       .select(GASOLINA_SELECT_LEGACY)
       .single();
-    data = retry.data;
-    error = retry.error;
   }
-  if (error) throw new Error(error.message);
-  return unwrap(data as Record<string, unknown>);
+  if (result.error) throw new Error(result.error.message);
+  return unwrap(asGasolinaRow(result.data) ?? {});
 }
 
 export async function eliminarGasolina(supabase: SupabaseClient, id: string): Promise<void> {
@@ -437,7 +433,7 @@ export function analizarConsumo(registros: FlotaGasolina[]): AnalisisConsumo {
   let bsTot = 0;
   const kmLVals: number[] = [];
 
-  for (const [vehiculo_id, g] of byVeh) {
+  for (const [vehiculo_id, g] of Array.from(byVeh.entries())) {
     let km = 0;
     const kmL: number[] = [];
     for (let i = 1; i < g.cargas.length; i++) {
