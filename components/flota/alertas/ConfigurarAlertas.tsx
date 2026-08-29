@@ -34,7 +34,9 @@ export default function ConfigurarAlertas({
           }}
         >
           <div className="sm:col-span-2">
-            <p className="text-sm font-medium text-white">{ETIQUETA_TIPO_ALERTA[c.tipo] ?? c.tipo}</p>
+            <p className="text-sm font-medium text-white">
+              {ETIQUETA_TIPO_ALERTA[c.tipo] ?? c.tipo_alerta ?? c.tipo}
+            </p>
             <p className="text-xs text-zinc-500">{c.tipo}</p>
           </div>
           <div>

@@ -4,8 +4,12 @@ import {
   calcularConsumoDesdeRegistros,
   consumoKmPorLitro,
   diasHasta,
+  estadoAlertaDesdeFlags,
+  flagsDesdeEstadoAlerta,
   normalizarPlaca,
+  normalizarSeveridadAlerta,
   normalizarTipoMantenimiento,
+  tipoAlertaACatalogo,
   parseFechaIso,
   parseNumero,
   partirNombreCompleto,
@@ -15,6 +19,16 @@ import {
 } from './utils';
 
 describe('flota/utils', () => {
+  it('normaliza severidad y estado de alerta', () => {
+    assert.equal(normalizarSeveridadAlerta('critical'), 'critica');
+    assert.equal(normalizarSeveridadAlerta('info'), 'info');
+    assert.equal(estadoAlertaDesdeFlags(false, false), 'pendiente');
+    assert.equal(estadoAlertaDesdeFlags(true, false), 'leida');
+    assert.deepEqual(flagsDesdeEstadoAlerta('pendiente'), { leida: false, resuelta: false });
+    assert.equal(tipoAlertaACatalogo('aceite', 'km'), 'mantenimiento_km');
+    assert.equal(tipoAlertaACatalogo('licencia_vence'), 'licencia_vence');
+  });
+
   it('normaliza tipo de mantenimiento al catálogo', () => {
     assert.equal(normalizarTipoMantenimiento('cambio_aceite'), 'cambio_aceite');
     assert.equal(normalizarTipoMantenimiento('Cambio de aceite'), 'cambio_aceite');

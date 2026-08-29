@@ -63,6 +63,53 @@ export const TIPOS_ALERTA_CONFIG = [
 
 export type TipoAlertaConfig = (typeof TIPOS_ALERTA_CONFIG)[number];
 
+export type FrecuenciaAlerta = 'km' | 'dias';
+export type SeveridadAlerta = 'info' | 'warning' | 'critica';
+export type EstadoAlerta = 'pendiente' | 'leida' | 'resuelta';
+
+export function normalizarFrecuenciaAlerta(raw: unknown): FrecuenciaAlerta {
+  const t = String(raw ?? '').trim().toLowerCase();
+  if (t === 'km') return 'km';
+  if (t === 'dias' || t === 'días' || t === 'days') return 'dias';
+  throw new Error('frecuencia_tipo inválida (km o dias)');
+}
+
+export function normalizarSeveridadAlerta(raw: unknown): SeveridadAlerta {
+  const s = String(raw ?? '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  if (s === 'critical' || s === 'critica') return 'critica';
+  if (s === 'info') return 'info';
+  return 'warning';
+}
+
+export function estadoAlertaDesdeFlags(leida: boolean, resuelta: boolean): EstadoAlerta {
+  if (resuelta) return 'resuelta';
+  if (leida) return 'leida';
+  return 'pendiente';
+}
+
+export function flagsDesdeEstadoAlerta(estado: string | null | undefined): {
+  leida: boolean;
+  resuelta: boolean;
+} {
+  const e = String(estado ?? '').trim().toLowerCase();
+  if (e === 'resuelta' || e === 'resuelto') return { leida: true, resuelta: true };
+  if (e === 'leida' || e === 'leído' || e === 'leido') return { leida: true, resuelta: false };
+  return { leida: false, resuelta: false };
+}
+
+export function tipoAlertaACatalogo(
+  tipoAlerta: string,
+  frecuencia?: FrecuenciaAlerta | null,
+): TipoAlertaConfig {
+  const t = String(tipoAlerta ?? '').trim();
+  if ((TIPOS_ALERTA_CONFIG as readonly string[]).includes(t)) return t as TipoAlertaConfig;
+  return frecuencia === 'km' ? 'mantenimiento_km' : 'mantenimiento_fecha';
+}
+
 export type FlotaVehiculo = {
   id: string;
   entidad_id: string | null;

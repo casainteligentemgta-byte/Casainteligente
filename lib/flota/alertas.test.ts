@@ -61,7 +61,7 @@ describe('evaluarAlertas', () => {
       fecha: '2026-07-01',
       proximo_odometro_km: 50000,
       vehiculo,
-    } as FlotaMantenimiento;
+    } as unknown as FlotaMantenimiento;
     const out = evaluarAlertas({
       conductores: [],
       documentos: [],
