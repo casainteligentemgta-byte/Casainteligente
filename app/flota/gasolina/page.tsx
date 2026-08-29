@@ -57,7 +57,17 @@ export default function FlotaGasolinaPage() {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(values),
+        body: JSON.stringify({
+          maquinaria_id: values.maquinaria_id,
+          cantidad_litros: values.cantidad_litros,
+          costo_total: values.costo_total,
+          km_actual: values.km_actual,
+          tipo_gasolina: values.tipo_gasolina,
+          estacion_gasolina: values.estacion_gasolina,
+          conductor_id: values.conductor_id,
+          fecha: values.fecha,
+          notas: values.notas,
+        }),
       });
       const json = await parseFetchJson<{ error?: string }>(res);
       if (!res.ok) throw new Error(formatApiErrorBody(json));
