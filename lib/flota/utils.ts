@@ -34,6 +34,24 @@ export const TIPOS_MANTENIMIENTO = [
   'otro',
 ] as const;
 
+export type TipoMantenimiento = (typeof TIPOS_MANTENIMIENTO)[number];
+
+const TIPO_MANTENIMIENTO_ALIAS: Record<string, TipoMantenimiento> = {
+  cambio_de_aceite: 'cambio_aceite',
+  aceite: 'cambio_aceite',
+};
+
+export function normalizarTipoMantenimiento(raw: string | null | undefined): TipoMantenimiento {
+  const t = String(raw ?? '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, '_');
+  if ((TIPOS_MANTENIMIENTO as readonly string[]).includes(t)) return t as TipoMantenimiento;
+  return TIPO_MANTENIMIENTO_ALIAS[t] ?? 'otro';
+}
+
 export const TIPOS_ALERTA_CONFIG = [
   'licencia_vence',
   'certificado_vence',

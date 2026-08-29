@@ -5,6 +5,7 @@ import {
   consumoKmPorLitro,
   diasHasta,
   normalizarPlaca,
+  normalizarTipoMantenimiento,
   parseFechaIso,
   parseNumero,
   partirNombreCompleto,
@@ -14,6 +15,12 @@ import {
 } from './utils';
 
 describe('flota/utils', () => {
+  it('normaliza tipo de mantenimiento al catálogo', () => {
+    assert.equal(normalizarTipoMantenimiento('cambio_aceite'), 'cambio_aceite');
+    assert.equal(normalizarTipoMantenimiento('Cambio de aceite'), 'cambio_aceite');
+    assert.equal(normalizarTipoMantenimiento('pintura'), 'otro');
+  });
+
   it('normaliza placa venezolana', () => {
     assert.equal(normalizarPlaca('ab-123-cd'), 'AB123CD');
     assert.equal(normalizarPlaca('  A12 BC3D '), 'A12BC3D');
