@@ -70,7 +70,11 @@ export default function FlotaConductoresPage() {
           method: editing ? 'PUT' : 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(values),
+          body: JSON.stringify({
+            ...values,
+            entidad_id: editing?.entidad_id ?? vehiculos[0]?.entidad_id ?? '',
+            numero_cedula: values.numero_cedula || values.cedula,
+          }),
         },
       );
       const json = await parseFetchJson<{ error?: string }>(res);
@@ -97,6 +101,7 @@ export default function FlotaConductoresPage() {
 
       <ConductorForm
         key={editing?.id ?? 'nuevo'}
+        entidad_id={editing?.entidad_id ?? vehiculos[0]?.entidad_id ?? ''}
         initial={editing}
         vehiculos={vehiculos}
         saving={saving}
@@ -117,7 +122,7 @@ export default function FlotaConductoresPage() {
         onSelect={(c) => void loadDetalle(c.id)}
         onEdit={setEditing}
         onDelete={async (c) => {
-          if (!confirm(`¿Eliminar a ${c.nombres} ${c.apellidos}?`)) return;
+          if (!confirm(`¿Eliminar a ${c.nombre_completo || `${c.nombres} ${c.apellidos}`.trim()}?`)) return;
           const res = await fetch(apiUrl(`/api/flota/conductores/${c.id}`), {
             method: 'DELETE',
             credentials: 'include',
