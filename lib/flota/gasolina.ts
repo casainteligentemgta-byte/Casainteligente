@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { createServerClient } from '@/lib/supabase/server';
 import {
+  calcularConsumoDesdeRegistros,
   consumoKmPorLitro,
   esMigracionPendiente,
   esUuid,
@@ -8,26 +10,52 @@ import {
   parseNumero,
 } from '@/lib/flota/utils';
 
+export { calcularConsumoDesdeRegistros } from '@/lib/flota/utils';
+
 export type FlotaGasolina = {
   id: string;
   vehiculo_id: string;
+  maquinaria_id?: string | null;
   conductor_id: string | null;
   entidad_id: string | null;
   proyecto_id: string | null;
   fecha: string;
   litros: number;
+  cantidad_litros?: number | null;
   odometro_km: number | null;
+  km_actual?: number | null;
   precio_litro_usd: number | null;
   precio_litro_bs: number | null;
   monto_usd: number | null;
+  costo_total?: number | null;
   monto_bs: number | null;
   estacion: string | null;
+  estacion_gasolina?: string | null;
+  tipo_gasolina?: string | null;
   factura_url: string | null;
   notas: string | null;
+  created_by?: string | null;
   created_at: string;
   updated_at: string;
   vehiculo?: { id: string; placa: string; marca: string | null; modelo: string | null } | null;
   conductor?: { id: string; nombres: string; apellidos: string } | null;
+};
+
+export type RegistrarGasolinaInput = {
+  maquinaria_id: string;
+  cantidad_litros: number;
+  costo_total: number;
+  km_actual?: number;
+  tipo_gasolina?: string;
+  estacion_gasolina?: string;
+  conductor_id?: string;
+  proyecto_id?: string;
+};
+
+export type ConsumoPromedio = {
+  consumo_promedio_km: number;
+  consumo_total: number;
+  km_recorridos: number;
 };
 
 export type ConsumoPorVehiculo = {
@@ -55,6 +83,14 @@ export type AnalisisConsumo = {
 };
 
 const GASOLINA_SELECT = `
+  id, vehiculo_id, maquinaria_id, conductor_id, entidad_id, proyecto_id, fecha, litros, cantidad_litros,
+  odometro_km, km_actual, precio_litro_usd, precio_litro_bs, monto_usd, costo_total, monto_bs,
+  estacion, estacion_gasolina, tipo_gasolina, factura_url, notas, created_by, created_at, updated_at,
+  vehiculo:ci_flota_vehiculos!vehiculo_id (id, placa, marca, modelo),
+  conductor:ci_flota_conductores!conductor_id (id, nombres, apellidos)
+`;
+
+const GASOLINA_SELECT_LEGACY = `
   id, vehiculo_id, conductor_id, entidad_id, proyecto_id, fecha, litros, odometro_km,
   precio_litro_usd, precio_litro_bs, monto_usd, monto_bs, estacion, factura_url, notas,
   created_at, updated_at,
@@ -62,36 +98,200 @@ const GASOLINA_SELECT = `
   conductor:ci_flota_conductores!conductor_id (id, nombres, apellidos)
 `;
 
+function columnasNuevasFaltan(error: { message?: string } | null): boolean {
+  return /maquinaria_id|cantidad_litros|costo_total|km_actual|tipo_gasolina|estacion_gasolina|created_by/i.test(
+    error?.message ?? '',
+  );
+}
+
 function unwrap(row: Record<string, unknown>): FlotaGasolina {
   const vehiculo = Array.isArray(row.vehiculo) ? row.vehiculo[0] : row.vehiculo;
   const conductor = Array.isArray(row.conductor) ? row.conductor[0] : row.conductor;
-  return { ...(row as unknown as FlotaGasolina), vehiculo: vehiculo ?? null, conductor: conductor ?? null };
+  const litros = Number(row.cantidad_litros ?? row.litros ?? 0);
+  const odometro = parseNumero(row.km_actual ?? row.odometro_km);
+  const costo = parseNumero(row.costo_total ?? row.monto_usd);
+  const estacion = (row.estacion_gasolina as string | null) ?? (row.estacion as string | null) ?? null;
+  return {
+    ...(row as unknown as FlotaGasolina),
+    vehiculo_id: String(row.vehiculo_id ?? row.maquinaria_id ?? ''),
+    maquinaria_id: (row.maquinaria_id as string | null) ?? (row.vehiculo_id as string | null) ?? null,
+    litros,
+    cantidad_litros: litros,
+    odometro_km: odometro,
+    km_actual: odometro,
+    monto_usd: costo,
+    costo_total: costo,
+    estacion,
+    estacion_gasolina: estacion,
+    vehiculo: vehiculo ?? null,
+    conductor: conductor ?? null,
+  };
+}
+
+const COLUMNAS_NUEVAS_GASOLINA = [
+  'maquinaria_id',
+  'cantidad_litros',
+  'costo_total',
+  'km_actual',
+  'tipo_gasolina',
+  'estacion_gasolina',
+  'created_by',
+] as const;
+
+function payloadLegacy(row: Record<string, unknown>): Record<string, unknown> {
+  const out = { ...row };
+  for (const k of COLUMNAS_NUEVAS_GASOLINA) delete out[k];
+  return out;
+}
+
+async function insertarCargaGasolina(body: Record<string, unknown>): Promise<FlotaGasolina> {
+  const supabase = await createServerClient();
+  const userId = (await supabase.auth.getUser()).data.user?.id ?? null;
+  const row = payload({ ...body, created_by: userId });
+
+  let result = await supabase.from('ci_flota_gasolina').insert([row]).select(GASOLINA_SELECT).single();
+  if (result.error && columnasNuevasFaltan(result.error)) {
+    result = await supabase
+      .from('ci_flota_gasolina')
+      .insert([payloadLegacy(row)])
+      .select(GASOLINA_SELECT_LEGACY)
+      .single();
+  }
+  if (result.error) throw result.error;
+
+  const odometro = parseNumero(row.odometro_km ?? row.km_actual);
+  if (odometro != null && esUuid(String(row.vehiculo_id))) {
+    await supabase
+      .from('ci_flota_vehiculos')
+      .update({ odometro_km: odometro, updated_at: new Date().toISOString() })
+      .eq('id', row.vehiculo_id)
+      .lt('odometro_km', odometro);
+  }
+
+  return unwrap(result.data as Record<string, unknown>);
+}
+
+export async function registrarGasolina(data: RegistrarGasolinaInput): Promise<FlotaGasolina> {
+  if (!esUuid(data.maquinaria_id)) throw new Error('maquinaria_id requerido');
+  if (data.cantidad_litros == null || Number(data.cantidad_litros) <= 0) {
+    throw new Error('cantidad_litros debe ser mayor a 0');
+  }
+  if (data.costo_total == null || Number.isNaN(Number(data.costo_total))) {
+    throw new Error('costo_total es requerido');
+  }
+
+  return insertarCargaGasolina({
+    maquinaria_id: data.maquinaria_id,
+    cantidad_litros: data.cantidad_litros,
+    costo_total: data.costo_total,
+    km_actual: data.km_actual,
+    tipo_gasolina: data.tipo_gasolina,
+    estacion_gasolina: data.estacion_gasolina,
+    conductor_id: data.conductor_id,
+    proyecto_id: data.proyecto_id,
+  });
+}
+
+export async function obtenerGasolinaPorMaquinaria(maquinaria_id: string): Promise<FlotaGasolina[]> {
+  if (!esUuid(maquinaria_id)) throw new Error('maquinaria_id requerido');
+  const supabase = await createServerClient();
+
+  const query = (col: 'maquinaria_id' | 'vehiculo_id', cols: string) =>
+    supabase
+      .from('ci_flota_gasolina')
+      .select(cols)
+      .eq(col, maquinaria_id)
+      .order('created_at', { ascending: false });
+
+  let { data, error } = await query('maquinaria_id', GASOLINA_SELECT);
+  if (error && columnasNuevasFaltan(error)) {
+    const retry = await query('vehiculo_id', GASOLINA_SELECT_LEGACY);
+    data = retry.data;
+    error = retry.error;
+  }
+  if (error) throw error;
+  return (data ?? []).map((r) => unwrap(r as Record<string, unknown>));
+}
+
+export async function calcularConsumoPromedio(
+  maquinaria_id: string,
+  ultimos_registros = 10,
+): Promise<ConsumoPromedio> {
+  if (!esUuid(maquinaria_id)) throw new Error('maquinaria_id requerido');
+  const supabase = await createServerClient();
+
+  const query = (col: 'maquinaria_id' | 'vehiculo_id', cols: string) =>
+    supabase
+      .from('ci_flota_gasolina')
+      .select(cols)
+      .eq(col, maquinaria_id)
+      .order('created_at', { ascending: false })
+      .limit(ultimos_registros);
+
+  let { data, error } = await query(
+    'maquinaria_id',
+    'cantidad_litros, km_actual, litros, odometro_km, created_at',
+  );
+  if (error && columnasNuevasFaltan(error)) {
+    const retry = await query('vehiculo_id', 'litros, odometro_km, created_at');
+    data = retry.data;
+    error = retry.error;
+  }
+  if (error) throw error;
+  return calcularConsumoDesdeRegistros((data ?? []) as Array<{
+    cantidad_litros?: number | null;
+    litros?: number | null;
+    km_actual?: number | null;
+    odometro_km?: number | null;
+  }>);
 }
 
 function payload(body: Record<string, unknown>, partial = false): Record<string, unknown> {
-  const vehiculoId = String(body.vehiculo_id ?? '').trim();
-  if (!partial && !esUuid(vehiculoId)) throw new Error('vehiculo_id requerido');
+  const vehiculoId = String(body.vehiculo_id ?? body.maquinaria_id ?? '').trim();
+  if (!partial && !esUuid(vehiculoId)) throw new Error('maquinaria_id requerido');
 
-  const litros = parseNumero(body.litros);
-  if (!partial && (litros == null || litros <= 0)) throw new Error('litros debe ser mayor a 0');
+  const litros = parseNumero(body.cantidad_litros ?? body.litros);
+  if (!partial && (litros == null || litros <= 0)) throw new Error('cantidad_litros debe ser mayor a 0');
 
   const out: Record<string, unknown> = { updated_at: new Date().toISOString() };
-  if (!partial || body.vehiculo_id !== undefined) out.vehiculo_id = vehiculoId;
-  if (!partial || body.litros !== undefined) {
-    if (litros == null || litros <= 0) throw new Error('litros debe ser mayor a 0');
+  if (!partial || body.vehiculo_id !== undefined || body.maquinaria_id !== undefined) {
+    out.vehiculo_id = vehiculoId;
+    out.maquinaria_id = vehiculoId;
+  }
+  if (!partial || body.litros !== undefined || body.cantidad_litros !== undefined) {
+    if (litros == null || litros <= 0) throw new Error('cantidad_litros debe ser mayor a 0');
     out.litros = litros;
+    out.cantidad_litros = litros;
   }
   if (!partial || body.fecha !== undefined) out.fecha = parseFechaIso(body.fecha) ?? hoyIso();
-  if (!partial || body.odometro_km !== undefined) out.odometro_km = parseNumero(body.odometro_km);
+  if (!partial || body.odometro_km !== undefined || body.km_actual !== undefined) {
+    const km = parseNumero(body.km_actual ?? body.odometro_km);
+    out.odometro_km = km;
+    out.km_actual = km;
+  }
   if (!partial || body.precio_litro_usd !== undefined) {
     out.precio_litro_usd = parseNumero(body.precio_litro_usd);
   }
   if (!partial || body.precio_litro_bs !== undefined) {
     out.precio_litro_bs = parseNumero(body.precio_litro_bs);
   }
-  if (!partial || body.monto_usd !== undefined) out.monto_usd = parseNumero(body.monto_usd);
+  if (!partial || body.monto_usd !== undefined || body.costo_total !== undefined) {
+    const costo = parseNumero(body.costo_total ?? body.monto_usd);
+    out.monto_usd = costo;
+    out.costo_total = costo;
+  }
   if (!partial || body.monto_bs !== undefined) out.monto_bs = parseNumero(body.monto_bs);
-  if (!partial || body.estacion !== undefined) out.estacion = String(body.estacion ?? '').trim() || null;
+  if (!partial || body.estacion !== undefined || body.estacion_gasolina !== undefined) {
+    const est = String(body.estacion_gasolina ?? body.estacion ?? '').trim() || null;
+    out.estacion = est;
+    out.estacion_gasolina = est;
+  }
+  if (!partial || body.tipo_gasolina !== undefined) {
+    out.tipo_gasolina = String(body.tipo_gasolina ?? '').trim() || null;
+  }
+  if (!partial || body.created_by !== undefined) {
+    out.created_by = esUuid(String(body.created_by ?? '')) ? String(body.created_by) : null;
+  }
   if (!partial || body.conductor_id !== undefined) {
     out.conductor_id = esUuid(String(body.conductor_id ?? '')) ? String(body.conductor_id) : null;
   }
@@ -109,6 +309,7 @@ function payload(body: Record<string, unknown>, partial = false): Record<string,
   const litrosFinal = (out.litros as number | undefined) ?? litros;
   if (out.monto_usd == null && out.precio_litro_usd != null && litrosFinal) {
     out.monto_usd = Math.round(Number(out.precio_litro_usd) * litrosFinal * 100) / 100;
+    if (out.costo_total == null) out.costo_total = out.monto_usd;
   }
   if (out.monto_bs == null && out.precio_litro_bs != null && litrosFinal) {
     out.monto_bs = Math.round(Number(out.precio_litro_bs) * litrosFinal * 100) / 100;
@@ -120,13 +321,21 @@ export async function listarGasolina(
   supabase: SupabaseClient,
   opts?: { vehiculoId?: string; conductorId?: string; desde?: string; hasta?: string },
 ): Promise<{ items: FlotaGasolina[]; migracionPendiente: boolean }> {
-  let q = supabase.from('ci_flota_gasolina').select(GASOLINA_SELECT).order('fecha', { ascending: false });
-  if (opts?.vehiculoId) q = q.eq('vehiculo_id', opts.vehiculoId);
-  if (opts?.conductorId) q = q.eq('conductor_id', opts.conductorId);
-  if (opts?.desde) q = q.gte('fecha', opts.desde);
-  if (opts?.hasta) q = q.lte('fecha', opts.hasta);
+  const ejecutar = async (cols: string) => {
+    let q = supabase.from('ci_flota_gasolina').select(cols).order('fecha', { ascending: false });
+    if (opts?.vehiculoId) q = q.eq('vehiculo_id', opts.vehiculoId);
+    if (opts?.conductorId) q = q.eq('conductor_id', opts.conductorId);
+    if (opts?.desde) q = q.gte('fecha', opts.desde);
+    if (opts?.hasta) q = q.lte('fecha', opts.hasta);
+    return q.limit(500);
+  };
 
-  const { data, error } = await q.limit(500);
+  let { data, error } = await ejecutar(GASOLINA_SELECT);
+  if (error && columnasNuevasFaltan(error)) {
+    const retry = await ejecutar(GASOLINA_SELECT_LEGACY);
+    data = retry.data;
+    error = retry.error;
+  }
   if (esMigracionPendiente(error)) return { items: [], migracionPendiente: true };
   if (error) throw new Error(error.message);
   return { items: (data ?? []).map((r) => unwrap(r as Record<string, unknown>)), migracionPendiente: false };
@@ -136,11 +345,20 @@ export async function obtenerGasolina(
   supabase: SupabaseClient,
   id: string,
 ): Promise<{ item: FlotaGasolina | null; migracionPendiente: boolean }> {
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('ci_flota_gasolina')
     .select(GASOLINA_SELECT)
     .eq('id', id)
     .maybeSingle();
+  if (error && columnasNuevasFaltan(error)) {
+    const retry = await supabase
+      .from('ci_flota_gasolina')
+      .select(GASOLINA_SELECT_LEGACY)
+      .eq('id', id)
+      .maybeSingle();
+    data = retry.data;
+    error = retry.error;
+  }
   if (esMigracionPendiente(error)) return { item: null, migracionPendiente: true };
   if (error) throw new Error(error.message);
   return { item: data ? unwrap(data as Record<string, unknown>) : null, migracionPendiente: false };
@@ -150,24 +368,8 @@ export async function crearGasolina(
   supabase: SupabaseClient,
   body: Record<string, unknown>,
 ): Promise<FlotaGasolina> {
-  const row = payload(body);
-  const { data, error } = await supabase
-    .from('ci_flota_gasolina')
-    .insert(row)
-    .select(GASOLINA_SELECT)
-    .single();
-  if (error) throw new Error(error.message);
-
-  const odometro = parseNumero(row.odometro_km);
-  if (odometro != null && esUuid(String(row.vehiculo_id))) {
-    await supabase
-      .from('ci_flota_vehiculos')
-      .update({ odometro_km: odometro, updated_at: new Date().toISOString() })
-      .eq('id', row.vehiculo_id)
-      .lt('odometro_km', odometro);
-  }
-
-  return unwrap(data as Record<string, unknown>);
+  void supabase;
+  return insertarCargaGasolina(body);
 }
 
 export async function actualizarGasolina(
@@ -175,12 +377,23 @@ export async function actualizarGasolina(
   id: string,
   body: Record<string, unknown>,
 ): Promise<FlotaGasolina> {
-  const { data, error } = await supabase
+  const patch = payload(body, true);
+  let { data, error } = await supabase
     .from('ci_flota_gasolina')
-    .update(payload(body, true))
+    .update(patch)
     .eq('id', id)
     .select(GASOLINA_SELECT)
     .single();
+  if (error && columnasNuevasFaltan(error)) {
+    const retry = await supabase
+      .from('ci_flota_gasolina')
+      .update(payloadLegacy(patch))
+      .eq('id', id)
+      .select(GASOLINA_SELECT_LEGACY)
+      .single();
+    data = retry.data;
+    error = retry.error;
+  }
   if (error) throw new Error(error.message);
   return unwrap(data as Record<string, unknown>);
 }

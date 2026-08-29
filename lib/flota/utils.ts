@@ -197,6 +197,52 @@ export function fechaSaludConductor(c: {
   return c.fecha_vencimiento_salud ?? c.certificado_medico_vence ?? null;
 }
 
+export type ConsumoPromedioGasolina = {
+  consumo_promedio_km: number;
+  consumo_total: number;
+  km_recorridos: number;
+};
+
+function kmDeRegistroGasolina(row: {
+  km_actual?: number | null;
+  odometro_km?: number | null;
+}): number | null {
+  const v = row.km_actual ?? row.odometro_km;
+  if (v == null || v === ('' as unknown)) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Filas más nuevas primero. litros/km entre cargas consecutivas → L/km. */
+export function calcularConsumoDesdeRegistros(
+  rows: Array<{
+    cantidad_litros?: number | null;
+    litros?: number | null;
+    km_actual?: number | null;
+    odometro_km?: number | null;
+  }>,
+): ConsumoPromedioGasolina {
+  let consumo_total = 0;
+  let km_recorridos = 0;
+
+  if (rows.length > 1) {
+    for (let i = 0; i < rows.length - 1; i++) {
+      consumo_total += Number(rows[i].cantidad_litros ?? rows[i].litros ?? 0);
+      const kmNuevo = kmDeRegistroGasolina(rows[i]);
+      const kmViejo = kmDeRegistroGasolina(rows[i + 1]);
+      if (kmNuevo != null && kmViejo != null) {
+        km_recorridos += kmNuevo - kmViejo;
+      }
+    }
+  }
+
+  return {
+    consumo_promedio_km: km_recorridos > 0 ? consumo_total / km_recorridos : 0,
+    consumo_total,
+    km_recorridos,
+  };
+}
+
 /** km/l entre dos cargas consecutivas del mismo vehículo. */
 export function consumoKmPorLitro(params: {
   odometroAnterior: number | null | undefined;
