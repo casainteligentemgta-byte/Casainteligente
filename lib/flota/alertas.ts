@@ -451,6 +451,170 @@ export async function generarAlerta(input: GenerarAlertaInput): Promise<FlotaAle
   return unwrapAlerta(asRow(saved) ?? {});
 }
 
+export type ConfigParaVerificar = {
+  frecuencia_tipo?: string | null;
+  proxima_alerta_fecha?: string | null;
+  proxima_alerta_km?: number | null;
+  activa?: boolean;
+  activo?: boolean;
+};
+
+/** Fecha vencida o km actual ≥ umbral. Sin odómetro no alerta por km. */
+export function checkShouldAlert(
+  config: ConfigParaVerificar,
+  opts?: { hoy?: Date; km_actual?: number | null },
+): boolean {
+  if (config.activa === false || config.activo === false) return false;
+  const hoy = opts?.hoy ?? new Date();
+  const tipo = String(config.frecuencia_tipo ?? '').toLowerCase();
+
+  if ((tipo === 'dias' || tipo === 'días' || tipo === 'days') && config.proxima_alerta_fecha) {
+    const dias = diasHasta(config.proxima_alerta_fecha, hoy);
+    return dias != null && dias <= 0;
+  }
+
+  if (tipo === 'km' && config.proxima_alerta_km != null) {
+    const umbral = Number(config.proxima_alerta_km);
+    const km = opts?.km_actual;
+    if (!Number.isFinite(umbral) || km == null || !Number.isFinite(km)) return false;
+    return km >= umbral;
+  }
+
+  return false;
+}
+
+function descripcionAlertaConfig(
+  config: FlotaAlertaConfig,
+  kmActual: number | null,
+): string {
+  const tipo = config.tipo_alerta ?? config.tipo;
+  if (config.frecuencia_tipo === 'km') {
+    return `Alerta de ${tipo}: umbral ${config.proxima_alerta_km ?? config.frecuencia_valor} km${
+      kmActual != null ? ` (odómetro ${kmActual} km)` : ''
+    }`;
+  }
+  if (config.proxima_alerta_fecha) {
+    return `Alerta de ${tipo}: vencía el ${config.proxima_alerta_fecha}`;
+  }
+  return `Alerta de ${tipo}: próxima en ${config.frecuencia_valor} ${config.frecuencia_tipo}`;
+}
+
+function clavePendiente(configId: string | null | undefined, maquinariaId: string | null | undefined): string {
+  return `${configId ?? ''}:${maquinariaId ?? ''}`;
+}
+
+async function kmActualPorMaquinaria(
+  supabase: Awaited<ReturnType<typeof createServerClient>>,
+  ids: string[],
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (!ids.length) return out;
+  const { data, error } = await supabase
+    .from('ci_flota_vehiculos')
+    .select('id, odometro_km')
+    .in('id', ids);
+  if (error) throw error;
+  for (const row of asRows(data)) {
+    const id = String(row.id ?? '');
+    const km = parseNumero(row.odometro_km);
+    if (esUuid(id) && km != null) out.set(id, km);
+  }
+  return out;
+}
+
+async function clavesAlertasPendientes(
+  supabase: Awaited<ReturnType<typeof createServerClient>>,
+): Promise<Set<string>> {
+  let data: unknown;
+  let error: { message?: string } | null;
+  const first = await supabase
+    .from('ci_flota_alertas')
+    .select('config_id, maquinaria_id, vehiculo_id, estado, resuelta')
+    .eq('estado', 'pendiente');
+  data = first.data;
+  error = first.error;
+  if (error && COLUMNAS_NUEVAS_ALERTA.test(error.message ?? '')) {
+    const retry = await supabase
+      .from('ci_flota_alertas')
+      .select('referencia_id, vehiculo_id, resuelta')
+      .eq('resuelta', false);
+    data = retry.data;
+    error = retry.error;
+  }
+  if (error) throw error;
+  const set = new Set<string>();
+  for (const row of asRows(data)) {
+    if (row.resuelta) continue;
+    const configId = String(row.config_id ?? row.referencia_id ?? '');
+    const maq = String(row.maquinaria_id ?? row.vehiculo_id ?? '');
+    set.add(clavePendiente(configId, maq));
+  }
+  return set;
+}
+
+export async function verificarYGenerarAlertas(opts?: { hoy?: Date }): Promise<{
+  verificadas: number;
+  creadas: FlotaAlerta[];
+}> {
+  const supabase = await createServerClient();
+  const hoy = opts?.hoy ?? new Date();
+
+  let configsRaw: unknown;
+  let configsError: { message?: string } | null;
+  const first = await supabase.from('ci_flota_alertas_config').select('*').eq('activa', true);
+  configsRaw = first.data;
+  configsError = first.error;
+  if (configsError && /activa|column/i.test(configsError.message ?? '')) {
+    const retry = await supabase.from('ci_flota_alertas_config').select('*').eq('activo', true);
+    configsRaw = retry.data;
+    configsError = retry.error;
+  }
+  if (configsError && COLUMNAS_NUEVAS_CONFIG.test(configsError.message ?? '')) {
+    const retry = await supabase.from('ci_flota_alertas_config').select(CONFIG_SELECT_LEGACY).eq('activa', true);
+    configsRaw = retry.data;
+    configsError = retry.error;
+  }
+  if (configsError) throw configsError;
+  if (!configsRaw) return { verificadas: 0, creadas: [] };
+
+  const configs = asRows(configsRaw)
+    .map(unwrapConfig)
+    .filter((c) => c.activa !== false);
+  const maqIds = Array.from(
+    new Set(configs.map((c) => c.maquinaria_id).filter((id): id is string => Boolean(id && esUuid(id)))),
+  );
+  const [kmByMaq, pendientes] = await Promise.all([
+    kmActualPorMaquinaria(supabase, maqIds),
+    clavesAlertasPendientes(supabase),
+  ]);
+
+  const creadas: FlotaAlerta[] = [];
+  for (const config of configs) {
+    if (!config.maquinaria_id || !esUuid(config.maquinaria_id)) continue;
+    const km_actual = kmByMaq.get(config.maquinaria_id) ?? null;
+    if (!checkShouldAlert(config, { hoy, km_actual })) continue;
+
+    const clave = clavePendiente(config.id, config.maquinaria_id);
+    if (pendientes.has(clave)) continue;
+
+    const tipoAlerta = String(config.tipo_alerta ?? config.tipo);
+    const alerta = await generarAlerta({
+      config_id: config.id,
+      maquinaria_id: config.maquinaria_id,
+      tipo_alerta: tipoAlerta,
+      descripcion: descripcionAlertaConfig(config, km_actual),
+      severidad: tipoAlerta === 'cambio_aceite' ? 'warning' : 'info',
+      fecha_vencimiento: config.proxima_alerta_fecha ?? undefined,
+      km_vencimiento: config.proxima_alerta_km ?? undefined,
+    });
+    creadas.push(alerta);
+    pendientes.add(clave);
+  }
+
+  console.log('✅ Alertas verificadas');
+  return { verificadas: configs.length, creadas };
+}
+
 export async function obtenerAlertasPendientes(): Promise<FlotaAlerta[]> {
   const supabase = await createServerClient();
 

@@ -8,6 +8,7 @@ import {
   obtenerAlertasPendientes,
   persistirAlertasGeneradas,
   upsertConfigAlerta,
+  verificarYGenerarAlertas,
 } from '@/lib/flota/alertas';
 import { listarConductores, listarDocumentosConductor } from '@/lib/flota/conductores';
 import { analizarConsumo, listarGasolina } from '@/lib/flota/gasolina';
@@ -63,7 +64,17 @@ export async function POST(req: Request) {
   }
 
   try {
+    if (body.accion === 'verificar') {
+      const porMaquinaria = await verificarYGenerarAlertas();
+      return NextResponse.json({
+        ok: true,
+        verificadas: porMaquinaria.verificadas,
+        creadas: porMaquinaria.creadas,
+      });
+    }
+
     if (body.accion === 'generar') {
+      const porMaquinaria = await verificarYGenerarAlertas();
       const [conductores, vehiculos, mantenimientos, gasolina, configs] = await Promise.all([
         listarConductores(auth.supabase, { activo: true }),
         listarVehiculos(auth.supabase, { activo: true }),
@@ -91,7 +102,8 @@ export async function POST(req: Request) {
       return NextResponse.json({
         ok: true,
         evaluadas: borradores.length,
-        creadas,
+        verificadas: porMaquinaria.verificadas,
+        creadas: [...porMaquinaria.creadas, ...creadas],
       });
     }
 

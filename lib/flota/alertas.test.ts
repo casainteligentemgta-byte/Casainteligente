@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { evaluarAlertas, type FlotaAlertaConfig } from './alertas';
+import { checkShouldAlert, evaluarAlertas, type FlotaAlertaConfig } from './alertas';
 import type { FlotaConductor } from './conductores';
 import type { FlotaMantenimiento } from './mantenimiento';
 import type { FlotaVehiculo } from './utils';
@@ -101,6 +101,44 @@ describe('evaluarAlertas', () => {
     });
     assert.equal(out.length, 1);
     assert.equal(out[0].tipo, 'consumo_alto');
+  });
+
+  it('checkShouldAlert: días vencidos y km alcanzado', () => {
+    assert.equal(
+      checkShouldAlert(
+        { frecuencia_tipo: 'dias', proxima_alerta_fecha: '2026-08-20' },
+        { hoy: now },
+      ),
+      true,
+    );
+    assert.equal(
+      checkShouldAlert(
+        { frecuencia_tipo: 'dias', proxima_alerta_fecha: '2026-09-10' },
+        { hoy: now },
+      ),
+      false,
+    );
+    assert.equal(
+      checkShouldAlert(
+        { frecuencia_tipo: 'km', proxima_alerta_km: 50000 },
+        { hoy: now, km_actual: 50100 },
+      ),
+      true,
+    );
+    assert.equal(
+      checkShouldAlert(
+        { frecuencia_tipo: 'km', proxima_alerta_km: 50000 },
+        { hoy: now, km_actual: 49000 },
+      ),
+      false,
+    );
+    assert.equal(
+      checkShouldAlert(
+        { frecuencia_tipo: 'km', proxima_alerta_km: 50000 },
+        { hoy: now },
+      ),
+      false,
+    );
   });
 
   it('ignora configs inactivas', () => {
