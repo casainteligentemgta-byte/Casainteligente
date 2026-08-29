@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import {
   indexarManualPDF,
   listarManuales,
@@ -18,46 +18,43 @@ export async function GET() {
     const manuals = await listarManuales(auth.supabase);
     if (manuals.migracionPendiente) return respuestaMigracionPendiente({ manuales: [] });
     return NextResponse.json({ ok: true, manuales: manuals.items });
-  } catch (e) {
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : 'Error al listar manuales' },
-      { status: 500 },
-    );
+  } catch (error) {
+    return NextResponse.json({ error: String(error) }, { status: 500 });
   }
 }
 
-export async function POST(req: Request) {
+export async function POST(request: NextRequest) {
   const auth = await requireAccesoFlota();
   if (!auth.ok) return auth.response;
 
-  let body: Record<string, unknown>;
   try {
-    body = (await req.json()) as Record<string, unknown>;
-  } catch {
-    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
-  }
+    const body = (await request.json()) as Record<string, unknown>;
 
-  try {
     if (body.accion === 'indexar' || body.contenido_texto != null) {
       const result = await indexarManualPDF(String(body.contenido_texto ?? body.texto ?? ''));
       return NextResponse.json({ ok: true, ...result });
     }
 
     const pregunta = String(body.pregunta ?? '').trim();
-    if (!pregunta) return NextResponse.json({ error: 'pregunta requerida' }, { status: 400 });
+    const manual_contexto =
+      body.manual_contexto != null
+        ? String(body.manual_contexto)
+        : body.contexto_manual != null
+          ? String(body.contexto_manual)
+          : undefined;
 
-    if (body.contexto_manual != null) {
-      const respuesta = await responderPreguntaMecanica(
-        pregunta,
-        String(body.contexto_manual) || undefined,
-      );
-      return NextResponse.json({ ok: true, respuesta, fuentes: [] });
+    if (!pregunta) {
+      return NextResponse.json({ error: 'pregunta requerida' }, { status: 400 });
+    }
+
+    if (manual_contexto != null) {
+      const respuesta = await responderPreguntaMecanica(pregunta, manual_contexto || undefined);
+      return NextResponse.json({ pregunta, respuesta });
     }
 
     const result = await responderPreguntaMecanico(auth.supabase, pregunta);
-    return NextResponse.json({ ok: true, ...result });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Error al consultar el mecánico';
-    return NextResponse.json({ error: msg }, { status: /específica|requerid|suficiente/i.test(msg) ? 400 : 500 });
+    return NextResponse.json({ pregunta, respuesta: result.respuesta, fuentes: result.fuentes });
+  } catch (error) {
+    return NextResponse.json({ error: String(error) }, { status: 500 });
   }
 }
