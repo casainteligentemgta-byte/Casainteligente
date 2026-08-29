@@ -73,7 +73,7 @@ export function esUuid(value: string | null | undefined): boolean {
 export function esMigracionPendiente(error: { code?: string; message?: string } | null): boolean {
   if (!error) return false;
   if (error.code === '42P01' || error.code === 'PGRST205') return true;
-  return /does not exist|schema cache/i.test(error.message ?? '');
+  return /does not exist|schema cache|column .* does not exist/i.test(error.message ?? '');
 }
 
 export function normalizarPlaca(raw: string | null | undefined): string {
@@ -156,11 +156,45 @@ export function etiquetaVehiculo(v: {
   return extra ? `${placa} · ${extra}` : placa;
 }
 
+export function partirNombreCompleto(nombre: string): { nombres: string; apellidos: string } {
+  const parts = nombre
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (parts.length === 0) return { nombres: '', apellidos: '' };
+  if (parts.length === 1) return { nombres: parts[0], apellidos: '' };
+  if (parts.length === 2) return { nombres: parts[0], apellidos: parts[1] };
+  return { nombres: parts.slice(0, -2).join(' '), apellidos: parts.slice(-2).join(' ') };
+}
+
+export function unirNombreCompleto(
+  nombres?: string | null,
+  apellidos?: string | null,
+): string {
+  return [nombres, apellidos].filter(Boolean).join(' ').trim();
+}
+
 export function etiquetaConductor(c: {
+  nombre_completo?: string | null;
   nombres?: string | null;
   apellidos?: string | null;
 }): string {
-  return [c.nombres, c.apellidos].filter(Boolean).join(' ').trim() || 'Conductor';
+  const full = c.nombre_completo?.trim() || unirNombreCompleto(c.nombres, c.apellidos);
+  return full || 'Conductor';
+}
+
+export function fechaLicenciaConductor(c: {
+  fecha_vencimiento_licencia?: string | null;
+  licencia_vence?: string | null;
+}): string | null {
+  return c.fecha_vencimiento_licencia ?? c.licencia_vence ?? null;
+}
+
+export function fechaSaludConductor(c: {
+  fecha_vencimiento_salud?: string | null;
+  certificado_medico_vence?: string | null;
+}): string | null {
+  return c.fecha_vencimiento_salud ?? c.certificado_medico_vence ?? null;
 }
 
 /** km/l entre dos cargas consecutivas del mismo vehículo. */

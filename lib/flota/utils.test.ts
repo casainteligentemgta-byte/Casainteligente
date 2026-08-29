@@ -6,8 +6,10 @@ import {
   normalizarPlaca,
   parseFechaIso,
   parseNumero,
+  partirNombreCompleto,
   partirTextoEnChunks,
   puntuacionBusqueda,
+  unirNombreCompleto,
 } from './utils';
 
 describe('flota/utils', () => {
@@ -53,5 +55,14 @@ describe('flota/utils', () => {
   it('puntúa búsqueda por tokens', () => {
     assert.ok(puntuacionBusqueda('cambio de aceite motor diesel', 'aceite diesel') > 0.9);
     assert.equal(puntuacionBusqueda('frenos', 'inyeccion'), 0);
+  });
+
+  it('parte y une nombre completo', () => {
+    assert.deepEqual(partirNombreCompleto('Juan Pérez'), { nombres: 'Juan', apellidos: 'Pérez' });
+    assert.deepEqual(partirNombreCompleto('Ana María Díaz López'), {
+      nombres: 'Ana María',
+      apellidos: 'Díaz López',
+    });
+    assert.equal(unirNombreCompleto('Juan', 'Pérez'), 'Juan Pérez');
   });
 });

@@ -8,6 +8,8 @@ import {
   esMigracionPendiente,
   etiquetaConductor,
   etiquetaVehiculo,
+  fechaLicenciaConductor,
+  fechaSaludConductor,
   parseNumero,
   type FlotaVehiculo,
   type TipoAlertaConfig,
@@ -85,7 +87,7 @@ export function evaluarAlertas(input: {
   const lic = cfg.get('licencia_vence');
   if (lic) {
     for (const c of input.conductores.filter((x) => x.activo)) {
-      const dias = diasHasta(c.licencia_vence, now);
+      const dias = diasHasta(fechaLicenciaConductor(c), now);
       if (dias == null) continue;
       if (dias > lic.dias_anticipacion) continue;
       out.push({
@@ -95,8 +97,8 @@ export function evaluarAlertas(input: {
         mensaje: `${etiquetaConductor(c)}: licencia ${dias < 0 ? `vencida hace ${Math.abs(dias)} día(s)` : `vence en ${dias} día(s)`}.`,
         conductor_id: c.id,
         vehiculo_id: c.vehiculo_asignado_id,
-        vence_el: c.licencia_vence,
-        clave: `licencia:${c.id}:${c.licencia_vence}`,
+        vence_el: fechaLicenciaConductor(c),
+        clave: `licencia:${c.id}:${fechaLicenciaConductor(c)}`,
       });
     }
   }
@@ -104,7 +106,7 @@ export function evaluarAlertas(input: {
   const cert = cfg.get('certificado_vence');
   if (cert) {
     for (const c of input.conductores.filter((x) => x.activo)) {
-      const dias = diasHasta(c.certificado_medico_vence, now);
+      const dias = diasHasta(fechaSaludConductor(c), now);
       if (dias == null || dias > cert.dias_anticipacion) continue;
       out.push({
         tipo: 'certificado_vence',
@@ -113,8 +115,8 @@ export function evaluarAlertas(input: {
         mensaje: `${etiquetaConductor(c)}: certificado ${dias < 0 ? `vencido hace ${Math.abs(dias)} día(s)` : `vence en ${dias} día(s)`}.`,
         conductor_id: c.id,
         vehiculo_id: c.vehiculo_asignado_id,
-        vence_el: c.certificado_medico_vence,
-        clave: `cert:${c.id}:${c.certificado_medico_vence}`,
+        vence_el: fechaSaludConductor(c),
+        clave: `cert:${c.id}:${fechaSaludConductor(c)}`,
       });
     }
   }

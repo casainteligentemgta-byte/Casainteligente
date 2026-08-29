@@ -87,7 +87,7 @@ export async function PUT(req: Request, ctx: RouteCtx) {
       return NextResponse.json({ ok: true });
     }
 
-    const conductor = await actualizarConductor(auth.supabase, id, body);
+    const conductor = await actualizarConductor(id, body);
     return NextResponse.json({ ok: true, conductor });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Error al actualizar';

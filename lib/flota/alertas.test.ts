@@ -24,8 +24,10 @@ describe('evaluarAlertas', () => {
   it('marca licencia vencida como crítica', () => {
     const conductor = {
       id: 'c1',
+      nombre_completo: 'Juan Pérez',
       nombres: 'Juan',
       apellidos: 'Pérez',
+      fecha_vencimiento_licencia: '2026-08-01',
       licencia_vence: '2026-08-01',
       certificado_medico_vence: null,
       vehiculo_asignado_id: null,
