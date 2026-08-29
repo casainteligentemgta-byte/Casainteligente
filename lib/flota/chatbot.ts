@@ -1,4 +1,6 @@
+import { Anthropic } from '@anthropic-ai/sdk';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { createServerClient } from '@/lib/supabase/server';
 import { geminiGenerateText, getGeminiApiKey } from '@/lib/gemini/client';
 import { GEMINI_PROCUREMENT_DEFAULT_MODEL } from '@/lib/almacen/geminiProcurementModels';
 import { leerTextoDocumentoLegalCompleto } from '@/lib/legal/leerTextoDocumentoLegal';
@@ -14,6 +16,12 @@ export type FlotaManual = {
   archivo_nombre: string | null;
   created_at: string;
   chunks?: number;
+};
+
+export type IndexacionManual = {
+  indexed: boolean;
+  chunks: number;
+  manual_id?: string;
 };
 
 export type FragmentoManual = {
@@ -88,6 +96,109 @@ export async function buscarFragmentosManual(
   return scored;
 }
 
+export function construirPromptMecanico(contexto_manual?: string): string {
+  return `Eres un mecánico experto especializado en mantenimiento de maquinaria pesada y camiones.
+Tu objetivo es responder preguntas técnicas sobre:
+- Cambios de aceite y filtros
+- Mantenimiento de llantas
+- Reparaciones de motor
+- Sistemas de combustible
+- Mantenimiento preventivo
+
+Responde en español, concreto y práctico. Si el síntoma es grave (frenos, dirección, sobrecalentamiento), indica detener la unidad.
+
+${contexto_manual ? `Basándote en el siguiente manual:\n${contexto_manual}` : ''}
+
+Si no sabes la respuesta específica, sugiere contactar a un taller profesional.`;
+}
+
+async function responderConGemini(pregunta: string, contexto_manual?: string): Promise<string | null> {
+  if (!getGeminiApiKey()) return null;
+  const model =
+    process.env.GEMINI_FLOTA_MODEL?.trim() ||
+    process.env.GEMINI_PROCUREMENT_MODEL?.trim() ||
+    GEMINI_PROCUREMENT_DEFAULT_MODEL;
+  return geminiGenerateText({
+    model,
+    temperature: 0.25,
+    maxOutputTokens: 1200,
+    systemInstruction: construirPromptMecanico(contexto_manual),
+    prompt: pregunta,
+  });
+}
+
+export async function responderPreguntaMecanica(
+  pregunta: string,
+  contexto_manual?: string,
+): Promise<string> {
+  const q = pregunta.trim();
+  if (!q) throw new Error('pregunta requerida');
+
+  const system_prompt = construirPromptMecanico(contexto_manual);
+  const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
+
+  if (apiKey) {
+    try {
+      const anthropic = new Anthropic({ apiKey });
+      const message = await anthropic.messages.create({
+        model: process.env.ANTHROPIC_FLOTA_MODEL?.trim() || 'claude-3-5-sonnet-20241022',
+        max_tokens: 1024,
+        messages: [{ role: 'user', content: q }],
+        system: system_prompt,
+      });
+      const block = message.content[0];
+      if (block?.type === 'text' && block.text.trim()) return block.text;
+    } catch {
+      const fallback = await responderConGemini(q, contexto_manual);
+      if (fallback) return fallback;
+      return 'Error al procesar';
+    }
+  }
+
+  const gemini = await responderConGemini(q, contexto_manual);
+  if (gemini) return gemini;
+
+  if (contexto_manual?.trim()) {
+    return `Sin ANTHROPIC_API_KEY ni GEMINI_API_KEY. Contexto del manual:\n\n${contexto_manual.slice(0, 1200)}`;
+  }
+  return 'No hay ANTHROPIC_API_KEY ni GEMINI_API_KEY. Configure una clave o cargue un manual para el mecánico.';
+}
+
+export async function indexarManualPDF(contenido_texto: string): Promise<IndexacionManual> {
+  const texto = contenido_texto.trim();
+  if (texto.length < 40) {
+    throw new Error('El manual no tiene texto suficiente. Suba un PDF legible o pegue el texto.');
+  }
+
+  const supabase = await createServerClient();
+  const primeraLinea = texto.split('\n').map((l) => l.trim()).find(Boolean) ?? 'Manual PDF';
+  const chunks = partirTextoEnChunks(texto);
+
+  const { data, error } = await supabase
+    .from('ci_flota_manuales')
+    .insert({
+      titulo: primeraLinea.slice(0, 180),
+      archivo_nombre: 'manual.pdf',
+      texto_extraido: texto.slice(0, 200_000),
+    })
+    .select('id')
+    .single();
+  if (error) throw error;
+
+  if (chunks.length) {
+    const { error: chunkErr } = await supabase.from('ci_flota_manual_chunks').insert(
+      chunks.map((contenido, chunk_index) => ({
+        manual_id: data.id,
+        chunk_index,
+        contenido,
+      })),
+    );
+    if (chunkErr) throw chunkErr;
+  }
+
+  return { indexed: true, chunks: chunks.length, manual_id: data.id };
+}
+
 export async function responderPreguntaMecanico(
   supabase: SupabaseClient,
   pregunta: string,
@@ -103,43 +214,7 @@ export async function responderPreguntaMecanico(
     )
     .join('\n\n---\n\n');
 
-  const key = getGeminiApiKey();
-  if (!key) {
-    if (!fuentes.length) {
-      return {
-        respuesta:
-          'No hay GEMINI_API_KEY ni fragmentos que coincidan. Cargue un manual (.txt/.md) o configure la clave para el mecánico con IA.',
-        fuentes,
-        sinManuales: true,
-      };
-    }
-    return {
-      respuesta: `Sin IA configurada. Fragmentos que coinciden:\n\n${fuentes
-        .map((f) => `• ${f.titulo ?? 'Manual'}: ${f.contenido.slice(0, 280)}…`)
-        .join('\n\n')}`,
-      fuentes,
-      sinManuales: false,
-    };
-  }
-
-  const model =
-    process.env.GEMINI_FLOTA_MODEL?.trim() ||
-    process.env.GEMINI_PROCUREMENT_MODEL?.trim() ||
-    GEMINI_PROCUREMENT_DEFAULT_MODEL;
-
-  const respuesta = await geminiGenerateText({
-    model,
-    temperature: 0.25,
-    maxOutputTokens: 1200,
-    systemInstruction: `Eres el mecánico de flota de Casa Inteligente (obras en Venezuela).
-Responde en español venezolano, concreto y práctico.
-Usa SOLO el contexto de manuales si existe. Si no hay contexto, dilo y da una guía general de taller (sin inventar torque, códigos ni piezas específicas).
-Si el síntoma es grave (frenos, dirección, sobrecalentamiento), indica detener la unidad y llevarla a taller.`,
-    prompt: contexto
-      ? `Pregunta del taller:\n${q}\n\nContexto de manuales:\n${contexto}`
-      : `Pregunta del taller (sin manual cargado que coincida):\n${q}`,
-  });
-
+  const respuesta = await responderPreguntaMecanica(q, contexto || undefined);
   return { respuesta, fuentes, sinManuales: fuentes.length === 0 };
 }
 
