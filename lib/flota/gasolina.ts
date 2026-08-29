@@ -181,24 +181,28 @@ async function insertarCargaGasolina(body: Record<string, unknown>): Promise<Flo
   return unwrap(asGasolinaRow(result.data) ?? {});
 }
 
-export async function registrarGasolina(data: RegistrarGasolinaInput): Promise<FlotaGasolina> {
-  if (!esUuid(data.maquinaria_id)) throw new Error('maquinaria_id requerido');
-  if (data.cantidad_litros == null || Number(data.cantidad_litros) <= 0) {
-    throw new Error('cantidad_litros debe ser mayor a 0');
-  }
-  if (data.costo_total == null || Number.isNaN(Number(data.costo_total))) {
-    throw new Error('costo_total es requerido');
-  }
+export async function registrarGasolina(
+  data: RegistrarGasolinaInput | Record<string, unknown>,
+): Promise<FlotaGasolina> {
+  const rec = data as Record<string, unknown>;
+  const maquinaria_id = String(rec.maquinaria_id ?? rec.vehiculo_id ?? '').trim();
+  const litros = parseNumero(rec.cantidad_litros ?? rec.litros);
+  const precio = parseNumero(rec.precio_litro_usd);
+  const costo =
+    parseNumero(rec.costo_total ?? rec.monto_usd) ??
+    (precio != null && litros != null ? Math.round(precio * litros * 100) / 100 : 0);
+
+  if (!esUuid(maquinaria_id)) throw new Error('maquinaria_id requerido');
+  if (litros == null || litros <= 0) throw new Error('cantidad_litros debe ser mayor a 0');
+  if (costo == null || Number.isNaN(Number(costo))) throw new Error('costo_total es requerido');
 
   return insertarCargaGasolina({
-    maquinaria_id: data.maquinaria_id,
-    cantidad_litros: data.cantidad_litros,
-    costo_total: data.costo_total,
-    km_actual: data.km_actual,
-    tipo_gasolina: data.tipo_gasolina,
-    estacion_gasolina: data.estacion_gasolina,
-    conductor_id: data.conductor_id,
-    proyecto_id: data.proyecto_id,
+    ...rec,
+    maquinaria_id,
+    cantidad_litros: litros,
+    costo_total: costo,
+    km_actual: rec.km_actual ?? rec.odometro_km,
+    estacion_gasolina: rec.estacion_gasolina ?? rec.estacion,
   });
 }
 
