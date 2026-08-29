@@ -1,42 +1,32 @@
-import { NextResponse } from 'next/server';
-import {
-  crearConductor,
-  listarConductores,
-  obtenerConductores,
-} from '@/lib/flota/conductores';
+import { NextRequest, NextResponse } from 'next/server';
+import { crearConductor, listarConductores, obtenerConductores } from '@/lib/flota/conductores';
 import {
   crearVehiculo,
   listarVehiculos,
   requireAccesoFlota,
   respuestaMigracionPendiente,
 } from '@/lib/flota/acceso';
-import { esUuid, unirNombreCompleto } from '@/lib/flota/utils';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: Request) {
+export async function GET(request: NextRequest) {
   const auth = await requireAccesoFlota();
   if (!auth.ok) return auth.response;
 
-  const url = new URL(req.url);
-  const q = url.searchParams.get('q')?.trim() || undefined;
-  const entidadId = url.searchParams.get('entidad_id')?.trim() || undefined;
-  const activoRaw = url.searchParams.get('activo');
-  const activo = activoRaw == null ? undefined : activoRaw !== '0' && activoRaw !== 'false';
-
   try {
-    if (entidadId && esUuid(entidadId) && !q && activo == null) {
-      const items = await obtenerConductores(entidadId);
-      const vehiculos = await listarVehiculos(auth.supabase);
-      return NextResponse.json({
-        ok: true,
-        conductores: items,
-        vehiculos: vehiculos.items,
-      });
+    const { searchParams } = new URL(request.url);
+    const entidad_id = searchParams.get('entidad_id');
+    const q = searchParams.get('q')?.trim() || undefined;
+    const activoRaw = searchParams.get('activo');
+    const activo = activoRaw == null ? undefined : activoRaw !== '0' && activoRaw !== 'false';
+
+    if (entidad_id) {
+      const data = await obtenerConductores(entidad_id);
+      return NextResponse.json(data);
     }
 
     const [conductores, vehiculos] = await Promise.all([
-      listarConductores(auth.supabase, { q, activo, entidadId }),
+      listarConductores(auth.supabase, { q, activo }),
       listarVehiculos(auth.supabase),
     ]);
     if (conductores.migracionPendiente || vehiculos.migracionPendiente) {
@@ -47,58 +37,26 @@ export async function GET(req: Request) {
       conductores: conductores.items,
       vehiculos: vehiculos.items,
     });
-  } catch (e) {
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : 'Error al listar conductores' },
-      { status: 500 },
-    );
+  } catch (error) {
+    return NextResponse.json({ error: String(error) }, { status: 500 });
   }
 }
 
-export async function POST(req: Request) {
+export async function POST(request: NextRequest) {
   const auth = await requireAccesoFlota();
   if (!auth.ok) return auth.response;
 
-  let body: Record<string, unknown>;
   try {
-    body = (await req.json()) as Record<string, unknown>;
-  } catch {
-    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
-  }
-
-  try {
+    const body = (await request.json()) as Record<string, unknown>;
     if (body.recurso === 'vehiculo') {
       const vehiculo = await crearVehiculo(auth.supabase, body);
-      return NextResponse.json({ ok: true, vehiculo });
+      return NextResponse.json({ ok: true, vehiculo }, { status: 201 });
     }
-    const nombreCompleto =
-      String(body.nombre_completo ?? '').trim() ||
-      unirNombreCompleto(String(body.nombres ?? ''), String(body.apellidos ?? ''));
-    const conductor = await crearConductor({
-      entidad_id: String(body.entidad_id ?? ''),
-      nombre_completo: nombreCompleto,
-      cedula: String(body.cedula ?? body.numero_cedula ?? ''),
-      numero_cedula: body.numero_cedula != null ? String(body.numero_cedula) : undefined,
-      fecha_vencimiento_licencia:
-        (body.fecha_vencimiento_licencia as string | undefined) ??
-        (body.licencia_vence as string | undefined),
-      fecha_vencimiento_salud:
-        (body.fecha_vencimiento_salud as string | undefined) ??
-        (body.certificado_medico_vence as string | undefined),
-      empleado_id: body.empleado_id != null ? String(body.empleado_id) : undefined,
-      telefono: body.telefono != null ? String(body.telefono) : undefined,
-      email: body.email != null ? String(body.email) : undefined,
-      tipo_licencia: body.tipo_licencia != null ? String(body.tipo_licencia) : undefined,
-      vehiculo_asignado_id:
-        body.vehiculo_asignado_id != null ? String(body.vehiculo_asignado_id) : undefined,
-      proyecto_id: body.proyecto_id != null ? String(body.proyecto_id) : undefined,
-      notas: body.notas != null ? String(body.notas) : undefined,
-      activo: body.activo !== false,
-    });
-    return NextResponse.json({ ok: true, conductor });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Error al guardar';
-    const status = /requerido|inválid/i.test(msg) ? 400 : 500;
+    const data = await crearConductor(body);
+    return NextResponse.json(data, { status: 201 });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    const status = /requerido|inválid|JSON/i.test(msg) ? 400 : 500;
     return NextResponse.json({ error: msg }, { status });
   }
 }

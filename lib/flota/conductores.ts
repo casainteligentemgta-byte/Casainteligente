@@ -163,23 +163,26 @@ function payloadConductor(body: Record<string, unknown>, partial = false): Recor
   return out;
 }
 
-export async function crearConductor(data: CrearConductorInput) {
-  const nombre = data.nombre_completo.trim();
+export async function crearConductor(data: CrearConductorInput | Record<string, unknown>) {
+  const rec = data as Record<string, unknown>;
+  const nombre =
+    String(rec.nombre_completo ?? '').trim() ||
+    unirNombreCompleto(String(rec.nombres ?? ''), String(rec.apellidos ?? ''));
   if (!nombre) throw new Error('nombre_completo requerido');
-  if (!String(data.cedula ?? '').trim() && !String(data.numero_cedula ?? '').trim()) {
+  if (!String(rec.cedula ?? '').trim() && !String(rec.numero_cedula ?? '').trim()) {
     throw new Error('cedula requerida');
   }
 
   const supabase = await createServerClient();
   const row = payloadConductor({
-    ...data,
+    ...rec,
     nombre_completo: nombre,
-    cedula: data.cedula,
-    numero_cedula: data.numero_cedula,
-    fecha_vencimiento_licencia: data.fecha_vencimiento_licencia,
-    fecha_vencimiento_salud: data.fecha_vencimiento_salud,
-    empleado_id: data.empleado_id,
-    entidad_id: data.entidad_id,
+    cedula: rec.cedula ?? rec.numero_cedula,
+    numero_cedula: rec.numero_cedula ?? rec.cedula,
+    fecha_vencimiento_licencia: rec.fecha_vencimiento_licencia ?? rec.licencia_vence,
+    fecha_vencimiento_salud: rec.fecha_vencimiento_salud ?? rec.certificado_medico_vence,
+    empleado_id: rec.empleado_id,
+    entidad_id: rec.entidad_id,
   });
 
   let result = await supabase
@@ -214,7 +217,11 @@ export async function obtenerConductores(entidad_id: string) {
     .order('created_at', { ascending: false });
   if (esUuid(entidad_id)) q = q.eq('entidad_id', entidad_id);
 
-  let { data, error } = await q;
+  let data: unknown;
+  let error: { message?: string } | null;
+  const first = await q;
+  data = first.data;
+  error = first.error;
   if (error && columnasNuevasFaltan(error)) {
     let q2 = supabase
       .from('ci_flota_conductores')
@@ -226,7 +233,7 @@ export async function obtenerConductores(entidad_id: string) {
     error = retry.error;
   }
   if (error) throw error;
-  return (data ?? []).map((row) => unwrapVehiculo(row as Record<string, unknown>));
+  return (Array.isArray(data) ? data : []).map((row) => unwrapVehiculo(row as Record<string, unknown>));
 }
 
 export async function actualizarConductor(
@@ -272,7 +279,11 @@ export async function listarConductores(
   if (opts?.activo != null) q = q.eq('activo', opts.activo);
   if (opts?.entidadId && esUuid(opts.entidadId)) q = q.eq('entidad_id', opts.entidadId);
 
-  let { data, error } = await q;
+  let data: unknown;
+  let error: { message?: string; code?: string } | null;
+  const first = await q;
+  data = first.data;
+  error = first.error;
   if (error && columnasNuevasFaltan(error)) {
     let q2 = supabase
       .from('ci_flota_conductores')
@@ -287,7 +298,7 @@ export async function listarConductores(
   if (esMigracionPendiente(error)) return { items: [], migracionPendiente: true };
   if (error) throw new Error(error.message);
 
-  let items = (data ?? []).map((row) => unwrapVehiculo(row as Record<string, unknown>));
+  let items = (Array.isArray(data) ? data : []).map((row) => unwrapVehiculo(row as Record<string, unknown>));
   const needle = opts?.q?.trim().toLowerCase();
   if (needle) {
     items = items.filter((c) =>
@@ -312,11 +323,15 @@ export async function obtenerConductor(
   supabase: SupabaseClient,
   id: string,
 ): Promise<{ conductor: FlotaConductor | null; migracionPendiente: boolean }> {
-  let { data, error } = await supabase
+  let data: unknown;
+  let error: { message?: string; code?: string } | null;
+  const first = await supabase
     .from('ci_flota_conductores')
     .select(CONDUCTOR_LIST_SELECT)
     .eq('id', id)
     .maybeSingle();
+  data = first.data;
+  error = first.error;
   if (error && columnasNuevasFaltan(error)) {
     const retry = await supabase
       .from('ci_flota_conductores')
