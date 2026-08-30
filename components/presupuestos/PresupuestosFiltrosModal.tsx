@@ -8,6 +8,7 @@ type ClasificacionPresupuesto =
     | 'aprobado'
     | 'no_aprobado'
     | 'cobrado'
+    | 'parcialmente_pagado'
     | 'pagado';
 
 type SortBy = 'fecha' | 'status' | 'nomenclatura';
@@ -18,6 +19,7 @@ const CLASIFICACION_LABELS: Record<ClasificacionPresupuesto, string> = {
     aprobado: 'Aprobado',
     no_aprobado: 'No aprobado',
     cobrado: 'Por Pagar',
+    parcialmente_pagado: 'Parcial',
     pagado: 'Pagado',
 };
 
@@ -246,7 +248,7 @@ export default function PresupuestosFiltrosModal({
                 >
                     {([
                         ['todos', 'no_enviado', 'enviado', 'aprobado'],
-                        ['no_aprobado', 'cobrado', 'pagado'],
+                        ['no_aprobado', 'cobrado', 'parcialmente_pagado', 'pagado'],
                     ] as const).map((row, rowIdx) => (
                         <div
                             key={rowIdx}

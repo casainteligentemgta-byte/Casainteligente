@@ -28,6 +28,8 @@ export type BudgetRow = {
   notes?: string | null;
   show_zelle?: boolean | null;
   subtotal?: number | null;
+  monto_pagado?: number | null;
+  saldo?: number | null;
   items?: unknown;
   fecha?: string | null;
   created_at?: string | null;
@@ -279,6 +281,14 @@ export function buildPresupuestoPrintHtml(budget: BudgetRow): string {
           <span>TOTAL</span>
           <span>$${fmt(Number(budget.subtotal ?? 0))}</span>
         </div>
+        ${
+          Number(budget.monto_pagado ?? 0) > 0
+            ? `<div class="sum-line" style="margin-top:4px"><span>Abonado</span><span>$${fmt(Number(budget.monto_pagado ?? 0))}</span></div>
+        <div class="sum-line"><span>Saldo</span><span>$${fmt(
+          Number(budget.saldo ?? Math.max(0, Number(budget.subtotal ?? 0) - Number(budget.monto_pagado ?? 0))),
+        )}</span></div>`
+            : ''
+        }
         <p class="muted" style="font-size:7px;margin-top:4px;text-align:right;line-height:1.15">Casa Inteligente · Documento generado electrónicamente</p>
       </div>
     </div>

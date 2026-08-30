@@ -5,14 +5,18 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 import PresupuestosFiltrosModal from '@/components/presupuestos/PresupuestosFiltrosModal';
+import PresupuestoCobrosModal from '@/components/presupuestos/PresupuestoCobrosModal';
 import { fechaDocumentoDeBudget, formatFechaPresupuestoCorta } from '@/lib/presupuesto/fecha';
+import { saldoPresupuesto } from '@/lib/presupuesto/cobros';
 
 interface Budget {
     id: string;
     customer_name: string;
     customer_rif: string;
     subtotal: number;
-    status: 'no_enviado' | 'enviado' | 'aprobado' | 'no_aprobado' | 'cobrado' | 'pagado';
+    monto_pagado?: number | null;
+    saldo?: number | null;
+    status: 'no_enviado' | 'enviado' | 'aprobado' | 'no_aprobado' | 'cobrado' | 'parcialmente_pagado' | 'pagado';
     show_zelle?: boolean;
     numero_correlativo?: number | string | null;
     fecha?: string | null;
@@ -25,6 +29,7 @@ type ClasificacionPresupuesto =
     | 'aprobado'
     | 'no_aprobado'
     | 'cobrado'
+    | 'parcialmente_pagado'
     | 'pagado';
 
 const CLASIFICACION_COLORS: Record<ClasificacionPresupuesto, { bg: string; text: string; label: string; short: string }> = {
@@ -33,6 +38,7 @@ const CLASIFICACION_COLORS: Record<ClasificacionPresupuesto, { bg: string; text:
     aprobado: { bg: '#DCFCE7', text: '#15803D', label: 'Aprobado', short: 'Aprobado' },
     no_aprobado: { bg: '#FEE2E2', text: '#B91C1C', label: 'No aprobado', short: 'Rechaz.' },
     cobrado: { bg: '#FEF3C7', text: '#B45309', label: 'Por Pagar', short: 'Por pagar' },
+    parcialmente_pagado: { bg: '#FFEDD5', text: '#C2410C', label: 'Parcial', short: 'Parcial' },
     pagado: { bg: '#D1FAE5', text: '#047857', label: 'Pagado', short: 'Pagado' },
 };
 
@@ -43,7 +49,8 @@ const STATUS_SORT_ORDER: Record<ClasificacionPresupuesto, number> = {
     aprobado: 2,
     no_aprobado: 3,
     cobrado: 4,
-    pagado: 5,
+    parcialmente_pagado: 5,
+    pagado: 6,
 };
 
 function clasificarPresupuesto(b: Budget): ClasificacionPresupuesto {
@@ -52,6 +59,16 @@ function clasificarPresupuesto(b: Budget): ClasificacionPresupuesto {
 
 function formatUSD(n: number) {
     return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function montoPagadoDe(b: Budget) {
+    if (b.monto_pagado != null && Number.isFinite(Number(b.monto_pagado))) return Number(b.monto_pagado);
+    return b.status === 'pagado' ? Number(b.subtotal) || 0 : 0;
+}
+
+function saldoDe(b: Budget) {
+    if (b.saldo != null && Number.isFinite(Number(b.saldo))) return Number(b.saldo);
+    return saldoPresupuesto(Number(b.subtotal) || 0, montoPagadoDe(b));
 }
 
 function formatFechaCorta(iso: string) {
@@ -92,6 +109,7 @@ function TarjetaPresupuesto({
     onShare,
     onDelete,
     onUpdateStatus,
+    onAbono,
 }: {
     b: Budget;
     fallbackById: Record<string, number>;
@@ -101,6 +119,7 @@ function TarjetaPresupuesto({
     onShare: () => void;
     onDelete: () => void;
     onUpdateStatus: (status: ClasificacionPresupuesto) => void;
+    onAbono: () => void;
 }) {
     const [menuAbierto, setMenuAbierto] = useState(false);
     const clasif = clasificarPresupuesto(b);
@@ -191,6 +210,29 @@ function TarjetaPresupuesto({
                     ${formatUSD(b.subtotal)}
                 </span>
             </button>
+            {montoPagadoDe(b) > 0 || b.status === 'parcialmente_pagado' ? (
+                <div style={{ minWidth: 0 }}>
+                    <div
+                        style={{
+                            height: '6px',
+                            borderRadius: '999px',
+                            background: '#E2E8F0',
+                            overflow: 'hidden',
+                        }}
+                    >
+                        <div
+                            style={{
+                                width: `${Math.min(100, ((montoPagadoDe(b) / Math.max(Number(b.subtotal) || 1, 1)) * 100))}%`,
+                                height: '100%',
+                                background: saldoDe(b) <= 0 ? '#10B981' : '#F59E0B',
+                            }}
+                        />
+                    </div>
+                    <p style={{ margin: '6px 0 0', fontSize: '11px', fontWeight: 600, color: '#64748B' }}>
+                        Abonado ${formatUSD(montoPagadoDe(b))} · Saldo ${formatUSD(saldoDe(b))}
+                    </p>
+                </div>
+            ) : null}
 
             {/* Status + acciones mínimas */}
             <div
@@ -242,6 +284,22 @@ function TarjetaPresupuesto({
                 </label>
 
                 <div style={{ display: 'flex', gap: '6px', marginLeft: 'auto', position: 'relative' }}>
+                    <button
+                        type="button"
+                        onClick={onAbono}
+                        style={{
+                            border: 'none',
+                            borderRadius: '10px',
+                            padding: '8px 12px',
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            background: '#D1FAE5',
+                            color: '#047857',
+                        }}
+                    >
+                        Abono
+                    </button>
                     <button
                         type="button"
                         onClick={onEditar}
@@ -298,6 +356,27 @@ function TarjetaPresupuesto({
                                 gap: '2px',
                             }}
                         >
+                            <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                    setMenuAbierto(false);
+                                    onAbono();
+                                }}
+                                style={{
+                                    border: 'none',
+                                    background: 'transparent',
+                                    color: '#047857',
+                                    textAlign: 'left',
+                                    padding: '10px 12px',
+                                    borderRadius: '8px',
+                                    fontSize: '13px',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                Registrar abono
+                            </button>
                             <button
                                 type="button"
                                 role="menuitem"
@@ -396,6 +475,7 @@ export default function PresupuestosPage() {
     });
     const [fallbackById, setFallbackById] = useState<Record<string, number>>({});
     const [filtrosAbiertos, setFiltrosAbiertos] = useState(false);
+    const [cobroId, setCobroId] = useState<string | null>(null);
 
     const fetchBudgets = async () => {
         setLoading(true);
@@ -472,21 +552,22 @@ export default function PresupuestosPage() {
                 sorted.reduce((acc, b) => (pred(b) ? acc + (Number(b.subtotal) || 0) : acc), 0);
 
             const s = {
-                // Aprobado comercial = aceptado por el cliente (incluye por pagar y pagados).
                 totalAprobado: sumSubtotal((b) =>
-                    b.status === 'aprobado' || b.status === 'cobrado' || b.status === 'pagado',
+                    b.status === 'aprobado' ||
+                    b.status === 'cobrado' ||
+                    b.status === 'parcialmente_pagado' ||
+                    b.status === 'pagado',
                 ),
-                // Pagado = dinero ya recibido.
-                totalPagado: sumSubtotal((b) => b.status === 'pagado'),
-                // Por pagar = aceptado aún sin pago (aprobado + status interno cobrado).
-                totalPorPagar: sumSubtotal(
-                    (b) => b.status === 'aprobado' || b.status === 'cobrado',
-                ),
+                totalPagado: sorted.reduce((acc, b) => acc + montoPagadoDe(b), 0),
+                totalPorPagar: sorted.reduce((acc, b) => {
+                    if (b.status === 'no_aprobado') return acc;
+                    return acc + saldoDe(b);
+                }, 0),
                 noEnviado: sorted.filter((b) => b.status === 'no_enviado').length,
                 enviado: sorted.filter((b) => b.status === 'enviado').length,
                 aprobados: sorted.filter((b) => b.status === 'aprobado').length,
                 noAprobados: sorted.filter((b) => b.status === 'no_aprobado').length,
-                porPagar: sorted.filter((b) => b.status === 'cobrado').length,
+                porPagar: sorted.filter((b) => b.status === 'cobrado' || b.status === 'parcialmente_pagado').length,
                 pagados: sorted.filter((b) => b.status === 'pagado').length,
             };
             setStats(s);
@@ -707,7 +788,7 @@ export default function PresupuestosPage() {
                 >
                     {([
                         ['todos', 'no_enviado', 'enviado', 'aprobado'],
-                        ['no_aprobado', 'cobrado', 'pagado'],
+                        ['no_aprobado', 'cobrado', 'parcialmente_pagado', 'pagado'],
                     ] as const).map((row, rowIdx) => (
                         <div
                             key={rowIdx}
@@ -839,11 +920,19 @@ export default function PresupuestosPage() {
                                 onShare={() => handleShare(b)}
                                 onDelete={() => deleteBudget(b.id)}
                                 onUpdateStatus={(status) => updateStatus(b.id, status)}
+                                onAbono={() => setCobroId(b.id)}
                             />
                         ))}
                     </div>
                 )}
             </div>
+            <PresupuestoCobrosModal
+                open={Boolean(cobroId)}
+                budgetId={cobroId}
+                customerName={budgets.find((x) => x.id === cobroId)?.customer_name}
+                onClose={() => setCobroId(null)}
+                onChanged={() => void fetchBudgets()}
+            />
         </div>
     );
 }
