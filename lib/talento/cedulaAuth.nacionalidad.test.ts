@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  domicilioContratoObrero,
   estadoCivilContratoObrero,
   nacionalidadDesdeCedula,
   trabajadorFemeninoDesdeEstadoCivil,
@@ -21,6 +22,13 @@ describe('nacionalidadDesdeCedula / estadoCivilContratoObrero', () => {
     assert.equal(estadoCivilContratoObrero(''), 'Soltero');
     assert.equal(estadoCivilContratoObrero('  '), 'Soltero');
     assert.equal(estadoCivilContratoObrero('casado'), 'casado');
+  });
+
+  it('domicilio vacío → de este domicilio', () => {
+    assert.equal(domicilioContratoObrero(null), 'de este domicilio');
+    assert.equal(domicilioContratoObrero(''), 'de este domicilio');
+    assert.equal(domicilioContratoObrero('  '), 'de este domicilio');
+    assert.equal(domicilioContratoObrero('Calle 1, Porlamar'), 'Calle 1, Porlamar');
   });
 
   it('trabajadorFemeninoDesdeEstadoCivil', () => {

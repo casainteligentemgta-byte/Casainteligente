@@ -28,10 +28,16 @@ export function nacionalidadDesdeCedula(
   return null;
 }
 
-/** Estado civil en contrato: si falta, «Soltero». */
+/** Estado civil en contrato: si falta en hoja de vida / planilla, «Soltero». */
 export function estadoCivilContratoObrero(raw: string | null | undefined): string {
   const t = String(raw ?? '').trim();
   return t || 'Soltero';
+}
+
+/** Domicilio del trabajador en contrato: si falta en hoja de vida, fórmula legal «de este domicilio». */
+export function domicilioContratoObrero(raw: string | null | undefined): string {
+  const t = String(raw ?? '').trim();
+  return t || 'de este domicilio';
 }
 
 /**
