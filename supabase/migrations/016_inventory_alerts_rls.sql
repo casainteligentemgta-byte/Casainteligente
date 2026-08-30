@@ -1,6 +1,17 @@
 -- Alertas de inventario: misma lógica que global_inventory (anon + authenticated).
 -- Ejecutar si aparece: "new row violates row-level security policy for table inventory_alerts"
 
+create table if not exists public.inventory_alerts (
+  id uuid primary key default gen_random_uuid(),
+  material_id uuid references public.global_inventory(id) on delete cascade,
+  alert_type text not null,
+  threshold_value numeric(15,2),
+  current_value numeric(15,2),
+  resolved boolean default false,
+  resolved_at timestamptz,
+  created_at timestamptz default now()
+);
+
 alter table public.inventory_alerts enable row level security;
 
 -- anon
