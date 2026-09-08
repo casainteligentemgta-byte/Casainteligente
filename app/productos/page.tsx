@@ -477,16 +477,27 @@ export default function ProductosPage() {
                     }}
                 />
 
-                <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '12px' }}>
+                <div
+                    style={{
+                        display: 'flex',
+                        gap: '8px',
+                        overflowX: 'auto',
+                        paddingBottom: '12px',
+                        WebkitOverflowScrolling: 'touch',
+                        scrollbarWidth: 'thin',
+                    }}
+                >
                     {CATEGORIAS.map(c => (
                         <button
                             key={c}
+                            type="button"
                             onClick={() => setCategoria(c)}
                             style={{
                                 background: categoria === c ? 'rgba(255,149,0,0.15)' : 'transparent',
                                 color: categoria === c ? '#FF9500' : 'rgba(255,255,255,0.4)',
                                 border: 'none', borderRadius: '10px', padding: '6px 14px',
-                                fontSize: '13px', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap'
+                                fontSize: '13px', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap',
+                                flexShrink: 0,
                             }}
                         >
                             {c}
