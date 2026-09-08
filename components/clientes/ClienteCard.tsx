@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import type { CustomerListItem } from '@/types';
 
 type ClienteStatus = 'activo' | 'inactivo' | 'pendiente';
 type ClienteTipo = 'V' | 'J' | 'E';
@@ -31,13 +32,20 @@ const statusConfig: Record<ClienteStatus, { label: string; dot: string; bg: stri
     pendiente: { label: 'Pendiente', dot: '#FF9500', bg: 'rgba(255,149,0,0.10)', text: '#B8620A' },
 };
 
-const tipoConfig: Record<ClienteTipo, { bg: string; text: string; border: string }> = {
+const tipoConfig: Record<RifTipo, { bg: string; text: string; border: string }> = {
     V: { bg: 'rgba(0,122,255,0.10)', text: '#007AFF', border: 'rgba(0,122,255,0.25)' },
     J: { bg: 'rgba(255,149,0,0.10)', text: '#B8620A', border: 'rgba(255,149,0,0.25)' },
     E: { bg: 'rgba(52,199,89,0.10)', text: '#1A7F3C', border: 'rgba(52,199,89,0.25)' },
 };
 
-function AvatarCircle({ initials, color, categoria, imagen }: { initials: string; color: string; categoria: ClienteCategoria; imagen?: string }) {
+const defaultTipoStyle = { bg: 'rgba(142,142,147,0.10)', text: '#8E8E93', border: 'rgba(142,142,147,0.25)' };
+
+function getRifTipo(rif: string): { letter: string; style: typeof defaultTipoStyle } {
+    const prefix = rif?.charAt(0)?.toUpperCase() as RifTipo;
+    return { letter: prefix || '?', style: tipoConfig[prefix] || defaultTipoStyle };
+}
+
+function AvatarCircle({ initials, color, categoria, imagen }: { initials: string; color: string; categoria: string; imagen?: string | null }) {
     return (
         <div className="relative flex-shrink-0" style={{ width: '54px', height: '54px' }}>
             <div className="absolute inset-0 rounded-full" style={{ background: `${color}20`, transform: 'scale(1.08)' }} />
@@ -107,8 +115,8 @@ function ClienteModal({ cliente, onClose }: { cliente: Cliente; onClose: () => v
                     <AvatarCircle initials={cliente.initials} color={accent} categoria={cliente.categoria} imagen={cliente.imagen} />
                     <div style={{ flex: 1 }}>
                         <div style={{ display: 'flex', gap: '6px', marginBottom: '4px', flexWrap: 'wrap' }}>
-                            <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '6px', background: tipo.bg, color: tipo.text, border: `1px solid ${tipo.border}` }}>
-                                {cliente.tipo}
+                            <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '6px', background: rifTipo.style.bg, color: rifTipo.style.text, border: `1px solid ${rifTipo.style.border}` }}>
+                                {rifTipo.letter}
                             </span>
                             <span style={{ fontSize: '11px', fontWeight: 600, padding: '2px 8px', borderRadius: '6px', background: status.bg, color: status.text, display: 'flex', alignItems: 'center', gap: '4px' }}>
                                 <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: status.dot, display: 'inline-block' }} />

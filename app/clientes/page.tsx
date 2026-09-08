@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback } from 'react';
 import ClienteCard from '@/components/clientes/ClienteCard';
 import { withTimeout } from '@/lib/http/withTimeout';
 import { createClient } from '@/lib/supabase/client';
+import type { CustomerListItem } from '@/types';
 
 const CUSTOMERS_LOAD_TIMEOUT_MS = 22_000;
 

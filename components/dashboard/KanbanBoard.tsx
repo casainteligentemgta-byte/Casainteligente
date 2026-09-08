@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { DndContext, DragOverlay, DragStartEvent, DragEndEvent, DragOverEvent, useSensor, useSensors, PointerSensor, KeyboardSensor, closestCorners } from "@dnd-kit/core"
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable"
 import { Project, ProjectStatus } from "@/types"
@@ -15,9 +15,9 @@ export function KanbanBoard({ initialProjects }: { initialProjects: Project[] })
     const [mounted, setMounted] = useState(false)
     const [activeProject, setActiveProject] = useState<Project | null>(null)
 
-    useState(() => {
+    useEffect(() => {
         setMounted(true)
-    })
+    }, [])
 
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
