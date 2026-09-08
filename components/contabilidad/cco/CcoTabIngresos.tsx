@@ -308,14 +308,6 @@ export default function CcoTabIngresos({ proyectoId }: { proyectoId: string }) {
     }
   };
 
-  if (!proyectoId) {
-    return (
-      <div style={box}>
-        <p style={muted}>Selecciona una obra para ver el control de ingresos.</p>
-      </div>
-    );
-  }
-
   const kpis = useMemo(() => {
     let montoOrig = 0;
     let montoUsd = 0;
@@ -326,6 +318,14 @@ export default function CcoTabIngresos({ proyectoId }: { proyectoId: string }) {
     }
     return { montoOrig, montoUsd, count: filas.length };
   }, [filas]);
+
+  if (!proyectoId) {
+    return (
+      <div style={box}>
+        <p style={muted}>Selecciona una obra para ver el control de ingresos.</p>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>

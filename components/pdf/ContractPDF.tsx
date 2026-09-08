@@ -110,10 +110,10 @@ export const ContractPDF: React.FC<ContractPDFProps> = ({
 
             <View style={styles.section}>
                 <Text style={styles.text}>
-                    Entre la empresa <Text style={styles.bold}>Casa Inteligente C.A.</Text>, en lo sucesivo "EL EMPLEADOR", 
+                    Entre la empresa <Text style={styles.bold}>Casa Inteligente C.A.</Text>, en lo sucesivo &quot;EL EMPLEADOR&quot;, 
                     y por la otra parte, el(la) ciudadano(a) <Text style={styles.bold}>{nombre}</Text>, titular de la Cédula 
                     de Identidad Nro. <Text style={styles.bold}>{cedula}</Text>, domiciliado(a) en <Text style={styles.bold}>{direccion}</Text>, 
-                    y número telefónico de contacto <Text style={styles.bold}>{telefono}</Text>, en lo sucesivo "EL TRABAJADOR", 
+                    y número telefónico de contacto <Text style={styles.bold}>{telefono}</Text>, en lo sucesivo &quot;EL TRABAJADOR&quot;, 
                     se ha convenido en celebrar el presente Contrato de Trabajo de acuerdo a las siguientes cláusulas:
                 </Text>
             </View>

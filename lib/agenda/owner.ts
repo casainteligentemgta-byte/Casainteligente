@@ -18,8 +18,10 @@ export function ownerFromAppSession(sessionId: string): AgendaOwner {
   return { telegramChatId: `app-${sessionId.trim()}` };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function applyOwnerFilter(query: any, owner: AgendaOwner) {
+export function applyOwnerFilter<T extends { eq: (column: string, value: string) => T }>(
+  query: T,
+  owner: AgendaOwner,
+): T {
   if (owner.userId) return query.eq('user_id', owner.userId);
   if (owner.telegramChatId) return query.eq('telegram_chat_id', owner.telegramChatId);
   return query;

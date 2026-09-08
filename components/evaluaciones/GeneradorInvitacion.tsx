@@ -147,7 +147,7 @@ export default function GeneradorInvitacion({ onClose }: { onClose?: () => void 
 
             <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
                 <p className="text-white/80 text-xs leading-relaxed italic">
-                    "{success.message}"
+                    &ldquo;{success.message}&rdquo;
                 </p>
             </div>
 

@@ -1,6 +1,6 @@
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { applyOwnerFilter, assertAgendaOwner, ownerInsertPayload } from '@/lib/agenda/owner';
-import type { AgendaOwner, AgendaToolArgs, AgendaToolResult } from '@/types/agenda';
+import type { AgendaOwner, AgendaToolArgs, AgendaToolResult, SpecialDate } from '@/types/agenda';
 
 function getSupabase() {
   return createSupabaseAdminClient();
@@ -40,10 +40,21 @@ export const ejecutarToolDeAgenda = async (
     }
 
     case 'consultarFechasEspeciales': {
+      type LooseSpecialDatesQuery = {
+        eq: (column: string, value: string) => LooseSpecialDatesQuery;
+        filter: (column: string, operator: string, value: string) => LooseSpecialDatesQuery;
+        order: (
+          column: string,
+          opts: { ascending: boolean },
+        ) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>;
+      };
+
       let query = applyOwnerFilter(
-        getSupabase().from('special_dates').select('*'),
+        getSupabase().from('special_dates').select('*') as unknown as {
+          eq: (column: string, value: string) => LooseSpecialDatesQuery;
+        },
         owner,
-      );
+      ) as LooseSpecialDatesQuery;
 
       if (args.categoria) {
         query = query.eq('category', args.categoria);
@@ -63,7 +74,7 @@ export const ejecutarToolDeAgenda = async (
 
       if (selectError) throw new Error(`Error al consultar Supabase: ${selectError.message}`);
 
-      return { status: 'success', data: selectData ?? [] };
+      return { status: 'success', data: (selectData ?? []) as SpecialDate[] };
     }
 
     default:
