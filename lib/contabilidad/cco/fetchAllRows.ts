@@ -1,5 +1,3 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-
 const PAGE = 1000;
 
 /**
@@ -8,9 +6,15 @@ const PAGE = 1000;
  * Importante: el query debe ordenar por clave estable (p.ej. fecha + id);
  * ordenar solo por fecha duplica/omite filas entre páginas.
  */
+type RangeResult<T> = {
+  data: T[] | null;
+  error: { message?: string; code?: string } | null;
+};
+
 export async function fetchAllRows<T extends Record<string, unknown>>(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  buildQuery: () => { range: (from: number, to: number) => any },
+  buildQuery: () => {
+    range: (from: number, to: number) => PromiseLike<RangeResult<T>> | RangeResult<T>;
+  },
   opts?: { pageSize?: number; maxRows?: number },
 ): Promise<{ data: T[]; error: { message?: string; code?: string } | null }> {
   const pageSize = opts?.pageSize ?? PAGE;

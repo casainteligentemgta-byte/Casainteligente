@@ -32,7 +32,7 @@ const statusConfig: Record<ClienteStatus, { label: string; dot: string; bg: stri
     pendiente: { label: 'Pendiente', dot: '#FF9500', bg: 'rgba(255,149,0,0.10)', text: '#B8620A' },
 };
 
-const tipoConfig: Record<RifTipo, { bg: string; text: string; border: string }> = {
+const tipoConfig: Record<ClienteTipo, { bg: string; text: string; border: string }> = {
     V: { bg: 'rgba(0,122,255,0.10)', text: '#007AFF', border: 'rgba(0,122,255,0.25)' },
     J: { bg: 'rgba(255,149,0,0.10)', text: '#B8620A', border: 'rgba(255,149,0,0.25)' },
     E: { bg: 'rgba(52,199,89,0.10)', text: '#1A7F3C', border: 'rgba(52,199,89,0.25)' },
@@ -41,7 +41,7 @@ const tipoConfig: Record<RifTipo, { bg: string; text: string; border: string }> 
 const defaultTipoStyle = { bg: 'rgba(142,142,147,0.10)', text: '#8E8E93', border: 'rgba(142,142,147,0.25)' };
 
 function getRifTipo(rif: string): { letter: string; style: typeof defaultTipoStyle } {
-    const prefix = rif?.charAt(0)?.toUpperCase() as RifTipo;
+    const prefix = rif?.charAt(0)?.toUpperCase() as ClienteTipo;
     return { letter: prefix || '?', style: tipoConfig[prefix] || defaultTipoStyle };
 }
 
@@ -78,7 +78,7 @@ function AvatarCircle({ initials, color, categoria, imagen }: { initials: string
 // ── Mini tarjeta modal ──────────────────────────────────────────────
 function ClienteModal({ cliente, onClose }: { cliente: Cliente; onClose: () => void }) {
     const status = statusConfig[cliente.status] ?? statusConfig.activo;
-    const tipo = tipoConfig[cliente.tipo] ?? tipoConfig.V;
+    const rifTipo = getRifTipo(cliente.rif);
     const accent = cliente.color ?? '#007AFF';
     return (
         <div

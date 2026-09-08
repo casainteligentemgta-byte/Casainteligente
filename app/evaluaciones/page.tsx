@@ -7,6 +7,23 @@ import { createClient } from '@/lib/supabase/client';
 import GeneradorInvitacion from '@/components/evaluaciones/GeneradorInvitacion';
 import { UserPlus } from 'lucide-react';
 
+type EvaluacionLista = {
+    id: string;
+    employee_name: string;
+    status: string;
+    cargo?: string | null;
+    celular?: string | null;
+    token?: string | null;
+    created_at?: string | null;
+    tab_changes?: number;
+    semaforo?: string | null;
+    risk_score?: number;
+    disc_d?: number;
+    disc_i?: number;
+    disc_s?: number;
+    disc_c?: number;
+};
+
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
     invitado:       { label: 'Invitado',    bg: 'rgba(255,214,10,0.12)', text: '#FFD60A' },
     en_evaluacion: { label: 'En Proceso', bg: 'rgba(0,174,239,0.12)',  text: '#00AEEF' },
@@ -20,7 +37,7 @@ const SEMAFORO_COLOR: Record<string, string> = {
 
 export default function EvaluacionesPage() {
     const router = useRouter();
-    const [evaluaciones, setEvaluaciones] = useState<Evaluacion[]>([]);
+    const [evaluaciones, setEvaluaciones] = useState<EvaluacionLista[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [isInviting, setIsInviting] = useState(false);
@@ -40,19 +57,31 @@ export default function EvaluacionesPage() {
             .order('created_at', { ascending: false })
             .limit(100);
         
-        // Aplanar datos para compatibilidad con el resto del componente
-        const formatted = (data || []).map(p => ({
-            ...p,
-            status: p.estado, // mapeo de 'estado' a 'status'
-            employee_name: p.nombres,
-            evaluacion: p.ci_evaluaciones?.[0] || null,
-            semaforo: p.ci_evaluaciones?.[0]?.respuestas?.semaforo || null,
-            risk_score: p.ci_evaluaciones?.[0]?.respuestas?.risk_score || 0,
-            disc_d: p.ci_evaluaciones?.[0]?.respuestas?.disc_d || 0,
-            disc_i: p.ci_evaluaciones?.[0]?.respuestas?.disc_i || 0,
-            disc_s: p.ci_evaluaciones?.[0]?.respuestas?.disc_s || 0,
-            disc_c: p.ci_evaluaciones?.[0]?.respuestas?.disc_c || 0,
-        }));
+        const formatted: EvaluacionLista[] = (data || []).map((p: Record<string, unknown>) => {
+            const evals = Array.isArray(p.ci_evaluaciones) ? p.ci_evaluaciones : [];
+            const first = (evals[0] && typeof evals[0] === 'object' ? evals[0] : null) as
+                | { respuestas?: Record<string, unknown> }
+                | null;
+            const resp = first?.respuestas ?? {};
+            return {
+                id: String(p.id ?? ''),
+                status: String(p.estado ?? ''),
+                employee_name: String(p.nombres ?? ''),
+                cargo: (p.cargo as string | null | undefined) ?? null,
+                celular: (p.celular as string | null | undefined) ?? null,
+                token:
+                    (p.token as string | null | undefined) ??
+                    ((first as { token?: string } | null)?.token ?? null),
+                created_at: (p.created_at as string | null | undefined) ?? null,
+                tab_changes: Number((first as { tab_changes?: number } | null)?.tab_changes ?? 0) || 0,
+                semaforo: (resp.semaforo as string | null | undefined) ?? null,
+                risk_score: Number(resp.risk_score) || 0,
+                disc_d: Number(resp.disc_d) || 0,
+                disc_i: Number(resp.disc_i) || 0,
+                disc_s: Number(resp.disc_s) || 0,
+                disc_c: Number(resp.disc_c) || 0,
+            };
+        });
 
         setEvaluaciones(formatted);
         setLoading(false);
@@ -163,7 +192,7 @@ export default function EvaluacionesPage() {
                                     </div>
                                     <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.35)' }}>
                                         Creada: {ev.created_at ? new Date(ev.created_at).toLocaleString('es-VE') : '—'}
-                                        {ev.tab_changes > 0 && <span style={{ marginLeft: '10px', color: '#FF9500' }}>⚠️ {ev.tab_changes} cambio(s) de ventana</span>}
+                                        {ev.tab_changes != null && ev.tab_changes > 0 && <span style={{ marginLeft: '10px', color: '#FF9500' }}>⚠️ {ev.tab_changes} cambio(s) de ventana</span>}
                                     </div>
                                     {isCompleted && (
                                         <div style={{ marginTop: '6px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
