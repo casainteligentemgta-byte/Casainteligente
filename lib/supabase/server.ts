@@ -1,4 +1,4 @@
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import { createServerClient as createSupabaseSsrClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { supabaseFetch } from '@/lib/supabase/supabaseFetch';
 
@@ -22,7 +22,7 @@ export async function createClient() {
     );
   }
   const cookieStore = await cookies();
-  return createServerClient(url, key, {
+  return createSupabaseSsrClient(url, key, {
     global: { fetch: supabaseFetch },
     cookies: {
         get(name: string) {
@@ -45,3 +45,6 @@ export async function createClient() {
       },
     });
 }
+
+/** Alias para server actions y servicios (p. ej. flota). */
+export const createServerClient = createClient;

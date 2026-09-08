@@ -336,7 +336,25 @@ const navItems: NavItem[] = [
         />
       </svg>
     ),
-  }
+  },
+  {
+    id: 'flota',
+    href: '/flota',
+    label: 'Flota',
+    icon: (active: boolean) => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <path
+          d="M3 13h13l3-5h-7l-2 5H3z"
+          stroke={active ? '#F59E0B' : '#8E8E93'}
+          strokeWidth="2"
+          strokeLinejoin="round"
+          fill={active ? 'rgba(245,158,11,0.12)' : 'none'}
+        />
+        <circle cx="7" cy="17" r="2" stroke={active ? '#F59E0B' : '#8E8E93'} strokeWidth="2" />
+        <circle cx="16" cy="17" r="2" stroke={active ? '#F59E0B' : '#8E8E93'} strokeWidth="2" />
+      </svg>
+    ),
+  },
 
 ];
 
@@ -376,6 +394,7 @@ function colorActivo(label: string): string {
   if (label === 'Legal') return '#FBBF24';
   if (label === 'RRHH') return '#F472B6';
   if (label === 'Ventas') return '#34C759';
+  if (label === 'Flota') return '#F59E0B';
   return '#007AFF';
 }
 

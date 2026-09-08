@@ -18,7 +18,8 @@ export type ModuloNavId =
   | 'almacen'
   | 'contabilidad'
   | 'cco'
-  | 'agenda';
+  | 'agenda'
+  | 'flota';
 
 export type ModuloNavDef = {
   id: ModuloNavId;
@@ -45,6 +46,7 @@ export const MODULOS_NAV: ModuloNavDef[] = [
   { id: 'contabilidad', href: '/contabilidad', label: 'Conta' },
   { id: 'agenda', href: '/agenda', label: 'Agenda' },
   { id: 'cco', href: '/contabilidad/cco', label: 'CCO' },
+  { id: 'flota', href: '/flota', label: 'Flota' },
 ];
 
 const MODULOS_POR_ROL: Record<RolEmpresa, ModuloNavId[]> = {
@@ -62,6 +64,7 @@ const MODULOS_POR_ROL: Record<RolEmpresa, ModuloNavId[]> = {
     'almacen',
     'contabilidad',
     'agenda',
+    'flota',
   ],
   pm_obra: [
     'inicio',
@@ -73,10 +76,11 @@ const MODULOS_POR_ROL: Record<RolEmpresa, ModuloNavId[]> = {
     'almacen',
     'contabilidad',
     'agenda',
+    'flota',
   ],
   contador: ['inicio', 'proyectos', 'contabilidad', 'agenda'],
   comprador: ['inicio', 'proyectos', 'almacen', 'contabilidad', 'agenda'],
-  almacen_central: ['inicio', 'almacen', 'contabilidad', 'agenda'],
+  almacen_central: ['inicio', 'almacen', 'contabilidad', 'agenda', 'flota'],
   rrhh: ['inicio', 'rrhh', 'proyectos', 'entidades', 'agenda'],
   solo_lectura: ['inicio', 'proyectos', 'domotica', 'nexus', 'contabilidad', 'almacen', 'agenda'],
   /** Suegro / invitado: solo Control Contable de Obra (lectura). */
@@ -127,6 +131,9 @@ export function ampliarModulosPorPermisos(
   }
   if (ps.has('cco.ver') || ps.has('cco.editar')) {
     if (!set.has('contabilidad')) set.add('cco');
+  }
+  if (ps.has('flota.gestionar')) {
+    set.add('flota');
   }
   return set;
 }
@@ -180,6 +187,7 @@ const GATES_POR_RUTA: Array<{ modulo: ModuloNavId; match: (pathname: string) => 
   { modulo: 'cco', match: (p) => esRutaCco(p) },
   { modulo: 'legal', match: (p) => p === '/legal' || p.startsWith('/legal/') },
   { modulo: 'agenda', match: (p) => p === '/agenda' || p.startsWith('/agenda/') },
+  { modulo: 'flota', match: (p) => p === '/flota' || p.startsWith('/flota/') },
 ];
 
 /**

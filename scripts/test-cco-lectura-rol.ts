@@ -33,7 +33,12 @@ assert.equal(mods.has('almacen'), false);
 assert.equal(hrefPermitidoPorModulos('/contabilidad/cco', mods), true);
 assert.equal(hrefPermitidoPorModulos('/contabilidad/compras', mods), false);
 assert.equal(hrefPermitidoPorModulos('/almacen', mods), false);
+assert.equal(hrefPermitidoPorModulos('/flota', mods), false);
 assert.equal(hrefPermitidoPorModulos('/', mods), true);
+
+const adminMods = modulosParaRolesEmpresa(['admin']);
+assert.ok(adminMods.has('flota'));
+assert.equal(hrefPermitidoPorModulos('/flota/conductores', adminMods), true);
 
 const conta = modulosParaRolesEmpresa(['contador']);
 assert.equal(hrefPermitidoPorModulos('/contabilidad/cco', conta), true);

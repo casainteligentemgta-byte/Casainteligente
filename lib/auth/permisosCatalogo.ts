@@ -18,6 +18,7 @@ export const PERMISOS = [
   'equipo.gestionar',
   'cco.ver',
   'cco.editar',
+  'flota.gestionar',
 ] as const;
 
 export type Permiso = (typeof PERMISOS)[number];
@@ -74,6 +75,7 @@ const POR_ROL_EMPRESA: Record<RolEmpresa, Permiso[]> = {
     'equipo.gestionar',
     'cco.ver',
     'cco.editar',
+    'flota.gestionar',
   ],
   contador: [
     'compra.registrar',
@@ -99,6 +101,7 @@ const POR_ROL_EMPRESA: Record<RolEmpresa, Permiso[]> = {
     'almacen.cuarentena',
     'compra.registrar',
     'cco.ver',
+    'flota.gestionar',
   ],
   rrhh: ['equipo.gestionar'],
   solo_lectura: ['cco.ver'],

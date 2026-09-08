@@ -1,5 +1,20 @@
 -- Tablas de ventas para Casa Inteligente
 -- Ejecuta en Supabase: SQL Editor → New query → Pegar → Run
+--
+-- empresas se crea aquí (antes que ventas) para que el preview aplique
+-- las migraciones en orden. 008_empresas.sql completa RLS e índices.
+
+create table if not exists public.empresas (
+  id uuid primary key default gen_random_uuid(),
+  nombre text not null,
+  direccion text,
+  telefono text,
+  email text,
+  rif text,
+  notas text,
+  creado_en timestamptz default now(),
+  actualizado_en timestamptz default now()
+);
 
 -- Cabecera de venta
 create table if not exists public.ventas (
