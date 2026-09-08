@@ -26,7 +26,8 @@ interface Product {
 
 const CATEGORIAS_COMERCIALES = ['Cámaras IP', 'Cámaras Análogas', 'C.C.T.V', 'Servicio', 'Cercos Eléctricos', 'Internet', 'Domótica', 'Network'];
 const CATEGORIAS_INTERNAS = ['Herramientas', 'Insumos', 'Consumibles', 'Materiales'];
-const CATEGORIAS = ['Todas', ...CATEGORIAS_COMERCIALES];
+const CATEGORIAS = ['Todas', ...CATEGORIAS_COMERCIALES, ...CATEGORIAS_INTERNAS];
+const PAGE_SIZE = 500;
 
 const CAT_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
     'Cámaras IP': { bg: 'rgba(0,122,255,0.12)', text: '#007AFF', dot: '#007AFF' },
@@ -40,6 +41,7 @@ const CAT_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
     'Materiales': { bg: 'rgba(142,142,147,0.12)', text: '#8E8E93', dot: '#8E8E93' },
     'Herramientas': { bg: 'rgba(255,149,0,0.12)', text: '#FF9500', dot: '#FF9500' },
     'Insumos': { bg: 'rgba(175,82,222,0.12)', text: '#AF52DE', dot: '#AF52DE' },
+    'Consumibles': { bg: 'rgba(90,200,250,0.12)', text: '#5AC8FA', dot: '#5AC8FA' },
 };
 
 function fmt(n: number | null) {
@@ -361,26 +363,40 @@ export default function ProductosPage() {
 
     const fetchProducts = useCallback(async () => {
         setLoading(true);
-        let query = supabase
-            .from('products')
-            .select('*', { count: 'exact' })
-            .order('nombre');
+        const q = search.trim();
+        const collected: Product[] = [];
+        let from = 0;
+        let totalCount = 0;
+        let failed = false;
 
-        if (search.trim().length >= 2) {
-            query = query.or(`nombre.ilike.%${search}%,marca.ilike.%${search}%,modelo.ilike.%${search}%`);
-        }
-        if (categoria !== 'Todas') {
-            query = query.eq('categoria', categoria);
-        }
+        while (from < 20_000) {
+            let query = supabase
+                .from('products')
+                .select('*', { count: 'exact' })
+                .order('nombre')
+                .range(from, from + PAGE_SIZE - 1);
 
-        const { data, error, count } = await query.limit(100);
-        if (!error && data) {
-            let filteredResult = data;
-            if (categoria === 'Todas') {
-                filteredResult = data.filter(p => !CATEGORIAS_INTERNAS.includes(p.categoria || ''));
+            if (q.length >= 2) {
+                query = query.or(`nombre.ilike.%${q}%,marca.ilike.%${q}%,modelo.ilike.%${q}%`);
             }
-            setProducts(filteredResult);
-            setTotal(count ?? filteredResult.length);
+            if (categoria !== 'Todas') {
+                query = query.eq('categoria', categoria);
+            }
+
+            const { data, error, count } = await query;
+            if (error) {
+                failed = true;
+                break;
+            }
+            totalCount = count ?? totalCount;
+            collected.push(...((data ?? []) as Product[]));
+            if (!data || data.length < PAGE_SIZE) break;
+            from += PAGE_SIZE;
+        }
+
+        if (!failed) {
+            setProducts(collected);
+            setTotal(totalCount || collected.length);
         }
         setLoading(false);
     }, [search, categoria, supabase]);
@@ -450,7 +466,7 @@ export default function ProductosPage() {
             <div style={{ padding: '20px' }}>
                 <input
                     type="text"
-                    placeholder="Buscar producto comercial..."
+                    placeholder="Buscar producto o material..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     style={{
@@ -476,6 +492,14 @@ export default function ProductosPage() {
                         </button>
                     ))}
                 </div>
+
+                {!loading && total > 0 ? (
+                    <p style={{ margin: '0 0 12px', fontSize: '12px', color: 'rgba(255,255,255,0.35)', fontWeight: 600 }}>
+                        {products.length === total
+                            ? `${total} producto${total === 1 ? '' : 's'}`
+                            : `Mostrando ${products.length} de ${total}`}
+                    </p>
+                ) : null}
 
                 <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '20px', overflow: 'hidden' }}>
                     {loading ? (

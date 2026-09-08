@@ -101,7 +101,7 @@ export default function ProductSearch({ onSelect }: ProductSearchProps) {
 
         const { data, error } = await queryBuilder
             .order('nombre')
-            .limit(20);
+            .limit(100);
 
         if (!error && data) {
             setResults(data);
@@ -152,7 +152,7 @@ export default function ProductSearch({ onSelect }: ProductSearchProps) {
         }
     };
 
-    const CATEGORIAS = ['Todos', 'Cámaras IP', 'Cámaras Análogas', 'C.C.T.V', 'Servicio', 'Cercos Eléctricos', 'Internet', 'Domótica', 'Network', 'Materiales', 'Herramientas'];
+    const CATEGORIAS = ['Todos', 'Cámaras IP', 'Cámaras Análogas', 'C.C.T.V', 'Servicio', 'Cercos Eléctricos', 'Internet', 'Domótica', 'Network', 'Herramientas', 'Insumos', 'Consumibles', 'Materiales'];
 
     const getCategoryColor = (cat: string | null) => {
         const map: Record<string, string> = {
@@ -166,6 +166,8 @@ export default function ProductSearch({ onSelect }: ProductSearchProps) {
             'Network': '#00C7BE',
             'Materiales': '#8E8E93',
             'Herramientas': '#FF9500',
+            'Insumos': '#AF52DE',
+            'Consumibles': '#5AC8FA',
         };
         return map[cat ?? ''] ?? '#8E8E93';
     };
