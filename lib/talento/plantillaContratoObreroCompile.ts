@@ -13,6 +13,7 @@ import {
   nacionalidadDesdeCedula,
   trabajadorFemeninoDesdeEstadoCivil,
   estadoCivilContratoObrero,
+  domicilioContratoObrero,
 } from '@/lib/talento/cedulaAuth';
 import { laboresContratoDesdeCargo, fraseLaboresOficioContrato } from '@/lib/talento/laboresOficioContrato';
 
@@ -96,13 +97,19 @@ const ETIQUETAS: Record<string, { etiqueta: string; ayuda: string }> = {
   PATRON_REPRESENTANTE: { etiqueta: 'Representante que firma', ayuda: 'Opcional; indique en plantilla o datos de obra.' },
   EMPLEADO_NOMBRE_COMPLETO: { etiqueta: 'Nombre completo del trabajador', ayuda: 'Revise su planilla de empleo.' },
   EMPLEADO_CEDULA: { etiqueta: 'Cédula o documento', ayuda: 'Indíquelo en la planilla de empleo.' },
-  EMPLEADO_DIRECCION: { etiqueta: 'Domicilio del trabajador', ayuda: 'Planilla de empleo — datos personales.' },
+  EMPLEADO_DIRECCION: {
+    etiqueta: 'Domicilio del trabajador',
+    ayuda: 'Planilla / hoja de vida. Si falta → «de este domicilio».',
+  },
   EMPLEADO_NACIONALIDAD: { etiqueta: 'Nacionalidad', ayuda: 'Planilla de empleo. Ciudadano → venezolano; ciudadana → venezolana.' },
   EMPLEADO_ARTICULO_CIUDADANO: {
     etiqueta: 'Artículo ciudadano/ciudadana',
     ayuda: 'Según estado civil (Soltera/Casada → la ciudadana).',
   },
-  EMPLEADO_ESTADO_CIVIL: { etiqueta: 'Estado civil', ayuda: 'Planilla de empleo.' },
+  EMPLEADO_ESTADO_CIVIL: {
+    etiqueta: 'Estado civil',
+    ayuda: 'Planilla / hoja de vida. Si falta → «Soltero».',
+  },
   EMPLEADO_FECHA_NACIMIENTO: { etiqueta: 'Fecha de nacimiento', ayuda: 'Planilla de empleo.' },
   EMPLEADO_LUGAR_NACIMIENTO: { etiqueta: 'Lugar de nacimiento', ayuda: 'Planilla de empleo.' },
   EMPLEADO_CELULAR: { etiqueta: 'Teléfono celular', ayuda: 'Planilla de empleo.' },
@@ -295,9 +302,9 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
 
   const cedula = str(dp?.cedulaIdentidad) || str(f.empleado.cedula) || str(f.empleado.documento);
   const cedulaEmpFmt = cedula ? cedulaVenezuelaGuion(cedula) : '';
-  const direccion = str(dp?.direccionDomicilio) || str(f.empleado.direccion);
+  const direccion = domicilioContratoObrero(str(dp?.direccionDomicilio) || str(f.empleado.direccion));
   const celular = str(dp?.celular) || str(f.empleado.celular);
-  const estadoCivil = str(dp?.estadoCivil) || estadoCivilContratoObrero(f.empleado.estado_civil);
+  const estadoCivil = estadoCivilContratoObrero(str(dp?.estadoCivil) || f.empleado.estado_civil);
   const trabFemenino = trabajadorFemeninoDesdeEstadoCivil(estadoCivil);
   const nacionalidadRaw = str(dp?.nacionalidad) || str(f.empleado.nacionalidad);
   const nacionalidad = nacionalidadRaw

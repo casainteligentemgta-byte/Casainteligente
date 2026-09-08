@@ -486,10 +486,6 @@ export function ContratoObreroPDF({
   const trabFemenino = trabajadorFemeninoDesdeEstadoCivil(estadoCivilTrab);
   const articuloCiudadanoTrab = trabFemenino ? 'la ciudadana' : 'el ciudadano';
   const cedulaTrabGuion = cedulaConGuion(empleado.cedula ?? empleado.documento);
-  const domicilioTrab = str(
-    empleado.direccion_domicilio ?? empleado.direccion_habitacion,
-    '______________________________________________________________',
-  );
   const faseTecnicaTxt = faseTecnicaClausulaPrimera(contrato ?? null);
   const obraDenomTxt = obraDenominadaClausulaPrimera(contrato ?? null);
   const lugarQuintaTxt = lugarPrestacionQuinta(contrato ?? null);

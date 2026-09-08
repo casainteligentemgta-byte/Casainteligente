@@ -18,6 +18,7 @@ import { resolvePlanillaPatronoParaEmpleado } from '@/lib/talento/resolvePlanill
 import { numeroALetrasHastaMiles } from '@/lib/talento/numeroALetrasVe';
 import { nacionalidadRepresentanteSegunGenero } from '@/lib/talento/nacionalidadRepresentanteSegunGenero';
 import {
+  domicilioContratoObrero,
   estadoCivilContratoObrero,
   trabajadorFemeninoDesdeEstadoCivil,
 } from '@/lib/talento/cedulaAuth';
@@ -451,11 +452,11 @@ export async function POST(req: Request) {
       trabFemenino,
     );
     const articuloCiudadanoTrab = trabFemenino ? 'la ciudadana' : 'el ciudadano';
-    const domicilioTrabajador =
+    const domicilioTrabajador = domicilioContratoObrero(
       empPlanilla.direccion ??
-      strOrNull(worker.direccion_domicilio) ??
-      strOrNull(worker.direccion_habitacion) ??
-      'Nueva Esparta';
+        strOrNull(worker.direccion_domicilio) ??
+        strOrNull(worker.direccion_habitacion),
+    );
     const cargoMayus = worker.cargo_nombre?.toUpperCase() || 'TRABAJADOR';
     const funcionesManual = laboresContratoDesdeCargo({
       cargoCodigo: strOrNull(conf?.cargo_codigo) ?? strOrNull(worker.cargo_codigo),

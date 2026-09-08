@@ -7,6 +7,7 @@ import type {
   ParametrosContratoPdf,
 } from '@/lib/talento/ContratoObreroPdfStructured';
 import { textoPuntoEncuentroTransporteClausulaSex } from '@/lib/talento/puntoEncuentroTransporteClausulaSex';
+import { domicilioContratoObrero, estadoCivilContratoObrero } from '@/lib/talento/cedulaAuth';
 
 function str(v: unknown): string {
   if (v == null) return '';
@@ -118,10 +119,10 @@ export function mapearDataFastAPdf(
       nombre_completo: nombreObrero || undefined,
       cedula: cedula || undefined,
       documento: cedula || undefined,
-      direccion_domicilio: dir || undefined,
-      direccion_habitacion: dir || undefined,
+      direccion_domicilio: domicilioContratoObrero(dir),
+      direccion_habitacion: domicilioContratoObrero(dir),
       nacionalidad: str(dataFast.obrero_nacionalidad) || undefined,
-      estado_civil: str(dataFast.obrero_estado_civil) || undefined,
+      estado_civil: estadoCivilContratoObrero(dataFast.obrero_estado_civil),
       cargo_nombre: str(dataFast.oficio_nombre) || undefined,
     },
     entidad: entidadDesdeLike(entidad),
