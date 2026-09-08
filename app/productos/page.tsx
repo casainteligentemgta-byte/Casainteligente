@@ -25,7 +25,8 @@ interface Product {
 }
 
 const CATEGORIAS_COMERCIALES = ['Cámaras IP', 'Cámaras Análogas', 'C.C.T.V', 'Servicio', 'Cercos Eléctricos', 'Internet', 'Domótica', 'Network'];
-const CATEGORIAS_INTERNAS = ['Herramientas', 'Insumos', 'Consumibles', 'Materiales'];
+/** Internas: Materiales primero para que salga al scroll derecha justo después de Network. */
+const CATEGORIAS_INTERNAS = ['Materiales', 'Herramientas', 'Insumos', 'Consumibles'];
 const CATEGORIAS = ['Todas', ...CATEGORIAS_COMERCIALES, ...CATEGORIAS_INTERNAS];
 const PAGE_SIZE = 500;
 
