@@ -533,7 +533,7 @@ function VentasContent() {
         }
     };
 
-    const addProduct = (product: Product) => {
+    const addProduct = (product: Product, opts?: { keepOpen?: boolean }) => {
         const existing = items.find(i => i.product.id === product.id);
         if (existing) {
             const newQty = existing.qty + 1;
@@ -558,7 +558,7 @@ function VentasContent() {
                     }
                     : i
             ));
-            setShowProductSearch(false);
+            if (!opts?.keepOpen) setShowProductSearch(false);
             return;
         }
         const basePrice = product.precio ?? 0;
@@ -572,7 +572,7 @@ function VentasContent() {
             inventoryItemIds: [],
             serialNumbers: [],
         }]);
-        setShowProductSearch(false);
+        if (!opts?.keepOpen) setShowProductSearch(false);
     };
 
     const updateQty = (id: string, qty: number) => {
@@ -1101,7 +1101,10 @@ function VentasContent() {
                                 </button>
                             ) : null}
                         </div>
-                        <ProductSearch onSelect={addProduct} />
+                        <ProductSearch
+                            onSelect={addProduct}
+                            inBudgetQtyById={Object.fromEntries(items.map((i) => [i.product.id, i.qty]))}
+                        />
                     </div>
                 ) : (
                     <div style={{ marginBottom: '14px' }}>
