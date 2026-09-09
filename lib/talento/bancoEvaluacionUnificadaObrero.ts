@@ -1,6 +1,6 @@
 /**
  * Banco unificado de ingreso del obrero (21 preguntas).
- * 6 color + 3 lógica + 3 honestidad + 6 ABC común + 3 oficio.
+ * 6 color + 3 lógica + 3 honestidad + 4 ABC común + 2 convivencia + 3 oficio.
  */
 
 import {
@@ -11,7 +11,11 @@ import {
   type PreguntaDiscObrero,
   type PreguntaLogicaObrero,
 } from '@/lib/talento/evaluacionObrero';
-import { PREGUNTAS_OBRERO_NUCLEO, type PreguntaObrero } from '@/lib/talento/exam';
+import {
+  PREGUNTAS_CONVIVENCIA_OBRA,
+  PREGUNTAS_OBRERO_NUCLEO,
+  type PreguntaObrero,
+} from '@/lib/talento/exam';
 import {
   armarPreguntasAbcObrero,
   type PreguntaAbcObrero,
@@ -33,12 +37,15 @@ export const CONF_UNIFICADA: PreguntaConfObrero[] = PREGUNTAS_CONFIABILIDAD_OBRE
   ['c01', 'c02', 'c03'].includes(q.id),
 );
 
-/** ABC común: seguridad + responsabilidad críticas. */
-const IDS_ABC_NUCLEO_MIN = ['obr_01', 'obr_02', 'obr_03', 'obr_07', 'obr_09', 'obr_10'] as const;
+/** ABC común: seguridad + responsabilidad críticas (4). Convivencia / acoso laboral (2) se suma aparte. */
+const IDS_ABC_NUCLEO_MIN = ['obr_01', 'obr_02', 'obr_03', 'obr_07'] as const;
 
-export const ABC_NUCLEO_UNIFICADA: PreguntaObrero[] = PREGUNTAS_OBRERO_NUCLEO.filter((q) =>
-  (IDS_ABC_NUCLEO_MIN as readonly string[]).includes(q.id),
-);
+export const ABC_NUCLEO_UNIFICADA: PreguntaObrero[] = [
+  ...PREGUNTAS_OBRERO_NUCLEO.filter((q) =>
+    (IDS_ABC_NUCLEO_MIN as readonly string[]).includes(q.id),
+  ),
+  ...PREGUNTAS_CONVIVENCIA_OBRA,
+];
 
 export type BancoEvaluacionUnificada = {
   disc: PreguntaDiscObrero[];

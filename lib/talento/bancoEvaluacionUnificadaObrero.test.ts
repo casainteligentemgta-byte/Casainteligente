@@ -20,6 +20,16 @@ describe('bancoEvaluacionUnificadaObrero', () => {
     assert.equal(b.confiabilidad.length, 3);
     assert.equal(b.abc.length, 9);
     assert.equal(b.familia, 'electricidad');
+    const idsAbc = b.abc.map((q) => q.id);
+    assert.ok(idsAbc.includes('obr_21'));
+    assert.ok(idsAbc.includes('obr_22'));
+    assert.ok(!idsAbc.includes('obr_09'));
+    assert.ok(!idsAbc.includes('obr_10'));
+    const conv = b.abc.filter((q) => q.categoria === 'convivencia');
+    assert.equal(conv.length, 2);
+    assert.equal(conv[0]!.opciones[0]!.valor, 'A');
+    assert.match(conv[0]!.pregunta, /compañera/i);
+    assert.match(conv[1]!.pregunta, /clienta|visitante/i);
   });
 });
 

@@ -26,6 +26,33 @@ export type PreguntaObrero = {
 };
 
 /**
+ * Convivencia / acoso laboral en obra (sin vida íntima).
+ * Situaciones de respeto en cuadrilla; A = corta y avisa, C = se une o insiste.
+ */
+export const PREGUNTAS_CONVIVENCIA_OBRA: PreguntaObrero[] = [
+  {
+    id: 'obr_21',
+    categoria: 'convivencia',
+    pregunta: 'Una compañera pide que dejen de comentarle el cuerpo. ¿Qué haces?',
+    opciones: [
+      { texto: 'Lo corto y aviso al encargado.', valor: 'A' },
+      { texto: 'Me río y sigo.', valor: 'B' },
+      { texto: 'Insisto o me burlo.', valor: 'C' },
+    ],
+  },
+  {
+    id: 'obr_22',
+    categoria: 'convivencia',
+    pregunta: 'Una clienta o visitante está en la obra. Un compañero le silba o le dice groserías. ¿Qué haces?',
+    opciones: [
+      { texto: 'Le digo que pare y, si sigue, aviso al encargado.', valor: 'A' },
+      { texto: 'Me hago el que no oí.', valor: 'B' },
+      { texto: 'Me río y le sigo la corriente.', valor: 'C' },
+    ],
+  },
+];
+
+/**
  * Núcleo ABC común (15) — léxico de obra.
  * El bloque 16–20 depende de la familia de oficio (`preguntasAbcObreroParaCargo`).
  */
