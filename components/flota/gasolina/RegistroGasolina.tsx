@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { Camera, Images } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { FLOTA_INPUT, FLOTA_LABEL } from '@/components/flota/FlotaShell';
-import { registrarGasolina } from '@/lib/flota/gasolinaCliente';
+import { aplicarExtraccionAFormulario } from '@/lib/flota/extractFacturaGasolina';
+import { leerFacturaGasolina, registrarGasolina } from '@/lib/flota/gasolinaCliente';
 import type { FlotaConductor } from '@/lib/flota/conductores';
 import { hoyIso, type FlotaVehiculo } from '@/lib/flota/utils';
 
@@ -17,6 +19,7 @@ export type GasolinaFormValues = {
   conductor_id: string;
   fecha: string;
   notas: string;
+  factura_url: string;
 };
 
 const VACIO: GasolinaFormValues = {
@@ -29,6 +32,7 @@ const VACIO: GasolinaFormValues = {
   conductor_id: '',
   fecha: hoyIso(),
   notas: '',
+  factura_url: '',
 };
 
 export function RegistroGasolina({
@@ -46,20 +50,58 @@ export function RegistroGasolina({
   onSubmit?: (values: GasolinaFormValues) => Promise<void> | void;
   onCreated?: () => Promise<void> | void;
 }) {
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const galleryRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
+  const [ocrBusy, setOcrBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ocrOk, setOcrOk] = useState<string | null>(null);
+  const [ocrAvisos, setOcrAvisos] = useState<string[]>([]);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [formData, setFormData] = useState<GasolinaFormValues>({
     ...VACIO,
     maquinaria_id,
     fecha: hoyIso(),
   });
-  const busy = Boolean(saving || loading);
+  const busy = Boolean(saving || loading || ocrBusy);
   const set = (k: keyof GasolinaFormValues, v: string) => setFormData((s) => ({ ...s, [k]: v }));
 
   const litros = Number(String(formData.cantidad_litros).replace(',', '.'));
   const costo = Number(String(formData.costo_total).replace(',', '.'));
   const precio_litro =
     Number.isFinite(litros) && litros > 0 && Number.isFinite(costo) ? (costo / litros).toFixed(2) : '0';
+
+  async function handleFoto(file: File | undefined) {
+    if (!file) return;
+    setError(null);
+    setOcrOk(null);
+    setOcrAvisos([]);
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(file.type.startsWith('image/') ? URL.createObjectURL(file) : null);
+    setOcrBusy(true);
+    try {
+      const lectura = await leerFacturaGasolina(file);
+      const aplicado = aplicarExtraccionAFormulario(formData, lectura, vehiculos);
+      setFormData((prev) => ({
+        ...prev,
+        ...aplicado.form,
+        km_actual: prev.km_actual,
+        conductor_id: prev.conductor_id,
+        maquinaria_id: aplicado.form.maquinaria_id || prev.maquinaria_id,
+        factura_url: lectura.factura_url ?? aplicado.form.factura_url ?? '',
+      }));
+      setOcrAvisos(aplicado.avisos);
+      setOcrOk(
+        aplicado.campos.length
+          ? `Datos leídos: ${aplicado.campos.join(', ')}. Revise y pulse Guardar.`
+          : 'Foto leída. Complete los datos que falten y pulse Guardar.',
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setOcrBusy(false);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -80,8 +122,15 @@ export function RegistroGasolina({
         tipo_gasolina: formData.tipo_gasolina,
         estacion_gasolina: formData.estacion_gasolina,
         conductor_id: formData.conductor_id || undefined,
+        fecha: formData.fecha,
+        notas: formData.notas,
+        factura_url: formData.factura_url || undefined,
       });
       setFormData({ ...VACIO, maquinaria_id: unidad, fecha: hoyIso() });
+      setOcrOk(null);
+      setOcrAvisos([]);
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
       await onCreated?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -96,6 +145,75 @@ export function RegistroGasolina({
       className="grid gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-4 sm:grid-cols-2"
     >
       <h3 className="text-lg font-semibold text-white sm:col-span-2">Registrar gasolina</h3>
+
+      <div className="sm:col-span-2 space-y-2 rounded-lg border border-amber-500/20 bg-amber-500/[0.06] p-3">
+        <p className="text-xs font-medium text-amber-100/90">
+          Foto de la factura: se cargan fecha, litros, monto y estación. Revise antes de guardar.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="elite"
+            disabled={busy}
+            onClick={() => cameraRef.current?.click()}
+          >
+            <Camera className="h-4 w-4" aria-hidden />
+            {ocrBusy ? 'Leyendo factura…' : 'Tomar foto'}
+          </Button>
+          <Button
+            type="button"
+            variant="elite"
+            disabled={busy}
+            onClick={() => galleryRef.current?.click()}
+          >
+            <Images className="h-4 w-4" aria-hidden />
+            Galería / archivo
+          </Button>
+        </div>
+        <input
+          ref={cameraRef}
+          type="file"
+          className="hidden"
+          accept="image/*"
+          capture="environment"
+          disabled={busy}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = '';
+            void handleFoto(file);
+          }}
+          aria-label="Tomar foto de la factura de gasolina"
+        />
+        <input
+          ref={galleryRef}
+          type="file"
+          className="hidden"
+          accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/*,application/pdf"
+          disabled={busy}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = '';
+            void handleFoto(file);
+          }}
+          aria-label="Elegir foto o PDF de la factura de gasolina"
+        />
+        {previewUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={previewUrl}
+            alt="Vista previa de la factura"
+            className="mt-1 max-h-40 w-full rounded-md border border-white/10 object-contain bg-black/40"
+          />
+        ) : null}
+        {ocrOk ? <p className="text-sm text-emerald-300">{ocrOk}</p> : null}
+        {ocrAvisos.length ? (
+          <ul className="list-disc space-y-0.5 pl-4 text-xs text-amber-100/80">
+            {ocrAvisos.map((a) => (
+              <li key={a}>{a}</li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
 
       {!maquinaria_id ? (
         <div>
@@ -195,7 +313,7 @@ export function RegistroGasolina({
         </select>
       </div>
       <div className="sm:col-span-2">
-        <label className={FLOTA_LABEL}>Estación</label>
+        <label className={FLOTA_LABEL}>Estación de servicio</label>
         <input
           className={FLOTA_INPUT}
           type="text"
@@ -213,7 +331,7 @@ export function RegistroGasolina({
 
       <div className="sm:col-span-2 flex justify-end">
         <Button type="submit" variant="elitePrimary" disabled={busy}>
-          {busy ? 'Guardando…' : 'Guardar'}
+          {busy ? (ocrBusy ? 'Leyendo factura…' : 'Guardando…') : 'Guardar'}
         </Button>
       </div>
     </form>
