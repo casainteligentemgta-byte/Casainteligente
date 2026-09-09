@@ -74,11 +74,9 @@ export default function FormularioEvaluacionUnificada({
         ? 'Preguntas de obra'
         : paso.tipo === 'conf'
           ? 'Honestidad'
-          : paso.tipo === 'abc' && banco.abc[paso.idx]?.categoria === 'convivencia'
-            ? 'Convivencia en la obra'
-            : banco.etiquetaFamilia
-              ? `En la obra · ${banco.etiquetaFamilia}`
-              : 'En la obra';
+          : banco.etiquetaFamilia
+            ? `En la obra · ${banco.etiquetaFamilia}`
+            : 'En la obra';
 
   const pasoRespondido = (): boolean => {
     if (paso.tipo === 'disc') {
