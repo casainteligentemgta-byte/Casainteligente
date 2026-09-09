@@ -50,6 +50,9 @@ export type RegistrarGasolinaInput = {
   estacion_gasolina?: string;
   conductor_id?: string;
   proyecto_id?: string;
+  fecha?: string;
+  notas?: string;
+  factura_url?: string;
 };
 
 export type ConsumoPromedio = {

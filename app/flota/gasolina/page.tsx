@@ -67,6 +67,7 @@ export default function FlotaGasolinaPage() {
           conductor_id: values.conductor_id,
           fecha: values.fecha,
           notas: values.notas,
+          factura_url: values.factura_url || undefined,
         }),
       });
       const json = await parseFetchJson<{ error?: string }>(res);
@@ -110,6 +111,7 @@ export default function FlotaGasolinaPage() {
                 <TableHead>Litros</TableHead>
                 <TableHead>Km</TableHead>
                 <TableHead>USD</TableHead>
+                <TableHead>Estación</TableHead>
                 <TableHead />
               </TableRow>
             </TableHeader>
@@ -121,6 +123,20 @@ export default function FlotaGasolinaPage() {
                   <TableCell>{r.litros}</TableCell>
                   <TableCell>{r.odometro_km ?? '—'}</TableCell>
                   <TableCell>{formatoMonedaUsd(r.monto_usd)}</TableCell>
+                  <TableCell>
+                    {r.factura_url ? (
+                      <a
+                        href={r.factura_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-amber-300 hover:underline"
+                      >
+                        {r.estacion ?? 'Factura'}
+                      </a>
+                    ) : (
+                      r.estacion ?? '—'
+                    )}
+                  </TableCell>
                   <TableCell className="text-right">
                     <Button
                       type="button"
