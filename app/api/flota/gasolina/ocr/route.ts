@@ -16,10 +16,9 @@ function nombreSeguro(name: string): string {
 }
 
 export async function POST(req: Request) {
-  const auth = await requireAccesoFlota();
-  if (!auth.ok) return auth.response;
-
   try {
+    const auth = await requireAccesoFlota();
+    if (!auth.ok) return auth.response;
     let form: FormData;
     try {
       form = await req.formData();
@@ -81,7 +80,7 @@ export async function POST(req: Request) {
     const message = error instanceof Error ? error.message : 'Error al leer la factura.';
     console.error('[POST /api/flota/gasolina/ocr]', error);
     let status = 500;
-    if (message.includes('GEMINI_API_KEY')) status = 503;
+    if (message.includes('GEMINI_API_KEY') || message.includes('NEXT_PUBLIC_SUPABASE')) status = 503;
     else if (/Cuota|429/.test(message)) status = 429;
     else if (/no parece|No se pudieron leer|Envíe|Formato|10 MB/.test(message)) status = 400;
     return NextResponse.json({ error: message }, { status });
