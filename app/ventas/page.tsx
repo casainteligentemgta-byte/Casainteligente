@@ -87,7 +87,7 @@ function saveVentasCustomersToCache(rows: CustomerPickerRow[]) {
     }
 }
 
-const MARGIN_PRESETS = [10, 15, 20];
+const MARGIN_PRESETS = [0, 10, 15, 20];
 
 function formatUSD(n: number) {
     return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
