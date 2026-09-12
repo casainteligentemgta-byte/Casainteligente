@@ -4,15 +4,12 @@
 -- 2) Ejecutar este archivo completo.
 -- 3) Al final registra versiones y recarga PostgREST.
 
--- ========== 0311_noop_preview_history.sql ==========
--- No-op: versión huérfana del Preview Branch tras renombres temporales.
-select 1;
+-- Quitar versiones huérfanas que rompen el sort del CLI de Preview
+-- (0311/0312 sombrean 031; 1980 sombrea 198).
+delete from supabase_migrations.schema_migrations
+where version in ('0311', '0312', '1980');
 
--- ========== 0312_ensure_recruitment_needs.sql ==========
--- Asegura recruitment_needs antes de 032_* cuando Preview ya tiene
--- schema_migrations.version=031 aplicada con otro archivo histórico
--- (p. ej. solo ci_preguntas) y se omite 031_recruitment_needs.sql.
-
+-- ========== 320_ensure_tablas_base.sql (antes 0311/0312/1980) ==========
 create table if not exists public.recruitment_needs (
   id uuid primary key default gen_random_uuid() not null,
   title text not null,
@@ -54,9 +51,7 @@ comment on column public.ci_empleados.observaciones_rrhh is
 notify pgrst, 'reload schema';
 --
 
--- ========== 1980_ensure_empresas.sql ==========
--- Asegura public.empresas en Preview/bases donde 004/008 no se reaplican
--- (branching con historial del padre ya marcado como applied).
+-- empresas (antes 1980_ensure_empresas; ahora parte de 320)
 
 create table if not exists public.empresas (
   id uuid primary key default gen_random_uuid(),
@@ -1095,17 +1090,15 @@ notify pgrst, 'reload schema';
 -- Registrar en el historial para que Preview no las vuelva a aplicar.
 insert into supabase_migrations.schema_migrations (version, name, statements)
 values
-  ('0311', '0311_noop_preview_history.sql', array['applied via sql editor']),
-  ('0312', '0312_ensure_recruitment_needs.sql', array['applied via sql editor']),
   ('090', '090_ci_empleados_observaciones_rrhh.sql', array['applied via sql editor']),
-  ('1980', '1980_ensure_empresas.sql', array['applied via sql editor']),
   ('313', '313_ci_flota.sql', array['applied via sql editor']),
   ('314', '314_ci_flota_conductores_nombre_completo.sql', array['applied via sql editor']),
   ('315', '315_ci_flota_gasolina_maquinaria.sql', array['applied via sql editor']),
   ('316', '316_ci_flota_mantenimiento_maquinaria.sql', array['applied via sql editor']),
   ('317', '317_ci_flota_alertas_maquinaria.sql', array['applied via sql editor']),
   ('318', '318_budgets_abonos_cuotas.sql', array['applied via sql editor']),
-  ('319', '319_ci_flota_alertas_ensure_resuelta.sql', array['applied via sql editor'])
+  ('319', '319_ci_flota_alertas_ensure_resuelta.sql', array['applied via sql editor']),
+  ('320', '320_ensure_tablas_base.sql', array['applied via sql editor'])
 on conflict (version) do nothing;
 
 notify pgrst, 'reload schema';
