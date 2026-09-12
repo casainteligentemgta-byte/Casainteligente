@@ -203,7 +203,9 @@ async function escribirConductor(
         ? supabase.from('ci_flota_conductores').insert([intento.payload])
         : supabase.from('ci_flota_conductores').update(intento.payload).eq('id', id ?? '');
     const result = await q.select(intento.select).single();
-    if (!result.error) return unwrapVehiculo(result.data as Record<string, unknown>);
+    if (!result.error) {
+      return unwrapVehiculo(result.data as unknown as Record<string, unknown>);
+    }
     lastError = result.error;
     if (esMigracionPendiente(result.error) && !columnasNuevasFaltan(result.error) && !relacionVehiculoFalta(result.error)) {
       break;
