@@ -6,6 +6,7 @@ import {
   eliminarDocumentoConductor,
   obtenerConductor,
 } from '@/lib/flota/conductores';
+import { jsonErrorFlota } from '@/lib/flota/error';
 import { esUuid } from '@/lib/flota/utils';
 import {
   actualizarVehiculo,
@@ -25,40 +26,37 @@ async function resolveId(ctx: RouteCtx): Promise<string> {
 }
 
 export async function GET(_req: Request, ctx: RouteCtx) {
-  const auth = await requireAccesoFlota();
-  if (!auth.ok) return auth.response;
-
-  const id = await resolveId(ctx);
-  if (!esUuid(id)) return NextResponse.json({ error: 'id inválido' }, { status: 400 });
-
   try {
+    const auth = await requireAccesoFlota();
+    if (!auth.ok) return auth.response;
+
+    const id = await resolveId(ctx);
+    if (!esUuid(id)) return NextResponse.json({ error: 'id inválido' }, { status: 400 });
+
     const { conductor, migracionPendiente } = await obtenerConductor(auth.supabase, id);
     if (migracionPendiente) return respuestaMigracionPendiente({ conductor: null });
     if (!conductor) return NextResponse.json({ error: 'Conductor no encontrado' }, { status: 404 });
     return NextResponse.json({ ok: true, conductor });
   } catch (e) {
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : 'Error al cargar conductor' },
-      { status: 500 },
-    );
+    return jsonErrorFlota(e, 'Error al cargar conductor');
   }
 }
 
 export async function PUT(req: Request, ctx: RouteCtx) {
-  const auth = await requireAccesoFlota();
-  if (!auth.ok) return auth.response;
-
-  const id = await resolveId(ctx);
-  if (!esUuid(id)) return NextResponse.json({ error: 'id inválido' }, { status: 400 });
-
-  let body: Record<string, unknown>;
   try {
-    body = (await req.json()) as Record<string, unknown>;
-  } catch {
-    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
-  }
+    const auth = await requireAccesoFlota();
+    if (!auth.ok) return auth.response;
 
-  try {
+    const id = await resolveId(ctx);
+    if (!esUuid(id)) return NextResponse.json({ error: 'id inválido' }, { status: 400 });
+
+    let body: Record<string, unknown>;
+    try {
+      body = (await req.json()) as Record<string, unknown>;
+    } catch {
+      return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
+    }
+
     if (body.recurso === 'vehiculo') {
       const vehiculo = await actualizarVehiculo(auth.supabase, id, body);
       return NextResponse.json({ ok: true, vehiculo });
@@ -87,24 +85,22 @@ export async function PUT(req: Request, ctx: RouteCtx) {
       return NextResponse.json({ ok: true });
     }
 
-    const conductor = await actualizarConductor(id, body);
+    const conductor = await actualizarConductor(id, body, auth.supabase);
     return NextResponse.json({ ok: true, conductor });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Error al actualizar';
-    const status = /requerido|inválid/i.test(msg) ? 400 : 500;
-    return NextResponse.json({ error: msg }, { status });
+    return jsonErrorFlota(e, 'Error al actualizar');
   }
 }
 
 export async function DELETE(_req: Request, ctx: RouteCtx) {
-  const auth = await requireAccesoFlota();
-  if (!auth.ok) return auth.response;
-
-  const id = await resolveId(ctx);
-  if (!esUuid(id)) return NextResponse.json({ error: 'id inválido' }, { status: 400 });
-
-  const url = new URL(_req.url);
   try {
+    const auth = await requireAccesoFlota();
+    if (!auth.ok) return auth.response;
+
+    const id = await resolveId(ctx);
+    if (!esUuid(id)) return NextResponse.json({ error: 'id inválido' }, { status: 400 });
+
+    const url = new URL(_req.url);
     if (url.searchParams.get('recurso') === 'vehiculo') {
       await eliminarVehiculo(auth.supabase, id);
       return NextResponse.json({ ok: true });
@@ -112,9 +108,6 @@ export async function DELETE(_req: Request, ctx: RouteCtx) {
     await eliminarConductor(auth.supabase, id);
     return NextResponse.json({ ok: true });
   } catch (e) {
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : 'Error al eliminar' },
-      { status: 500 },
-    );
+    return jsonErrorFlota(e, 'Error al eliminar');
   }
 }

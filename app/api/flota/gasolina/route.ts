@@ -7,6 +7,7 @@ import {
 } from '@/lib/flota/gasolina';
 import { listarConductores } from '@/lib/flota/conductores';
 import { listarVehiculos, requireAccesoFlota, respuestaMigracionPendiente } from '@/lib/flota/acceso';
+import { jsonErrorFlota } from '@/lib/flota/error';
 import { parseFechaIso } from '@/lib/flota/utils';
 
 export const dynamic = 'force-dynamic';
@@ -49,7 +50,7 @@ export async function GET(request: NextRequest) {
       conductores: conductores.items,
     });
   } catch (error) {
-    return NextResponse.json({ error: String(error) }, { status: 500 });
+    return jsonErrorFlota(error, 'No se pudieron cargar las cargas de gasolina');
   }
 }
 
@@ -62,8 +63,6 @@ export async function POST(request: NextRequest) {
     const data = await registrarGasolina(body);
     return NextResponse.json(data, { status: 201 });
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    const status = /requerido|inválid|mayor|JSON/i.test(msg) ? 400 : 500;
-    return NextResponse.json({ error: msg }, { status });
+    return jsonErrorFlota(error, 'No se pudo registrar la carga de gasolina');
   }
 }

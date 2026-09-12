@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { crearConductor, listarConductores, obtenerConductores } from '@/lib/flota/conductores';
+import { jsonErrorFlota } from '@/lib/flota/error';
 import {
   crearVehiculo,
   listarVehiculos,
@@ -10,10 +11,10 @@ import {
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
-  const auth = await requireAccesoFlota();
-  if (!auth.ok) return auth.response;
-
   try {
+    const auth = await requireAccesoFlota();
+    if (!auth.ok) return auth.response;
+
     const { searchParams } = new URL(request.url);
     const entidad_id = searchParams.get('entidad_id');
     const q = searchParams.get('q')?.trim() || undefined;
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest) {
     const activo = activoRaw == null ? undefined : activoRaw !== '0' && activoRaw !== 'false';
 
     if (entidad_id) {
-      const data = await obtenerConductores(entidad_id);
+      const data = await obtenerConductores(entidad_id, auth.supabase);
       return NextResponse.json(data);
     }
 
@@ -38,25 +39,23 @@ export async function GET(request: NextRequest) {
       vehiculos: vehiculos.items,
     });
   } catch (error) {
-    return NextResponse.json({ error: String(error) }, { status: 500 });
+    return jsonErrorFlota(error, 'No se pudieron cargar los conductores');
   }
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireAccesoFlota();
-  if (!auth.ok) return auth.response;
-
   try {
+    const auth = await requireAccesoFlota();
+    if (!auth.ok) return auth.response;
+
     const body = (await request.json()) as Record<string, unknown>;
     if (body.recurso === 'vehiculo') {
       const vehiculo = await crearVehiculo(auth.supabase, body);
       return NextResponse.json({ ok: true, vehiculo }, { status: 201 });
     }
-    const data = await crearConductor(body);
+    const data = await crearConductor(body, auth.supabase);
     return NextResponse.json(data, { status: 201 });
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    const status = /requerido|inválid|JSON/i.test(msg) ? 400 : 500;
-    return NextResponse.json({ error: msg }, { status });
+    return jsonErrorFlota(error, 'No se pudo registrar el conductor');
   }
 }

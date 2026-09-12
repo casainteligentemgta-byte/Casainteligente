@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServerClient } from '@/lib/supabase/server';
 import type { Database } from '@/types/supabase';
+import { mensajeErrorFlota, throwFlotaError } from '@/lib/flota/error';
 import {
   TIPOS_DOCUMENTO_CONDUCTOR,
   TIPOS_LICENCIA,
@@ -76,10 +77,29 @@ const CONDUCTOR_SELECT_LEGACY =
 
 const CONDUCTOR_LIST_SELECT_LEGACY = `${CONDUCTOR_SELECT_LEGACY}, vehiculo:ci_flota_vehiculos!vehiculo_asignado_id (id, placa, marca, modelo)`;
 
-function columnasNuevasFaltan(error: { message?: string } | null): boolean {
-  return /nombre_completo|numero_cedula|fecha_vencimiento_licencia|fecha_vencimiento_salud/i.test(
-    error?.message ?? '',
+function columnasNuevasFaltan(error: { message?: string; code?: string } | null): boolean {
+  return /nombre_completo|numero_cedula|fecha_vencimiento_licencia|fecha_vencimiento_salud|PGRST204/i.test(
+    `${error?.code ?? ''} ${error?.message ?? ''}`,
   );
+}
+
+function relacionVehiculoFalta(error: { message?: string; code?: string } | null): boolean {
+  return /could not find a relationship|PGRST200|PGRST201/i.test(
+    `${error?.code ?? ''} ${error?.message ?? ''}`,
+  );
+}
+
+function sinColumnasNuevas(row: Record<string, unknown>): Record<string, unknown> {
+  const legacy = { ...row };
+  delete legacy.nombre_completo;
+  delete legacy.numero_cedula;
+  delete legacy.fecha_vencimiento_licencia;
+  delete legacy.fecha_vencimiento_salud;
+  return legacy;
+}
+
+async function clienteFlota(supabase?: SupabaseClient): Promise<SupabaseClient> {
+  return supabase ?? (await createServerClient());
 }
 
 function unwrapVehiculo(row: Record<string, unknown>): FlotaConductor {
@@ -163,7 +183,43 @@ function payloadConductor(body: Record<string, unknown>, partial = false): Recor
   return out;
 }
 
-export async function crearConductor(data: CrearConductorInput | Record<string, unknown>) {
+async function escribirConductor(
+  supabase: SupabaseClient,
+  row: Record<string, unknown>,
+  modo: 'insert' | 'update',
+  id?: string,
+) {
+  const intentos: { payload: Record<string, unknown>; select: string }[] = [
+    { payload: row, select: CONDUCTOR_LIST_SELECT },
+    { payload: sinColumnasNuevas(row), select: CONDUCTOR_LIST_SELECT_LEGACY },
+    { payload: row, select: CONDUCTOR_SELECT },
+    { payload: sinColumnasNuevas(row), select: CONDUCTOR_SELECT_LEGACY },
+  ];
+
+  let lastError: { message?: string; code?: string } | null = null;
+  for (const intento of intentos) {
+    const q =
+      modo === 'insert'
+        ? supabase.from('ci_flota_conductores').insert([intento.payload])
+        : supabase.from('ci_flota_conductores').update(intento.payload).eq('id', id ?? '');
+    const result = await q.select(intento.select).single();
+    if (!result.error) {
+      return unwrapVehiculo(result.data as unknown as Record<string, unknown>);
+    }
+    lastError = result.error;
+    if (esMigracionPendiente(result.error) && !columnasNuevasFaltan(result.error) && !relacionVehiculoFalta(result.error)) {
+      break;
+    }
+    if (!columnasNuevasFaltan(result.error) && !relacionVehiculoFalta(result.error)) break;
+  }
+
+  throwFlotaError(lastError, modo === 'insert' ? 'No se pudo registrar el conductor' : 'No se pudo actualizar el conductor');
+}
+
+export async function crearConductor(
+  data: CrearConductorInput | Record<string, unknown>,
+  supabaseClient?: SupabaseClient,
+) {
   const rec = data as Record<string, unknown>;
   const nombre =
     String(rec.nombre_completo ?? '').trim() ||
@@ -173,7 +229,7 @@ export async function crearConductor(data: CrearConductorInput | Record<string, 
     throw new Error('cedula requerida');
   }
 
-  const supabase = await createServerClient();
+  const supabase = await clienteFlota(supabaseClient);
   const row = payloadConductor({
     ...rec,
     nombre_completo: nombre,
@@ -185,118 +241,60 @@ export async function crearConductor(data: CrearConductorInput | Record<string, 
     entidad_id: rec.entidad_id,
   });
 
-  let result = await supabase
-    .from('ci_flota_conductores')
-    .insert([row])
-    .select(CONDUCTOR_LIST_SELECT)
-    .single();
-
-  if (result.error && columnasNuevasFaltan(result.error)) {
-    const legacy = { ...row };
-    delete legacy.nombre_completo;
-    delete legacy.numero_cedula;
-    delete legacy.fecha_vencimiento_licencia;
-    delete legacy.fecha_vencimiento_salud;
-    result = await supabase
-      .from('ci_flota_conductores')
-      .insert([legacy])
-      .select(CONDUCTOR_LIST_SELECT_LEGACY)
-      .single();
-  }
-
-  if (result.error) throw result.error;
-  return unwrapVehiculo(result.data as Record<string, unknown>);
+  return escribirConductor(supabase, row, 'insert');
 }
 
-export async function obtenerConductores(entidad_id: string) {
-  const supabase = await createServerClient();
+export async function obtenerConductores(entidad_id: string, supabaseClient?: SupabaseClient) {
+  const supabase = await clienteFlota(supabaseClient);
 
-  let q = supabase
-    .from('ci_flota_conductores')
-    .select(CONDUCTOR_LIST_SELECT)
-    .order('created_at', { ascending: false });
-  if (esUuid(entidad_id)) q = q.eq('entidad_id', entidad_id);
-
+  const selects = [CONDUCTOR_LIST_SELECT, CONDUCTOR_LIST_SELECT_LEGACY, CONDUCTOR_SELECT, CONDUCTOR_SELECT_LEGACY];
   let data: unknown;
-  let error: { message?: string } | null;
-  const first = await q;
-  data = first.data;
-  error = first.error;
-  if (error && columnasNuevasFaltan(error)) {
-    let q2 = supabase
-      .from('ci_flota_conductores')
-      .select(CONDUCTOR_LIST_SELECT_LEGACY)
-      .order('created_at', { ascending: false });
-    if (esUuid(entidad_id)) q2 = q2.eq('entidad_id', entidad_id);
-    const retry = await q2;
-    data = retry.data;
-    error = retry.error;
+  let error: { message?: string; code?: string } | null = null;
+  for (const cols of selects) {
+    let q = supabase.from('ci_flota_conductores').select(cols).order('created_at', { ascending: false });
+    if (esUuid(entidad_id)) q = q.eq('entidad_id', entidad_id);
+    const result = await q;
+    data = result.data;
+    error = result.error;
+    if (!error) break;
+    if (!columnasNuevasFaltan(error) && !relacionVehiculoFalta(error)) break;
   }
-  if (error) throw error;
+  if (error) throwFlotaError(error, 'No se pudieron cargar los conductores');
   return (Array.isArray(data) ? data : []).map((row) => unwrapVehiculo(row as Record<string, unknown>));
 }
 
 export async function actualizarConductor(
   id: string,
   data: Partial<Database['public']['Tables']['ci_flota_conductores']['Update']>,
+  supabaseClient?: SupabaseClient,
 ) {
-  const supabase = await createServerClient();
-
+  const supabase = await clienteFlota(supabaseClient);
   const patch = payloadConductor(data as Record<string, unknown>, true);
-  let result = await supabase
-    .from('ci_flota_conductores')
-    .update(patch)
-    .eq('id', id)
-    .select(CONDUCTOR_LIST_SELECT)
-    .single();
-
-  if (result.error && columnasNuevasFaltan(result.error)) {
-    const legacy = { ...patch };
-    delete legacy.nombre_completo;
-    delete legacy.numero_cedula;
-    delete legacy.fecha_vencimiento_licencia;
-    delete legacy.fecha_vencimiento_salud;
-    result = await supabase
-      .from('ci_flota_conductores')
-      .update(legacy)
-      .eq('id', id)
-      .select(CONDUCTOR_LIST_SELECT_LEGACY)
-      .single();
-  }
-
-  if (result.error) throw result.error;
-  return unwrapVehiculo(result.data as Record<string, unknown>);
+  return escribirConductor(supabase, patch, 'update', id);
 }
 
 export async function listarConductores(
   supabase: SupabaseClient,
   opts?: { activo?: boolean; q?: string; entidadId?: string },
 ): Promise<{ items: FlotaConductor[]; migracionPendiente: boolean }> {
-  let q = supabase
-    .from('ci_flota_conductores')
-    .select(CONDUCTOR_LIST_SELECT)
-    .order('created_at', { ascending: false });
-  if (opts?.activo != null) q = q.eq('activo', opts.activo);
-  if (opts?.entidadId && esUuid(opts.entidadId)) q = q.eq('entidad_id', opts.entidadId);
-
+  const selects = [CONDUCTOR_LIST_SELECT, CONDUCTOR_LIST_SELECT_LEGACY, CONDUCTOR_SELECT, CONDUCTOR_SELECT_LEGACY];
   let data: unknown;
-  let error: { message?: string; code?: string } | null;
-  const first = await q;
-  data = first.data;
-  error = first.error;
-  if (error && columnasNuevasFaltan(error)) {
-    let q2 = supabase
-      .from('ci_flota_conductores')
-      .select(CONDUCTOR_LIST_SELECT_LEGACY)
-      .order('created_at', { ascending: false });
-    if (opts?.activo != null) q2 = q2.eq('activo', opts.activo);
-    if (opts?.entidadId && esUuid(opts.entidadId)) q2 = q2.eq('entidad_id', opts.entidadId);
-    const retry = await q2;
-    data = retry.data;
-    error = retry.error;
+  let error: { message?: string; code?: string } | null = null;
+  for (const cols of selects) {
+    let q = supabase.from('ci_flota_conductores').select(cols).order('created_at', { ascending: false });
+    if (opts?.activo != null) q = q.eq('activo', opts.activo);
+    if (opts?.entidadId && esUuid(opts.entidadId)) q = q.eq('entidad_id', opts.entidadId);
+    const result = await q;
+    data = result.data;
+    error = result.error;
+    if (!error) break;
+    if (esMigracionPendiente(error) && !columnasNuevasFaltan(error) && !relacionVehiculoFalta(error)) {
+      return { items: [], migracionPendiente: true };
+    }
+    if (!columnasNuevasFaltan(error) && !relacionVehiculoFalta(error)) break;
   }
   if (esMigracionPendiente(error)) return { items: [], migracionPendiente: true };
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(mensajeErrorFlota(error, 'No se pudieron cargar los conductores'));
 
   let items = (Array.isArray(data) ? data : []).map((row) => unwrapVehiculo(row as Record<string, unknown>));
   const needle = opts?.q?.trim().toLowerCase();
@@ -323,26 +321,21 @@ export async function obtenerConductor(
   supabase: SupabaseClient,
   id: string,
 ): Promise<{ conductor: FlotaConductor | null; migracionPendiente: boolean }> {
+  const selects = [CONDUCTOR_LIST_SELECT, CONDUCTOR_LIST_SELECT_LEGACY, CONDUCTOR_SELECT, CONDUCTOR_SELECT_LEGACY];
   let data: unknown;
-  let error: { message?: string; code?: string } | null;
-  const first = await supabase
-    .from('ci_flota_conductores')
-    .select(CONDUCTOR_LIST_SELECT)
-    .eq('id', id)
-    .maybeSingle();
-  data = first.data;
-  error = first.error;
-  if (error && columnasNuevasFaltan(error)) {
-    const retry = await supabase
-      .from('ci_flota_conductores')
-      .select(CONDUCTOR_LIST_SELECT_LEGACY)
-      .eq('id', id)
-      .maybeSingle();
-    data = retry.data;
-    error = retry.error;
+  let error: { message?: string; code?: string } | null = null;
+  for (const cols of selects) {
+    const result = await supabase.from('ci_flota_conductores').select(cols).eq('id', id).maybeSingle();
+    data = result.data;
+    error = result.error;
+    if (!error) break;
+    if (esMigracionPendiente(error) && !columnasNuevasFaltan(error) && !relacionVehiculoFalta(error)) {
+      return { conductor: null, migracionPendiente: true };
+    }
+    if (!columnasNuevasFaltan(error) && !relacionVehiculoFalta(error)) break;
   }
   if (esMigracionPendiente(error)) return { conductor: null, migracionPendiente: true };
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(mensajeErrorFlota(error, 'No se pudo cargar el conductor'));
   if (!data) return { conductor: null, migracionPendiente: false };
 
   const docs = await listarDocumentosConductor(supabase, id);
@@ -354,7 +347,7 @@ export async function obtenerConductor(
 
 export async function eliminarConductor(supabase: SupabaseClient, id: string): Promise<void> {
   const { error } = await supabase.from('ci_flota_conductores').delete().eq('id', id);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(mensajeErrorFlota(error, 'No se pudo eliminar el conductor'));
 }
 
 export async function listarDocumentosConductor(
@@ -367,7 +360,7 @@ export async function listarDocumentosConductor(
     .eq('conductor_id', conductorId)
     .order('created_at', { ascending: false });
   if (esMigracionPendiente(error)) return { items: [], migracionPendiente: true };
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(mensajeErrorFlota(error, 'No se pudieron cargar los documentos'));
   return { items: (data ?? []) as FlotaConductorDocumento[], migracionPendiente: false };
 }
 
@@ -394,7 +387,7 @@ export async function agregarDocumentoConductor(
     })
     .select('id, conductor_id, tipo, nombre, url, vence_el, created_at')
     .single();
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(mensajeErrorFlota(error, 'No se pudo agregar el documento'));
   return data as FlotaConductorDocumento;
 }
 
@@ -406,5 +399,5 @@ export async function eliminarDocumentoConductor(
     .from('ci_flota_conductor_documentos')
     .delete()
     .eq('id', documentoId);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(mensajeErrorFlota(error, 'No se pudo eliminar el documento'));
 }

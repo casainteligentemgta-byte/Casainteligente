@@ -6,6 +6,7 @@ import {
   responderPreguntaMecanico,
 } from '@/lib/flota/chatbot';
 import { requireAccesoFlota, respuestaMigracionPendiente } from '@/lib/flota/acceso';
+import { jsonErrorFlota } from '@/lib/flota/error';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -19,7 +20,7 @@ export async function GET() {
     if (manuals.migracionPendiente) return respuestaMigracionPendiente({ manuales: [] });
     return NextResponse.json({ ok: true, manuales: manuals.items });
   } catch (error) {
-    return NextResponse.json({ error: String(error) }, { status: 500 });
+    return jsonErrorFlota(error, 'No se pudieron cargar los manuales');
   }
 }
 
@@ -55,6 +56,6 @@ export async function POST(request: NextRequest) {
     const result = await responderPreguntaMecanico(auth.supabase, pregunta);
     return NextResponse.json({ pregunta, respuesta: result.respuesta, fuentes: result.fuentes });
   } catch (error) {
-    return NextResponse.json({ error: String(error) }, { status: 500 });
+    return jsonErrorFlota(error, 'No se pudo responder la pregunta');
   }
 }

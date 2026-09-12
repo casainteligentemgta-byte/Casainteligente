@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServerClient } from '@/lib/supabase/server';
+import { formatErrorMessage } from '@/lib/utils/formatErrorMessage';
 import {
   calcularConsumoDesdeRegistros,
   consumoKmPorLitro,
@@ -170,7 +171,7 @@ async function insertarCargaGasolina(body: Record<string, unknown>): Promise<Flo
       .select(GASOLINA_SELECT_LEGACY)
       .single();
   }
-  if (result.error) throw result.error;
+  if (result.error) throw new Error(formatErrorMessage(result.error));
 
   const odometro = parseNumero(row.odometro_km ?? row.km_actual);
   if (odometro != null && esUuid(String(row.vehiculo_id))) {
@@ -224,7 +225,7 @@ export async function obtenerGasolinaPorMaquinaria(maquinaria_id: string): Promi
   if (result.error && columnasNuevasFaltan(result.error)) {
     result = await query('vehiculo_id', GASOLINA_SELECT_LEGACY);
   }
-  if (result.error) throw result.error;
+  if (result.error) throw new Error(formatErrorMessage(result.error));
   return asGasolinaRows(result.data).map(unwrap);
 }
 
@@ -250,7 +251,7 @@ export async function calcularConsumoPromedio(
   if (result.error && columnasNuevasFaltan(result.error)) {
     result = await query('vehiculo_id', 'litros, odometro_km, created_at');
   }
-  if (result.error) throw result.error;
+  if (result.error) throw new Error(formatErrorMessage(result.error));
   return calcularConsumoDesdeRegistros(asGasolinaRows(result.data));
 }
 

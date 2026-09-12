@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { FLOTA_INPUT, FLOTA_LABEL } from '@/components/flota/FlotaShell';
 import { crearConductor } from '@/lib/flota/conductoresCliente';
+import { formatErrorMessage } from '@/lib/utils/formatErrorMessage';
 import type { FlotaConductor } from '@/lib/flota/conductores';
 import { TIPOS_LICENCIA, unirNombreCompleto, type FlotaVehiculo } from '@/lib/flota/utils';
 
@@ -80,7 +81,7 @@ export function ConductorForm({
       setFormData(conductorAValores(null));
       await onCreated?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(formatErrorMessage(err) || 'No se pudo guardar el conductor');
     } finally {
       setLoading(false);
     }
@@ -212,7 +213,9 @@ export function ConductorForm({
         Activo
       </label>
 
-      {error ? <p className="text-sm text-red-300 sm:col-span-2">{error}</p> : null}
+      {error ? (
+        <p className="text-sm text-red-300 sm:col-span-2">{formatErrorMessage(error)}</p>
+      ) : null}
 
       <div className="flex justify-end gap-2 sm:col-span-2">
         {onCancel ? (

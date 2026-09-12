@@ -1,16 +1,44 @@
 /** Convierte errores API, PostgREST o objetos sueltos a texto legible (evita "[object Object]"). */
+
+function esMensajeInutil(value: string): boolean {
+  const t = value.trim();
+  return !t || t === '[object Object]' || t === 'Error: [object Object]';
+}
+
+function camposPostgrest(o: Record<string, unknown>): string | null {
+  const message =
+    typeof o.message === 'string'
+      ? o.message.trim()
+      : typeof o.message === 'object' && o.message
+        ? formatErrorMessage(o.message)
+        : '';
+  const details = typeof o.details === 'string' ? o.details.trim() : '';
+  const hint = typeof o.hint === 'string' ? o.hint.trim() : '';
+  const code = typeof o.code === 'string' || typeof o.code === 'number' ? String(o.code).trim() : '';
+  const parts = [message, details, hint].filter((p) => p && !esMensajeInutil(p));
+  if (code && !parts.some((p) => p.includes(code))) parts.push(`[${code}]`);
+  return parts.length > 0 ? parts.join(' — ') : null;
+}
+
 export function formatErrorMessage(err: unknown): string {
   if (err == null) return 'Error desconocido';
-  if (typeof err === 'string') return err.trim() || 'Error desconocido';
+  if (typeof err === 'string') {
+    return esMensajeInutil(err) ? 'Error desconocido' : err.trim();
+  }
   if (typeof err === 'number' || typeof err === 'boolean') return String(err);
 
   if (err instanceof Error) {
     const msg = err.message?.trim();
-    return msg || err.name || 'Error desconocido';
+    if (msg && !esMensajeInutil(msg)) return msg;
+    if (err.cause != null && err.cause !== err) {
+      const nested = formatErrorMessage(err.cause);
+      if (nested !== 'Error desconocido') return nested;
+    }
+    return err.name && err.name !== 'Error' ? err.name : 'Error desconocido';
   }
 
   if (Array.isArray(err)) {
-    const parts = err.map((item) => formatErrorMessage(item)).filter(Boolean);
+    const parts = err.map((item) => formatErrorMessage(item)).filter((p) => p && p !== 'Error desconocido');
     return parts.length > 0 ? parts.join(' · ') : 'Error desconocido';
   }
 
@@ -18,33 +46,34 @@ export function formatErrorMessage(err: unknown): string {
     const o = err as Record<string, unknown>;
 
     if (typeof o.error !== 'undefined' && o.error !== err) {
-      const nested = formatErrorMessage(o.error);
-      if (nested !== 'Error desconocido') return nested;
+      if (!(typeof o.error === 'string' && esMensajeInutil(o.error))) {
+        const nested = formatErrorMessage(o.error);
+        if (nested !== 'Error desconocido') return nested;
+      }
     }
 
-    if (typeof o.message === 'string' && o.message.trim()) {
-      const parts = [o.message.trim()];
-      if (typeof o.details === 'string' && o.details.trim()) parts.push(o.details.trim());
-      if (typeof o.hint === 'string' && o.hint.trim()) parts.push(o.hint.trim());
-      if (typeof o.code === 'string' && o.code.trim()) parts.push(`[${o.code}]`);
-      return parts.join(' — ');
-    }
+    const postgrest = camposPostgrest(o);
+    if (postgrest) return postgrest;
 
     try {
       const json = JSON.stringify(err);
-      if (json && json !== '{}') return json;
+      if (json && json !== '{}' && json !== '[]' && json !== 'null' && !json.includes('[object Object]')) {
+        return json;
+      }
     } catch {
       /* circular */
     }
   }
 
-  return String(err);
+  return 'Error desconocido';
 }
 
 /** Extrae mensaje de cuerpo JSON de API (`error`, `hint`, `message`). */
 export function formatApiErrorBody(data: unknown, fallback = 'Error en la operación'): string {
   if (data == null) return fallback;
-  if (typeof data === 'string') return data.trim() || fallback;
+  if (typeof data === 'string') {
+    return esMensajeInutil(data) ? fallback : data.trim();
+  }
 
   if (typeof data === 'object') {
     const o = data as Record<string, unknown>;
@@ -52,9 +81,12 @@ export function formatApiErrorBody(data: unknown, fallback = 'Error en la operac
       const fromError = formatErrorMessage(o.error);
       if (fromError !== 'Error desconocido') return fromError;
     }
-    if (typeof o.hint === 'string' && o.hint.trim()) return o.hint.trim();
-    if (typeof o.message === 'string' && o.message.trim()) return o.message.trim();
+    if (typeof o.hint === 'string' && o.hint.trim() && !esMensajeInutil(o.hint)) return o.hint.trim();
+    if (typeof o.message === 'string' && o.message.trim() && !esMensajeInutil(o.message)) {
+      return o.message.trim();
+    }
   }
 
-  return formatErrorMessage(data) || fallback;
+  const formatted = formatErrorMessage(data);
+  return formatted !== 'Error desconocido' ? formatted : fallback;
 }
