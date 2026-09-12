@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServerClient } from '@/lib/supabase/server';
+import { formatErrorMessage } from '@/lib/utils/formatErrorMessage';
 import {
   ETIQUETA_TIPO_MANTENIMIENTO,
   TIPOS_MANTENIMIENTO,
@@ -193,7 +194,7 @@ async function insertarServicio(body: Record<string, unknown>): Promise<FlotaMan
       .select(MANT_SELECT_LEGACY)
       .single();
   }
-  if (result.error) throw result.error;
+  if (result.error) throw new Error(formatErrorMessage(result.error));
 
   const odometro = parseNumero(row.odometro_km ?? row.km_actual);
   if (odometro != null && esUuid(String(row.vehiculo_id))) {
@@ -243,7 +244,7 @@ export async function obtenerMantenimientoPorMaquinaria(
   if (result.error && columnasNuevasFaltan(result.error)) {
     result = await query('vehiculo_id', MANT_SELECT_LEGACY, 'fecha');
   }
-  if (result.error) throw result.error;
+  if (result.error) throw new Error(formatErrorMessage(result.error));
   return asRows(result.data).map(unwrap);
 }
 

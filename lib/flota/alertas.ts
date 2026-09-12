@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServerClient } from '@/lib/supabase/server';
+import { formatErrorMessage } from '@/lib/utils/formatErrorMessage';
 import type { FlotaConductor, FlotaConductorDocumento } from '@/lib/flota/conductores';
 import type { ConsumoPorVehiculo } from '@/lib/flota/gasolina';
 import type { FlotaMantenimiento } from '@/lib/flota/mantenimiento';
@@ -417,7 +418,7 @@ export async function crearConfiguracionAlerta(
     saved = retry.data;
     error = retry.error;
   }
-  if (error) throw error;
+  if (error) throw new Error(formatErrorMessage(error));
   return unwrapConfig(asRow(saved) ?? {});
 }
 
@@ -441,7 +442,7 @@ export async function generarAlerta(input: GenerarAlertaInput): Promise<FlotaAle
     saved = retry.data;
     error = retry.error;
   }
-  if (error) throw error;
+  if (error) throw new Error(formatErrorMessage(error));
   return unwrapAlerta(asRow(saved) ?? {});
 }
 
@@ -507,7 +508,7 @@ async function kmActualPorMaquinaria(
     .from('ci_flota_vehiculos')
     .select('id, odometro_km')
     .in('id', ids);
-  if (error) throw error;
+  if (error) throw new Error(formatErrorMessage(error));
   for (const row of asRows(data)) {
     const id = String(row.id ?? '');
     const km = parseNumero(row.odometro_km);
@@ -535,7 +536,7 @@ async function clavesAlertasPendientes(
     data = retry.data;
     error = retry.error;
   }
-  if (error) throw error;
+  if (error) throw new Error(formatErrorMessage(error));
   const set = new Set<string>();
   for (const row of asRows(data)) {
     if (row.resuelta) continue;
@@ -630,7 +631,7 @@ export async function obtenerAlertasPendientes(): Promise<FlotaAlerta[]> {
     data = retry.data;
     error = retry.error;
   }
-  if (error) throw error;
+  if (error) throw new Error(formatErrorMessage(error));
   return asRows(data).map(unwrapAlerta);
 }
 

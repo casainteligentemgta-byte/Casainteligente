@@ -6,6 +6,7 @@ import { GEMINI_PROCUREMENT_DEFAULT_MODEL } from '@/lib/almacen/geminiProcuremen
 import { leerTextoDocumentoLegalCompleto } from '@/lib/legal/leerTextoDocumentoLegal';
 import { subirArchivoFlota } from '@/lib/flota/acceso';
 import { esMigracionPendiente, partirTextoEnChunks, puntuacionBusqueda } from '@/lib/flota/utils';
+import { formatErrorMessage } from '@/lib/utils/formatErrorMessage';
 
 export type FlotaManual = {
   id: string;
@@ -183,7 +184,7 @@ export async function indexarManualPDF(contenido_texto: string): Promise<Indexac
     })
     .select('id')
     .single();
-  if (error) throw error;
+  if (error) throw new Error(formatErrorMessage(error));
 
   if (chunks.length) {
     const { error: chunkErr } = await supabase.from('ci_flota_manual_chunks').insert(

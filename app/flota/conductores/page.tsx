@@ -8,7 +8,7 @@ import DocumentosConductor from '@/components/flota/conductores/DocumentosConduc
 import { FLOTA_INPUT } from '@/components/flota/FlotaShell';
 import { apiUrl } from '@/lib/http/apiUrl';
 import { parseFetchJson } from '@/lib/utils/parseFetchJson';
-import { formatApiErrorBody } from '@/lib/utils/formatErrorMessage';
+import { formatApiErrorBody, formatErrorMessage } from '@/lib/utils/formatErrorMessage';
 import type { FlotaConductor, FlotaConductorDocumento } from '@/lib/flota/conductores';
 import type { FlotaVehiculo } from '@/lib/flota/utils';
 
@@ -41,7 +41,7 @@ export default function FlotaConductoresPage() {
     if (!res.ok) throw new Error(formatApiErrorBody(json));
     setItems(json.conductores ?? []);
     setVehiculos(json.vehiculos ?? []);
-    setHint(json.hint ?? null);
+    setHint(typeof json.hint === 'string' ? json.hint : null);
   }, [q, router]);
 
   const loadDetalle = useCallback(
@@ -57,7 +57,7 @@ export default function FlotaConductoresPage() {
   );
 
   useEffect(() => {
-    void load().catch((e) => setError(e instanceof Error ? e.message : 'Error'));
+    void load().catch((e) => setError(formatErrorMessage(e) || 'Error al cargar conductores'));
   }, [load]);
 
   async function guardar(values: ConductorFormValues) {
@@ -82,7 +82,7 @@ export default function FlotaConductoresPage() {
       setEditing(null);
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'No se pudo guardar');
+      setError(formatErrorMessage(e) || 'No se pudo guardar');
     } finally {
       setSaving(false);
     }
@@ -97,7 +97,7 @@ export default function FlotaConductoresPage() {
       {hint ? (
         <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">{hint}</p>
       ) : null}
-      {error ? <p className="text-sm text-red-300">{error}</p> : null}
+      {error ? <p className="text-sm text-red-300">{formatErrorMessage(error)}</p> : null}
 
       <ConductorForm
         key={editing?.id ?? 'nuevo'}
@@ -157,7 +157,7 @@ export default function FlotaConductoresPage() {
               if (!res.ok) throw new Error(formatApiErrorBody(json));
               await loadDetalle(selected.id);
             } catch (e) {
-              setError(e instanceof Error ? e.message : 'No se pudo agregar');
+              setError(formatErrorMessage(e) || 'No se pudo agregar');
             } finally {
               setSaving(false);
             }

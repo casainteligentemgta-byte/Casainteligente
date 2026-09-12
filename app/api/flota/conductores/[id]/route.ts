@@ -6,6 +6,7 @@ import {
   eliminarDocumentoConductor,
   obtenerConductor,
 } from '@/lib/flota/conductores';
+import { jsonErrorFlota } from '@/lib/flota/error';
 import { esUuid } from '@/lib/flota/utils';
 import {
   actualizarVehiculo,
@@ -37,10 +38,7 @@ export async function GET(_req: Request, ctx: RouteCtx) {
     if (!conductor) return NextResponse.json({ error: 'Conductor no encontrado' }, { status: 404 });
     return NextResponse.json({ ok: true, conductor });
   } catch (e) {
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : 'Error al cargar conductor' },
-      { status: 500 },
-    );
+    return jsonErrorFlota(e, 'Error al cargar conductor');
   }
 }
 
@@ -87,12 +85,10 @@ export async function PUT(req: Request, ctx: RouteCtx) {
       return NextResponse.json({ ok: true });
     }
 
-    const conductor = await actualizarConductor(id, body);
+    const conductor = await actualizarConductor(id, body, auth.supabase);
     return NextResponse.json({ ok: true, conductor });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Error al actualizar';
-    const status = /requerido|inválid/i.test(msg) ? 400 : 500;
-    return NextResponse.json({ error: msg }, { status });
+    return jsonErrorFlota(e, 'Error al actualizar');
   }
 }
 
@@ -112,9 +108,6 @@ export async function DELETE(_req: Request, ctx: RouteCtx) {
     await eliminarConductor(auth.supabase, id);
     return NextResponse.json({ ok: true });
   } catch (e) {
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : 'Error al eliminar' },
-      { status: 500 },
-    );
+    return jsonErrorFlota(e, 'Error al eliminar');
   }
 }
