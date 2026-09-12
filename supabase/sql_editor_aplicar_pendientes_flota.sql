@@ -279,6 +279,65 @@ create table if not exists public.ci_flota_alertas (
   updated_at timestamptz not null default now()
 );
 
+-- CREATE TABLE IF NOT EXISTS no añade columnas si la tabla ya existía
+-- (p. ej. esquema maquinaria con estado y sin leida/resuelta).
+alter table public.ci_flota_alertas
+  add column if not exists tipo text,
+  add column if not exists severidad text default 'warning',
+  add column if not exists titulo text,
+  add column if not exists mensaje text,
+  add column if not exists conductor_id uuid references public.ci_flota_conductores (id) on delete cascade,
+  add column if not exists vehiculo_id uuid references public.ci_flota_vehiculos (id) on delete cascade,
+  add column if not exists referencia_id uuid,
+  add column if not exists vence_el date,
+  add column if not exists leida boolean not null default false,
+  add column if not exists resuelta boolean not null default false,
+  add column if not exists created_at timestamptz not null default now(),
+  add column if not exists updated_at timestamptz not null default now();
+
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'ci_flota_alertas' and column_name = 'estado'
+  ) then
+    update public.ci_flota_alertas
+    set
+      resuelta = case
+        when lower(coalesce(estado, '')) in ('resuelta', 'resuelto') then true
+        else resuelta
+      end,
+      leida = case
+        when lower(coalesce(estado, '')) in ('leida', 'leido', 'leído', 'resuelta', 'resuelto') then true
+        else leida
+      end;
+  end if;
+
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'ci_flota_alertas' and column_name = 'detalle'
+  ) then
+    update public.ci_flota_alertas
+    set mensaje = coalesce(mensaje, detalle)
+    where mensaje is null;
+  end if;
+
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'ci_flota_alertas' and column_name = 'creada_en'
+  ) then
+    update public.ci_flota_alertas
+    set created_at = creada_en
+    where creada_en is not null;
+  end if;
+end $$;
+
+update public.ci_flota_alertas
+set
+  titulo = coalesce(nullif(btrim(titulo), ''), nullif(btrim(tipo), ''), 'Alerta'),
+  severidad = coalesce(nullif(btrim(severidad), ''), 'warning')
+where titulo is null or severidad is null;
+
 create index if not exists idx_ci_flota_alertas_abiertas
   on public.ci_flota_alertas (resuelta, severidad, created_at desc);
 
@@ -567,6 +626,15 @@ set
   frecuencia_valor = coalesce(frecuencia_valor, dias_anticipacion);
 
 alter table public.ci_flota_alertas
+  add column if not exists tipo text,
+  add column if not exists titulo text,
+  add column if not exists mensaje text,
+  add column if not exists vehiculo_id uuid references public.ci_flota_vehiculos (id) on delete cascade,
+  add column if not exists vence_el date,
+  add column if not exists leida boolean not null default false,
+  add column if not exists resuelta boolean not null default false,
+  add column if not exists created_at timestamptz not null default now(),
+  add column if not exists updated_at timestamptz not null default now(),
   add column if not exists config_id uuid references public.ci_flota_alertas_config (id) on delete set null,
   add column if not exists maquinaria_id uuid references public.ci_flota_vehiculos (id) on delete cascade,
   add column if not exists tipo_alerta text,
@@ -587,7 +655,18 @@ set
   estado = case
     when resuelta then 'resuelta'
     when leida then 'leida'
+    when lower(coalesce(estado, '')) in ('abierta', 'abierto', 'nueva', 'nuevo') then 'pendiente'
     else coalesce(nullif(btrim(estado), ''), 'pendiente')
+  end,
+  resuelta = case
+    when resuelta then true
+    when lower(coalesce(estado, '')) in ('resuelta', 'resuelto') then true
+    else false
+  end,
+  leida = case
+    when leida or resuelta then true
+    when lower(coalesce(estado, '')) in ('leida', 'leido', 'leído', 'resuelta', 'resuelto') then true
+    else false
   end;
 
 alter table public.ci_flota_alertas
@@ -982,6 +1061,37 @@ comment on column public.budgets.saldo is
 
 notify pgrst, 'reload schema';
 
+-- ========== 319_ci_flota_alertas_ensure_resuelta.sql ==========
+-- Idempotente: cubre el caso en que 313 ya se registró o la tabla existía
+-- sin leida/resuelta.
+
+alter table public.ci_flota_alertas
+  add column if not exists tipo text,
+  add column if not exists severidad text default 'warning',
+  add column if not exists titulo text,
+  add column if not exists mensaje text,
+  add column if not exists conductor_id uuid references public.ci_flota_conductores (id) on delete cascade,
+  add column if not exists vehiculo_id uuid references public.ci_flota_vehiculos (id) on delete cascade,
+  add column if not exists referencia_id uuid,
+  add column if not exists vence_el date,
+  add column if not exists leida boolean not null default false,
+  add column if not exists resuelta boolean not null default false,
+  add column if not exists created_at timestamptz not null default now(),
+  add column if not exists updated_at timestamptz not null default now(),
+  add column if not exists config_id uuid references public.ci_flota_alertas_config (id) on delete set null,
+  add column if not exists maquinaria_id uuid references public.ci_flota_vehiculos (id) on delete cascade,
+  add column if not exists tipo_alerta text,
+  add column if not exists descripcion text,
+  add column if not exists fecha_vencimiento date,
+  add column if not exists km_vencimiento numeric(12, 1),
+  add column if not exists estado text default 'pendiente',
+  add column if not exists creada_en timestamptz;
+
+create index if not exists idx_ci_flota_alertas_abiertas
+  on public.ci_flota_alertas (resuelta, severidad, created_at desc);
+
+notify pgrst, 'reload schema';
+
 -- Registrar en el historial para que Preview no las vuelva a aplicar.
 insert into supabase_migrations.schema_migrations (version, name, statements)
 values
@@ -994,7 +1104,8 @@ values
   ('315', '315_ci_flota_gasolina_maquinaria.sql', array['applied via sql editor']),
   ('316', '316_ci_flota_mantenimiento_maquinaria.sql', array['applied via sql editor']),
   ('317', '317_ci_flota_alertas_maquinaria.sql', array['applied via sql editor']),
-  ('318', '318_budgets_abonos_cuotas.sql', array['applied via sql editor'])
+  ('318', '318_budgets_abonos_cuotas.sql', array['applied via sql editor']),
+  ('319', '319_ci_flota_alertas_ensure_resuelta.sql', array['applied via sql editor'])
 on conflict (version) do nothing;
 
 notify pgrst, 'reload schema';
