@@ -26,13 +26,13 @@ async function resolveId(ctx: RouteCtx): Promise<string> {
 }
 
 export async function GET(_req: Request, ctx: RouteCtx) {
-  const auth = await requireAccesoFlota();
-  if (!auth.ok) return auth.response;
-
-  const id = await resolveId(ctx);
-  if (!esUuid(id)) return NextResponse.json({ error: 'id inválido' }, { status: 400 });
-
   try {
+    const auth = await requireAccesoFlota();
+    if (!auth.ok) return auth.response;
+
+    const id = await resolveId(ctx);
+    if (!esUuid(id)) return NextResponse.json({ error: 'id inválido' }, { status: 400 });
+
     const { conductor, migracionPendiente } = await obtenerConductor(auth.supabase, id);
     if (migracionPendiente) return respuestaMigracionPendiente({ conductor: null });
     if (!conductor) return NextResponse.json({ error: 'Conductor no encontrado' }, { status: 404 });
@@ -43,20 +43,20 @@ export async function GET(_req: Request, ctx: RouteCtx) {
 }
 
 export async function PUT(req: Request, ctx: RouteCtx) {
-  const auth = await requireAccesoFlota();
-  if (!auth.ok) return auth.response;
-
-  const id = await resolveId(ctx);
-  if (!esUuid(id)) return NextResponse.json({ error: 'id inválido' }, { status: 400 });
-
-  let body: Record<string, unknown>;
   try {
-    body = (await req.json()) as Record<string, unknown>;
-  } catch {
-    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
-  }
+    const auth = await requireAccesoFlota();
+    if (!auth.ok) return auth.response;
 
-  try {
+    const id = await resolveId(ctx);
+    if (!esUuid(id)) return NextResponse.json({ error: 'id inválido' }, { status: 400 });
+
+    let body: Record<string, unknown>;
+    try {
+      body = (await req.json()) as Record<string, unknown>;
+    } catch {
+      return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
+    }
+
     if (body.recurso === 'vehiculo') {
       const vehiculo = await actualizarVehiculo(auth.supabase, id, body);
       return NextResponse.json({ ok: true, vehiculo });
@@ -93,14 +93,14 @@ export async function PUT(req: Request, ctx: RouteCtx) {
 }
 
 export async function DELETE(_req: Request, ctx: RouteCtx) {
-  const auth = await requireAccesoFlota();
-  if (!auth.ok) return auth.response;
-
-  const id = await resolveId(ctx);
-  if (!esUuid(id)) return NextResponse.json({ error: 'id inválido' }, { status: 400 });
-
-  const url = new URL(_req.url);
   try {
+    const auth = await requireAccesoFlota();
+    if (!auth.ok) return auth.response;
+
+    const id = await resolveId(ctx);
+    if (!esUuid(id)) return NextResponse.json({ error: 'id inválido' }, { status: 400 });
+
+    const url = new URL(_req.url);
     if (url.searchParams.get('recurso') === 'vehiculo') {
       await eliminarVehiculo(auth.supabase, id);
       return NextResponse.json({ ok: true });

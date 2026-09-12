@@ -11,10 +11,10 @@ import {
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
-  const auth = await requireAccesoFlota();
-  if (!auth.ok) return auth.response;
-
   try {
+    const auth = await requireAccesoFlota();
+    if (!auth.ok) return auth.response;
+
     const { searchParams } = new URL(request.url);
     const entidad_id = searchParams.get('entidad_id');
     const q = searchParams.get('q')?.trim() || undefined;
@@ -44,10 +44,10 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireAccesoFlota();
-  if (!auth.ok) return auth.response;
-
   try {
+    const auth = await requireAccesoFlota();
+    if (!auth.ok) return auth.response;
+
     const body = (await request.json()) as Record<string, unknown>;
     if (body.recurso === 'vehiculo') {
       const vehiculo = await crearVehiculo(auth.supabase, body);
