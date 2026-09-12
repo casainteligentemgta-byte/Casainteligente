@@ -9,14 +9,34 @@
 delete from supabase_migrations.schema_migrations
 where version in ('0311', '0312', '1980');
 
--- Si la tabla ya existía (esquema maquinaria), CREATE TABLE IF NOT EXISTS
--- no añade columnas. Hay que crear leida/resuelta ANTES de cualquier índice.
+-- Si la tabla ya existía (esquema maquinaria: estado/creada_en), CREATE TABLE
+-- IF NOT EXISTS no añade columnas. Hay que crearlas ANTES de cualquier índice.
 do $$
 begin
   if to_regclass('public.ci_flota_alertas') is not null then
     alter table public.ci_flota_alertas
       add column if not exists leida boolean not null default false,
-      add column if not exists resuelta boolean not null default false;
+      add column if not exists resuelta boolean not null default false,
+      add column if not exists severidad text default 'warning',
+      add column if not exists created_at timestamptz default now(),
+      add column if not exists updated_at timestamptz default now(),
+      add column if not exists conductor_id uuid,
+      add column if not exists vehiculo_id uuid,
+      add column if not exists tipo text,
+      add column if not exists titulo text,
+      add column if not exists mensaje text;
+    if exists (
+      select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'ci_flota_alertas' and column_name = 'creada_en'
+    ) then
+      update public.ci_flota_alertas
+      set created_at = creada_en
+      where creada_en is not null;
+    end if;
+  end if;
+  if to_regclass('public.ci_flota_conductores') is not null then
+    alter table public.ci_flota_conductores
+      add column if not exists created_at timestamptz default now();
   end if;
 end $$;
 
