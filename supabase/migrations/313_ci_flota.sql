@@ -182,6 +182,34 @@ create table if not exists public.ci_flota_alertas_config (
 comment on table public.ci_flota_alertas_config is
   'Umbrales para generar alertas de flota (vencimientos, km y consumo).';
 
+alter table public.ci_flota_alertas_config
+  add column if not exists tipo text,
+  add column if not exists tipo_alerta text,
+  add column if not exists dias_anticipacion integer default 15,
+  add column if not exists umbral_consumo_km_l numeric(8, 2),
+  add column if not exists activa boolean default true,
+  add column if not exists created_at timestamptz default now(),
+  add column if not exists updated_at timestamptz default now();
+
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'ci_flota_alertas_config' and column_name = 'tipo_alerta'
+  ) then
+    update public.ci_flota_alertas_config
+    set tipo = coalesce(nullif(btrim(tipo), ''), tipo_alerta)
+    where tipo is null;
+  end if;
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'ci_flota_alertas_config' and column_name = 'activo'
+  ) then
+    update public.ci_flota_alertas_config
+    set activa = coalesce(activa, activo);
+  end if;
+end $$;
+
 create table if not exists public.ci_flota_alertas (
   id uuid primary key default gen_random_uuid(),
   tipo text not null,
@@ -198,6 +226,65 @@ create table if not exists public.ci_flota_alertas (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+-- CREATE TABLE IF NOT EXISTS no añade columnas si la tabla ya existía
+-- (p. ej. esquema maquinaria con estado y sin leida/resuelta).
+alter table public.ci_flota_alertas
+  add column if not exists tipo text,
+  add column if not exists severidad text default 'warning',
+  add column if not exists titulo text,
+  add column if not exists mensaje text,
+  add column if not exists conductor_id uuid references public.ci_flota_conductores (id) on delete cascade,
+  add column if not exists vehiculo_id uuid references public.ci_flota_vehiculos (id) on delete cascade,
+  add column if not exists referencia_id uuid,
+  add column if not exists vence_el date,
+  add column if not exists leida boolean not null default false,
+  add column if not exists resuelta boolean not null default false,
+  add column if not exists created_at timestamptz not null default now(),
+  add column if not exists updated_at timestamptz not null default now();
+
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'ci_flota_alertas' and column_name = 'estado'
+  ) then
+    update public.ci_flota_alertas
+    set
+      resuelta = case
+        when lower(coalesce(estado, '')) in ('resuelta', 'resuelto') then true
+        else resuelta
+      end,
+      leida = case
+        when lower(coalesce(estado, '')) in ('leida', 'leido', 'leído', 'resuelta', 'resuelto') then true
+        else leida
+      end;
+  end if;
+
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'ci_flota_alertas' and column_name = 'detalle'
+  ) then
+    update public.ci_flota_alertas
+    set mensaje = coalesce(mensaje, detalle)
+    where mensaje is null;
+  end if;
+
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'ci_flota_alertas' and column_name = 'creada_en'
+  ) then
+    update public.ci_flota_alertas
+    set created_at = creada_en
+    where creada_en is not null;
+  end if;
+end $$;
+
+update public.ci_flota_alertas
+set
+  titulo = coalesce(nullif(btrim(titulo), ''), nullif(btrim(tipo), ''), 'Alerta'),
+  severidad = coalesce(nullif(btrim(severidad), ''), 'warning')
+where titulo is null or severidad is null;
 
 create index if not exists idx_ci_flota_alertas_abiertas
   on public.ci_flota_alertas (resuelta, severidad, created_at desc);
@@ -247,14 +334,19 @@ comment on table public.ci_flota_manual_chunks is
   'Fragmentos de manuales para buscar contexto del mecánico.';
 
 insert into public.ci_flota_alertas_config (tipo, dias_anticipacion, umbral_consumo_km_l, activa)
-values
-  ('licencia_vence', 15, null, true),
-  ('certificado_vence', 15, null, true),
-  ('documento_vence', 15, null, true),
-  ('mantenimiento_fecha', 7, null, true),
-  ('mantenimiento_km', 0, null, true),
-  ('consumo_alto', 0, 4.0, true)
-on conflict (tipo) do nothing;
+select v.tipo, v.dias, v.umbral, true
+from (values
+  ('licencia_vence', 15, null::numeric),
+  ('certificado_vence', 15, null::numeric),
+  ('documento_vence', 15, null::numeric),
+  ('mantenimiento_fecha', 7, null::numeric),
+  ('mantenimiento_km', 0, null::numeric),
+  ('consumo_alto', 0, 4.0)
+) as v(tipo, dias, umbral)
+where not exists (
+  select 1 from public.ci_flota_alertas_config c
+  where c.tipo = v.tipo
+);
 
 insert into storage.buckets (id, name, public)
 values ('flota', 'flota', true)

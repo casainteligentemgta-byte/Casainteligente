@@ -31,6 +31,15 @@ set
   frecuencia_valor = coalesce(frecuencia_valor, dias_anticipacion);
 
 alter table public.ci_flota_alertas
+  add column if not exists tipo text,
+  add column if not exists titulo text,
+  add column if not exists mensaje text,
+  add column if not exists vehiculo_id uuid references public.ci_flota_vehiculos (id) on delete cascade,
+  add column if not exists vence_el date,
+  add column if not exists leida boolean not null default false,
+  add column if not exists resuelta boolean not null default false,
+  add column if not exists created_at timestamptz not null default now(),
+  add column if not exists updated_at timestamptz not null default now(),
   add column if not exists config_id uuid references public.ci_flota_alertas_config (id) on delete set null,
   add column if not exists maquinaria_id uuid references public.ci_flota_vehiculos (id) on delete cascade,
   add column if not exists tipo_alerta text,
@@ -51,7 +60,18 @@ set
   estado = case
     when resuelta then 'resuelta'
     when leida then 'leida'
+    when lower(coalesce(estado, '')) in ('abierta', 'abierto', 'nueva', 'nuevo') then 'pendiente'
     else coalesce(nullif(btrim(estado), ''), 'pendiente')
+  end,
+  resuelta = case
+    when resuelta then true
+    when lower(coalesce(estado, '')) in ('resuelta', 'resuelto') then true
+    else false
+  end,
+  leida = case
+    when leida or resuelta then true
+    when lower(coalesce(estado, '')) in ('leida', 'leido', 'leído', 'resuelta', 'resuelto') then true
+    else false
   end;
 
 alter table public.ci_flota_alertas
