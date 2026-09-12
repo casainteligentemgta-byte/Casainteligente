@@ -9,6 +9,17 @@
 delete from supabase_migrations.schema_migrations
 where version in ('0311', '0312', '1980');
 
+-- Si la tabla ya existía (esquema maquinaria), CREATE TABLE IF NOT EXISTS
+-- no añade columnas. Hay que crear leida/resuelta ANTES de cualquier índice.
+do $$
+begin
+  if to_regclass('public.ci_flota_alertas') is not null then
+    alter table public.ci_flota_alertas
+      add column if not exists leida boolean not null default false,
+      add column if not exists resuelta boolean not null default false;
+  end if;
+end $$;
+
 -- ========== 320_ensure_tablas_base.sql (antes 0311/0312/1980) ==========
 create table if not exists public.recruitment_needs (
   id uuid primary key default gen_random_uuid() not null,
