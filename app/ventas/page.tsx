@@ -58,11 +58,49 @@ function saveVentasCustomersToCache(rows: CustomerPickerRow[]) {
 
 const MARGIN_PRESETS = [0, 10, 15, 20];
 
+function demoLineItems(): LineItem[] {
+    const demoItem = (
+        n: number,
+        nombre: string,
+        categoria: string,
+        unitPrice: number,
+        costo: number,
+        qty = 1,
+    ): LineItem => ({
+        id: `demo-${n}`,
+        product: {
+            id: 9000 + n,
+            external_id: null,
+            nombre,
+            categoria,
+            modelo: null,
+            marca: null,
+            descripcion: null,
+            costo,
+            precio: unitPrice,
+            utilidad: unitPrice - costo,
+        },
+        qty,
+        unitPrice,
+        discount: 0,
+        inventoryItemIds: [],
+        serialNumbers: [],
+    });
+    return [
+        demoItem(1, 'Brochas 3"', 'General', 4.8, 4),
+        demoItem(2, 'Brocha 2.5"', 'General', 3, 2.5),
+        demoItem(3, 'Fondo 3 en 1 (1 galón)', 'Materiales', 60, 50),
+        demoItem(4, 'Rodillo de pintar', 'General', 7.2, 6),
+        demoItem(5, 'Mano de Obra Herrería', 'General', 6000, 4000),
+    ];
+}
+
 function VentasContent() {
     const searchParams = useSearchParams();
-    const [items, setItems] = useState<LineItem[]>([]);
+    const isDemo = searchParams.get('demo') === '1' && !searchParams.get('id');
+    const [items, setItems] = useState<LineItem[]>(() => (isDemo ? demoLineItems() : []));
     /** Con productos en la lista, el buscador se oculta hasta “Agregar producto”. */
-    const [showProductSearch, setShowProductSearch] = useState(true);
+    const [showProductSearch, setShowProductSearch] = useState(!isDemo);
     const [globalMargin, setGlobalMargin] = useState(20);
     const [clientName, setClientName] = useState('');
     const [clientRif, setClientRif] = useState('');
@@ -210,44 +248,7 @@ function VentasContent() {
         if (id) setBudgetId(id);
         if (cId) setCustomerId(cId);
 
-        if (searchParams.get('demo') === '1' && !id) {
-            const demoItem = (
-                n: number,
-                nombre: string,
-                categoria: string,
-                unitPrice: number,
-                costo: number,
-                qty = 1,
-            ): LineItem => ({
-                id: `demo-${n}`,
-                product: {
-                    id: 9000 + n,
-                    external_id: null,
-                    nombre,
-                    categoria,
-                    modelo: null,
-                    marca: null,
-                    descripcion: null,
-                    costo,
-                    precio: unitPrice,
-                    utilidad: unitPrice - costo,
-                },
-                qty,
-                unitPrice,
-                discount: 0,
-                inventoryItemIds: [],
-                serialNumbers: [],
-            });
-            setItems([
-                demoItem(1, 'Brochas 3"', 'General', 4.8, 4),
-                demoItem(2, 'Brocha 2.5"', 'General', 3, 2.5),
-                demoItem(3, 'Fondo 3 en 1 (1 galón)', 'Materiales', 60, 50),
-                demoItem(4, 'Rodillo de pintar', 'General', 7.2, 6),
-                demoItem(5, 'Mano de Obra Herrería', 'General', 6000, 4000),
-            ]);
-            setShowProductSearch(false);
-            return;
-        }
+        if (isDemo) return;
 
         const supabase = createClient();
 
@@ -354,7 +355,7 @@ function VentasContent() {
                     });
             }
         }
-    }, [searchParams, globalMargin, applyCustomer]);
+    }, [searchParams, globalMargin, applyCustomer, isDemo]);
 
     const filteredCustomers = useMemo(() => {
         const q = customerQuery.trim().toLowerCase();
