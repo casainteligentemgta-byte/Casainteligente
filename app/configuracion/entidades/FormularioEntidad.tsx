@@ -580,7 +580,9 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
       }}
     >
       <div
-        className="relative max-h-[92vh] w-full max-w-2xl overflow-hidden rounded-2xl border border-white/10 bg-[#0A0A0F] shadow-2xl shadow-black/50"
+        className={`relative max-h-[92vh] w-full overflow-hidden rounded-2xl border border-white/10 bg-[#0A0A0F] shadow-2xl shadow-black/50 ${
+          enSeccion && tab === 'maquinaria' ? 'max-w-5xl' : 'max-w-2xl'
+        }`}
         onClick={(ev) => ev.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3 border-b border-white/10 px-5 py-4">

@@ -6,7 +6,7 @@ import { FLOTA_INPUT, FLOTA_LABEL } from '@/components/flota/FlotaShell';
 import { crearConductor } from '@/lib/flota/conductoresCliente';
 import { formatErrorMessage } from '@/lib/utils/formatErrorMessage';
 import type { FlotaConductor } from '@/lib/flota/conductores';
-import { TIPOS_LICENCIA, unirNombreCompleto, type FlotaVehiculo } from '@/lib/flota/utils';
+import { TIPOS_LICENCIA, etiquetaVehiculo, unirNombreCompleto, type FlotaVehiculo } from '@/lib/flota/utils';
 
 export type ConductorFormValues = {
   nombre_completo: string;
@@ -192,9 +192,7 @@ export function ConductorForm({
             <option value="">Sin asignar</option>
             {vehiculos.map((v) => (
               <option key={v.id} value={v.id}>
-                {v.placa}
-                {v.marca ? ` · ${v.marca}` : ''}
-                {v.modelo ? ` ${v.modelo}` : ''}
+                {etiquetaVehiculo(v)}
               </option>
             ))}
           </select>

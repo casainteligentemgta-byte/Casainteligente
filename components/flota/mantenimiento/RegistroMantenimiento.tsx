@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { FLOTA_INPUT, FLOTA_LABEL } from '@/components/flota/FlotaShell';
-import { ETIQUETA_TIPO_MANTENIMIENTO, TIPOS_MANTENIMIENTO, hoyIso, type FlotaVehiculo } from '@/lib/flota/utils';
+import { ETIQUETA_TIPO_MANTENIMIENTO, TIPOS_MANTENIMIENTO, etiquetaVehiculo, hoyIso, type FlotaVehiculo } from '@/lib/flota/utils';
 
 export type MantenimientoFormValues = {
   vehiculo_id: string;
@@ -55,8 +55,7 @@ export default function RegistroMantenimiento({
           <option value="">Seleccionar placa…</option>
           {vehiculos.map((v) => (
             <option key={v.id} value={v.id}>
-              {v.placa}
-              {v.marca ? ` · ${v.marca}` : ''} {v.modelo ?? ''}
+              {etiquetaVehiculo(v)}
             </option>
           ))}
         </select>

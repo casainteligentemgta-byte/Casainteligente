@@ -6,6 +6,8 @@ import {
   FLOTA_MIGRACION,
   TIPOS_VEHICULO,
   VEHICULO_SELECT,
+  VEHICULO_SELECT_LEGACY,
+  columnasEquipoFlotaFaltan,
   esMigracionPendiente,
   esUuid,
   normalizarPlaca,
@@ -13,6 +15,10 @@ import {
   type FlotaVehiculo,
   type TipoVehiculo,
 } from '@/lib/flota/utils';
+import {
+  asegurarCatalogoDesdeVehiculo,
+  sincronizarMaquinariaEnFlota,
+} from '@/lib/flota/sincronizarMaquinariaFlota';
 
 export type RequireFlotaOk = {
   ok: true;
@@ -65,15 +71,26 @@ export function respuestaMigracionPendiente(extra?: Record<string, unknown>) {
 
 export async function listarVehiculos(
   supabase: SupabaseClient,
-  opts?: { activo?: boolean },
+  opts?: { activo?: boolean; entidadId?: string; sincronizarMaquinaria?: boolean },
 ): Promise<{ items: FlotaVehiculo[]; migracionPendiente: boolean }> {
-  let q = supabase.from('ci_flota_vehiculos').select(VEHICULO_SELECT).order('placa');
-  if (opts?.activo != null) q = q.eq('activo', opts.activo);
+  if (opts?.sincronizarMaquinaria !== false) {
+    await sincronizarMaquinariaEnFlota(supabase, opts?.entidadId).catch(() => undefined);
+  }
 
-  const { data, error } = await q;
-  if (esMigracionPendiente(error)) return { items: [], migracionPendiente: true };
-  if (error) throw new Error(error.message);
-  return { items: (data ?? []) as FlotaVehiculo[], migracionPendiente: false };
+  const ejecutar = (cols: string) => {
+    let q = supabase.from('ci_flota_vehiculos').select(cols).order('placa');
+    if (opts?.activo != null) q = q.eq('activo', opts.activo);
+    if (opts?.entidadId && esUuid(opts.entidadId)) q = q.eq('entidad_id', opts.entidadId);
+    return q;
+  };
+
+  let result = await ejecutar(VEHICULO_SELECT);
+  if (result.error && columnasEquipoFlotaFaltan(result.error)) {
+    result = await ejecutar(VEHICULO_SELECT_LEGACY);
+  }
+  if (esMigracionPendiente(result.error)) return { items: [], migracionPendiente: true };
+  if (result.error) throw new Error(result.error.message);
+  return { items: (result.data ?? []) as FlotaVehiculo[], migracionPendiente: false };
 }
 
 export async function crearVehiculo(
@@ -88,6 +105,12 @@ export async function crearVehiculo(
     ? (tipoRaw as TipoVehiculo)
     : 'camioneta';
 
+  const nombre =
+    String(body.nombre ?? '').trim() ||
+    [String(body.marca ?? '').trim(), String(body.modelo ?? '').trim()].filter(Boolean).join(' ') ||
+    null;
+  const equipoId = esUuid(String(body.equipo_id ?? '')) ? String(body.equipo_id) : null;
+
   const row = {
     placa,
     marca: String(body.marca ?? '').trim() || null,
@@ -101,16 +124,23 @@ export async function crearVehiculo(
     proyecto_id: esUuid(String(body.proyecto_id ?? '')) ? String(body.proyecto_id) : null,
     activo: body.activo !== false,
     notas: String(body.notas ?? '').trim() || null,
+    nombre,
+    equipo_id: equipoId,
     updated_at: new Date().toISOString(),
   };
 
-  const { data, error } = await supabase
-    .from('ci_flota_vehiculos')
-    .insert(row)
-    .select(VEHICULO_SELECT)
-    .single();
-  if (error) throw new Error(error.message);
-  return data as FlotaVehiculo;
+  let result = await supabase.from('ci_flota_vehiculos').insert(row).select(VEHICULO_SELECT).single();
+  if (result.error && columnasEquipoFlotaFaltan(result.error)) {
+    const { nombre: _n, equipo_id: _e, ...legacy } = row;
+    result = await supabase.from('ci_flota_vehiculos').insert(legacy).select(VEHICULO_SELECT_LEGACY).single();
+  }
+  if (result.error) throw new Error(result.error.message);
+  const vehiculo = result.data as FlotaVehiculo;
+  const crearCatalogo = body.crear_catalogo !== false;
+  if (crearCatalogo && vehiculo.entidad_id) {
+    return asegurarCatalogoDesdeVehiculo(supabase, vehiculo);
+  }
+  return vehiculo;
 }
 
 export async function actualizarVehiculo(
@@ -144,15 +174,28 @@ export async function actualizarVehiculo(
   }
   if (body.activo !== undefined) patch.activo = Boolean(body.activo);
   if (body.notas !== undefined) patch.notas = String(body.notas).trim() || null;
+  if (body.nombre !== undefined) patch.nombre = String(body.nombre).trim() || null;
+  if (body.equipo_id !== undefined) {
+    patch.equipo_id = esUuid(String(body.equipo_id ?? '')) ? String(body.equipo_id) : null;
+  }
 
-  const { data, error } = await supabase
+  let result = await supabase
     .from('ci_flota_vehiculos')
     .update(patch)
     .eq('id', id)
     .select(VEHICULO_SELECT)
     .single();
-  if (error) throw new Error(error.message);
-  return data as FlotaVehiculo;
+  if (result.error && columnasEquipoFlotaFaltan(result.error)) {
+    const { nombre: _n, equipo_id: _e, ...legacy } = patch;
+    result = await supabase
+      .from('ci_flota_vehiculos')
+      .update(legacy)
+      .eq('id', id)
+      .select(VEHICULO_SELECT_LEGACY)
+      .single();
+  }
+  if (result.error) throw new Error(result.error.message);
+  return result.data as FlotaVehiculo;
 }
 
 export async function eliminarVehiculo(supabase: SupabaseClient, id: string): Promise<void> {
