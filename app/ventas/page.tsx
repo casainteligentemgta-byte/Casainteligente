@@ -119,8 +119,23 @@ function VentasContent() {
     const [fecha, setFecha] = useState(hoyFechaPresupuesto);
     const [notes, setNotes] = useState('');
     const [showZelle, setShowZelle] = useState(true);
-    const [showSummary, setShowSummary] = useState(false);
     const [saving, setSaving] = useState(false);
+    const headerRef = useRef<HTMLDivElement>(null);
+    const [headerH, setHeaderH] = useState(72);
+
+    useEffect(() => {
+        const el = headerRef.current;
+        if (!el) return;
+        const update = () => setHeaderH(Math.ceil(el.getBoundingClientRect().height));
+        update();
+        const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : null;
+        ro?.observe(el);
+        window.addEventListener('resize', update);
+        return () => {
+            ro?.disconnect();
+            window.removeEventListener('resize', update);
+        };
+    }, []);
 
     type InventoryCandidate = {
         id: string;
@@ -598,22 +613,35 @@ function VentasContent() {
     } as React.CSSProperties;
 
     return (
-        <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', paddingBottom: '120px' }}>
+        <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', paddingBottom: '120px', paddingTop: headerH }}>
 
-            {/* ── Header ── */}
-            <div style={{
-                position: 'sticky', top: 0, zIndex: 50,
-                background: 'rgba(0,0,0,0.6)',
-                backdropFilter: 'blur(30px)',
-                WebkitBackdropFilter: 'blur(30px)',
-                borderBottom: '1px solid rgba(255,255,255,0.08)',
-                padding: '16px 20px 12px',
-            }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {/* ── Header fijo: un solo Guardar ── */}
+            <div
+                ref={headerRef}
+                style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    zIndex: 80,
+                    background: 'rgba(0,0,0,0.82)',
+                    backdropFilter: 'blur(30px)',
+                    WebkitBackdropFilter: 'blur(30px)',
+                    borderBottom: '1px solid rgba(255,255,255,0.08)',
+                    paddingTop: 'max(12px, env(safe-area-inset-top))',
+                    paddingLeft: '20px',
+                    paddingRight: '20px',
+                    paddingBottom: '12px',
+                    transform: 'translateZ(0)',
+                    WebkitTransform: 'translateZ(0)',
+                }}
+            >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', maxWidth: '900px', margin: '0 auto' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
                         <div style={{
                             width: '36px', height: '36px', borderRadius: '10px',
                             background: 'rgba(52,199,89,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            flexShrink: 0,
                         }}>
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                                 <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" stroke="#34C759" strokeWidth="2" strokeLinecap="round" />
@@ -621,58 +649,63 @@ function VentasContent() {
                                 <path d="M9 12h6M9 16h4" stroke="#34C759" strokeWidth="1.8" strokeLinecap="round" />
                             </svg>
                         </div>
-                        <div>
+                        <div style={{ minWidth: 0 }}>
                             <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--label-primary)', lineHeight: 1 }}>Presupuesto</h1>
                             <p style={{ fontSize: '12px', color: 'var(--label-secondary)', marginTop: '2px' }}>
                                 {items.length} producto{items.length !== 1 ? 's' : ''} · ${formatUSD(subtotal)}
                             </p>
                         </div>
                     </div>
-                    {items.length > 0 && (
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                            <button
-                                onClick={handleSaveBudget}
-                                disabled={saving}
-                                style={{
-                                    background: 'rgba(52,199,89,0.15)',
-                                    border: '1px solid rgba(52,199,89,0.3)',
-                                    borderRadius: '12px',
-                                    padding: '8px 14px',
-                                    color: '#34C759',
-                                    fontSize: '13px',
-                                    fontWeight: 700,
-                                    cursor: saving ? 'not-allowed' : 'pointer',
-                                    fontFamily: 'inherit',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '6px',
-                                    opacity: saving ? 0.7 : 1,
-                                }}
-                            >
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                                    <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" stroke="#34C759" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                                    <polyline points="17 21 17 13 7 13 7 21" stroke="#34C759" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                                {saving ? '...' : 'Guardar'}
-                            </button>
-                            <button
-                                onClick={() => setShowSummary(!showSummary)}
-                                style={{
-                                    background: 'rgba(255,255,255,0.08)',
-                                    border: '1px solid rgba(255,255,255,0.12)',
-                                    borderRadius: '12px',
-                                    padding: '8px 14px',
-                                    color: 'white',
-                                    fontSize: '13px',
-                                    fontWeight: 600,
-                                    cursor: 'pointer',
-                                    fontFamily: 'inherit',
-                                }}
-                            >
-                                {showSummary ? 'Cerrar' : 'Resumen'}
-                            </button>
-                        </div>
-                    )}
+                    <div style={{ display: 'flex', gap: '8px', flexShrink: 0, marginLeft: '8px' }}>
+                        <button
+                            type="button"
+                            onClick={handleSaveBudget}
+                            disabled={saving || items.length === 0}
+                            style={{
+                                background: 'rgba(52,199,89,0.15)',
+                                border: '1px solid rgba(52,199,89,0.3)',
+                                borderRadius: '12px',
+                                padding: '8px 14px',
+                                color: '#34C759',
+                                fontSize: '13px',
+                                fontWeight: 700,
+                                cursor: saving || items.length === 0 ? 'not-allowed' : 'pointer',
+                                fontFamily: 'inherit',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                opacity: saving || items.length === 0 ? 0.55 : 1,
+                            }}
+                        >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                                <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" stroke="#34C759" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                                <polyline points="17 21 17 13 7 13 7 21" stroke="#34C759" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                            {saving ? '...' : 'Guardar'}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                document.getElementById('presupuesto-resumen')?.scrollIntoView({
+                                    behavior: 'smooth',
+                                    block: 'start',
+                                });
+                            }}
+                            style={{
+                                background: 'rgba(255,255,255,0.08)',
+                                border: '1px solid rgba(255,255,255,0.12)',
+                                borderRadius: '12px',
+                                padding: '8px 14px',
+                                color: 'white',
+                                fontSize: '13px',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                fontFamily: 'inherit',
+                            }}
+                        >
+                            Resumen
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -1282,11 +1315,15 @@ function VentasContent() {
                     </div>
                 </div>
 
-                <div style={{
+                <div
+                    id="presupuesto-resumen"
+                    style={{
                     ...glass,
                     padding: '20px',
                     background: 'rgba(0,0,0,0.4)',
-                }}>
+                    scrollMarginTop: headerH + 12,
+                }}
+                >
                     <h3 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--label-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '16px' }}>
                         Resumen del Presupuesto
                     </h3>
@@ -1337,37 +1374,10 @@ function VentasContent() {
                             <span style={{ color: '#34C759', fontSize: '24px', fontWeight: 800 }}>${formatUSD(subtotal)}</span>
                         </div>
 
-                        {/* Actions */}
+                        {/* Actions: Guardar vive solo en el menú fijo de arriba */}
                         <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
                             <button
-                                onClick={handleSaveBudget}
-                                disabled={saving}
-                                style={{
-                                    flex: 1,
-                                    padding: '14px',
-                                    borderRadius: '14px',
-                                    border: 'none',
-                                    background: 'rgba(0,122,255,0.15)',
-                                    color: '#007AFF',
-                                    fontSize: '15px',
-                                    fontWeight: 700,
-                                    cursor: saving ? 'not-allowed' : 'pointer',
-                                    fontFamily: 'inherit',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: '8px',
-                                    opacity: saving ? 0.7 : 1,
-                                }}
-                            >
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                                    <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" stroke="#007AFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                    <polyline points="17 21 17 13 7 13 7 21" stroke="#007AFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                    <polyline points="7 3 7 8 15 8" stroke="#007AFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                                {saving ? 'Guardando...' : 'Guardar'}
-                            </button>
-                            <button
+                                type="button"
                                 onClick={() => {
                                     if (!customerId) {
                                         alert('Selecciona un cliente de la lista antes de abrir la vista previa.');
