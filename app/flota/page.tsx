@@ -1,10 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { FLOTA_INPUT, FLOTA_LABEL } from '@/components/flota/FlotaShell';
+import { FlotaLink, useFlotaNav } from '@/components/flota/FlotaNav';
 import { apiUrl } from '@/lib/http/apiUrl';
 import { parseFetchJson } from '@/lib/utils/parseFetchJson';
 import { formatApiErrorBody } from '@/lib/utils/formatErrorMessage';
@@ -14,6 +14,7 @@ import type { FlotaAlerta } from '@/lib/flota/alertas';
 
 export default function FlotaResumenPage() {
   const router = useRouter();
+  const { api, loginNext, entidadId, embedded, defaultTipo } = useFlotaNav();
   const [vehiculos, setVehiculos] = useState<FlotaVehiculo[]>([]);
   const [conductores, setConductores] = useState<FlotaConductor[]>([]);
   const [alertas, setAlertas] = useState<FlotaAlerta[]>([]);
@@ -23,17 +24,21 @@ export default function FlotaResumenPage() {
   const [placa, setPlaca] = useState('');
   const [marca, setMarca] = useState('');
   const [modelo, setModelo] = useState('');
-  const [tipo, setTipo] = useState('camioneta');
+  const [tipo, setTipo] = useState(defaultTipo);
   const [odometro, setOdometro] = useState('');
 
   const load = useCallback(async () => {
     setError(null);
     const [cRes, aRes] = await Promise.all([
-      fetch(apiUrl('/api/flota/conductores'), { credentials: 'include' }),
-      fetch(apiUrl('/api/flota/alertas'), { credentials: 'include' }),
+      fetch(apiUrl(api('/api/flota/conductores')), { credentials: 'include' }),
+      fetch(apiUrl(api('/api/flota/alertas')), { credentials: 'include' }),
     ]);
     if (cRes.status === 401) {
-      router.push('/login?next=/flota');
+      if (embedded) {
+        setError('Debe iniciar sesión para gestionar la flota.');
+        return;
+      }
+      router.push(`/login?next=${encodeURIComponent(loginNext)}`);
       return;
     }
     const cJson = await parseFetchJson<{
@@ -51,7 +56,7 @@ export default function FlotaResumenPage() {
       const aJson = await parseFetchJson<{ alertas?: FlotaAlerta[] }>(aRes);
       setAlertas(aJson.alertas ?? []);
     }
-  }, [router]);
+  }, [router, api, loginNext, embedded]);
 
   useEffect(() => {
     void load().catch((e) => setError(e instanceof Error ? e.message : 'Error al cargar'));
@@ -82,7 +87,7 @@ export default function FlotaResumenPage() {
             setSaving(true);
             setError(null);
             try {
-              const res = await fetch(apiUrl('/api/flota/conductores'), {
+              const res = await fetch(apiUrl(api('/api/flota/conductores')), {
                 method: 'POST',
                 credentials: 'include',
                 headers: { 'Content-Type': 'application/json' },
@@ -93,6 +98,8 @@ export default function FlotaResumenPage() {
                   modelo,
                   tipo,
                   odometro_km: odometro,
+                  entidad_id: entidadId,
+                  crear_catalogo: embedded,
                 }),
               });
               const json = await parseFetchJson<{ error?: string }>(res);
@@ -115,7 +122,7 @@ export default function FlotaResumenPage() {
           </div>
           <div>
             <label className={FLOTA_LABEL}>Tipo</label>
-            <select className={FLOTA_INPUT} value={tipo} onChange={(e) => setTipo(e.target.value)}>
+            <select className={FLOTA_INPUT} value={tipo} onChange={(e) => setTipo(e.target.value as typeof tipo)}>
               {TIPOS_VEHICULO.map((t) => (
                 <option key={t} value={t}>
                   {t}
@@ -155,11 +162,12 @@ export default function FlotaResumenPage() {
                   <p className="text-white">{etiquetaVehiculo(v)}</p>
                   <p className="text-xs text-zinc-500">
                     {v.tipo} · {v.odometro_km} km
+                    {v.placa ? ` · ${v.placa}` : ''}
                   </p>
                 </div>
-                <Link href="/flota/gasolina" className="text-xs text-amber-300 hover:underline">
+                <FlotaLink href="/flota/gasolina" className="text-xs text-amber-300 hover:underline">
                   Cargar gasolina
-                </Link>
+                </FlotaLink>
               </li>
             ))}
           </ul>
@@ -171,9 +179,9 @@ export default function FlotaResumenPage() {
 
 function Tile({ href, label, value }: { href: string; label: string; value: number | string }) {
   return (
-    <Link href={href} className="rounded-xl border border-white/10 bg-white/[0.03] p-3 transition hover:bg-white/[0.06]">
+    <FlotaLink href={href} className="w-full rounded-xl border border-white/10 bg-white/[0.03] p-3 text-left transition hover:bg-white/[0.06]">
       <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">{label}</p>
       <p className="mt-1 text-2xl font-bold text-white">{value}</p>
-    </Link>
+    </FlotaLink>
   );
 }

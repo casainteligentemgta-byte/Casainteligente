@@ -8,7 +8,7 @@ import {
 import { listarConductores } from '@/lib/flota/conductores';
 import { listarVehiculos, requireAccesoFlota, respuestaMigracionPendiente } from '@/lib/flota/acceso';
 import { jsonErrorFlota } from '@/lib/flota/error';
-import { parseFechaIso } from '@/lib/flota/utils';
+import { entidadIdDesdeSearch, filtrarPorUnidadesEntidad, parseFechaIso } from '@/lib/flota/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,6 +24,8 @@ export async function GET(request: NextRequest) {
     const desde = parseFechaIso(searchParams.get('desde'));
     const hasta = parseFechaIso(searchParams.get('hasta'));
 
+    const entidadId = entidadIdDesdeSearch(searchParams);
+
     if (maquinaria_id && !conductorId && !desde && !hasta && !vehiculoId) {
       const data = await obtenerGasolinaPorMaquinaria(maquinaria_id);
       return NextResponse.json(data);
@@ -36,16 +38,18 @@ export async function GET(request: NextRequest) {
         desde: desde ?? undefined,
         hasta: hasta ?? undefined,
       }),
-      listarVehiculos(auth.supabase, { activo: true }),
-      listarConductores(auth.supabase, { activo: true }),
+      listarVehiculos(auth.supabase, { activo: true, entidadId }),
+      listarConductores(auth.supabase, { activo: true, entidadId }),
     ]);
     if (gasolina.migracionPendiente) {
       return respuestaMigracionPendiente({ registros: [], analisis: null, vehiculos: [], conductores: [] });
     }
+    const ids = new Set(vehiculos.items.map((v) => v.id));
+    const registros = filtrarPorUnidadesEntidad(gasolina.items, ids, entidadId);
     return NextResponse.json({
       ok: true,
-      registros: gasolina.items,
-      analisis: analizarConsumo(gasolina.items),
+      registros,
+      analisis: analizarConsumo(registros),
       vehiculos: vehiculos.items,
       conductores: conductores.items,
     });

@@ -1,4 +1,5 @@
 export const FLOTA_MIGRACION = '313_ci_flota.sql';
+export const FLOTA_MIGRACION_EQUIPO = '320_ci_flota_vehiculos_equipo.sql';
 
 export const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -133,6 +134,8 @@ export type FlotaVehiculo = {
   id: string;
   entidad_id: string | null;
   proyecto_id: string | null;
+  equipo_id?: string | null;
+  nombre?: string | null;
   placa: string;
   marca: string | null;
   modelo: string | null;
@@ -148,7 +151,14 @@ export type FlotaVehiculo = {
 };
 
 export const VEHICULO_SELECT =
+  'id, entidad_id, proyecto_id, equipo_id, nombre, placa, marca, modelo, anio, tipo, color, odometro_km, capacidad_tanque_litros, activo, notas, created_at, updated_at';
+
+export const VEHICULO_SELECT_LEGACY =
   'id, entidad_id, proyecto_id, placa, marca, modelo, anio, tipo, color, odometro_km, capacidad_tanque_litros, activo, notas, created_at, updated_at';
+
+export function columnasEquipoFlotaFaltan(error: { message?: string } | null | undefined): boolean {
+  return /equipo_id|column .*nombre/i.test(error?.message ?? '');
+}
 
 export function esUuid(value: string | null | undefined): boolean {
   return Boolean(value && UUID_RE.test(value.trim()));
@@ -234,10 +244,59 @@ export function etiquetaVehiculo(v: {
   placa?: string | null;
   marca?: string | null;
   modelo?: string | null;
+  nombre?: string | null;
 }): string {
-  const placa = v.placa?.trim() || 's/placa';
+  const nombre = v.nombre?.trim() || '';
   const extra = [v.marca, v.modelo].filter(Boolean).join(' ');
+  const placa = v.placa?.trim() || 's/placa';
+  if (nombre && extra && !nombre.toLowerCase().includes(extra.toLowerCase())) {
+    return `${nombre} · ${extra}`;
+  }
+  if (nombre) return nombre;
   return extra ? `${placa} · ${extra}` : placa;
+}
+
+export function placaDesdeEquipo(e: { id: string; serial?: string | null }): string {
+  const serial = normalizarPlaca(e.serial);
+  if (serial.length >= 4) return serial.slice(0, 10);
+  const compact = e.id.replace(/-/g, '').slice(0, 8).toUpperCase();
+  return `MQ${compact}`.slice(0, 10);
+}
+
+export function inferirTipoVehiculo(
+  nombre?: string | null,
+  marca?: string | null,
+  modelo?: string | null,
+): TipoVehiculo {
+  const t = `${nombre ?? ''} ${marca ?? ''} ${modelo ?? ''}`
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  if (/moto|motocicleta/.test(t)) return 'moto';
+  if (/camioneta|pickup|hilux|ranger/.test(t)) return 'camioneta';
+  if (/\bcamion\b|\bnpr\b|\bnkr\b|\bnhr\b/.test(t)) return 'camion';
+  if (/\bauto\b|sedan|carro/.test(t)) return 'auto';
+  return 'maquinaria';
+}
+
+export function entidadIdDesdeSearch(search: URLSearchParams): string | undefined {
+  const v = search.get('entidad_id')?.trim() ?? '';
+  return esUuid(v) ? v : undefined;
+}
+
+export function filtrarPorUnidadesEntidad<
+  T extends {
+    vehiculo_id?: string | null;
+    maquinaria_id?: string | null;
+    entidad_id?: string | null;
+  },
+>(items: T[], vehiculoIds: Set<string>, entidadId?: string): T[] {
+  if (!entidadId) return items;
+  return items.filter((i) => {
+    const vid = i.vehiculo_id || i.maquinaria_id;
+    if (!vid) return !i.entidad_id || i.entidad_id === entidadId;
+    return vehiculoIds.has(vid) || i.entidad_id === entidadId;
+  });
 }
 
 export function partirNombreCompleto(nombre: string): { nombres: string; apellidos: string } {

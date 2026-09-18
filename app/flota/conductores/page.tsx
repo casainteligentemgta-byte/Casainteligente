@@ -6,6 +6,7 @@ import ConductorForm, { type ConductorFormValues } from '@/components/flota/cond
 import ConductorTable from '@/components/flota/conductores/ConductorTable';
 import DocumentosConductor from '@/components/flota/conductores/DocumentosConductor';
 import { FLOTA_INPUT } from '@/components/flota/FlotaShell';
+import { useFlotaNav } from '@/components/flota/FlotaNav';
 import { apiUrl } from '@/lib/http/apiUrl';
 import { parseFetchJson } from '@/lib/utils/parseFetchJson';
 import { formatApiErrorBody, formatErrorMessage } from '@/lib/utils/formatErrorMessage';
@@ -14,6 +15,7 @@ import type { FlotaVehiculo } from '@/lib/flota/utils';
 
 export default function FlotaConductoresPage() {
   const router = useRouter();
+  const { api, loginNext, entidadId, embedded } = useFlotaNav();
   const [items, setItems] = useState<FlotaConductor[]>([]);
   const [vehiculos, setVehiculos] = useState<FlotaVehiculo[]>([]);
   const [q, setQ] = useState('');
@@ -25,11 +27,15 @@ export default function FlotaConductoresPage() {
   const [hint, setHint] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const res = await fetch(apiUrl(`/api/flota/conductores${q ? `?q=${encodeURIComponent(q)}` : ''}`), {
+    const res = await fetch(apiUrl(api(`/api/flota/conductores${q ? `?q=${encodeURIComponent(q)}` : ''}`)), {
       credentials: 'include',
     });
     if (res.status === 401) {
-      router.push('/login?next=/flota/conductores');
+      if (embedded) {
+        setError('Debe iniciar sesión para gestionar la flota.');
+        return;
+      }
+      router.push(`/login?next=${encodeURIComponent(loginNext)}`);
       return;
     }
     const json = await parseFetchJson<{
@@ -42,7 +48,7 @@ export default function FlotaConductoresPage() {
     setItems(json.conductores ?? []);
     setVehiculos(json.vehiculos ?? []);
     setHint(typeof json.hint === 'string' ? json.hint : null);
-  }, [q, router]);
+  }, [q, router, api, loginNext, embedded]);
 
   const loadDetalle = useCallback(
     async (id: string) => {
@@ -72,7 +78,7 @@ export default function FlotaConductoresPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             ...values,
-            entidad_id: editing?.entidad_id ?? vehiculos[0]?.entidad_id ?? '',
+            entidad_id: entidadId || editing?.entidad_id || vehiculos[0]?.entidad_id || '',
             numero_cedula: values.numero_cedula || values.cedula,
           }),
         },
@@ -101,7 +107,7 @@ export default function FlotaConductoresPage() {
 
       <ConductorForm
         key={editing?.id ?? 'nuevo'}
-        entidad_id={editing?.entidad_id ?? vehiculos[0]?.entidad_id ?? ''}
+        entidad_id={entidadId || editing?.entidad_id || vehiculos[0]?.entidad_id || ''}
         initial={editing}
         vehiculos={vehiculos}
         saving={saving}

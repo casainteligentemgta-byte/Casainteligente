@@ -11,9 +11,11 @@ import { parseFetchJson } from '@/lib/utils/parseFetchJson';
 import { formatApiErrorBody } from '@/lib/utils/formatErrorMessage';
 import type { FlotaMantenimiento } from '@/lib/flota/mantenimiento';
 import type { FlotaVehiculo } from '@/lib/flota/utils';
+import { useFlotaNav } from '@/components/flota/FlotaNav';
 
 export default function FlotaMantenimientoPage() {
   const router = useRouter();
+  const { api, loginNext, embedded } = useFlotaNav();
   const [registros, setRegistros] = useState<FlotaMantenimiento[]>([]);
   const [vehiculos, setVehiculos] = useState<FlotaVehiculo[]>([]);
   const [saving, setSaving] = useState(false);
@@ -21,9 +23,13 @@ export default function FlotaMantenimientoPage() {
   const [hint, setHint] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const res = await fetch(apiUrl('/api/flota/mantenimiento'), { credentials: 'include' });
+    const res = await fetch(apiUrl(api('/api/flota/mantenimiento')), { credentials: 'include' });
     if (res.status === 401) {
-      router.push('/login?next=/flota/mantenimiento');
+      if (embedded) {
+        setError('Debe iniciar sesión para gestionar la flota.');
+        return;
+      }
+      router.push(`/login?next=${encodeURIComponent(loginNext)}`);
       return;
     }
     const json = await parseFetchJson<{
@@ -36,7 +42,7 @@ export default function FlotaMantenimientoPage() {
     setRegistros(json.registros ?? []);
     setVehiculos(json.vehiculos ?? []);
     setHint(json.hint ?? null);
-  }, [router]);
+  }, [router, api, loginNext, embedded]);
 
   useEffect(() => {
     void load().catch((e) => setError(e instanceof Error ? e.message : 'Error'));
@@ -46,7 +52,7 @@ export default function FlotaMantenimientoPage() {
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch(apiUrl('/api/flota/mantenimiento'), {
+      const res = await fetch(apiUrl(api('/api/flota/mantenimiento')), {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
