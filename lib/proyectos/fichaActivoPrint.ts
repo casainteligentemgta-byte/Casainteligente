@@ -153,12 +153,12 @@ export function buildFichaActivoPrintHtml(d: FichaActivoDatos): string {
 
 export function abrirFichaActivoImpresion(d: FichaActivoDatos): void {
   const html = buildFichaActivoPrintHtml(d);
-  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const w = window.open(url, '_blank', 'noopener,noreferrer');
+  const w = window.open('', '_blank');
   if (!w) {
-    URL.revokeObjectURL(url);
     throw new Error('El navegador bloqueó la ventana. Permita ventanas emergentes para imprimir.');
   }
-  w.addEventListener('load', () => URL.revokeObjectURL(url), { once: true });
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+  w.focus();
 }
