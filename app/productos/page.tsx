@@ -481,115 +481,58 @@ export default function ProductosPage() {
                     }}
                 />
 
-                <div
-                    style={{
-                        display: 'flex',
-                        gap: '8px',
-                        overflowX: 'auto',
-                        paddingBottom: '12px',
-                        WebkitOverflowScrolling: 'touch',
-                        scrollbarWidth: 'thin',
-                        alignItems: 'center',
-                    }}
-                >
-                    {categorias.map(c => (
-                        <button
-                            key={c}
-                            type="button"
-                            onClick={() => setCategoria(c)}
+                <div style={{ marginBottom: '12px' }}>
+                    <div
+                        style={{
+                            display: 'flex',
+                            gap: '8px',
+                            alignItems: 'center',
+                        }}
+                    >
+                        <div
                             style={{
-                                background: categoria === c ? 'rgba(255,149,0,0.15)' : 'transparent',
-                                color: categoria === c ? '#FF9500' : 'rgba(255,255,255,0.4)',
-                                border: 'none', borderRadius: '10px', padding: '6px 14px',
-                                fontSize: '13px', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap',
-                                flexShrink: 0,
+                                display: 'flex',
+                                gap: '8px',
+                                overflowX: 'auto',
+                                WebkitOverflowScrolling: 'touch',
+                                scrollbarWidth: 'thin',
+                                alignItems: 'center',
+                                flex: 1,
+                                minWidth: 0,
+                                paddingBottom: '2px',
                             }}
                         >
-                            {c}
-                        </button>
-                    ))}
-                    {creandoCategoria ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-                            <input
-                                type="text"
-                                value={nombreNuevaCategoria}
-                                onChange={(e) => setNombreNuevaCategoria(e.target.value)}
-                                placeholder="Nueva categoría"
-                                autoFocus
-                                disabled={guardandoCategoria}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                        e.preventDefault();
-                                        void guardarNuevaCategoria();
-                                    }
-                                    if (e.key === 'Escape') {
-                                        setCreandoCategoria(false);
-                                        setErrorCategoria(null);
-                                    }
-                                }}
-                                style={{
-                                    width: '160px',
-                                    background: 'rgba(255,255,255,0.08)',
-                                    border: '1px solid rgba(255,149,0,0.45)',
-                                    borderRadius: '10px',
-                                    padding: '6px 10px',
-                                    color: 'white',
-                                    outline: 'none',
-                                    fontSize: '13px',
-                                    fontFamily: 'inherit',
-                                }}
-                            />
-                            <button
-                                type="button"
-                                disabled={guardandoCategoria}
-                                onClick={() => void guardarNuevaCategoria()}
-                                style={{
-                                    background: 'rgba(52,199,89,0.18)',
-                                    color: '#34C759',
-                                    border: 'none',
-                                    borderRadius: '10px',
-                                    padding: '6px 12px',
-                                    fontSize: '13px',
-                                    fontWeight: 700,
-                                    cursor: guardandoCategoria ? 'not-allowed' : 'pointer',
-                                    whiteSpace: 'nowrap',
-                                    fontFamily: 'inherit',
-                                }}
-                            >
-                                {guardandoCategoria ? '…' : 'Crear'}
-                            </button>
-                            <button
-                                type="button"
-                                disabled={guardandoCategoria}
-                                onClick={() => {
-                                    setCreandoCategoria(false);
-                                    setErrorCategoria(null);
-                                    setNombreNuevaCategoria('');
-                                }}
-                                style={{
-                                    background: 'transparent',
-                                    color: 'rgba(255,255,255,0.45)',
-                                    border: 'none',
-                                    borderRadius: '10px',
-                                    padding: '6px 8px',
-                                    fontSize: '13px',
-                                    fontWeight: 600,
-                                    cursor: 'pointer',
-                                    fontFamily: 'inherit',
-                                }}
-                            >
-                                Cancelar
-                            </button>
+                            {categorias.map((c) => (
+                                <button
+                                    key={c}
+                                    type="button"
+                                    onClick={() => setCategoria(c)}
+                                    style={{
+                                        background: categoria === c ? 'rgba(255,149,0,0.15)' : 'transparent',
+                                        color: categoria === c ? '#FF9500' : 'rgba(255,255,255,0.4)',
+                                        border: 'none',
+                                        borderRadius: '10px',
+                                        padding: '6px 14px',
+                                        fontSize: '13px',
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                        whiteSpace: 'nowrap',
+                                        flexShrink: 0,
+                                    }}
+                                >
+                                    {c}
+                                </button>
+                            ))}
                         </div>
-                    ) : (
                         <button
                             type="button"
+                            aria-label="Crear categoría"
                             onClick={() => {
-                                setCreandoCategoria(true);
+                                setCreandoCategoria((v) => !v);
                                 setErrorCategoria(null);
                             }}
                             style={{
-                                background: 'transparent',
+                                background: creandoCategoria ? 'rgba(255,149,0,0.15)' : 'transparent',
                                 color: '#FF9500',
                                 border: '1px dashed rgba(255,149,0,0.45)',
                                 borderRadius: '10px',
@@ -604,13 +547,96 @@ export default function ProductosPage() {
                         >
                             + Categoría
                         </button>
-                    )}
+                    </div>
+                    {creandoCategoria ? (
+                        <div
+                            style={{
+                                display: 'flex',
+                                flexWrap: 'wrap',
+                                alignItems: 'center',
+                                gap: '8px',
+                                marginTop: '10px',
+                            }}
+                        >
+                            <input
+                                type="text"
+                                value={nombreNuevaCategoria}
+                                onChange={(e) => setNombreNuevaCategoria(e.target.value)}
+                                placeholder="Nombre de la nueva categoría"
+                                autoFocus
+                                disabled={guardandoCategoria}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        void guardarNuevaCategoria();
+                                    }
+                                    if (e.key === 'Escape') {
+                                        setCreandoCategoria(false);
+                                        setErrorCategoria(null);
+                                    }
+                                }}
+                                style={{
+                                    flex: 1,
+                                    minWidth: '160px',
+                                    background: 'rgba(255,255,255,0.08)',
+                                    border: '1px solid rgba(255,149,0,0.45)',
+                                    borderRadius: '10px',
+                                    padding: '10px 12px',
+                                    color: 'white',
+                                    outline: 'none',
+                                    fontSize: '14px',
+                                    fontFamily: 'inherit',
+                                }}
+                            />
+                            <button
+                                type="button"
+                                disabled={guardandoCategoria}
+                                onClick={() => void guardarNuevaCategoria()}
+                                style={{
+                                    background: 'rgba(52,199,89,0.18)',
+                                    color: '#34C759',
+                                    border: 'none',
+                                    borderRadius: '10px',
+                                    padding: '10px 14px',
+                                    fontSize: '13px',
+                                    fontWeight: 700,
+                                    cursor: guardandoCategoria ? 'not-allowed' : 'pointer',
+                                    whiteSpace: 'nowrap',
+                                    fontFamily: 'inherit',
+                                }}
+                            >
+                                {guardandoCategoria ? 'Creando…' : 'Crear'}
+                            </button>
+                            <button
+                                type="button"
+                                disabled={guardandoCategoria}
+                                onClick={() => {
+                                    setCreandoCategoria(false);
+                                    setErrorCategoria(null);
+                                    setNombreNuevaCategoria('');
+                                }}
+                                style={{
+                                    background: 'transparent',
+                                    color: 'rgba(255,255,255,0.45)',
+                                    border: '1px solid rgba(255,255,255,0.12)',
+                                    borderRadius: '10px',
+                                    padding: '10px 14px',
+                                    fontSize: '13px',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    fontFamily: 'inherit',
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                        </div>
+                    ) : null}
+                    {errorCategoria ? (
+                        <p style={{ margin: '8px 0 0', fontSize: '12px', color: '#FF8A80', fontWeight: 600 }}>
+                            {errorCategoria}
+                        </p>
+                    ) : null}
                 </div>
-                {errorCategoria ? (
-                    <p style={{ margin: '-4px 0 12px', fontSize: '12px', color: '#FF8A80', fontWeight: 600 }}>
-                        {errorCategoria}
-                    </p>
-                ) : null}
 
                 {!loading && total > 0 ? (
                     <p style={{ margin: '0 0 12px', fontSize: '12px', color: 'rgba(255,255,255,0.35)', fontWeight: 600 }}>
