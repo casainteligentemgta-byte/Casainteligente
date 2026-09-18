@@ -4,8 +4,7 @@ import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { uploadProductImage, uploadProductManualPdf } from '@/lib/supabase/product-media';
-
-const CATEGORIAS = ['Cámaras IP', 'Cámaras Análogas', 'C.C.T.V', 'Servicio', 'Cercos Eléctricos', 'Internet', 'Domótica', 'Network', 'Herramientas', 'Insumos', 'Consumibles', 'Materiales'];
+import SelectorCategoriaProducto from '@/components/productos/SelectorCategoriaProducto';
 
 export default function NuevoProductoForm({ initialData, isEditing }: { initialData?: any; isEditing?: boolean }) {
     const router = useRouter();
@@ -330,23 +329,13 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
                 />
             </div>
 
-            <div style={fieldBox}>
-                <label style={labelStyle}>Categoría</label>
-                <select
-                    value={form.categoria}
-                    onChange={(e) => set('categoria', e.target.value)}
-                    style={{ ...inputStyle, cursor: 'pointer' }}
-                >
-                    <option value="" style={{ color: '#000000' }}>
-                        Sin categoría
-                    </option>
-                    {CATEGORIAS.map((c) => (
-                        <option key={c} value={c} style={{ color: '#000000' }}>
-                            {c}
-                        </option>
-                    ))}
-                </select>
-            </div>
+            <SelectorCategoriaProducto
+                value={form.categoria}
+                onChange={(nombre) => set('categoria', nombre)}
+                inputStyle={inputStyle}
+                fieldBox={fieldBox}
+                labelStyle={labelStyle}
+            />
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
                 <div style={{ ...fieldBox, marginBottom: 0 }}>
