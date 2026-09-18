@@ -7,7 +7,7 @@ import { FLOTA_INPUT, FLOTA_LABEL } from '@/components/flota/FlotaShell';
 import { aplicarExtraccionAFormulario } from '@/lib/flota/extractFacturaGasolina';
 import { leerFacturaGasolina, registrarGasolina } from '@/lib/flota/gasolinaCliente';
 import type { FlotaConductor } from '@/lib/flota/conductores';
-import { hoyIso, type FlotaVehiculo } from '@/lib/flota/utils';
+import { hoyIso, etiquetaVehiculo, type FlotaVehiculo } from '@/lib/flota/utils';
 
 export type GasolinaFormValues = {
   maquinaria_id: string;
@@ -227,8 +227,7 @@ export function RegistroGasolina({
             <option value="">Seleccionar placa…</option>
             {vehiculos.map((v) => (
               <option key={v.id} value={v.id}>
-                {v.placa}
-                {v.marca ? ` · ${v.marca}` : ''} {v.modelo ?? ''}
+                {etiquetaVehiculo(v)}
               </option>
             ))}
           </select>

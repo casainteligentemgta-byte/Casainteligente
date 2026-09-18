@@ -10,6 +10,7 @@ import {
   Plus,
   ShieldCheck,
   Trash2,
+  Fuel,
   Truck,
   X,
   type LucideIcon,
@@ -19,6 +20,7 @@ import { toast } from 'sonner';
 import BotonCompartirDocumento from '@/components/configuracion/BotonCompartirDocumento';
 import EquiposEntidadPanel from '@/components/configuracion/EquiposEntidadPanel';
 import MaquinariaPropiaEntidadPanel from '@/components/configuracion/MaquinariaPropiaEntidadPanel';
+import FlotaWorkspace from '@/components/flota/FlotaWorkspace';
 import {
   nuevoPermisoPersonalizado,
   permisologiaDesdeItems,
@@ -61,6 +63,7 @@ type SeccionPatronoId =
   | 'permisos'
   | 'medios'
   | 'maquinaria'
+  | 'flota'
   | 'equipos';
 
 type SeccionPatronoItem = {
@@ -78,6 +81,7 @@ const SECCIONES_PATRONO: SeccionPatronoItem[] = [
   { id: 'permisos', label: 'Permisología', icon: Calendar },
   { id: 'medios', label: 'Logo / sello', icon: ImageIcon },
   { id: 'maquinaria', label: 'Maquinaria', icon: Truck, soloEdicion: true },
+  { id: 'flota', label: 'Flota', icon: Fuel, soloEdicion: true },
   { id: 'equipos', label: 'Equipos y herramientas', icon: Package, soloEdicion: true },
 ];
 
@@ -88,12 +92,13 @@ const LABEL_SECCION: Record<SeccionPatronoId, string> = {
   permisos: 'Permisología',
   medios: 'Logo / sello',
   maquinaria: 'Maquinaria',
+  flota: 'Flota',
   equipos: 'Equipos y herramientas',
 };
 
 /** Pestañas embebidas (sin Guardar del formulario de entidad). */
 function esTabPanelEmbebido(tab: SeccionPatronoId): boolean {
-  return tab === 'maquinaria' || tab === 'equipos';
+  return tab === 'maquinaria' || tab === 'flota' || tab === 'equipos';
 }
 
 function asRecord(v: unknown): Record<string, unknown> {
@@ -580,7 +585,9 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
       }}
     >
       <div
-        className="relative max-h-[92vh] w-full max-w-2xl overflow-hidden rounded-2xl border border-white/10 bg-[#0A0A0F] shadow-2xl shadow-black/50"
+        className={`relative max-h-[92vh] w-full overflow-hidden rounded-2xl border border-white/10 bg-[#0A0A0F] shadow-2xl shadow-black/50 ${
+          enSeccion && (tab === 'maquinaria' || tab === 'flota') ? 'max-w-5xl' : 'max-w-2xl'
+        }`}
         onClick={(ev) => ev.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3 border-b border-white/10 px-5 py-4">
@@ -1299,6 +1306,12 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
               {esEdicion && entidad?.id ? (
                 <Tabs.Content value="maquinaria" className="outline-none">
                   <MaquinariaPropiaEntidadPanel entidadId={entidad.id} entidadNombre={entidad.nombre} />
+                </Tabs.Content>
+              ) : null}
+
+              {esEdicion && entidad?.id ? (
+                <Tabs.Content value="flota" className="outline-none">
+                  <FlotaWorkspace entidadId={entidad.id} defaultTipo="maquinaria" />
                 </Tabs.Content>
               ) : null}
 

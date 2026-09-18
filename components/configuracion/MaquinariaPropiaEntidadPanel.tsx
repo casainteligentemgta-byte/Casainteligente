@@ -16,7 +16,7 @@ export default function MaquinariaPropiaEntidadPanel({ entidadId, entidadNombre 
       entidadNombre={entidadNombre}
       categoria="maquinaria_propia"
       titulo="Maquinarias propias"
-      subtitulo="Catálogo del patrono con fotos y ubicación en almacén. Las alquiladas se gestionan en Control de obras."
+      subtitulo="Catálogo del patrono con fotos y ubicación en almacén. Gasolina, taller y alertas se gestionan en Flota."
       labelNombre="Equipo"
       botonAgregar="Agregar maquinaria propia"
       confirmBorrar="¿Eliminar esta maquinaria propia?"

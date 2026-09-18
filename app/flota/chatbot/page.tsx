@@ -8,25 +8,31 @@ import { apiUrl } from '@/lib/http/apiUrl';
 import { parseFetchJson } from '@/lib/utils/parseFetchJson';
 import { formatApiErrorBody } from '@/lib/utils/formatErrorMessage';
 import type { FlotaManual } from '@/lib/flota/chatbot';
+import { useFlotaNav } from '@/components/flota/FlotaNav';
 
 export default function FlotaChatbotPage() {
   const router = useRouter();
+  const { api, loginNext, embedded } = useFlotaNav();
   const [manuales, setManuales] = useState<FlotaManual[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const res = await fetch(apiUrl('/api/flota/chatbot'), { credentials: 'include' });
+    const res = await fetch(apiUrl(api('/api/flota/chatbot')), { credentials: 'include' });
     if (res.status === 401) {
-      router.push('/login?next=/flota/chatbot');
+      if (embedded) {
+        setError('Debe iniciar sesión para gestionar la flota.');
+        return;
+      }
+      router.push(`/login?next=${encodeURIComponent(loginNext)}`);
       return;
     }
     const json = await parseFetchJson<{ manuales?: FlotaManual[]; hint?: string; error?: string }>(res);
     if (!res.ok) throw new Error(formatApiErrorBody(json));
     setManuales(json.manuales ?? []);
     setHint(json.hint ?? null);
-  }, [router]);
+  }, [router, api, loginNext, embedded]);
 
   useEffect(() => {
     void load().catch((e) => setError(e instanceof Error ? e.message : 'Error'));
