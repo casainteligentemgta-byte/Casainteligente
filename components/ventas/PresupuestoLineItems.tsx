@@ -23,6 +23,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { Product } from '@/components/ventas/ProductSearch';
+import { coloresCategoria } from '@/lib/productos/categoriasCatalogo';
 
 export interface LineItem {
     id: string;
@@ -118,18 +119,7 @@ export function EditableNumberInput({
 }
 
 function CategoryBadge({ cat }: { cat: string | null }) {
-    const colorMap: Record<string, { bg: string; text: string }> = {
-        'Cámaras IP': { bg: 'rgba(0,122,255,0.15)', text: '#007AFF' },
-        'Cámaras Análogas': { bg: 'rgba(88,86,214,0.15)', text: '#5856D6' },
-        'C.C.T.V': { bg: 'rgba(88,86,214,0.15)', text: '#5856D6' },
-        'Servicio': { bg: 'rgba(52,199,89,0.15)', text: '#34C759' },
-        'Cercos Eléctricos': { bg: 'rgba(255,149,0,0.15)', text: '#FF9500' },
-        'Internet': { bg: 'rgba(0,199,190,0.15)', text: '#00C7BE' },
-        'Domótica': { bg: 'rgba(255,45,85,0.15)', text: '#FF2D55' },
-        'Network': { bg: 'rgba(0,199,190,0.15)', text: '#00C7BE' },
-        'Materiales': { bg: 'rgba(142,142,147,0.15)', text: '#8E8E93' },
-    };
-    const c = colorMap[cat ?? ''] ?? { bg: 'rgba(142,142,147,0.15)', text: '#8E8E93' };
+    const c = coloresCategoria(cat);
     return (
         <span style={{
             background: c.bg, color: c.text,

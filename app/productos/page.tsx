@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import { Package } from 'lucide-react';
 import ModuloPageTitle from '@/components/ui/ModuloPageTitle';
 import { createClient } from '@/lib/supabase/client';
+import { coloresCategoria } from '@/lib/productos/categoriasCatalogo';
+import { useCategoriasCatalogo } from '@/lib/productos/useCategoriasCatalogo';
 
 interface Product {
     id: number;
@@ -24,26 +26,7 @@ interface Product {
     manual_documento_url?: string | null;
 }
 
-const CATEGORIAS_COMERCIALES = ['Cámaras IP', 'Cámaras Análogas', 'C.C.T.V', 'Servicio', 'Cercos Eléctricos', 'Internet', 'Domótica', 'Network'];
-/** Internas: Materiales primero para que salga al scroll derecha justo después de Network. */
-const CATEGORIAS_INTERNAS = ['Materiales', 'Herramientas', 'Insumos', 'Consumibles'];
-const CATEGORIAS = ['Todas', ...CATEGORIAS_COMERCIALES, ...CATEGORIAS_INTERNAS];
 const PAGE_SIZE = 500;
-
-const CAT_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
-    'Cámaras IP': { bg: 'rgba(0,122,255,0.12)', text: '#007AFF', dot: '#007AFF' },
-    'Cámaras Análogas': { bg: 'rgba(88,86,214,0.12)', text: '#5856D6', dot: '#5856D6' },
-    'C.C.T.V': { bg: 'rgba(88,86,214,0.12)', text: '#5856D6', dot: '#5856D6' },
-    'Servicio': { bg: 'rgba(52,199,89,0.12)', text: '#34C759', dot: '#34C759' },
-    'Cercos Eléctricos': { bg: 'rgba(255,149,0,0.12)', text: '#FF9500', dot: '#FF9500' },
-    'Internet': { bg: 'rgba(0,199,190,0.12)', text: '#00C7BE', dot: '#00C7BE' },
-    'Domótica': { bg: 'rgba(255,45,85,0.12)', text: '#FF2D55', dot: '#FF2D55' },
-    'Network': { bg: 'rgba(0,199,190,0.12)', text: '#00C7BE', dot: '#00C7BE' },
-    'Materiales': { bg: 'rgba(142,142,147,0.12)', text: '#8E8E93', dot: '#8E8E93' },
-    'Herramientas': { bg: 'rgba(255,149,0,0.12)', text: '#FF9500', dot: '#FF9500' },
-    'Insumos': { bg: 'rgba(175,82,222,0.12)', text: '#AF52DE', dot: '#AF52DE' },
-    'Consumibles': { bg: 'rgba(90,200,250,0.12)', text: '#5AC8FA', dot: '#5AC8FA' },
-};
 
 function fmt(n: number | null) {
     if (n == null) return '—';
@@ -53,7 +36,7 @@ function fmt(n: number | null) {
 /** Miniatura en catálogo: foto del producto si hay URL válida; si no, identidad por categoría/iniciales. */
 function ProductAvatar({ product }: { product: Product }) {
     const cat = product.categoria ?? '';
-    const color = CAT_COLORS[cat]?.dot ?? '#8E8E93';
+    const color = coloresCategoria(cat).dot;
     const initials = (product.nombre || '??').slice(0, 2).toUpperCase();
     const [imgFailed, setImgFailed] = useState(false);
     const src = product.imagen?.trim();
@@ -106,7 +89,7 @@ function ProductRow({
     inCart: boolean;
 }) {
     const cat = product.categoria ?? '';
-    const colors = CAT_COLORS[cat] ?? { bg: 'rgba(142,142,147,0.12)', text: '#8E8E93', dot: '#8E8E93' };
+    const colors = coloresCategoria(cat);
     const [confirmDel, setConfirmDel] = useState(false);
 
     const handleDelete = () => {
@@ -328,6 +311,8 @@ function ProductDetail({ product, onClose }: { product: Product; onClose: () => 
 export default function ProductosPage() {
     const supabase = useMemo(() => createClient(), []);
     const router = useRouter();
+    const { nombres: categoriasNombres, crear: crearCategoria } = useCategoriasCatalogo();
+    const categorias = useMemo(() => ['Todas', ...categoriasNombres], [categoriasNombres]);
     const [products, setProducts] = useState<Product[]>([]);
     const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(true);
@@ -335,6 +320,10 @@ export default function ProductosPage() {
     const [categoria, setCategoria] = useState('Todas');
     const [selected, setSelected] = useState<Product | null>(null);
     const [cart, setCart] = useState<CartItem[]>([]);
+    const [creandoCategoria, setCreandoCategoria] = useState(false);
+    const [nombreNuevaCategoria, setNombreNuevaCategoria] = useState('');
+    const [guardandoCategoria, setGuardandoCategoria] = useState(false);
+    const [errorCategoria, setErrorCategoria] = useState<string | null>(null);
 
     useEffect(() => {
         const saved = localStorage.getItem('cart_ventas');
@@ -361,6 +350,21 @@ export default function ProductosPage() {
             setTotal(t => t - 1);
         }
     }, [supabase]);
+
+    const guardarNuevaCategoria = useCallback(async () => {
+        setGuardandoCategoria(true);
+        setErrorCategoria(null);
+        try {
+            const creada = await crearCategoria(nombreNuevaCategoria);
+            setCategoria(creada);
+            setCreandoCategoria(false);
+            setNombreNuevaCategoria('');
+        } catch (err) {
+            setErrorCategoria(err instanceof Error ? err.message : 'No se pudo crear');
+        } finally {
+            setGuardandoCategoria(false);
+        }
+    }, [crearCategoria, nombreNuevaCategoria]);
 
     const fetchProducts = useCallback(async () => {
         setLoading(true);
@@ -485,9 +489,10 @@ export default function ProductosPage() {
                         paddingBottom: '12px',
                         WebkitOverflowScrolling: 'touch',
                         scrollbarWidth: 'thin',
+                        alignItems: 'center',
                     }}
                 >
-                    {CATEGORIAS.map(c => (
+                    {categorias.map(c => (
                         <button
                             key={c}
                             type="button"
@@ -503,7 +508,109 @@ export default function ProductosPage() {
                             {c}
                         </button>
                     ))}
+                    {creandoCategoria ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                            <input
+                                type="text"
+                                value={nombreNuevaCategoria}
+                                onChange={(e) => setNombreNuevaCategoria(e.target.value)}
+                                placeholder="Nueva categoría"
+                                autoFocus
+                                disabled={guardandoCategoria}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        void guardarNuevaCategoria();
+                                    }
+                                    if (e.key === 'Escape') {
+                                        setCreandoCategoria(false);
+                                        setErrorCategoria(null);
+                                    }
+                                }}
+                                style={{
+                                    width: '160px',
+                                    background: 'rgba(255,255,255,0.08)',
+                                    border: '1px solid rgba(255,149,0,0.45)',
+                                    borderRadius: '10px',
+                                    padding: '6px 10px',
+                                    color: 'white',
+                                    outline: 'none',
+                                    fontSize: '13px',
+                                    fontFamily: 'inherit',
+                                }}
+                            />
+                            <button
+                                type="button"
+                                disabled={guardandoCategoria}
+                                onClick={() => void guardarNuevaCategoria()}
+                                style={{
+                                    background: 'rgba(52,199,89,0.18)',
+                                    color: '#34C759',
+                                    border: 'none',
+                                    borderRadius: '10px',
+                                    padding: '6px 12px',
+                                    fontSize: '13px',
+                                    fontWeight: 700,
+                                    cursor: guardandoCategoria ? 'not-allowed' : 'pointer',
+                                    whiteSpace: 'nowrap',
+                                    fontFamily: 'inherit',
+                                }}
+                            >
+                                {guardandoCategoria ? '…' : 'Crear'}
+                            </button>
+                            <button
+                                type="button"
+                                disabled={guardandoCategoria}
+                                onClick={() => {
+                                    setCreandoCategoria(false);
+                                    setErrorCategoria(null);
+                                    setNombreNuevaCategoria('');
+                                }}
+                                style={{
+                                    background: 'transparent',
+                                    color: 'rgba(255,255,255,0.45)',
+                                    border: 'none',
+                                    borderRadius: '10px',
+                                    padding: '6px 8px',
+                                    fontSize: '13px',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    fontFamily: 'inherit',
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                        </div>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setCreandoCategoria(true);
+                                setErrorCategoria(null);
+                            }}
+                            style={{
+                                background: 'transparent',
+                                color: '#FF9500',
+                                border: '1px dashed rgba(255,149,0,0.45)',
+                                borderRadius: '10px',
+                                padding: '6px 12px',
+                                fontSize: '13px',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                whiteSpace: 'nowrap',
+                                flexShrink: 0,
+                                fontFamily: 'inherit',
+                            }}
+                        >
+                            + Categoría
+                        </button>
+                    )}
                 </div>
+                {errorCategoria ? (
+                    <p style={{ margin: '-4px 0 12px', fontSize: '12px', color: '#FF8A80', fontWeight: 600 }}>
+                        {errorCategoria}
+                    </p>
+                ) : null}
 
                 {!loading && total > 0 ? (
                     <p style={{ margin: '0 0 12px', fontSize: '12px', color: 'rgba(255,255,255,0.35)', fontWeight: 600 }}>
