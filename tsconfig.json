@@ -38,6 +38,7 @@
     "exclude": [
         "node_modules",
         "scripts",
-        "supabase/functions"
+        "supabase/functions",
+        "patches"
     ]
 }
