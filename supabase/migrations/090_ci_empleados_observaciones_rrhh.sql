@@ -1,4 +1,4 @@
- Observaciones internas de RRHH por obrero (visible en /rrhh/hojas-vida).
+-- Observaciones internas de RRHH por obrero (visible en /rrhh/hojas-vida).
 -- Idempotente.
 
 alter table public.ci_empleados
