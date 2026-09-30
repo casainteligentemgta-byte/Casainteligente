@@ -54,6 +54,12 @@ export const NETVISION_LAYER_HELP: LayerHelpItem[] = [
       'Recalcula el FOV en modo nocturno (alcance IR / visión de noche). No oscurece el plano: simula cobertura de noche.',
   },
   {
+    id: 'invert',
+    label: 'Fondo negro',
+    blurb:
+      'Invierte el plano: el papel blanco pasa a negro y las líneas negras a blancas. No modifica el archivo original y se puede desactivar.',
+  },
+  {
     id: 'calibrate',
     label: 'Calibrar',
     blurb:

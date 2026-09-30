@@ -35,9 +35,12 @@ import {
 import type { WifiCoverageCircle } from '@/lib/netvision/services/wifiPredictor'
 import type { AccessChamber, UndergroundRun } from '@/lib/netvision/services/canalizationCalculator'
 import { nearestSegmentOnRoute, MANUAL_CABLE_TO_ID } from '@/lib/netvision/services/cableRoutingEngine'
+import { invertRgbPixels } from '@/lib/netvision/utils/rotatePlano'
 
 export type CameraPlacementToolProps = {
   backgroundUrl: string | null
+  /** Invierte el plano en pantalla (fondo negro, trazos blancos). No altera el archivo. */
+  invertBackground?: boolean
   cameras: DesignCamera[]
   networkNodes: DesignNetworkNode[]
   structures?: DesignStructure[]
@@ -195,7 +198,25 @@ function useContainerSize(ref: React.RefObject<HTMLDivElement | null>) {
   return size
 }
 
-function useHtmlImage(url: string | null) {
+function invertLoadedImage(img: HTMLImageElement): HTMLImageElement | null {
+  const w = img.naturalWidth || img.width
+  const h = img.naturalHeight || img.height
+  if (w < 1 || h < 1) return null
+  const canvas = document.createElement('canvas')
+  canvas.width = w
+  canvas.height = h
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return null
+  ctx.drawImage(img, 0, 0)
+  const imageData = ctx.getImageData(0, 0, w, h)
+  invertRgbPixels(imageData.data)
+  ctx.putImageData(imageData, 0, 0)
+  const inverted = new window.Image()
+  inverted.src = canvas.toDataURL('image/png')
+  return inverted
+}
+
+function useHtmlImage(url: string | null, invert = false) {
   const [image, setImage] = useState<HTMLImageElement | null>(null)
   useEffect(() => {
     if (!url) {
@@ -208,7 +229,30 @@ function useHtmlImage(url: string | null) {
       img.crossOrigin = 'anonymous'
     }
     img.onload = () => {
-      if (!cancelled) setImage(img)
+      if (cancelled) return
+      if (!invert) {
+        setImage(img)
+        return
+      }
+      try {
+        const inverted = invertLoadedImage(img)
+        if (!inverted) {
+          setImage(img)
+          return
+        }
+        if (inverted.complete && inverted.naturalWidth > 0) {
+          setImage(inverted)
+          return
+        }
+        inverted.onload = () => {
+          if (!cancelled) setImage(inverted)
+        }
+        inverted.onerror = () => {
+          if (!cancelled) setImage(img)
+        }
+      } catch {
+        if (!cancelled) setImage(img)
+      }
     }
     img.onerror = () => {
       if (!cancelled) setImage(null)
@@ -217,12 +261,13 @@ function useHtmlImage(url: string | null) {
     return () => {
       cancelled = true
     }
-  }, [url])
+  }, [url, invert])
   return image
 }
 
 export default function CameraPlacementTool({
   backgroundUrl,
+  invertBackground = false,
   cameras,
   networkNodes,
   structures = [],
@@ -270,7 +315,7 @@ export default function CameraPlacementTool({
   const containerRef = useRef<HTMLDivElement>(null)
   const localStageRef = useRef<Konva.Stage | null>(null)
   const { width, height } = useContainerSize(containerRef)
-  const image = useHtmlImage(backgroundUrl)
+  const image = useHtmlImage(backgroundUrl, invertBackground)
   const [zoom, setZoom] = useState(1)
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 })
   const [pinching, setPinching] = useState(false)

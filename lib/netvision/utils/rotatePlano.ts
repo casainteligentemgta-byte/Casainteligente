@@ -19,6 +19,15 @@ function wrapYaw(deg: number): number {
   return n
 }
 
+/** Invierte RGB (fondo blanco → negro, trazos negros → blancos). Conserva alfa. */
+export function invertRgbPixels(data: Uint8ClampedArray | number[]): void {
+  for (let i = 0; i + 2 < data.length; i += 4) {
+    data[i] = 255 - (data[i] as number)
+    data[i + 1] = 255 - (data[i + 1] as number)
+    data[i + 2] = 255 - (data[i + 2] as number)
+  }
+}
+
 function rotatePt(
   p: { x: number; y: number },
   dir: PlanoRotateDir,
@@ -131,6 +140,48 @@ export function rotatePlanoDataUrl90(
       resolve(out)
     }
     img.onerror = () => reject(new Error('No se pudo leer el plano para rotarlo.'))
+    img.src = src
+  })
+}
+
+/** Data URL con colores invertidos (para fondo negro / líneas blancas). */
+export function invertPlanoDataUrl(dataUrl: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (typeof Image === 'undefined' || typeof document === 'undefined') {
+      reject(new Error('La inversión del plano solo funciona en el navegador.'))
+      return
+    }
+    const src = dataUrl.trim()
+    if (!src) {
+      reject(new Error('No hay plano para invertir.'))
+      return
+    }
+    const img = new Image()
+    if (/^https?:/i.test(src)) {
+      img.crossOrigin = 'anonymous'
+    }
+    img.onload = () => {
+      const w = img.naturalWidth || img.width
+      const h = img.naturalHeight || img.height
+      if (w < 1 || h < 1) {
+        reject(new Error('El plano no tiene un tamaño válido.'))
+        return
+      }
+      const canvas = document.createElement('canvas')
+      canvas.width = w
+      canvas.height = h
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        reject(new Error('No se pudo crear el canvas para invertir el plano.'))
+        return
+      }
+      ctx.drawImage(img, 0, 0)
+      const imageData = ctx.getImageData(0, 0, w, h)
+      invertRgbPixels(imageData.data)
+      ctx.putImageData(imageData, 0, 0)
+      resolve(canvas.toDataURL('image/png'))
+    }
+    img.onerror = () => reject(new Error('No se pudo leer el plano para invertirlo.'))
     img.src = src
   })
 }

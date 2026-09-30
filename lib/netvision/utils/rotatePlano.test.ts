@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { rotateNormPoint, rotateProjectGeometry } from './rotatePlano'
+import { rotateNormPoint, rotateProjectGeometry, invertRgbPixels } from './rotatePlano'
 import { emptyProject } from '@/lib/netvision/storage'
 
 describe('rotateNormPoint', () => {
@@ -48,5 +48,19 @@ describe('rotateProjectGeometry', () => {
     assert.equal(next.cameras[0]!.yawDeg, 90)
     assert.equal(next.scale.metersPerNormX, 40)
     assert.equal(next.scale.metersPerNormY, 10)
+  })
+})
+
+describe('invertRgbPixels', () => {
+  it('pasa negro a blanco y blanco a negro', () => {
+    const data = new Uint8ClampedArray([0, 0, 0, 255, 255, 255, 255, 255])
+    invertRgbPixels(data)
+    assert.deepEqual([...data], [255, 255, 255, 255, 0, 0, 0, 255])
+  })
+
+  it('conserva alfa y invierte gris', () => {
+    const data = new Uint8ClampedArray([128, 64, 32, 200])
+    invertRgbPixels(data)
+    assert.deepEqual([...data], [127, 191, 223, 200])
   })
 })

@@ -1759,6 +1759,20 @@ export default function NexusVisionArchitectClient() {
               />
               Noche
             </label>
+            <label
+              title={layerHelpTitle('invert')}
+              className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
+            >
+              <input
+                type="checkbox"
+                checked={Boolean(project.planoInvertido)}
+                disabled={!project.planoUrl || loading}
+                onChange={(e) =>
+                  setProject((p) => ({ ...p, planoInvertido: e.target.checked }))
+                }
+              />
+              Fondo negro
+            </label>
             <button
               type="button"
               title={layerHelpTitle('calibrate')}
@@ -1904,6 +1918,7 @@ export default function NexusVisionArchitectClient() {
                 >
                   <CameraPlacementTool
                     backgroundUrl={project.planoUrl}
+                    invertBackground={Boolean(project.planoInvertido)}
                     cameras={project.cameras}
                     networkNodes={project.networkNodes}
                     structures={structures}

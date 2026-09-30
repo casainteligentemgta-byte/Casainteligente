@@ -175,6 +175,8 @@ export type NetVisionProject = {
   distributorMarginPct: number
   planoUrl: string | null
   planoNombre: string
+  /** Si true, el plano se muestra invertido (fondo negro, trazos blancos). */
+  planoInvertido?: boolean
   cameras: DesignCamera[]
   networkNodes: DesignNetworkNode[]
   structures: DesignStructure[]
