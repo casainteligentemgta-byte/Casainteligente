@@ -54,10 +54,22 @@ export const NETVISION_LAYER_HELP: LayerHelpItem[] = [
       'Recalcula el FOV en modo nocturno (alcance IR / visión de noche). No oscurece el plano: simula cobertura de noche.',
   },
   {
+    id: 'invert',
+    label: 'Fondo negro',
+    blurb:
+      'Invierte el plano: el papel blanco pasa a negro y las líneas negras a blancas. No modifica el archivo original y se puede desactivar.',
+  },
+  {
     id: 'calibrate',
     label: 'Calibrar',
     blurb:
       'Marca dos puntos en el plano e indica la distancia real en metros para fijar la escala del diseño.',
+  },
+  {
+    id: 'rotate',
+    label: 'Rotar',
+    blurb:
+      'Gira el PDF o la imagen del plano 90° (izquierda o derecha). Las cámaras, muros y cables se mueven con el plano.',
   },
   {
     id: 'structures',

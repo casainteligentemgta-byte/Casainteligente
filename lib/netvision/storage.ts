@@ -62,6 +62,7 @@ export function emptyProject(partial?: {
     distributorMarginPct: 15,
     planoUrl: null,
     planoNombre: '',
+    planoInvertido: false,
     cameras: [],
     networkNodes: [],
     structures: [],
@@ -379,6 +380,7 @@ function normalizeProject(
     distributorMarginPct: margin,
     planoUrl: p.planoUrl ?? null,
     planoNombre: p.planoNombre ?? '',
+    planoInvertido: Boolean(p.planoInvertido),
     cameras: Array.isArray(p.cameras) ? p.cameras.map(normalizeCamera) : [],
     networkNodes: Array.isArray(p.networkNodes)
       ? p.networkNodes.map(normalizeNetworkNode)
