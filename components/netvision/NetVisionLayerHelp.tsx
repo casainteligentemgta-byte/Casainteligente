@@ -60,6 +60,12 @@ export const NETVISION_LAYER_HELP: LayerHelpItem[] = [
       'Marca dos puntos en el plano e indica la distancia real en metros para fijar la escala del diseño.',
   },
   {
+    id: 'rotate',
+    label: 'Rotar',
+    blurb:
+      'Gira el PDF o la imagen del plano 90° (izquierda o derecha). Las cámaras, muros y cables se mueven con el plano.',
+  },
+  {
     id: 'structures',
     label: 'Estructuras',
     blurb:

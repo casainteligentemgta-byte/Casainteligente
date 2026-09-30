@@ -9,6 +9,8 @@ import {
   BookOpen,
   Camera,
   Download,
+  RotateCcw,
+  RotateCw,
   Trash2,
   Upload,
   Undo2,
@@ -142,6 +144,12 @@ import {
 } from '@/lib/netvision/utils/cableDraw'
 import { downloadDataUrl } from '@/lib/netvision/utils/exporters'
 import { downloadNetVisionPlanPdf } from '@/lib/netvision/utils/exportPlanPdf'
+import {
+  rotateNormPoint,
+  rotatePlanoDataUrl90,
+  rotateProjectGeometry,
+  type PlanoRotateDir,
+} from '@/lib/netvision/utils/rotatePlano'
 import type { NetVisionZoomControls } from '@/components/netvision/CameraPlacementTool'
 
 const CameraPlacementTool = dynamic(
@@ -663,7 +671,26 @@ export default function NexusVisionArchitectClient() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [clearCableDraft])
+
+  const rotatePlano = useCallback(
+    async (dir: PlanoRotateDir) => {
+      const url = project.planoUrl
+      if (!url || loading) return
+      setError(null)
+      setLoading(true)
+      try {
+        const rotated = await rotatePlanoDataUrl90(url, dir)
+        setProject((p) => ({ ...rotateProjectGeometry(p, dir), planoUrl: rotated }))
+        setCalibPoints((pts) => pts.map((pt) => rotateNormPoint(pt.x, pt.y, dir)))
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'No se pudo rotar el plano')
+      } finally {
+        setLoading(false)
+      }
+    },
+    [project.planoUrl, loading],
+  )
 
   /** Posición inicial al agregar por botón (leve desplazamiento para no apilar). */
   const buttonSpawnPos = (index: number, baseX: number, baseY: number) => {
@@ -1753,6 +1780,34 @@ export default function NexusVisionArchitectClient() {
             >
               Calibrar
             </button>
+            <div
+              className="flex overflow-hidden rounded-md border border-white/15 bg-black/40"
+              title={layerHelpTitle('rotate')}
+            >
+              <button
+                type="button"
+                title="Rotar el plano 90° a la izquierda"
+                aria-label="Rotar el plano a la izquierda"
+                disabled={!project.planoUrl || loading}
+                className="inline-flex min-h-8 min-w-8 touch-manipulation items-center justify-center px-2 py-1 text-white hover:bg-white/10 disabled:opacity-40"
+                onClick={() => void rotatePlano('ccw')}
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+              </button>
+              <span className="inline-flex select-none items-center border-l border-white/15 px-1.5 text-[11px] font-semibold text-[var(--nexus-cyan)]">
+                Rotar
+              </span>
+              <button
+                type="button"
+                title="Rotar el plano 90° a la derecha"
+                aria-label="Rotar el plano a la derecha"
+                disabled={!project.planoUrl || loading}
+                className="inline-flex min-h-8 min-w-8 touch-manipulation items-center justify-center border-l border-white/15 px-2 py-1 text-white hover:bg-white/10 disabled:opacity-40"
+                onClick={() => void rotatePlano('cw')}
+              >
+                <RotateCw className="h-3.5 w-3.5" />
+              </button>
+            </div>
             {calibrateMode ? (
               <label className="flex items-center gap-1 text-[11px] text-[var(--nexus-text-dim)]">
                 {lengthUnitLabel(project.unitSystem ?? 'metric')}

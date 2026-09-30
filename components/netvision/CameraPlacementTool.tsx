@@ -204,7 +204,9 @@ function useHtmlImage(url: string | null) {
     }
     let cancelled = false
     const img = new window.Image()
-    img.crossOrigin = 'anonymous'
+    if (/^https?:/i.test(url)) {
+      img.crossOrigin = 'anonymous'
+    }
     img.onload = () => {
       if (!cancelled) setImage(img)
     }
