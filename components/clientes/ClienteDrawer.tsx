@@ -32,7 +32,14 @@ export default function ClienteDrawer({ cliente, onClose }: ClienteDrawerProps) 
 
   const handleNuevoProyecto = () => {
     onClose();
-    router.push(`/proyectos/modulo/nuevo?customerId=${encodeURIComponent(cliente.id)}`);
+    const params = new URLSearchParams();
+    const cid = String(cliente.id ?? '').trim();
+    if (cid) params.set('customerId', cid);
+    const nom = String(cliente.nombre ?? '').trim();
+    const dir = String(cliente.direccion ?? '').trim();
+    if (nom) params.set('nombre', nom);
+    if (dir) params.set('ubicacion', dir);
+    router.push(`/proyectos/modulo/nuevo?${params.toString()}`);
   };
 
   const clienteId = String(cliente.id ?? '');

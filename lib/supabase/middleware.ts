@@ -85,7 +85,7 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
 
   let supabaseResponse = NextResponse.next({ request });
 
-  if (!url || !key) {
+  if (!url || !key || /example\.supabase\.co/i.test(url) || url.includes('your-project-url')) {
     return supabaseResponse;
   }
 
