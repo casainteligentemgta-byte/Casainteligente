@@ -6,6 +6,7 @@ import {
   DollarSign, FileText, Loader2,
   Search, Check
 } from 'lucide-react';
+import { etiquetaCliente, idCliente } from '@/lib/clientes/etiquetaCliente';
 import { createClient } from '@/lib/supabase/client';
 
 interface NuevoProyectoDrawerProps {
@@ -41,13 +42,21 @@ export default function NuevoProyectoDrawer({ onClose, onSuccess }: NuevoProyect
   async function fetchClientes() {
     setIsFetchingClientes(true);
     try {
-      const { data, error } = await supabase
+      const full = await supabase
         .from('customers')
-        .select('id, nombre')
+        .select('id,nombre,razon_social,nombre_comercial,direccion')
         .order('nombre', { ascending: true });
-      
-      if (error) throw error;
-      if (data) setClientes(data);
+
+      if (full.error) {
+        const fallback = await supabase
+          .from('customers')
+          .select('id,nombre,direccion')
+          .order('nombre', { ascending: true });
+        if (fallback.error) throw fallback.error;
+        if (fallback.data) setClientes(fallback.data);
+      } else if (full.data) {
+        setClientes(full.data);
+      }
     } catch (error) {
       console.error('Error fetching clientes:', error);
     } finally {
@@ -55,13 +64,19 @@ export default function NuevoProyectoDrawer({ onClose, onSuccess }: NuevoProyect
     }
   }
 
-  const clientesFiltrados = clientes.filter(c => 
-    (c.nombre || '').toLowerCase().includes(searchCliente.toLowerCase())
+  const clientesFiltrados = clientes.filter(c =>
+    etiquetaCliente(c).toLowerCase().includes(searchCliente.toLowerCase())
   ).slice(0, 10); // Aumentar a 10 para mejor visibilidad
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.nombre || !formData.customer_id) {
+    let customerId = formData.customer_id;
+    if (!customerId && searchCliente.trim()) {
+      const q = searchCliente.trim().toLowerCase();
+      const exactos = clientes.filter((c) => etiquetaCliente(c).toLowerCase() === q);
+      if (exactos.length === 1) customerId = idCliente(exactos[0]);
+    }
+    if (!formData.nombre.trim() || !customerId) {
       alert('Por favor completa los campos obligatorios (Nombre y Cliente)');
       return;
     }
@@ -71,6 +86,7 @@ export default function NuevoProyectoDrawer({ onClose, onSuccess }: NuevoProyect
       .from('ci_proyectos')
       .insert([{
         ...formData,
+        customer_id: customerId,
         nombre_proyecto: formData.nombre, // Sync both fields just in case
         monto_aproximado: formData.monto_aproximado ? parseFloat(formData.monto_aproximado) : null
       }]);
@@ -153,12 +169,18 @@ export default function NuevoProyectoDrawer({ onClose, onSuccess }: NuevoProyect
                           ${formData.customer_id === c.id ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' : 'dark:text-slate-300'}
                         `}
                         onClick={() => {
-                          setFormData({ ...formData, customer_id: c.id });
-                          setSearchCliente(c.nombre);
+                          const dir = typeof c.direccion === 'string' ? c.direccion.trim() : '';
+                          setFormData({
+                            ...formData,
+                            customer_id: c.id,
+                            nombre: formData.nombre.trim() ? formData.nombre : etiquetaCliente(c),
+                            ubicacion_texto: formData.ubicacion_texto.trim() ? formData.ubicacion_texto : dir,
+                          });
+                          setSearchCliente(etiquetaCliente(c));
                         }}
                       >
                         <div>
-                          <p className="font-bold text-sm">{c.nombre}</p>
+                          <p className="font-bold text-sm">{etiquetaCliente(c)}</p>
                           <p className="text-[10px] opacity-70">ID: {c.id.slice(0, 8)}</p>
                         </div>
                         {formData.customer_id === c.id && <Check className="w-4 h-4" />}
