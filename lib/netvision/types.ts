@@ -60,6 +60,17 @@ export type DesignCamera = {
   fovRightDeg?: number
   /** Alcance de visión en metros (override día/noche del catálogo). */
   rangeM?: number
+  /**
+   * Orientación de la lente tele (cámaras Dual).
+   * Si falta, la tele sigue a `yawDeg` (mismo encuadre que el gran angular).
+   */
+  teleYawDeg?: number
+  /** FOV total de la tele (override). */
+  teleFovDeg?: number
+  teleFovLeftDeg?: number
+  teleFovRightDeg?: number
+  /** Alcance dibujado de la tele en metros. */
+  teleRangeM?: number
 }
 
 export type ScaleCalibration = {

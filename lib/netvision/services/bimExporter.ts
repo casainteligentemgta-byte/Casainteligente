@@ -63,6 +63,7 @@ export function buildBimPackage(
         PoE_W: m.poeWatts,
         Bitrate_Mbps: m.bitrateMbps,
         Yaw_deg: c.yawDeg,
+        ...(typeof c.teleYawDeg === 'number' ? { Tele_Yaw_deg: c.teleYawDeg } : {}),
         MountHeight_m: c.mountHeightM,
         NV_SKU: m.id,
       },

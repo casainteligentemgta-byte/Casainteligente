@@ -2,6 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import type { DesignCamera } from '../types'
 import {
+  buildCoverageSectors,
   buildVisionSpectrum,
   preferredVisionBand,
   visionBandForDistance,
@@ -107,5 +108,31 @@ describe('buildVisionSpectrum overlap', () => {
     const inFrontOfB = cells.find((c) => c.x > 0.78 && c.x < 0.92 && c.y > 0.45 && c.y < 0.55)
     assert.equal(inFrontOfA?.band, 'green')
     assert.equal(inFrontOfB?.band, 'green')
+  })
+})
+
+describe('buildCoverageSectors dual', () => {
+  it('la tele usa teleYawDeg distinto al gran angular', () => {
+    const scale = { metersPerNormX: 40, metersPerNormY: 40, calibrated: true }
+    const sectors = buildCoverageSectors(
+      [
+        testCam({
+          id: 'd',
+          x: 0.5,
+          yawDeg: 0,
+          modelId: 'ezviz-h9c',
+          teleYawDeg: 180,
+        }),
+      ],
+      scale,
+    )
+    const wide = sectors.find((s) => s.lensId === 'wide')
+    const tele = sectors.find((s) => s.lensId === 'tele')
+    assert.ok(wide)
+    assert.ok(tele)
+    const wideMid = (wide!.startAngleRad + wide!.endAngleRad) / 2
+    const teleMid = (tele!.startAngleRad + tele!.endAngleRad) / 2
+    assert.ok(Math.abs(wideMid) < 0.2)
+    assert.ok(Math.abs(Math.abs(teleMid) - Math.PI) < 0.2)
   })
 })

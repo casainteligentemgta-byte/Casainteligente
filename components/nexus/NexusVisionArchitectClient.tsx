@@ -48,6 +48,8 @@ import {
   effectiveCameraVision,
   catalogVisionDefaults,
   getCameraModelOrDefault,
+  applyLensVisionPatch,
+  isSecondaryCameraLens,
 } from '@/lib/netvision/catalog/cameras'
 import {
   DEFAULT_AP_ID,
@@ -1131,6 +1133,15 @@ export default function NexusVisionArchitectClient() {
         if ('fovLeftDeg' in patch && patch.fovLeftDeg === undefined) delete next.fovLeftDeg
         if ('fovRightDeg' in patch && patch.fovRightDeg === undefined) delete next.fovRightDeg
         if ('rangeM' in patch && patch.rangeM === undefined) delete next.rangeM
+        if ('teleYawDeg' in patch && patch.teleYawDeg === undefined) delete next.teleYawDeg
+        if ('teleFovDeg' in patch && patch.teleFovDeg === undefined) delete next.teleFovDeg
+        if ('teleFovLeftDeg' in patch && patch.teleFovLeftDeg === undefined) {
+          delete next.teleFovLeftDeg
+        }
+        if ('teleFovRightDeg' in patch && patch.teleFovRightDeg === undefined) {
+          delete next.teleFovRightDeg
+        }
+        if ('teleRangeM' in patch && patch.teleRangeM === undefined) delete next.teleRangeM
         return next
       }),
     }))
@@ -1150,8 +1161,9 @@ export default function NexusVisionArchitectClient() {
       fovRightDeg?: number
       rangeM?: number
     },
+    lensId?: string,
   ) => {
-    patchCamera(id, patch)
+    patchCamera(id, applyLensVisionPatch(lensId, patch))
   }
 
   const patchNetworkNode = (id: string, patch: Partial<DesignNetworkNode>) => {
@@ -2400,11 +2412,12 @@ export default function NexusVisionArchitectClient() {
                     const isDual = lenses.length >= 2
                     const model = getCameraModelOrDefault(selectedCam.modelId)
                     const bands = visionBandRangesM(vision.rangeM, vision.catalogRangeM)
+                    const tele = lenses.find((l) => isSecondaryCameraLens(l.lensId))
                     const dualSummary = isDual
                       ? lenses
                           .map(
                             (l) =>
-                              `${l.label.split(' ')[0]} ${l.fovDeg}°/${formatLength(l.rangeM, project.unitSystem ?? 'metric')}`,
+                              `${l.label.split(' ')[0]} ${l.yawDeg}° ${l.fovDeg}°/${formatLength(l.rangeM, project.unitSystem ?? 'metric')}`,
                           )
                           .join(' · ')
                       : `${vision.yawDeg}° · FOV ${vision.fovDeg}° · ${formatLength(vision.rangeM, project.unitSystem ?? 'metric')}`
@@ -2413,7 +2426,7 @@ export default function NexusVisionArchitectClient() {
                         title="Óptica · orientación / FOV / alcance"
                         summary={
                           isDual
-                            ? `${vision.yawDeg}° · Dual · ${dualSummary}`
+                            ? `Dual · ${dualSummary}`
                             : dualSummary
                         }
                         defaultOpen
@@ -2434,13 +2447,13 @@ export default function NexusVisionArchitectClient() {
                               <p
                                 key={l.lensId}
                                 className={
-                                  l.lensId === 'tele'
+                                  isSecondaryCameraLens(l.lensId)
                                     ? 'text-orange-200'
                                     : 'text-[var(--nexus-cyan)]'
                                 }
                               >
-                                {l.lensId === 'tele' ? 'Naranja' : 'Cyan'} · {l.label}: FOV{' '}
-                                {l.fovDeg}° ·{' '}
+                                {isSecondaryCameraLens(l.lensId) ? 'Naranja' : 'Cyan'} ·{' '}
+                                {l.label}: {l.yawDeg}° · FOV {l.fovDeg}° ·{' '}
                                 {formatLength(l.rangeM, project.unitSystem ?? 'metric')}
                               </p>
                             ))}
@@ -2471,6 +2484,7 @@ export default function NexusVisionArchitectClient() {
                         <label className="block">
                           <span className="text-[var(--nexus-text-dim)]">
                             Orientación {vision.yawDeg}°
+                            {isDual ? ' · gran angular' : ''}
                           </span>
                           <input
                             type="range"
@@ -2569,6 +2583,88 @@ export default function NexusVisionArchitectClient() {
                             className="mt-1 w-full"
                           />
                         </label>
+                        {tele ? (
+                          <div className="space-y-2 rounded-lg border border-orange-400/30 bg-orange-400/5 px-2 py-2">
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-orange-200">
+                              Segunda óptica · tele naranja
+                            </p>
+                            <label className="block">
+                              <span className="text-[var(--nexus-text-dim)]">
+                                Orientación {tele.yawDeg}°
+                                {selectedCam.teleYawDeg == null ? ' · igual al angular' : ''}
+                              </span>
+                              <input
+                                type="range"
+                                min={0}
+                                max={359}
+                                value={tele.yawDeg}
+                                onChange={(e) =>
+                                  updateSelectedCam({
+                                    teleYawDeg: Number(e.target.value),
+                                  })
+                                }
+                                className="mt-1 w-full"
+                              />
+                            </label>
+                            <label className="block">
+                              <span className="text-[var(--nexus-text-dim)]">
+                                Apertura {tele.fovDeg}°
+                                {selectedCam.teleFovDeg == null &&
+                                selectedCam.teleFovLeftDeg == null &&
+                                selectedCam.teleFovRightDeg == null
+                                  ? ' · catálogo'
+                                  : ''}
+                              </span>
+                              <input
+                                type="range"
+                                min={20}
+                                max={170}
+                                value={tele.fovDeg}
+                                onChange={(e) => {
+                                  const total = Number(e.target.value)
+                                  const half = Math.round(total / 2)
+                                  updateSelectedCam({
+                                    teleFovDeg: total,
+                                    teleFovLeftDeg: half,
+                                    teleFovRightDeg: total - half,
+                                  })
+                                }}
+                                className="mt-1 w-full"
+                              />
+                            </label>
+                            <label className="block">
+                              <span className="text-[var(--nexus-text-dim)]">
+                                Alcance{' '}
+                                {formatLength(tele.rangeM, project.unitSystem ?? 'metric')}
+                                {selectedCam.teleRangeM == null ? ' · catálogo' : ''}
+                              </span>
+                              <input
+                                type="range"
+                                min={2}
+                                max={120}
+                                step={0.5}
+                                value={tele.rangeM}
+                                onChange={(e) =>
+                                  updateSelectedCam({
+                                    teleRangeM: Number(e.target.value),
+                                  })
+                                }
+                                className="mt-1 w-full"
+                              />
+                            </label>
+                            {selectedCam.teleYawDeg != null ? (
+                              <button
+                                type="button"
+                                className="min-h-8 w-full rounded-md border border-orange-300/40 bg-orange-400/10 text-[11px] font-semibold text-orange-100"
+                                onClick={() =>
+                                  updateSelectedCam({ teleYawDeg: undefined })
+                                }
+                              >
+                                Alinear tele al gran angular
+                              </button>
+                            ) : null}
+                          </div>
+                        ) : null}
                         {Math.abs(vision.fovLeftDeg - vision.fovRightDeg) > 1 ? (
                           <button
                             type="button"
@@ -2642,7 +2738,13 @@ export default function NexusVisionArchitectClient() {
                               selectedCam.modelId,
                               nightMode ? 'night' : 'day',
                             )
-                            updateSelectedCam(vision)
+                            updateSelectedCam({
+                              ...vision,
+                              teleFovDeg: undefined,
+                              teleFovLeftDeg: undefined,
+                              teleFovRightDeg: undefined,
+                              teleRangeM: undefined,
+                            })
                           }}
                         >
                           Restaurar FOV/alcance del modelo ({model.fovDeg}° /{' '}
@@ -2651,7 +2753,9 @@ export default function NexusVisionArchitectClient() {
                         <p className="text-[10px] text-[var(--nexus-text-dim)]">
                           Plano: arrastra el cono o el punto del medio para girar; los lados
                           para la apertura; el anillo de la punta para el alcance.
-                          {isDual ? ' Dual: cyan angular + naranja tele.' : ''}
+                          {isDual
+                            ? ' Dual: cyan = gran angular; naranja = tele (se apunta sola).'
+                            : ''}
                         </p>
                       </NetVisionCollapsible>
                     )

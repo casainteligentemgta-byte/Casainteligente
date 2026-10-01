@@ -43,7 +43,15 @@ export function rotateProjectGeometry(
   const dYaw = dir === 'cw' ? 90 : -90
   const cameras = project.cameras.map((c) => {
     const p = rotateNormPoint(c.x, c.y, dir)
-    return { ...c, x: p.x, y: p.y, yawDeg: wrapYaw(c.yawDeg + dYaw) }
+    return {
+      ...c,
+      x: p.x,
+      y: p.y,
+      yawDeg: wrapYaw(c.yawDeg + dYaw),
+      ...(typeof c.teleYawDeg === 'number'
+        ? { teleYawDeg: wrapYaw(c.teleYawDeg + dYaw) }
+        : {}),
+    }
   })
   const networkNodes = project.networkNodes.map((n) => {
     const p = rotateNormPoint(n.x, n.y, dir)

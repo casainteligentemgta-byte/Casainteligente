@@ -4,11 +4,14 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  applyLensVisionPatch,
   cameraCatalogOptionLabel,
   cameraVisionSummary,
   camerasByBrand,
+  effectiveCameraLenses,
   getCameraModel,
   isDualCameraModel,
+  isSecondaryCameraLens,
 } from './cameras'
 
 describe('catálogo Aqara', () => {
@@ -74,5 +77,44 @@ describe('catálogo Aqara', () => {
       '2K · bullet · 135° · día 16 m / noche 12 m',
     )
     assert.match(g100.notes ?? '', /IP65/)
+  })
+})
+
+describe('cámaras duales · tele independiente', () => {
+  const dual = {
+    id: 'd1',
+    label: 'CAM-01',
+    x: 0.4,
+    y: 0.5,
+    modelId: 'ezviz-h9c',
+    yawDeg: 0,
+    mountHeightM: 2.8,
+  }
+
+  it('sin teleYawDeg la tele sigue al gran angular', () => {
+    const lenses = effectiveCameraLenses(dual)
+    assert.equal(lenses.length, 2)
+    assert.equal(lenses[0]!.lensId, 'wide')
+    assert.equal(lenses[1]!.lensId, 'tele')
+    assert.equal(lenses[0]!.yawDeg, 0)
+    assert.equal(lenses[1]!.yawDeg, 0)
+    assert.equal(isSecondaryCameraLens('tele'), true)
+    assert.equal(isSecondaryCameraLens('wide'), false)
+  })
+
+  it('teleYawDeg gira solo el cono naranja', () => {
+    const lenses = effectiveCameraLenses({ ...dual, teleYawDeg: 90 })
+    assert.equal(lenses[0]!.yawDeg, 0)
+    assert.equal(lenses[1]!.yawDeg, 90)
+    assert.equal(lenses[0]!.fovDeg, 130)
+    assert.equal(lenses[1]!.fovDeg, 62)
+  })
+
+  it('applyLensVisionPatch escribe campos tele*', () => {
+    assert.deepEqual(applyLensVisionPatch('tele', { yawDeg: 45, rangeM: 20 }), {
+      teleYawDeg: 45,
+      teleRangeM: 20,
+    })
+    assert.deepEqual(applyLensVisionPatch('wide', { yawDeg: 10 }), { yawDeg: 10 })
   })
 })

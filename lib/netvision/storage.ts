@@ -429,6 +429,27 @@ function normalizeCamera(c: Partial<DesignCamera> & { label?: string }): DesignC
     typeof c.rangeM === 'number' && Number.isFinite(c.rangeM)
       ? Math.min(120, Math.max(2, c.rangeM))
       : undefined
+  const wrapYaw = (n: number) => ((n % 360) + 360) % 360
+  const teleYawDeg =
+    typeof c.teleYawDeg === 'number' && Number.isFinite(c.teleYawDeg)
+      ? wrapYaw(c.teleYawDeg)
+      : undefined
+  const teleFovDeg =
+    typeof c.teleFovDeg === 'number' && Number.isFinite(c.teleFovDeg)
+      ? Math.min(170, Math.max(20, c.teleFovDeg))
+      : undefined
+  const teleFovLeftDeg =
+    typeof c.teleFovLeftDeg === 'number' && Number.isFinite(c.teleFovLeftDeg)
+      ? Math.min(85, Math.max(10, c.teleFovLeftDeg))
+      : undefined
+  const teleFovRightDeg =
+    typeof c.teleFovRightDeg === 'number' && Number.isFinite(c.teleFovRightDeg)
+      ? Math.min(85, Math.max(10, c.teleFovRightDeg))
+      : undefined
+  const teleRangeM =
+    typeof c.teleRangeM === 'number' && Number.isFinite(c.teleRangeM)
+      ? Math.min(120, Math.max(2, c.teleRangeM))
+      : undefined
   return {
     id: c.id ?? `${Date.now()}`,
     label: c.label ?? 'CAM',
@@ -441,6 +462,11 @@ function normalizeCamera(c: Partial<DesignCamera> & { label?: string }): DesignC
     ...(fovLeftDeg != null ? { fovLeftDeg } : {}),
     ...(fovRightDeg != null ? { fovRightDeg } : {}),
     ...(rangeM != null ? { rangeM } : {}),
+    ...(teleYawDeg != null ? { teleYawDeg } : {}),
+    ...(teleFovDeg != null ? { teleFovDeg } : {}),
+    ...(teleFovLeftDeg != null ? { teleFovLeftDeg } : {}),
+    ...(teleFovRightDeg != null ? { teleFovRightDeg } : {}),
+    ...(teleRangeM != null ? { teleRangeM } : {}),
   }
 }
 

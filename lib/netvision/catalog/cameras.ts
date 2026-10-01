@@ -109,17 +109,50 @@ export function resolveFovHalves(
   return { left: half, right: half, total: clampFov(half * 2) }
 }
 
+function wrapYawDeg(deg: number) {
+  return ((deg % 360) + 360) % 360
+}
+
+/** Lente secundaria (tele) de una Dual; el gran angular es `wide`/`main`. */
+export function isSecondaryCameraLens(lensId?: string | null): boolean {
+  return Boolean(lensId && lensId !== 'main' && lensId !== 'wide')
+}
+
+export type CameraVisionPatch = {
+  yawDeg?: number
+  fovDeg?: number
+  fovLeftDeg?: number
+  fovRightDeg?: number
+  rangeM?: number
+}
+
+/** Traduce un parche de asas del plano a campos de `DesignCamera` (wide vs tele). */
+export function applyLensVisionPatch(
+  lensId: string | undefined,
+  patch: CameraVisionPatch,
+): Partial<DesignCamera> {
+  if (!isSecondaryCameraLens(lensId)) return patch
+  const next: Partial<DesignCamera> = {}
+  if (patch.yawDeg != null) next.teleYawDeg = patch.yawDeg
+  if (patch.fovDeg != null) next.teleFovDeg = patch.fovDeg
+  if (patch.fovLeftDeg != null) next.teleFovLeftDeg = patch.fovLeftDeg
+  if (patch.fovRightDeg != null) next.teleFovRightDeg = patch.fovRightDeg
+  if (patch.rangeM != null) next.teleRangeM = patch.rangeM
+  return next
+}
+
 /**
  * Ópticas efectivas por cámara.
  * Dual (≥2 lentes en catálogo) → una entrada por lente (2 espectros en el plano).
- * Overrides fov / rangeM del pin solo afectan la lente primaria (primera).
+ * Overrides fov / rangeM / yaw del pin afectan el gran angular;
+ * teleYawDeg / teleFov* / teleRangeM apuntan y abren la tele por separado.
  */
 export function effectiveCameraLenses(
   cam: DesignCamera,
   mode: 'day' | 'night' = 'day',
 ): EffectiveLensVision[] {
   const model = getCameraModelOrDefault(cam.modelId)
-  const yawDeg = ((cam.yawDeg % 360) + 360) % 360
+  const yawDeg = wrapYawDeg(cam.yawDeg)
   const lenses = model.lenses?.filter(
     (l) =>
       typeof l.fovDeg === 'number' &&
@@ -130,14 +163,26 @@ export function effectiveCameraLenses(
   if (lenses && lenses.length >= 2) {
     return lenses.map((lens, index) => {
       const catalogRange = mode === 'night' ? lens.rangeNightM : lens.rangeDayM
-      const useOverride = index === 0
-      const halves = useOverride
-        ? resolveFovHalves(cam, lens.fovDeg)
-        : resolveFovHalves({}, lens.fovDeg)
+      const secondary = index > 0
+      const halves = secondary
+        ? resolveFovHalves(
+            {
+              fovDeg: cam.teleFovDeg,
+              fovLeftDeg: cam.teleFovLeftDeg,
+              fovRightDeg: cam.teleFovRightDeg,
+            },
+            lens.fovDeg,
+          )
+        : resolveFovHalves(cam, lens.fovDeg)
+      const rangeOverride = secondary ? cam.teleRangeM : cam.rangeM
       const rangeM =
-        useOverride && typeof cam.rangeM === 'number' && Number.isFinite(cam.rangeM)
-          ? clampRange(cam.rangeM)
+        typeof rangeOverride === 'number' && Number.isFinite(rangeOverride)
+          ? clampRange(rangeOverride)
           : clampRange(catalogRange)
+      const yawSrc =
+        secondary && typeof cam.teleYawDeg === 'number' && Number.isFinite(cam.teleYawDeg)
+          ? cam.teleYawDeg
+          : cam.yawDeg
       return {
         lensId: lens.id || (index === 0 ? 'wide' : `lens-${index}`),
         label: lens.label || (index === 0 ? 'Gran angular' : 'Tele'),
@@ -146,7 +191,7 @@ export function effectiveCameraLenses(
         fovRightDeg: halves.right,
         rangeM,
         catalogRangeM: clampRange(catalogRange),
-        yawDeg,
+        yawDeg: wrapYawDeg(yawSrc),
       }
     })
   }

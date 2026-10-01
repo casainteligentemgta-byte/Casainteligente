@@ -22,7 +22,7 @@ import type {
   DesignStructure,
   SpectrumCell,
 } from '@/lib/netvision/types'
-import { effectiveCameraVision } from '@/lib/netvision/catalog/cameras'
+import { effectiveCameraLenses, isSecondaryCameraLens } from '@/lib/netvision/catalog/cameras'
 import { getStructureMaterialOrDefault } from '@/lib/netvision/catalog/materials'
 import { degToRad } from '@/lib/netvision/utils/geometryHelpers'
 import { snapOrtho90 } from '@/lib/netvision/utils/structureDraw'
@@ -88,6 +88,7 @@ export type CameraPlacementToolProps = {
       fovRightDeg?: number
       rangeM?: number
     },
+    lensId?: string,
   ) => void
   metersPerNormX?: number
   metersPerNormY?: number
@@ -835,8 +836,7 @@ export default function CameraPlacementTool({
                 selected &&
                 !!onAdjustCameraVision &&
                 !snapPlaceToDevices &&
-                !placeMode &&
-                !isTele
+                !placeMode
               const applyYawFromEvent = (e: KonvaEventObject<DragEvent>) => {
                 const stage = e.target.getStage()
                 const pos = stage?.getRelativePointerPosition()
@@ -853,6 +853,7 @@ export default function CameraPlacementTool({
                     yawDeg: 0,
                     avgMPerNorm: 1,
                   }),
+                  s.lensId,
                 )
               }
               const hitCx = offsetX + s.cx * drawW
@@ -1430,61 +1431,12 @@ export default function CameraPlacementTool({
             !snapPlaceToDevices &&
             cameras
               .filter((c) => c.id === selectedId)
-              .map((cam) => {
-                const vision = effectiveCameraVision(cam, nightMode ? 'night' : 'day')
-                // Asas sobre la óptica primaria (gran angular en Dual)
-                const sector = sectors.find(
-                  (s) =>
-                    s.cameraId === cam.id &&
-                    (!s.lensId || s.lensId === 'main' || s.lensId === 'wide'),
-                )
+              .flatMap((cam) => {
+                const mode = nightMode ? 'night' : 'day'
+                const lenses = effectiveCameraLenses(cam, mode)
                 const avgMPerNorm = Math.max((metersPerNormX + metersPerNormY) / 2, 0.01)
-                const radiusNorm =
-                  sector?.radiusNorm ?? vision.rangeM / avgMPerNorm
-                const midAng = degToRad(vision.yawDeg)
-                const leftHalf = degToRad(vision.fovLeftDeg)
-                const rightHalf = degToRad(vision.fovRightDeg)
-                const leftAng = midAng - leftHalf
-                const rightAng = midAng + rightHalf
-                /** Asas a mitad de cada rayo; el centro queda en el bisector (45° si el FOV es 90°). */
-                const handleR = radiusNorm * 0.5
-                const tipX = offsetX + (cam.x + Math.cos(midAng) * handleR) * drawW
-                const tipY = offsetY + (cam.y + Math.sin(midAng) * handleR) * drawH
-                const leftX = offsetX + (cam.x + Math.cos(leftAng) * handleR) * drawW
-                const leftY = offsetY + (cam.y + Math.sin(leftAng) * handleR) * drawH
-                const rightX = offsetX + (cam.x + Math.cos(rightAng) * handleR) * drawW
-                const rightY = offsetY + (cam.y + Math.sin(rightAng) * handleR) * drawH
-                const midLabelR = radiusNorm * 0.22
-                const midLabelX = offsetX + (cam.x + Math.cos(midAng) * midLabelR) * drawW
-                const midLabelY = offsetY + (cam.y + Math.sin(midAng) * midLabelR) * drawH
-                const tipLabelX = offsetX + (cam.x + Math.cos(midAng) * radiusNorm) * drawW
-                const tipLabelY = offsetY + (cam.y + Math.sin(midAng) * radiusNorm) * drawH
-                const farX = tipLabelX
-                const farY = tipLabelY
                 const cx = offsetX + cam.x * drawW
                 const cy = offsetY + cam.y * drawH
-
-                const applyFromPointer = (
-                  px: number,
-                  py: number,
-                  mode: VisionHandleMode,
-                  fovStep?: number,
-                ) => {
-                  const n = toNorm(px, py)
-                  onAdjustCameraVision(
-                    cam.id,
-                    visionPatchFromPointer({
-                      mode,
-                      camX: cam.x,
-                      camY: cam.y,
-                      pointerX: n.x,
-                      pointerY: n.y,
-                      yawDeg: vision.yawDeg,
-                      avgMPerNorm,
-                      fovStep,
-                    }),
-                  )
-                }
 
                 const pointerFromEvent = (e: KonvaEventObject<DragEvent>) => {
                   const pos = e.target.getStage()?.getRelativePointerPosition()
@@ -1493,153 +1445,221 @@ export default function CameraPlacementTool({
                   return { x: node.x(), y: node.y() }
                 }
 
-                const bindHandleDrag = (mode: VisionHandleMode) => ({
-                  onDragStart: (e: KonvaEventObject<DragEvent>) => {
-                    e.cancelBubble = true
-                    pauseStageDrag(e.target.getStage())
-                    onSelect(cam.id)
-                  },
-                  onDragMove: (e: KonvaEventObject<DragEvent>) => {
-                    e.cancelBubble = true
-                    const pos = pointerFromEvent(e)
-                    applyFromPointer(pos.x, pos.y, mode, mode === 'fov' ? 1 : undefined)
-                  },
-                  onDragEnd: (e: KonvaEventObject<DragEvent>) => {
-                    e.cancelBubble = true
-                    const pos = pointerFromEvent(e)
-                    applyFromPointer(pos.x, pos.y, mode, mode === 'fov' ? 5 : undefined)
-                    onSelect(cam.id)
-                    resumeStageDrag(e.target.getStage())
-                  },
-                })
+                return lenses.map((vision) => {
+                  const isTele = isSecondaryCameraLens(vision.lensId)
+                  const sector = sectors.find(
+                    (s) =>
+                      s.cameraId === cam.id &&
+                      (s.lensId ?? 'main') === vision.lensId,
+                  )
+                  const radiusNorm =
+                    sector?.radiusNorm ?? vision.rangeM / avgMPerNorm
+                  const midAng = degToRad(vision.yawDeg)
+                  const leftAng = midAng - degToRad(vision.fovLeftDeg)
+                  const rightAng = midAng + degToRad(vision.fovRightDeg)
+                  const handleR = radiusNorm * 0.5
+                  const tipX = offsetX + (cam.x + Math.cos(midAng) * handleR) * drawW
+                  const tipY = offsetY + (cam.y + Math.sin(midAng) * handleR) * drawH
+                  const leftX = offsetX + (cam.x + Math.cos(leftAng) * handleR) * drawW
+                  const leftY = offsetY + (cam.y + Math.sin(leftAng) * handleR) * drawH
+                  const rightX = offsetX + (cam.x + Math.cos(rightAng) * handleR) * drawW
+                  const rightY = offsetY + (cam.y + Math.sin(rightAng) * handleR) * drawH
+                  const midLabelR = radiusNorm * 0.22
+                  const midLabelX =
+                    offsetX + (cam.x + Math.cos(midAng) * midLabelR) * drawW
+                  const midLabelY =
+                    offsetY + (cam.y + Math.sin(midAng) * midLabelR) * drawH
+                  const farX = offsetX + (cam.x + Math.cos(midAng) * radiusNorm) * drawW
+                  const farY = offsetY + (cam.y + Math.sin(midAng) * radiusNorm) * drawH
+                  const axis = isTele ? 'rgba(253,186,116,0.95)' : 'rgba(165,243,252,0.9)'
+                  const sides = isTele ? 'rgba(251,146,60,0.55)' : 'rgba(103,232,249,0.45)'
+                  const tipFill = isTele ? '#fb923c' : '#22d3ee'
+                  const fovFill = isTele ? '#fdba74' : '#67e8f9'
+                  const rangeStroke = isTele ? '#fb923c' : '#22d3ee'
+                  const fovLabel = isTele ? '#ffedd5' : '#ecfeff'
+                  const rangeLabel = isTele ? '#fdba74' : '#a5f3fc'
 
-                return (
-                  <Fragment key={`vis-handles-${cam.id}`}>
-                    <Line
-                      points={[cx, cy, farX, farY]}
-                      stroke="rgba(165,243,252,0.9)"
-                      strokeWidth={2}
-                      dash={[5, 4]}
-                      listening={false}
-                    />
-                    <Line
-                      points={[cx, cy, leftX, leftY]}
-                      stroke="rgba(103,232,249,0.45)"
-                      strokeWidth={1.5}
-                      dash={[3, 4]}
-                      listening={false}
-                    />
-                    <Line
-                      points={[cx, cy, rightX, rightY]}
-                      stroke="rgba(103,232,249,0.45)"
-                      strokeWidth={1.5}
-                      dash={[3, 4]}
-                      listening={false}
-                    />
-                    <Text
-                      x={midLabelX - 36}
-                      y={midLabelY - 9}
-                      width={72}
-                      align="center"
-                      text={`${Math.round(vision.fovDeg)}°`}
-                      fontSize={14}
-                      fontStyle="bold"
-                      fill="#ecfeff"
-                      stroke="#0f172a"
-                      strokeWidth={0.7}
-                      listening={false}
-                    />
-                    <Text
-                      x={tipLabelX - 28}
-                      y={tipLabelY + 14}
-                      width={56}
-                      align="center"
-                      text={`${vision.rangeM.toFixed(vision.rangeM >= 10 ? 0 : 1)} m`}
-                      fontSize={12}
-                      fontStyle="bold"
-                      fill="#a5f3fc"
-                      stroke="#0f172a"
-                      strokeWidth={0.5}
-                      listening={false}
-                    />
-                    <Circle
-                      x={tipX}
-                      y={tipY}
-                      radius={13}
-                      fill="#22d3ee"
-                      stroke="#ecfeff"
-                      strokeWidth={2.5}
-                      hitStrokeWidth={28}
-                      draggable
-                      onClick={(e) => {
-                        e.cancelBubble = true
-                        onSelect(cam.id)
-                      }}
-                      onTap={(e) => {
-                        e.cancelBubble = true
-                        onSelect(cam.id)
-                      }}
-                      {...bindHandleDrag('yaw')}
-                    />
-                    <Circle
-                      x={leftX}
-                      y={leftY}
-                      radius={12}
-                      fill="#67e8f9"
-                      stroke="#ecfeff"
-                      strokeWidth={2}
-                      hitStrokeWidth={26}
-                      draggable
-                      onClick={(e) => {
-                        e.cancelBubble = true
-                        onSelect(cam.id)
-                      }}
-                      onTap={(e) => {
-                        e.cancelBubble = true
-                        onSelect(cam.id)
-                      }}
-                      {...bindHandleDrag('fov')}
-                    />
-                    <Circle
-                      x={rightX}
-                      y={rightY}
-                      radius={12}
-                      fill="#67e8f9"
-                      stroke="#ecfeff"
-                      strokeWidth={2}
-                      hitStrokeWidth={26}
-                      draggable
-                      onClick={(e) => {
-                        e.cancelBubble = true
-                        onSelect(cam.id)
-                      }}
-                      onTap={(e) => {
-                        e.cancelBubble = true
-                        onSelect(cam.id)
-                      }}
-                      {...bindHandleDrag('fov')}
-                    />
-                    <Circle
-                      x={farX}
-                      y={farY}
-                      radius={11}
-                      fill="#0f172a"
-                      stroke="#22d3ee"
-                      strokeWidth={3}
-                      hitStrokeWidth={26}
-                      draggable
-                      onClick={(e) => {
-                        e.cancelBubble = true
-                        onSelect(cam.id)
-                      }}
-                      onTap={(e) => {
-                        e.cancelBubble = true
-                        onSelect(cam.id)
-                      }}
-                      {...bindHandleDrag('range')}
-                    />
-                  </Fragment>
-                )
+                  const applyFromPointer = (
+                    px: number,
+                    py: number,
+                    handleMode: VisionHandleMode,
+                    fovStep?: number,
+                  ) => {
+                    const n = toNorm(px, py)
+                    onAdjustCameraVision(
+                      cam.id,
+                      visionPatchFromPointer({
+                        mode: handleMode,
+                        camX: cam.x,
+                        camY: cam.y,
+                        pointerX: n.x,
+                        pointerY: n.y,
+                        yawDeg: vision.yawDeg,
+                        avgMPerNorm,
+                        fovStep,
+                      }),
+                      vision.lensId,
+                    )
+                  }
+
+                  const bindHandleDrag = (handleMode: VisionHandleMode) => ({
+                    onDragStart: (e: KonvaEventObject<DragEvent>) => {
+                      e.cancelBubble = true
+                      pauseStageDrag(e.target.getStage())
+                      onSelect(cam.id)
+                    },
+                    onDragMove: (e: KonvaEventObject<DragEvent>) => {
+                      e.cancelBubble = true
+                      const pos = pointerFromEvent(e)
+                      applyFromPointer(
+                        pos.x,
+                        pos.y,
+                        handleMode,
+                        handleMode === 'fov' ? 1 : undefined,
+                      )
+                    },
+                    onDragEnd: (e: KonvaEventObject<DragEvent>) => {
+                      e.cancelBubble = true
+                      const pos = pointerFromEvent(e)
+                      applyFromPointer(
+                        pos.x,
+                        pos.y,
+                        handleMode,
+                        handleMode === 'fov' ? 5 : undefined,
+                      )
+                      onSelect(cam.id)
+                      resumeStageDrag(e.target.getStage())
+                    },
+                  })
+
+                  return (
+                    <Fragment key={`vis-handles-${cam.id}-${vision.lensId}`}>
+                      <Line
+                        points={[cx, cy, farX, farY]}
+                        stroke={axis}
+                        strokeWidth={isTele ? 1.75 : 2}
+                        dash={[5, 4]}
+                        listening={false}
+                      />
+                      <Line
+                        points={[cx, cy, leftX, leftY]}
+                        stroke={sides}
+                        strokeWidth={1.5}
+                        dash={[3, 4]}
+                        listening={false}
+                      />
+                      <Line
+                        points={[cx, cy, rightX, rightY]}
+                        stroke={sides}
+                        strokeWidth={1.5}
+                        dash={[3, 4]}
+                        listening={false}
+                      />
+                      <Text
+                        x={midLabelX - 36}
+                        y={midLabelY - 9}
+                        width={72}
+                        align="center"
+                        text={`${Math.round(vision.fovDeg)}°`}
+                        fontSize={isTele ? 12 : 14}
+                        fontStyle="bold"
+                        fill={fovLabel}
+                        stroke="#0f172a"
+                        strokeWidth={0.7}
+                        listening={false}
+                      />
+                      <Text
+                        x={farX - 28}
+                        y={farY + 14}
+                        width={56}
+                        align="center"
+                        text={`${vision.rangeM.toFixed(vision.rangeM >= 10 ? 0 : 1)} m`}
+                        fontSize={12}
+                        fontStyle="bold"
+                        fill={rangeLabel}
+                        stroke="#0f172a"
+                        strokeWidth={0.5}
+                        listening={false}
+                      />
+                      <Circle
+                        x={tipX}
+                        y={tipY}
+                        radius={isTele ? 12 : 13}
+                        fill={tipFill}
+                        stroke="#ecfeff"
+                        strokeWidth={2.5}
+                        hitStrokeWidth={28}
+                        draggable
+                        onClick={(e) => {
+                          e.cancelBubble = true
+                          onSelect(cam.id)
+                        }}
+                        onTap={(e) => {
+                          e.cancelBubble = true
+                          onSelect(cam.id)
+                        }}
+                        {...bindHandleDrag('yaw')}
+                      />
+                      <Circle
+                        x={leftX}
+                        y={leftY}
+                        radius={11}
+                        fill={fovFill}
+                        stroke="#ecfeff"
+                        strokeWidth={2}
+                        hitStrokeWidth={26}
+                        draggable
+                        onClick={(e) => {
+                          e.cancelBubble = true
+                          onSelect(cam.id)
+                        }}
+                        onTap={(e) => {
+                          e.cancelBubble = true
+                          onSelect(cam.id)
+                        }}
+                        {...bindHandleDrag('fov')}
+                      />
+                      <Circle
+                        x={rightX}
+                        y={rightY}
+                        radius={11}
+                        fill={fovFill}
+                        stroke="#ecfeff"
+                        strokeWidth={2}
+                        hitStrokeWidth={26}
+                        draggable
+                        onClick={(e) => {
+                          e.cancelBubble = true
+                          onSelect(cam.id)
+                        }}
+                        onTap={(e) => {
+                          e.cancelBubble = true
+                          onSelect(cam.id)
+                        }}
+                        {...bindHandleDrag('fov')}
+                      />
+                      <Circle
+                        x={farX}
+                        y={farY}
+                        radius={10}
+                        fill="#0f172a"
+                        stroke={rangeStroke}
+                        strokeWidth={3}
+                        hitStrokeWidth={26}
+                        draggable
+                        onClick={(e) => {
+                          e.cancelBubble = true
+                          onSelect(cam.id)
+                        }}
+                        onTap={(e) => {
+                          e.cancelBubble = true
+                          onSelect(cam.id)
+                        }}
+                        {...bindHandleDrag('range')}
+                      />
+                    </Fragment>
+                  )
+                })
               })}
 
           {networkNodes.map((node) => {

@@ -49,6 +49,28 @@ describe('rotateProjectGeometry', () => {
     assert.equal(next.scale.metersPerNormX, 40)
     assert.equal(next.scale.metersPerNormY, 10)
   })
+
+  it('rota también el yaw de la tele en Dual', () => {
+    const base = emptyProject({ id: 't', name: 't' })
+    const project = {
+      ...base,
+      cameras: [
+        {
+          id: 'c1',
+          label: 'CAM-01',
+          x: 0.5,
+          y: 0.5,
+          modelId: 'ezviz-h9c',
+          yawDeg: 10,
+          teleYawDeg: 80,
+          mountHeightM: 2.8,
+        },
+      ],
+    }
+    const next = rotateProjectGeometry(project, 'cw')
+    assert.equal(next.cameras[0]!.yawDeg, 100)
+    assert.equal(next.cameras[0]!.teleYawDeg, 170)
+  })
 })
 
 describe('invertRgbPixels', () => {
