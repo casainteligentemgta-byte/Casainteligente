@@ -114,6 +114,12 @@ function RrhhHubInner() {
               Contrato de trabajo
             </Link>
             <Link
+              href="/rrhh/carga-masiva"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-emerald-500/40 bg-emerald-950/50 text-emerald-50 text-xs font-black uppercase hover:bg-emerald-900/55"
+            >
+              Carga masiva
+            </Link>
+            <Link
               href="/rrhh/registro"
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#FF9500] text-black text-xs font-black uppercase"
             >
