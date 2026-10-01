@@ -150,6 +150,7 @@ import {
   rotateProjectGeometry,
   type PlanoRotateDir,
 } from '@/lib/netvision/utils/rotatePlano'
+import { FOV_PRESETS_DEG, RANGE_PRESETS_M } from '@/lib/netvision/utils/visionAdjust'
 import type { NetVisionZoomControls } from '@/components/netvision/CameraPlacementTool'
 
 const CameraPlacementTool = dynamic(
@@ -2310,7 +2311,7 @@ export default function NexusVisionArchitectClient() {
                             ? `${vision.yawDeg}° · Dual · ${dualSummary}`
                             : dualSummary
                         }
-                        defaultOpen={false}
+                        defaultOpen
                       >
                         {isDual ? (
                           <div className="space-y-1.5 rounded-lg border border-orange-400/25 bg-orange-400/5 px-2 py-1.5 text-[10px]">
@@ -2374,7 +2375,7 @@ export default function NexusVisionArchitectClient() {
                         </label>
                         <label className="block">
                           <span className="text-[var(--nexus-text-dim)]">
-                            Apertura total {vision.fovDeg}°
+                            Apertura {vision.fovDeg}°
                             {isDual ? ' · gran angular' : ''}
                             {selectedCam.fovDeg == null &&
                             selectedCam.fovLeftDeg == null &&
@@ -2382,6 +2383,29 @@ export default function NexusVisionArchitectClient() {
                               ? ' · catálogo'
                               : ''}
                           </span>
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {FOV_PRESETS_DEG.map((deg) => (
+                              <button
+                                key={deg}
+                                type="button"
+                                className={`min-h-8 rounded-md px-2 text-[11px] font-semibold ${
+                                  Math.abs(vision.fovDeg - deg) <= 2
+                                    ? 'bg-[var(--nexus-cyan)] text-black'
+                                    : 'border border-white/15 text-[var(--nexus-cyan)]'
+                                }`}
+                                onClick={() => {
+                                  const half = Math.round(deg / 2)
+                                  updateSelectedCam({
+                                    fovDeg: deg,
+                                    fovLeftDeg: half,
+                                    fovRightDeg: deg - half,
+                                  })
+                                }}
+                              >
+                                {deg}°
+                              </button>
+                            ))}
+                          </div>
                           <input
                             type="range"
                             min={20}
@@ -2399,50 +2423,6 @@ export default function NexusVisionArchitectClient() {
                             className="mt-1 w-full"
                           />
                         </label>
-                        <div className="grid grid-cols-2 gap-2">
-                          <label className="block">
-                            <span className="text-[var(--nexus-text-dim)]">
-                              Lado izq. {vision.fovLeftDeg}°
-                            </span>
-                            <input
-                              type="range"
-                              min={10}
-                              max={85}
-                              value={vision.fovLeftDeg}
-                              onChange={(e) => {
-                                const left = Number(e.target.value)
-                                const right = vision.fovRightDeg
-                                updateSelectedCam({
-                                  fovLeftDeg: left,
-                                  fovRightDeg: right,
-                                  fovDeg: left + right,
-                                })
-                              }}
-                              className="mt-1 w-full"
-                            />
-                          </label>
-                          <label className="block">
-                            <span className="text-[var(--nexus-text-dim)]">
-                              Lado der. {vision.fovRightDeg}°
-                            </span>
-                            <input
-                              type="range"
-                              min={10}
-                              max={85}
-                              value={vision.fovRightDeg}
-                              onChange={(e) => {
-                                const right = Number(e.target.value)
-                                const left = vision.fovLeftDeg
-                                updateSelectedCam({
-                                  fovLeftDeg: left,
-                                  fovRightDeg: right,
-                                  fovDeg: left + right,
-                                })
-                              }}
-                              className="mt-1 w-full"
-                            />
-                          </label>
-                        </div>
                         <label className="block">
                           <span className="text-[var(--nexus-text-dim)]">
                             Alcance{' '}
@@ -2451,6 +2431,22 @@ export default function NexusVisionArchitectClient() {
                             {selectedCam.rangeM == null ? ' · catálogo' : ''}
                             {nightMode ? ' · noche' : ' · día'}
                           </span>
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {RANGE_PRESETS_M.map((meters) => (
+                              <button
+                                key={meters}
+                                type="button"
+                                className={`min-h-8 rounded-md px-2 text-[11px] font-semibold ${
+                                  Math.abs(vision.rangeM - meters) <= 0.6
+                                    ? 'bg-[var(--nexus-cyan)] text-black'
+                                    : 'border border-white/15 text-[var(--nexus-cyan)]'
+                                }`}
+                                onClick={() => updateSelectedCam({ rangeM: meters })}
+                              >
+                                {formatLength(meters, project.unitSystem ?? 'metric', 0)}
+                              </button>
+                            ))}
+                          </div>
                           <input
                             type="range"
                             min={2}
@@ -2463,6 +2459,71 @@ export default function NexusVisionArchitectClient() {
                             className="mt-1 w-full"
                           />
                         </label>
+                        {Math.abs(vision.fovLeftDeg - vision.fovRightDeg) > 1 ? (
+                          <button
+                            type="button"
+                            className="min-h-8 w-full rounded-md border border-[var(--nexus-cyan)]/40 bg-[var(--nexus-cyan)]/10 text-[11px] font-semibold text-[var(--nexus-cyan)]"
+                            onClick={() => {
+                              const half = Math.round(vision.fovDeg / 2)
+                              updateSelectedCam({
+                                fovDeg: half * 2,
+                                fovLeftDeg: half,
+                                fovRightDeg: half,
+                              })
+                            }}
+                          >
+                            Igualar lados ({vision.fovLeftDeg}° / {vision.fovRightDeg}°)
+                          </button>
+                        ) : null}
+                        <details className="rounded-lg border border-white/10 bg-black/20 px-2 py-1">
+                          <summary className="cursor-pointer text-[10px] text-[var(--nexus-text-dim)]">
+                            Ajuste fino por lado (avanzado)
+                          </summary>
+                          <div className="mt-1.5 grid grid-cols-2 gap-2">
+                            <label className="block">
+                              <span className="text-[var(--nexus-text-dim)]">
+                                Lado izq. {vision.fovLeftDeg}°
+                              </span>
+                              <input
+                                type="range"
+                                min={10}
+                                max={85}
+                                value={vision.fovLeftDeg}
+                                onChange={(e) => {
+                                  const left = Number(e.target.value)
+                                  const right = vision.fovRightDeg
+                                  updateSelectedCam({
+                                    fovLeftDeg: left,
+                                    fovRightDeg: right,
+                                    fovDeg: left + right,
+                                  })
+                                }}
+                                className="mt-1 w-full"
+                              />
+                            </label>
+                            <label className="block">
+                              <span className="text-[var(--nexus-text-dim)]">
+                                Lado der. {vision.fovRightDeg}°
+                              </span>
+                              <input
+                                type="range"
+                                min={10}
+                                max={85}
+                                value={vision.fovRightDeg}
+                                onChange={(e) => {
+                                  const right = Number(e.target.value)
+                                  const left = vision.fovLeftDeg
+                                  updateSelectedCam({
+                                    fovLeftDeg: left,
+                                    fovRightDeg: right,
+                                    fovDeg: left + right,
+                                  })
+                                }}
+                                className="mt-1 w-full"
+                              />
+                            </label>
+                          </div>
+                        </details>
                         <button
                           type="button"
                           className="text-[10px] text-[var(--nexus-text-muted)] underline"
@@ -2478,8 +2539,8 @@ export default function NexusVisionArchitectClient() {
                           {nightMode ? model.rangeNightM : model.rangeDayM} m)
                         </button>
                         <p className="text-[10px] text-[var(--nexus-text-dim)]">
-                          En el plano: punto cyan = orientación/alcance; laterales = apertura de
-                          cada lado (independiente). Grados en el centro del espectro.
+                          En el plano: arrastra el cono para girar; la punta cyan para
+                          orientar/alcance; los lados para la apertura (los dos lados juntos).
                           {isDual
                             ? ' Dual: cono cyan (angular) + naranja (tele).'
                             : ''}
