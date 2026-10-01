@@ -39,6 +39,8 @@
         "node_modules",
         "scripts",
         "supabase/functions",
-        "patches"
+        "patches",
+        "**/*.test.ts",
+        "**/*.test.tsx"
     ]
 }
