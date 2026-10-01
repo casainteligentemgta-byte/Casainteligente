@@ -24,7 +24,7 @@ import type {
 } from '@/lib/netvision/types'
 import { effectiveCameraVision } from '@/lib/netvision/catalog/cameras'
 import { getStructureMaterialOrDefault } from '@/lib/netvision/catalog/materials'
-import { degToRad, radToDeg } from '@/lib/netvision/utils/geometryHelpers'
+import { degToRad } from '@/lib/netvision/utils/geometryHelpers'
 import { snapOrtho90 } from '@/lib/netvision/utils/structureDraw'
 import {
   clampNetworkPlanSize,
@@ -37,10 +37,8 @@ import type { AccessChamber, UndergroundRun } from '@/lib/netvision/services/can
 import { nearestSegmentOnRoute, MANUAL_CABLE_TO_ID } from '@/lib/netvision/services/cableRoutingEngine'
 import { invertRgbPixels } from '@/lib/netvision/utils/rotatePlano'
 import {
-  rangeFromDistNorm,
-  shortestDeltaDeg,
-  symmetricFovFromYawDelta,
-  wrapDeg360,
+  visionPatchFromPointer,
+  type VisionHandleMode,
 } from '@/lib/netvision/utils/visionAdjust'
 
 export type CameraPlacementToolProps = {
@@ -784,9 +782,30 @@ export default function CameraPlacementTool({
                 const pos = stage?.getRelativePointerPosition()
                 if (!pos || !onAdjustCameraVision) return
                 const n = toNorm(pos.x, pos.y)
-                const ang = radToDeg(Math.atan2(n.y - s.cy, n.x - s.cx))
-                onAdjustCameraVision(s.cameraId, { yawDeg: wrapDeg360(Math.round(ang)) })
+                onAdjustCameraVision(
+                  s.cameraId,
+                  visionPatchFromPointer({
+                    mode: 'yaw',
+                    camX: s.cx,
+                    camY: s.cy,
+                    pointerX: n.x,
+                    pointerY: n.y,
+                    yawDeg: 0,
+                    avgMPerNorm: 1,
+                  }),
+                )
               }
+              const hitCx = offsetX + s.cx * drawW
+              const hitCy = offsetY + s.cy * drawH
+              const hitSweep = ((s.endAngleRad - s.startAngleRad) * 180) / Math.PI
+              const hitRot = (s.startAngleRad * 180) / Math.PI
+              const hitR = Math.max(
+                16,
+                Math.hypot(
+                  Math.cos((s.startAngleRad + s.endAngleRad) / 2) * s.radiusNorm * drawW,
+                  Math.sin((s.startAngleRad + s.endAngleRad) / 2) * s.radiusNorm * drawH,
+                ),
+              )
               if (poly && poly.length >= 3) {
                 const pts: number[] = []
                 for (const p of poly) {
@@ -794,8 +813,46 @@ export default function CameraPlacementTool({
                 }
                 // Contorno del cono; el relleno lo da el semáforo del espectro
                 return (
+                  <Fragment key={fovKey}>
+                  {canSpin ? (
+                    <Arc
+                      x={hitCx}
+                      y={hitCy}
+                      innerRadius={0}
+                      outerRadius={hitR}
+                      angle={hitSweep}
+                      rotation={hitRot}
+                      fill="rgba(255,255,255,0.01)"
+                      listening
+                      draggable
+                      dragDistance={4}
+                      onMouseDown={(e) => {
+                        e.cancelBubble = true
+                        pauseStageDrag(e.target.getStage())
+                      }}
+                      onTouchStart={(e) => {
+                        e.cancelBubble = true
+                        pauseStageDrag(e.target.getStage())
+                      }}
+                      onDragStart={(e) => {
+                        e.cancelBubble = true
+                        pauseStageDrag(e.target.getStage())
+                        onSelect(s.cameraId)
+                      }}
+                      onDragMove={(e) => {
+                        e.cancelBubble = true
+                        e.target.position({ x: hitCx, y: hitCy })
+                        applyYawFromEvent(e)
+                      }}
+                      onDragEnd={(e) => {
+                        e.cancelBubble = true
+                        e.target.position({ x: hitCx, y: hitCy })
+                        applyYawFromEvent(e)
+                        resumeStageDrag(e.target.getStage())
+                      }}
+                    />
+                  ) : null}
                   <Line
-                    key={fovKey}
                     points={pts}
                     closed
                     fill={fill}
@@ -805,7 +862,7 @@ export default function CameraPlacementTool({
                     listening={canSpin}
                     hitStrokeWidth={canSpin ? 28 : 0}
                     draggable={canSpin}
-                    dragDistance={6}
+                    dragDistance={4}
                     onClick={(e) => {
                       e.cancelBubble = true
                       onSelect(s.cameraId)
@@ -834,6 +891,7 @@ export default function CameraPlacementTool({
                       resumeStageDrag(e.target.getStage())
                     }}
                   />
+                  </Fragment>
                 )
               }
               const cx = offsetX + s.cx * drawW
@@ -1349,28 +1407,33 @@ export default function CameraPlacementTool({
                 const applyFromPointer = (
                   px: number,
                   py: number,
-                  mode: 'tip' | 'left' | 'right',
+                  mode: VisionHandleMode,
+                  fovStep?: number,
                 ) => {
                   const n = toNorm(px, py)
-                  const dx = n.x - cam.x
-                  const dy = n.y - cam.y
-                  const ang = radToDeg(Math.atan2(dy, dx))
-                  const distNorm = Math.hypot(dx, dy)
-                  if (mode === 'tip') {
-                    onAdjustCameraVision(cam.id, {
-                      yawDeg: wrapDeg360(Math.round(ang)),
-                      rangeM: rangeFromDistNorm(distNorm, avgMPerNorm),
-                    })
-                    return
-                  }
-                  // Un lado mueve los dos: apertura simétrica (fácil en iPad).
-                  const fov = symmetricFovFromYawDelta(
-                    shortestDeltaDeg(vision.yawDeg, ang),
+                  onAdjustCameraVision(
+                    cam.id,
+                    visionPatchFromPointer({
+                      mode,
+                      camX: cam.x,
+                      camY: cam.y,
+                      pointerX: n.x,
+                      pointerY: n.y,
+                      yawDeg: vision.yawDeg,
+                      avgMPerNorm,
+                      fovStep,
+                    }),
                   )
-                  onAdjustCameraVision(cam.id, fov)
                 }
 
-                const bindHandleDrag = (mode: 'tip' | 'left' | 'right') => ({
+                const pointerFromEvent = (e: KonvaEventObject<DragEvent>) => {
+                  const pos = e.target.getStage()?.getRelativePointerPosition()
+                  if (pos) return pos
+                  const node = e.target as Konva.Circle
+                  return { x: node.x(), y: node.y() }
+                }
+
+                const bindHandleDrag = (mode: VisionHandleMode) => ({
                   onDragStart: (e: KonvaEventObject<DragEvent>) => {
                     e.cancelBubble = true
                     pauseStageDrag(e.target.getStage())
@@ -1378,13 +1441,13 @@ export default function CameraPlacementTool({
                   },
                   onDragMove: (e: KonvaEventObject<DragEvent>) => {
                     e.cancelBubble = true
-                    const node = e.target as Konva.Circle
-                    applyFromPointer(node.x(), node.y(), mode)
+                    const pos = pointerFromEvent(e)
+                    applyFromPointer(pos.x, pos.y, mode, mode === 'fov' ? 1 : undefined)
                   },
                   onDragEnd: (e: KonvaEventObject<DragEvent>) => {
                     e.cancelBubble = true
-                    const node = e.target as Konva.Circle
-                    applyFromPointer(node.x(), node.y(), mode)
+                    const pos = pointerFromEvent(e)
+                    applyFromPointer(pos.x, pos.y, mode, mode === 'fov' ? 5 : undefined)
                     onSelect(cam.id)
                     resumeStageDrag(e.target.getStage())
                   },
@@ -1456,7 +1519,7 @@ export default function CameraPlacementTool({
                         e.cancelBubble = true
                         onSelect(cam.id)
                       }}
-                      {...bindHandleDrag('tip')}
+                      {...bindHandleDrag('yaw')}
                     />
                     <Circle
                       x={leftX}
@@ -1475,7 +1538,7 @@ export default function CameraPlacementTool({
                         e.cancelBubble = true
                         onSelect(cam.id)
                       }}
-                      {...bindHandleDrag('left')}
+                      {...bindHandleDrag('fov')}
                     />
                     <Circle
                       x={rightX}
@@ -1494,7 +1557,26 @@ export default function CameraPlacementTool({
                         e.cancelBubble = true
                         onSelect(cam.id)
                       }}
-                      {...bindHandleDrag('right')}
+                      {...bindHandleDrag('fov')}
+                    />
+                    <Circle
+                      x={farX}
+                      y={farY}
+                      radius={11}
+                      fill="#0f172a"
+                      stroke="#22d3ee"
+                      strokeWidth={3}
+                      hitStrokeWidth={26}
+                      draggable
+                      onClick={(e) => {
+                        e.cancelBubble = true
+                        onSelect(cam.id)
+                      }}
+                      onTap={(e) => {
+                        e.cancelBubble = true
+                        onSelect(cam.id)
+                      }}
+                      {...bindHandleDrag('range')}
                     />
                   </Fragment>
                 )

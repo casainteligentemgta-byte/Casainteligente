@@ -1,6 +1,6 @@
 /** Ajustes de óptica en el plano (yaw / FOV / alcance). */
 
-import { clampFovHalf } from '@/lib/netvision/utils/geometryHelpers'
+import { clampFovHalf, radToDeg } from '@/lib/netvision/utils/geometryHelpers'
 
 export function wrapDeg360(deg: number): number {
   return ((deg % 360) + 360) % 360
@@ -19,17 +19,54 @@ export function snapToStep(value: number, step: number): number {
 }
 
 /** Apertura simétrica desde el ángulo entre el yaw y el puntero. */
-export function symmetricFovFromYawDelta(deltaDeg: number): {
+export function symmetricFovFromYawDelta(
+  deltaDeg: number,
+  step = 1,
+): {
   fovLeftDeg: number
   fovRightDeg: number
   fovDeg: number
 } {
-  const half = clampFovHalf(snapToStep(Math.abs(deltaDeg), 5))
+  const half = clampFovHalf(snapToStep(Math.abs(deltaDeg), step))
   return {
     fovLeftDeg: half,
     fovRightDeg: half,
     fovDeg: half * 2,
   }
+}
+
+export type VisionHandleMode = 'yaw' | 'fov' | 'range'
+
+/** Parche de óptica según el asa: girar, abrir o estirar. Nunca mezcla alcance con giro. */
+export function visionPatchFromPointer(opts: {
+  mode: VisionHandleMode
+  camX: number
+  camY: number
+  pointerX: number
+  pointerY: number
+  yawDeg: number
+  avgMPerNorm: number
+  fovStep?: number
+}): {
+  yawDeg?: number
+  fovLeftDeg?: number
+  fovRightDeg?: number
+  fovDeg?: number
+  rangeM?: number
+} {
+  const dx = opts.pointerX - opts.camX
+  const dy = opts.pointerY - opts.camY
+  const ang = wrapDeg360(radToDeg(Math.atan2(dy, dx)))
+  if (opts.mode === 'yaw') {
+    return { yawDeg: Math.round(ang) }
+  }
+  if (opts.mode === 'range') {
+    return { rangeM: rangeFromDistNorm(Math.hypot(dx, dy), opts.avgMPerNorm) }
+  }
+  return symmetricFovFromYawDelta(
+    shortestDeltaDeg(opts.yawDeg, ang),
+    opts.fovStep ?? 1,
+  )
 }
 
 export function rangeFromDistNorm(distNorm: number, avgMPerNorm: number): number {
