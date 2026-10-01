@@ -32,7 +32,6 @@ import {
   resolveNetworkPlanSize,
 } from '@/lib/netvision/utils/networkNodeSize'
 import type { WifiCoverageCircle } from '@/lib/netvision/services/wifiPredictor'
-import { VISION_BAND_FRAC } from '@/lib/netvision/services/coverageCalculator'
 import type { AccessChamber, UndergroundRun } from '@/lib/netvision/services/canalizationCalculator'
 import { nearestSegmentOnRoute, MANUAL_CABLE_TO_ID } from '@/lib/netvision/services/cableRoutingEngine'
 import { invertRgbPixels } from '@/lib/netvision/utils/rotatePlano'
@@ -146,20 +145,20 @@ function visionBandSolidFill(band: SpectrumBand, isTele: boolean): string {
   return 'rgb(239, 68, 68)'
 }
 
-function visionBandArcRadii(band: SpectrumBand, radiusPx: number) {
+function visionBandArcRadii(
+  band: SpectrumBand,
+  radiusPx: number,
+  greenRadiusPx: number,
+  yellowRadiusPx: number,
+): { inner: number; outer: number } | null {
+  const greenPx = Math.max(0, Math.min(radiusPx, greenRadiusPx))
+  const yellowPx = Math.max(greenPx, Math.min(radiusPx, yellowRadiusPx))
   const inner =
-    band === 'green'
-      ? 0
-      : band === 'yellow'
-        ? radiusPx * VISION_BAND_FRAC.greenMax
-        : radiusPx * VISION_BAND_FRAC.yellowMax
+    band === 'green' ? 0 : band === 'yellow' ? greenPx : yellowPx
   const outer =
-    band === 'green'
-      ? radiusPx * VISION_BAND_FRAC.greenMax
-      : band === 'yellow'
-        ? radiusPx * VISION_BAND_FRAC.yellowMax
-        : radiusPx
-  return { inner, outer: Math.max(inner + 0.5, outer) }
+    band === 'green' ? greenPx : band === 'yellow' ? yellowPx : radiusPx
+  if (outer <= inner + 0.4) return null
+  return { inner, outer }
 }
 
 function sectorFovClip(
@@ -213,16 +212,23 @@ function VisionSpectrumLayer({
           const cx = offsetX + s.cx * drawW
           const cy = offsetY + s.cy * drawH
           const midAng = (s.startAngleRad + s.endAngleRad) / 2
-          const radiusPx = Math.max(
-            12,
+          const radiusAlong = (rNorm: number) =>
             Math.hypot(
-              Math.cos(midAng) * s.radiusNorm * drawW,
-              Math.sin(midAng) * s.radiusNorm * drawH,
-            ),
+              Math.cos(midAng) * rNorm * drawW,
+              Math.sin(midAng) * rNorm * drawH,
+            )
+          const radiusPx = Math.max(12, radiusAlong(s.radiusNorm))
+          const greenRadiusPx = radiusAlong(
+            s.greenRadiusNorm ?? s.radiusNorm * 0.4,
           )
+          const yellowRadiusPx = radiusAlong(
+            s.yellowRadiusNorm ?? s.radiusNorm * 0.7,
+          )
+          const radii = visionBandArcRadii(band, radiusPx, greenRadiusPx, yellowRadiusPx)
+          if (!radii) return []
           const sweep = ((s.endAngleRad - s.startAngleRad) * 180) / Math.PI
           const rotation = (s.startAngleRad * 180) / Math.PI
-          const { inner, outer } = visionBandArcRadii(band, radiusPx)
+          const { inner, outer } = radii
           const clipFunc = sectorFovClip(s.polygon, offsetX, offsetY, drawW, drawH)
           const lens = s.lensId ?? 'main'
           const arc = {

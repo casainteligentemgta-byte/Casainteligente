@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { apiUrl } from '@/lib/http/apiUrl';
 import { cn } from '@/lib/utils';
-import { createClient } from '@/lib/supabase/client';
+import { createClientConInvitacion } from '@/lib/supabase/clientInvitacion';
 
 type PageProps = { params: { token: string } };
 
@@ -65,7 +65,7 @@ function SwitchLopcymat({
 
 export default function FirmaDigitalOnboardingPage({ params }: PageProps) {
   const token = (params.token ?? '').trim();
-  const supabase = useMemo(() => createClient(), []);
+  const supabase = useMemo(() => createClientConInvitacion(token), [token]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

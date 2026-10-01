@@ -196,7 +196,8 @@ Usa **[+ Cámara]** y el selector de marca/modelo:
 │  ├─ Uniview
 │  ├─ Dahua
 │  ├─ Sony
-│  └─ (catálogo ampliable: Ezviz, Aqara, …)
+│  ├─ Ezviz
+│  └─ Aqara (G5 Pro, G350 Dual, G3 PTZ, E1, G100, timbres G410/G400/G4)
 ```
 
 ### Paso 2: Seleccionar cámara
@@ -221,7 +222,7 @@ Activa la capa **Visión**. Verás el cono/espectro de cobertura. Ajusta:
 
 - Orientación (yaw)
 - Apertura FOV°
-- Alcance (m)
+- Alcance (m): el anillo estira el cono, pero verde/amarillo siguen en metros de ficha
 - Asas en el plano / sliders
 
 Consulta **?** en la barra de capas para Visión / WiFi / Sonido / Enlaces / Rutas / Sub / Noche.

@@ -35,14 +35,19 @@ export function defaultScale(): ScaleCalibration {
   }
 }
 
+/**
+ * Semáforo en metros de ficha (`catalogRangeM`), no del cono estirado.
+ * Estirar el anillo solo alarga el rojo; el verde de 2 m sigue en 2 m.
+ */
 export function visionBandForDistance(
   distanceM: number,
-  rangeM: number,
+  drawnRangeM: number,
+  catalogRangeM = drawnRangeM,
 ): VisionBand | null {
-  if (rangeM <= 0 || distanceM < 0 || distanceM > rangeM + 1e-6) return null
-  const t = distanceM / rangeM
-  if (t <= VISION_BAND_FRAC.greenMax) return 'green'
-  if (t <= VISION_BAND_FRAC.yellowMax) return 'yellow'
+  if (drawnRangeM <= 0 || distanceM < 0 || distanceM > drawnRangeM + 1e-6) return null
+  const qualityM = Math.max(catalogRangeM, 1e-6)
+  if (distanceM <= qualityM * VISION_BAND_FRAC.greenMax) return 'green'
+  if (distanceM <= qualityM * VISION_BAND_FRAC.yellowMax) return 'yellow'
   return 'red'
 }
 
@@ -58,16 +63,28 @@ export function preferredVisionBand(a: VisionBand, b: VisionBand): VisionBand {
   return visionBandRank(a) >= visionBandRank(b) ? a : b
 }
 
-/** Metros por banda de semáforo según el alcance efectivo. */
-export function visionBandRangesM(rangeM: number): {
+function round1(n: number) {
+  return Math.round(n * 10) / 10
+}
+
+/**
+ * Metros de cada banda.
+ * Verde/amarillo salen de la ficha (`catalogRangeM`); el rojo llega al borde dibujado.
+ */
+export function visionBandRangesM(
+  drawnRangeM: number,
+  catalogRangeM = drawnRangeM,
+): {
   greenMaxM: number
   yellowMaxM: number
   redMaxM: number
 } {
+  const qualityM = Math.max(catalogRangeM, 0)
+  const drawn = Math.max(drawnRangeM, 0)
   return {
-    greenMaxM: Math.round(rangeM * VISION_BAND_FRAC.greenMax * 10) / 10,
-    yellowMaxM: Math.round(rangeM * VISION_BAND_FRAC.yellowMax * 10) / 10,
-    redMaxM: Math.round(rangeM * 10) / 10,
+    greenMaxM: round1(Math.min(drawn, qualityM * VISION_BAND_FRAC.greenMax)),
+    yellowMaxM: round1(Math.min(drawn, qualityM * VISION_BAND_FRAC.yellowMax)),
+    redMaxM: round1(drawn),
   }
 }
 
@@ -89,6 +106,7 @@ export function buildCoverageSectors(
         scale.metersPerNormX,
         scale.metersPerNormY,
       )
+      const bands = visionBandRangesM(lens.rangeM, lens.catalogRangeM)
       const { startAngleRad, endAngleRad } = fovSectorAngles(
         lens.yawDeg,
         lens.fovLeftDeg,
@@ -113,6 +131,16 @@ export function buildCoverageSectors(
         endAngleRad,
         mode,
         polygon,
+        greenRadiusNorm: metersToNormRadius(
+          bands.greenMaxM,
+          scale.metersPerNormX,
+          scale.metersPerNormY,
+        ),
+        yellowRadiusNorm: metersToNormRadius(
+          bands.yellowMaxM,
+          scale.metersPerNormX,
+          scale.metersPerNormY,
+        ),
       }
     })
   })
@@ -159,6 +187,7 @@ export function buildVisionSpectrum(
       return {
         cam,
         rangeM: lens.rangeM,
+        catalogRangeM: lens.catalogRangeM,
         radiusNorm,
         startAngleRad,
         endAngleRad,
@@ -188,9 +217,9 @@ export function buildVisionSpectrum(
           scale.metersPerNormX,
           scale.metersPerNormY,
         )
-        const band = visionBandForDistance(d, p.rangeM)
+        const band = visionBandForDistance(d, p.rangeM, p.catalogRangeM)
         if (!band) continue
-        const strength = Math.max(0.15, 1 - d / Math.max(p.rangeM, 1))
+        const strength = Math.max(0.15, 1 - d / Math.max(p.catalogRangeM, 1))
         if (
           !bestBand ||
           visionBandRank(band) > visionBandRank(bestBand) ||

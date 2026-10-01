@@ -16,7 +16,8 @@ export async function uploadTalentoPublicFile(
   const path = `postulaciones/${params.needId}/${params.stagingId}/${params.kind}.${ext}`;
   const { error: upErr } = await supabase.storage.from(TALENTO_PUBLIC_BUCKET).upload(path, params.file, {
     cacheControl: '3600',
-    upsert: true,
+    // Ruta única por stagingId: no hace falta upsert (que exigiría permisos de lectura/actualización anónimos).
+    upsert: false,
     contentType: params.file.type || undefined,
   });
   if (upErr) {

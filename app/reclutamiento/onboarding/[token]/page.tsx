@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useEffect, Suspense } from 'react';
 import dynamic from 'next/dynamic';
-import { createClient } from '@/lib/supabase/client';
+import { createClientConInvitacion } from '@/lib/supabase/clientInvitacion';
 import {
   emptyHojaVidaObreroCompleta,
   hojaVidaDesdeRow,
@@ -110,7 +110,7 @@ function hvInicialOnboarding(row: Record<string, unknown>): HojaVidaObreroComple
 }
 
 function HojaDeVidaMovilInner({ params }: Props) {
-  const supabase = useMemo(() => createClient(), []);
+  const supabase = useMemo(() => createClientConInvitacion(params.token), [params.token]);
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitPhase, setSubmitPhase] = useState<'idle' | 'compress' | 'upload' | 'save' | 'pdf'>('idle');

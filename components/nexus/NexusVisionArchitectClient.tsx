@@ -42,6 +42,8 @@ import {
   CAMERA_BRANDS,
   DEFAULT_CAMERA_MODEL_ID,
   cameraCatalogGrouped,
+  cameraCatalogOptionLabel,
+  cameraVisionSummary,
   effectiveCameraLenses,
   effectiveCameraVision,
   catalogVisionDefaults,
@@ -1341,7 +1343,7 @@ export default function NexusVisionArchitectClient() {
               <optgroup key={g.brand} label={g.brand}>
                 {g.models.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.name}
+                    {cameraCatalogOptionLabel(m)}
                   </option>
                 ))}
               </optgroup>
@@ -2120,7 +2122,7 @@ export default function NexusVisionArchitectClient() {
                   </span>
                   <span className="inline-flex items-center gap-1">
                     <span className="h-2.5 w-2.5 rounded-sm bg-emerald-500" />
-                    Verde · detección objetos/personas
+                    Verde · metros fijos (ficha)
                   </span>
                   <span className="inline-flex items-center gap-1">
                     <span className="h-2.5 w-2.5 rounded-sm bg-yellow-400" />
@@ -2397,7 +2399,7 @@ export default function NexusVisionArchitectClient() {
                     const lenses = effectiveCameraLenses(selectedCam, mode)
                     const isDual = lenses.length >= 2
                     const model = getCameraModelOrDefault(selectedCam.modelId)
-                    const bands = visionBandRangesM(vision.rangeM)
+                    const bands = visionBandRangesM(vision.rangeM, vision.catalogRangeM)
                     const dualSummary = isDual
                       ? lenses
                           .map(
@@ -2416,6 +2418,13 @@ export default function NexusVisionArchitectClient() {
                         }
                         defaultOpen
                       >
+                        <div className="rounded-lg border border-white/10 bg-black/25 px-2 py-1.5 text-[10px] leading-relaxed">
+                          <p className="font-semibold text-white">{model.name}</p>
+                          <p className="text-[var(--nexus-cyan)]">{cameraVisionSummary(model)}</p>
+                          {model.notes ? (
+                            <p className="mt-1 text-[var(--nexus-text-muted)]">{model.notes}</p>
+                          ) : null}
+                        </div>
                         {isDual ? (
                           <div className="space-y-1.5 rounded-lg border border-orange-400/25 bg-orange-400/5 px-2 py-1.5 text-[10px]">
                             <p className="font-semibold uppercase tracking-wide text-orange-200">
@@ -2453,9 +2462,11 @@ export default function NexusVisionArchitectClient() {
                           </span>
                           {' · '}
                           <span className="text-red-300">
-                            rojo {formatLength(bands.redMaxM, project.unitSystem ?? 'metric')}
+                            rojo hasta{' '}
+                            {formatLength(bands.redMaxM, project.unitSystem ?? 'metric')}
                           </span>
-                          . Si se solapan, prevalece verde sobre naranja y naranja sobre rojo.
+                          . Verde y amarillo son metros de ficha: estirar el cono no los agranda.
+                          Si se solapan, prevalece verde sobre naranja y naranja sobre rojo.
                         </p>
                         <label className="block">
                           <span className="text-[var(--nexus-text-dim)]">

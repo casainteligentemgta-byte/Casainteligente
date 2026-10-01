@@ -36,6 +36,28 @@ export function cameraCatalogGrouped(): { brand: CameraBrand; models: CameraMode
   })).filter((g) => g.models.length > 0)
 }
 
+/** FOV de catálogo para la lista: dual muestra ambas ópticas. */
+export function catalogFovLabel(model: CameraModel): string {
+  if (model.lenses && model.lenses.length >= 2) {
+    const wide = model.lenses[0]!
+    const tele = model.lenses[1]!
+    return `Dual ${wide.fovDeg}°+${tele.fovDeg}°`
+  }
+  return `${model.fovDeg}°`
+}
+
+/** Etiqueta del selector de modelo (nombre + facultades de visión). */
+export function cameraCatalogOptionLabel(model: CameraModel): string {
+  return `${model.name} · ${catalogFovLabel(model)}`
+}
+
+/** Resumen corto para inspector: resolución, forma, FOV, alcances día/noche. */
+export function cameraVisionSummary(model: CameraModel): string {
+  const form =
+    model.formFactor === 'ptz' ? 'PTZ' : model.formFactor === 'bullet' ? 'bullet' : 'domo'
+  return `${model.resolution} · ${form} · ${catalogFovLabel(model)} · día ${model.rangeDayM} m / noche ${model.rangeNightM} m`
+}
+
 export type EffectiveLensVision = {
   lensId: string
   label: string
@@ -45,7 +67,10 @@ export type EffectiveLensVision = {
   fovLeftDeg: number
   /** Medio FOV derecho (desde yaw). */
   fovRightDeg: number
+  /** Alcance dibujado (cono / anillo). */
   rangeM: number
+  /** Alcance de ficha día/noche. El semáforo usa estos metros fijos. */
+  catalogRangeM: number
   yawDeg: number
 }
 
@@ -120,6 +145,7 @@ export function effectiveCameraLenses(
         fovLeftDeg: halves.left,
         fovRightDeg: halves.right,
         rangeM,
+        catalogRangeM: clampRange(catalogRange),
         yawDeg,
       }
     })
@@ -139,6 +165,7 @@ export function effectiveCameraLenses(
       fovLeftDeg: halves.left,
       fovRightDeg: halves.right,
       rangeM,
+      catalogRangeM: clampRange(catalogRange),
       yawDeg,
     },
   ]
@@ -153,6 +180,7 @@ export function effectiveCameraVision(
   fovLeftDeg: number
   fovRightDeg: number
   rangeM: number
+  catalogRangeM: number
   yawDeg: number
 } {
   const primary = effectiveCameraLenses(cam, mode)[0]!
@@ -161,6 +189,7 @@ export function effectiveCameraVision(
     fovLeftDeg: primary.fovLeftDeg,
     fovRightDeg: primary.fovRightDeg,
     rangeM: primary.rangeM,
+    catalogRangeM: primary.catalogRangeM,
     yawDeg: primary.yawDeg,
   }
 }

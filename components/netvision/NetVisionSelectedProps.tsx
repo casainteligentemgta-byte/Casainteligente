@@ -3,8 +3,9 @@
 import { Trash2 } from 'lucide-react'
 import { Button } from '@/components/nexus/ui/button'
 import {
-  CAMERA_BRANDS,
   cameraCatalogGrouped,
+  cameraCatalogOptionLabel,
+  cameraVisionSummary,
   catalogVisionDefaults,
   getCameraModelOrDefault,
 } from '@/lib/netvision/catalog/cameras'
@@ -108,16 +109,24 @@ export default function NetVisionSelectedProps({
               <optgroup key={g.brand} label={g.brand}>
                 {g.models.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.name}
+                    {cameraCatalogOptionLabel(m)}
                   </option>
                 ))}
               </optgroup>
             ))}
           </select>
         </label>
-        <p className="text-[10px] text-[var(--nexus-text-dim)]">
-          {getCameraModelOrDefault(camera.modelId).brand} · {CAMERA_BRANDS.length} marcas
-        </p>
+        {(() => {
+          const model = getCameraModelOrDefault(camera.modelId)
+          return (
+            <div className="space-y-1 text-[10px] leading-relaxed text-[var(--nexus-text-dim)]">
+              <p>
+                {model.brand} · {cameraVisionSummary(model)}
+              </p>
+              {model.notes ? <p>{model.notes}</p> : null}
+            </div>
+          )
+        })()}
         <Button
           type="button"
           variant="glass"

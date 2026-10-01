@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
+import { createClientConInvitacion } from '@/lib/supabase/clientInvitacion';
 import { 
     User, 
     GraduationCap, 
@@ -28,7 +28,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 export default function HojaVidaOnboarding() {
     const params = useParams();
     const router = useRouter();
-    const supabase = createClient();
+    const supabase = useMemo(() => createClientConInvitacion(String(params?.token ?? '')), [params?.token]);
     
     const [loading, setLoading] = useState(true);
     const [candidate, setCandidate] = useState<any>(null);

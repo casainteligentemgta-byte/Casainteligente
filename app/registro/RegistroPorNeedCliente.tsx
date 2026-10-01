@@ -21,6 +21,7 @@ import { nombresLegadoDesdeGaceta } from '@/lib/registro/ciEmpleadosNombresLegad
 import { uploadTalentoPublicFile } from '@/lib/registro/uploadTalentoPublic';
 import { apiUrl } from '@/lib/http/apiUrl';
 import { createClient } from '@/lib/supabase/client';
+import { createClientConInvitacion } from '@/lib/supabase/clientInvitacion';
 
 import type { FirmaDigitalGuardado } from './components/FirmaDigital';
 
@@ -439,7 +440,12 @@ export default function RegistroPorNeedCliente({
         token_registro: tokenRegistro,
       };
 
-      const { data: ins, error: insErr } = await supabase.from('ci_empleados').insert(insertPayload).select('id').single();
+      // El cliente con cabecera x-invite-token permite leer de vuelta SOLO la fila recién creada (RLS por token).
+      const { data: ins, error: insErr } = await createClientConInvitacion(tokenRegistro)
+        .from('ci_empleados')
+        .insert(insertPayload)
+        .select('id')
+        .single();
 
       if (insErr || !ins) {
         toast.error(insErr?.message ?? 'No se pudo guardar la postulación.');
