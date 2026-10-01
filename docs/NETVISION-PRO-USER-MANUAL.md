@@ -155,6 +155,8 @@ Cabecera → **Cargar PDF / imagen** (o zona de carga del canvas).
 
 Ejemplo: `Centro_Comercial.pdf` → Abrir.
 
+Si el PDF es vectorial (exportado de CAD), NetVision detecta **muros**, **puertas** y **ventanas** al cargar. Los muros quedan como **bloque**; las aberturas como puerta/ventana (editables). Un escaneo o imagen no trae vectores: dibuja a mano en **Muros**, o usa **Detectar muros, puertas y ventanas** si recargas un CAD. No se detectan muebles ni archivos DWG/DXF.
+
 ### Paso 4: Calibración (importante)
 
 El plano se carga pero necesita escala real:
