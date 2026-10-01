@@ -137,6 +137,122 @@ function spectrumFill(strength: number, hue: number, boost = 0) {
   return `hsla(${hue}, 90%, ${42 + strength * 22}%, ${a})`
 }
 
+type SpectrumBand = 'red' | 'yellow' | 'green'
+
+/** Colores opacos: la capa del espectro aplica transparencia uniforme. */
+function visionBandSolidFill(band: SpectrumBand, isTele: boolean): string {
+  if (band === 'green') return isTele ? 'rgb(251, 146, 60)' : 'rgb(34, 197, 94)'
+  if (band === 'yellow') return isTele ? 'rgb(253, 186, 116)' : 'rgb(234, 179, 8)'
+  return 'rgb(239, 68, 68)'
+}
+
+function visionBandArcRadii(band: SpectrumBand, radiusPx: number) {
+  const inner =
+    band === 'green'
+      ? 0
+      : band === 'yellow'
+        ? radiusPx * VISION_BAND_FRAC.greenMax
+        : radiusPx * VISION_BAND_FRAC.yellowMax
+  const outer =
+    band === 'green'
+      ? radiusPx * VISION_BAND_FRAC.greenMax
+      : band === 'yellow'
+        ? radiusPx * VISION_BAND_FRAC.yellowMax
+        : radiusPx
+  return { inner, outer: Math.max(inner + 0.5, outer) }
+}
+
+function sectorFovClip(
+  poly: { x: number; y: number }[] | undefined,
+  offsetX: number,
+  offsetY: number,
+  drawW: number,
+  drawH: number,
+) {
+  if (!poly || poly.length < 3) return undefined
+  return (ctx: {
+    beginPath: () => void
+    moveTo: (x: number, y: number) => void
+    lineTo: (x: number, y: number) => void
+    closePath: () => void
+  }) => {
+    const p0 = poly[0]!
+    ctx.beginPath()
+    ctx.moveTo(offsetX + p0.x * drawW, offsetY + p0.y * drawH)
+    for (let i = 1; i < poly.length; i++) {
+      const p = poly[i]!
+      ctx.lineTo(offsetX + p.x * drawW, offsetY + p.y * drawH)
+    }
+    ctx.closePath()
+  }
+}
+
+/**
+ * Capa propia del semáforo CCTV: primero rojos, luego naranjas, luego verdes.
+ * Antes de pintar una banda mejor se recorta (destination-out) para que no se
+ * mezclen en arcoíris: verde prevalece sobre naranja y naranja sobre rojo.
+ */
+function VisionSpectrumLayer({
+  sectors,
+  offsetX,
+  offsetY,
+  drawW,
+  drawH,
+}: {
+  sectors: CoverageSector[]
+  offsetX: number
+  offsetY: number
+  drawW: number
+  drawH: number
+}) {
+  const bands: SpectrumBand[] = ['red', 'yellow', 'green']
+  return (
+    <Layer listening={false} opacity={0.74}>
+      {bands.flatMap((band) =>
+        sectors.flatMap((s) => {
+          const cx = offsetX + s.cx * drawW
+          const cy = offsetY + s.cy * drawH
+          const midAng = (s.startAngleRad + s.endAngleRad) / 2
+          const radiusPx = Math.max(
+            12,
+            Math.hypot(
+              Math.cos(midAng) * s.radiusNorm * drawW,
+              Math.sin(midAng) * s.radiusNorm * drawH,
+            ),
+          )
+          const sweep = ((s.endAngleRad - s.startAngleRad) * 180) / Math.PI
+          const rotation = (s.startAngleRad * 180) / Math.PI
+          const { inner, outer } = visionBandArcRadii(band, radiusPx)
+          const clipFunc = sectorFovClip(s.polygon, offsetX, offsetY, drawW, drawH)
+          const lens = s.lensId ?? 'main'
+          const arc = {
+            x: cx,
+            y: cy,
+            innerRadius: inner,
+            outerRadius: outer,
+            angle: sweep,
+            rotation,
+            listening: false as const,
+            perfectDrawEnabled: false,
+          }
+          const punch =
+            band === 'red' ? null : (
+              <Group key={`vis-punch-${band}-${s.cameraId}-${lens}`} listening={false} clipFunc={clipFunc}>
+                <Arc {...arc} fill="#000" globalCompositeOperation="destination-out" />
+              </Group>
+            )
+          const fill = (
+            <Group key={`vis-bands-${band}-${s.cameraId}-${lens}`} listening={false} clipFunc={clipFunc}>
+              <Arc {...arc} fill={visionBandSolidFill(band, s.lensId === 'tele')} />
+            </Group>
+          )
+          return punch ? [punch, fill] : [fill]
+        }),
+      )}
+    </Layer>
+  )
+}
+
 const NODE_COLORS: Record<DesignNetworkNode['kind'], string> = {
   switch: '#a78bfa',
   ap: '#34d399',
@@ -596,7 +712,7 @@ export default function CameraPlacementTool({
         onTouchMove={handleStageMouseMove}
         style={{ cursor: placeMode ? 'crosshair' : 'grab' }}
       >
-        <Layer>
+        <Layer listening={false}>
           {image ? (
             <KonvaImage
               image={image}
@@ -618,82 +734,17 @@ export default function CameraPlacementTool({
               listening={false}
             />
           )}
-
-          {showFov &&
-            (['red', 'yellow', 'green'] as const).flatMap((band) =>
-              sectors.map((s) => {
-                const cx = offsetX + s.cx * drawW
-                const cy = offsetY + s.cy * drawH
-                const midAng = (s.startAngleRad + s.endAngleRad) / 2
-                const radiusPx = Math.max(
-                  12,
-                  Math.hypot(
-                    Math.cos(midAng) * s.radiusNorm * drawW,
-                    Math.sin(midAng) * s.radiusNorm * drawH,
-                  ),
-                )
-                const sweep = ((s.endAngleRad - s.startAngleRad) * 180) / Math.PI
-                const rotation = (s.startAngleRad * 180) / Math.PI
-                const isTele = s.lensId === 'tele'
-                const poly = s.polygon
-                const inner =
-                  band === 'green'
-                    ? 0
-                    : band === 'yellow'
-                      ? radiusPx * VISION_BAND_FRAC.greenMax
-                      : radiusPx * VISION_BAND_FRAC.yellowMax
-                const outer =
-                  band === 'green'
-                    ? radiusPx * VISION_BAND_FRAC.greenMax
-                    : band === 'yellow'
-                      ? radiusPx * VISION_BAND_FRAC.yellowMax
-                      : radiusPx
-                const fill =
-                  band === 'green'
-                    ? isTele
-                      ? 'rgba(251, 146, 60, 0.78)'
-                      : 'rgba(34, 197, 94, 0.82)'
-                    : band === 'yellow'
-                      ? isTele
-                        ? 'rgba(253, 186, 116, 0.70)'
-                        : 'rgba(234, 179, 8, 0.76)'
-                      : isTele
-                        ? 'rgba(239, 68, 68, 0.42)'
-                        : 'rgba(239, 68, 68, 0.55)'
-                return (
-                  <Group
-                    key={`vis-bands-${band}-${s.cameraId}-${s.lensId ?? 'main'}`}
-                    listening={false}
-                    clipFunc={
-                      poly && poly.length >= 3
-                        ? (ctx) => {
-                            const p0 = poly[0]!
-                            ctx.beginPath()
-                            ctx.moveTo(offsetX + p0.x * drawW, offsetY + p0.y * drawH)
-                            for (let i = 1; i < poly.length; i++) {
-                              const p = poly[i]!
-                              ctx.lineTo(offsetX + p.x * drawW, offsetY + p.y * drawH)
-                            }
-                            ctx.closePath()
-                          }
-                        : undefined
-                    }
-                  >
-                    <Arc
-                      x={cx}
-                      y={cy}
-                      innerRadius={inner}
-                      outerRadius={Math.max(inner + 0.5, outer)}
-                      angle={sweep}
-                      rotation={rotation}
-                      fill={fill}
-                      listening={false}
-                    />
-                  </Group>
-                )
-              }),
-            )}
-
+        </Layer>
+        {showFov ? (
+          <VisionSpectrumLayer
+            sectors={sectors}
+            offsetX={offsetX}
+            offsetY={offsetY}
+            drawW={drawW}
+            drawH={drawH}
+          />
+        ) : null}
+        <Layer>
           {showWifi &&
             wifiSpectrum.map((c, i) => (
               <Rect
