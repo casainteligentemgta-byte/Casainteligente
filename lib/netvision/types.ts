@@ -194,6 +194,20 @@ export type NetVisionProject = {
   scale: ScaleCalibration
   retentionDays: number
   complianceProfileId: string
+  /**
+   * Cámaras Dual: ajuste propio de cada lente secundaria (por id de lente, p. ej. «tele»).
+   * Cada cono puede mirar a otro lugar. La lente primaria usa yawDeg / fov* / rangeM de arriba.
+   */
+  lensVision?: Record<string, LensVisionOverride>
+}
+
+/** Orientación / apertura / alcance propios de una lente secundaria. */
+export type LensVisionOverride = {
+  yawDeg?: number
+  fovDeg?: number
+  fovLeftDeg?: number
+  fovRightDeg?: number
+  rangeM?: number
 }
 
 export type ValidationLevel = 'ERROR' | 'WARNING' | 'INFO'

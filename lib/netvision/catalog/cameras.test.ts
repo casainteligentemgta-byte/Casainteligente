@@ -5,8 +5,11 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   cameraCatalogOptionLabel,
+  cameraPatchForLens,
   cameraVisionSummary,
   camerasByBrand,
+  catalogVisionDefaults,
+  effectiveCameraLenses,
   getCameraModel,
   isDualCameraModel,
 } from './cameras'
@@ -74,5 +77,50 @@ describe('catálogo Aqara', () => {
       '2K · bullet · 135° · día 16 m / noche 12 m',
     )
     assert.match(g100.notes ?? '', /IP65/)
+  })
+})
+
+describe('Dual · conos autónomos', () => {
+  const base = {
+    id: 'c1',
+    label: 'CAM-01',
+    x: 0.5,
+    y: 0.5,
+    modelId: 'aqara-g350',
+    yawDeg: 90,
+    mountHeightM: 2.8,
+    retentionDays: 30,
+    complianceProfileId: 'x',
+  }
+
+  it('sin ajuste propio, la tele mira hacia donde mira la gran angular', () => {
+    const [wide, tele] = effectiveCameraLenses(base)
+    assert.equal(wide!.yawDeg, 90)
+    assert.equal(tele!.yawDeg, 90)
+  })
+
+  it('girar la tele no mueve la gran angular, y viceversa', () => {
+    const cam = { ...base, ...cameraPatchForLens(base, 'tele', { yawDeg: 270, rangeM: 20 }) }
+    const [wide, tele] = effectiveCameraLenses(cam)
+    assert.equal(wide!.yawDeg, 90)
+    assert.equal(tele!.yawDeg, 270)
+    assert.equal(tele!.rangeM, 20)
+    const cam2 = { ...cam, ...cameraPatchForLens(cam, 'wide', { yawDeg: 0 }) }
+    const [w2, t2] = effectiveCameraLenses(cam2)
+    assert.equal(w2!.yawDeg, 0)
+    assert.equal(t2!.yawDeg, 270)
+  })
+
+  it('la apertura de la tele es propia', () => {
+    const cam = { ...base, ...cameraPatchForLens(base, 'tele', { fovLeftDeg: 10, fovRightDeg: 10 }) }
+    const [wide, tele] = effectiveCameraLenses(cam)
+    assert.equal(tele!.fovDeg, 20)
+    assert.equal(wide!.fovDeg, 127)
+  })
+
+  it('cambiar de modelo o restaurar vuelve a alinear las lentes', () => {
+    const d = catalogVisionDefaults('aqara-g350')
+    assert.ok('lensVision' in d)
+    assert.equal(d.lensVision, undefined)
   })
 })

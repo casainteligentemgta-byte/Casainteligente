@@ -22,7 +22,7 @@ import type {
   DesignStructure,
   SpectrumCell,
 } from '@/lib/netvision/types'
-import { effectiveCameraVision } from '@/lib/netvision/catalog/cameras'
+import { effectiveCameraLenses } from '@/lib/netvision/catalog/cameras'
 import { getStructureMaterialOrDefault } from '@/lib/netvision/catalog/materials'
 import { degToRad } from '@/lib/netvision/utils/geometryHelpers'
 import { snapOrtho90 } from '@/lib/netvision/utils/structureDraw'
@@ -88,6 +88,8 @@ export type CameraPlacementToolProps = {
       fovRightDeg?: number
       rangeM?: number
     },
+    /** Dual: lente a ajustar (cada cono mira por su cuenta). Sin valor = óptica primaria. */
+    lensId?: string,
   ) => void
   metersPerNormX?: number
   metersPerNormY?: number
@@ -835,8 +837,7 @@ export default function CameraPlacementTool({
                 selected &&
                 !!onAdjustCameraVision &&
                 !snapPlaceToDevices &&
-                !placeMode &&
-                !isTele
+                !placeMode
               const applyYawFromEvent = (e: KonvaEventObject<DragEvent>) => {
                 const stage = e.target.getStage()
                 const pos = stage?.getRelativePointerPosition()
@@ -853,6 +854,7 @@ export default function CameraPlacementTool({
                     yawDeg: 0,
                     avgMPerNorm: 1,
                   }),
+                  s.lensId,
                 )
               }
               const hitCx = offsetX + s.cx * drawW
@@ -1430,13 +1432,18 @@ export default function CameraPlacementTool({
             !snapPlaceToDevices &&
             cameras
               .filter((c) => c.id === selectedId)
-              .map((cam) => {
-                const vision = effectiveCameraVision(cam, nightMode ? 'night' : 'day')
-                // Asas sobre la óptica primaria (gran angular en Dual)
+              .flatMap((cam) =>
+                effectiveCameraLenses(cam, nightMode ? 'night' : 'day').map((vision, lensIndex) => {
+                // Asas por lente: en Dual cada cono se orienta, abre y alarga por separado.
+                const lensId = vision.lensId
+                const secundaria = lensIndex > 0
+                const colPrincipal = secundaria ? '#fb923c' : '#22d3ee'
+                const colLados = secundaria ? '#fdba74' : '#67e8f9'
+                const colTexto = secundaria ? '#ffedd5' : '#ecfeff'
+                const colGuia = secundaria ? 'rgba(253,186,116,0.9)' : 'rgba(165,243,252,0.9)'
+                const colGuiaLado = secundaria ? 'rgba(253,186,116,0.45)' : 'rgba(103,232,249,0.45)'
                 const sector = sectors.find(
-                  (s) =>
-                    s.cameraId === cam.id &&
-                    (!s.lensId || s.lensId === 'main' || s.lensId === 'wide'),
+                  (s) => s.cameraId === cam.id && (s.lensId ?? 'main') === lensId,
                 )
                 const avgMPerNorm = Math.max((metersPerNormX + metersPerNormY) / 2, 0.01)
                 const radiusNorm =
@@ -1483,6 +1490,7 @@ export default function CameraPlacementTool({
                       avgMPerNorm,
                       fovStep,
                     }),
+                    lensId,
                   )
                 }
 
@@ -1514,24 +1522,24 @@ export default function CameraPlacementTool({
                 })
 
                 return (
-                  <Fragment key={`vis-handles-${cam.id}`}>
+                  <Fragment key={`vis-handles-${cam.id}-${lensId}`}>
                     <Line
                       points={[cx, cy, farX, farY]}
-                      stroke="rgba(165,243,252,0.9)"
+                      stroke={colGuia}
                       strokeWidth={2}
                       dash={[5, 4]}
                       listening={false}
                     />
                     <Line
                       points={[cx, cy, leftX, leftY]}
-                      stroke="rgba(103,232,249,0.45)"
+                      stroke={colGuiaLado}
                       strokeWidth={1.5}
                       dash={[3, 4]}
                       listening={false}
                     />
                     <Line
                       points={[cx, cy, rightX, rightY]}
-                      stroke="rgba(103,232,249,0.45)"
+                      stroke={colGuiaLado}
                       strokeWidth={1.5}
                       dash={[3, 4]}
                       listening={false}
@@ -1544,7 +1552,7 @@ export default function CameraPlacementTool({
                       text={`${Math.round(vision.fovDeg)}°`}
                       fontSize={14}
                       fontStyle="bold"
-                      fill="#ecfeff"
+                      fill={colTexto}
                       stroke="#0f172a"
                       strokeWidth={0.7}
                       listening={false}
@@ -1557,7 +1565,7 @@ export default function CameraPlacementTool({
                       text={`${vision.rangeM.toFixed(vision.rangeM >= 10 ? 0 : 1)} m`}
                       fontSize={12}
                       fontStyle="bold"
-                      fill="#a5f3fc"
+                      fill={colLados}
                       stroke="#0f172a"
                       strokeWidth={0.5}
                       listening={false}
@@ -1566,7 +1574,7 @@ export default function CameraPlacementTool({
                       x={tipX}
                       y={tipY}
                       radius={13}
-                      fill="#22d3ee"
+                      fill={colPrincipal}
                       stroke="#ecfeff"
                       strokeWidth={2.5}
                       hitStrokeWidth={28}
@@ -1585,7 +1593,7 @@ export default function CameraPlacementTool({
                       x={leftX}
                       y={leftY}
                       radius={12}
-                      fill="#67e8f9"
+                      fill={colLados}
                       stroke="#ecfeff"
                       strokeWidth={2}
                       hitStrokeWidth={26}
@@ -1604,7 +1612,7 @@ export default function CameraPlacementTool({
                       x={rightX}
                       y={rightY}
                       radius={12}
-                      fill="#67e8f9"
+                      fill={colLados}
                       stroke="#ecfeff"
                       strokeWidth={2}
                       hitStrokeWidth={26}
@@ -1624,7 +1632,7 @@ export default function CameraPlacementTool({
                       y={farY}
                       radius={11}
                       fill="#0f172a"
-                      stroke="#22d3ee"
+                      stroke={colPrincipal}
                       strokeWidth={3}
                       hitStrokeWidth={26}
                       draggable
@@ -1640,7 +1648,8 @@ export default function CameraPlacementTool({
                     />
                   </Fragment>
                 )
-              })}
+                }),
+              )}
 
           {networkNodes.map((node) => {
             const cx = offsetX + node.x * drawW

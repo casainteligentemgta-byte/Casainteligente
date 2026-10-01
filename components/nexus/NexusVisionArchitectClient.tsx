@@ -47,6 +47,7 @@ import {
   effectiveCameraLenses,
   effectiveCameraVision,
   catalogVisionDefaults,
+  cameraPatchForLens,
   getCameraModelOrDefault,
 } from '@/lib/netvision/catalog/cameras'
 import {
@@ -1130,6 +1131,7 @@ export default function NexusVisionArchitectClient() {
         if ('fovDeg' in patch && patch.fovDeg === undefined) delete next.fovDeg
         if ('fovLeftDeg' in patch && patch.fovLeftDeg === undefined) delete next.fovLeftDeg
         if ('fovRightDeg' in patch && patch.fovRightDeg === undefined) delete next.fovRightDeg
+        if ('lensVision' in patch && patch.lensVision === undefined) delete next.lensVision
         if ('rangeM' in patch && patch.rangeM === undefined) delete next.rangeM
         return next
       }),
@@ -1150,8 +1152,12 @@ export default function NexusVisionArchitectClient() {
       fovRightDeg?: number
       rangeM?: number
     },
+    lensId?: string,
   ) => {
-    patchCamera(id, patch)
+    const cam = project.cameras.find((c) => c.id === id)
+    if (!cam) return
+    // Dual: cada cono se ajusta por separado (la lente secundaria guarda su propio yaw/FOV/alcance).
+    patchCamera(id, cameraPatchForLens(cam, lensId, patch))
   }
 
   const patchNetworkNode = (id: string, patch: Partial<DesignNetworkNode>) => {
@@ -2439,10 +2445,44 @@ export default function NexusVisionArchitectClient() {
                                     : 'text-[var(--nexus-cyan)]'
                                 }
                               >
-                                {l.lensId === 'tele' ? 'Naranja' : 'Cyan'} · {l.label}: FOV{' '}
+                                {l.lensId === 'tele' ? 'Naranja' : 'Cyan'} · {l.label}: {l.yawDeg}° · FOV{' '}
                                 {l.fovDeg}° ·{' '}
                                 {formatLength(l.rangeM, project.unitSystem ?? 'metric')}
                               </p>
+                            ))}
+                            {lenses.slice(1).map((l) => (
+                              <div key={`yaw-${l.lensId}`} className="flex flex-wrap items-center gap-2">
+                                <label className="flex items-center gap-1 text-orange-200">
+                                  Orientación {l.label.split(' ')[0].toLowerCase()}
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={359}
+                                    step={5}
+                                    value={l.yawDeg}
+                                    onChange={(e) => {
+                                      const v = Number(e.target.value)
+                                      if (!Number.isFinite(v)) return
+                                      adjustCameraVision(selectedCam.id, { yawDeg: ((v % 360) + 360) % 360 }, l.lensId)
+                                    }}
+                                    className="w-16 rounded border border-white/10 bg-black/40 px-1.5 py-0.5 text-[11px] text-white"
+                                  />
+                                  °
+                                </label>
+                                <button
+                                  type="button"
+                                  className="text-[10px] text-[var(--nexus-text-muted)] underline"
+                                  onClick={() => {
+                                    const rest = { ...(selectedCam.lensVision ?? {}) }
+                                    delete rest[l.lensId]
+                                    updateSelectedCam({
+                                      lensVision: Object.keys(rest).length ? rest : undefined,
+                                    })
+                                  }}
+                                >
+                                  Alinear con {lenses[0]!.label.split(' ')[0].toLowerCase()}
+                                </button>
+                              </div>
                             ))}
                           </div>
                         ) : null}
@@ -2651,7 +2691,9 @@ export default function NexusVisionArchitectClient() {
                         <p className="text-[10px] text-[var(--nexus-text-dim)]">
                           Plano: arrastra el cono o el punto del medio para girar; los lados
                           para la apertura; el anillo de la punta para el alcance.
-                          {isDual ? ' Dual: cyan angular + naranja tele.' : ''}
+                          {isDual
+                            ? ' Dual: cada cono es autónomo; arrastra el cyan (angular) o el naranja (tele) para que miren a lugares distintos.'
+                            : ''}
                         </p>
                       </NetVisionCollapsible>
                     )

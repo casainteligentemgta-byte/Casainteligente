@@ -441,7 +441,30 @@ function normalizeCamera(c: Partial<DesignCamera> & { label?: string }): DesignC
     ...(fovLeftDeg != null ? { fovLeftDeg } : {}),
     ...(fovRightDeg != null ? { fovRightDeg } : {}),
     ...(rangeM != null ? { rangeM } : {}),
+    ...normalizeLensVision(c.lensVision),
   }
+}
+
+/** Ajuste propio de las lentes secundarias (Dual): se conserva al guardar/cargar el diseño. */
+function normalizeLensVision(raw: unknown): Pick<DesignCamera, 'lensVision'> | Record<string, never> {
+  if (!raw || typeof raw !== 'object') return {}
+  const num = (v: unknown, min: number, max: number) =>
+    typeof v === 'number' && Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : undefined
+  const out: NonNullable<DesignCamera['lensVision']> = {}
+  for (const [lensId, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (!lensId || !v || typeof v !== 'object') continue
+    const o = v as Record<string, unknown>
+    const yaw = typeof o.yawDeg === 'number' && Number.isFinite(o.yawDeg) ? ((o.yawDeg % 360) + 360) % 360 : undefined
+    const lens = {
+      ...(yaw != null ? { yawDeg: yaw } : {}),
+      ...(num(o.fovDeg, 20, 170) != null ? { fovDeg: num(o.fovDeg, 20, 170) } : {}),
+      ...(num(o.fovLeftDeg, 10, 85) != null ? { fovLeftDeg: num(o.fovLeftDeg, 10, 85) } : {}),
+      ...(num(o.fovRightDeg, 10, 85) != null ? { fovRightDeg: num(o.fovRightDeg, 10, 85) } : {}),
+      ...(num(o.rangeM, 2, 120) != null ? { rangeM: num(o.rangeM, 2, 120) } : {}),
+    }
+    if (Object.keys(lens).length) out[lensId] = lens
+  }
+  return Object.keys(out).length ? { lensVision: out } : {}
 }
 
 function normalizeNetworkNode(
