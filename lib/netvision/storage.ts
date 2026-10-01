@@ -16,6 +16,12 @@ import type {
 import { DRAWABLE_CABLE_TYPES } from '@/lib/netvision/services/cableCalculator'
 import { defaultScale } from '@/lib/netvision/services/coverageCalculator'
 import { DEFAULT_CAMERA_MODEL_ID } from '@/lib/netvision/catalog/cameras'
+import {
+  clampMountHeightM,
+  clampTiltDeg,
+  DEFAULT_MOUNT_HEIGHT_M,
+  DEFAULT_TILT_DEG,
+} from '@/lib/netvision/utils/cameraMount'
 import { DEFAULT_STRUCTURE_MATERIAL_ID } from '@/lib/netvision/catalog/materials'
 import { defaultModelIdForKind } from '@/lib/netvision/catalog/network'
 import {
@@ -436,7 +442,10 @@ function normalizeCamera(c: Partial<DesignCamera> & { label?: string }): DesignC
     y: looksPercent ? (c.y ?? 0) / 100 : (c.y ?? 0),
     modelId: c.modelId ?? DEFAULT_CAMERA_MODEL_ID,
     yawDeg: typeof c.yawDeg === 'number' ? c.yawDeg : 0,
-    mountHeightM: typeof c.mountHeightM === 'number' ? c.mountHeightM : 2.8,
+    mountHeightM: clampMountHeightM(
+      typeof c.mountHeightM === 'number' ? c.mountHeightM : DEFAULT_MOUNT_HEIGHT_M,
+    ),
+    tiltDeg: clampTiltDeg(typeof c.tiltDeg === 'number' ? c.tiltDeg : DEFAULT_TILT_DEG),
     ...(fovDeg != null ? { fovDeg } : {}),
     ...(fovLeftDeg != null ? { fovLeftDeg } : {}),
     ...(fovRightDeg != null ? { fovRightDeg } : {}),
