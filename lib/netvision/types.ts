@@ -32,6 +32,8 @@ export type CameraModel = {
   bitrateMbps: number
   poeWatts: number
   priceUsd: number
+  /** Facultades de visión (FOV de ficha, IR/color, PTZ, dual, etc.). */
+  notes?: string
 }
 
 export type DesignCamera = {

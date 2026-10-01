@@ -194,7 +194,8 @@ Usa **[+ Cámara]** y el selector de marca/modelo:
 │  ├─ Uniview
 │  ├─ Dahua
 │  ├─ Sony
-│  └─ (catálogo ampliable: Ezviz, Aqara, …)
+│  ├─ Ezviz
+│  └─ Aqara (G5 Pro, G350 Dual, G3 PTZ, E1, G100, timbres G410/G400/G4)
 ```
 
 ### Paso 2: Seleccionar cámara

@@ -13,10 +13,10 @@ Diseño CCTV / redes / cableado / subterráneo / normativas / BIM en Nexus (`/ne
 
 ### 1 — CCTV
 FOV, catálogo multi-marca, calibración, BOM base, exports JSON/CSV/PNG/**PDF del plano** (captura A4 apaisada).
-**Marcas:** Hikvision, Axis, Uniview, Dahua, Sony, Ezviz (catálogo amplio), Aqara (catálogo amplio).
+**Marcas:** Hikvision, Axis, Uniview, Dahua, Sony, Ezviz (catálogo amplio), Aqara (G2H/G3/E1/G100, G350 Dual 4K, G5 Pro color night, timbres G4/G400/G410).
 Agregar cámara con botón **+ Cámara** (no por clic en el plano); luego arrastrar el pin.
 Espectro de visión ajustable por cámara: orientación, apertura FOV y alcance (sliders + asas en el plano).
-Cámaras **Dual** (p. ej. Ezviz H9c): dos conos/espectros — gran angular (cyan) + tele (naranja).
+Cámaras **Dual** (Ezviz H9c, Aqara G350): dos conos/espectros — gran angular (cyan) + tele (naranja). El FOV del catálogo es **horizontal** (si la ficha publica diagonal, se convierte).
 **Calcular cobertura**: semáforo por alcance — verde (detección objetos/personas ≤40%), amarillo (≤70%), rojo (visión dudosa hasta 100%).
 Guía rápida de capas (Visión / WiFi / Sonido / Enlaces / Rutas / Sub / Noche): botón **?** en la barra del plano (`NetVisionLayerHelp`).
 

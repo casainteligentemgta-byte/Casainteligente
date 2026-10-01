@@ -216,6 +216,23 @@ IP Rating               IP67
 
 Usa **+ Cámara** y el selector de marca/modelo en NetVision para datos del catálogo cargado.
 
+### Aqara (visión en plano = FOV horizontal)
+
+Valores de ficha convertidos a FOV horizontal cuando el fabricante publica diagonal. Alcance noche estimado (Aqara rara vez publica metros IR).
+
+```
+G5 Pro PoE/Wi-Fi     2K QHD  H112°  color night f/1.0 + spotlight 3 W  IP65
+G350 Dual            4K 2,8 mm H127° + tele 8 mm H38°  PTZ 360°  IR 940 nm
+G3 PTZ               2K H110°  pan 340°/tilt 45°  IR 940 nm  hub Zigbee
+G2H Pro              1080p H141° (146° diag)  IR 940 nm  fija
+E1 PTZ               2K H93° (101° diag)  pan 360°  IR 940 nm
+G100                 2K H135° (140° diag)  IP65  IR + spotlight
+Doorbell G410        2K ~H170° (175° diag 4:3)  mmWave
+Doorbell G400        2K H155° (165° diag 3:4)  IP65  PoE/8–24 V
+```
+
+El PTZ **no** dibuja 360°: el cono es el encuadre actual. Hub M3 no es cámara.
+
 ---
 
 ## Consumo PoE por dispositivo
