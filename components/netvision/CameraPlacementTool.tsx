@@ -36,6 +36,12 @@ import type { WifiCoverageCircle } from '@/lib/netvision/services/wifiPredictor'
 import type { AccessChamber, UndergroundRun } from '@/lib/netvision/services/canalizationCalculator'
 import { nearestSegmentOnRoute, MANUAL_CABLE_TO_ID } from '@/lib/netvision/services/cableRoutingEngine'
 import { invertRgbPixels } from '@/lib/netvision/utils/rotatePlano'
+import {
+  rangeFromDistNorm,
+  shortestDeltaDeg,
+  symmetricFovFromYawDelta,
+  wrapDeg360,
+} from '@/lib/netvision/utils/visionAdjust'
 
 export type CameraPlacementToolProps = {
   backgroundUrl: string | null
@@ -737,8 +743,12 @@ export default function CameraPlacementTool({
               const fill =
                 visionSpectrum.length > 0
                   ? isTele
-                    ? 'rgba(251,146,60,0.03)'
-                    : 'rgba(6,182,212,0.04)'
+                    ? selected
+                      ? 'rgba(251,146,60,0.16)'
+                      : 'rgba(251,146,60,0.03)'
+                    : selected
+                      ? 'rgba(6,182,212,0.16)'
+                      : 'rgba(6,182,212,0.04)'
                   : selected
                     ? isTele
                       ? 'rgba(251,146,60,0.28)'
@@ -748,6 +758,20 @@ export default function CameraPlacementTool({
                       : 'rgba(6,182,212,0.32)'
               const fovKey = `fov-${s.cameraId}-${s.lensId ?? 'main'}`
               const poly = s.polygon
+              const canSpin =
+                selected &&
+                !!onAdjustCameraVision &&
+                !snapPlaceToDevices &&
+                !placeMode &&
+                !isTele
+              const applyYawFromEvent = (e: KonvaEventObject<DragEvent>) => {
+                const stage = e.target.getStage()
+                const pos = stage?.getRelativePointerPosition()
+                if (!pos || !onAdjustCameraVision) return
+                const n = toNorm(pos.x, pos.y)
+                const ang = radToDeg(Math.atan2(n.y - s.cy, n.x - s.cx))
+                onAdjustCameraVision(s.cameraId, { yawDeg: wrapDeg360(Math.round(ang)) })
+              }
               if (poly && poly.length >= 3) {
                 const pts: number[] = []
                 for (const p of poly) {
@@ -763,7 +787,37 @@ export default function CameraPlacementTool({
                     stroke={stroke}
                     strokeWidth={selected ? (isTele ? 2 : 2.5) : isTele ? 1.75 : 2}
                     dash={isTele ? [7, 5] : undefined}
-                    listening={false}
+                    listening={canSpin}
+                    hitStrokeWidth={canSpin ? 28 : 0}
+                    draggable={canSpin}
+                    dragDistance={6}
+                    onClick={(e) => {
+                      e.cancelBubble = true
+                      onSelect(s.cameraId)
+                    }}
+                    onTap={(e) => {
+                      e.cancelBubble = true
+                      onSelect(s.cameraId)
+                    }}
+                    onDragStart={(e) => {
+                      if (!canSpin) return
+                      e.cancelBubble = true
+                      pauseStageDrag(e.target.getStage())
+                      onSelect(s.cameraId)
+                    }}
+                    onDragMove={(e) => {
+                      if (!canSpin) return
+                      e.cancelBubble = true
+                      e.target.position({ x: 0, y: 0 })
+                      applyYawFromEvent(e)
+                    }}
+                    onDragEnd={(e) => {
+                      if (!canSpin) return
+                      e.cancelBubble = true
+                      e.target.position({ x: 0, y: 0 })
+                      applyYawFromEvent(e)
+                      resumeStageDrag(e.target.getStage())
+                    }}
                   />
                 )
               }
@@ -1261,24 +1315,16 @@ export default function CameraPlacementTool({
                 const tipY = offsetY + (cam.y + Math.sin(midAng) * radiusNorm) * drawH
                 const leftAng = midAng - leftHalf
                 const rightAng = midAng + rightHalf
-                const wingR = radiusNorm * 0.72
-                const midLabelR = radiusNorm * 0.48
+                const wingR = radiusNorm * 0.88
+                const midLabelR = radiusNorm * 0.42
                 const leftX = offsetX + (cam.x + Math.cos(leftAng) * wingR) * drawW
                 const leftY = offsetY + (cam.y + Math.sin(leftAng) * wingR) * drawH
                 const rightX = offsetX + (cam.x + Math.cos(rightAng) * wingR) * drawW
                 const rightY = offsetY + (cam.y + Math.sin(rightAng) * wingR) * drawH
                 const midLabelX = offsetX + (cam.x + Math.cos(midAng) * midLabelR) * drawW
                 const midLabelY = offsetY + (cam.y + Math.sin(midAng) * midLabelR) * drawH
-                const leftLabelR = radiusNorm * 0.4
-                const rightLabelR = radiusNorm * 0.4
-                const leftLabelX =
-                  offsetX + (cam.x + Math.cos(midAng - leftHalf * 0.55) * leftLabelR) * drawW
-                const leftLabelY =
-                  offsetY + (cam.y + Math.sin(midAng - leftHalf * 0.55) * leftLabelR) * drawH
-                const rightLabelX =
-                  offsetX + (cam.x + Math.cos(midAng + rightHalf * 0.55) * rightLabelR) * drawW
-                const rightLabelY =
-                  offsetY + (cam.y + Math.sin(midAng + rightHalf * 0.55) * rightLabelR) * drawH
+                const tipLabelX = offsetX + (cam.x + Math.cos(midAng) * radiusNorm) * drawW
+                const tipLabelY = offsetY + (cam.y + Math.sin(midAng) * radiusNorm) * drawH
                 const cx = offsetX + cam.x * drawW
                 const cy = offsetY + cam.y * drawH
 
@@ -1293,39 +1339,17 @@ export default function CameraPlacementTool({
                   const ang = radToDeg(Math.atan2(dy, dx))
                   const distNorm = Math.hypot(dx, dy)
                   if (mode === 'tip') {
-                    const rangeM = Math.min(
-                      120,
-                      Math.max(2, distNorm * avgMPerNorm),
-                    )
                     onAdjustCameraVision(cam.id, {
-                      yawDeg: Math.round(((ang % 360) + 360) % 360),
-                      rangeM: Math.round(rangeM * 10) / 10,
+                      yawDeg: wrapDeg360(Math.round(ang)),
+                      rangeM: rangeFromDistNorm(distNorm, avgMPerNorm),
                     })
                     return
                   }
-                  let delta = ang - vision.yawDeg
-                  while (delta > 180) delta -= 360
-                  while (delta < -180) delta += 360
-                  if (mode === 'left') {
-                    // Izquierda del yaw: delta negativo en sentido horario canvas
-                    const half = Math.min(85, Math.max(10, Math.abs(Math.min(0, delta))))
-                    const left = Math.round(half)
-                    const right = Math.round(vision.fovRightDeg)
-                    onAdjustCameraVision(cam.id, {
-                      fovLeftDeg: left,
-                      fovRightDeg: right,
-                      fovDeg: left + right,
-                    })
-                    return
-                  }
-                  const half = Math.min(85, Math.max(10, Math.abs(Math.max(0, delta))))
-                  const left = Math.round(vision.fovLeftDeg)
-                  const right = Math.round(half)
-                  onAdjustCameraVision(cam.id, {
-                    fovLeftDeg: left,
-                    fovRightDeg: right,
-                    fovDeg: left + right,
-                  })
+                  // Un lado mueve los dos: apertura simétrica (fácil en iPad).
+                  const fov = symmetricFovFromYawDelta(
+                    shortestDeltaDeg(vision.yawDeg, ang),
+                  )
+                  onAdjustCameraVision(cam.id, fov)
                 }
 
                 const bindHandleDrag = (mode: 'tip' | 'left' | 'right') => ({
@@ -1371,40 +1395,26 @@ export default function CameraPlacementTool({
                       dash={[3, 4]}
                       listening={false}
                     />
-                    {/* Grados en el medio del espectro (eje de orientación) */}
                     <Text
-                      x={midLabelX - 22}
-                      y={midLabelY - 8}
-                      width={44}
+                      x={midLabelX - 36}
+                      y={midLabelY - 9}
+                      width={72}
                       align="center"
                       text={`${Math.round(vision.fovDeg)}°`}
-                      fontSize={13}
+                      fontSize={14}
                       fontStyle="bold"
                       fill="#ecfeff"
                       stroke="#0f172a"
-                      strokeWidth={0.6}
+                      strokeWidth={0.7}
                       listening={false}
                     />
                     <Text
-                      x={leftLabelX - 16}
-                      y={leftLabelY - 7}
-                      width={32}
+                      x={tipLabelX - 28}
+                      y={tipLabelY + 14}
+                      width={56}
                       align="center"
-                      text={`${Math.round(vision.fovLeftDeg)}°`}
-                      fontSize={11}
-                      fontStyle="bold"
-                      fill="#a5f3fc"
-                      stroke="#0f172a"
-                      strokeWidth={0.5}
-                      listening={false}
-                    />
-                    <Text
-                      x={rightLabelX - 16}
-                      y={rightLabelY - 7}
-                      width={32}
-                      align="center"
-                      text={`${Math.round(vision.fovRightDeg)}°`}
-                      fontSize={11}
+                      text={`${vision.rangeM.toFixed(vision.rangeM >= 10 ? 0 : 1)} m`}
+                      fontSize={12}
                       fontStyle="bold"
                       fill="#a5f3fc"
                       stroke="#0f172a"
@@ -1414,11 +1424,11 @@ export default function CameraPlacementTool({
                     <Circle
                       x={tipX}
                       y={tipY}
-                      radius={10}
+                      radius={13}
                       fill="#22d3ee"
                       stroke="#ecfeff"
-                      strokeWidth={2}
-                      hitStrokeWidth={18}
+                      strokeWidth={2.5}
+                      hitStrokeWidth={28}
                       draggable
                       onClick={(e) => {
                         e.cancelBubble = true
@@ -1433,11 +1443,11 @@ export default function CameraPlacementTool({
                     <Circle
                       x={leftX}
                       y={leftY}
-                      radius={8}
+                      radius={12}
                       fill="#67e8f9"
-                      stroke="#0f172a"
-                      strokeWidth={1.5}
-                      hitStrokeWidth={16}
+                      stroke="#ecfeff"
+                      strokeWidth={2}
+                      hitStrokeWidth={26}
                       draggable
                       onClick={(e) => {
                         e.cancelBubble = true
@@ -1452,11 +1462,11 @@ export default function CameraPlacementTool({
                     <Circle
                       x={rightX}
                       y={rightY}
-                      radius={8}
+                      radius={12}
                       fill="#67e8f9"
-                      stroke="#0f172a"
-                      strokeWidth={1.5}
-                      hitStrokeWidth={16}
+                      stroke="#ecfeff"
+                      strokeWidth={2}
+                      hitStrokeWidth={26}
                       draggable
                       onClick={(e) => {
                         e.cancelBubble = true
