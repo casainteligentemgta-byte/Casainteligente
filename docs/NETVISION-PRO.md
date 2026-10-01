@@ -21,7 +21,8 @@ Cámaras **Dual** (p. ej. Ezviz H9c): dos conos/espectros — gran angular (cyan
 Guía rápida de capas (Visión / WiFi / Sonido / Enlaces / Rutas / Sub / Noche): botón **?** en la barra del plano (`NetVisionLayerHelp`).
 
 ### 1b — Muros / materiales
-Pestaña **Muros**: drywall, bloque, **concreto**, vidrio, ventana, **puerta** (2 toques); arrastrar segmento o extremos. Capa **Estructuras** (checkbox) muestra/oculta en el plano; lista colapsable en el panel. Drywall/bloque/concreto cortan FOV (el espectro no atraviesa); aberturas no.
+Pestaña **Muros**: detecta muros de un PDF vectorial (CAD) o dibuja drywall, bloque, **concreto**, vidrio, ventana, **puerta**; arrastrar segmento o extremos. Capa **Estructuras** (checkbox) muestra/oculta en el plano; lista colapsable en el panel. Drywall/bloque/concreto cortan FOV (el espectro no atraviesa); aberturas no.
+- Al cargar un PDF exportado de CAD, NetVision agrupa polígonos rellenos por color y toma como muro el color más largo y delgado (paso 2 de la cascada). Se puede repetir con **Detectar muros del PDF**.
 - Drywall/bloque/concreto cortan FOV; vidrio/ventana dejan ver.
 - WiFi y Sonido usan mapa de calor atenuado por material (`structureAttenuation`, `buildWifiSpectrum`, `buildSoundSpectrum`).
 

@@ -151,6 +151,10 @@ import {
   type PlanoRotateDir,
 } from '@/lib/netvision/utils/rotatePlano'
 import { FOV_PRESETS_DEG, RANGE_PRESETS_M } from '@/lib/netvision/utils/visionAdjust'
+import {
+  detectWallsFromPdfBytes,
+  structuresFromWallDetection,
+} from '@/lib/netvision/detectWallsFromPdf'
 import type { NetVisionZoomControls } from '@/components/netvision/CameraPlacementTool'
 
 const CameraPlacementTool = dynamic(
@@ -169,20 +173,40 @@ function uid(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
 }
 
-async function renderPdfFirstPage(file: File): Promise<string> {
+async function renderPdfFirstPageFromBytes(data: Uint8Array): Promise<string> {
   const pdfjs = await import('pdfjs-dist')
   pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`
-  const data = new Uint8Array(await file.arrayBuffer())
-  const doc = await pdfjs.getDocument({ data }).promise
-  const page = await doc.getPage(1)
-  const viewport = page.getViewport({ scale: 1.5 })
-  const canvas = document.createElement('canvas')
-  canvas.width = viewport.width
-  canvas.height = viewport.height
-  const ctx = canvas.getContext('2d')
-  if (!ctx) throw new Error('No se pudo crear el canvas del PDF.')
-  await page.render({ canvasContext: ctx, viewport }).promise
-  return canvas.toDataURL('image/jpeg', 0.92)
+  const doc = await pdfjs.getDocument({ data: data.slice() }).promise
+  try {
+    const page = await doc.getPage(1)
+    const viewport = page.getViewport({ scale: 1.5 })
+    const canvas = document.createElement('canvas')
+    canvas.width = viewport.width
+    canvas.height = viewport.height
+    const ctx = canvas.getContext('2d')
+    if (!ctx) throw new Error('No se pudo crear el canvas del PDF.')
+    await page.render({ canvasContext: ctx, viewport }).promise
+    return canvas.toDataURL('image/jpeg', 0.92)
+  } finally {
+    await doc.destroy()
+  }
+}
+
+function rotateStructuresCwQuarters(
+  structures: DesignStructure[],
+  quarters: number,
+): DesignStructure[] {
+  const q = ((quarters % 4) + 4) % 4
+  if (q === 0) return structures
+  return structures.map((s) => {
+    let a = { x: s.x1, y: s.y1 }
+    let b = { x: s.x2, y: s.y2 }
+    for (let i = 0; i < q; i++) {
+      a = rotateNormPoint(a.x, a.y, 'cw')
+      b = rotateNormPoint(b.x, b.y, 'cw')
+    }
+    return { ...s, x1: a.x, y1: a.y, x2: b.x, y2: b.y }
+  })
 }
 
 export default function NexusVisionArchitectClient() {
@@ -233,6 +257,10 @@ export default function NexusVisionArchitectClient() {
   const [loading, setLoading] = useState(false)
   const [exportingPdf, setExportingPdf] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [info, setInfo] = useState<string | null>(null)
+  const pdfBytesRef = useRef<Uint8Array | null>(null)
+  const pdfRotateQuartersRef = useRef(0)
+  const [canDetectPdfWalls, setCanDetectPdfWalls] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [defaultModelId, setDefaultModelId] = useState(DEFAULT_CAMERA_MODEL_ID)
   const [defaultNetModels, setDefaultNetModels] = useState<Record<NetworkNodeKind, string>>({
@@ -630,14 +658,42 @@ export default function NexusVisionArchitectClient() {
   const onFile = useCallback(async (file: File | null) => {
     if (!file) return
     setError(null)
+    setInfo(null)
     setLoading(true)
     try {
       const isPdf =
         file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
       let url: string
+      let detected: DesignStructure[] = []
       if (isPdf) {
-        url = await renderPdfFirstPage(file)
+        const data = new Uint8Array(await file.arrayBuffer())
+        pdfBytesRef.current = data.slice()
+        pdfRotateQuartersRef.current = 0
+        setCanDetectPdfWalls(true)
+        url = await renderPdfFirstPageFromBytes(data)
+        try {
+          const result = await detectWallsFromPdfBytes(data)
+          detected = structuresFromWallDetection(result, { makeId: uid })
+          if (detected.length > 0) {
+            setInfo(
+              `Se detectaron ${detected.length} muros del PDF vectorial. Material: bloque — cámbialo en Muros si hace falta.`,
+            )
+            setSideTab('muros')
+            setShowStructures(true)
+          } else {
+            setInfo(
+              'PDF cargado. No se detectaron muros rellenos (¿es un escaneo?). Dibuja en Muros.',
+            )
+          }
+        } catch {
+          setInfo(
+            'PDF cargado. No se pudieron leer muros vectoriales; dibújalos en Muros.',
+          )
+        }
       } else if (file.type.startsWith('image/')) {
+        pdfBytesRef.current = null
+        pdfRotateQuartersRef.current = 0
+        setCanDetectPdfWalls(false)
         url = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader()
           reader.onload = () => resolve(String(reader.result))
@@ -653,7 +709,7 @@ export default function NexusVisionArchitectClient() {
         planoNombre: file.name,
         cameras: [],
         networkNodes: [],
-        structures: [],
+        structures: detected,
         undergroundSegments: [],
         cableSegments: [],
         cableRouteOverrides: {},
@@ -682,6 +738,8 @@ export default function NexusVisionArchitectClient() {
       setLoading(true)
       try {
         const rotated = await rotatePlanoDataUrl90(url, dir)
+        pdfRotateQuartersRef.current =
+          (pdfRotateQuartersRef.current + (dir === 'cw' ? 1 : 3)) % 4
         setProject((p) => ({ ...rotateProjectGeometry(p, dir), planoUrl: rotated }))
         setCalibPoints((pts) => pts.map((pt) => rotateNormPoint(pt.x, pt.y, dir)))
       } catch (e) {
@@ -1154,7 +1212,49 @@ export default function NexusVisionArchitectClient() {
     setProject(next)
     setSelectedId(null)
     setError(null)
+    setInfo(null)
+    pdfBytesRef.current = null
+    pdfRotateQuartersRef.current = 0
+    setCanDetectPdfWalls(false)
   }
+
+  const detectWallsFromLoadedPdf = useCallback(async () => {
+    const data = pdfBytesRef.current
+    if (!data || !project.planoUrl || loading) return
+    if ((project.structures?.length ?? 0) > 0) {
+      const ok = window.confirm(
+        'Esto reemplaza los muros actuales por los detectados en el PDF. ¿Continuar?',
+      )
+      if (!ok) return
+    }
+    setError(null)
+    setInfo(null)
+    setLoading(true)
+    try {
+      const result = await detectWallsFromPdfBytes(data)
+      const detected = rotateStructuresCwQuarters(
+        structuresFromWallDetection(result, { makeId: uid }),
+        pdfRotateQuartersRef.current,
+      )
+      if (detected.length === 0) {
+        setInfo(
+          'No se detectaron muros rellenos en este PDF. Dibuja los tramos en Muros.',
+        )
+        return
+      }
+      setProject((p) => ({ ...p, structures: detected }))
+      setSelectedId(null)
+      setSideTab('muros')
+      setShowStructures(true)
+      setInfo(
+        `Se detectaron ${detected.length} muros del PDF vectorial. Material: bloque — cámbialo en Muros si hace falta.`,
+      )
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudieron detectar muros del PDF')
+    } finally {
+      setLoading(false)
+    }
+  }, [loading, project.planoUrl, project.structures?.length])
 
   const switchToProject = (p: NetVisionProject) => {
     setProject(p)
@@ -1164,6 +1264,10 @@ export default function NexusVisionArchitectClient() {
     setCalibrateMode(false)
     setCalibMeters(defaultCalibrationInput(p.unitSystem ?? 'metric'))
     setError(null)
+    setInfo(null)
+    pdfBytesRef.current = null
+    pdfRotateQuartersRef.current = 0
+    setCanDetectPdfWalls(false)
   }
 
   const exportPng = () => {
@@ -1878,6 +1982,11 @@ export default function NexusVisionArchitectClient() {
           {error}
         </p>
       ) : null}
+      {info ? (
+        <p className="rounded-lg border border-[rgba(0,242,254,0.3)] bg-[rgba(0,242,254,0.08)] px-3 py-2 text-sm text-[var(--nexus-cyan)]">
+          {info}
+        </p>
+      ) : null}
 
       <div
         className={
@@ -1896,7 +2005,7 @@ export default function NexusVisionArchitectClient() {
               <Camera className="h-10 w-10 text-[var(--nexus-cyan)]" />
               <p className="text-sm font-semibold text-white">Sube el plano del inmueble</p>
               <p className="max-w-sm text-xs text-[var(--nexus-text-dim)]">
-                Agrega cámara, switch, AP o NVR con los botones +; luego arrastra en el plano.
+                PDF vectorial (CAD): se detectan muros rellenos al cargar. Luego + Cámara / Switch / AP.
                 CCTV: {CAMERA_BRANDS.join(', ')}.
               </p>
             </button>
@@ -2095,6 +2204,9 @@ export default function NexusVisionArchitectClient() {
               draftPoint={structureDraft}
               disabled={!project.planoUrl || loading}
               showOnPlan={showStructures}
+              canDetectPdf={canDetectPdfWalls}
+              detecting={loading && canDetectPdfWalls}
+              onDetectFromPdf={() => void detectWallsFromLoadedPdf()}
               onShowOnPlan={setShowStructures}
               onDrawMaterial={(id) => {
                 setDrawStructureMaterial(id)
