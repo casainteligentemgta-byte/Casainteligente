@@ -2420,7 +2420,27 @@ export default function NexusVisionArchitectClient() {
                 <Camera className="h-3.5 w-3.5" />
                 + Agregar cámara
               </button>
-              {selectedCam ? null : (
+              {project.cameras.length > 0 ? (
+                <div className="flex flex-wrap gap-1">
+                  {project.cameras.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      className={`min-h-8 rounded-md px-2 text-[11px] font-semibold ${
+                        selectedId === c.id
+                          ? 'bg-[var(--nexus-cyan)] text-black'
+                          : 'border border-white/15 text-[var(--nexus-cyan)]'
+                      }`}
+                      onClick={() => {
+                        setSelectedId(c.id)
+                        setInspectorOpen(true)
+                      }}
+                    >
+                      {c.label}
+                    </button>
+                  ))}
+                </div>
+              ) : (
                 <p className="text-[10px] text-[var(--nexus-text-dim)]">
                   La cámara se agrega al plano; arrástrala para ubicarla. Elige el tipo en el
                   submenú CCTV bajo NetVision.
