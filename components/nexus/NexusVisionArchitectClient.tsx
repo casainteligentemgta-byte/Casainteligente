@@ -2024,7 +2024,7 @@ export default function NexusVisionArchitectClient() {
                   </span>
                   <span className="inline-flex items-center gap-1">
                     <span className="h-2.5 w-2.5 rounded-sm bg-emerald-500" />
-                    Verde · detección objetos/personas
+                    Verde · metros fijos (ficha)
                   </span>
                   <span className="inline-flex items-center gap-1">
                     <span className="h-2.5 w-2.5 rounded-sm bg-yellow-400" />
@@ -2298,7 +2298,7 @@ export default function NexusVisionArchitectClient() {
                     const lenses = effectiveCameraLenses(selectedCam, mode)
                     const isDual = lenses.length >= 2
                     const model = getCameraModelOrDefault(selectedCam.modelId)
-                    const bands = visionBandRangesM(vision.rangeM)
+                    const bands = visionBandRangesM(vision.rangeM, vision.catalogRangeM)
                     const dualSummary = isDual
                       ? lenses
                           .map(
@@ -2361,9 +2361,11 @@ export default function NexusVisionArchitectClient() {
                           </span>
                           {' · '}
                           <span className="text-red-300">
-                            rojo {formatLength(bands.redMaxM, project.unitSystem ?? 'metric')}
+                            rojo hasta{' '}
+                            {formatLength(bands.redMaxM, project.unitSystem ?? 'metric')}
                           </span>
-                          . Si se solapan, prevalece verde sobre naranja y naranja sobre rojo.
+                          . Verde y amarillo son metros de ficha: estirar el cono no los agranda.
+                          Si se solapan, prevalece verde sobre naranja y naranja sobre rojo.
                         </p>
                         <label className="block">
                           <span className="text-[var(--nexus-text-dim)]">

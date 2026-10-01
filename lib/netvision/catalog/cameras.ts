@@ -67,7 +67,10 @@ export type EffectiveLensVision = {
   fovLeftDeg: number
   /** Medio FOV derecho (desde yaw). */
   fovRightDeg: number
+  /** Alcance dibujado (cono / anillo). */
   rangeM: number
+  /** Alcance de ficha día/noche. El semáforo usa estos metros fijos. */
+  catalogRangeM: number
   yawDeg: number
 }
 
@@ -142,6 +145,7 @@ export function effectiveCameraLenses(
         fovLeftDeg: halves.left,
         fovRightDeg: halves.right,
         rangeM,
+        catalogRangeM: clampRange(catalogRange),
         yawDeg,
       }
     })
@@ -161,6 +165,7 @@ export function effectiveCameraLenses(
       fovLeftDeg: halves.left,
       fovRightDeg: halves.right,
       rangeM,
+      catalogRangeM: clampRange(catalogRange),
       yawDeg,
     },
   ]
@@ -175,6 +180,7 @@ export function effectiveCameraVision(
   fovLeftDeg: number
   fovRightDeg: number
   rangeM: number
+  catalogRangeM: number
   yawDeg: number
 } {
   const primary = effectiveCameraLenses(cam, mode)[0]!
@@ -183,6 +189,7 @@ export function effectiveCameraVision(
     fovLeftDeg: primary.fovLeftDeg,
     fovRightDeg: primary.fovRightDeg,
     rangeM: primary.rangeM,
+    catalogRangeM: primary.catalogRangeM,
     yawDeg: primary.yawDeg,
   }
 }
