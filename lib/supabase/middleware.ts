@@ -34,6 +34,7 @@ const RUTAS_PROTEGIDAS = [
   '/empleados',
   '/cambiar-password',
   '/obra-digital',
+  '/entidades',
 ];
 
 /** Rutas de personal que cuelgan de un prefijo público: siempre exigen sesión. */
