@@ -2279,15 +2279,14 @@ export default function NexusVisionArchitectClient() {
                 <Camera className="h-3.5 w-3.5" />
                 + Agregar cámara
               </button>
-              <p className="text-[10px] text-[var(--nexus-text-dim)]">
-                La cámara se agrega al plano; arrástrala para ubicarla. Elige el tipo en el
-                submenú CCTV bajo NetVision.
-              </p>
+              {selectedCam ? null : (
+                <p className="text-[10px] text-[var(--nexus-text-dim)]">
+                  La cámara se agrega al plano; arrástrala para ubicarla. Elige el tipo en el
+                  submenú CCTV bajo NetVision.
+                </p>
+              )}
               {selectedCam ? (
                 <div className="space-y-2 text-xs">
-                  <p className="text-[10px] text-[var(--nexus-text-dim)]">
-                    Modelo y etiqueta arriba · aquí ajustas la óptica.
-                  </p>
                   {(() => {
                     const mode = nightMode ? 'night' : 'day'
                     const vision = effectiveCameraVision(selectedCam, mode)
@@ -2338,26 +2337,21 @@ export default function NexusVisionArchitectClient() {
                           Espectro de visión · semáforo
                           {isDual ? ' (gran angular)' : ''}
                         </p>
-                        <ul className="space-y-0.5 rounded-lg border border-white/10 bg-black/25 px-2 py-1.5 text-[10px]">
-                          <li className="flex items-center gap-1.5 text-emerald-300">
-                            <span className="h-2 w-2 rounded-sm bg-emerald-500" />
-                            0–
-                            {formatLength(bands.greenMaxM, project.unitSystem ?? 'metric')} ·
-                            detección objetos/personas
-                          </li>
-                          <li className="flex items-center gap-1.5 text-yellow-200">
-                            <span className="h-2 w-2 rounded-sm bg-yellow-400" />
-                            {formatLength(bands.greenMaxM, project.unitSystem ?? 'metric')}–
-                            {formatLength(bands.yellowMaxM, project.unitSystem ?? 'metric')} · más
-                            lejos
-                          </li>
-                          <li className="flex items-center gap-1.5 text-red-300">
-                            <span className="h-2 w-2 rounded-sm bg-red-500" />
-                            {formatLength(bands.yellowMaxM, project.unitSystem ?? 'metric')}–
-                            {formatLength(bands.redMaxM, project.unitSystem ?? 'metric')} ·
-                            detección dudosa
-                          </li>
-                        </ul>
+                        <p className="rounded-lg border border-white/10 bg-black/25 px-2 py-1.5 text-[10px] leading-relaxed">
+                          <span className="text-emerald-300">
+                            Verde 0–
+                            {formatLength(bands.greenMaxM, project.unitSystem ?? 'metric')}
+                          </span>
+                          {' · '}
+                          <span className="text-yellow-200">
+                            amarillo{' '}
+                            {formatLength(bands.yellowMaxM, project.unitSystem ?? 'metric')}
+                          </span>
+                          {' · '}
+                          <span className="text-red-300">
+                            rojo {formatLength(bands.redMaxM, project.unitSystem ?? 'metric')}
+                          </span>
+                        </p>
                         <label className="block">
                           <span className="text-[var(--nexus-text-dim)]">
                             Orientación {vision.yawDeg}°
@@ -2539,12 +2533,8 @@ export default function NexusVisionArchitectClient() {
                           {nightMode ? model.rangeNightM : model.rangeDayM} m)
                         </button>
                         <p className="text-[10px] text-[var(--nexus-text-dim)]">
-                          En el plano: arrastra el cono para girar; la punta cyan para
-                          orientar/alcance; los lados para la apertura (los dos lados juntos).
-                          {isDual
-                            ? ' Dual: cono cyan (angular) + naranja (tele).'
-                            : ''}
-                          {` · ${model.poeWatts} W · ${model.bitrateMbps} Mbps`}
+                          Plano: cono = girar · punta = alcance · lados = apertura (iguales).
+                          {isDual ? ' Dual: cyan angular + naranja tele.' : ''}
                         </p>
                       </NetVisionCollapsible>
                     )
