@@ -60,6 +60,11 @@ export type DesignCamera = {
   fovRightDeg?: number
   /** Alcance de visión en metros (override día/noche del catálogo). */
   rangeM?: number
+  /**
+   * Cámaras Dual: ajuste propio de cada lente secundaria (por id de lente, p. ej. «tele»).
+   * Cada cono puede mirar a otro lugar. La lente primaria usa yawDeg / fov* / rangeM de arriba.
+   */
+  lensVision?: Record<string, LensVisionOverride>
 }
 
 export type ScaleCalibration = {
@@ -194,11 +199,6 @@ export type NetVisionProject = {
   scale: ScaleCalibration
   retentionDays: number
   complianceProfileId: string
-  /**
-   * Cámaras Dual: ajuste propio de cada lente secundaria (por id de lente, p. ej. «tele»).
-   * Cada cono puede mirar a otro lugar. La lente primaria usa yawDeg / fov* / rangeM de arriba.
-   */
-  lensVision?: Record<string, LensVisionOverride>
 }
 
 /** Orientación / apertura / alcance propios de una lente secundaria. */
