@@ -36,6 +36,28 @@ export function cameraCatalogGrouped(): { brand: CameraBrand; models: CameraMode
   })).filter((g) => g.models.length > 0)
 }
 
+/** FOV de catálogo para la lista: dual muestra ambas ópticas. */
+export function catalogFovLabel(model: CameraModel): string {
+  if (model.lenses && model.lenses.length >= 2) {
+    const wide = model.lenses[0]!
+    const tele = model.lenses[1]!
+    return `Dual ${wide.fovDeg}°+${tele.fovDeg}°`
+  }
+  return `${model.fovDeg}°`
+}
+
+/** Etiqueta del selector de modelo (nombre + facultades de visión). */
+export function cameraCatalogOptionLabel(model: CameraModel): string {
+  return `${model.name} · ${catalogFovLabel(model)}`
+}
+
+/** Resumen corto para inspector: resolución, forma, FOV, alcances día/noche. */
+export function cameraVisionSummary(model: CameraModel): string {
+  const form =
+    model.formFactor === 'ptz' ? 'PTZ' : model.formFactor === 'bullet' ? 'bullet' : 'domo'
+  return `${model.resolution} · ${form} · ${catalogFovLabel(model)} · día ${model.rangeDayM} m / noche ${model.rangeNightM} m`
+}
+
 export type EffectiveLensVision = {
   lensId: string
   label: string

@@ -42,6 +42,8 @@ import {
   CAMERA_BRANDS,
   DEFAULT_CAMERA_MODEL_ID,
   cameraCatalogGrouped,
+  cameraCatalogOptionLabel,
+  cameraVisionSummary,
   effectiveCameraLenses,
   effectiveCameraVision,
   catalogVisionDefaults,
@@ -1248,7 +1250,7 @@ export default function NexusVisionArchitectClient() {
               <optgroup key={g.brand} label={g.brand}>
                 {g.models.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.name}
+                    {cameraCatalogOptionLabel(m)}
                   </option>
                 ))}
               </optgroup>
@@ -2315,6 +2317,13 @@ export default function NexusVisionArchitectClient() {
                         }
                         defaultOpen
                       >
+                        <div className="rounded-lg border border-white/10 bg-black/25 px-2 py-1.5 text-[10px] leading-relaxed">
+                          <p className="font-semibold text-white">{model.name}</p>
+                          <p className="text-[var(--nexus-cyan)]">{cameraVisionSummary(model)}</p>
+                          {model.notes ? (
+                            <p className="mt-1 text-[var(--nexus-text-muted)]">{model.notes}</p>
+                          ) : null}
+                        </div>
                         {isDual ? (
                           <div className="space-y-1.5 rounded-lg border border-orange-400/25 bg-orange-400/5 px-2 py-1.5 text-[10px]">
                             <p className="font-semibold uppercase tracking-wide text-orange-200">
