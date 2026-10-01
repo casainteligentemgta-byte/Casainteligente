@@ -2032,6 +2032,9 @@ export default function NexusVisionArchitectClient() {
                     <span className="h-2.5 w-2.5 rounded-sm bg-red-500" />
                     Rojo · detección dudosa (con visión)
                   </span>
+                  <span>
+                    En solapes gana la mejor detección (verde sobre naranja, naranja sobre rojo)
+                  </span>
                 </div>
               ) : null}
             </>
@@ -2351,6 +2354,7 @@ export default function NexusVisionArchitectClient() {
                           <span className="text-red-300">
                             rojo {formatLength(bands.redMaxM, project.unitSystem ?? 'metric')}
                           </span>
+                          . Si se solapan, prevalece verde sobre naranja y naranja sobre rojo.
                         </p>
                         <label className="block">
                           <span className="text-[var(--nexus-text-dim)]">

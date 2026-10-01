@@ -46,10 +46,16 @@ export function visionBandForDistance(
   return 'red'
 }
 
-function bandRank(band: VisionBand): number {
+/** Mayor = mejor detección. Verde prevalece sobre naranja; naranja sobre rojo. */
+export function visionBandRank(band: VisionBand): number {
   if (band === 'green') return 3
   if (band === 'yellow') return 2
   return 1
+}
+
+/** En un solape, qué banda se muestra (calidad de detección, no mezcla). */
+export function preferredVisionBand(a: VisionBand, b: VisionBand): VisionBand {
+  return visionBandRank(a) >= visionBandRank(b) ? a : b
 }
 
 /** Metros por banda de semáforo según el alcance efectivo. */
@@ -123,7 +129,7 @@ export function buildVisionSpectrum(
   scale: ScaleCalibration,
   mode: 'day' | 'night' = 'day',
   structures: DesignStructure[] = [],
-  grid = 36,
+  grid = 64,
 ): SpectrumCell[] {
   if (cameras.length === 0) return []
 
@@ -187,7 +193,7 @@ export function buildVisionSpectrum(
         const strength = Math.max(0.15, 1 - d / Math.max(p.rangeM, 1))
         if (
           !bestBand ||
-          bandRank(band) > bandRank(bestBand) ||
+          visionBandRank(band) > visionBandRank(bestBand) ||
           (band === bestBand && strength > bestStrength)
         ) {
           bestBand = band
