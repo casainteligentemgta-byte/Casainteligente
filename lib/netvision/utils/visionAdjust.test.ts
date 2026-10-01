@@ -5,6 +5,7 @@ import {
   shortestDeltaDeg,
   snapToStep,
   symmetricFovFromYawDelta,
+  visionPatchFromPointer,
   wrapDeg360,
 } from './visionAdjust'
 
@@ -23,14 +24,58 @@ describe('shortestDeltaDeg', () => {
 })
 
 describe('symmetricFovFromYawDelta', () => {
-  it('iguala ambos lados y redondea a 5°', () => {
-    const next = symmetricFovFromYawDelta(-47)
+  it('iguala ambos lados y redondea al paso', () => {
+    const next = symmetricFovFromYawDelta(-47, 5)
     assert.deepEqual(next, { fovLeftDeg: 45, fovRightDeg: 45, fovDeg: 90 })
   })
 
   it('no baja de 10° ni pasa de 85° por lado', () => {
     assert.equal(symmetricFovFromYawDelta(3).fovLeftDeg, 10)
     assert.equal(symmetricFovFromYawDelta(200).fovLeftDeg, 85)
+  })
+})
+
+describe('visionPatchFromPointer', () => {
+  it('el asa central solo gira, no cambia el alcance', () => {
+    const patch = visionPatchFromPointer({
+      mode: 'yaw',
+      camX: 0.4,
+      camY: 0.5,
+      pointerX: 0.7,
+      pointerY: 0.5,
+      yawDeg: 0,
+      avgMPerNorm: 40,
+    })
+    assert.equal(patch.yawDeg, 0)
+    assert.equal(patch.rangeM, undefined)
+  })
+
+  it('el asa de alcance solo estira', () => {
+    const patch = visionPatchFromPointer({
+      mode: 'range',
+      camX: 0.4,
+      camY: 0.5,
+      pointerX: 0.7,
+      pointerY: 0.5,
+      yawDeg: 90,
+      avgMPerNorm: 40,
+    })
+    assert.equal(patch.rangeM, 12)
+    assert.equal(patch.yawDeg, undefined)
+  })
+
+  it('el asa lateral abre los dos lados', () => {
+    const patch = visionPatchFromPointer({
+      mode: 'fov',
+      camX: 0.5,
+      camY: 0.5,
+      pointerX: 0.5,
+      pointerY: 0.2,
+      yawDeg: 0,
+      avgMPerNorm: 40,
+    })
+    assert.equal(patch.fovLeftDeg, patch.fovRightDeg)
+    assert.ok((patch.fovDeg ?? 0) >= 20)
   })
 })
 

@@ -2533,7 +2533,8 @@ export default function NexusVisionArchitectClient() {
                           {nightMode ? model.rangeNightM : model.rangeDayM} m)
                         </button>
                         <p className="text-[10px] text-[var(--nexus-text-dim)]">
-                          Plano: cono = girar · punta = alcance · lados = apertura (iguales).
+                          Plano: arrastra el cono o el punto del medio para girar; los lados
+                          para la apertura; el anillo de la punta para el alcance.
                           {isDual ? ' Dual: cyan angular + naranja tele.' : ''}
                         </p>
                       </NetVisionCollapsible>
