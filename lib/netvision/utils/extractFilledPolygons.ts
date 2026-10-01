@@ -35,6 +35,8 @@ export const PDFJS_OPS = {
   setFillRGBColor: 59,
   setFillCMYKColor: 61,
   constructPath: 91,
+  stroke: 20,
+  closeStroke: 21,
 } as const
 
 export type PdfOperatorList = {
@@ -52,6 +54,12 @@ export type FilledPolygon = {
   color: string
   pts: PdfPoint[]
 }
+
+export type PathArc = {
+  pts: PdfPoint[]
+}
+
+const STROKE_OPS = new Set<number>([PDFJS_OPS.stroke, PDFJS_OPS.closeStroke])
 
 const FILL_OPS = new Set<number>([
   PDFJS_OPS.fill,
@@ -100,10 +108,11 @@ function roundPt(x: number, y: number): PdfPoint {
 type PathBuilder = {
   subpaths: PdfPoint[][]
   current: PdfPoint[]
+  curveCount: number
 }
 
 function newPath(): PathBuilder {
-  return { subpaths: [], current: [] }
+  return { subpaths: [], current: [], curveCount: 0 }
 }
 
 function pushCurrent(path: PathBuilder) {
@@ -164,6 +173,7 @@ function consumePathOps(
       continue
     }
     if (op === PDFJS_OPS.curveTo) {
+      path.curveCount += 1
       j += 4
       x = coords[j++] ?? x
       y = coords[j++] ?? y
@@ -171,6 +181,7 @@ function consumePathOps(
       continue
     }
     if (op === PDFJS_OPS.curveTo2) {
+      path.curveCount += 1
       j += 2
       x = coords[j++] ?? x
       y = coords[j++] ?? y
@@ -178,6 +189,7 @@ function consumePathOps(
       continue
     }
     if (op === PDFJS_OPS.curveTo3) {
+      path.curveCount += 1
       x = coords[j + 2] ?? x
       y = coords[j + 3] ?? y
       j += 4
@@ -204,16 +216,17 @@ function bboxPolygon(minMax: number[], mapPt: (x: number, y: number) => PdfPoint
 }
 
 /**
- * Extrae polígonos rellenos del operator list, transformados al espacio del viewport
+ * Extrae polígonos rellenos y arcos trazados del operator list, en espacio viewport
  * (origen arriba-izquierda, igual que el canvas de pdf.js).
  */
-export function extractFilledPolygonsFromOperatorList(
+export function extractPdfPrimitivesFromOperatorList(
   opList: PdfOperatorList,
   viewport: ViewportLike,
   ops: Record<string, number> = PDFJS_OPS,
-): FilledPolygon[] {
+): { polygons: FilledPolygon[]; arcs: PathArc[] } {
   const nameToCode = buildNameToCode(ops)
-  const out: FilledPolygon[] = []
+  const polygons: FilledPolygon[] = []
+  const arcs: PathArc[] = []
   let fillColor = 'None'
   let ctm = cloneAffine(AFFINE_IDENTITY)
   const stack: Affine[] = []
@@ -228,7 +241,17 @@ export function extractFilledPolygonsFromOperatorList(
   const emitFill = () => {
     pushCurrent(path)
     for (const pts of path.subpaths) {
-      if (pts.length >= 3) out.push({ color: fillColor, pts })
+      if (pts.length >= 3) polygons.push({ color: fillColor, pts })
+    }
+    path = newPath()
+  }
+
+  const emitStrokeArcs = () => {
+    pushCurrent(path)
+    if (path.curveCount > 0) {
+      for (const pts of path.subpaths) {
+        if (pts.length >= 3) arcs.push({ pts })
+      }
     }
     path = newPath()
   }
@@ -293,12 +316,24 @@ export function extractFilledPolygonsFromOperatorList(
       emitFill()
       continue
     }
+    if (STROKE_OPS.has(fn) || fn === (ops.stroke as number) || fn === (ops.closeStroke as number)) {
+      emitStrokeArcs()
+      continue
+    }
     if (fn === ops.endPath) {
       path = newPath()
     }
   }
 
-  return out
+  return { polygons, arcs }
+}
+
+export function extractFilledPolygonsFromOperatorList(
+  opList: PdfOperatorList,
+  viewport: ViewportLike,
+  ops: Record<string, number> = PDFJS_OPS,
+): FilledPolygon[] {
+  return extractPdfPrimitivesFromOperatorList(opList, viewport, ops).polygons
 }
 
 export function groupPolygonsByColor(polys: FilledPolygon[]): Map<string, PdfPoint[][]> {

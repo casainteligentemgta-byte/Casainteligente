@@ -52,7 +52,8 @@ export default function StructureDesigner({
         <p className="text-[11px] text-[var(--nexus-text-dim)]">
           Toca puntos en el plano: cada tramo se ajusta a 90° (H/V) y puedes seguir desde la
           esquina. Pulsa «Terminar» al cerrar el muro. Arrastra el segmento o los extremos para
-          mover. En un PDF vectorial (CAD) usa «Detectar muros del PDF».
+          mover. En un PDF vectorial (CAD) se detectan muros, puertas y ventanas;
+          puedes corregir o dibujar a mano.
         </p>
       </div>
 
@@ -78,10 +79,10 @@ export default function StructureDesigner({
           className="w-full rounded-lg border border-[rgba(0,242,254,0.3)] bg-[rgba(0,242,254,0.08)] px-2 py-1.5 text-[11px] font-semibold text-[var(--nexus-cyan)] disabled:opacity-40"
         >
           {detecting
-            ? 'Detectando muros…'
+            ? 'Detectando…'
             : canDetectPdf
-              ? 'Detectar muros del PDF'
-              : 'Carga un PDF vectorial (CAD) para detectar muros'}
+              ? 'Detectar muros, puertas y ventanas'
+              : 'Carga un PDF vectorial (CAD) para detectar muros y aberturas'}
         </button>
       ) : null}
       <div className="flex flex-wrap gap-1.5">

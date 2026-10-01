@@ -154,6 +154,7 @@ import { FOV_PRESETS_DEG, RANGE_PRESETS_M } from '@/lib/netvision/utils/visionAd
 import {
   detectWallsFromPdfBytes,
   structuresFromWallDetection,
+  summarizePdfDetection,
 } from '@/lib/netvision/detectWallsFromPdf'
 import type { NetVisionZoomControls } from '@/components/netvision/CameraPlacementTool'
 
@@ -674,16 +675,10 @@ export default function NexusVisionArchitectClient() {
         try {
           const result = await detectWallsFromPdfBytes(data)
           detected = structuresFromWallDetection(result, { makeId: uid })
+          setInfo(summarizePdfDetection(result))
           if (detected.length > 0) {
-            setInfo(
-              `Se detectaron ${detected.length} muros del PDF vectorial. Material: bloque — cámbialo en Muros si hace falta.`,
-            )
             setSideTab('muros')
             setShowStructures(true)
-          } else {
-            setInfo(
-              'PDF cargado. No se detectaron muros rellenos (¿es un escaneo?). Dibuja en Muros.',
-            )
           }
         } catch {
           setInfo(
@@ -1223,7 +1218,7 @@ export default function NexusVisionArchitectClient() {
     if (!data || !project.planoUrl || loading) return
     if ((project.structures?.length ?? 0) > 0) {
       const ok = window.confirm(
-        'Esto reemplaza los muros actuales por los detectados en el PDF. ¿Continuar?',
+        'Esto reemplaza los muros, puertas y ventanas actuales por los detectados en el PDF. ¿Continuar?',
       )
       if (!ok) return
     }
@@ -1236,19 +1231,13 @@ export default function NexusVisionArchitectClient() {
         structuresFromWallDetection(result, { makeId: uid }),
         pdfRotateQuartersRef.current,
       )
-      if (detected.length === 0) {
-        setInfo(
-          'No se detectaron muros rellenos en este PDF. Dibuja los tramos en Muros.',
-        )
-        return
-      }
+      setInfo(summarizePdfDetection(result))
       setProject((p) => ({ ...p, structures: detected }))
       setSelectedId(null)
-      setSideTab('muros')
-      setShowStructures(true)
-      setInfo(
-        `Se detectaron ${detected.length} muros del PDF vectorial. Material: bloque — cámbialo en Muros si hace falta.`,
-      )
+      if (detected.length > 0) {
+        setSideTab('muros')
+        setShowStructures(true)
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudieron detectar muros del PDF')
     } finally {
@@ -2005,7 +1994,7 @@ export default function NexusVisionArchitectClient() {
               <Camera className="h-10 w-10 text-[var(--nexus-cyan)]" />
               <p className="text-sm font-semibold text-white">Sube el plano del inmueble</p>
               <p className="max-w-sm text-xs text-[var(--nexus-text-dim)]">
-                PDF vectorial (CAD): se detectan muros rellenos al cargar. Luego + Cámara / Switch / AP.
+                PDF vectorial (CAD): se detectan muros, puertas y ventanas al cargar. Luego + Cámara / Switch / AP.
                 CCTV: {CAMERA_BRANDS.join(', ')}.
               </p>
             </button>

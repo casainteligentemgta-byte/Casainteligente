@@ -7,6 +7,8 @@ export type WallSegment = {
   y1: number
   x2: number
   y2: number
+  /** Espesor del polígono origen (mismas unidades que x/y). */
+  thickness?: number
 }
 
 export type Affine = [number, number, number, number, number, number]
@@ -206,6 +208,7 @@ export function polygonsToWallSegments(
       y1: Math.round(seg.y1 * 1000) / 1000,
       x2: Math.round(seg.x2 * 1000) / 1000,
       y2: Math.round(seg.y2 * 1000) / 1000,
+      thickness: Math.round(shorter * 1000) / 1000,
     })
   }
   return out

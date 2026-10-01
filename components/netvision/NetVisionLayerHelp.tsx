@@ -81,7 +81,7 @@ export const NETVISION_LAYER_HELP: LayerHelpItem[] = [
     id: 'muros',
     label: 'Muros',
     blurb:
-      'Pestaña Muros: detecta muros de un PDF vectorial (CAD) o dibuja drywall, bloque, concreto, vidrio, ventana o puerta. Drywall/bloque/concreto cortan el FOV. Arrastra para mover; la capa Estructuras las muestra u oculta.',
+      'Pestaña Muros: detecta muros, puertas y ventanas de un PDF vectorial (CAD) o dibújalos a mano. Drywall/bloque/concreto cortan el FOV. Arrastra para mover; la capa Estructuras las muestra u oculta.',
   },
 ]
 
