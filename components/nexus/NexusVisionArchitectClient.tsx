@@ -2453,7 +2453,7 @@ export default function NexusVisionArchitectClient() {
                             {lenses.slice(1).map((l) => (
                               <div key={`yaw-${l.lensId}`} className="flex flex-wrap items-center gap-2">
                                 <label className="flex items-center gap-1 text-orange-200">
-                                  Orientación {l.label.split(' ')[0].toLowerCase()}
+                                  Orientación {l.label.replace(/\s*\d.*$/, '').toLowerCase()}
                                   <input
                                     type="number"
                                     min={0}
@@ -2480,7 +2480,7 @@ export default function NexusVisionArchitectClient() {
                                     })
                                   }}
                                 >
-                                  Alinear con {lenses[0]!.label.split(' ')[0].toLowerCase()}
+                                  Alinear con {lenses[0]!.label.replace(/\s*\d.*$/, '').toLowerCase()}
                                 </button>
                               </div>
                             ))}
