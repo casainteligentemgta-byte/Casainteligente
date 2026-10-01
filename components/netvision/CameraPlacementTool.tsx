@@ -21,7 +21,6 @@ import type {
   DesignNetworkNode,
   DesignStructure,
   SpectrumCell,
-  VisionBand,
 } from '@/lib/netvision/types'
 import { effectiveCameraVision } from '@/lib/netvision/catalog/cameras'
 import { getStructureMaterialOrDefault } from '@/lib/netvision/catalog/materials'
@@ -33,6 +32,7 @@ import {
   resolveNetworkPlanSize,
 } from '@/lib/netvision/utils/networkNodeSize'
 import type { WifiCoverageCircle } from '@/lib/netvision/services/wifiPredictor'
+import { VISION_BAND_FRAC } from '@/lib/netvision/services/coverageCalculator'
 import type { AccessChamber, UndergroundRun } from '@/lib/netvision/services/canalizationCalculator'
 import { nearestSegmentOnRoute, MANUAL_CABLE_TO_ID } from '@/lib/netvision/services/cableRoutingEngine'
 import { invertRgbPixels } from '@/lib/netvision/utils/rotatePlano'
@@ -137,15 +137,6 @@ export type NetVisionZoomControls = {
 function spectrumFill(strength: number, hue: number, boost = 0) {
   const a = Math.min(0.72, 0.1 + boost + strength * 0.48)
   return `hsla(${hue}, 90%, ${42 + strength * 22}%, ${a})`
-}
-
-/** Semáforo de cobertura: verde detección, amarillo lejos, rojo dudoso. */
-function visionBandFill(band: VisionBand | undefined, strength: number) {
-  const a = Math.min(0.78, 0.28 + strength * 0.42)
-  if (band === 'green') return `rgba(34, 197, 94, ${a})`
-  if (band === 'yellow') return `rgba(234, 179, 8, ${a})`
-  if (band === 'red') return `rgba(239, 68, 68, ${a})`
-  return spectrumFill(strength, 190, 0.12)
 }
 
 const NODE_COLORS: Record<DesignNetworkNode['kind'], string> = {
@@ -278,7 +269,6 @@ export default function CameraPlacementTool({
   networkNodes,
   structures = [],
   sectors,
-  visionSpectrum = [],
   wifiCircles,
   wifiSpectrum = [],
   soundSpectrum = [],
@@ -631,37 +621,77 @@ export default function CameraPlacementTool({
             />
           )}
 
-          {showFov && visionSpectrum.length > 0 && (
-            <Group
-              listening={false}
-              clipFunc={(ctx) => {
-                // Recorta el semáforo al polígono FOV (no atraviesa drywall/concreto)
-                for (const s of sectors) {
-                  const poly = s.polygon
-                  if (!poly || poly.length < 3) continue
-                  const p0 = poly[0]!
-                  ctx.moveTo(offsetX + p0.x * drawW, offsetY + p0.y * drawH)
-                  for (let i = 1; i < poly.length; i++) {
-                    const p = poly[i]!
-                    ctx.lineTo(offsetX + p.x * drawW, offsetY + p.y * drawH)
-                  }
-                  ctx.closePath()
-                }
-              }}
-            >
-              {visionSpectrum.map((c, i) => (
-                <Rect
-                  key={`vis-cell-${i}`}
-                  x={offsetX + c.x * drawW}
-                  y={offsetY + c.y * drawH}
-                  width={Math.max(1, c.w * drawW)}
-                  height={Math.max(1, c.h * drawH)}
-                  fill={visionBandFill(c.band, c.strength)}
+          {showFov &&
+            sectors.map((s) => {
+              const cx = offsetX + s.cx * drawW
+              const cy = offsetY + s.cy * drawH
+              const midAng = (s.startAngleRad + s.endAngleRad) / 2
+              const radiusPx = Math.max(
+                12,
+                Math.hypot(
+                  Math.cos(midAng) * s.radiusNorm * drawW,
+                  Math.sin(midAng) * s.radiusNorm * drawH,
+                ),
+              )
+              const sweep = ((s.endAngleRad - s.startAngleRad) * 180) / Math.PI
+              const rotation = (s.startAngleRad * 180) / Math.PI
+              const isTele = s.lensId === 'tele'
+              const poly = s.polygon
+              const green = isTele ? 'rgba(251, 146, 60, 0.46)' : 'rgba(34, 197, 94, 0.50)'
+              const yellow = isTele ? 'rgba(253, 186, 116, 0.42)' : 'rgba(234, 179, 8, 0.48)'
+              const red = isTele ? 'rgba(239, 68, 68, 0.28)' : 'rgba(239, 68, 68, 0.40)'
+              return (
+                <Group
+                  key={`vis-bands-${s.cameraId}-${s.lensId ?? 'main'}`}
                   listening={false}
-                />
-              ))}
-            </Group>
-          )}
+                  clipFunc={
+                    poly && poly.length >= 3
+                      ? (ctx) => {
+                          const p0 = poly[0]!
+                          ctx.beginPath()
+                          ctx.moveTo(offsetX + p0.x * drawW, offsetY + p0.y * drawH)
+                          for (let i = 1; i < poly.length; i++) {
+                            const p = poly[i]!
+                            ctx.lineTo(offsetX + p.x * drawW, offsetY + p.y * drawH)
+                          }
+                          ctx.closePath()
+                        }
+                      : undefined
+                  }
+                >
+                  <Arc
+                    x={cx}
+                    y={cy}
+                    innerRadius={radiusPx * VISION_BAND_FRAC.yellowMax}
+                    outerRadius={radiusPx}
+                    angle={sweep}
+                    rotation={rotation}
+                    fill={red}
+                    listening={false}
+                  />
+                  <Arc
+                    x={cx}
+                    y={cy}
+                    innerRadius={radiusPx * VISION_BAND_FRAC.greenMax}
+                    outerRadius={radiusPx * VISION_BAND_FRAC.yellowMax}
+                    angle={sweep}
+                    rotation={rotation}
+                    fill={yellow}
+                    listening={false}
+                  />
+                  <Arc
+                    x={cx}
+                    y={cy}
+                    innerRadius={0}
+                    outerRadius={radiusPx * VISION_BAND_FRAC.greenMax}
+                    angle={sweep}
+                    rotation={rotation}
+                    fill={green}
+                    listening={false}
+                  />
+                </Group>
+              )
+            })}
 
           {showWifi &&
             wifiSpectrum.map((c, i) => (
@@ -740,22 +770,7 @@ export default function CameraPlacementTool({
                 : selected
                   ? 'rgba(165,243,252,0.95)'
                   : 'rgba(34,211,238,0.8)'
-              const fill =
-                visionSpectrum.length > 0
-                  ? isTele
-                    ? selected
-                      ? 'rgba(251,146,60,0.16)'
-                      : 'rgba(251,146,60,0.03)'
-                    : selected
-                      ? 'rgba(6,182,212,0.16)'
-                      : 'rgba(6,182,212,0.04)'
-                  : selected
-                    ? isTele
-                      ? 'rgba(251,146,60,0.28)'
-                      : 'rgba(34,211,238,0.42)'
-                    : isTele
-                      ? 'rgba(251,146,60,0.2)'
-                      : 'rgba(6,182,212,0.32)'
+              const fill = 'rgba(0,0,0,0)'
               const fovKey = `fov-${s.cameraId}-${s.lensId ?? 'main'}`
               const poly = s.polygon
               const canSpin =
@@ -1311,20 +1326,23 @@ export default function CameraPlacementTool({
                 const midAng = degToRad(vision.yawDeg)
                 const leftHalf = degToRad(vision.fovLeftDeg)
                 const rightHalf = degToRad(vision.fovRightDeg)
-                const tipX = offsetX + (cam.x + Math.cos(midAng) * radiusNorm) * drawW
-                const tipY = offsetY + (cam.y + Math.sin(midAng) * radiusNorm) * drawH
                 const leftAng = midAng - leftHalf
                 const rightAng = midAng + rightHalf
-                const wingR = radiusNorm * 0.88
-                const midLabelR = radiusNorm * 0.42
-                const leftX = offsetX + (cam.x + Math.cos(leftAng) * wingR) * drawW
-                const leftY = offsetY + (cam.y + Math.sin(leftAng) * wingR) * drawH
-                const rightX = offsetX + (cam.x + Math.cos(rightAng) * wingR) * drawW
-                const rightY = offsetY + (cam.y + Math.sin(rightAng) * wingR) * drawH
+                /** Asas a mitad de cada rayo; el centro queda en el bisector (45° si el FOV es 90°). */
+                const handleR = radiusNorm * 0.5
+                const tipX = offsetX + (cam.x + Math.cos(midAng) * handleR) * drawW
+                const tipY = offsetY + (cam.y + Math.sin(midAng) * handleR) * drawH
+                const leftX = offsetX + (cam.x + Math.cos(leftAng) * handleR) * drawW
+                const leftY = offsetY + (cam.y + Math.sin(leftAng) * handleR) * drawH
+                const rightX = offsetX + (cam.x + Math.cos(rightAng) * handleR) * drawW
+                const rightY = offsetY + (cam.y + Math.sin(rightAng) * handleR) * drawH
+                const midLabelR = radiusNorm * 0.22
                 const midLabelX = offsetX + (cam.x + Math.cos(midAng) * midLabelR) * drawW
                 const midLabelY = offsetY + (cam.y + Math.sin(midAng) * midLabelR) * drawH
                 const tipLabelX = offsetX + (cam.x + Math.cos(midAng) * radiusNorm) * drawW
                 const tipLabelY = offsetY + (cam.y + Math.sin(midAng) * radiusNorm) * drawH
+                const farX = tipLabelX
+                const farY = tipLabelY
                 const cx = offsetX + cam.x * drawW
                 const cy = offsetY + cam.y * drawH
 
@@ -1375,7 +1393,7 @@ export default function CameraPlacementTool({
                 return (
                   <Fragment key={`vis-handles-${cam.id}`}>
                     <Line
-                      points={[cx, cy, tipX, tipY]}
+                      points={[cx, cy, farX, farY]}
                       stroke="rgba(165,243,252,0.9)"
                       strokeWidth={2}
                       dash={[5, 4]}

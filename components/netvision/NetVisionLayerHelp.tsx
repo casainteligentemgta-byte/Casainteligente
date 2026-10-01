@@ -15,7 +15,7 @@ export const NETVISION_LAYER_HELP: LayerHelpItem[] = [
     id: 'fov',
     label: 'Visión',
     blurb:
-      'Cobertura automática por alcance (semáforo): verde detección objetos/personas, amarillo más lejos, rojo detección dudosa. Arrastra el cono para girarlo, la punta para el alcance y los lados para la apertura (ambos lados iguales). Drywall, bloque y concreto cortan la vista.',
+      'Cobertura automática por alcance (semáforo): verde cerca, amarillo más lejos, rojo al límite — los tres colores llenan todo el cono. Arrastra el cono para girarlo; las asas del medio para apertura y alcance. Drywall, bloque y concreto cortan la vista.',
   },
   {
     id: 'wifi',
