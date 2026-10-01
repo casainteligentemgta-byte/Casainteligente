@@ -33,6 +33,7 @@ const RUTAS_PROTEGIDAS = [
   '/metron',
   '/empleados',
   '/cambiar-password',
+  '/obra-digital',
 ];
 
 /** Rutas de personal que cuelgan de un prefijo público: siempre exigen sesión. */
