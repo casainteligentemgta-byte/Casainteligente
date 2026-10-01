@@ -12,6 +12,7 @@ import type {
   SpectrumCell,
   VisionBand,
 } from '@/lib/netvision/types'
+import { projectGroundCoverage } from '@/lib/netvision/utils/cameraMount'
 import {
   distMeters,
   fovSectorAngles,
@@ -92,6 +93,33 @@ function hasOpaqueWalls(structures: DesignStructure[]): boolean {
   return structures.some((s) => getStructureMaterialOrDefault(s.materialId).blocksVision)
 }
 
+function lensGroundOnPlan(
+  cam: DesignCamera,
+  lens: { fovDeg: number; rangeM: number },
+  scale: ScaleCalibration,
+) {
+  const ground = projectGroundCoverage({
+    heightM: cam.mountHeightM,
+    tiltDeg: cam.tiltDeg ?? 0,
+    hFovDeg: lens.fovDeg,
+    rangeM: lens.rangeM,
+  })
+  return {
+    nearM: ground.nearM,
+    farM: ground.farM,
+    innerRadiusNorm: metersToNormRadius(
+      ground.nearM,
+      scale.metersPerNormX,
+      scale.metersPerNormY,
+    ),
+    radiusNorm: metersToNormRadius(
+      ground.farM,
+      scale.metersPerNormX,
+      scale.metersPerNormY,
+    ),
+  }
+}
+
 export function buildCoverageSectors(
   cameras: DesignCamera[],
   scale: ScaleCalibration,
@@ -101,12 +129,7 @@ export function buildCoverageSectors(
   return cameras.flatMap((cam) => {
     const lenses = effectiveCameraLenses(cam, mode)
     return lenses.map((lens) => {
-      const radiusNorm = metersToNormRadius(
-        lens.rangeM,
-        scale.metersPerNormX,
-        scale.metersPerNormY,
-      )
-      const bands = visionBandRangesM(lens.rangeM, lens.catalogRangeM)
+      const ground = lensGroundOnPlan(cam, lens, scale)
       const { startAngleRad, endAngleRad } = fovSectorAngles(
         lens.yawDeg,
         lens.fovLeftDeg,
@@ -116,17 +139,21 @@ export function buildCoverageSectors(
       const polygon = buildFovPolygon(
         cam.x,
         cam.y,
-        radiusNorm,
+        ground.radiusNorm,
         startAngleRad,
         endAngleRad,
         structures,
+        96,
+        ground.innerRadiusNorm,
       )
+      const bands = visionBandRangesM(ground.farM, lens.catalogRangeM)
       return {
         cameraId: cam.id,
         lensId: lens.lensId,
         cx: cam.x,
         cy: cam.y,
-        radiusNorm,
+        radiusNorm: ground.radiusNorm,
+        innerRadiusNorm: ground.innerRadiusNorm,
         startAngleRad,
         endAngleRad,
         mode,
@@ -166,11 +193,7 @@ export function buildVisionSpectrum(
 
   const prepared = cameras.flatMap((cam) =>
     effectiveCameraLenses(cam, mode).map((lens) => {
-      const radiusNorm = metersToNormRadius(
-        lens.rangeM,
-        scale.metersPerNormX,
-        scale.metersPerNormY,
-      )
+      const ground = lensGroundOnPlan(cam, lens, scale)
       const { startAngleRad, endAngleRad } = fovSectorAngles(
         lens.yawDeg,
         lens.fovLeftDeg,
@@ -179,16 +202,19 @@ export function buildVisionSpectrum(
       const polygon = buildFovPolygon(
         cam.x,
         cam.y,
-        radiusNorm,
+        ground.radiusNorm,
         startAngleRad,
         endAngleRad,
         structures,
+        96,
+        ground.innerRadiusNorm,
       )
       return {
         cam,
-        rangeM: lens.rangeM,
+        rangeM: ground.farM,
         catalogRangeM: lens.catalogRangeM,
-        radiusNorm,
+        nearM: ground.nearM,
+        radiusNorm: ground.radiusNorm,
         startAngleRad,
         endAngleRad,
         polygon,
@@ -217,6 +243,7 @@ export function buildVisionSpectrum(
           scale.metersPerNormX,
           scale.metersPerNormY,
         )
+        if (d + 1e-6 < p.nearM) continue
         const band = visionBandForDistance(d, p.rangeM, p.catalogRangeM)
         if (!band) continue
         const strength = Math.max(0.15, 1 - d / Math.max(p.catalogRangeM, 1))

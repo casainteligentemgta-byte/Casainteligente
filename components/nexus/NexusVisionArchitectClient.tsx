@@ -155,6 +155,11 @@ import {
 } from '@/lib/netvision/utils/rotatePlano'
 import { FOV_PRESETS_DEG, RANGE_PRESETS_M } from '@/lib/netvision/utils/visionAdjust'
 import {
+  DEFAULT_MOUNT_HEIGHT_M,
+  DEFAULT_TILT_DEG,
+  projectGroundCoverage,
+} from '@/lib/netvision/utils/cameraMount'
+import {
   detectWallsFromPdfBytes,
   structuresFromWallDetection,
   summarizePdfDetection,
@@ -775,7 +780,8 @@ export default function NexusVisionArchitectClient() {
       label: `CAM-${String(n).padStart(2, '0')}`,
       modelId: defaultModelId,
       yawDeg: 0,
-      mountHeightM: 2.8,
+      mountHeightM: DEFAULT_MOUNT_HEIGHT_M,
+      tiltDeg: DEFAULT_TILT_DEG,
       ...vision,
     }
     setError(null)
@@ -2177,6 +2183,7 @@ export default function NexusVisionArchitectClient() {
             structure={selectedStructure}
             cable={selectedManualCable}
             nightMode={nightMode}
+            unitSystem={project.unitSystem ?? 'metric'}
             onPatchCamera={(patch) => {
               if (!selectedCam) return
               patchCamera(selectedCam.id, patch)
@@ -2428,6 +2435,12 @@ export default function NexusVisionArchitectClient() {
                     const isDual = lenses.length >= 2
                     const model = getCameraModelOrDefault(selectedCam.modelId)
                     const bands = visionBandRangesM(vision.rangeM, vision.catalogRangeM)
+                    const ground = projectGroundCoverage({
+                      heightM: selectedCam.mountHeightM,
+                      tiltDeg: selectedCam.tiltDeg ?? 0,
+                      hFovDeg: vision.fovDeg,
+                      rangeM: vision.rangeM,
+                    })
                     const dualSummary = isDual
                       ? lenses
                           .map(
@@ -2511,6 +2524,14 @@ export default function NexusVisionArchitectClient() {
                         <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-cyan)]">
                           Espectro de visión · semáforo
                           {isDual ? ' (gran angular)' : ''}
+                        </p>
+                        <p className="rounded-lg border border-white/10 bg-black/25 px-2 py-1.5 text-[10px] leading-relaxed">
+                          Montaje {formatLength(selectedCam.mountHeightM, project.unitSystem ?? 'metric')} ·
+                          inclinación {Math.round(selectedCam.tiltDeg ?? 0)}°
+                          {ground.nearM > 0.05
+                            ? ` · en el piso ciega ${formatLength(ground.nearM, project.unitSystem ?? 'metric')} / llega ${formatLength(ground.farM, project.unitSystem ?? 'metric')}`
+                            : ` · horizonte, llega ${formatLength(ground.farM, project.unitSystem ?? 'metric')}`}
+                          . Ajústalo en la ficha de la cámara (arriba).
                         </p>
                         <p className="rounded-lg border border-white/10 bg-black/25 px-2 py-1.5 text-[10px] leading-relaxed">
                           <span className="text-emerald-300">

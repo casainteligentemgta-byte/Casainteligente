@@ -31,7 +31,22 @@ import type {
   DesignStructure,
   NetworkNodeKind,
   StructureMaterialId,
+  UnitSystem,
 } from '@/lib/netvision/types'
+import {
+  DEFAULT_MOUNT_HEIGHT_M,
+  HEIGHT_PRESETS_M,
+  MAX_MOUNT_HEIGHT_M,
+  MAX_TILT_DEG,
+  MIN_MOUNT_HEIGHT_M,
+  MIN_TILT_DEG,
+  TILT_PRESETS_DEG,
+  clampMountHeightM,
+  clampTiltDeg,
+  projectGroundCoverage,
+} from '@/lib/netvision/utils/cameraMount'
+import { formatLength } from '@/lib/netvision/utils/units'
+import { effectiveCameraVision } from '@/lib/netvision/catalog/cameras'
 import {
   defaultNetworkPlanSize,
   networkPlanSizePct,
@@ -57,6 +72,7 @@ type Props = {
   structure: DesignStructure | null
   cable: DesignCableSegment | null
   nightMode?: boolean
+  unitSystem?: UnitSystem
   onPatchCamera: (patch: Partial<DesignCamera>) => void
   onPatchNetwork: (patch: Partial<DesignNetworkNode>) => void
   onPatchStructure: (patch: Partial<DesignStructure>) => void
@@ -74,6 +90,7 @@ export default function NetVisionSelectedProps({
   structure,
   cable,
   nightMode = false,
+  unitSystem = 'metric',
   onPatchCamera,
   onPatchNetwork,
   onPatchStructure,
@@ -118,13 +135,108 @@ export default function NetVisionSelectedProps({
         </label>
         {(() => {
           const model = getCameraModelOrDefault(camera.modelId)
+          const vision = effectiveCameraVision(camera, nightMode ? 'night' : 'day')
+          const heightM = camera.mountHeightM || DEFAULT_MOUNT_HEIGHT_M
+          const tiltDeg = camera.tiltDeg ?? 0
+          const ground = projectGroundCoverage({
+            heightM,
+            tiltDeg,
+            hFovDeg: vision.fovDeg,
+            rangeM: vision.rangeM,
+          })
           return (
-            <div className="space-y-1 text-[10px] leading-relaxed text-[var(--nexus-text-dim)]">
-              <p>
-                {model.brand} · {cameraVisionSummary(model)}
-              </p>
-              {model.notes ? <p>{model.notes}</p> : null}
-            </div>
+            <>
+              <div className="space-y-1 text-[10px] leading-relaxed text-[var(--nexus-text-dim)]">
+                <p>
+                  {model.brand} · {cameraVisionSummary(model)}
+                </p>
+                {model.notes ? <p>{model.notes}</p> : null}
+              </div>
+              <div className="space-y-2 rounded-md border border-white/10 bg-black/25 px-2 py-1.5">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-cyan)]">
+                  Montaje
+                </p>
+                <label className="block">
+                  <span className="text-[var(--nexus-text-dim)]">
+                    Altura {formatLength(heightM, unitSystem)}
+                  </span>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {HEIGHT_PRESETS_M.map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        className={`min-h-8 rounded-md px-2 text-[11px] font-semibold ${
+                          Math.abs(heightM - m) < 0.05
+                            ? 'bg-[var(--nexus-cyan)] text-black'
+                            : 'border border-white/15 text-[var(--nexus-cyan)]'
+                        }`}
+                        onClick={() => onPatchCamera({ mountHeightM: m })}
+                      >
+                        {formatLength(m, unitSystem, 1)}
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    type="range"
+                    min={MIN_MOUNT_HEIGHT_M}
+                    max={MAX_MOUNT_HEIGHT_M}
+                    step={0.1}
+                    value={heightM}
+                    onChange={(e) =>
+                      onPatchCamera({ mountHeightM: clampMountHeightM(Number(e.target.value)) })
+                    }
+                    className="mt-1 w-full"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-[var(--nexus-text-dim)]">
+                    Inclinación {Math.round(tiltDeg)}°
+                    {tiltDeg < 0.5 ? ' · horizonte' : tiltDeg >= 89 ? ' · al piso' : ' · hacia el piso'}
+                  </span>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {TILT_PRESETS_DEG.map((d) => (
+                      <button
+                        key={d}
+                        type="button"
+                        className={`min-h-8 rounded-md px-2 text-[11px] font-semibold ${
+                          Math.abs(tiltDeg - d) < 0.5
+                            ? 'bg-[var(--nexus-cyan)] text-black'
+                            : 'border border-white/15 text-[var(--nexus-cyan)]'
+                        }`}
+                        onClick={() => onPatchCamera({ tiltDeg: d })}
+                      >
+                        {d}°
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    type="range"
+                    min={MIN_TILT_DEG}
+                    max={MAX_TILT_DEG}
+                    step={1}
+                    value={tiltDeg}
+                    onChange={(e) =>
+                      onPatchCamera({ tiltDeg: clampTiltDeg(Number(e.target.value)) })
+                    }
+                    className="mt-1 w-full"
+                  />
+                </label>
+                <p className="text-[10px] leading-relaxed text-[var(--nexus-text-muted)]">
+                  {tiltDeg < 0.5 ? (
+                    <>
+                      Mira al horizonte: el cono llega{' '}
+                      {formatLength(ground.farM, unitSystem)}. Inclina hacia el piso para
+                      cubrir más cerca y recortar el fondo.
+                    </>
+                  ) : (
+                    <>
+                      En el piso: zona ciega {formatLength(ground.nearM, unitSystem)} ·
+                      llega {formatLength(ground.farM, unitSystem)}.
+                    </>
+                  )}
+                </p>
+              </div>
+            </>
           )
         })()}
         <Button

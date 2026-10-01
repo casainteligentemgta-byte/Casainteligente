@@ -135,7 +135,7 @@ export function soundLossBetween(
   return loss
 }
 
-/** Polígono FOV por rayos (incluye el centro de la cámara). */
+/** Polígono FOV por rayos. Si innerRadiusNorm > 0, es un anillo (zona ciega al centro). */
 export function buildFovPolygon(
   cx: number,
   cy: number,
@@ -144,6 +144,7 @@ export function buildFovPolygon(
   endAngleRad: number,
   structures: DesignStructure[],
   rays = 96,
+  innerRadiusNorm = 0,
 ): { x: number; y: number }[] {
   let start = startAngleRad
   let end = endAngleRad
@@ -154,13 +155,21 @@ export function buildFovPolygon(
   )
     ? Math.max(rays, 128)
     : rays
-  const pts: { x: number; y: number }[] = [{ x: cx, y: cy }]
+  const inner = Math.max(0, innerRadiusNorm)
+  const outers: { x: number; y: number }[] = []
+  const inners: { x: number; y: number }[] = []
   for (let i = 0; i <= rayCount; i++) {
     const ang = start + (span * i) / rayCount
-    const r = visionRangeAlongRay(cx, cy, ang, radiusNorm, structures)
-    pts.push(polarToNorm(cx, cy, r, ang))
+    const outerR = visionRangeAlongRay(cx, cy, ang, radiusNorm, structures)
+    outers.push(polarToNorm(cx, cy, outerR, ang))
+    if (inner > 1e-6) {
+      inners.push(polarToNorm(cx, cy, Math.min(inner, outerR), ang))
+    }
   }
-  return pts
+  if (inner <= 1e-6) {
+    return [{ x: cx, y: cy }, ...outers]
+  }
+  return [...outers, ...inners.reverse()]
 }
 
 /** ¿Hay línea de visión libre (sin muro opaco) entre dos puntos? */

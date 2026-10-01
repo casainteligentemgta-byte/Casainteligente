@@ -109,3 +109,36 @@ describe('buildVisionSpectrum overlap', () => {
     assert.equal(inFrontOfB?.band, 'green')
   })
 })
+
+describe('inclinación recorta el piso bajo la cámara', () => {
+  it('con tilt 20° la celda pegada al pin no tiene espectro', () => {
+    const scale = { metersPerNormX: 40, metersPerNormY: 40, calibrated: true }
+    const cells = buildVisionSpectrum(
+      [
+        testCam({
+          id: 'a',
+          x: 0.5,
+          yawDeg: 0,
+          fovDeg: 90,
+          fovLeftDeg: 45,
+          fovRightDeg: 45,
+          rangeM: 25,
+          mountHeightM: 3,
+          tiltDeg: 20,
+        }),
+      ],
+      scale,
+      'day',
+      [],
+      40,
+    )
+    const underPin = cells.find(
+      (c) => c.x > 0.48 && c.x < 0.52 && c.y > 0.48 && c.y < 0.52,
+    )
+    const ahead8m = cells.find(
+      (c) => c.x > 0.68 && c.x < 0.72 && c.y > 0.48 && c.y < 0.52,
+    )
+    assert.equal(underPin, undefined)
+    assert.ok(ahead8m?.band, 'debe cubrir ~8 m al frente')
+  })
+})

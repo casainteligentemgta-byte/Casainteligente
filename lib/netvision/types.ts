@@ -45,7 +45,13 @@ export type DesignCamera = {
   modelId: string
   /** Orientación en grados (0 = este; en canvas Y-down crece en sentido horario) */
   yawDeg: number
+  /** Altura de montaje sobre el piso (m). */
   mountHeightM: number
+  /**
+   * Inclinación hacia el piso: 0° = horizonte (cono 2D actual), 90° = nadir.
+   * Con inclinación > 0 aparece zona ciega bajo la cámara y se recorta el fondo.
+   */
+  tiltDeg?: number
   /** Apertura FOV total en grados (override del catálogo). Si faltan lados, se reparte 50/50. */
   fovDeg?: number
   /**
@@ -228,6 +234,8 @@ export type CoverageSector = {
   cx: number
   cy: number
   radiusNorm: number
+  /** Radio interior (zona ciega por inclinación) en coords 0–1. */
+  innerRadiusNorm?: number
   startAngleRad: number
   endAngleRad: number
   mode: 'day' | 'night'

@@ -152,11 +152,13 @@ function visionBandArcRadii(
   radiusPx: number,
   greenRadiusPx: number,
   yellowRadiusPx: number,
+  deadRadiusPx = 0,
 ): { inner: number; outer: number } | null {
-  const greenPx = Math.max(0, Math.min(radiusPx, greenRadiusPx))
+  const deadPx = Math.max(0, deadRadiusPx)
+  const greenPx = Math.max(deadPx, Math.min(radiusPx, greenRadiusPx))
   const yellowPx = Math.max(greenPx, Math.min(radiusPx, yellowRadiusPx))
   const inner =
-    band === 'green' ? 0 : band === 'yellow' ? greenPx : yellowPx
+    band === 'green' ? deadPx : band === 'yellow' ? greenPx : yellowPx
   const outer =
     band === 'green' ? greenPx : band === 'yellow' ? yellowPx : radiusPx
   if (outer <= inner + 0.4) return null
@@ -226,7 +228,14 @@ function VisionSpectrumLayer({
           const yellowRadiusPx = radiusAlong(
             s.yellowRadiusNorm ?? s.radiusNorm * 0.7,
           )
-          const radii = visionBandArcRadii(band, radiusPx, greenRadiusPx, yellowRadiusPx)
+          const deadRadiusPx = radiusAlong(s.innerRadiusNorm ?? 0)
+          const radii = visionBandArcRadii(
+            band,
+            radiusPx,
+            greenRadiusPx,
+            yellowRadiusPx,
+            deadRadiusPx,
+          )
           if (!radii) return []
           const sweep = ((s.endAngleRad - s.startAngleRad) * 180) / Math.PI
           const rotation = (s.startAngleRad * 180) / Math.PI
@@ -861,6 +870,17 @@ export default function CameraPlacementTool({
               const hitCy = offsetY + s.cy * drawH
               const hitSweep = ((s.endAngleRad - s.startAngleRad) * 180) / Math.PI
               const hitRot = (s.startAngleRad * 180) / Math.PI
+              const hitInner = Math.max(
+                0,
+                Math.hypot(
+                  Math.cos((s.startAngleRad + s.endAngleRad) / 2) *
+                    (s.innerRadiusNorm ?? 0) *
+                    drawW,
+                  Math.sin((s.startAngleRad + s.endAngleRad) / 2) *
+                    (s.innerRadiusNorm ?? 0) *
+                    drawH,
+                ),
+              )
               const hitR = Math.max(
                 16,
                 Math.hypot(
@@ -880,7 +900,7 @@ export default function CameraPlacementTool({
                     <Arc
                       x={hitCx}
                       y={hitCy}
-                      innerRadius={0}
+                      innerRadius={hitInner}
                       outerRadius={hitR}
                       angle={hitSweep}
                       rotation={hitRot}
@@ -959,6 +979,7 @@ export default function CameraPlacementTool({
               const cx = offsetX + s.cx * drawW
               const cy = offsetY + s.cy * drawH
               const radius = s.radiusNorm * avg
+              const innerR = Math.max(0, (s.innerRadiusNorm ?? 0) * avg)
               const angle = ((s.endAngleRad - s.startAngleRad) * 180) / Math.PI
               const rotation = (s.startAngleRad * 180) / Math.PI
               return (
@@ -966,7 +987,7 @@ export default function CameraPlacementTool({
                   key={fovKey}
                   x={cx}
                   y={cy}
-                  innerRadius={0}
+                  innerRadius={innerR}
                   outerRadius={Math.max(12, radius)}
                   angle={angle}
                   rotation={rotation}
@@ -1448,13 +1469,14 @@ export default function CameraPlacementTool({
                 const avgMPerNorm = Math.max((metersPerNormX + metersPerNormY) / 2, 0.01)
                 const radiusNorm =
                   sector?.radiusNorm ?? vision.rangeM / avgMPerNorm
+                const innerNorm = sector?.innerRadiusNorm ?? 0
                 const midAng = degToRad(vision.yawDeg)
                 const leftHalf = degToRad(vision.fovLeftDeg)
                 const rightHalf = degToRad(vision.fovRightDeg)
                 const leftAng = midAng - leftHalf
                 const rightAng = midAng + rightHalf
-                /** Asas a mitad de cada rayo; el centro queda en el bisector (45° si el FOV es 90°). */
-                const handleR = radiusNorm * 0.5
+                /** Asas a mitad de la zona visible (entre ciega e alcance). */
+                const handleR = innerNorm + (radiusNorm - innerNorm) * 0.5
                 const tipX = offsetX + (cam.x + Math.cos(midAng) * handleR) * drawW
                 const tipY = offsetY + (cam.y + Math.sin(midAng) * handleR) * drawH
                 const leftX = offsetX + (cam.x + Math.cos(leftAng) * handleR) * drawW
@@ -1749,17 +1771,32 @@ export default function CameraPlacementTool({
             )
           })}
 
-          {cameras.map((cam) => (
-            <Text
-              key={`lbl-${cam.id}`}
-              x={offsetX + cam.x * drawW + 12}
-              y={offsetY + cam.y * drawH - 18}
-              text={cam.label}
-              fontSize={11}
-              fill="#e2e8f0"
-              listening={false}
-            />
-          ))}
+          {cameras.map((cam) => {
+            const selected = cam.id === selectedId
+            const tilt = Math.round(cam.tiltDeg ?? 0)
+            return (
+              <Fragment key={`lbl-${cam.id}`}>
+                <Text
+                  x={offsetX + cam.x * drawW + 12}
+                  y={offsetY + cam.y * drawH - 18}
+                  text={cam.label}
+                  fontSize={11}
+                  fill="#e2e8f0"
+                  listening={false}
+                />
+                {selected ? (
+                  <Text
+                    x={offsetX + cam.x * drawW + 12}
+                    y={offsetY + cam.y * drawH - 6}
+                    text={`${cam.mountHeightM.toFixed(1)} m · ${tilt}°`}
+                    fontSize={9}
+                    fill="#67e8f9"
+                    listening={false}
+                  />
+                ) : null}
+              </Fragment>
+            )
+          })}
 
           {networkNodes.map((node) => {
             const planSize = resolveNetworkPlanSize(node)
