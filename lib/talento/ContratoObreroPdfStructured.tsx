@@ -751,7 +751,7 @@ export function ContratoObreroPDF({
           <Text style={styles.bold}>OCTAVA: COMPLEMENTO VOLUNTARIO DE ALIMENTACIÓN.</Text>
           {` Por mera liberalidad, LA ENTIDAD DE TRABAJO podrá pagar semanalmente un complemento equivalente a la diferencia entre la suma del salario semanal y la alimentación semanal, y el equivalente en bolívares de `}
           <Text style={styles.bold}>{totalIngresoSemanalUsdClausulaSexTxt}</Text>
-          {` a la tasa oficial del Banco Central de Venezuela del día del pago. El dólar se usa solo como moneda de cuenta y el pago se hará siempre en bolívares. El complemento tiene la misma naturaleza no salarial del beneficio de alimentación; no modifica la Convención Colectiva ni el acuerdo homologado ni crea un nuevo mínimo convencional; y LA ENTIDAD DE TRABAJO podrá modificarlo o suspenderlo por razones económicas, con aviso escrito de treinta (30) días continuos, sin que el pago de alimentación sea nunca inferior al monto convencional vigente. Cualquier aumento convencional o legal del beneficio de alimentación se imputará primero a este complemento.`}
+          {` a la tasa oficial del Banco Central de Venezuela del día del pago. El dólar se usa solo como moneda de cuenta y el pago se hará siempre en bolívares. El complemento tiene la misma naturaleza no salarial del beneficio de alimentación, y no modifica la Convención Colectiva ni el acuerdo homologado ni crea un nuevo mínimo convencional.`}
         </Text>
       ) : null}
 
