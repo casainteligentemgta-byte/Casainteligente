@@ -53,9 +53,19 @@ export function markdownLegalToHtml(md: string): string {
 }
 
 function inline(s: string): string {
-  return s
+  // Protege {{VARIABLES_CON_GUION_BAJO}} y líneas de firma «_____» para que no se lean como cursiva.
+  const guardados: string[] = [];
+  const guardar = (m: string) => {
+    guardados.push(m);
+    return `\u0000${guardados.length - 1}\u0000`;
+  };
+  const t = s
+    .replace(/\{\{[^}]*\}\}/g, guardar)
+    .replace(/_{3,}/g, guardar)
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/_(.+?)_/g, '<em>$1</em>');
+    // Cursiva solo con _texto_ delimitado por espacios o puntuación, nunca dentro de una palabra.
+    .replace(/(^|[\s(«"])_([^_\s](?:[^_]*[^_\s])?)_(?=$|[\s.,;:)»"])/g, '$1<em>$2</em>');
+  return t.replace(/\u0000(\d+)\u0000/g, (_, i: string) => guardados[Number(i)] ?? '');
 }
 
 export function documentoPrintHtml(titulo: string, cuerpoMarkdown: string): string {
