@@ -665,8 +665,13 @@ export default function NexusVisionArchitectClient() {
     setInfo(null)
     setLoading(true)
     try {
-      const isPdf =
-        file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+      const lower = file.name.toLowerCase()
+      if (/\.(dwg|dxf|dgn)$/.test(lower)) {
+        throw new Error(
+          'El CAD nativo (.dwg / .dxf) no se abre aquí. En AutoCAD o Revit exporta el plano a PDF y pulsa Cargar plano.',
+        )
+      }
+      const isPdf = file.type === 'application/pdf' || lower.endsWith('.pdf')
       let url: string
       let detected: DesignStructure[] = []
       if (isPdf) {
@@ -699,7 +704,7 @@ export default function NexusVisionArchitectClient() {
           reader.readAsDataURL(file)
         })
       } else {
-        throw new Error('Usa una imagen (JPG/PNG/WEBP) o un PDF.')
+        throw new Error('Usa un PDF (exportado del CAD) o una imagen (JPG/PNG/WEBP).')
       }
       setProject((p) => ({
         ...p,
@@ -1575,8 +1580,22 @@ export default function NexusVisionArchitectClient() {
     )
   })()
 
+  const openPlanoPicker = () => fileRef.current?.click()
+
   const projectActions = (
     <>
+      <Button
+        type="button"
+        variant="glass"
+        size="sm"
+        className="shrink-0"
+        onClick={openPlanoPicker}
+        disabled={loading}
+        title="PDF (exportado de CAD) o imagen JPG/PNG"
+      >
+        <Upload className="mr-1.5 h-3.5 w-3.5" />
+        {loading ? 'Cargando…' : 'Cargar plano'}
+      </Button>
       <Button
         type="button"
         variant="glass"
@@ -1588,24 +1607,6 @@ export default function NexusVisionArchitectClient() {
         <Undo2 className="mr-1.5 h-3.5 w-3.5" />
         Nuevo plano
       </Button>
-      <Button
-        type="button"
-        variant="glass"
-        size="sm"
-        className="shrink-0"
-        onClick={() => fileRef.current?.click()}
-        disabled={loading}
-      >
-        <Upload className="mr-1.5 h-3.5 w-3.5" />
-        {loading ? 'Cargando…' : 'Cargar'}
-      </Button>
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/*,application/pdf,.pdf"
-        className="hidden"
-        onChange={(e) => void onFile(e.target.files?.[0] ?? null)}
-      />
       <div className="shrink-0">
         <NetVisionProjectsPanel
           activeId={project.id}
@@ -1701,6 +1702,17 @@ export default function NexusVisionArchitectClient() {
 
   return (
     <div className="space-y-3">
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*,application/pdf,.pdf,.dwg,.dxf"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0] ?? null
+          e.target.value = ''
+          void onFile(file)
+        }}
+      />
       {headerNav}
 
       <div className="flex flex-wrap items-center gap-3">
@@ -1728,6 +1740,16 @@ export default function NexusVisionArchitectClient() {
             Diagrama
           </button>
         </div>
+        <button
+          type="button"
+          disabled={loading}
+          title="PDF exportado de CAD, o imagen JPG/PNG"
+          onClick={openPlanoPicker}
+          className="inline-flex items-center gap-1 rounded-lg border border-[var(--nexus-cyan)]/50 bg-[var(--nexus-cyan)]/15 px-2.5 py-1 text-[11px] font-semibold text-[var(--nexus-cyan)] disabled:opacity-40"
+        >
+          <Upload className="h-3.5 w-3.5" />
+          {loading ? 'Cargando…' : 'Cargar PDF'}
+        </button>
         {project.planoUrl ? (
           <p className="truncate text-xs text-[var(--nexus-text-muted)]">
             <Mono>{project.planoNombre || 'Plano'}</Mono>
@@ -1996,7 +2018,7 @@ export default function NexusVisionArchitectClient() {
           {!project.planoUrl ? (
             <button
               type="button"
-              onClick={() => fileRef.current?.click()}
+              onClick={openPlanoPicker}
               className="flex min-h-[320px] w-full flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-[rgba(0,242,254,0.35)] bg-[radial-gradient(ellipse_at_center,rgba(0,242,254,0.12),transparent_70%)] px-4 text-center transition hover:border-[rgba(0,242,254,0.55)]"
             >
               <Camera className="h-10 w-10 text-[var(--nexus-cyan)]" />
