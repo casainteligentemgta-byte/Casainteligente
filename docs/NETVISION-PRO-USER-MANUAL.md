@@ -220,7 +220,7 @@ Activa la capa **Visión**. Verás el cono/espectro de cobertura. Ajusta:
 
 - Orientación (yaw)
 - Apertura FOV°
-- Alcance (m)
+- Alcance (m): el anillo estira el cono, pero verde/amarillo siguen en metros de ficha
 - Asas en el plano / sliders
 
 Consulta **?** en la barra de capas para Visión / WiFi / Sonido / Enlaces / Rutas / Sub / Noche.

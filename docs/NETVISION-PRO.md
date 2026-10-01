@@ -17,7 +17,7 @@ FOV, catálogo multi-marca, calibración, BOM base, exports JSON/CSV/PNG/**PDF d
 Agregar cámara con botón **+ Cámara** (no por clic en el plano); luego arrastrar el pin.
 Espectro de visión ajustable por cámara: orientación, apertura FOV y alcance (sliders + asas en el plano).
 Cámaras **Dual** (Ezviz H9c, Aqara G350): dos conos/espectros — gran angular (cyan) + tele (naranja). El FOV del catálogo es **horizontal** (si la ficha publica diagonal, se convierte).
-**Calcular cobertura**: semáforo por alcance — verde (detección objetos/personas ≤40%), amarillo (≤70%), rojo (visión dudosa hasta 100%).
+**Calcular cobertura**: semáforo en **metros de ficha** — verde (detección ≤40% del alcance del modelo), amarillo (≤70%), rojo (hasta el borde del cono). Estirar el espectro no agranda el verde: 2 m siguen siendo 2 m.
 Guía rápida de capas (Visión / WiFi / Sonido / Enlaces / Rutas / Sub / Noche): botón **?** en la barra del plano (`NetVisionLayerHelp`).
 
 ### 1b — Muros / materiales
