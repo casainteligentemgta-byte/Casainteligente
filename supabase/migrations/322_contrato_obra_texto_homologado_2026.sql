@@ -1,13 +1,10 @@
-/**
- * Plantilla del contrato individual de trabajo (obrero) — obra determinada, CCT construcción.
- * Se inserta en `ci_documento_plantillas` si no existe (ver `ensurePlantillaContratoObrero`).
- * La entidad patrono (razón social, RM, representante) se sustituye desde `ci_entidades` del proyecto.
- * Revise con asesoría legal antes de uso en firma.
- */
-export const CONTRATO_OBRERO_HORARIO_CUARTA_DEFAULT =
-  'Lunes a Jueves: De 7:00 a.m. a 5:00 p.m. (1 hora de descanso de 12:00 p.m. a 1:00 p.m., no imputable a la jornada). Viernes: De 7:00 a.m. a 11:00 a.m. (Jornada continua).';
+-- 322 · Contrato individual por obra determinada: texto ajustado al tabulador homologado (19/08/2026)
+-- Reemplaza el cuerpo de las plantillas de Legal → Formatos que aún tenían la cláusula de
+-- «compensación por culminación» (renuncia anticipada a prestaciones, utilidades y vacaciones),
+-- el período de prueba de 90 días y el cesta ticket en dólares.
 
-export const CONTRATO_OBRERO_CUERPO_DEFAULT = `CONTRATO INDIVIDUAL DE TRABAJO PARA UNA OBRA DETERMINADA
+update public.ci_legal_plantillas
+set cuerpo_markdown = $cuerpo$CONTRATO INDIVIDUAL DE TRABAJO PARA UNA OBRA DETERMINADA
 
 Entre {{PATRON_RAZON_SOCIAL}}, sociedad mercantil domiciliada en {{PATRON_DOMICILIO}}, Municipio {{PATRON_MUNICIPIO}} del estado {{PATRON_ESTADO}}, {{PATRON_INSCRIPCION_RM}} representada en este acto por su {{REP_LEGAL_CARGO}} {{REP_LEGAL_ARTICULO_CIUDADANO}} {{REP_LEGAL_NOMBRE}}, {{REP_LEGAL_NACIONALIDAD}}, mayor de edad, {{REP_LEGAL_ESTADO_CIVIL}}, titular de la cédula de identidad N° {{REP_LEGAL_CEDULA}}, quien en lo sucesivo se denominará LA ENTIDAD DE TRABAJO; y {{EMPLEADO_ARTICULO_CIUDADANO}} {{EMPLEADO_NOMBRE_COMPLETO}}, {{EMPLEADO_NACIONALIDAD}}, mayor de edad, {{EMPLEADO_ESTADO_CIVIL}}, titular de la cédula de identidad N° {{EMPLEADO_CEDULA}}, domiciliado en {{EMPLEADO_DIRECCION}}, quien en lo sucesivo se denominará EL TRABAJADOR; se ha convenido en celebrar el presente Contrato de Trabajo para una Obra Determinada, conforme al artículo 63 de la Ley Orgánica del Trabajo, los Trabajadores y las Trabajadoras (LOTTT), a las Cláusulas 18 y 19 de la Convención Colectiva de Trabajo de la Industria de la Construcción, Conexos y Similares (Gaceta Oficial Extraordinaria N° 6.752, en lo adelante «la Convención») y al acuerdo de la Comisión de Avenimiento del 17 de agosto de 2026, homologado por auto N° 2026-021 del 19 de agosto de 2026, que se regirá por las siguientes cláusulas:
 
@@ -44,4 +41,8 @@ POR LA ENTIDAD DE TRABAJO                          POR EL TRABAJADOR
 _______________________________                    _______________________________
 {{REP_LEGAL_NOMBRE}}                               {{EMPLEADO_NOMBRE_COMPLETO}}
 C.I.: {{REP_LEGAL_CEDULA}}                         C.I.: {{EMPLEADO_CEDULA}}
-                                                   (Huella Dactilar)`;
+                                                   (Huella Dactilar)$cuerpo$,
+    variables = '[{"key": "PATRON_RAZON_SOCIAL", "label": "PATRON RAZON SOCIAL"}, {"key": "PATRON_DOMICILIO", "label": "PATRON DOMICILIO"}, {"key": "PATRON_MUNICIPIO", "label": "PATRON MUNICIPIO"}, {"key": "PATRON_ESTADO", "label": "PATRON ESTADO"}, {"key": "PATRON_INSCRIPCION_RM", "label": "PATRON INSCRIPCION RM"}, {"key": "REP_LEGAL_CARGO", "label": "REP LEGAL CARGO"}, {"key": "REP_LEGAL_ARTICULO_CIUDADANO", "label": "REP LEGAL ARTICULO CIUDADANO"}, {"key": "REP_LEGAL_NOMBRE", "label": "REP LEGAL NOMBRE"}, {"key": "REP_LEGAL_NACIONALIDAD", "label": "REP LEGAL NACIONALIDAD"}, {"key": "REP_LEGAL_ESTADO_CIVIL", "label": "REP LEGAL ESTADO CIVIL"}, {"key": "REP_LEGAL_CEDULA", "label": "REP LEGAL CEDULA"}, {"key": "EMPLEADO_ARTICULO_CIUDADANO", "label": "EMPLEADO ARTICULO CIUDADANO"}, {"key": "EMPLEADO_NOMBRE_COMPLETO", "label": "EMPLEADO NOMBRE COMPLETO"}, {"key": "EMPLEADO_NACIONALIDAD", "label": "EMPLEADO NACIONALIDAD"}, {"key": "EMPLEADO_ESTADO_CIVIL", "label": "EMPLEADO ESTADO CIVIL"}, {"key": "EMPLEADO_CEDULA", "label": "EMPLEADO CEDULA"}, {"key": "EMPLEADO_DIRECCION", "label": "EMPLEADO DIRECCION"}, {"key": "CONTRATO_FASE_TECNICA", "label": "CONTRATO FASE TECNICA"}, {"key": "OBRA_NOMBRE", "label": "OBRA NOMBRE"}, {"key": "CONTRATO_CARGO_OFICIO", "label": "CONTRATO CARGO OFICIO"}, {"key": "CONTRATO_HORARIO_CUARTA", "label": "CONTRATO HORARIO CUARTA"}, {"key": "CONTRATO_LUGAR_QUINTA", "label": "CONTRATO LUGAR QUINTA"}, {"key": "CONTRATO_SALARIO_DIARIO_VES", "label": "CONTRATO SALARIO DIARIO VES"}, {"key": "CONTRATO_SALARIO_SEMANAL_VES", "label": "CONTRATO SALARIO SEMANAL VES"}, {"key": "CONTRATO_ALIMENTACION_MENSUAL_VES", "label": "CONTRATO ALIMENTACION MENSUAL VES"}, {"key": "CONTRATO_ALIMENTACION_SEMANAL_VES", "label": "CONTRATO ALIMENTACION SEMANAL VES"}, {"key": "CONTRATO_INGRESO_SEMANAL_USD_TOTAL", "label": "CONTRATO INGRESO SEMANAL USD TOTAL"}, {"key": "OBRA_PUNTO_ENC_TRANSPORTE", "label": "OBRA PUNTO ENC TRANSPORTE"}, {"key": "CONTRATO_DOMICILIO_PROCESAL", "label": "CONTRATO DOMICILIO PROCESAL"}, {"key": "CONTRATO_DIA_FIRMA", "label": "CONTRATO DIA FIRMA"}, {"key": "CONTRATO_MES_FIRMA", "label": "CONTRATO MES FIRMA"}, {"key": "CONTRATO_ANIO_FIRMA", "label": "CONTRATO ANIO FIRMA"}]'::jsonb,
+    descripcion = 'Contrato individual de trabajo por obra determinada (CCT Construcción 2023, tabulador homologado 19/08/2026).',
+    updated_at = now()
+where codigo in ('contrato_individual_obra_determinada_ve', 'contrato_laboral_obra_ve');

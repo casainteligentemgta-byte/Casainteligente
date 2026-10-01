@@ -1,6 +1,13 @@
 import type { HojaVidaObreroCompleta } from '@/lib/talento/hojaVidaObreroCompleta';
 import { CESTATICKET_SEMANAL_USD } from '@/lib/nomina/cestaticketLegalUsd';
 import {
+  ALIMENTACION_MENSUAL_VES_HOMOLOGADA_2026,
+  alimentacionSemanalVes,
+  nivelDesdeCodigoOficio,
+  nivelDesdeSalarioDiario2023,
+  salarioDiarioHomologado,
+} from '@/lib/nomina/tabuladorHomologado2026';
+import {
   dueñoPlaceholderContrato,
   valorPlantillaEfectivamenteVacio,
   type DueñoDatoContrato,
@@ -73,7 +80,9 @@ const ETIQUETAS: Record<string, { etiqueta: string; ayuda: string }> = {
     etiqueta: 'Lugar de prestación (cláusula quinta)',
     ayuda: 'PM: ubicación del proyecto en el módulo obra.',
   },
-  CONTRATO_SALARIO_SEMANAL_VES: { etiqueta: 'Salario semanal en Bs.', ayuda: 'Salario mensual tabulador ÷ 4.' },
+  CONTRATO_SALARIO_SEMANAL_VES: { etiqueta: 'Salario semanal en Bs.', ayuda: 'Salario diario del tabulador homologado × 7 (Cláusula 8).' },
+  CONTRATO_ALIMENTACION_MENSUAL_VES: { etiqueta: 'Alimentación mensual en Bs.', ayuda: 'Monto del acuerdo homologado el 19/08/2026.' },
+  CONTRATO_ALIMENTACION_SEMANAL_VES: { etiqueta: 'Alimentación semanal en Bs.', ayuda: 'Mensual × 12 ÷ 52.' },
   CONTRATO_CESTA_TICKET_USD_SEMANAL: { etiqueta: 'Cesta ticket semanal USD', ayuda: 'Por defecto 10 USD.' },
   CONTRATO_INGRESO_SEMANAL_USD_TOTAL: { etiqueta: 'Ingreso semanal total USD', ayuda: 'Tabulador + bono especial.' },
   CONTRATO_COMPENSACION_CULMINACION_USD: { etiqueta: 'Compensación por culminación USD/mes', ayuda: 'Canon mensual al cierre.' },
@@ -315,7 +324,13 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
   const lugarNac = [str(dp?.lugarNacimiento), str(dp?.paisNacimiento)].filter(Boolean).join(', ');
 
   const sal = f.contrato.salario_basico_diario_ves;
-  const salNum = typeof sal === 'number' ? sal : Number.parseFloat(String(sal ?? ''));
+  const salNumRaw = typeof sal === 'number' ? sal : Number.parseFloat(String(sal ?? ''));
+  /** Tabulador homologado 2026 por nivel del oficio; un salario 2023 guardado se traduce a su nivel. */
+  const nivelOficio =
+    nivelDesdeCodigoOficio(str(f.contrato.numero_oficio_tabulador)) ??
+    nivelDesdeSalarioDiario2023(Number.isFinite(salNumRaw) ? salNumRaw : null);
+  const salHomologado = salarioDiarioHomologado(nivelOficio);
+  const salNum = salHomologado ?? salNumRaw;
   const salTxt =
     Number.isFinite(salNum) && salNum > 0
       ? salNum.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 4 })
@@ -345,10 +360,12 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
 
   const salMensualEst =
     Number.isFinite(salNum) && salNum > 0 ? salNum * DIAS_MES_REF_SALARIO_PLANTILLA : null;
+  void salMensualEst;
   const salSemanalTxt =
-    salMensualEst != null
-      ? (salMensualEst / 4).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    Number.isFinite(salNum) && salNum > 0
+      ? (Math.round(salNum * 7 * 100) / 100).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
       : '__________________';
+  const fmtVes = (n: number) => n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const horarioCuarta = str(f.contrato.horario_semanal_texto) || CONTRATO_OBRERO_HORARIO_CUARTA_DEFAULT;
   /** Preferir objeto del contrato; si no, fase técnica cargada por el PM en la obra. */
@@ -425,6 +442,8 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
     CONTRATO_HORARIO_CUARTA: horarioCuarta,
     CONTRATO_LUGAR_QUINTA: lugarQuinta,
     CONTRATO_SALARIO_SEMANAL_VES: salSemanalTxt,
+    CONTRATO_ALIMENTACION_MENSUAL_VES: fmtVes(ALIMENTACION_MENSUAL_VES_HOMOLOGADA_2026),
+    CONTRATO_ALIMENTACION_SEMANAL_VES: fmtVes(alimentacionSemanalVes()),
     CONTRATO_CESTA_TICKET_USD_SEMANAL: `${CESTATICKET_SEMANAL_USD} USD`,
     CONTRATO_INGRESO_SEMANAL_USD_TOTAL: '__________ USD',
     CONTRATO_COMPENSACION_CULMINACION_USD: '100,00',
