@@ -620,76 +620,79 @@ export default function CameraPlacementTool({
           )}
 
           {showFov &&
-            sectors.map((s) => {
-              const cx = offsetX + s.cx * drawW
-              const cy = offsetY + s.cy * drawH
-              const midAng = (s.startAngleRad + s.endAngleRad) / 2
-              const radiusPx = Math.max(
-                12,
-                Math.hypot(
-                  Math.cos(midAng) * s.radiusNorm * drawW,
-                  Math.sin(midAng) * s.radiusNorm * drawH,
-                ),
-              )
-              const sweep = ((s.endAngleRad - s.startAngleRad) * 180) / Math.PI
-              const rotation = (s.startAngleRad * 180) / Math.PI
-              const isTele = s.lensId === 'tele'
-              const poly = s.polygon
-              const green = isTele ? 'rgba(251, 146, 60, 0.46)' : 'rgba(34, 197, 94, 0.50)'
-              const yellow = isTele ? 'rgba(253, 186, 116, 0.42)' : 'rgba(234, 179, 8, 0.48)'
-              const red = isTele ? 'rgba(239, 68, 68, 0.28)' : 'rgba(239, 68, 68, 0.40)'
-              return (
-                <Group
-                  key={`vis-bands-${s.cameraId}-${s.lensId ?? 'main'}`}
-                  listening={false}
-                  clipFunc={
-                    poly && poly.length >= 3
-                      ? (ctx) => {
-                          const p0 = poly[0]!
-                          ctx.beginPath()
-                          ctx.moveTo(offsetX + p0.x * drawW, offsetY + p0.y * drawH)
-                          for (let i = 1; i < poly.length; i++) {
-                            const p = poly[i]!
-                            ctx.lineTo(offsetX + p.x * drawW, offsetY + p.y * drawH)
+            (['red', 'yellow', 'green'] as const).flatMap((band) =>
+              sectors.map((s) => {
+                const cx = offsetX + s.cx * drawW
+                const cy = offsetY + s.cy * drawH
+                const midAng = (s.startAngleRad + s.endAngleRad) / 2
+                const radiusPx = Math.max(
+                  12,
+                  Math.hypot(
+                    Math.cos(midAng) * s.radiusNorm * drawW,
+                    Math.sin(midAng) * s.radiusNorm * drawH,
+                  ),
+                )
+                const sweep = ((s.endAngleRad - s.startAngleRad) * 180) / Math.PI
+                const rotation = (s.startAngleRad * 180) / Math.PI
+                const isTele = s.lensId === 'tele'
+                const poly = s.polygon
+                const inner =
+                  band === 'green'
+                    ? 0
+                    : band === 'yellow'
+                      ? radiusPx * VISION_BAND_FRAC.greenMax
+                      : radiusPx * VISION_BAND_FRAC.yellowMax
+                const outer =
+                  band === 'green'
+                    ? radiusPx * VISION_BAND_FRAC.greenMax
+                    : band === 'yellow'
+                      ? radiusPx * VISION_BAND_FRAC.yellowMax
+                      : radiusPx
+                const fill =
+                  band === 'green'
+                    ? isTele
+                      ? 'rgba(251, 146, 60, 0.78)'
+                      : 'rgba(34, 197, 94, 0.82)'
+                    : band === 'yellow'
+                      ? isTele
+                        ? 'rgba(253, 186, 116, 0.70)'
+                        : 'rgba(234, 179, 8, 0.76)'
+                      : isTele
+                        ? 'rgba(239, 68, 68, 0.42)'
+                        : 'rgba(239, 68, 68, 0.55)'
+                return (
+                  <Group
+                    key={`vis-bands-${band}-${s.cameraId}-${s.lensId ?? 'main'}`}
+                    listening={false}
+                    clipFunc={
+                      poly && poly.length >= 3
+                        ? (ctx) => {
+                            const p0 = poly[0]!
+                            ctx.beginPath()
+                            ctx.moveTo(offsetX + p0.x * drawW, offsetY + p0.y * drawH)
+                            for (let i = 1; i < poly.length; i++) {
+                              const p = poly[i]!
+                              ctx.lineTo(offsetX + p.x * drawW, offsetY + p.y * drawH)
+                            }
+                            ctx.closePath()
                           }
-                          ctx.closePath()
-                        }
-                      : undefined
-                  }
-                >
-                  <Arc
-                    x={cx}
-                    y={cy}
-                    innerRadius={radiusPx * VISION_BAND_FRAC.yellowMax}
-                    outerRadius={radiusPx}
-                    angle={sweep}
-                    rotation={rotation}
-                    fill={red}
-                    listening={false}
-                  />
-                  <Arc
-                    x={cx}
-                    y={cy}
-                    innerRadius={radiusPx * VISION_BAND_FRAC.greenMax}
-                    outerRadius={radiusPx * VISION_BAND_FRAC.yellowMax}
-                    angle={sweep}
-                    rotation={rotation}
-                    fill={yellow}
-                    listening={false}
-                  />
-                  <Arc
-                    x={cx}
-                    y={cy}
-                    innerRadius={0}
-                    outerRadius={radiusPx * VISION_BAND_FRAC.greenMax}
-                    angle={sweep}
-                    rotation={rotation}
-                    fill={green}
-                    listening={false}
-                  />
-                </Group>
-              )
-            })}
+                        : undefined
+                    }
+                  >
+                    <Arc
+                      x={cx}
+                      y={cy}
+                      innerRadius={inner}
+                      outerRadius={Math.max(inner + 0.5, outer)}
+                      angle={sweep}
+                      rotation={rotation}
+                      fill={fill}
+                      listening={false}
+                    />
+                  </Group>
+                )
+              }),
+            )}
 
           {showWifi &&
             wifiSpectrum.map((c, i) => (

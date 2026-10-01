@@ -2351,6 +2351,7 @@ export default function NexusVisionArchitectClient() {
                           <span className="text-red-300">
                             rojo {formatLength(bands.redMaxM, project.unitSystem ?? 'metric')}
                           </span>
+                          . Si se solapan, prevalece verde sobre naranja y naranja sobre rojo.
                         </p>
                         <label className="block">
                           <span className="text-[var(--nexus-text-dim)]">
