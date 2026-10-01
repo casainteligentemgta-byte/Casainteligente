@@ -86,13 +86,16 @@ export function isSkippedFillColor(color: string): boolean {
 export function pickWallColor(
   groups: Map<string, PdfPoint[][]> | Record<string, PdfPoint[][]>,
 ): { color: string | null; score: number } {
-  const entries =
-    groups instanceof Map ? groups.entries() : Object.entries(groups)
+  const entries: Array<[string, PdfPoint[][]]> =
+    groups instanceof Map ? Array.from(groups.entries()) : Object.entries(groups)
   let best: string | null = null
   let bestScore = 0
   for (const [color, polys] of entries) {
     if (isSkippedFillColor(color)) continue
-    const score = polys.reduce((n, pts) => n + (elongation(pts) > WALL_ELONGATION_MIN ? 1 : 0), 0)
+    const score = polys.reduce(
+      (n: number, pts: PdfPoint[]) => n + (elongation(pts) > WALL_ELONGATION_MIN ? 1 : 0),
+      0,
+    )
     if (score > bestScore) {
       best = color
       bestScore = score

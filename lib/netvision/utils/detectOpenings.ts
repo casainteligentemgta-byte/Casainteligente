@@ -247,7 +247,8 @@ export function segmentsFromColoredPolys(
   wallColor: string | null,
   opts: { minLonger: number; maxShorter: number; pageMin: number },
 ): { glass: ThickSegment[]; wood: ThickSegment[] } {
-  const entries = groups instanceof Map ? groups.entries() : Object.entries(groups)
+  const entries: Array<[string, PdfPoint[][]]> =
+    groups instanceof Map ? Array.from(groups.entries()) : Object.entries(groups)
   const glass: ThickSegment[] = []
   const wood: ThickSegment[] = []
   for (const [color, polys] of entries) {

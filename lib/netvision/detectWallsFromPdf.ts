@@ -115,7 +115,7 @@ export async function detectWallsFromPdfBytes(
   const doc = await pdfjs.getDocument({ data: data.slice() }).promise
   try {
     const page = await doc.getPage(pageNo + 1)
-    const viewport = page.getViewport({ scale: 1 }) as ViewportLike
+    const viewport = page.getViewport({ scale: 1 }) as unknown as ViewportLike
     const opList = await page.getOperatorList()
     const primitives = extractPdfPrimitivesFromOperatorList(
       { fnArray: opList.fnArray as number[], argsArray: opList.argsArray },
