@@ -3,6 +3,7 @@
 import type { DesignStructure, StructureMaterialId } from '@/lib/netvision/types'
 import {
   pickWallColor,
+  type Affine,
   type PdfPoint,
   type WallSegment,
 } from '@/lib/netvision/utils/detectWallsGeometry'
@@ -115,15 +116,24 @@ export async function detectWallsFromPdfBytes(
   const doc = await pdfjs.getDocument({ data: data.slice() }).promise
   try {
     const page = await doc.getPage(pageNo + 1)
-    const viewport = page.getViewport({ scale: 1 }) as ViewportLike
+    const vp = page.getViewport({ scale: 1 })
+    const t = vp.transform
+    const viewport: ViewportLike = {
+      width: vp.width,
+      height: vp.height,
+      transform: [
+        Number(t[0]) || 1,
+        Number(t[1]) || 0,
+        Number(t[2]) || 0,
+        Number(t[3]) || 1,
+        Number(t[4]) || 0,
+        Number(t[5]) || 0,
+      ] as Affine,
+    }
     const opList = await page.getOperatorList()
     const primitives = extractPdfPrimitivesFromOperatorList(
       { fnArray: opList.fnArray as number[], argsArray: opList.argsArray },
-      {
-        width: viewport.width,
-        height: viewport.height,
-        transform: viewport.transform as ViewportLike['transform'],
-      },
+      viewport,
       (pdfjs.OPS as unknown as Record<string, number>) ?? PDFJS_OPS,
     )
     const groups = groupPolygonsByColor(primitives.polygons)
