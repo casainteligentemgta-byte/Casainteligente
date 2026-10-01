@@ -23,7 +23,10 @@ type Props = {
   submenu?: ReactNode
 }
 
-/** Barra bajo NetVision: acciones a la izquierda; ramas ancladas a la derecha. */
+const scrollHide =
+  'overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
+
+/** Barra bajo NetVision: en móvil, Cargar plano va arriba; las ramas debajo. */
 export default function NetVisionBranchNav({
   active,
   onSelect,
@@ -31,7 +34,7 @@ export default function NetVisionBranchNav({
   submenu,
 }: Props) {
   const branches = (
-    <div className="flex shrink-0 flex-nowrap items-center gap-1">
+    <div className="flex flex-nowrap items-center gap-1">
       {NETVISION_BRANCHES.map(({ id, label }) => {
         const isActive = active === id
         return (
@@ -56,22 +59,18 @@ export default function NetVisionBranchNav({
 
   return (
     <div className="space-y-2">
-      <div className="flex w-full min-w-0 items-center gap-2">
+      <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
         {projectActions ? (
-          <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div
+            className={cn(
+              'flex w-full min-w-0 flex-nowrap items-center gap-2 sm:flex-1',
+              scrollHide,
+            )}
+          >
             {projectActions}
           </div>
-        ) : (
-          <div className="min-w-0 flex-1" />
-        )}
-        {projectActions ? (
-          <span
-            className="hidden h-5 w-px shrink-0 bg-white/15 sm:block"
-            aria-hidden
-          />
         ) : null}
-        {/* Ramas a la derecha: hueco marcado junto al panel. */}
-        <div className="ml-auto shrink-0 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className={cn('w-full min-w-0 sm:ml-auto sm:w-auto sm:shrink-0', scrollHide)}>
           {branches}
         </div>
       </div>
