@@ -147,10 +147,10 @@ function spectrumFill(strength: number, hue: number, boost = 0) {
 
 type SpectrumBand = 'red' | 'yellow' | 'green'
 
-/** Colores opacos: la capa del espectro aplica transparencia uniforme. */
-function visionBandSolidFill(band: SpectrumBand, isTele: boolean): string {
-  if (band === 'green') return isTele ? 'rgb(251, 146, 60)' : 'rgb(34, 197, 94)'
-  if (band === 'yellow') return isTele ? 'rgb(253, 186, 116)' : 'rgb(234, 179, 8)'
+/** Semáforo de cobertura: verde / naranja / rojo en todas las ópticas (incluida la PTZ). */
+function visionBandSolidFill(band: SpectrumBand): string {
+  if (band === 'green') return 'rgb(34, 197, 94)'
+  if (band === 'yellow') return 'rgb(249, 115, 22)'
   return 'rgb(239, 68, 68)'
 }
 
@@ -205,7 +205,7 @@ function VisionSpectrumLayer({
               key={`vis-band-${band}-${s.cameraId}-${lens}`}
               points={pts}
               closed
-              fill={visionBandSolidFill(band, s.lensId === 'tele')}
+              fill={visionBandSolidFill(band)}
               listening={false}
               perfectDrawEnabled={false}
               strokeEnabled={false}
