@@ -70,6 +70,8 @@ export type CameraPlacementToolProps = {
   /** Etiqueta sobre el trazo (p. ej. cota de calibración). */
   draftLabel?: string | null
   showFov: boolean
+  /** Opacidad del semáforo CCTV (0–1). Por defecto translúcido para ver el plano. */
+  visionOpacity?: number
   showWifi: boolean
   showSound?: boolean
   showLinks: boolean
@@ -147,11 +149,11 @@ function spectrumFill(strength: number, hue: number, boost = 0) {
 
 type SpectrumBand = 'red' | 'yellow' | 'green'
 
-/** Semáforo de cobertura: verde / naranja / rojo en todas las ópticas (incluida la PTZ). */
+/** Semáforo de cobertura: verde / naranja / rojo translúcidos (se ve el plano debajo). */
 function visionBandSolidFill(band: SpectrumBand): string {
-  if (band === 'green') return 'rgb(34, 197, 94)'
-  if (band === 'yellow') return 'rgb(249, 115, 22)'
-  return 'rgb(239, 68, 68)'
+  if (band === 'green') return 'rgba(34, 197, 94, 0.42)'
+  if (band === 'yellow') return 'rgba(249, 115, 22, 0.36)'
+  return 'rgba(239, 68, 68, 0.30)'
 }
 
 function sectorPolyPoints(
@@ -180,12 +182,15 @@ function VisionSpectrumLayer({
   offsetY,
   drawW,
   drawH,
+  opacity = 0.36,
 }: {
   sectors: CoverageSector[]
   offsetX: number
   offsetY: number
   drawW: number
   drawH: number
+  /** 0–1: qué tan opaco se ve el semáforo sobre el plano. */
+  opacity?: number
 }) {
   const bands: { band: SpectrumBand; polyOf: (s: CoverageSector) => { x: number; y: number }[] | undefined }[] =
     [
@@ -193,8 +198,9 @@ function VisionSpectrumLayer({
       { band: 'yellow', polyOf: (s) => s.yellowPolygon },
       { band: 'green', polyOf: (s) => s.greenPolygon },
     ]
+  const layerOpacity = Math.min(1, Math.max(0.1, opacity))
   return (
-    <Layer listening={false} opacity={0.74}>
+    <Layer listening={false} opacity={layerOpacity}>
       {bands.flatMap(({ band, polyOf }) =>
         sectors.flatMap((s) => {
           const pts = sectorPolyPoints(polyOf(s), offsetX, offsetY, drawW, drawH)
@@ -362,6 +368,7 @@ export default function CameraPlacementTool({
   draftColor = '#22d3ee',
   draftLabel = null,
   showFov,
+  visionOpacity = 0.36,
   showWifi,
   showSound = false,
   showLinks,
@@ -734,6 +741,7 @@ export default function CameraPlacementTool({
             offsetY={offsetY}
             drawW={drawW}
             drawH={drawH}
+            opacity={visionOpacity}
           />
         ) : null}
         <Layer>

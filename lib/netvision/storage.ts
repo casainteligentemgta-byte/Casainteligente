@@ -154,6 +154,8 @@ export function listProjectIndex(): NetVisionProjectIndexEntry[] {
       planoNombre: p.planoNombre,
       cameraCount: p.cameras.length,
       networkCount: p.networkNodes.length,
+      planDeviceCount: (p.planDevices ?? []).length,
+      structureCount: (p.structures ?? []).length,
     }))
     .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))
 }
@@ -319,6 +321,32 @@ export function saveProject(project: NetVisionProject) {
   lib.projects[next.id] = next
   writeLibrary(lib)
   setActiveId(next.id)
+  return next
+}
+
+/** Copia el proyecto con nuevo id/nombre y lo deja activo. */
+export function duplicateProject(
+  source: NetVisionProject,
+  name?: string,
+): NetVisionProject {
+  const id = newId()
+  const label =
+    (name?.trim() || `${source.name.trim() || 'Proyecto'} (copia)`).slice(0, 120)
+  const copy = normalizeProject(
+    {
+      ...source,
+      id,
+      name: label,
+      updatedAt: nowIso(),
+    },
+    id,
+  )
+  const lib = readLibrary()
+  lib.projects[copy.id] = copy
+  writeLibrary(lib)
+  setActiveId(copy.id)
+  persistWorkingCopy(copy)
+  return copy
 }
 
 export function clearProjectStorage() {
