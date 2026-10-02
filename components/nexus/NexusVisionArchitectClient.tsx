@@ -183,6 +183,12 @@ import {
 } from '@/lib/netvision/detectWallsFromPdf'
 import type { NetVisionZoomControls } from '@/components/netvision/CameraPlacementTool'
 import { renderPdfFirstPageFromBytes } from '@/lib/netvision/utils/renderPdfPlano'
+import {
+  extractPdfDimensionsFromBytes,
+  pickDimensionForSegment,
+  rotatePlanoDimensions,
+  type PlanoDimension,
+} from '@/lib/netvision/utils/extractPdfDimensions'
 
 const CameraPlacementTool = dynamic(
   () => import('@/components/netvision/CameraPlacementTool'),
@@ -280,7 +286,9 @@ export default function NexusVisionArchitectClient() {
   })
   const [calibrateMode, setCalibrateMode] = useState(false)
   const [calibPoints, setCalibPoints] = useState<{ x: number; y: number }[]>([])
+  const [calibCursor, setCalibCursor] = useState<{ x: number; y: number } | null>(null)
   const [calibMeters, setCalibMeters] = useState('10')
+  const [planoDims, setPlanoDims] = useState<PlanoDimension[]>([])
   const [sideTab, setSideTab] = useState<NetVisionBranchId>('cctv')
   const [redFocusKind, setRedFocusKind] = useState<NetworkNodeKind>('switch')
   const [headerNavEl, setHeaderNavEl] = useState<HTMLElement | null>(null)
@@ -742,23 +750,35 @@ export default function NexusVisionArchitectClient() {
         pdfRotateQuartersRef.current = 0
         setCanDetectPdfWalls(true)
         url = await renderPdfFirstPageFromBytes(data)
+        let dims: PlanoDimension[] = []
+        try {
+          dims = await extractPdfDimensionsFromBytes(data)
+        } catch {
+          dims = []
+        }
+        setPlanoDims(dims)
+        const dimHint =
+          dims.length > 0
+            ? ` ${dims.length} cota(s) leídas. Pulsa Calibrar y traza una línea sobre un acotamiento.`
+            : ' No se leyeron cotas de texto; al calibrar escribe los metros a mano.'
         try {
           const result = await detectWallsFromPdfBytes(data)
           detected = structuresFromWallDetection(result, { makeId: uid })
-          setInfo(summarizePdfDetection(result))
+          setInfo(summarizePdfDetection(result) + dimHint)
           if (detected.length > 0) {
             setSideTab('muros')
             setShowStructures(true)
           }
         } catch {
           setInfo(
-            'PDF cargado. No se pudieron leer muros vectoriales; dibújalos en Muros.',
+            `PDF cargado. No se pudieron leer muros vectoriales; dibújalos en Muros.${dimHint}`,
           )
         }
       } else if (file.type.startsWith('image/')) {
         pdfBytesRef.current = null
         pdfRotateQuartersRef.current = 0
         setCanDetectPdfWalls(false)
+        setPlanoDims([])
         url = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader()
           reader.onload = () => resolve(String(reader.result))
@@ -782,6 +802,7 @@ export default function NexusVisionArchitectClient() {
       setSelectedId(null)
       setCalibrateMode(false)
       setCalibPoints([])
+      setCalibCursor(null)
       setDrawStructureMaterial(null)
       setStructureDraft(null)
       setDrawUnderground(false)
@@ -807,6 +828,8 @@ export default function NexusVisionArchitectClient() {
           (pdfRotateQuartersRef.current + (dir === 'cw' ? 1 : 3)) % 4
         setProject((p) => ({ ...rotateProjectGeometry(p, dir), planoUrl: rotated }))
         setCalibPoints((pts) => pts.map((pt) => rotateNormPoint(pt.x, pt.y, dir)))
+        setCalibCursor((c) => (c ? rotateNormPoint(c.x, c.y, dir) : null))
+        setPlanoDims((dims) => rotatePlanoDimensions(dims, dir))
       } catch (e) {
         setError(e instanceof Error ? e.message : 'No se pudo rotar el plano')
       } finally {
@@ -1120,6 +1143,16 @@ export default function NexusVisionArchitectClient() {
     clearCableDraft()
   }
 
+  const onCalibPointerMove = (normX: number, normY: number) => {
+    if (!calibrateMode) return
+    const cursor = { x: normX, y: normY }
+    setCalibCursor(cursor)
+    const origin = calibPoints[0]
+    if (!origin) return
+    const hit = pickDimensionForSegment(origin, cursor, planoDims)
+    if (hit) setCalibMeters(hit.label)
+  }
+
   const onCablePointerMove = (normX: number, normY: number) => {
     if (!drawCable) return
     const from = cableDraftPoints[cableDraftPoints.length - 1] ?? null
@@ -1139,10 +1172,13 @@ export default function NexusVisionArchitectClient() {
       if (next.length >= 2) {
         const a = next[0]!
         const b = next[1]!
-        const meters = parseCalibrationToMeters(
-          calibMeters,
-          project.unitSystem ?? 'metric',
-        )
+        const hit = pickDimensionForSegment(a, b, planoDims)
+        const meters = hit
+          ? hit.meters
+          : parseCalibrationToMeters(
+              calibMeters,
+              project.unitSystem ?? 'metric',
+            )
         const distN = Math.hypot(a.x - b.x, a.y - b.y) || 1e-6
         const metersPerNorm = meters / distN
         setProject((p) => ({
@@ -1154,9 +1190,18 @@ export default function NexusVisionArchitectClient() {
           },
         }))
         setCalibPoints([])
+        setCalibCursor(null)
         setCalibrateMode(false)
+        if (hit) setCalibMeters(hit.label)
+        setInfo(
+          hit
+            ? `Escala lista: ${hit.label} m según el acotamiento del plano.`
+            : `Escala lista: ${formatLength(meters, project.unitSystem ?? 'metric')} (valor indicado).`,
+        )
+        setError(null)
       } else {
         setCalibPoints(next)
+        setCalibCursor(null)
       }
       return
     }
@@ -1373,6 +1418,8 @@ export default function NexusVisionArchitectClient() {
     pdfBytesRef.current = null
     pdfRotateQuartersRef.current = 0
     setCanDetectPdfWalls(false)
+    setPlanoDims([])
+    setCalibCursor(null)
   }
 
   const detectWallsFromLoadedPdf = useCallback(async () => {
@@ -1419,6 +1466,8 @@ export default function NexusVisionArchitectClient() {
     pdfBytesRef.current = null
     pdfRotateQuartersRef.current = 0
     setCanDetectPdfWalls(false)
+    setPlanoDims([])
+    setCalibCursor(null)
   }
 
   const exportPng = () => {
@@ -1460,12 +1509,17 @@ export default function NexusVisionArchitectClient() {
     cableDraftPoints.length > 0
       ? cableDraftPoints[cableDraftPoints.length - 1]!
       : undergroundDraft ?? structureDraft
-  const draftColor =
-    drawCable || cableDraftPoints.length > 0
+  const draftColor = calibrateMode
+    ? '#a3e635'
+    : drawCable || cableDraftPoints.length > 0
       ? '#facc15'
       : undergroundDraft || drawUnderground
         ? '#fb923c'
         : '#22d3ee'
+  const draftLabel =
+    calibrateMode && calibPoints.length >= 1
+      ? `${calibMeters} m`
+      : null
 
   const chipClass = (active: boolean) =>
     `rounded-md px-2 py-1 text-[11px] font-semibold disabled:opacity-40 ${
@@ -1973,10 +2027,12 @@ export default function NexusVisionArchitectClient() {
             {planDevices.length ? ` · ${planDevices.length} eq` : ''}
             {' · '}
             {project.scale.calibrated ? (
-              <span className="text-[var(--nexus-green)]">escala OK</span>
+              <span className="text-[var(--nexus-green)]">
+                escala {formatLength(project.scale.metersPerNormX, project.unitSystem ?? 'metric', 1)} / ancho
+              </span>
             ) : (
               <span className="text-amber-300">
-                escala ~{formatLength(40, project.unitSystem ?? 'metric', 0)}
+                escala ~{formatLength(40, project.unitSystem ?? 'metric', 0)} · calibrar
               </span>
             )}
           </p>
@@ -2131,6 +2187,7 @@ export default function NexusVisionArchitectClient() {
               onClick={() => {
                 setCalibrateMode((v) => !v)
                 setCalibPoints([])
+                setCalibCursor(null)
                 setDrawStructureMaterial(null)
                 setStructureDraft(null)
                 setDrawUnderground(false)
@@ -2176,8 +2233,16 @@ export default function NexusVisionArchitectClient() {
                   value={calibMeters}
                   onChange={(e) => setCalibMeters(e.target.value)}
                   className="w-14 rounded border border-white/10 bg-black/40 px-1 py-0.5 text-xs text-white"
+                  title="Si el PDF trae la cota, se rellena al trazar. Si no, escríbela."
                 />
                 ({calibPoints.length}/2)
+                {planoDims.length > 0 ? (
+                  <span className="text-[10px] text-lime-300/90">
+                    {planoDims.length} cotas
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-amber-200/80">sin cotas PDF</span>
+                )}
               </label>
             ) : null}
             <div
@@ -2281,9 +2346,18 @@ export default function NexusVisionArchitectClient() {
                     selectedId={selectedId}
                     placeMode={placeMode}
                     draftPoint={draftPoint}
-                    draftPoints={drawCable ? cableDraftPoints : undefined}
-                    draftCursor={drawCable ? cableCursor : null}
+                    draftPoints={
+                      calibrateMode
+                        ? calibPoints
+                        : drawCable
+                          ? cableDraftPoints
+                          : undefined
+                    }
+                    draftCursor={
+                      calibrateMode ? calibCursor : drawCable ? cableCursor : null
+                    }
                     draftColor={draftColor}
+                    draftLabel={draftLabel}
                     showFov={showActiveCoverage}
                     showWifi={showWifi && sideTab !== 'sonido' && sideTab !== 'domotica' && sideTab !== 'electrico'}
                     showSound={showSound && sideTab === 'sonido'}
@@ -2292,7 +2366,13 @@ export default function NexusVisionArchitectClient() {
                     showUnderground={showUnderground || sideTab === 'sub'}
                     showStructures={showStructures}
                     onAddAt={onAddAt}
-                    onDraftPointerMove={drawCable ? onCablePointerMove : undefined}
+                    onDraftPointerMove={
+                      drawCable
+                        ? onCablePointerMove
+                        : calibrateMode
+                          ? onCalibPointerMove
+                          : undefined
+                    }
                     onFinishPlace={drawCable ? finishCableDraft : undefined}
                     snapPlaceToDevices={drawCable}
                     onMove={onMove}

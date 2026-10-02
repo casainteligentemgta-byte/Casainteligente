@@ -67,6 +67,8 @@ export type CameraPlacementToolProps = {
   draftCursor?: { x: number; y: number } | null
   /** Color del punto de borrador (muros cyan, sub naranja, cable amarillo). */
   draftColor?: string
+  /** Etiqueta sobre el trazo (p. ej. cota de calibración). */
+  draftLabel?: string | null
   showFov: boolean
   showWifi: boolean
   showSound?: boolean
@@ -358,6 +360,7 @@ export default function CameraPlacementTool({
   draftPoints,
   draftCursor = null,
   draftColor = '#22d3ee',
+  draftLabel = null,
   showFov,
   showWifi,
   showSound = false,
@@ -1132,6 +1135,31 @@ export default function CameraPlacementTool({
                   radius={2}
                   fill={draftColor}
                   opacity={0.7}
+                  listening={false}
+                />
+              ) : null}
+              {draftLabel && draftPoints && draftPoints[0] ? (
+                <Text
+                  x={
+                    offsetX +
+                    ((draftCursor ?? draftPoints[draftPoints.length - 1]!).x +
+                      draftPoints[0].x) *
+                      0.5 *
+                      drawW +
+                    8
+                  }
+                  y={
+                    offsetY +
+                    ((draftCursor ?? draftPoints[draftPoints.length - 1]!).y +
+                      draftPoints[0].y) *
+                      0.5 *
+                      drawH -
+                    16
+                  }
+                  text={draftLabel}
+                  fill={draftColor}
+                  fontSize={14}
+                  fontStyle="bold"
                   listening={false}
                 />
               ) : null}
