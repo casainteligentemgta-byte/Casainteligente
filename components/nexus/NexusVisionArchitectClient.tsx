@@ -182,6 +182,7 @@ import {
   summarizePdfDetection,
 } from '@/lib/netvision/detectWallsFromPdf'
 import type { NetVisionZoomControls } from '@/components/netvision/CameraPlacementTool'
+import { renderPdfFirstPageFromBytes } from '@/lib/netvision/utils/renderPdfPlano'
 
 const CameraPlacementTool = dynamic(
   () => import('@/components/netvision/CameraPlacementTool'),
@@ -197,25 +198,6 @@ const CameraPlacementTool = dynamic(
 
 function uid(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
-}
-
-async function renderPdfFirstPageFromBytes(data: Uint8Array): Promise<string> {
-  const pdfjs = await import('pdfjs-dist')
-  pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`
-  const doc = await pdfjs.getDocument({ data: data.slice() }).promise
-  try {
-    const page = await doc.getPage(1)
-    const viewport = page.getViewport({ scale: 1.5 })
-    const canvas = document.createElement('canvas')
-    canvas.width = viewport.width
-    canvas.height = viewport.height
-    const ctx = canvas.getContext('2d')
-    if (!ctx) throw new Error('No se pudo crear el canvas del PDF.')
-    await page.render({ canvasContext: ctx, viewport }).promise
-    return canvas.toDataURL('image/jpeg', 0.92)
-  } finally {
-    await doc.destroy()
-  }
 }
 
 function rotateStructuresCwQuarters(
