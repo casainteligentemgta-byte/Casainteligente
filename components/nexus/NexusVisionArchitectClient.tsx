@@ -8,6 +8,7 @@ import Link from 'next/link'
 import {
   BookOpen,
   Camera,
+  ChevronDown,
   Download,
   FilePlus,
   RotateCcw,
@@ -299,6 +300,8 @@ export default function NexusVisionArchitectClient() {
   const [headerNavEl, setHeaderNavEl] = useState<HTMLElement | null>(null)
   /** Panel derecho (inspector): visible por defecto; se oculta con el botón. */
   const [inspectorOpen, setInspectorOpen] = useState(false)
+  /** Menú desplegable con todas las cámaras del plano. */
+  const [camerasMenuOpen, setCamerasMenuOpen] = useState(false)
   const [defaultPlanModels, setDefaultPlanModels] = useState<
     Record<PlanDiscipline, string>
   >({
@@ -322,6 +325,29 @@ export default function NexusVisionArchitectClient() {
   useEffect(() => {
     setHeaderNavEl(document.getElementById('netvision-header-nav'))
   }, [])
+
+  useEffect(() => {
+    if (!camerasMenuOpen) return
+    const onDoc = (e: MouseEvent | TouchEvent) => {
+      const t = e.target
+      if (!(t instanceof Node)) return
+      const roots = document.querySelectorAll('[data-cameras-menu]')
+      for (const root of roots) {
+        if (root.contains(t)) return
+      }
+      setCamerasMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('touchstart', onDoc)
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      document.removeEventListener('touchstart', onDoc)
+    }
+  }, [camerasMenuOpen])
+
+  useEffect(() => {
+    if (project.cameras.length === 0) setCamerasMenuOpen(false)
+  }, [project.cameras.length])
 
   useEffect(() => {
     const p = loadProject()
@@ -949,6 +975,24 @@ export default function NexusVisionArchitectClient() {
     }
     const pos = buttonSpawnPos(project.cameras.length, 0.5, 0.45)
     addCameraAt(pos.x, pos.y)
+  }
+
+  /** Elige una cámara de la lista desplegable (plano + asas / ficha). */
+  const selectCameraFromMenu = (id: string, openInspector = false) => {
+    setSelectedId(id)
+    setSideTab('cctv')
+    setShowFov(true)
+    setViewMode('plano')
+    setCamerasMenuOpen(false)
+    setInspectorOpen(openInspector)
+  }
+
+  const toggleCamerasMenu = () => {
+    setCamerasMenuOpen((open) => {
+      const next = !open
+      if (next) setInspectorOpen(false)
+      return next
+    })
   }
 
   const selectSideTab = useCallback(
@@ -2230,6 +2274,26 @@ export default function NexusVisionArchitectClient() {
           Cámara
         </button>
       ) : null}
+      {viewMode === 'plano' && project.cameras.length > 0 ? (
+        <button
+          type="button"
+          aria-expanded={camerasMenuOpen}
+          aria-haspopup="listbox"
+          title="Ver todas las cámaras del plano"
+          data-cameras-menu
+          onClick={toggleCamerasMenu}
+          className={`inline-flex shrink-0 items-center gap-1 rounded-lg border px-2.5 py-1 text-[11px] font-semibold ${
+            camerasMenuOpen
+              ? 'border-[var(--nexus-cyan)] bg-[var(--nexus-cyan)]/20 text-[var(--nexus-cyan)]'
+              : 'border-white/15 text-[var(--nexus-text-muted)] hover:bg-white/5 hover:text-white'
+          }`}
+        >
+          Cámaras · {project.cameras.length}
+          <ChevronDown
+            className={`h-3.5 w-3.5 transition-transform ${camerasMenuOpen ? 'rotate-180' : ''}`}
+          />
+        </button>
+      ) : null}
       {viewMode === 'plano' ? (
         <button
           type="button"
@@ -2524,6 +2588,84 @@ export default function NexusVisionArchitectClient() {
             </>
           )}
         </GlassCardMotion>
+
+        {project.planoUrl &&
+        viewMode === 'plano' &&
+        project.cameras.length > 0 &&
+        !inspectorOpen ? (
+          <div
+            className="absolute bottom-4 left-4 z-20"
+            data-cameras-menu
+          >
+            <button
+              type="button"
+              aria-expanded={camerasMenuOpen}
+              aria-haspopup="listbox"
+              title="Ver todas las cámaras agregadas"
+              onClick={toggleCamerasMenu}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-[11px] font-semibold shadow-lg backdrop-blur-md ${
+                camerasMenuOpen
+                  ? 'border-[var(--nexus-cyan)] bg-[var(--nexus-cyan)] text-black'
+                  : 'border-white/20 bg-[#071018]/90 text-[var(--nexus-cyan)]'
+              }`}
+            >
+              <Camera className="h-3.5 w-3.5" />
+              Cámaras · {project.cameras.length}
+              <ChevronDown
+                className={`h-3.5 w-3.5 transition-transform ${camerasMenuOpen ? 'rotate-180' : ''}`}
+              />
+            </button>
+            {camerasMenuOpen ? (
+              <div
+                role="listbox"
+                aria-label="Cámaras agregadas"
+                className="absolute bottom-[calc(100%+8px)] left-0 max-h-[min(50vh,320px)] w-[min(280px,80vw)] overflow-y-auto rounded-xl border border-white/15 bg-[#071018]/98 p-1.5 shadow-xl backdrop-blur-md"
+              >
+                <p className="px-2 py-1 text-[9px] font-semibold uppercase tracking-wide text-[var(--nexus-text-dim)]">
+                  Cámaras en el plano
+                </p>
+                {project.cameras.map((c) => {
+                  const model = getCameraModelOrDefault(c.modelId)
+                  const active = selectedId === c.id
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      role="option"
+                      aria-selected={active}
+                      onClick={() => selectCameraFromMenu(c.id, false)}
+                      className={`flex w-full flex-col items-start gap-0.5 rounded-lg px-2.5 py-2 text-left ${
+                        active
+                          ? 'bg-[var(--nexus-cyan)] text-black'
+                          : 'text-white hover:bg-white/10'
+                      }`}
+                    >
+                      <span className="text-[12px] font-semibold">{c.label}</span>
+                      <span
+                        className={`line-clamp-1 text-[10px] ${
+                          active ? 'text-black/70' : 'text-[var(--nexus-text-muted)]'
+                        }`}
+                      >
+                        {model.brand} · {model.name}
+                      </span>
+                    </button>
+                  )
+                })}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCamerasMenuOpen(false)
+                    setSideTab('cctv')
+                    setInspectorOpen(true)
+                  }}
+                  className="mt-1 w-full rounded-lg border border-white/10 px-2.5 py-1.5 text-[10px] font-semibold text-[var(--nexus-cyan)] hover:bg-white/5"
+                >
+                  Abrir inspector CCTV
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
         {selectedId && !inspectorOpen && project.planoUrl && viewMode === 'plano' ? (
           <button
@@ -2853,10 +2995,7 @@ export default function NexusVisionArchitectClient() {
                           ? 'bg-[var(--nexus-cyan)] text-black'
                           : 'border border-white/15 text-[var(--nexus-cyan)]'
                       }`}
-                      onClick={() => {
-                        setSelectedId(c.id)
-                        setInspectorOpen(true)
-                      }}
+                      onClick={() => selectCameraFromMenu(c.id, true)}
                     >
                       {c.label}
                     </button>
