@@ -2193,6 +2193,78 @@ export default function NexusVisionArchitectClient() {
 
   const fileLine = <Mono>{project.planoNombre || 'Sin plano'}</Mono>
 
+  const workLine = (
+    <>
+      <div className="flex shrink-0 gap-0.5 rounded-lg border border-white/10 bg-black/40 p-0.5">
+        <button
+          type="button"
+          className={`rounded-md px-2.5 py-1 text-[11px] font-semibold ${
+            viewMode === 'plano'
+              ? 'bg-[var(--nexus-cyan)] text-black'
+              : 'text-[var(--nexus-text-muted)]'
+          }`}
+          onClick={() => setViewMode('plano')}
+        >
+          Plano
+        </button>
+        <button
+          type="button"
+          className={`rounded-md px-2.5 py-1 text-[11px] font-semibold ${
+            viewMode === 'diagrama'
+              ? 'bg-[var(--nexus-cyan)] text-black'
+              : 'text-[var(--nexus-text-muted)]'
+          }`}
+          onClick={() => setViewMode('diagrama')}
+        >
+          Diagrama
+        </button>
+      </div>
+      {viewMode === 'plano' ? (
+        <button
+          type="button"
+          disabled={!project.planoUrl || loading}
+          onClick={addCameraFromButton}
+          className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-[var(--nexus-cyan)] px-2.5 py-1 text-[11px] font-semibold text-black disabled:opacity-40"
+        >
+          <Camera className="h-3.5 w-3.5" />
+          Cámara
+        </button>
+      ) : null}
+      {viewMode === 'plano' ? (
+        <button
+          type="button"
+          disabled={!project.planoUrl || loading || project.cameras.length === 0}
+          title="Calcula cobertura automática por alcance (semáforo verde/amarillo/rojo)"
+          onClick={() => {
+            setShowFov(true)
+            setViewMode('plano')
+            setSideTab('cctv')
+            setError(null)
+          }}
+          className="inline-flex shrink-0 items-center rounded-lg border border-emerald-400/40 bg-emerald-500/15 px-2.5 py-1 text-[11px] font-semibold text-emerald-200 disabled:opacity-40"
+        >
+          Calcular cobertura
+        </button>
+      ) : null}
+      <button
+        type="button"
+        disabled={!canUndo}
+        title="Deshacer el último cambio (Ctrl+Z)"
+        aria-label="Deshacer"
+        onClick={undoLast}
+        className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-white/15 px-2.5 py-1 text-[11px] font-semibold text-[var(--nexus-text-muted)] hover:bg-white/5 hover:text-white disabled:opacity-40"
+      >
+        <Undo2 className="h-3.5 w-3.5" />
+        Deshacer
+      </button>
+      {calibrateMode ? (
+        <span className="shrink-0 text-[10px] font-semibold text-lime-300">
+          Calibrando {calibMeters} m ({calibPoints.length}/2)
+        </span>
+      ) : null}
+    </>
+  )
+
   const headerNav =
     headerNavEl &&
     createPortal(
@@ -2201,6 +2273,7 @@ export default function NexusVisionArchitectClient() {
         onSelect={selectSideTab}
         fileLine={fileLine}
         archivo={archivoMenu}
+        tools={workLine}
         submenu={branchSubmenu}
       />,
       headerNavEl,
@@ -2259,76 +2332,6 @@ export default function NexusVisionArchitectClient() {
         }}
       />
       {headerNav}
-
-      <div className="flex flex-nowrap items-center gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <div className="flex shrink-0 gap-0.5 rounded-lg border border-white/10 bg-black/40 p-0.5">
-          <button
-            type="button"
-            className={`rounded-md px-2.5 py-1 text-[11px] font-semibold ${
-              viewMode === 'plano'
-                ? 'bg-[var(--nexus-cyan)] text-black'
-                : 'text-[var(--nexus-text-muted)]'
-            }`}
-            onClick={() => setViewMode('plano')}
-          >
-            Plano
-          </button>
-          <button
-            type="button"
-            className={`rounded-md px-2.5 py-1 text-[11px] font-semibold ${
-              viewMode === 'diagrama'
-                ? 'bg-[var(--nexus-cyan)] text-black'
-                : 'text-[var(--nexus-text-muted)]'
-            }`}
-            onClick={() => setViewMode('diagrama')}
-          >
-            Diagrama
-          </button>
-        </div>
-        {viewMode === 'plano' ? (
-          <button
-            type="button"
-            disabled={!project.planoUrl || loading}
-            onClick={addCameraFromButton}
-            className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-[var(--nexus-cyan)] px-2.5 py-1 text-[11px] font-semibold text-black disabled:opacity-40"
-          >
-            <Camera className="h-3.5 w-3.5" />
-            Cámara
-          </button>
-        ) : null}
-        {viewMode === 'plano' ? (
-          <button
-            type="button"
-            disabled={!project.planoUrl || loading || project.cameras.length === 0}
-            title="Calcula cobertura automática por alcance (semáforo verde/amarillo/rojo)"
-            onClick={() => {
-              setShowFov(true)
-              setViewMode('plano')
-              setSideTab('cctv')
-              setError(null)
-            }}
-            className="inline-flex shrink-0 items-center rounded-lg border border-emerald-400/40 bg-emerald-500/15 px-2.5 py-1 text-[11px] font-semibold text-emerald-200 disabled:opacity-40"
-          >
-            Calcular cobertura
-          </button>
-        ) : null}
-        <button
-          type="button"
-          disabled={!canUndo}
-          title="Deshacer el último cambio (Ctrl+Z)"
-          aria-label="Deshacer"
-          onClick={undoLast}
-          className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-white/15 px-2.5 py-1 text-[11px] font-semibold text-[var(--nexus-text-muted)] hover:bg-white/5 hover:text-white disabled:opacity-40"
-        >
-          <Undo2 className="h-3.5 w-3.5" />
-          Deshacer
-        </button>
-        {calibrateMode ? (
-          <span className="shrink-0 text-[10px] font-semibold text-lime-300">
-            Calibrando {calibMeters} m ({calibPoints.length}/2)
-          </span>
-        ) : null}
-      </div>
 
       {error ? (
         <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">

@@ -34,6 +34,7 @@ type Props = {
   onSelect: (id: NetVisionBranchId) => void
   fileLine?: ReactNode
   archivo: ReactNode
+  tools?: ReactNode
   submenu?: ReactNode
 }
 
@@ -123,6 +124,7 @@ export default function NetVisionBranchNav({
   onSelect,
   fileLine,
   archivo,
+  tools,
   submenu,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null)
@@ -146,7 +148,7 @@ export default function NetVisionBranchNav({
           {fileLine}
         </p>
       ) : null}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-nowrap items-center gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <FoldButton id="archivo" label="Archivo" open={open} onToggle={toggle}>
           <div className="flex flex-col gap-1.5">{archivo}</div>
         </FoldButton>
@@ -181,6 +183,7 @@ export default function NetVisionBranchNav({
             ) : null}
           </div>
         </FoldButton>
+        {tools}
       </div>
     </div>
   )
