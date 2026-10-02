@@ -142,7 +142,7 @@ export default function NetVisionBranchNav({
   return (
     <div ref={rootRef} className="space-y-1.5">
       {fileLine ? (
-        <p className="truncate text-[11px] leading-tight text-[var(--nexus-text-muted)]">
+        <p className="truncate text-xs leading-tight text-white/85">
           {fileLine}
         </p>
       ) : null}

@@ -345,7 +345,7 @@ export default function NexusVisionArchitectClient() {
       return
     }
     const prev = lastProjectRef.current
-    if (prev) {
+    if (prev && prev !== project) {
       historyRef.current = pushProjectHistory(historyRef.current, prev)
       setCanUndo(historyRef.current.length > 0)
     }
@@ -2191,29 +2191,7 @@ export default function NexusVisionArchitectClient() {
     </>
   )
 
-  const fileLine = (
-    <>
-      <Mono>{project.planoNombre || 'Sin plano'}</Mono>
-      {project.planoUrl ? (
-        <>
-          {' · '}
-          {project.cameras.length} cam · {project.networkNodes.length} red
-          {planDevices.length ? ` · ${planDevices.length} eq` : ''}
-          {' · '}
-          {project.scale.calibrated ? (
-            <span className="text-[var(--nexus-green)]">
-              escala {formatLength(project.scale.metersPerNormX, project.unitSystem ?? 'metric', 1)} /
-              ancho
-            </span>
-          ) : (
-            <span className="text-amber-300">
-              escala ~{formatLength(40, project.unitSystem ?? 'metric', 0)} · calibrar
-            </span>
-          )}
-        </>
-      ) : null}
-    </>
-  )
+  const fileLine = <Mono>{project.planoNombre || 'Sin plano'}</Mono>
 
   const headerNav =
     headerNavEl &&
