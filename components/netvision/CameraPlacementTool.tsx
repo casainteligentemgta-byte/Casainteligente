@@ -396,11 +396,21 @@ export default function CameraPlacementTool({
   const [zoom, setZoom] = useState(1)
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 })
   const [pinching, setPinching] = useState(false)
+  /** Asas de apertura/orientación/alcance: visibles al elegir la cámara; se ocultan al soltar tras ajustar. */
+  const [visionHandlesOpen, setVisionHandlesOpen] = useState(false)
+  const prevSelectedIdRef = useRef<string | null>(null)
   const viewRef = useRef({ zoom: 1, stagePos: { x: 0, y: 0 } })
   const pinchRef = useRef<PinchState | null>(null)
   const suppressTapUntilRef = useRef(0)
 
   viewRef.current = { zoom, stagePos }
+
+  useEffect(() => {
+    if (selectedId === prevSelectedIdRef.current) return
+    prevSelectedIdRef.current = selectedId
+    const isCam = !!selectedId && cameras.some((c) => c.id === selectedId)
+    setVisionHandlesOpen(isCam)
+  }, [selectedId, cameras])
 
   useEffect(() => {
     onZoomChange?.(zoom)
@@ -576,9 +586,14 @@ export default function CameraPlacementTool({
   }
 
   const handleStageClick = (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
-    if (!placeMode || pinching) return
+    if (pinching) return
     if (Date.now() < suppressTapUntilRef.current) return
     if (e.target !== e.target.getStage()) return
+    // Toque vacío: ocultar asas tras configurar la apertura (la cámara sigue seleccionada).
+    if (!placeMode) {
+      setVisionHandlesOpen(false)
+      return
+    }
     const stage = e.target.getStage()
     if (!stage) return
     const pos = stage.getRelativePointerPosition()
@@ -890,6 +905,7 @@ export default function CameraPlacementTool({
                         e.cancelBubble = true
                         e.target.position({ x: hitCx, y: hitCy })
                         applyYawFromEvent(e)
+                        setVisionHandlesOpen(false)
                         resumeStageDrag(e.target.getStage())
                       }}
                     />
@@ -1405,6 +1421,7 @@ export default function CameraPlacementTool({
                     onAddAt(cam.x, cam.y)
                     return
                   }
+                  setVisionHandlesOpen(true)
                   inspect(cam.id)
                 }}
                 onTap={(e) => {
@@ -1413,11 +1430,13 @@ export default function CameraPlacementTool({
                     onAddAt(cam.x, cam.y)
                     return
                   }
+                  setVisionHandlesOpen(true)
                   inspect(cam.id)
                 }}
                 onDragStart={(e) => {
                   e.cancelBubble = true
                   pauseStageDrag(e.target.getStage())
+                  setVisionHandlesOpen(true)
                   onSelect(cam.id)
                 }}
                 onDragEnd={(e: KonvaEventObject<DragEvent>) => {
@@ -1425,6 +1444,7 @@ export default function CameraPlacementTool({
                   const node = e.target as Konva.Circle
                   const n = toNorm(node.x(), node.y())
                   onMove(cam.id, n.x, n.y)
+                  setVisionHandlesOpen(true)
                   onSelect(cam.id)
                   resumeStageDrag(e.target.getStage())
                 }}
@@ -1432,10 +1452,11 @@ export default function CameraPlacementTool({
             )
           })}
 
-          {/* Asas de visión encima del pin: orient./alcance/FOV tras mover o seleccionar */}
+          {/* Asas de visión: al seleccionar; se ocultan al soltar tras ajustar apertura/orient./alcance */}
           {showFov &&
             onAdjustCameraVision &&
             !snapPlaceToDevices &&
+            visionHandlesOpen &&
             cameras
               .filter((c) => c.id === selectedId)
               .flatMap((cam) =>
@@ -1524,6 +1545,8 @@ export default function CameraPlacementTool({
                     const pos = pointerFromEvent(e)
                     applyFromPointer(pos.x, pos.y, mode, mode === 'fov' ? 5 : undefined)
                     onSelect(cam.id)
+                    // Tras configurar la apertura (o orientación/alcance), ocultar los puntos.
+                    setVisionHandlesOpen(false)
                     resumeStageDrag(e.target.getStage())
                   },
                 })
