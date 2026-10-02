@@ -81,7 +81,7 @@ export const NETVISION_LAYER_HELP: LayerHelpItem[] = [
     id: 'calibrate',
     label: 'Calibrar',
     blurb:
-      'Marca dos puntos en el plano e indica la distancia real en metros para fijar la escala del diseño.',
+      'Traza una línea sobre un acotamiento del plano. Si el PDF trae el número (4.40, 3.20…), se usa solo. Si no, escríbelo y toca los dos extremos.',
   },
   {
     id: 'rotate',
