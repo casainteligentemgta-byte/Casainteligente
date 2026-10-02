@@ -137,7 +137,7 @@ export default function NetVisionProjectsPanel({
         type="button"
         variant="glass"
         size={triggerSize}
-        className="shrink-0"
+        className="w-full shrink-0 justify-start"
         onClick={() => setOpen((v) => !v)}
       >
         <FolderOpen
