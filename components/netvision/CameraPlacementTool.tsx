@@ -36,6 +36,7 @@ import type { WifiCoverageCircle } from '@/lib/netvision/services/wifiPredictor'
 import type { AccessChamber, UndergroundRun } from '@/lib/netvision/services/canalizationCalculator'
 import { nearestSegmentOnRoute, MANUAL_CABLE_TO_ID } from '@/lib/netvision/services/cableRoutingEngine'
 import { invertRgbPixels } from '@/lib/netvision/utils/rotatePlano'
+import { shouldSmoothPlanoImage } from '@/lib/netvision/utils/renderPdfPlano'
 import {
   visionPatchFromPointer,
   type VisionHandleMode,
@@ -688,6 +689,11 @@ export default function CameraPlacementTool({
               y={offsetY}
               width={drawW}
               height={drawH}
+              imageSmoothingEnabled={shouldSmoothPlanoImage(
+                image.width,
+                drawW,
+                zoom,
+              )}
               listening={false}
             />
           ) : (

@@ -2,6 +2,7 @@
 
 import type { NetVisionProject } from '@/lib/netvision/types'
 import { clamp01 } from '@/lib/netvision/utils/geometryHelpers'
+import { encodePlanoCanvas } from '@/lib/netvision/utils/renderPdfPlano'
 
 export type PlanoRotateDir = 'cw' | 'ccw'
 
@@ -144,10 +145,7 @@ export function rotatePlanoDataUrl90(
         ctx.rotate(-Math.PI / 2)
       }
       ctx.drawImage(img, 0, 0)
-      const out = src.startsWith('data:image/png')
-        ? canvas.toDataURL('image/png')
-        : canvas.toDataURL('image/jpeg', 0.92)
-      resolve(out)
+      resolve(encodePlanoCanvas(canvas))
     }
     img.onerror = () => reject(new Error('No se pudo leer el plano para rotarlo.'))
     img.src = src
