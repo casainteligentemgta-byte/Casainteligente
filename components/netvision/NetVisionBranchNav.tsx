@@ -107,7 +107,7 @@ function FoldButton({
         <ChevronDown className={cn('h-3.5 w-3.5', isOpen && 'rotate-180')} />
       </button>
       {isOpen ? (
-        <div className="absolute left-0 z-50 mt-1 w-[min(92vw,22rem)] rounded-xl border border-white/15 bg-[#12141c]/98 p-2 shadow-2xl backdrop-blur-md">
+        <div className="absolute left-0 top-full z-[80] mt-1 w-[min(92vw,22rem)] rounded-xl border border-white/15 bg-[#12141c]/98 p-2 shadow-2xl backdrop-blur-md">
           {children}
         </div>
       ) : null}
@@ -148,7 +148,7 @@ export default function NetVisionBranchNav({
           {fileLine}
         </p>
       ) : null}
-      <div className="flex flex-nowrap items-center gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex flex-nowrap items-center gap-2">
         <FoldButton id="archivo" label="Archivo" open={open} onToggle={toggle}>
           <div className="flex flex-col gap-1.5">{archivo}</div>
         </FoldButton>
@@ -183,7 +183,9 @@ export default function NetVisionBranchNav({
             ) : null}
           </div>
         </FoldButton>
-        {tools}
+        <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {tools}
+        </div>
       </div>
     </div>
   )

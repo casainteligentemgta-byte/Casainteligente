@@ -70,7 +70,7 @@ function NexusShellHeader({
         </button>
       </div>
       {isNetVision ? (
-        <div id="netvision-header-nav" className="mt-2 min-w-0" />
+        <div id="netvision-header-nav" className="relative z-50 mt-2 min-w-0 overflow-visible" />
       ) : null}
     </header>
   );
