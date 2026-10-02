@@ -18,8 +18,17 @@ export function buildSoundSpectrum(
   structures: DesignStructure[] = [],
   grid = 28,
   listenRangeM = 8,
+  extraSources: { x: number; y: number; rangeM?: number }[] = [],
 ): SpectrumCell[] {
-  if (cameras.length === 0) return []
+  const sources = [
+    ...cameras.map((c) => ({ x: c.x, y: c.y, rangeM: listenRangeM })),
+    ...extraSources.map((s) => ({
+      x: s.x,
+      y: s.y,
+      rangeM: s.rangeM && s.rangeM > 0 ? s.rangeM : listenRangeM,
+    })),
+  ]
+  if (sources.length === 0) return []
 
   const cell = 1 / grid
   const cells: SpectrumCell[] = []
@@ -31,19 +40,19 @@ export function buildSoundSpectrum(
       const px = (ix + 0.5) * cell
       const py = (iy + 0.5) * cell
       let best = -999
-      for (const cam of cameras) {
+      for (const src of sources) {
         const d = distMeters(
-          cam.x,
-          cam.y,
+          src.x,
+          src.y,
           px,
           py,
           scale.metersPerNormX,
           scale.metersPerNormY,
         )
-        if (d > listenRangeM * 1.4) continue
+        if (d > src.rangeM * 1.4) continue
         // Caída ~6 dB por duplicar distancia + pérdidas de muro
         const distLoss = 20 * Math.log10(Math.max(1, d))
-        const wallLoss = soundLossBetween(cam.x, cam.y, px, py, structures)
+        const wallLoss = soundLossBetween(src.x, src.y, px, py, structures)
         const spl = refSpl - distLoss - wallLoss
         if (spl > best) best = spl
       }

@@ -83,6 +83,48 @@ export type ScaleCalibration = {
 
 export type NetworkNodeKind = 'switch' | 'ap' | 'nvr' | 'injector'
 
+/** Planos de especialidad (además de CCTV / Internet). */
+export type PlanDiscipline = 'sonido' | 'domotica' | 'electrico'
+
+export type PlanDeviceKind =
+  | 'speaker'
+  | 'siren'
+  | 'mic'
+  | 'hub'
+  | 'sensor'
+  | 'relay'
+  | 'keypad'
+  | 'panel'
+  | 'outlet'
+  | 'light'
+  | 'transformer'
+
+export type PlanDeviceModel = {
+  id: string
+  discipline: PlanDiscipline
+  kind: PlanDeviceKind
+  brand: string
+  name: string
+  /** Alcance útil en metros (ficha). */
+  rangeM: number
+  /** Apertura. 360 = omnidireccional. */
+  fovDeg: number
+  priceUsd: number
+}
+
+export type DesignPlanDevice = {
+  id: string
+  label: string
+  x: number
+  y: number
+  discipline: PlanDiscipline
+  kind: PlanDeviceKind
+  modelId: string
+  yawDeg?: number
+  rangeM?: number
+  fovDeg?: number
+}
+
 export type NetworkDeviceModel = {
   id: string
   kind: NetworkNodeKind
@@ -192,6 +234,8 @@ export type NetVisionProject = {
   planoInvertido?: boolean
   cameras: DesignCamera[]
   networkNodes: DesignNetworkNode[]
+  /** Altavoces, sensores, tableros, etc. (planos de especialidad). */
+  planDevices: DesignPlanDevice[]
   structures: DesignStructure[]
   /** Tramos subterráneos dibujados en el plano (además de los derivados de cable ≥ 8 m). */
   undergroundSegments: DesignUndergroundSegment[]
@@ -245,6 +289,10 @@ export type CoverageSector = {
   greenRadiusNorm?: number
   /** Radio del amarillo en coords 0–1 (metros de ficha). */
   yellowRadiusNorm?: number
+  /** Polígono de la banda verde (mismo recorte de muros que `polygon`). */
+  greenPolygon?: { x: number; y: number }[]
+  /** Polígono de la banda amarilla. */
+  yellowPolygon?: { x: number; y: number }[]
 }
 
 /** Semáforo de cobertura CCTV (metros de ficha; el cono estirado no los agranda). */

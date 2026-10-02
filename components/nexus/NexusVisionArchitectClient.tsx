@@ -55,9 +55,19 @@ import {
   DEFAULT_INJECTOR_ID,
   DEFAULT_NVR_ID,
   DEFAULT_SWITCH_ID,
+  getNetworkModelOrDefault,
   labelPrefixForKind,
   networkCatalogByKind,
 } from '@/lib/netvision/catalog/network'
+import {
+  PLAN_DISCIPLINE_LABEL,
+  PLAN_KIND_LABEL,
+  defaultPlanDeviceId,
+  getPlanDeviceModelOrDefault,
+  labelPrefixForPlanKind,
+  planDeviceKinds,
+  planDevicesByDiscipline,
+} from '@/lib/netvision/catalog/planDevices'
 import {
   defaultNetworkPlanSize,
 } from '@/lib/netvision/utils/networkNodeSize'
@@ -81,6 +91,10 @@ import {
   buildWifiSpectrum,
 } from '@/lib/netvision/services/wifiPredictor'
 import { buildSoundSpectrum } from '@/lib/netvision/services/soundPredictor'
+import {
+  buildApCoverageSectors,
+  buildPlanDeviceSectors,
+} from '@/lib/netvision/services/planDeviceCoverage'
 import { STRUCTURE_MATERIALS } from '@/lib/netvision/catalog/materials'
 import {
   buildCableRoutes,
@@ -134,10 +148,13 @@ import type {
   DesignCableSegment,
   DesignCamera,
   DesignNetworkNode,
+  DesignPlanDevice,
   DesignStructure,
   DesignUndergroundSegment,
   NetVisionProject,
   NetworkNodeKind,
+  PlanDeviceKind,
+  PlanDiscipline,
   StructureMaterialId,
 } from '@/lib/netvision/types'
 import { snapOrtho90 } from '@/lib/netvision/utils/structureDraw'
@@ -256,8 +273,9 @@ export default function NexusVisionArchitectClient() {
     () => [
       ...project.cameras.map((c) => ({ x: c.x, y: c.y })),
       ...project.networkNodes.map((n) => ({ x: n.x, y: n.y })),
+      ...(project.planDevices ?? []).map((d) => ({ x: d.x, y: d.y })),
     ],
-    [project.cameras, project.networkNodes],
+    [project.cameras, project.networkNodes, project.planDevices],
   )
   const [ugZone, setUgZone] = useState<ZoneType>('vehicle')
   const [ugTerrain, setUgTerrain] = useState<TerrainType>('medium')
@@ -285,7 +303,15 @@ export default function NexusVisionArchitectClient() {
   const [redFocusKind, setRedFocusKind] = useState<NetworkNodeKind>('switch')
   const [headerNavEl, setHeaderNavEl] = useState<HTMLElement | null>(null)
   /** Panel derecho (inspector): visible por defecto; se oculta con el botón. */
-  const [inspectorOpen, setInspectorOpen] = useState(true)
+  const [inspectorOpen, setInspectorOpen] = useState(false)
+  const [defaultPlanModels, setDefaultPlanModels] = useState<
+    Record<PlanDiscipline, string>
+  >({
+    sonido: defaultPlanDeviceId('sonido'),
+    domotica: defaultPlanDeviceId('domotica'),
+    electrico: defaultPlanDeviceId('electrico'),
+  })
+  const [planFocusKind, setPlanFocusKind] = useState<PlanDeviceKind>('speaker')
   useRegisterNexusRightPanel(inspectorOpen, setInspectorOpen)
   const [viewMode, setViewMode] = useState<'plano' | 'diagrama'>('plano')
   const [complianceCountry, setComplianceCountry] = useState('VE')
@@ -409,10 +435,57 @@ export default function NexusVisionArchitectClient() {
     [project.networkNodes, project.scale, structures],
   )
 
+  const planDevices = project.planDevices ?? []
+
   const soundSpectrum = useMemo(
-    () => buildSoundSpectrum(project.cameras, project.scale, structures),
-    [project.cameras, project.scale, structures],
+    () =>
+      buildSoundSpectrum(
+        project.cameras,
+        project.scale,
+        structures,
+        28,
+        8,
+        planDevices
+          .filter((d) => d.discipline === 'sonido')
+          .map((d) => ({
+            x: d.x,
+            y: d.y,
+            rangeM:
+              d.rangeM ??
+              getPlanDeviceModelOrDefault(d.modelId, 'sonido').rangeM,
+          })),
+      ),
+    [project.cameras, project.scale, structures, planDevices],
   )
+
+  const planSectors = useMemo(() => {
+    if (sideTab === 'sonido' || sideTab === 'domotica' || sideTab === 'electrico') {
+      return buildPlanDeviceSectors(
+        planDevices,
+        project.scale,
+        structures,
+        sideTab,
+      )
+    }
+    if (sideTab === 'internet') {
+      return buildApCoverageSectors(
+        project.networkNodes,
+        (n) => getNetworkModelOrDefault(n.modelId, 'ap').wifiRangeM || 12,
+        project.scale,
+        structures,
+      )
+    }
+    return []
+  }, [sideTab, planDevices, project.scale, project.networkNodes, structures])
+
+  const activeSectors = sideTab === 'cctv' ? sectors : planSectors
+  const showActiveCoverage =
+    sideTab === 'cctv'
+      ? showFov
+      : sideTab === 'sonido' ||
+        sideTab === 'internet' ||
+        sideTab === 'domotica' ||
+        sideTab === 'electrico'
 
   const linkAdvice = useMemo(
     () => adviseCameraLinks(project.cameras, project.networkNodes, project.scale),
@@ -650,6 +723,7 @@ export default function NexusVisionArchitectClient() {
 
   const selectedCam = project.cameras.find((c) => c.id === selectedId) ?? null
   const selectedNet = project.networkNodes.find((n) => n.id === selectedId) ?? null
+  const selectedPlanDevice = planDevices.find((d) => d.id === selectedId) ?? null
   const selectedStructure =
     structures.find((s) => s.id === selectedId) ?? null
   const selectedManualCable =
@@ -659,6 +733,7 @@ export default function NexusVisionArchitectClient() {
   const hasSelection = !!(
     selectedCam ||
     selectedNet ||
+    selectedPlanDevice ||
     selectedStructure ||
     selectedManualCable ||
     selectedUnderground
@@ -787,6 +862,7 @@ export default function NexusVisionArchitectClient() {
     setError(null)
     setProject((p) => ({ ...p, cameras: [...p.cameras, pin] }))
     setSelectedId(pin.id)
+    setInspectorOpen(false)
     setSideTab('cctv')
     setViewMode('plano')
     setCalibrateMode(false)
@@ -808,7 +884,26 @@ export default function NexusVisionArchitectClient() {
   const selectSideTab = useCallback(
     (id: NetVisionBranchId) => {
       setSideTab(id)
-      setInspectorOpen(true)
+      if (id === 'cctv') {
+        setShowFov(true)
+        setViewMode('plano')
+      } else if (id === 'sonido') {
+        setShowSound(true)
+        setShowFov(false)
+        setViewMode('plano')
+        setPlanFocusKind('speaker')
+      } else if (id === 'internet') {
+        setShowWifi(true)
+        setViewMode('plano')
+      } else if (id === 'domotica') {
+        setShowFov(true)
+        setViewMode('plano')
+        setPlanFocusKind('hub')
+      } else if (id === 'electrico') {
+        setShowFov(true)
+        setViewMode('plano')
+        setPlanFocusKind('panel')
+      }
       if (id === 'sub') {
         setShowUnderground(true)
         setViewMode('plano')
@@ -864,7 +959,8 @@ export default function NexusVisionArchitectClient() {
     setError(null)
     setProject((p) => ({ ...p, networkNodes: [...p.networkNodes, node] }))
     setSelectedId(node.id)
-    setSideTab('red')
+    setInspectorOpen(false)
+    setSideTab('internet')
     setViewMode('plano')
     setCalibrateMode(false)
     setCalibPoints([])
@@ -886,6 +982,57 @@ export default function NexusVisionArchitectClient() {
     const idx = project.networkNodes.filter((n) => n.kind === kind).length
     const pos = buttonSpawnPos(idx, base.x, base.y)
     addNetworkAt(kind, pos.x, pos.y)
+  }
+
+  const addPlanDeviceAt = (
+    discipline: PlanDiscipline,
+    kind: PlanDeviceKind,
+    normX: number,
+    normY: number,
+  ) => {
+    if (!project.planoUrl) return
+    const modelId =
+      defaultPlanModels[discipline] &&
+      getPlanDeviceModelOrDefault(defaultPlanModels[discipline], discipline).kind === kind
+        ? defaultPlanModels[discipline]
+        : planDevicesByDiscipline(discipline).find((m) => m.kind === kind)?.id ??
+          defaultPlanDeviceId(discipline)
+    const model = getPlanDeviceModelOrDefault(modelId, discipline)
+    const count = planDevices.filter((d) => d.kind === model.kind).length + 1
+    const prefix = labelPrefixForPlanKind(model.kind)
+    const device: DesignPlanDevice = {
+      id: uid(),
+      x: Math.round(normX * 1000) / 1000,
+      y: Math.round(normY * 1000) / 1000,
+      label: `${prefix}-${String(count).padStart(2, '0')}`,
+      discipline: model.discipline,
+      kind: model.kind,
+      modelId: model.id,
+      yawDeg: 0,
+    }
+    setError(null)
+    setProject((p) => ({
+      ...p,
+      planDevices: [...(p.planDevices ?? []), device],
+    }))
+    setSelectedId(device.id)
+    setInspectorOpen(false)
+    setSideTab(discipline)
+    setViewMode('plano')
+    setCalibrateMode(false)
+    setCalibPoints([])
+    setDrawStructureMaterial(null)
+    setStructureDraft(null)
+  }
+
+  const addPlanDeviceFromButton = (discipline: PlanDiscipline, kind: PlanDeviceKind) => {
+    if (!project.planoUrl) {
+      setError('Carga un plano antes de agregar equipos.')
+      return
+    }
+    const idx = planDevices.filter((d) => d.discipline === discipline).length
+    const pos = buttonSpawnPos(idx, 0.48, 0.42)
+    addPlanDeviceAt(discipline, kind, pos.x, pos.y)
   }
 
   const addStructureSegment = (
@@ -1109,6 +1256,9 @@ export default function NexusVisionArchitectClient() {
       ...p,
       cameras: p.cameras.map((c) => (c.id === id ? { ...c, x: nx, y: ny } : c)),
       networkNodes: p.networkNodes.map((n) => (n.id === id ? { ...n, x: nx, y: ny } : n)),
+      planDevices: (p.planDevices ?? []).map((d) =>
+        d.id === id ? { ...d, x: nx, y: ny } : d,
+      ),
     }))
   }
 
@@ -1171,6 +1321,19 @@ export default function NexusVisionArchitectClient() {
     patchCamera(id, cameraPatchForLens(cam, lensId, patch))
   }
 
+  const patchPlanDevice = (id: string, patch: Partial<DesignPlanDevice>) => {
+    setProject((p) => ({
+      ...p,
+      planDevices: (p.planDevices ?? []).map((d) => {
+        if (d.id !== id) return d
+        const next: DesignPlanDevice = { ...d, ...patch }
+        if ('rangeM' in patch && patch.rangeM === undefined) delete next.rangeM
+        if ('fovDeg' in patch && patch.fovDeg === undefined) delete next.fovDeg
+        return next
+      }),
+    }))
+  }
+
   const patchNetworkNode = (id: string, patch: Partial<DesignNetworkNode>) => {
     setProject((p) => ({
       ...p,
@@ -1210,6 +1373,7 @@ export default function NexusVisionArchitectClient() {
         ...p,
         cameras: p.cameras.filter((c) => c.id !== id),
         networkNodes: p.networkNodes.filter((n) => n.id !== id),
+        planDevices: (p.planDevices ?? []).filter((d) => d.id !== id),
         structures: (p.structures ?? []).filter((s) => s.id !== id),
         undergroundSegments: (p.undergroundSegments ?? []).filter(
           (s) => s.id !== id,
@@ -1366,15 +1530,81 @@ export default function NexusVisionArchitectClient() {
               </optgroup>
             ))}
           </select>
+          <button
+            type="button"
+            disabled={!project.planoUrl || loading}
+            className={chipClass(false)}
+            onClick={addCameraFromButton}
+          >
+            + Cámara
+          </button>
           {!selectedCam ? (
             <span className="text-[10px] text-[var(--nexus-text-dim)]">
-              Modelo al agregar · {CAMERA_BRANDS.slice(0, 3).join(', ')}…
+              Coloca primero · configura al tocar
             </span>
           ) : null}
         </>
       )
     }
-    if (sideTab === 'red') {
+    if (sideTab === 'sonido' || sideTab === 'domotica' || sideTab === 'electrico') {
+      const kinds = planDeviceKinds(sideTab)
+      const focus =
+        kinds.includes(planFocusKind) ? planFocusKind : kinds[0]!
+      return (
+        <>
+          {kinds.map((k) => (
+            <button
+              key={k}
+              type="button"
+              disabled={!project.planoUrl || loading}
+              className={chipClass(focus === k)}
+              onClick={() => {
+                setPlanFocusKind(k)
+                setDrawStructureMaterial(null)
+                setStructureDraft(null)
+                setCalibrateMode(false)
+                addPlanDeviceFromButton(sideTab, k)
+              }}
+            >
+              + {PLAN_KIND_LABEL[k]}
+            </button>
+          ))}
+          <select
+            value={
+              selectedPlanDevice?.discipline === sideTab
+                ? selectedPlanDevice.modelId
+                : defaultPlanModels[sideTab]
+            }
+            onChange={(e) => {
+              const id = e.target.value
+              const model = getPlanDeviceModelOrDefault(id, sideTab)
+              setDefaultPlanModels((m) => ({ ...m, [sideTab]: id }))
+              setPlanFocusKind(model.kind)
+              if (selectedPlanDevice?.discipline === sideTab) {
+                patchPlanDevice(selectedPlanDevice.id, {
+                  modelId: model.id,
+                  kind: model.kind,
+                  rangeM: undefined,
+                  fovDeg: undefined,
+                })
+              }
+            }}
+            className="max-w-[min(100%,240px)] rounded border border-white/10 bg-black/40 px-2 py-1 text-[11px] text-white"
+            title={`Modelo ${PLAN_DISCIPLINE_LABEL[sideTab]}`}
+          >
+            {planDevicesByDiscipline(sideTab).map((m) => (
+              <option key={m.id} value={m.id}>
+                {PLAN_KIND_LABEL[m.kind]} · {m.brand} {m.name}
+              </option>
+            ))}
+          </select>
+          <span className="text-[10px] text-[var(--nexus-text-dim)]">
+            Coloca en el plano · toca para configurar
+          </span>
+        </>
+      )
+    }
+    if (sideTab === 'internet') {
       const kinds: { kind: NetworkNodeKind; label: string }[] = [
         { kind: 'switch', label: 'Switch' },
         { kind: 'ap', label: 'AP' },
@@ -1707,7 +1937,7 @@ export default function NexusVisionArchitectClient() {
   )
 
   return (
-    <div className="space-y-3">
+    <div className="flex min-h-[calc(100dvh-7.25rem)] flex-col gap-2">
       <input
         ref={fileRef}
         type="file"
@@ -1761,6 +1991,7 @@ export default function NexusVisionArchitectClient() {
             <Mono>{project.planoNombre || 'Plano'}</Mono>
             {' · '}
             {project.cameras.length} cam · {project.networkNodes.length} red
+            {planDevices.length ? ` · ${planDevices.length} eq` : ''}
             {' · '}
             {project.scale.calibrated ? (
               <span className="text-[var(--nexus-green)]">escala OK</span>
@@ -1801,6 +2032,11 @@ export default function NexusVisionArchitectClient() {
         {viewMode === 'plano' && project.planoUrl ? (
           <>
             <NetVisionLayerHelp />
+            <details className="rounded-md border border-white/10 bg-black/30 px-2 py-0.5">
+              <summary className="cursor-pointer text-[11px] font-semibold text-[var(--nexus-cyan)]">
+                Capas
+              </summary>
+              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 pb-1">
             <label
               title={layerHelpTitle('fov')}
               className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
@@ -1903,6 +2139,8 @@ export default function NexusVisionArchitectClient() {
               />
               Fondo negro
             </label>
+              </div>
+            </details>
             <button
               type="button"
               title={layerHelpTitle('calibrate')}
@@ -2013,14 +2251,8 @@ export default function NexusVisionArchitectClient() {
         </p>
       ) : null}
 
-      <div
-        className={
-          inspectorOpen
-            ? 'grid gap-6 xl:grid-cols-[1fr_300px]'
-            : 'grid gap-6 xl:grid-cols-1'
-        }
-      >
-        <GlassCardMotion className="overflow-hidden p-3 sm:p-4">
+      <div className="relative min-h-0 flex-1">
+        <GlassCardMotion className="flex h-full min-h-[360px] flex-col overflow-hidden p-1.5 sm:p-2">
           {!project.planoUrl ? (
             <button
               type="button"
@@ -2030,8 +2262,9 @@ export default function NexusVisionArchitectClient() {
               <Camera className="h-10 w-10 text-[var(--nexus-cyan)]" />
               <p className="text-sm font-semibold text-white">Sube el plano del inmueble</p>
               <p className="max-w-sm text-xs text-[var(--nexus-text-dim)]">
-                PDF vectorial (CAD): se detectan muros, puertas y ventanas al cargar. Luego + Cámara / Switch / AP.
-                CCTV: {CAMERA_BRANDS.join(', ')}.
+                PDF vectorial (CAD): se detectan muros, puertas y ventanas al cargar.
+                Luego coloca equipos en el plano amplio y tócalos para configurarlos.
+                CCTV, sonido, internet, domótica y eléctrico.
               </p>
             </button>
           ) : (
@@ -2047,7 +2280,7 @@ export default function NexusVisionArchitectClient() {
                 />
               ) : (
                 <div
-                  className={`h-[min(62vh,560px)] w-full overflow-hidden rounded-xl border border-[rgba(0,242,254,0.2)] bg-black ${
+                  className={`h-[calc(100dvh-11.5rem)] min-h-[420px] w-full overflow-hidden rounded-xl border border-[rgba(0,242,254,0.2)] bg-black ${
                     placeMode ? 'cursor-crosshair' : 'cursor-default'
                   }`}
                 >
@@ -2056,8 +2289,9 @@ export default function NexusVisionArchitectClient() {
                     invertBackground={Boolean(project.planoInvertido)}
                     cameras={project.cameras}
                     networkNodes={project.networkNodes}
+                    planDevices={planDevices}
                     structures={structures}
-                    sectors={sectors}
+                    sectors={activeSectors}
                     visionSpectrum={visionSpectrum}
                     wifiCircles={wifiCircles}
                     wifiSpectrum={wifiSpectrum}
@@ -2071,9 +2305,9 @@ export default function NexusVisionArchitectClient() {
                     draftPoints={drawCable ? cableDraftPoints : undefined}
                     draftCursor={drawCable ? cableCursor : null}
                     draftColor={draftColor}
-                    showFov={showFov}
-                    showWifi={showWifi}
-                    showSound={showSound}
+                    showFov={showActiveCoverage}
+                    showWifi={showWifi || sideTab === 'internet'}
+                    showSound={showSound || sideTab === 'sonido'}
                     showLinks={showLinks}
                     showCableRoutes={showCableRoutes}
                     showUnderground={showUnderground || sideTab === 'sub'}
@@ -2087,9 +2321,9 @@ export default function NexusVisionArchitectClient() {
                     metersPerNormX={project.scale.metersPerNormX}
                     metersPerNormY={project.scale.metersPerNormY}
                     nightMode={nightMode}
+                    onInspect={() => setInspectorOpen(true)}
                     onSelect={(id) => {
                       setSelectedId(id)
-                      setInspectorOpen(true)
                       if (project.cameras.some((c) => c.id === id)) {
                         setShowFov(true)
                         setSideTab('cctv')
@@ -2110,8 +2344,19 @@ export default function NexusVisionArchitectClient() {
                         setUndergroundDraft(null)
                         setDrawCable(false)
                         clearCableDraft()
+                      } else if (planDevices.some((d) => d.id === id)) {
+                        const dev = planDevices.find((d) => d.id === id)!
+                        setSideTab(dev.discipline)
+                        setViewMode('plano')
+                        setCalibrateMode(false)
+                        setDrawStructureMaterial(null)
+                        setStructureDraft(null)
+                        setDrawUnderground(false)
+                        setUndergroundDraft(null)
+                        setDrawCable(false)
+                        clearCableDraft()
                       } else if (project.networkNodes.some((n) => n.id === id)) {
-                        setSideTab('red')
+                        setSideTab('internet')
                         setViewMode('plano')
                         setCalibrateMode(false)
                         setDrawStructureMaterial(null)
@@ -2149,25 +2394,22 @@ export default function NexusVisionArchitectClient() {
                   />
                 </div>
               )}
-              {viewMode === 'plano' && showFov && project.cameras.length > 0 ? (
-                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-white/10 bg-black/30 px-2.5 py-1.5 text-[10px] text-[var(--nexus-text-muted)]">
+              {viewMode === 'plano' && showActiveCoverage ? (
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[10px] text-[var(--nexus-text-muted)]">
                   <span className="font-semibold uppercase tracking-wide text-white">
-                    Semáforo cobertura
+                    Semáforo
                   </span>
                   <span className="inline-flex items-center gap-1">
-                    <span className="h-2.5 w-2.5 rounded-sm bg-emerald-500" />
-                    Verde · metros fijos (ficha)
+                    <span className="h-2 w-2 rounded-sm bg-emerald-500" />
+                    Verde
                   </span>
                   <span className="inline-flex items-center gap-1">
-                    <span className="h-2.5 w-2.5 rounded-sm bg-yellow-400" />
-                    Amarillo · más lejos
+                    <span className="h-2 w-2 rounded-sm bg-yellow-400" />
+                    Amarillo
                   </span>
                   <span className="inline-flex items-center gap-1">
-                    <span className="h-2.5 w-2.5 rounded-sm bg-red-500" />
-                    Rojo · detección dudosa (con visión)
-                  </span>
-                  <span>
-                    En solapes gana la mejor detección (verde sobre naranja, naranja sobre rojo)
+                    <span className="h-2 w-2 rounded-sm bg-red-500" />
+                    Rojo
                   </span>
                 </div>
               ) : null}
@@ -2175,11 +2417,41 @@ export default function NexusVisionArchitectClient() {
           )}
         </GlassCardMotion>
 
+        {selectedId && !inspectorOpen && project.planoUrl && viewMode === 'plano' ? (
+          <button
+            type="button"
+            onClick={() => setInspectorOpen(true)}
+            className="absolute bottom-4 right-4 z-20 rounded-full bg-[var(--nexus-cyan)] px-3.5 py-2 text-[11px] font-semibold text-black shadow-lg"
+          >
+            Configurar{' '}
+            {selectedCam?.label ||
+              selectedNet?.label ||
+              selectedPlanDevice?.label ||
+              selectedStructure?.label ||
+              selectedManualCable?.label ||
+              selectedUnderground?.label ||
+              'elemento'}
+          </button>
+        ) : null}
+
         {inspectorOpen ? (
-        <GlassCardMotion delay={0.04} className="space-y-3 p-4">
+        <div className="absolute inset-x-0 bottom-0 z-30 max-h-[min(52dvh,480px)] overflow-y-auto rounded-t-2xl border border-white/15 bg-[#071018]/96 p-3 shadow-[0_-12px_40px_rgba(0,0,0,0.45)] backdrop-blur-md xl:inset-y-2 xl:bottom-2 xl:left-auto xl:right-2 xl:w-[min(340px,40vw)] xl:max-h-[calc(100%-1rem)] xl:rounded-2xl">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-text-muted)]">
+              Configurar elemento
+            </p>
+            <button
+              type="button"
+              onClick={() => setInspectorOpen(false)}
+              className="rounded-md px-2 py-1 text-[11px] font-semibold text-[var(--nexus-cyan)] hover:bg-white/10"
+            >
+              Cerrar · volver al plano
+            </button>
+          </div>
           <NetVisionSelectedProps
             camera={selectedCam}
             network={selectedNet}
+            planDevice={selectedPlanDevice}
             structure={selectedStructure}
             cable={selectedManualCable}
             nightMode={nightMode}
@@ -2191,6 +2463,10 @@ export default function NexusVisionArchitectClient() {
             onPatchNetwork={(patch) => {
               if (!selectedNet) return
               patchNetworkNode(selectedNet.id, patch)
+            }}
+            onPatchPlanDevice={(patch) => {
+              if (!selectedPlanDevice) return
+              patchPlanDevice(selectedPlanDevice.id, patch)
             }}
             onPatchStructure={(patch) => {
               if (!selectedStructure) return
@@ -2367,7 +2643,45 @@ export default function NexusVisionArchitectClient() {
                 />
               </div>
             </div>
-          ) : sideTab === 'red' ? (
+          ) : sideTab === 'sonido' || sideTab === 'domotica' || sideTab === 'electrico' ? (
+            <div className="space-y-2">
+              <h2 className="text-sm font-bold uppercase tracking-wide text-[var(--nexus-text-muted)]">
+                Plano {PLAN_DISCIPLINE_LABEL[sideTab]}
+              </h2>
+              <p className="text-[10px] text-[var(--nexus-text-dim)]">
+                Coloca todos los equipos en el plano. Luego toca cada uno para
+                modelo, alcance y orientación.
+              </p>
+              {planDevices.filter((d) => d.discipline === sideTab).length > 0 ? (
+                <div className="flex flex-wrap gap-1">
+                  {planDevices
+                    .filter((d) => d.discipline === sideTab)
+                    .map((d) => (
+                      <button
+                        key={d.id}
+                        type="button"
+                        className={`min-h-8 rounded-md px-2 text-[11px] font-semibold ${
+                          selectedId === d.id
+                            ? 'bg-[var(--nexus-cyan)] text-black'
+                            : 'border border-white/15 text-[var(--nexus-cyan)]'
+                        }`}
+                        onClick={() => {
+                          setSelectedId(d.id)
+                          setInspectorOpen(true)
+                        }}
+                      >
+                        {d.label}
+                      </button>
+                    ))}
+                </div>
+              ) : (
+                <p className="text-[10px] text-[var(--nexus-text-dim)]">
+                  Usa + {PLAN_KIND_LABEL[planDeviceKinds(sideTab)[0]!]} arriba para
+                  agregar el primero.
+                </p>
+              )}
+            </div>
+          ) : sideTab === 'internet' ? (
             <NetworkDesigner
               nodes={project.networkNodes}
               defaultModels={defaultNetModels}
@@ -2402,7 +2716,7 @@ export default function NexusVisionArchitectClient() {
               onSelectNode={(id) => {
                 setSelectedId(id)
                 setInspectorOpen(true)
-                setSideTab('red')
+                setSideTab('internet')
               }}
               onRemoveNode={quitar}
             />
@@ -2764,14 +3078,14 @@ export default function NexusVisionArchitectClient() {
                 </div>
               ) : !hasSelection ? (
                 <p className="text-xs text-[var(--nexus-text-dim)]">
-                  Selecciona una cámara, nodo, muro o cable en el plano.
+                  Coloca equipos en el plano amplio. Toca uno para configurarlo.
                 </p>
               ) : null}
             </>
           )}
 
           {inspectorFooter}
-        </GlassCardMotion>
+        </div>
         ) : null}
       </div>
     </div>

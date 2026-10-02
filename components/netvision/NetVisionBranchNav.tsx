@@ -3,14 +3,25 @@
 import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 
-export const NETVISION_BRANCHES = [
+export const NETVISION_PLAN_BRANCHES = [
   { id: 'cctv', label: 'CCTV' },
-  { id: 'red', label: 'Red' },
+  { id: 'sonido', label: 'Sonido' },
+  { id: 'internet', label: 'Internet' },
+  { id: 'domotica', label: 'Domótica' },
+  { id: 'electrico', label: 'Eléctrico' },
+] as const
+
+export const NETVISION_TOOL_BRANCHES = [
   { id: 'muros', label: 'Muros' },
   { id: 'cable', label: 'Cable' },
   { id: 'sub', label: 'Sub' },
   { id: 'norm', label: 'Norm' },
   { id: 'ajustes', label: 'Ajustes' },
+] as const
+
+export const NETVISION_BRANCHES = [
+  ...NETVISION_PLAN_BRANCHES,
+  ...NETVISION_TOOL_BRANCHES,
 ] as const
 
 export type NetVisionBranchId = (typeof NETVISION_BRANCHES)[number]['id']
@@ -26,16 +37,18 @@ type Props = {
 const scrollHide =
   'overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
 
-/** Barra bajo NetVision: en móvil, Cargar plano va arriba; las ramas debajo. */
-export default function NetVisionBranchNav({
+function BranchRow({
+  items,
   active,
   onSelect,
-  projectActions,
-  submenu,
-}: Props) {
-  const branches = (
+}: {
+  items: readonly { id: NetVisionBranchId; label: string }[]
+  active: NetVisionBranchId
+  onSelect: (id: NetVisionBranchId) => void
+}) {
+  return (
     <div className="flex flex-nowrap items-center gap-1">
-      {NETVISION_BRANCHES.map(({ id, label }) => {
+      {items.map(({ id, label }) => {
         const isActive = active === id
         return (
           <button
@@ -56,10 +69,18 @@ export default function NetVisionBranchNav({
       })}
     </div>
   )
+}
 
+/** Barra bajo NetVision: planos de especialidad + herramientas. */
+export default function NetVisionBranchNav({
+  active,
+  onSelect,
+  projectActions,
+  submenu,
+}: Props) {
   return (
-    <div className="space-y-2">
-      <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
+    <div className="space-y-1.5">
+      <div className="flex w-full min-w-0 flex-col gap-1.5 sm:flex-row sm:items-center">
         {projectActions ? (
           <div
             className={cn(
@@ -71,11 +92,14 @@ export default function NetVisionBranchNav({
           </div>
         ) : null}
         <div className={cn('w-full min-w-0 sm:ml-auto sm:w-auto sm:shrink-0', scrollHide)}>
-          {branches}
+          <BranchRow items={NETVISION_PLAN_BRANCHES} active={active} onSelect={onSelect} />
         </div>
       </div>
+      <div className={cn('w-full min-w-0', scrollHide)}>
+        <BranchRow items={NETVISION_TOOL_BRANCHES} active={active} onSelect={onSelect} />
+      </div>
       {submenu ? (
-        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-white/10 pt-2">
+        <div className="flex flex-wrap items-center gap-2 border-t border-white/10 pt-1.5">
           {submenu}
         </div>
       ) : null}

@@ -4,7 +4,6 @@ import { Fragment, useEffect, useRef, useState } from 'react'
 import {
   Arc,
   Circle,
-  Group,
   Image as KonvaImage,
   Layer,
   Line,
@@ -19,9 +18,11 @@ import type {
   CoverageSector,
   DesignCamera,
   DesignNetworkNode,
+  DesignPlanDevice,
   DesignStructure,
   SpectrumCell,
 } from '@/lib/netvision/types'
+import { planDeviceColor } from '@/lib/netvision/catalog/planDevices'
 import { effectiveCameraLenses } from '@/lib/netvision/catalog/cameras'
 import { getStructureMaterialOrDefault } from '@/lib/netvision/catalog/materials'
 import { degToRad } from '@/lib/netvision/utils/geometryHelpers'
@@ -46,6 +47,7 @@ export type CameraPlacementToolProps = {
   invertBackground?: boolean
   cameras: DesignCamera[]
   networkNodes: DesignNetworkNode[]
+  planDevices?: DesignPlanDevice[]
   structures?: DesignStructure[]
   sectors: CoverageSector[]
   visionSpectrum?: SpectrumCell[]
@@ -95,6 +97,8 @@ export type CameraPlacementToolProps = {
   metersPerNormY?: number
   nightMode?: boolean
   onSelect: (id: string) => void
+  /** Toque (no arrastre): abrir ficha de configuración. */
+  onInspect?: (id: string) => void
   /** Mover un quiebre (índice 0-based entre extremos) de una ruta auto. */
   onCableWaypointMove?: (
     routeId: string,
@@ -147,53 +151,25 @@ function visionBandSolidFill(band: SpectrumBand, isTele: boolean): string {
   return 'rgb(239, 68, 68)'
 }
 
-function visionBandArcRadii(
-  band: SpectrumBand,
-  radiusPx: number,
-  greenRadiusPx: number,
-  yellowRadiusPx: number,
-  deadRadiusPx = 0,
-): { inner: number; outer: number } | null {
-  const deadPx = Math.max(0, deadRadiusPx)
-  const greenPx = Math.max(deadPx, Math.min(radiusPx, greenRadiusPx))
-  const yellowPx = Math.max(greenPx, Math.min(radiusPx, yellowRadiusPx))
-  const inner =
-    band === 'green' ? deadPx : band === 'yellow' ? greenPx : yellowPx
-  const outer =
-    band === 'green' ? greenPx : band === 'yellow' ? yellowPx : radiusPx
-  if (outer <= inner + 0.4) return null
-  return { inner, outer }
-}
-
-function sectorFovClip(
+function sectorPolyPoints(
   poly: { x: number; y: number }[] | undefined,
   offsetX: number,
   offsetY: number,
   drawW: number,
   drawH: number,
-) {
-  if (!poly || poly.length < 3) return undefined
-  return (ctx: {
-    beginPath: () => void
-    moveTo: (x: number, y: number) => void
-    lineTo: (x: number, y: number) => void
-    closePath: () => void
-  }) => {
-    const p0 = poly[0]!
-    ctx.beginPath()
-    ctx.moveTo(offsetX + p0.x * drawW, offsetY + p0.y * drawH)
-    for (let i = 1; i < poly.length; i++) {
-      const p = poly[i]!
-      ctx.lineTo(offsetX + p.x * drawW, offsetY + p.y * drawH)
-    }
-    ctx.closePath()
+): number[] | null {
+  if (!poly || poly.length < 3) return null
+  const pts: number[] = []
+  for (const p of poly) {
+    pts.push(offsetX + p.x * drawW, offsetY + p.y * drawH)
   }
+  return pts
 }
 
 /**
- * Capa propia del semáforo CCTV: primero rojos, luego naranjas, luego verdes.
- * Antes de pintar una banda mejor se recorta (destination-out) para que no se
- * mezclen en arcoíris: verde prevalece sobre naranja y naranja sobre rojo.
+ * Semáforo CCTV relleno con polígonos del FOV (elipse + recorte de muros).
+ * Arcos circulares no cubrían el cono en planos apaisados y dejaban huecos.
+ * Se pinta rojo → amarillo → verde para que en solapes gane la mejor detección.
  */
 function VisionSpectrumLayer({
   sectors,
@@ -208,62 +184,30 @@ function VisionSpectrumLayer({
   drawW: number
   drawH: number
 }) {
-  const bands: SpectrumBand[] = ['red', 'yellow', 'green']
+  const bands: { band: SpectrumBand; polyOf: (s: CoverageSector) => { x: number; y: number }[] | undefined }[] =
+    [
+      { band: 'red', polyOf: (s) => s.polygon },
+      { band: 'yellow', polyOf: (s) => s.yellowPolygon },
+      { band: 'green', polyOf: (s) => s.greenPolygon },
+    ]
   return (
     <Layer listening={false} opacity={0.74}>
-      {bands.flatMap((band) =>
+      {bands.flatMap(({ band, polyOf }) =>
         sectors.flatMap((s) => {
-          const cx = offsetX + s.cx * drawW
-          const cy = offsetY + s.cy * drawH
-          const midAng = (s.startAngleRad + s.endAngleRad) / 2
-          const radiusAlong = (rNorm: number) =>
-            Math.hypot(
-              Math.cos(midAng) * rNorm * drawW,
-              Math.sin(midAng) * rNorm * drawH,
-            )
-          const radiusPx = Math.max(12, radiusAlong(s.radiusNorm))
-          const greenRadiusPx = radiusAlong(
-            s.greenRadiusNorm ?? s.radiusNorm * 0.4,
-          )
-          const yellowRadiusPx = radiusAlong(
-            s.yellowRadiusNorm ?? s.radiusNorm * 0.7,
-          )
-          const deadRadiusPx = radiusAlong(s.innerRadiusNorm ?? 0)
-          const radii = visionBandArcRadii(
-            band,
-            radiusPx,
-            greenRadiusPx,
-            yellowRadiusPx,
-            deadRadiusPx,
-          )
-          if (!radii) return []
-          const sweep = ((s.endAngleRad - s.startAngleRad) * 180) / Math.PI
-          const rotation = (s.startAngleRad * 180) / Math.PI
-          const { inner, outer } = radii
-          const clipFunc = sectorFovClip(s.polygon, offsetX, offsetY, drawW, drawH)
+          const pts = sectorPolyPoints(polyOf(s), offsetX, offsetY, drawW, drawH)
+          if (!pts) return []
           const lens = s.lensId ?? 'main'
-          const arc = {
-            x: cx,
-            y: cy,
-            innerRadius: inner,
-            outerRadius: outer,
-            angle: sweep,
-            rotation,
-            listening: false as const,
-            perfectDrawEnabled: false,
-          }
-          const punch =
-            band === 'red' ? null : (
-              <Group key={`vis-punch-${band}-${s.cameraId}-${lens}`} listening={false} clipFunc={clipFunc}>
-                <Arc {...arc} fill="#000" globalCompositeOperation="destination-out" />
-              </Group>
-            )
-          const fill = (
-            <Group key={`vis-bands-${band}-${s.cameraId}-${lens}`} listening={false} clipFunc={clipFunc}>
-              <Arc {...arc} fill={visionBandSolidFill(band, s.lensId === 'tele')} />
-            </Group>
-          )
-          return punch ? [punch, fill] : [fill]
+          return [
+            <Line
+              key={`vis-band-${band}-${s.cameraId}-${lens}`}
+              points={pts}
+              closed
+              fill={visionBandSolidFill(band, s.lensId === 'tele')}
+              listening={false}
+              perfectDrawEnabled={false}
+              strokeEnabled={false}
+            />,
+          ]
         }),
       )}
     </Layer>
@@ -398,6 +342,7 @@ export default function CameraPlacementTool({
   invertBackground = false,
   cameras,
   networkNodes,
+  planDevices = [],
   structures = [],
   sectors,
   wifiCircles,
@@ -429,6 +374,7 @@ export default function CameraPlacementTool({
   metersPerNormY = 40,
   nightMode = false,
   onSelect,
+  onInspect,
   onCableWaypointMove,
   onCableWaypointInsert,
   onCableWaypointRemove,
@@ -654,6 +600,11 @@ export default function CameraPlacementTool({
 
   // En iPad/tablet: un dedo siempre puede mover el plano; el tap corto sigue colocando.
   const canPan = !pinching
+
+  const inspect = (id: string) => {
+    onSelect(id)
+    onInspect?.(id)
+  }
 
   const pauseStageDrag = (stage: Konva.Stage | null) => {
     if (stage) stage.draggable(false)
@@ -1420,7 +1371,7 @@ export default function CameraPlacementTool({
                     onAddAt(cam.x, cam.y)
                     return
                   }
-                  onSelect(cam.id)
+                  inspect(cam.id)
                 }}
                 onTap={(e) => {
                   e.cancelBubble = true
@@ -1428,7 +1379,7 @@ export default function CameraPlacementTool({
                     onAddAt(cam.x, cam.y)
                     return
                   }
-                  onSelect(cam.id)
+                  inspect(cam.id)
                 }}
                 onDragStart={(e) => {
                   e.cancelBubble = true
@@ -1703,7 +1654,7 @@ export default function CameraPlacementTool({
                       onAddAt(node.x, node.y)
                       return
                     }
-                    onSelect(node.id)
+                    inspect(node.id)
                   }}
                   onTap={(e) => {
                     e.cancelBubble = true
@@ -1711,7 +1662,7 @@ export default function CameraPlacementTool({
                       onAddAt(node.x, node.y)
                       return
                     }
-                    onSelect(node.id)
+                    inspect(node.id)
                   }}
                   onDragStart={(e) => {
                     e.cancelBubble = true
@@ -1798,6 +1749,58 @@ export default function CameraPlacementTool({
             )
           })}
 
+          {planDevices.map((dev) => {
+            const cx = offsetX + dev.x * drawW
+            const cy = offsetY + dev.y * drawH
+            const selected = dev.id === selectedId
+            const color = planDeviceColor(dev.discipline)
+            return (
+              <Circle
+                key={dev.id}
+                x={cx}
+                y={cy}
+                radius={selected ? 6 : 5}
+                fill={color}
+                stroke={selected ? '#fff' : '#0f172a'}
+                strokeWidth={selected ? 1.75 : 1.25}
+                hitStrokeWidth={16}
+                shadowColor="black"
+                shadowBlur={3}
+                shadowOpacity={0.3}
+                draggable={!snapPlaceToDevices}
+                onClick={(e) => {
+                  e.cancelBubble = true
+                  if (snapPlaceToDevices && placeMode) {
+                    onAddAt(dev.x, dev.y)
+                    return
+                  }
+                  inspect(dev.id)
+                }}
+                onTap={(e) => {
+                  e.cancelBubble = true
+                  if (snapPlaceToDevices && placeMode) {
+                    onAddAt(dev.x, dev.y)
+                    return
+                  }
+                  inspect(dev.id)
+                }}
+                onDragStart={(e) => {
+                  e.cancelBubble = true
+                  pauseStageDrag(e.target.getStage())
+                  onSelect(dev.id)
+                }}
+                onDragEnd={(e: KonvaEventObject<DragEvent>) => {
+                  e.cancelBubble = true
+                  const node = e.target as Konva.Circle
+                  const n = toNorm(node.x(), node.y())
+                  onMove(dev.id, n.x, n.y)
+                  onSelect(dev.id)
+                  resumeStageDrag(e.target.getStage())
+                }}
+              />
+            )
+          })}
+
           {networkNodes.map((node) => {
             const planSize = resolveNetworkPlanSize(node)
             const size = networkNodeHalfPx(planSize, drawW)
@@ -1817,6 +1820,18 @@ export default function CameraPlacementTool({
               />
             )
           })}
+
+          {planDevices.map((dev) => (
+            <Text
+              key={`plbl-${dev.id}`}
+              x={offsetX + dev.x * drawW + 12}
+              y={offsetY + dev.y * drawH - 16}
+              text={dev.label}
+              fontSize={10}
+              fill="#e2e8f0"
+              listening={false}
+            />
+          ))}
         </Layer>
       </Stage>
     </div>

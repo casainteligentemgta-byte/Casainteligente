@@ -2,7 +2,9 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import type { DesignCamera } from '../types'
 import {
+  buildCoverageSectors,
   buildVisionSpectrum,
+  coverageBandPolygons,
   preferredVisionBand,
   visionBandForDistance,
   visionBandRank,
@@ -140,5 +142,68 @@ describe('inclinación recorta el piso bajo la cámara', () => {
     )
     assert.equal(underPin, undefined)
     assert.ok(ahead8m?.band, 'debe cubrir ~8 m al frente')
+  })
+})
+
+describe('coverageBandPolygons', () => {
+  it('verde y amarillo son polígonos con al menos 3 puntos', () => {
+    const polys = coverageBandPolygons({
+      cx: 0.4,
+      cy: 0.5,
+      startAngleRad: -Math.PI / 4,
+      endAngleRad: Math.PI / 4,
+      innerRadiusNorm: 0,
+      greenRadiusNorm: 0.08,
+      yellowRadiusNorm: 0.14,
+      structures: [],
+    })
+    assert.ok((polys.greenPolygon?.length ?? 0) >= 3)
+    assert.ok((polys.yellowPolygon?.length ?? 0) >= 3)
+  })
+
+  it('sin radio verde no genera polígono verde', () => {
+    const polys = coverageBandPolygons({
+      cx: 0.5,
+      cy: 0.5,
+      startAngleRad: 0,
+      endAngleRad: Math.PI / 2,
+      innerRadiusNorm: 0.1,
+      greenRadiusNorm: 0.05,
+      yellowRadiusNorm: 0.2,
+      structures: [],
+    })
+    assert.equal(polys.greenPolygon, undefined)
+    assert.ok((polys.yellowPolygon?.length ?? 0) >= 3)
+  })
+})
+
+describe('buildCoverageSectors band polygons', () => {
+  it('incluye polígonos de semáforo para rellenar el cono', () => {
+    const scale = { metersPerNormX: 40, metersPerNormY: 20, calibrated: true }
+    const sectors = buildCoverageSectors(
+      [
+        testCam({
+          id: 'a',
+          x: 0.3,
+          yawDeg: 0,
+          fovDeg: 90,
+          fovLeftDeg: 45,
+          fovRightDeg: 45,
+          rangeM: 20,
+          mountHeightM: 2.8,
+          tiltDeg: 0,
+        }),
+      ],
+      scale,
+      'day',
+      [],
+    )
+    assert.equal(sectors.length, 1)
+    const s = sectors[0]!
+    assert.ok((s.polygon?.length ?? 0) >= 3)
+    assert.ok((s.greenPolygon?.length ?? 0) >= 3)
+    assert.ok((s.yellowPolygon?.length ?? 0) >= 3)
+    assert.ok((s.greenRadiusNorm ?? 0) < (s.yellowRadiusNorm ?? 0))
+    assert.ok((s.yellowRadiusNorm ?? 0) <= s.radiusNorm + 1e-9)
   })
 })

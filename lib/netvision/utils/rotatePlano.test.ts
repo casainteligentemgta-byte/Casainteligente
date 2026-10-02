@@ -49,6 +49,29 @@ describe('rotateProjectGeometry', () => {
     assert.equal(next.scale.metersPerNormX, 40)
     assert.equal(next.scale.metersPerNormY, 10)
   })
+
+  it('rota equipos de plano de especialidad', () => {
+    const base = emptyProject({ id: 't', name: 't' })
+    const project = {
+      ...base,
+      planDevices: [
+        {
+          id: 's1',
+          label: 'ALT-01',
+          x: 0.25,
+          y: 0.1,
+          discipline: 'sonido' as const,
+          kind: 'speaker' as const,
+          modelId: 'snd-hik-dsqae',
+          yawDeg: 10,
+        },
+      ],
+    }
+    const next = rotateProjectGeometry(project, 'cw')
+    assert.equal(next.planDevices[0]!.x, 0.9)
+    assert.equal(next.planDevices[0]!.y, 0.25)
+    assert.equal(next.planDevices[0]!.yawDeg, 100)
+  })
 })
 
 describe('invertRgbPixels', () => {
