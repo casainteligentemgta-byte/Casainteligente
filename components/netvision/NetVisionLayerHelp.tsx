@@ -15,7 +15,7 @@ export const NETVISION_LAYER_HELP: LayerHelpItem[] = [
     id: 'fov',
     label: 'Visión',
     blurb:
-      'Cobertura automática por alcance (semáforo): verde y amarillo son metros fijos de la ficha de la cámara; estirar el cono solo alarga el rojo. Si dos cámaras se solapan, gana la mejor detección: verde sobre naranja, naranja sobre rojo. Arrastra el cono para girar; lados = apertura; anillo = alcance.',
+      'Cobertura automática por alcance (semáforo): verde, naranja y rojo. Verde y naranja son metros de ficha; estirar el cono solo alarga el rojo. En Dual (H9c) el gran angular y la PTZ tele usan el mismo semáforo. Si se solapan, gana verde sobre naranja y naranja sobre rojo.',
   },
   {
     id: 'wifi',

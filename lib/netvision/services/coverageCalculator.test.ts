@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import type { DesignCamera } from '../types'
+import { catalogVisionDefaults } from '../catalog/cameras'
 import {
   buildCoverageSectors,
   buildVisionSpectrum,
@@ -205,5 +206,35 @@ describe('buildCoverageSectors band polygons', () => {
     assert.ok((s.yellowPolygon?.length ?? 0) >= 3)
     assert.ok((s.greenRadiusNorm ?? 0) < (s.yellowRadiusNorm ?? 0))
     assert.ok((s.yellowRadiusNorm ?? 0) <= s.radiusNorm + 1e-9)
+  })
+
+  it('H9c Dual pinta semáforo en el gran angular y en la PTZ tele', () => {
+    const scale = { metersPerNormX: 40, metersPerNormY: 20, calibrated: true }
+    const sectors = buildCoverageSectors(
+      [
+        testCam({
+          id: 'h9',
+          x: 0.4,
+          yawDeg: 20,
+          modelId: 'ezviz-h9c',
+          ...catalogVisionDefaults('ezviz-h9c'),
+        }),
+      ],
+      scale,
+      'day',
+      [],
+    )
+    assert.equal(sectors.length, 2)
+    const wide = sectors.find((s) => s.lensId === 'wide')
+    const tele = sectors.find((s) => s.lensId === 'tele')
+    assert.ok(wide)
+    assert.ok(tele)
+    for (const s of [wide, tele]) {
+      assert.ok((s.polygon?.length ?? 0) >= 3)
+      assert.ok((s.greenPolygon?.length ?? 0) >= 3)
+      assert.ok((s.yellowPolygon?.length ?? 0) >= 3)
+      assert.ok((s.greenRadiusNorm ?? 0) > 0)
+      assert.ok((s.yellowRadiusNorm ?? 0) > (s.greenRadiusNorm ?? 0))
+    }
   })
 })

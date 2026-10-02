@@ -2876,7 +2876,6 @@ export default function NexusVisionArchitectClient() {
                     const lenses = effectiveCameraLenses(selectedCam, mode)
                     const isDual = lenses.length >= 2
                     const model = getCameraModelOrDefault(selectedCam.modelId)
-                    const bands = visionBandRangesM(vision.rangeM, vision.catalogRangeM)
                     const ground = projectGroundCoverage({
                       heightM: selectedCam.mountHeightM,
                       tiltDeg: selectedCam.tiltDeg ?? 0,
@@ -2965,8 +2964,38 @@ export default function NexusVisionArchitectClient() {
                         ) : null}
                         <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-cyan)]">
                           Espectro de visión · semáforo
-                          {isDual ? ' (gran angular)' : ''}
                         </p>
+                        {lenses.map((l) => {
+                          const lb = visionBandRangesM(l.rangeM, l.catalogRangeM)
+                          return (
+                            <p
+                              key={`bands-${l.lensId}`}
+                              className="rounded-lg border border-white/10 bg-black/25 px-2 py-1.5 text-[10px] leading-relaxed"
+                            >
+                              {isDual ? (
+                                <span className="font-semibold text-white/80">
+                                  {l.lensId === 'tele' ? 'PTZ tele' : l.label.split(' (')[0]}
+                                  {': '}
+                                </span>
+                              ) : null}
+                              <span className="text-emerald-300">
+                                Verde 0–
+                                {formatLength(lb.greenMaxM, project.unitSystem ?? 'metric')}
+                              </span>
+                              {' · '}
+                              <span className="text-orange-300">
+                                naranja{' '}
+                                {formatLength(lb.yellowMaxM, project.unitSystem ?? 'metric')}
+                              </span>
+                              {' · '}
+                              <span className="text-red-300">
+                                rojo hasta{' '}
+                                {formatLength(lb.redMaxM, project.unitSystem ?? 'metric')}
+                              </span>
+                              .
+                            </p>
+                          )
+                        })}
                         <p className="rounded-lg border border-white/10 bg-black/25 px-2 py-1.5 text-[10px] leading-relaxed">
                           Montaje {formatLength(selectedCam.mountHeightM, project.unitSystem ?? 'metric')} ·
                           inclinación {Math.round(selectedCam.tiltDeg ?? 0)}°
@@ -2974,23 +3003,7 @@ export default function NexusVisionArchitectClient() {
                             ? ` · en el piso ciega ${formatLength(ground.nearM, project.unitSystem ?? 'metric')} / llega ${formatLength(ground.farM, project.unitSystem ?? 'metric')}`
                             : ` · horizonte, llega ${formatLength(ground.farM, project.unitSystem ?? 'metric')}`}
                           . Ajústalo en la ficha de la cámara (arriba).
-                        </p>
-                        <p className="rounded-lg border border-white/10 bg-black/25 px-2 py-1.5 text-[10px] leading-relaxed">
-                          <span className="text-emerald-300">
-                            Verde 0–
-                            {formatLength(bands.greenMaxM, project.unitSystem ?? 'metric')}
-                          </span>
-                          {' · '}
-                          <span className="text-yellow-200">
-                            amarillo{' '}
-                            {formatLength(bands.yellowMaxM, project.unitSystem ?? 'metric')}
-                          </span>
-                          {' · '}
-                          <span className="text-red-300">
-                            rojo hasta{' '}
-                            {formatLength(bands.redMaxM, project.unitSystem ?? 'metric')}
-                          </span>
-                          . Verde y amarillo son metros de ficha: estirar el cono no los agranda.
+                          Verde y naranja son metros de ficha: estirar el cono no los agranda.
                           Si se solapan, prevalece verde sobre naranja y naranja sobre rojo.
                         </p>
                         <label className="block">
