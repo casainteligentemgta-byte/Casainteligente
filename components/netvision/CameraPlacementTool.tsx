@@ -35,7 +35,7 @@ import {
 import type { WifiCoverageCircle } from '@/lib/netvision/services/wifiPredictor'
 import type { AccessChamber, UndergroundRun } from '@/lib/netvision/services/canalizationCalculator'
 import { nearestSegmentOnRoute, MANUAL_CABLE_TO_ID } from '@/lib/netvision/services/cableRoutingEngine'
-import { invertRgbPixels } from '@/lib/netvision/utils/rotatePlano'
+import { applyNightPlanoPalette } from '@/lib/netvision/utils/nightPlanoPalette'
 import { shouldSmoothPlanoImage } from '@/lib/netvision/utils/renderPdfPlano'
 import {
   visionPatchFromPointer,
@@ -282,7 +282,7 @@ function invertLoadedImage(img: HTMLImageElement): HTMLImageElement | null {
   if (!ctx) return null
   ctx.drawImage(img, 0, 0)
   const imageData = ctx.getImageData(0, 0, w, h)
-  invertRgbPixels(imageData.data)
+  applyNightPlanoPalette(imageData.data, w, h)
   ctx.putImageData(imageData, 0, 0)
   const inverted = new window.Image()
   inverted.src = canvas.toDataURL('image/png')

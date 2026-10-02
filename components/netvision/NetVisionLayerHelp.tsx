@@ -75,7 +75,7 @@ export const NETVISION_LAYER_HELP: LayerHelpItem[] = [
     id: 'invert',
     label: 'Fondo negro',
     blurb:
-      'Invierte el plano: el papel blanco pasa a negro y las líneas negras a blancas. No modifica el archivo original y se puede desactivar.',
+      'Pasa el papel a negro. Muros y objetos gruesos quedan en blanco; cotas y números en neón (verde, naranja o amarillo). No modifica el archivo y se puede desactivar.',
   },
   {
     id: 'calibrate',
