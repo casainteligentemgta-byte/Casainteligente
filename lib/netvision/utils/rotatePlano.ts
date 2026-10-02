@@ -3,6 +3,7 @@
 import type { NetVisionProject } from '@/lib/netvision/types'
 import { clamp01 } from '@/lib/netvision/utils/geometryHelpers'
 import { encodePlanoCanvas } from '@/lib/netvision/utils/renderPdfPlano'
+import { applyNightPlanoPalette } from '@/lib/netvision/utils/nightPlanoPalette'
 
 export type PlanoRotateDir = 'cw' | 'ccw'
 
@@ -185,7 +186,7 @@ export function invertPlanoDataUrl(dataUrl: string): Promise<string> {
       }
       ctx.drawImage(img, 0, 0)
       const imageData = ctx.getImageData(0, 0, w, h)
-      invertRgbPixels(imageData.data)
+      applyNightPlanoPalette(imageData.data, w, h)
       ctx.putImageData(imageData, 0, 0)
       resolve(canvas.toDataURL('image/png'))
     }
