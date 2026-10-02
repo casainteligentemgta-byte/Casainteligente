@@ -92,7 +92,7 @@ function NexusShellInner({ children }: { children: React.ReactNode }) {
       setIsDesktop(desktop);
       if (!menuInicializadoRef.current) {
         menuInicializadoRef.current = true;
-        setMenuOpen(desktop);
+        setMenuOpen(desktop && !isNetVision);
         return;
       }
       if (!desktop) setMenuOpen(false);
@@ -100,7 +100,11 @@ function NexusShellInner({ children }: { children: React.ReactNode }) {
     apply();
     mq.addEventListener('change', apply);
     return () => mq.removeEventListener('change', apply);
-  }, []);
+  }, [isNetVision]);
+
+  useEffect(() => {
+    if (isNetVision) setMenuOpen(false);
+  }, [isNetVision]);
 
   useEffect(() => {
     if (isDesktop || !menuOpen) return;

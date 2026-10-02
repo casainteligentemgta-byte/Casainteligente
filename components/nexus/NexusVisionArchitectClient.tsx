@@ -239,7 +239,7 @@ export default function NexusVisionArchitectClient() {
   const [project, setProject] = useState<NetVisionProject>(() => emptyProject())
   const [hydrated, setHydrated] = useState(false)
   const [showFov, setShowFov] = useState(true)
-  const [showWifi, setShowWifi] = useState(true)
+  const [showWifi, setShowWifi] = useState(false)
   const [showSound, setShowSound] = useState(false)
   const [showLinks, setShowLinks] = useState(true)
   const [showCableRoutes, setShowCableRoutes] = useState(true)
@@ -888,12 +888,9 @@ export default function NexusVisionArchitectClient() {
         setShowFov(true)
         setViewMode('plano')
       } else if (id === 'sonido') {
-        setShowSound(true)
-        setShowFov(false)
         setViewMode('plano')
         setPlanFocusKind('speaker')
       } else if (id === 'internet') {
-        setShowWifi(true)
         setViewMode('plano')
       } else if (id === 'domotica') {
         setShowFov(true)
@@ -2306,8 +2303,8 @@ export default function NexusVisionArchitectClient() {
                     draftCursor={drawCable ? cableCursor : null}
                     draftColor={draftColor}
                     showFov={showActiveCoverage}
-                    showWifi={showWifi || sideTab === 'internet'}
-                    showSound={showSound || sideTab === 'sonido'}
+                    showWifi={showWifi && sideTab !== 'sonido' && sideTab !== 'domotica' && sideTab !== 'electrico'}
+                    showSound={showSound && sideTab === 'sonido'}
                     showLinks={showLinks}
                     showCableRoutes={showCableRoutes}
                     showUnderground={showUnderground || sideTab === 'sub'}
