@@ -3,8 +3,11 @@ import type {
   DesignCableSegment,
   DesignCamera,
   DesignNetworkNode,
+  DesignPlanDevice,
   DesignStructure,
   DesignUndergroundSegment,
+  PlanDeviceKind,
+  PlanDiscipline,
   NetVisionCurrency,
   NetVisionProject,
   NetVisionProjectIndexEntry,
@@ -24,6 +27,10 @@ import {
 } from '@/lib/netvision/utils/cameraMount'
 import { DEFAULT_STRUCTURE_MATERIAL_ID } from '@/lib/netvision/catalog/materials'
 import { defaultModelIdForKind } from '@/lib/netvision/catalog/network'
+import {
+  defaultPlanDeviceId,
+  getPlanDeviceModelOrDefault,
+} from '@/lib/netvision/catalog/planDevices'
 import {
   clampNetworkPlanSize,
   defaultNetworkPlanSize,
@@ -71,6 +78,7 @@ export function emptyProject(partial?: {
     planoInvertido: false,
     cameras: [],
     networkNodes: [],
+    planDevices: [],
     structures: [],
     undergroundSegments: [],
     cableSegments: [],
@@ -391,6 +399,9 @@ function normalizeProject(
     networkNodes: Array.isArray(p.networkNodes)
       ? p.networkNodes.map(normalizeNetworkNode)
       : [],
+    planDevices: Array.isArray(p.planDevices)
+      ? p.planDevices.map(normalizePlanDevice)
+      : [],
     structures: Array.isArray(p.structures)
       ? p.structures.map(normalizeStructure)
       : [],
@@ -474,6 +485,53 @@ function normalizeLensVision(raw: unknown): Pick<DesignCamera, 'lensVision'> | R
     if (Object.keys(lens).length) out[lensId] = lens
   }
   return Object.keys(out).length ? { lensVision: out } : {}
+}
+
+const PLAN_DISCIPLINES: PlanDiscipline[] = ['sonido', 'domotica', 'electrico']
+const PLAN_KINDS: PlanDeviceKind[] = [
+  'speaker',
+  'siren',
+  'mic',
+  'hub',
+  'sensor',
+  'relay',
+  'keypad',
+  'panel',
+  'outlet',
+  'light',
+  'transformer',
+]
+
+function normalizePlanDevice(d: Partial<DesignPlanDevice>): DesignPlanDevice {
+  const discipline = PLAN_DISCIPLINES.includes(d.discipline as PlanDiscipline)
+    ? (d.discipline as PlanDiscipline)
+    : 'sonido'
+  const kind = PLAN_KINDS.includes(d.kind as PlanDeviceKind)
+    ? (d.kind as PlanDeviceKind)
+    : getPlanDeviceModelOrDefault(d.modelId ?? '', discipline).kind
+  const looksPercent = (d.x ?? 0) > 1 || (d.y ?? 0) > 1
+  const model = getPlanDeviceModelOrDefault(d.modelId ?? '', discipline)
+  const rangeM =
+    typeof d.rangeM === 'number' && Number.isFinite(d.rangeM)
+      ? Math.min(40, Math.max(0.4, d.rangeM))
+      : undefined
+  const fovDeg =
+    typeof d.fovDeg === 'number' && Number.isFinite(d.fovDeg)
+      ? Math.min(360, Math.max(10, d.fovDeg))
+      : undefined
+  return {
+    id: d.id ?? `${Date.now()}`,
+    label: d.label ?? 'EQ-01',
+    x: looksPercent ? (d.x ?? 0) / 100 : (d.x ?? 0),
+    y: looksPercent ? (d.y ?? 0) / 100 : (d.y ?? 0),
+    discipline,
+    kind,
+    modelId: d.modelId ?? defaultPlanDeviceId(discipline),
+    yawDeg: typeof d.yawDeg === 'number' ? ((d.yawDeg % 360) + 360) % 360 : 0,
+    ...(rangeM != null ? { rangeM } : {}),
+    ...(fovDeg != null ? { fovDeg } : {}),
+    ...(model.id && !d.modelId ? { modelId: model.id } : {}),
+  }
 }
 
 function normalizeNetworkNode(

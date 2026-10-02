@@ -89,6 +89,54 @@ export function visionBandRangesM(
   }
 }
 
+/**
+ * Polígonos de cada banda del semáforo, recortados por muros.
+ * Se pintan apilados (rojo → amarillo → verde) para rellenar el cono
+ * aunque el plano no sea cuadrado (un Arc circular no cubre la elipse).
+ */
+export function coverageBandPolygons(opts: {
+  cx: number
+  cy: number
+  startAngleRad: number
+  endAngleRad: number
+  innerRadiusNorm: number
+  greenRadiusNorm: number
+  yellowRadiusNorm: number
+  structures: DesignStructure[]
+}): Pick<CoverageSector, 'greenPolygon' | 'yellowPolygon'> {
+  const inner = Math.max(0, opts.innerRadiusNorm)
+  const greenR = Math.max(0, opts.greenRadiusNorm)
+  const yellowR = Math.max(0, opts.yellowRadiusNorm)
+  const rays = 96
+  const greenPolygon =
+    greenR > inner + 1e-4
+      ? buildFovPolygon(
+          opts.cx,
+          opts.cy,
+          greenR,
+          opts.startAngleRad,
+          opts.endAngleRad,
+          opts.structures,
+          rays,
+          inner,
+        )
+      : undefined
+  const yellowPolygon =
+    yellowR > inner + 1e-4
+      ? buildFovPolygon(
+          opts.cx,
+          opts.cy,
+          yellowR,
+          opts.startAngleRad,
+          opts.endAngleRad,
+          opts.structures,
+          rays,
+          inner,
+        )
+      : undefined
+  return { greenPolygon, yellowPolygon }
+}
+
 function hasOpaqueWalls(structures: DesignStructure[]): boolean {
   return structures.some((s) => getStructureMaterialOrDefault(s.materialId).blocksVision)
 }
@@ -147,6 +195,16 @@ export function buildCoverageSectors(
         ground.innerRadiusNorm,
       )
       const bands = visionBandRangesM(ground.farM, lens.catalogRangeM)
+      const greenRadiusNorm = metersToNormRadius(
+        bands.greenMaxM,
+        scale.metersPerNormX,
+        scale.metersPerNormY,
+      )
+      const yellowRadiusNorm = metersToNormRadius(
+        bands.yellowMaxM,
+        scale.metersPerNormX,
+        scale.metersPerNormY,
+      )
       return {
         cameraId: cam.id,
         lensId: lens.lensId,
@@ -158,16 +216,18 @@ export function buildCoverageSectors(
         endAngleRad,
         mode,
         polygon,
-        greenRadiusNorm: metersToNormRadius(
-          bands.greenMaxM,
-          scale.metersPerNormX,
-          scale.metersPerNormY,
-        ),
-        yellowRadiusNorm: metersToNormRadius(
-          bands.yellowMaxM,
-          scale.metersPerNormX,
-          scale.metersPerNormY,
-        ),
+        greenRadiusNorm,
+        yellowRadiusNorm,
+        ...coverageBandPolygons({
+          cx: cam.x,
+          cy: cam.y,
+          startAngleRad,
+          endAngleRad,
+          innerRadiusNorm: ground.innerRadiusNorm,
+          greenRadiusNorm,
+          yellowRadiusNorm,
+          structures,
+        }),
       }
     })
   })

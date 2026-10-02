@@ -28,11 +28,18 @@ import type {
   DesignCableSegment,
   DesignCamera,
   DesignNetworkNode,
+  DesignPlanDevice,
   DesignStructure,
   NetworkNodeKind,
   StructureMaterialId,
   UnitSystem,
 } from '@/lib/netvision/types'
+import {
+  PLAN_DISCIPLINE_LABEL,
+  PLAN_KIND_LABEL,
+  getPlanDeviceModelOrDefault,
+  planDevicesByDiscipline,
+} from '@/lib/netvision/catalog/planDevices'
 import {
   DEFAULT_MOUNT_HEIGHT_M,
   HEIGHT_PRESETS_M,
@@ -69,12 +76,14 @@ const fieldClass =
 type Props = {
   camera: DesignCamera | null
   network: DesignNetworkNode | null
+  planDevice?: DesignPlanDevice | null
   structure: DesignStructure | null
   cable: DesignCableSegment | null
   nightMode?: boolean
   unitSystem?: UnitSystem
   onPatchCamera: (patch: Partial<DesignCamera>) => void
   onPatchNetwork: (patch: Partial<DesignNetworkNode>) => void
+  onPatchPlanDevice?: (patch: Partial<DesignPlanDevice>) => void
   onPatchStructure: (patch: Partial<DesignStructure>) => void
   onPatchCableType: (type: CableType) => void
   onRemove: (id: string) => void
@@ -87,16 +96,102 @@ type Props = {
 export default function NetVisionSelectedProps({
   camera,
   network,
+  planDevice = null,
   structure,
   cable,
   nightMode = false,
   unitSystem = 'metric',
   onPatchCamera,
   onPatchNetwork,
+  onPatchPlanDevice,
   onPatchStructure,
   onPatchCableType,
   onRemove,
 }: Props) {
+  if (planDevice && onPatchPlanDevice) {
+    const model = getPlanDeviceModelOrDefault(planDevice.modelId, planDevice.discipline)
+    const rangeM = planDevice.rangeM ?? model.rangeM
+    const fovDeg = planDevice.fovDeg ?? model.fovDeg
+    return (
+      <div className="space-y-2 rounded-lg border border-[rgba(0,242,254,0.28)] bg-[rgba(0,242,254,0.06)] p-2.5 text-xs">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-cyan)]">
+          Seleccionado · {PLAN_DISCIPLINE_LABEL[planDevice.discipline]} ·{' '}
+          {PLAN_KIND_LABEL[planDevice.kind]}
+        </p>
+        <label className="block">
+          <span className="text-[var(--nexus-text-dim)]">Etiqueta</span>
+          <input
+            value={planDevice.label}
+            onChange={(e) => onPatchPlanDevice({ label: e.target.value })}
+            className={fieldClass}
+          />
+        </label>
+        <label className="block">
+          <span className="text-[var(--nexus-text-dim)]">Modelo</span>
+          <select
+            value={planDevice.modelId}
+            onChange={(e) => {
+              const next = getPlanDeviceModelOrDefault(e.target.value, planDevice.discipline)
+              onPatchPlanDevice({
+                modelId: next.id,
+                kind: next.kind,
+                rangeM: undefined,
+                fovDeg: undefined,
+              })
+            }}
+            className={fieldClass}
+          >
+            {planDevicesByDiscipline(planDevice.discipline).map((m) => (
+              <option key={m.id} value={m.id}>
+                {PLAN_KIND_LABEL[m.kind]} · {m.brand} {m.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <span className="text-[var(--nexus-text-dim)]">
+            Alcance {formatLength(rangeM, unitSystem)}
+          </span>
+          <input
+            type="range"
+            min={0.5}
+            max={30}
+            step={0.5}
+            value={rangeM}
+            onChange={(e) => onPatchPlanDevice({ rangeM: Number(e.target.value) })}
+            className="mt-1 w-full"
+          />
+        </label>
+        {fovDeg < 359 ? (
+          <label className="block">
+            <span className="text-[var(--nexus-text-dim)]">Apertura {Math.round(fovDeg)}°</span>
+            <input
+              type="range"
+              min={20}
+              max={360}
+              step={5}
+              value={fovDeg}
+              onChange={(e) => onPatchPlanDevice({ fovDeg: Number(e.target.value) })}
+              className="mt-1 w-full"
+            />
+          </label>
+        ) : null}
+        <p className="text-[10px] text-[var(--nexus-text-dim)]">
+          {model.brand} · {model.name} · ficha {formatLength(model.rangeM, unitSystem)}
+        </p>
+        <Button
+          type="button"
+          variant="glass"
+          className="w-full"
+          onClick={() => onRemove(planDevice.id)}
+        >
+          <Trash2 className="mr-2 h-3.5 w-3.5" />
+          Quitar
+        </Button>
+      </div>
+    )
+  }
+
   if (camera) {
     return (
       <div className="space-y-2 rounded-lg border border-[rgba(0,242,254,0.28)] bg-[rgba(0,242,254,0.06)] p-2.5 text-xs">

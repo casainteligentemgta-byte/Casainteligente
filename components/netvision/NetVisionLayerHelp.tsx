@@ -27,7 +27,25 @@ export const NETVISION_LAYER_HELP: LayerHelpItem[] = [
     id: 'sound',
     label: 'Sonido',
     blurb:
-      'Espectro acústico estimado desde las cámaras (mic). Los muros reducen el alcance según el material.',
+      'Plano de sonido: coloca altavoces, sirenas y micrófonos, luego configúralos. El semáforo muestra alcance; los muros atenúan.',
+  },
+  {
+    id: 'internet',
+    label: 'Internet',
+    blurb:
+      'Plano de red / WiFi. Coloca AP, switch, NVR o inyector en el plano amplio; tócalos para el modelo. El semáforo del AP usa el alcance de ficha.',
+  },
+  {
+    id: 'domotica',
+    label: 'Domótica',
+    blurb:
+      'Hubs, sensores, relés y teclados. Primero ubícalos en el plano; después ajusta modelo y alcance en la ficha.',
+  },
+  {
+    id: 'electrico',
+    label: 'Eléctrico',
+    blurb:
+      'Tableros, tomas, luminarias y transformadores. Mismo flujo: colocar en el plano amplio y configurar cada uno.',
   },
   {
     id: 'links',

@@ -78,6 +78,8 @@ function NexusShellHeader({
 
 function NexusShellInner({ children }: { children: React.ReactNode }) {
   /** Menú de módulos: cerrado en móvil; abierto en desktop por defecto. */
+  const pathname = usePathname();
+  const isNetVision = pathname === '/nexus/vision' || pathname.startsWith('/nexus/vision/');
   const [menuOpen, setMenuOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
   const menuInicializadoRef = React.useRef(false);
@@ -90,7 +92,7 @@ function NexusShellInner({ children }: { children: React.ReactNode }) {
       setIsDesktop(desktop);
       if (!menuInicializadoRef.current) {
         menuInicializadoRef.current = true;
-        setMenuOpen(desktop);
+        setMenuOpen(desktop && !isNetVision);
         return;
       }
       if (!desktop) setMenuOpen(false);
@@ -98,7 +100,11 @@ function NexusShellInner({ children }: { children: React.ReactNode }) {
     apply();
     mq.addEventListener('change', apply);
     return () => mq.removeEventListener('change', apply);
-  }, []);
+  }, [isNetVision]);
+
+  useEffect(() => {
+    if (isNetVision) setMenuOpen(false);
+  }, [isNetVision]);
 
   useEffect(() => {
     if (isDesktop || !menuOpen) return;
@@ -113,7 +119,9 @@ function NexusShellInner({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen bg-[var(--nexus-bg-base)] text-white">
       <div className="flex min-w-0 flex-1 flex-col">
         <NexusShellHeader menuOpen={menuOpen} setMenuOpen={setMenuOpen} />
-        <main className="flex-1 p-4 lg:p-8">{children}</main>
+        <main className={cn('flex-1', isNetVision ? 'p-2 lg:p-3' : 'p-4 lg:p-8')}>
+          {children}
+        </main>
       </div>
 
       {/* Desktop: sidebar a la derecha */}
