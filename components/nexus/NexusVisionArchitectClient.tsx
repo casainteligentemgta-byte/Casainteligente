@@ -294,6 +294,7 @@ export default function NexusVisionArchitectClient() {
   const [ugTerrain, setUgTerrain] = useState<TerrainType>('medium')
   const [ugChamberMat, setUgChamberMat] = useState<ChamberMaterial>('polietileno')
   const [nightMode, setNightMode] = useState(false)
+  const [lookPanelOpen, setLookPanelOpen] = useState(true)
   const [loading, setLoading] = useState(false)
   const [exportingPdf, setExportingPdf] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -2768,27 +2769,53 @@ export default function NexusVisionArchitectClient() {
                     onZoomChange={(z) => setZoomPercent(Math.round(z * 100))}
                   />
                   <div className="pointer-events-none absolute left-3 top-3 z-20 w-[min(16.75rem,calc(100%-1.5rem))]">
-                    <div className="pointer-events-auto rounded-xl border border-white/20 bg-[#071018]/92 p-2.5 shadow-xl backdrop-blur-md">
-                      <p className="mb-1.5 px-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-text-dim)]">
-                        Apariencia del plano
-                      </p>
-                      <NetVisionPlanoLookControls
-                        compact
-                        invertido={Boolean(project.planoInvertido)}
-                        cotaColor={normalizeCotaColor(project.planoCotaColor)}
-                        grosorMuro={clampGrosorMuro(project.planoGrosorMuro)}
-                        disabled={loading}
-                        onInvertido={(value) =>
-                          setProject((p) => ({ ...p, planoInvertido: value }))
-                        }
-                        onCotaColor={(value) =>
-                          setProject((p) => ({ ...p, planoCotaColor: value }))
-                        }
-                        onGrosorMuro={(value) =>
-                          setProject((p) => ({ ...p, planoGrosorMuro: value }))
-                        }
-                      />
-                    </div>
+                    {lookPanelOpen ? (
+                      <div className="pointer-events-auto rounded-xl border border-white/20 bg-[#071018]/92 p-2.5 shadow-xl backdrop-blur-md">
+                        <div className="mb-1.5 flex items-center justify-between gap-2">
+                          <p className="px-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-text-dim)]">
+                            Apariencia del plano
+                          </p>
+                          <button
+                            type="button"
+                            title="Ocultar apariencia"
+                            aria-label="Ocultar apariencia"
+                            onClick={() => setLookPanelOpen(false)}
+                            className="rounded-md px-1.5 py-0.5 text-[11px] text-[var(--nexus-text-muted)] hover:bg-white/10 hover:text-white"
+                          >
+                            −
+                          </button>
+                        </div>
+                        <NetVisionPlanoLookControls
+                          compact
+                          invertido={Boolean(project.planoInvertido)}
+                          cotaColor={normalizeCotaColor(project.planoCotaColor)}
+                          grosorMuro={clampGrosorMuro(project.planoGrosorMuro)}
+                          disabled={loading}
+                          onInvertido={(value) =>
+                            setProject((p) => ({ ...p, planoInvertido: value }))
+                          }
+                          onCotaColor={(value) =>
+                            setProject((p) => ({ ...p, planoCotaColor: value }))
+                          }
+                          onGrosorMuro={(value) =>
+                            setProject((p) => ({ ...p, planoGrosorMuro: value }))
+                          }
+                        />
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        title={layerHelpTitle('invert')}
+                        onClick={() => setLookPanelOpen(true)}
+                        className={`pointer-events-auto min-h-9 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold shadow-lg backdrop-blur-md ${
+                          project.planoInvertido
+                            ? 'border-white/70 bg-white text-black'
+                            : 'border-white/20 bg-[#071018]/92 text-[var(--nexus-cyan)]'
+                        }`}
+                      >
+                        Apariencia
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
