@@ -9,10 +9,12 @@ import {
   BookOpen,
   Camera,
   ChevronDown,
+  Copy,
   Download,
   FilePlus,
   RotateCcw,
   RotateCw,
+  Save,
   Trash2,
   Undo2,
   Upload,
@@ -134,6 +136,7 @@ import {
 } from '@/lib/netvision/services/complianceValidator'
 import { cloudUpsertProject } from '@/lib/netvision/cloud'
 import {
+  duplicateProject,
   emptyProject,
   loadProject,
   resetActiveDesign,
@@ -233,6 +236,8 @@ export default function NexusVisionArchitectClient() {
   const [project, setProject] = useState<NetVisionProject>(() => emptyProject())
   const [hydrated, setHydrated] = useState(false)
   const [showFov, setShowFov] = useState(true)
+  /** Opacidad del semáforo (translúcido por defecto para ver el plano). */
+  const [visionOpacity, setVisionOpacity] = useState(0.36)
   const [showWifi, setShowWifi] = useState(false)
   const [showSound, setShowSound] = useState(false)
   const [showLinks, setShowLinks] = useState(true)
@@ -1579,6 +1584,63 @@ export default function NexusVisionArchitectClient() {
     setCalibCursor(null)
   }
 
+  const persistProjectNow = useCallback(async () => {
+    const saved = saveProject(project)
+    setProject(saved)
+    const r = await cloudUpsertProject(saved)
+    const cam = saved.cameras.length
+    const red = saved.networkNodes.length
+    const eq = (saved.planDevices ?? []).length
+    const parts = [
+      cam ? `${cam} cam` : null,
+      red ? `${red} red` : null,
+      eq ? `${eq} equipos` : null,
+    ].filter(Boolean)
+    const summary = parts.length ? parts.join(' · ') : 'diseño vacío'
+    if (r.ok && r.authenticated) {
+      setInfo(`Proyecto guardado («${saved.name}»: ${summary}) · nube OK`)
+    } else if (r.authenticated === false) {
+      setInfo(`Proyecto guardado en este navegador («${saved.name}»: ${summary})`)
+    } else {
+      setInfo(`Proyecto guardado localmente («${saved.name}»: ${summary})`)
+    }
+    setError(null)
+  }, [project])
+
+  const saveProjectAsCopy = useCallback(() => {
+    const suggested = `${project.name.trim() || 'Proyecto'} (copia)`
+    const name = window.prompt('Nombre del nuevo proyecto', suggested)
+    if (name == null) return
+    const copy = duplicateProject(project, name)
+    switchToProject(copy)
+    setInfo(`Copia guardada como «${copy.name}»`)
+  }, [project])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 's') return
+      const t = e.target as HTMLElement | null
+      if (
+        t &&
+        (t.tagName === 'INPUT' ||
+          t.tagName === 'TEXTAREA' ||
+          t.tagName === 'SELECT' ||
+          t.isContentEditable)
+      ) {
+        // En inputs de nombre también queremos guardar con Ctrl+S
+        if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA') {
+          e.preventDefault()
+          void persistProjectNow()
+        }
+        return
+      }
+      e.preventDefault()
+      void persistProjectNow()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [persistProjectNow])
+
   const exportPng = () => {
     const stage = stageRef.current
     if (!stage) return
@@ -1967,6 +2029,28 @@ export default function NexusVisionArchitectClient() {
         variant="glass"
         size="sm"
         className="w-full justify-start"
+        onClick={() => void persistProjectNow()}
+        title="Guardar CCTV, red, domótica y resto del diseño (Ctrl+S)"
+      >
+        <Save className="mr-1.5 h-3.5 w-3.5" />
+        Guardar proyecto
+      </Button>
+      <Button
+        type="button"
+        variant="glass"
+        size="sm"
+        className="w-full justify-start"
+        onClick={saveProjectAsCopy}
+        title="Duplicar el proyecto con otro nombre"
+      >
+        <Copy className="mr-1.5 h-3.5 w-3.5" />
+        Guardar como…
+      </Button>
+      <Button
+        type="button"
+        variant="glass"
+        size="sm"
+        className="w-full justify-start"
         onClick={openPlanoPicker}
         disabled={loading}
         title="PDF (exportado de CAD) o imagen JPG/PNG"
@@ -2108,6 +2192,26 @@ export default function NexusVisionArchitectClient() {
                 />
                 Visión
               </label>
+              {showFov ? (
+                <label
+                  className="inline-flex min-w-[9rem] flex-1 cursor-pointer items-center gap-1.5 text-[10px] text-[var(--nexus-text-muted)]"
+                  title="Translucidez del semáforo sobre el plano"
+                >
+                  <span className="shrink-0">Opacidad</span>
+                  <input
+                    type="range"
+                    min={15}
+                    max={80}
+                    step={1}
+                    value={Math.round(visionOpacity * 100)}
+                    onChange={(e) => setVisionOpacity(Number(e.target.value) / 100)}
+                    className="h-1.5 w-full accent-[var(--nexus-cyan)]"
+                  />
+                  <span className="w-8 tabular-nums text-[var(--nexus-cyan)]">
+                    {Math.round(visionOpacity * 100)}%
+                  </span>
+                </label>
+              ) : null}
               <label
                 title={layerHelpTitle('wifi')}
                 className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
@@ -2472,6 +2576,7 @@ export default function NexusVisionArchitectClient() {
                     draftColor={draftColor}
                     draftLabel={draftLabel}
                     showFov={showActiveCoverage}
+                    visionOpacity={visionOpacity}
                     showWifi={showWifi && sideTab !== 'sonido' && sideTab !== 'domotica' && sideTab !== 'electrico'}
                     showSound={showSound && sideTab === 'sonido'}
                     showLinks={showLinks}
