@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { ChevronLeft, ChevronRight, Loader2, MapPin, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
+import FichaActivoModal from '@/components/configuracion/FichaActivoModal';
 import FotosCostadosActivo, {
   type FotoCostadoLocal,
 } from '@/components/configuracion/FotosCostadosActivo';
@@ -30,6 +31,7 @@ import {
   type CategoriaEquipoProyecto,
   type ProyectoEquipoRow,
 } from '@/lib/proyectos/proyectoEquipos';
+import type { FichaActivoDatos } from '@/lib/proyectos/fichaActivoPrint';
 import { createClient } from '@/lib/supabase/client';
 import type { UbicacionInventario } from '@/types/inventario-obra';
 
@@ -48,6 +50,43 @@ type Props = {
   icon: ComponentType<{ className?: string }>;
   accentClass?: string;
 };
+
+function fotosFicha(e: ProyectoEquipoRow): { label: string; url: string }[] {
+  return COSTADOS_ACTIVO.map((lado) => {
+    const url = e.fotos_costados?.[lado]?.url?.trim();
+    if (!url) return null;
+    return { url, label: ETIQUETA_COSTADO[lado] };
+  }).filter(Boolean) as { label: string; url: string }[];
+}
+
+function datosFichaActivo(
+  e: ProyectoEquipoRow,
+  entidadNombre: string | undefined,
+  ubicaciones: UbicacionInventario[],
+): FichaActivoDatos {
+  const ub =
+    e.ubicacion?.nombre?.trim() ||
+    (e.ubicacion_id ? ubicaciones.find((u) => u.id === e.ubicacion_id) : null);
+  const ubicacionLabel =
+    typeof ub === 'string'
+      ? ub
+      : ub
+        ? labelUbicacionOpcion(ub)
+        : 'Sin ubicación';
+  return {
+    categoria: e.categoria,
+    entidadNombre: entidadNombre ?? null,
+    nombre: e.nombre_equipo,
+    marca: e.marca,
+    modelo: e.modelo,
+    serial: e.serial,
+    cantidad: e.cantidad,
+    ubicacion: ubicacionLabel,
+    fechaAsignacion: e.fecha_asignacion,
+    notas: e.notas,
+    fotos: fotosFicha(e),
+  };
+}
 
 function migrationHint(msg: string): string {
   const m = msg.toLowerCase();
@@ -94,6 +133,7 @@ export default function ActivoCatalogoEntidadPanel({
     items: { url: string; label: string }[];
     index: number;
   } | null>(null);
+  const [ficha, setFicha] = useState<ProyectoEquipoRow | null>(null);
   const lastTapRef = useRef<{ key: string; at: number } | null>(null);
 
   const abrirVisor = useCallback(
@@ -439,18 +479,19 @@ export default function ActivoCatalogoEntidadPanel({
       ) : (
         <ul className="space-y-2">
           {filas.map((e) => {
-            const fotoItems = COSTADOS_ACTIVO.map((lado) => {
-              const url = e.fotos_costados?.[lado]?.url?.trim();
-              if (!url) return null;
-              return { url, label: ETIQUETA_COSTADO[lado] };
-            }).filter(Boolean) as { url: string; label: string }[];
+            const fotoItems = fotosFicha(e);
             return (
               <li
                 key={e.id}
                 className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm"
               >
                 <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div className="min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => setFicha(e)}
+                    className="min-w-0 flex-1 rounded-lg text-left transition hover:bg-white/[0.04] focus:outline-none focus:ring-1 focus:ring-emerald-500/40"
+                    aria-label={`Abrir ficha de ${e.nombre_equipo}`}
+                  >
                     <p className="font-semibold text-white">{e.nombre_equipo}</p>
                     <p className="text-xs text-zinc-500">
                       {[e.marca, e.modelo, e.serial ? `Serial: ${e.serial}` : null, `Cant: ${e.cantidad}`]
@@ -463,7 +504,10 @@ export default function ActivoCatalogoEntidadPanel({
                       </p>
                     ) : null}
                     {e.notas ? <p className="mt-0.5 text-xs text-zinc-500">{e.notas}</p> : null}
-                  </div>
+                    <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-400/80">
+                      Ver ficha · enviar e imprimir
+                    </p>
+                  </button>
                   <button
                     type="button"
                     onClick={() => void borrar(e.id)}
@@ -546,6 +590,13 @@ export default function ActivoCatalogoEntidadPanel({
           })}
         </ul>
       )}
+
+      {ficha ? (
+        <FichaActivoModal
+          datos={datosFichaActivo(ficha, entidadNombre, ubicaciones)}
+          onClose={() => setFicha(null)}
+        />
+      ) : null}
 
       {visor ? (
         <div
