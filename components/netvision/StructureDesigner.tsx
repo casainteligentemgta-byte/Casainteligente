@@ -51,9 +51,9 @@ export default function StructureDesigner({
         </h2>
         <p className="text-[11px] text-[var(--nexus-text-dim)]">
           Toca puntos en el plano: cada tramo se ajusta a 90° (H/V) y puedes seguir desde la
-          esquina. Pulsa «Terminar» al cerrar el muro. Arrastra el segmento o los extremos para
-          mover. En un PDF vectorial (CAD) se detectan muros, puertas y ventanas;
-          puedes corregir o dibujar a mano.
+          esquina. Verás la guía antes de confirmar. Pulsa «Terminar» o Enter al cerrar el
+          muro. Arrastra el segmento o los extremos para mover. En un PDF vectorial (CAD) se
+          detectan muros, puertas y ventanas; puedes corregir o dibujar a mano.
         </p>
       </div>
 

@@ -409,6 +409,8 @@ export default function CameraPlacementTool({
   const viewRef = useRef({ zoom: 1, stagePos: { x: 0, y: 0 } })
   const pinchRef = useRef<PinchState | null>(null)
   const suppressTapUntilRef = useRef(0)
+  /** Konva dispara onClick y onTap en el mismo toque (tablet); no colocar dos veces. */
+  const lastPlaceAtRef = useRef(0)
 
   viewRef.current = { zoom, stagePos }
 
@@ -601,6 +603,9 @@ export default function CameraPlacementTool({
       setVisionHandlesOpen(false)
       return
     }
+    const now = Date.now()
+    if (now - lastPlaceAtRef.current < 280) return
+    lastPlaceAtRef.current = now
     const stage = e.target.getStage()
     if (!stage) return
     const pos = stage.getRelativePointerPosition()
@@ -692,7 +697,7 @@ export default function CameraPlacementTool({
         x={stagePos.x}
         y={stagePos.y}
         draggable={canPan}
-        dragDistance={6}
+        dragDistance={placeMode ? 16 : 6}
         onDragEnd={(e) => {
           if (e.target !== e.target.getStage()) return
           const next = { x: e.target.x(), y: e.target.y() }
@@ -999,10 +1004,11 @@ export default function CameraPlacementTool({
                   points={[x1, y1, x2, y2]}
                   stroke={mat.color}
                   strokeWidth={selected ? 2.5 : 1.25}
-                  hitStrokeWidth={16}
+                  hitStrokeWidth={placeMode ? 0 : 16}
                   dash={mat.dash ?? undefined}
                   lineCap="round"
                   opacity={selected ? 1 : 0.9}
+                  listening={!placeMode}
                   draggable={canDrag}
                   onClick={(e) => {
                     e.cancelBubble = true
@@ -1422,7 +1428,8 @@ export default function CameraPlacementTool({
                 shadowColor="black"
                 shadowBlur={3}
                 shadowOpacity={0.3}
-                draggable={!snapPlaceToDevices}
+                listening={!placeMode || snapPlaceToDevices}
+                draggable={!placeMode}
                 onClick={(e) => {
                   e.cancelBubble = true
                   if (snapPlaceToDevices && placeMode) {
@@ -1712,7 +1719,8 @@ export default function CameraPlacementTool({
                   shadowBlur={selected ? 6 : 4}
                   shadowOpacity={0.28}
                   hitStrokeWidth={Math.max(10, 14 - size)}
-                  draggable={!snapPlaceToDevices}
+                  listening={!placeMode || snapPlaceToDevices}
+                  draggable={!placeMode}
                   onClick={(e) => {
                     e.cancelBubble = true
                     if (snapPlaceToDevices && placeMode) {
@@ -1743,7 +1751,7 @@ export default function CameraPlacementTool({
                     resumeStageDrag(e.target.getStage())
                   }}
                 />
-                {selected && onNetworkSizeChange && !snapPlaceToDevices ? (
+                {selected && onNetworkSizeChange && !placeMode ? (
                   <Circle
                     x={cx + size}
                     y={cy + size}
@@ -1832,7 +1840,8 @@ export default function CameraPlacementTool({
                 shadowColor="black"
                 shadowBlur={3}
                 shadowOpacity={0.3}
-                draggable={!snapPlaceToDevices}
+                listening={!placeMode || snapPlaceToDevices}
+                draggable={!placeMode}
                 onClick={(e) => {
                   e.cancelBubble = true
                   if (snapPlaceToDevices && placeMode) {
