@@ -215,6 +215,9 @@ export type NetVisionProjectIndexEntry = {
   planoNombre: string
   cameraCount: number
   networkCount: number
+  /** Domótica / sonido / eléctrico y otros del plano. */
+  planDeviceCount: number
+  structureCount: number
 }
 
 export type NetVisionProject = {
