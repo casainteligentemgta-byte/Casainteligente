@@ -6,7 +6,7 @@ import {
   registrarMantenimiento,
 } from '@/lib/flota/mantenimiento';
 import { listarVehiculos, requireAccesoFlota, respuestaMigracionPendiente } from '@/lib/flota/acceso';
-import { esUuid, parseFechaIso, parseNumero } from '@/lib/flota/utils';
+import { entidadIdDesdeSearch, esUuid, filtrarPorUnidadesEntidad, parseFechaIso, parseNumero } from '@/lib/flota/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +15,7 @@ export async function GET(req: Request) {
   if (!auth.ok) return auth.response;
 
   const url = new URL(req.url);
+  const entidadId = entidadIdDesdeSearch(url.searchParams);
   const maquinariaId = url.searchParams.get('maquinaria_id')?.trim() || undefined;
   const vehiculoId = url.searchParams.get('vehiculo_id')?.trim() || undefined;
   const tipo = url.searchParams.get('tipo')?.trim() || undefined;
@@ -23,7 +24,7 @@ export async function GET(req: Request) {
     if (maquinariaId && esUuid(maquinariaId) && !tipo) {
       const [registros, vehiculos] = await Promise.all([
         obtenerMantenimientoPorMaquinaria(maquinariaId),
-        listarVehiculos(auth.supabase, { activo: true }),
+        listarVehiculos(auth.supabase, { activo: true, entidadId }),
       ]);
       return NextResponse.json({
         ok: true,
@@ -34,14 +35,15 @@ export async function GET(req: Request) {
 
     const [mant, vehiculos] = await Promise.all([
       listarMantenimientos(auth.supabase, { vehiculoId: vehiculoId ?? maquinariaId, tipo }),
-      listarVehiculos(auth.supabase, { activo: true }),
+      listarVehiculos(auth.supabase, { activo: true, entidadId }),
     ]);
     if (mant.migracionPendiente) {
       return respuestaMigracionPendiente({ registros: [], vehiculos: [] });
     }
+    const ids = new Set(vehiculos.items.map((v) => v.id));
     return NextResponse.json({
       ok: true,
-      registros: mant.items,
+      registros: filtrarPorUnidadesEntidad(mant.items, ids, entidadId),
       vehiculos: vehiculos.items,
     });
   } catch (e) {

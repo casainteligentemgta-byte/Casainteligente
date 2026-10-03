@@ -12,9 +12,11 @@ import { formatApiErrorBody } from '@/lib/utils/formatErrorMessage';
 import type { FlotaConductor } from '@/lib/flota/conductores';
 import type { AnalisisConsumo as Analisis, FlotaGasolina } from '@/lib/flota/gasolina';
 import { formatoFechaVe, formatoMonedaUsd, type FlotaVehiculo } from '@/lib/flota/utils';
+import { useFlotaNav } from '@/components/flota/FlotaNav';
 
 export default function FlotaGasolinaPage() {
   const router = useRouter();
+  const { api, loginNext, embedded } = useFlotaNav();
   const [registros, setRegistros] = useState<FlotaGasolina[]>([]);
   const [analisis, setAnalisis] = useState<Analisis | null>(null);
   const [vehiculos, setVehiculos] = useState<FlotaVehiculo[]>([]);
@@ -24,9 +26,13 @@ export default function FlotaGasolinaPage() {
   const [hint, setHint] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const res = await fetch(apiUrl('/api/flota/gasolina'), { credentials: 'include' });
+    const res = await fetch(apiUrl(api('/api/flota/gasolina')), { credentials: 'include' });
     if (res.status === 401) {
-      router.push('/login?next=/flota/gasolina');
+      if (embedded) {
+        setError('Debe iniciar sesión para gestionar la flota.');
+        return;
+      }
+      router.push(`/login?next=${encodeURIComponent(loginNext)}`);
       return;
     }
     const json = await parseFetchJson<{
@@ -43,7 +49,7 @@ export default function FlotaGasolinaPage() {
     setVehiculos(json.vehiculos ?? []);
     setConductores(json.conductores ?? []);
     setHint(json.hint ?? null);
-  }, [router]);
+  }, [router, api, loginNext, embedded]);
 
   useEffect(() => {
     void load().catch((e) => setError(e instanceof Error ? e.message : 'Error'));
@@ -53,7 +59,7 @@ export default function FlotaGasolinaPage() {
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch(apiUrl('/api/flota/gasolina'), {
+      const res = await fetch(apiUrl(api('/api/flota/gasolina')), {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },

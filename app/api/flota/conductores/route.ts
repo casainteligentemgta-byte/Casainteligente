@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { crearConductor, listarConductores, obtenerConductores } from '@/lib/flota/conductores';
+import { crearConductor, listarConductores } from '@/lib/flota/conductores';
 import { jsonErrorFlota } from '@/lib/flota/error';
 import {
   crearVehiculo,
@@ -7,6 +7,7 @@ import {
   requireAccesoFlota,
   respuestaMigracionPendiente,
 } from '@/lib/flota/acceso';
+import { entidadIdDesdeSearch } from '@/lib/flota/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,19 +17,14 @@ export async function GET(request: NextRequest) {
     if (!auth.ok) return auth.response;
 
     const { searchParams } = new URL(request.url);
-    const entidad_id = searchParams.get('entidad_id');
+    const entidadId = entidadIdDesdeSearch(searchParams);
     const q = searchParams.get('q')?.trim() || undefined;
     const activoRaw = searchParams.get('activo');
     const activo = activoRaw == null ? undefined : activoRaw !== '0' && activoRaw !== 'false';
 
-    if (entidad_id) {
-      const data = await obtenerConductores(entidad_id, auth.supabase);
-      return NextResponse.json(data);
-    }
-
     const [conductores, vehiculos] = await Promise.all([
-      listarConductores(auth.supabase, { q, activo }),
-      listarVehiculos(auth.supabase),
+      listarConductores(auth.supabase, { q, activo, entidadId }),
+      listarVehiculos(auth.supabase, { entidadId }),
     ]);
     if (conductores.migracionPendiente || vehiculos.migracionPendiente) {
       return respuestaMigracionPendiente({ conductores: [], vehiculos: [] });
