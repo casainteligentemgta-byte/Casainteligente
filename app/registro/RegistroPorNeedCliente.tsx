@@ -22,6 +22,7 @@ import { uploadTalentoPublicFile } from '@/lib/registro/uploadTalentoPublic';
 import { apiUrl } from '@/lib/http/apiUrl';
 import { createClient } from '@/lib/supabase/client';
 import { createClientConInvitacion } from '@/lib/supabase/clientInvitacion';
+import { CARGOS_OBREROS, cargoPorCodigo, tipoVacantePorNivel } from '@/lib/constants/cargosObreros';
 
 import type { FirmaDigitalGuardado } from './components/FirmaDigital';
 
@@ -100,10 +101,22 @@ export default function RegistroPorNeedCliente({
   const [firma, setFirma] = useState<FirmaDigitalGuardado | null>(null);
   const [enviando, setEnviando] = useState(false);
 
+  /**
+   * Enlace abierto por obra: la vacante no trae oficio fijo y el trabajador declara el suyo.
+   * RRHH lo confirma o corrige antes de generar el contrato.
+   */
+  const [oficioCodigo, setOficioCodigo] = useState('');
+  const sinOficioFijo = Boolean(need) && !(need?.cargo_codigo ?? '').trim();
+  const oficioElegido = useMemo(
+    () => (sinOficioFijo && oficioCodigo ? (cargoPorCodigo(oficioCodigo) ?? null) : null),
+    [sinOficioFijo, oficioCodigo],
+  );
+
   const cargoEtiqueta = useMemo(() => {
+    if (oficioElegido) return oficioElegido.nombre;
     const n = (need?.cargo_nombre ?? '').trim() || (need?.title ?? '').trim();
     return n || 'Vacante';
-  }, [need]);
+  }, [need, oficioElegido]);
 
   useEffect(() => {
     if (!needId && !captacionToken) {
@@ -194,6 +207,7 @@ export default function RegistroPorNeedCliente({
 
   function validarPaso(i: number): string | null {
     if (i === 0) {
+      if (sinOficioFijo && !oficioElegido) return 'Elige tu oficio.';
       if (!form.primerNombre.trim()) return 'Indica al menos el primer nombre.';
       if (!form.primerApellido.trim()) return 'Indica al menos el primer apellido.';
       if (!form.cedula.trim()) return 'Indica la cédula.';
@@ -380,10 +394,10 @@ export default function RegistroPorNeedCliente({
       const insertPayload: Record<string, unknown> = {
         recruitment_need_id: needRowId,
         proyecto_modulo_id: need.proyecto_modulo_id,
-        cargo_codigo: need.cargo_codigo,
-        cargo_nombre: need.cargo_nombre,
-        cargo_nivel: need.cargo_nivel,
-        tipo_vacante: need.tipo_vacante,
+        cargo_codigo: oficioElegido ? oficioElegido.codigo : need.cargo_codigo,
+        cargo_nombre: oficioElegido ? oficioElegido.nombre : need.cargo_nombre,
+        cargo_nivel: oficioElegido ? oficioElegido.nivel : need.cargo_nivel,
+        tipo_vacante: oficioElegido ? tipoVacantePorNivel(oficioElegido.nivel) : need.tipo_vacante,
         nombre_completo: nombreCompleto || 'Postulante',
         nombres: nombresLegado,
         cargo: cargoEtiqueta,
@@ -571,14 +585,16 @@ export default function RegistroPorNeedCliente({
       <div className="mx-auto max-w-lg px-4">
         <header className="rounded-2xl border border-[#FF9500]/25 bg-gradient-to-br from-[#FF9500]/10 to-transparent p-5 shadow-lg shadow-black/40">
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#FFD60A]/90">Casa Inteligente · Hoja de vida</p>
-          <h1 className="mt-2 text-xl font-bold leading-snug text-white">Postulación para: {cargoEtiqueta}</h1>
+          <h1 className="mt-2 text-xl font-bold leading-snug text-white">
+            {sinOficioFijo ? 'Registro de personal de obra' : `Postulación para: ${cargoEtiqueta}`}
+          </h1>
           <p className="mt-2 text-xs leading-relaxed text-zinc-400">
             Completa tu hoja de vida una sola vez. Al contratarte, los mismos datos alimentan la hoja de empleo; RRHH solo
             rellena patrono, obra y lo que falte.
           </p>
           {proyectoNombre ? (
             <p className="mt-2 text-sm text-zinc-300">
-              Proyecto: <span className="font-semibold text-white">{proyectoNombre}</span>
+              {sinOficioFijo ? 'Obra' : 'Proyecto'}: <span className="font-semibold text-white">{proyectoNombre}</span>
             </p>
           ) : (
             <p className="mt-2 text-xs text-zinc-500">Proyecto no vinculado o sin nombre en sistema.</p>
@@ -606,6 +622,30 @@ export default function RegistroPorNeedCliente({
           {step === 0 && (
             <div className="space-y-4">
               <h2 className="text-sm font-bold text-white">1. Trabajador — datos personales</h2>
+              {sinOficioFijo ? (
+                <div>
+                  <label className={labelClass}>Tu oficio *</label>
+                  <select
+                    className={inputClass}
+                    value={oficioCodigo}
+                    onChange={(e) => setOficioCodigo(e.target.value)}
+                  >
+                    <option value="" className="bg-zinc-900 text-white">Elige tu oficio…</option>
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((nivel) => (
+                      <optgroup key={nivel} label={`Nivel ${nivel}`} className="bg-zinc-900 text-zinc-300">
+                        {CARGOS_OBREROS.filter((c) => c.nivel === nivel).map((c) => (
+                          <option key={c.codigo} value={c.codigo} className="bg-zinc-900 text-white">
+                            {c.codigo.replace('.', ',')} · {c.nombre}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
+                    Elige el oficio para el que te llamaron. La empresa lo confirma antes de hacer tu contrato.
+                  </p>
+                </div>
+              ) : null}
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <label className={labelClass}>Primer nombre *</label>
