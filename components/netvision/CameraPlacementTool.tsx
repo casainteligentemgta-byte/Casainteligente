@@ -286,6 +286,9 @@ function useContainerSize(ref: React.RefObject<HTMLDivElement | null>) {
   return size
 }
 
+/** Tope para no tumbar iPad al invertir un CAD de 3000+ px. */
+const INVERT_MAX_EDGE = 2048
+
 function invertLoadedImage(
   img: HTMLImageElement,
   options?: NightPlanoOptions,
@@ -293,17 +296,21 @@ function invertLoadedImage(
   const w = img.naturalWidth || img.width
   const h = img.naturalHeight || img.height
   if (w < 1 || h < 1) return null
+  const scale = Math.min(1, INVERT_MAX_EDGE / Math.max(w, h))
+  const cw = Math.max(1, Math.round(w * scale))
+  const ch = Math.max(1, Math.round(h * scale))
   const canvas = document.createElement('canvas')
-  canvas.width = w
-  canvas.height = h
+  canvas.width = cw
+  canvas.height = ch
   const ctx = canvas.getContext('2d')
   if (!ctx) return null
-  ctx.drawImage(img, 0, 0)
-  const imageData = ctx.getImageData(0, 0, w, h)
-  applyNightPlanoPalette(imageData.data, w, h, options)
+  ctx.imageSmoothingEnabled = scale < 1
+  ctx.drawImage(img, 0, 0, cw, ch)
+  const imageData = ctx.getImageData(0, 0, cw, ch)
+  applyNightPlanoPalette(imageData.data, cw, ch, options)
   ctx.putImageData(imageData, 0, 0)
   const inverted = new window.Image()
-  inverted.src = canvas.toDataURL('image/png')
+  inverted.src = canvas.toDataURL('image/jpeg', 0.92)
   return inverted
 }
 

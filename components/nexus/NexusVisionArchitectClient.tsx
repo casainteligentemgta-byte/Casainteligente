@@ -370,11 +370,24 @@ export default function NexusVisionArchitectClient() {
   }, [project.cameras.length])
 
   useEffect(() => {
-    const p = loadProject()
-    setProject(p)
-    if (p.complianceProfileId) setComplianceCountry(p.complianceProfileId)
-    setCalibMeters(defaultCalibrationInput(p.unitSystem ?? 'metric'))
-    lastProjectRef.current = p
+    try {
+      const p = loadProject()
+      setProject(p)
+      if (p.complianceProfileId) setComplianceCountry(p.complianceProfileId)
+      setCalibMeters(defaultCalibrationInput(p.unitSystem ?? 'metric'))
+      lastProjectRef.current = p
+      if (p.cameras.length > 0 && !p.planoUrl) {
+        setInfo(
+          `Proyecto «${p.name}» con ${p.cameras.length} cámaras. El plano no está en este dispositivo; pulsa Cargar plano (las cámaras se conservan).`,
+        )
+      }
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? e.message
+          : 'No se pudo abrir el último proyecto. Entra en Mis proyectos.',
+      )
+    }
     setHydrated(true)
   }, [])
 
@@ -537,13 +550,15 @@ export default function NexusVisionArchitectClient() {
 
   const visionSpectrum = useMemo(
     () =>
-      buildVisionSpectrum(
-        project.cameras,
-        project.scale,
-        nightMode ? 'night' : 'day',
-        structures,
-      ),
-    [project.cameras, project.scale, nightMode, structures],
+      showFov
+        ? buildVisionSpectrum(
+            project.cameras,
+            project.scale,
+            nightMode ? 'night' : 'day',
+            structures,
+          )
+        : [],
+    [showFov, project.cameras, project.scale, nightMode, structures],
   )
 
   const wifiCircles = useMemo(
@@ -552,31 +567,34 @@ export default function NexusVisionArchitectClient() {
   )
 
   const wifiSpectrum = useMemo(
-    () => buildWifiSpectrum(project.networkNodes, project.scale, structures),
-    [project.networkNodes, project.scale, structures],
+    () =>
+      showWifi ? buildWifiSpectrum(project.networkNodes, project.scale, structures) : [],
+    [showWifi, project.networkNodes, project.scale, structures],
   )
 
   const planDevices = project.planDevices ?? []
 
   const soundSpectrum = useMemo(
     () =>
-      buildSoundSpectrum(
-        project.cameras,
-        project.scale,
-        structures,
-        28,
-        8,
-        planDevices
-          .filter((d) => d.discipline === 'sonido')
-          .map((d) => ({
-            x: d.x,
-            y: d.y,
-            rangeM:
-              d.rangeM ??
-              getPlanDeviceModelOrDefault(d.modelId, 'sonido').rangeM,
-          })),
-      ),
-    [project.cameras, project.scale, structures, planDevices],
+      showSound
+        ? buildSoundSpectrum(
+            project.cameras,
+            project.scale,
+            structures,
+            28,
+            8,
+            planDevices
+              .filter((d) => d.discipline === 'sonido')
+              .map((d) => ({
+                x: d.x,
+                y: d.y,
+                rangeM:
+                  d.rangeM ??
+                  getPlanDeviceModelOrDefault(d.modelId, 'sonido').rangeM,
+              })),
+          )
+        : [],
+    [showSound, project.cameras, project.scale, structures, planDevices],
   )
 
   const planSectors = useMemo(() => {
@@ -919,17 +937,44 @@ export default function NexusVisionArchitectClient() {
       } else {
         throw new Error('Usa un PDF (exportado del CAD) o una imagen (JPG/PNG/WEBP).')
       }
-      setProject((p) => ({
-        ...p,
-        planoUrl: url,
-        planoNombre: file.name,
-        cameras: [],
-        networkNodes: [],
-        structures: detected,
-        undergroundSegments: [],
-        cableSegments: [],
-        cableRouteOverrides: {},
-      }))
+      const keepDesign =
+        project.cameras.length > 0 ||
+        project.networkNodes.length > 0 ||
+        (project.planDevices?.length ?? 0) > 0 ||
+        (project.cableSegments?.length ?? 0) > 0
+      if (keepDesign) {
+        const cam = project.cameras.length
+        setInfo(
+          `${file.name} actualizado. Se conservan ${cam} cámara${cam === 1 ? '' : 's'} y el resto del diseño.`,
+        )
+      }
+      setProject((p) => {
+        const preserve =
+          p.cameras.length > 0 ||
+          p.networkNodes.length > 0 ||
+          (p.planDevices?.length ?? 0) > 0 ||
+          (p.cableSegments?.length ?? 0) > 0
+        if (preserve) {
+          return {
+            ...p,
+            planoUrl: url,
+            planoNombre: file.name,
+            structures:
+              (p.structures?.length ?? 0) > 0 ? p.structures : detected,
+          }
+        }
+        return {
+          ...p,
+          planoUrl: url,
+          planoNombre: file.name,
+          cameras: [],
+          networkNodes: [],
+          structures: detected,
+          undergroundSegments: [],
+          cableSegments: [],
+          cableRouteOverrides: {},
+        }
+      })
       setSelectedId(null)
       setCalibrateMode(false)
       setCalibPoints([])
@@ -945,7 +990,7 @@ export default function NexusVisionArchitectClient() {
     } finally {
       setLoading(false)
     }
-  }, [clearCableDraft])
+  }, [clearCableDraft, project.cameras.length, project.networkNodes.length, project.planDevices, project.cableSegments])
 
   const rotatePlano = useCallback(
     async (dir: PlanoRotateDir) => {
@@ -1628,19 +1673,35 @@ export default function NexusVisionArchitectClient() {
   }, [loading, project.planoUrl, project.structures?.length])
 
   const switchToProject = (p: NetVisionProject) => {
-    setProject(p)
-    setSelectedId(null)
-    setComplianceCountry(p.complianceProfileId || 'VE')
-    setCalibPoints([])
-    setCalibrateMode(false)
-    setCalibMeters(defaultCalibrationInput(p.unitSystem ?? 'metric'))
-    setError(null)
-    setInfo(null)
-    pdfBytesRef.current = null
-    pdfRotateQuartersRef.current = 0
-    setCanDetectPdfWalls(false)
-    setPlanoDims([])
-    setCalibCursor(null)
+    try {
+      setProject(p)
+      setSelectedId(null)
+      setComplianceCountry(p.complianceProfileId || 'VE')
+      setCalibPoints([])
+      setCalibrateMode(false)
+      setCalibMeters(defaultCalibrationInput(p.unitSystem ?? 'metric'))
+      setError(null)
+      pdfBytesRef.current = null
+      pdfRotateQuartersRef.current = 0
+      setCanDetectPdfWalls(false)
+      setPlanoDims([])
+      setCalibCursor(null)
+      if (p.cameras.length > 0 && !p.planoUrl) {
+        setInfo(
+          `Abierto «${p.name}» (${p.cameras.length} cámaras). Falta el plano en este iPad/navegador: Cargar plano no borra las cámaras.`,
+        )
+      } else {
+        setInfo(
+          `Abierto «${p.name}»${p.cameras.length ? ` · ${p.cameras.length} cámaras` : ''}`,
+        )
+      }
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? e.message
+          : 'No se pudo abrir el proyecto. Prueba de nuevo o recarga la página.',
+      )
+    }
   }
 
   const persistProjectNow = useCallback(async () => {
