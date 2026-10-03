@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Copy, Download, Loader2, MessageCircle, RefreshCw, Upload } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { CARGOS_OBREROS } from '@/lib/constants/cargosObreros';
 import {
   ENCABEZADOS_PLANTILLA_CARGA,
   enlaceWhatsApp,
@@ -35,6 +36,7 @@ type Avance = {
   cedula: string | null;
   whatsapp: string | null;
   oficio: string;
+  cargo_codigo: string | null;
   estado_proceso: string | null;
   enlace: string | null;
 };
@@ -72,6 +74,7 @@ export default function CargaMasivaObrerosClient() {
   const [cargandoAvance, setCargandoAvance] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copiado, setCopiado] = useState<string | null>(null);
+  const [guardandoOficio, setGuardandoOficio] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const obra = obras.find((o) => o.id === obraId) ?? null;
@@ -205,6 +208,31 @@ export default function CargaMasivaObrerosClient() {
         enlace,
       }),
     );
+  };
+
+  /** El operador confirma o corrige el oficio declarado por el trabajador. */
+  const cambiarOficio = async (empleadoId: string, codigo: string) => {
+    if (!codigo) return;
+    setGuardandoOficio(empleadoId);
+    setError(null);
+    try {
+      const r = await fetch('/api/rrhh/carga-masiva-obreros', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ empleado_id: empleadoId, oficio: codigo }),
+      });
+      const j = (await r.json()) as { oficio?: string; cargo_codigo?: string; error?: string };
+      if (!r.ok) throw new Error(j.error ?? 'No se pudo cambiar el oficio');
+      setAvance((prev) =>
+        prev.map((a) =>
+          a.id === empleadoId ? { ...a, oficio: j.oficio ?? a.oficio, cargo_codigo: j.cargo_codigo ?? codigo } : a,
+        ),
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setGuardandoOficio(null);
+    }
   };
 
   const copiar = async (enlace: string) => {
@@ -418,9 +446,32 @@ export default function CargaMasivaObrerosClient() {
                   >
                     <div className="min-w-0">
                       <p className="text-sm font-semibold">{a.nombre}</p>
-                      <p className="text-xs text-zinc-500">
-                        {a.cedula} · {a.oficio}
-                      </p>
+                      <p className="text-xs text-zinc-500">{a.cedula}</p>
+                      <label className="mt-1 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-zinc-500">
+                        Oficio
+                        <select
+                          value={a.cargo_codigo ?? ''}
+                          disabled={guardandoOficio === a.id}
+                          onChange={(e) => void cambiarOficio(a.id, e.target.value)}
+                          className="max-w-[230px] rounded-lg border border-white/10 bg-black/40 px-2 py-1 text-xs font-normal normal-case tracking-normal text-white disabled:opacity-50"
+                        >
+                          {a.cargo_codigo ? null : (
+                            <option value="" className="bg-zinc-900">
+                              Sin oficio
+                            </option>
+                          )}
+                          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((nivel) => (
+                            <optgroup key={nivel} label={`Nivel ${nivel}`} className="bg-zinc-900 text-zinc-300">
+                              {CARGOS_OBREROS.filter((c) => c.nivel === nivel).map((c) => (
+                                <option key={c.codigo} value={c.codigo} className="bg-zinc-900 text-white">
+                                  {c.codigo.replace('.', ',')} · {c.nombre}
+                                </option>
+                              ))}
+                            </optgroup>
+                          ))}
+                        </select>
+                        {guardandoOficio === a.id ? <Loader2 size={12} className="animate-spin" /> : null}
+                      </label>
                       <span
                         className={`mt-1 inline-block rounded-lg border px-2 py-0.5 text-[10px] font-bold uppercase ${colorEstado(a.estado_proceso)}`}
                       >

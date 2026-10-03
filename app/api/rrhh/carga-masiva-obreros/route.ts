@@ -5,7 +5,7 @@ import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import { crearExpedienteToken } from '@/lib/reclutamiento/validarExpedienteToken';
 import { celularParaInserto } from '@/lib/registro/ciEmpleadosCelular';
 import { nombresLegadoDesdeTextoLibre } from '@/lib/registro/ciEmpleadosNombresLegado';
-import { tipoVacantePorNivel } from '@/lib/constants/cargosObreros';
+import { cargoPorCodigo, tipoVacantePorNivel } from '@/lib/constants/cargosObreros';
 import { validarFilaCarga, type FilaCargaMasivaEntrada } from '@/lib/rrhh/cargaMasivaObreros';
 
 export const dynamic = 'force-dynamic';
@@ -206,8 +206,67 @@ export async function GET(req: Request) {
       cedula: r.cedula,
       whatsapp: r.telefono,
       oficio: [String(r.cargo_codigo ?? '').replace('.', ','), r.cargo_nombre].filter(Boolean).join(' '),
+      cargo_codigo: r.cargo_codigo ?? null,
       estado_proceso: r.estado_proceso,
       enlace: r.token_registro && base ? `${base}/reclutamiento/onboarding/${r.token_registro}` : null,
     })),
+  });
+}
+
+/**
+ * PATCH: el operador confirma o corrige el oficio que declaró el trabajador (define su nivel y salario).
+ * Body: { empleado_id, oficio } con el código del tabulador («5.1» o «5,1»).
+ */
+export async function PATCH(req: Request) {
+  const user = await exigirSesion();
+  if (!user) return NextResponse.json({ error: 'Inicia sesión.' }, { status: 401 });
+  const admin = supabaseAdminForRoute();
+  if (!admin.ok) return admin.response;
+
+  let body: { empleado_id?: string; oficio?: string };
+  try {
+    body = (await req.json()) as typeof body;
+  } catch {
+    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
+  }
+  const empleadoId = String(body.empleado_id ?? '').trim();
+  const codigo = String(body.oficio ?? '').trim().replace(',', '.');
+  const cargo = cargoPorCodigo(codigo);
+  if (!empleadoId || !cargo) {
+    return NextResponse.json({ error: 'Falta el trabajador o el oficio no está en el tabulador.' }, { status: 400 });
+  }
+
+  const { data: actual, error: errSel } = await admin.client
+    .from('ci_empleados')
+    .select('id,hoja_vida_obrero')
+    .eq('id', empleadoId)
+    .maybeSingle();
+  if (errSel || !actual) return NextResponse.json({ error: 'No se encontró el trabajador.' }, { status: 404 });
+
+  // La hoja de vida guarda el oficio en contratacion.cargoUOficio: se mantiene igual al del expediente.
+  const hoja = (actual as { hoja_vida_obrero?: unknown }).hoja_vida_obrero;
+  const cambios: Record<string, unknown> = {
+    cargo_codigo: cargo.codigo,
+    cargo_nombre: cargo.nombre,
+    cargo_nivel: cargo.nivel,
+    tipo_vacante: tipoVacantePorNivel(cargo.nivel),
+    cargo: cargo.nombre,
+    rol_buscado: cargo.nombre,
+  };
+  if (hoja && typeof hoja === 'object' && !Array.isArray(hoja)) {
+    const h = hoja as Record<string, unknown>;
+    const contratacion =
+      h.contratacion && typeof h.contratacion === 'object' ? (h.contratacion as Record<string, unknown>) : {};
+    cambios.hoja_vida_obrero = { ...h, contratacion: { ...contratacion, cargoUOficio: cargo.nombre } };
+  }
+
+  const { error } = await admin.client.from('ci_empleados').update(cambios as never).eq('id', empleadoId);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json({
+    ok: true,
+    cargo_codigo: cargo.codigo,
+    oficio: `${cargo.codigo.replace('.', ',')} ${cargo.nombre}`,
+    nivel: cargo.nivel,
   });
 }
