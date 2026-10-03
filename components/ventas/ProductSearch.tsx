@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { colorHexCategoria } from '@/lib/productos/categoriasCatalogo';
+import { useCategoriasCatalogo } from '@/lib/productos/useCategoriasCatalogo';
 
 export interface Product {
     id: number;
@@ -23,41 +25,8 @@ export type ModoSelectorProducto = 'botones' | 'lista';
 
 const MODO_STORAGE_KEY = 'ci-presupuesto-selector-modo-v1';
 
-const CATEGORIAS_LISTA = [
-    'Todos',
-    'Cámaras IP',
-    'Cámaras Análogas',
-    'C.C.T.V',
-    'Servicio',
-    'Cercos Eléctricos',
-    'Internet',
-    'Domótica',
-    'Network',
-    'Herramientas',
-    'Insumos',
-    'Consumibles',
-    'Materiales',
-] as const;
-
-const CATEGORIAS_BOTONES = CATEGORIAS_LISTA.filter((c) => c !== 'Todos');
-
-const COLOR_CATEGORIA: Record<string, string> = {
-    'Cámaras IP': '#007AFF',
-    'Cámaras Análogas': '#5856D6',
-    'C.C.T.V': '#5856D6',
-    Servicio: '#34C759',
-    'Cercos Eléctricos': '#FF9500',
-    Internet: '#00C7BE',
-    Domótica: '#FF2D55',
-    Network: '#00C7BE',
-    Materiales: '#8E8E93',
-    Herramientas: '#FF9500',
-    Insumos: '#AF52DE',
-    Consumibles: '#5AC8FA',
-};
-
 function colorCategoria(cat: string | null) {
-    return COLOR_CATEGORIA[cat ?? ''] ?? '#8E8E93';
+    return colorHexCategoria(cat);
 }
 
 function leerModoGuardado(): ModoSelectorProducto {
@@ -202,6 +171,9 @@ export default function ProductSearch({ onSelect, inBudgetQtyById }: ProductSear
     const inputRef = useRef<HTMLInputElement>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const supabase = createClient();
+    const { nombres: categoriasNombres } = useCategoriasCatalogo();
+    const categoriasLista = ['Todos', ...categoriasNombres];
+    const categoriasBotones = categoriasNombres;
 
     useEffect(() => {
         setModo(leerModoGuardado());
@@ -374,7 +346,7 @@ export default function ProductSearch({ onSelect, inBudgetQtyById }: ProductSear
                                 gap: 8,
                             }}
                         >
-                            {CATEGORIAS_BOTONES.map((cat) => {
+                            {categoriasBotones.map((cat) => {
                                 const color = colorCategoria(cat);
                                 return (
                                     <button
@@ -506,7 +478,7 @@ export default function ProductSearch({ onSelect, inBudgetQtyById }: ProductSear
                 gap: '8px',
                 WebkitOverflowScrolling: 'touch'
             }}>
-                {CATEGORIAS_LISTA.map(cat => {
+                {categoriasLista.map(cat => {
                     const active = selectedCategory === cat;
                     const color = colorCategoria(cat === 'Todos' ? null : cat);
                     return (
