@@ -21,6 +21,7 @@ import {
   type ViewportLike,
 } from '@/lib/netvision/utils/extractFilledPolygons'
 import { clamp01 } from '@/lib/netvision/utils/geometryHelpers'
+import { structureLabelPrefix } from '@/lib/netvision/utils/structureDraw'
 
 export type DetectWallsResult = {
   color: string | null
@@ -137,14 +138,6 @@ export async function detectWallsFromPdfBytes(
   }
 }
 
-function labelPrefix(materialId: StructureMaterialId): string {
-  if (materialId === 'door') return 'PUE'
-  if (materialId === 'window' || materialId === 'glass') return 'VEN'
-  if (materialId === 'block') return 'BLO'
-  if (materialId === 'concrete') return 'CON'
-  return 'DRY'
-}
-
 export function structuresFromWallDetection(
   result: DetectWallsResult,
   opts?: {
@@ -161,7 +154,7 @@ export function structuresFromWallDetection(
     segs: WallSegment[],
     materialId: StructureMaterialId,
   ): DesignStructure[] => {
-    const prefix = labelPrefix(materialId)
+    const prefix = structureLabelPrefix(materialId)
     return segs.map((w, i) => ({
       id: makeId(),
       label: `${prefix}-${String(i + 1).padStart(2, '0')}`,

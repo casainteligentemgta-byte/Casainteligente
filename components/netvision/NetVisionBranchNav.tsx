@@ -177,7 +177,10 @@ export default function NetVisionBranchNav({
               onSelect={onSelect}
             />
             {submenu ? (
-              <div className="flex flex-wrap items-center gap-2 border-t border-white/10 pt-2">
+              <div
+                className="flex flex-wrap items-center gap-2 border-t border-white/10 pt-2"
+                onClick={() => setOpen(null)}
+              >
                 {submenu}
               </div>
             ) : null}

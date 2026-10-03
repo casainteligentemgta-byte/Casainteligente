@@ -162,7 +162,12 @@ import type {
   PlanDiscipline,
   StructureMaterialId,
 } from '@/lib/netvision/types'
-import { snapOrtho90 } from '@/lib/netvision/utils/structureDraw'
+import {
+  snapOrtho90,
+  snapToStructureJoints,
+  snapToStructureJointsAligned,
+  structureLabelPrefix,
+} from '@/lib/netvision/utils/structureDraw'
 import {
   sanitizeCablePoints,
   snapCableDrawPoint,
@@ -249,6 +254,10 @@ export default function NexusVisionArchitectClient() {
   const [structureDraft, setStructureDraft] = useState<{ x: number; y: number } | null>(
     null,
   )
+  const [structureCursor, setStructureCursor] = useState<{
+    x: number
+    y: number
+  } | null>(null)
   const [drawUnderground, setDrawUnderground] = useState(false)
   const [undergroundDraft, setUndergroundDraft] = useState<{
     x: number
@@ -395,6 +404,7 @@ export default function NexusVisionArchitectClient() {
     setCalibCursor(null)
     setDrawStructureMaterial(null)
     setStructureDraft(null)
+    setStructureCursor(null)
     setDrawUnderground(false)
     setUndergroundDraft(null)
     setDrawCable(false)
@@ -443,6 +453,10 @@ export default function NexusVisionArchitectClient() {
     setCalibMeters(defaultCalibrationInput(project.unitSystem ?? 'metric'))
   }, [project.unitSystem, hydrated])
 
+  useEffect(() => {
+    if (!drawStructureMaterial) setStructureCursor(null)
+  }, [drawStructureMaterial])
+
   /** Escape / Enter: cable polilínea y muros. */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -461,7 +475,21 @@ export default function NexusVisionArchitectClient() {
         if (structureDraft) {
           setStructureDraft(null)
           e.preventDefault()
+          return
         }
+        if (drawStructureMaterial) {
+          setDrawStructureMaterial(null)
+          e.preventDefault()
+        }
+        return
+      }
+      if (
+        (e.key === 'Enter' || e.key === ' ') &&
+        drawStructureMaterial &&
+        structureDraft
+      ) {
+        e.preventDefault()
+        setStructureDraft(null)
         return
       }
       if (
@@ -481,6 +509,7 @@ export default function NexusVisionArchitectClient() {
     // addCableSegmentFromPoints is stable enough via closure on project length
   }, [
     structureDraft,
+    drawStructureMaterial,
     cableDraftPoints,
     drawCable,
     drawCableType,
@@ -970,6 +999,7 @@ export default function NexusVisionArchitectClient() {
     setCalibPoints([])
     setDrawStructureMaterial(null)
     setStructureDraft(null)
+    setStructureCursor(null)
   }
 
   /** Agrega cámara por botón (centro del plano, con leve desplazamiento si ya hay otras). */
@@ -1139,6 +1169,7 @@ export default function NexusVisionArchitectClient() {
     setCalibPoints([])
     setDrawStructureMaterial(null)
     setStructureDraft(null)
+    setStructureCursor(null)
   }
 
   const addPlanDeviceFromButton = (discipline: PlanDiscipline, kind: PlanDeviceKind) => {
@@ -1158,20 +1189,10 @@ export default function NexusVisionArchitectClient() {
     x2: number,
     y2: number,
   ) => {
-    const n = (project.structures?.length ?? 0) + 1
-    const prefix =
-      materialId === 'door'
-        ? 'PUE'
-        : materialId === 'window'
-          ? 'VEN'
-          : materialId === 'glass'
-            ? 'VID'
-            : materialId === 'block'
-              ? 'BLO'
-              : 'DRY'
+    const prefix = structureLabelPrefix(materialId)
     const seg: DesignStructure = {
       id: uid(),
-      label: `${prefix}-${String(n).padStart(2, '0')}`,
+      label: `${prefix}-00`,
       materialId,
       x1: Math.round(x1 * 1000) / 1000,
       y1: Math.round(y1 * 1000) / 1000,
@@ -1179,13 +1200,21 @@ export default function NexusVisionArchitectClient() {
       y2: Math.round(y2 * 1000) / 1000,
     }
     setError(null)
-    setProject((p) => ({
-      ...p,
-      structures: [...(p.structures ?? []), seg],
-    }))
+    setProject((p) => {
+      const n = (p.structures ?? []).length + 1
+      const labeled = {
+        ...seg,
+        label: `${prefix}-${String(n).padStart(2, '0')}`,
+      }
+      return {
+        ...p,
+        structures: [...(p.structures ?? []), labeled],
+      }
+    })
     setSelectedId(seg.id)
     setSideTab('muros')
     setViewMode('plano')
+    setShowStructures(true)
   }
 
   const addUndergroundSegment = (
@@ -1278,6 +1307,24 @@ export default function NexusVisionArchitectClient() {
     setCableCursor(snapped)
   }
 
+  const onStructurePointerMove = (normX: number, normY: number) => {
+    if (!drawStructureMaterial) return
+    if (!structureDraft) {
+      setStructureCursor(
+        snapToStructureJoints({ x: normX, y: normY }, project.structures ?? []),
+      )
+      return
+    }
+    const snapped = snapOrtho90(structureDraft, { x: normX, y: normY })
+    setStructureCursor(
+      snapToStructureJointsAligned(
+        structureDraft,
+        snapped,
+        project.structures ?? [],
+      ),
+    )
+  }
+
   const onAddAt = (normX: number, normY: number) => {
     if (!project.planoUrl) return
 
@@ -1362,14 +1409,19 @@ export default function NexusVisionArchitectClient() {
     }
 
     if (drawStructureMaterial) {
+      const walls = project.structures ?? []
       if (!structureDraft) {
-        setStructureDraft({ x: normX, y: normY })
+        const start = snapToStructureJoints({ x: normX, y: normY }, walls)
+        setStructureDraft(start)
+        setStructureCursor(start)
+        setError(null)
         return
       }
       // Snap a 90° (horizontal o vertical) para esquinas ortogonales.
       const snapped = snapOrtho90(structureDraft, { x: normX, y: normY })
-      const dx = Math.abs(structureDraft.x - snapped.x)
-      const dy = Math.abs(structureDraft.y - snapped.y)
+      const joined = snapToStructureJointsAligned(structureDraft, snapped, walls)
+      const dx = Math.abs(structureDraft.x - joined.x)
+      const dy = Math.abs(structureDraft.y - joined.y)
       if (dx + dy < 0.008) {
         setError('El segmento es demasiado corto; elige otro punto.')
         return
@@ -1378,11 +1430,12 @@ export default function NexusVisionArchitectClient() {
         drawStructureMaterial,
         structureDraft.x,
         structureDraft.y,
-        snapped.x,
-        snapped.y,
+        joined.x,
+        joined.y,
       )
       // Continuar dibujando desde la esquina (muro polilínea con tramos H/V).
-      setStructureDraft({ x: snapped.x, y: snapped.y })
+      setStructureDraft({ x: joined.x, y: joined.y })
+      setStructureCursor({ x: joined.x, y: joined.y })
       setError(null)
     }
   }
@@ -1874,7 +1927,6 @@ export default function NexusVisionArchitectClient() {
                   if (next) {
                     setCalibrateMode(false)
                     setViewMode('plano')
-                    setShowFov(true)
                     setShowStructures(true)
                   }
                 }}
@@ -2568,10 +2620,18 @@ export default function NexusVisionArchitectClient() {
                         ? calibPoints
                         : drawCable
                           ? cableDraftPoints
-                          : undefined
+                          : drawStructureMaterial && structureDraft
+                            ? [structureDraft]
+                            : undefined
                     }
                     draftCursor={
-                      calibrateMode ? calibCursor : drawCable ? cableCursor : null
+                      calibrateMode
+                        ? calibCursor
+                        : drawCable
+                          ? cableCursor
+                          : drawStructureMaterial
+                            ? structureCursor
+                            : null
                     }
                     draftColor={draftColor}
                     draftLabel={draftLabel}
@@ -2589,7 +2649,9 @@ export default function NexusVisionArchitectClient() {
                         ? onCablePointerMove
                         : calibrateMode
                           ? onCalibPointerMove
-                          : undefined
+                          : drawStructureMaterial
+                            ? onStructurePointerMove
+                            : undefined
                     }
                     onFinishPlace={drawCable ? finishCableDraft : undefined}
                     snapPlaceToDevices={drawCable}
@@ -2607,6 +2669,7 @@ export default function NexusVisionArchitectClient() {
                         setViewMode('plano')
                         setCalibrateMode(false)
                         setDrawStructureMaterial(null)
+                        setStructureDraft(null)
                         setDrawUnderground(false)
                         setUndergroundDraft(null)
                         setDrawCable(false)
@@ -2615,12 +2678,13 @@ export default function NexusVisionArchitectClient() {
                         setSideTab('muros')
                         setViewMode('plano')
                         setShowStructures(true)
-                        setDrawStructureMaterial(null)
-                        setStructureDraft(null)
-                        setDrawUnderground(false)
-                        setUndergroundDraft(null)
-                        setDrawCable(false)
-                        clearCableDraft()
+                        if (!drawStructureMaterial) {
+                          setStructureDraft(null)
+                          setDrawUnderground(false)
+                          setUndergroundDraft(null)
+                          setDrawCable(false)
+                          clearCableDraft()
+                        }
                       } else if (planDevices.some((d) => d.id === id)) {
                         const dev = planDevices.find((d) => d.id === id)!
                         setSideTab(dev.discipline)
@@ -2868,6 +2932,7 @@ export default function NexusVisionArchitectClient() {
               onDrawMaterial={(id) => {
                 setDrawStructureMaterial(id)
                 setStructureDraft(null)
+                setStructureCursor(null)
                 setDrawUnderground(false)
                 setUndergroundDraft(null)
                 setDrawCable(false)
@@ -2875,7 +2940,6 @@ export default function NexusVisionArchitectClient() {
                 if (id) {
                   setCalibrateMode(false)
                   setViewMode('plano')
-                  setShowFov(true)
                   setShowStructures(true)
                 }
               }}
@@ -2885,7 +2949,10 @@ export default function NexusVisionArchitectClient() {
                 setSideTab('muros')
               }}
               onRemove={quitar}
-              onFinishDraft={() => setStructureDraft(null)}
+              onFinishDraft={() => {
+                setStructureDraft(null)
+                setStructureCursor(null)
+              }}
             />
           ) : sideTab === 'norm' ? (
             <ComplianceValidatorPanel
