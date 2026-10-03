@@ -25,6 +25,8 @@ type Props = {
   canDetectPdf?: boolean
   detecting?: boolean
   onDetectFromPdf?: () => void
+  grosorMuro?: number
+  onGrosorMuro?: (value: number) => void
 }
 
 export default function StructureDesigner({
@@ -42,6 +44,8 @@ export default function StructureDesigner({
   canDetectPdf = false,
   detecting = false,
   onDetectFromPdf,
+  grosorMuro,
+  onGrosorMuro,
 }: Props) {
   return (
     <div className="space-y-3">
@@ -68,6 +72,32 @@ export default function StructureDesigner({
             onChange={(e) => onShowOnPlan(e.target.checked)}
             className="accent-[var(--nexus-cyan)]"
           />
+        </label>
+      ) : null}
+
+      {onGrosorMuro ? (
+        <label className="block rounded-lg border border-white/10 bg-black/25 px-2.5 py-2">
+          <span className="flex items-center justify-between text-[11px] text-[var(--nexus-text-muted)]">
+            Grosor de la línea del muro
+            <span className="tabular-nums text-[var(--nexus-cyan)]">
+              {Math.round(grosorMuro ?? 50)}
+            </span>
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={1}
+            disabled={disabled}
+            value={grosorMuro ?? 50}
+            onChange={(e) => onGrosorMuro(Number(e.target.value))}
+            className="mt-1.5 h-1.5 w-full accent-[var(--nexus-cyan)]"
+            aria-label="Grosor de la línea del muro"
+          />
+          <span className="mt-0.5 flex justify-between text-[10px] text-[var(--nexus-text-dim)]">
+            <span>Fina</span>
+            <span>Gruesa</span>
+          </span>
         </label>
       ) : null}
 

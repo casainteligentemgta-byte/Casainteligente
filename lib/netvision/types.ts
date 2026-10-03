@@ -235,6 +235,10 @@ export type NetVisionProject = {
   planoNombre: string
   /** Si true, el plano se muestra invertido (fondo negro, trazos blancos). */
   planoInvertido?: boolean
+  /** Color de cotas/números en modo fondo negro. */
+  planoCotaColor?: 'auto' | 'verde' | 'naranja' | 'amarillo'
+  /** Grosor visual de la línea de muro (0 = fina, 100 = gruesa). */
+  planoGrosorMuro?: number
   cameras: DesignCamera[]
   networkNodes: DesignNetworkNode[]
   /** Altavoces, sensores, tableros, etc. (planos de especialidad). */

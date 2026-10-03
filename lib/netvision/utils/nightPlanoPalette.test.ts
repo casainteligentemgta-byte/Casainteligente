@@ -5,6 +5,10 @@ import {
   NIGHT_NEON,
   NIGHT_WALL,
   applyNightPlanoPalette,
+  clampGrosorMuro,
+  neonIndexForColor,
+  normalizeCotaColor,
+  wallDilateFromGrosor,
 } from './nightPlanoPalette'
 
 function blank(w: number, h: number, rgb: readonly [number, number, number] = [255, 255, 255]) {
@@ -95,11 +99,61 @@ describe('applyNightPlanoPalette', () => {
     assert.equal(isNeon(d), true, `vl ${d.join(',')}`)
   })
 
+  it('cotaColor naranja pinta dígito y cota del mismo neón', () => {
+    const w = 400
+    const h = 320
+    const data = blank(w, h)
+    paint(data, w, 80, 70, 81, 86)
+    paint(data, w, 74, 78, 88, 79)
+    paint(data, w, 70, 88, 130, 88)
+    applyNightPlanoPalette(data, w, h, { cotaColor: 'naranja' })
+    const digit = rgbAt(data, w, 80, 76)
+    const tick = rgbAt(data, w, 120, 88)
+    assert.deepEqual([...digit], [...NIGHT_NEON[1]!])
+    assert.deepEqual([...tick], [...NIGHT_NEON[1]!])
+  })
+
+  it('grosor alto traga una raya fina pegada al muro; grosor 0 la deja en neón', () => {
+    const w = 200
+    const h = 160
+    const thin = blank(w, h)
+    const fat = blank(w, h)
+    paint(thin, w, 10, 70, 189, 82)
+    paint(thin, w, 80, 84, 120, 84)
+    paint(fat, w, 10, 70, 189, 82)
+    paint(fat, w, 80, 84, 120, 84)
+    applyNightPlanoPalette(thin, w, h, { grosorMuro: 0 })
+    applyNightPlanoPalette(fat, w, h, { grosorMuro: 100 })
+    const nearThin = rgbAt(thin, w, 100, 84)
+    const nearFat = rgbAt(fat, w, 100, 84)
+    assert.deepEqual([...rgbAt(thin, w, 100, 76)], [...NIGHT_WALL])
+    assert.deepEqual([...rgbAt(fat, w, 100, 76)], [...NIGHT_WALL])
+    assert.equal(isNeon(nearThin), true, `raya fina ${nearThin.join(',')}`)
+    assert.deepEqual([...nearFat], [...NIGHT_WALL])
+  })
+
   it('foto con medios tonos cae a inversión RGB', () => {
     const w = 20
     const h = 20
     const data = blank(w, h, [128, 128, 128])
     applyNightPlanoPalette(data, w, h)
     assert.deepEqual([...rgbAt(data, w, 2, 2)], [127, 127, 127])
+  })
+})
+
+describe('night plano helpers', () => {
+  it('normaliza color de cota y grosor', () => {
+    assert.equal(normalizeCotaColor('NARANJA'), 'naranja')
+    assert.equal(normalizeCotaColor('x'), 'auto')
+    assert.equal(clampGrosorMuro(-4), 0)
+    assert.equal(clampGrosorMuro(140), 100)
+    assert.equal(clampGrosorMuro('no'), 50)
+    assert.equal(wallDilateFromGrosor(0), 0)
+    assert.equal(wallDilateFromGrosor(50), 2)
+    assert.equal(wallDilateFromGrosor(100), 4)
+    assert.equal(neonIndexForColor('verde'), 0)
+    assert.equal(neonIndexForColor('naranja'), 1)
+    assert.equal(neonIndexForColor('amarillo'), 2)
+    assert.equal(neonIndexForColor('auto'), null)
   })
 })

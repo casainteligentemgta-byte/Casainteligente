@@ -35,6 +35,10 @@ import {
   clampNetworkPlanSize,
   defaultNetworkPlanSize,
 } from '@/lib/netvision/utils/networkNodeSize'
+import {
+  clampGrosorMuro,
+  normalizeCotaColor,
+} from '@/lib/netvision/utils/nightPlanoPalette'
 
 /** Copia activa de trabajo (rápida). */
 export const NETVISION_STORAGE_KEY = 'nexus.netvision.v1'
@@ -76,6 +80,8 @@ export function emptyProject(partial?: {
     planoUrl: null,
     planoNombre: '',
     planoInvertido: false,
+    planoCotaColor: 'auto',
+    planoGrosorMuro: 50,
     cameras: [],
     networkNodes: [],
     planDevices: [],
@@ -423,6 +429,8 @@ function normalizeProject(
     planoUrl: p.planoUrl ?? null,
     planoNombre: p.planoNombre ?? '',
     planoInvertido: Boolean(p.planoInvertido),
+    planoCotaColor: normalizeCotaColor(p.planoCotaColor),
+    planoGrosorMuro: clampGrosorMuro(p.planoGrosorMuro),
     cameras: Array.isArray(p.cameras) ? p.cameras.map(normalizeCamera) : [],
     networkNodes: Array.isArray(p.networkNodes)
       ? p.networkNodes.map(normalizeNetworkNode)

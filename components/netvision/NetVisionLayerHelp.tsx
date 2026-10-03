@@ -75,7 +75,19 @@ export const NETVISION_LAYER_HELP: LayerHelpItem[] = [
     id: 'invert',
     label: 'Fondo negro',
     blurb:
-      'Pasa el papel a negro. Muros y objetos gruesos quedan en blanco; cotas y números en neón (verde, naranja o amarillo). No modifica el archivo y se puede desactivar.',
+      'Pasa el papel a negro y las rayas del plano (muros) a blanco. Las acotaciones se pueden pintar en verde, naranja o amarillo fluorescente, tipo monitor. No modifica el archivo y se puede desactivar.',
+  },
+  {
+    id: 'cotas',
+    label: 'Cotas',
+    blurb:
+      'Con Fondo negro activo, elige el color de las acotaciones y números: naranja, amarillo o verde fluorescente. Auto reparte el neón según la forma de cada cota.',
+  },
+  {
+    id: 'grosor',
+    label: 'Grosor muro',
+    blurb:
+      'Baja o sube el grosor de la línea que representa el muro: tanto las rayas del plano en negro como los muros dibujados a mano. 0 es la más fina.',
   },
   {
     id: 'calibrate',

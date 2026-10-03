@@ -35,7 +35,11 @@ import {
 import type { WifiCoverageCircle } from '@/lib/netvision/services/wifiPredictor'
 import type { AccessChamber, UndergroundRun } from '@/lib/netvision/services/canalizationCalculator'
 import { nearestSegmentOnRoute, MANUAL_CABLE_TO_ID } from '@/lib/netvision/services/cableRoutingEngine'
-import { applyNightPlanoPalette } from '@/lib/netvision/utils/nightPlanoPalette'
+import {
+  applyNightPlanoPalette,
+  clampGrosorMuro,
+  type NightPlanoOptions,
+} from '@/lib/netvision/utils/nightPlanoPalette'
 import { shouldSmoothPlanoImage } from '@/lib/netvision/utils/renderPdfPlano'
 import {
   visionPatchFromPointer,
@@ -46,6 +50,9 @@ export type CameraPlacementToolProps = {
   backgroundUrl: string | null
   /** Invierte el plano en pantalla (fondo negro, trazos blancos). No altera el archivo. */
   invertBackground?: boolean
+  invertOptions?: NightPlanoOptions
+  /** Grosor de muros dibujados (0–100). */
+  wallStrokeGrosor?: number
   cameras: DesignCamera[]
   networkNodes: DesignNetworkNode[]
   planDevices?: DesignPlanDevice[]
@@ -279,7 +286,10 @@ function useContainerSize(ref: React.RefObject<HTMLDivElement | null>) {
   return size
 }
 
-function invertLoadedImage(img: HTMLImageElement): HTMLImageElement | null {
+function invertLoadedImage(
+  img: HTMLImageElement,
+  options?: NightPlanoOptions,
+): HTMLImageElement | null {
   const w = img.naturalWidth || img.width
   const h = img.naturalHeight || img.height
   if (w < 1 || h < 1) return null
@@ -290,14 +300,23 @@ function invertLoadedImage(img: HTMLImageElement): HTMLImageElement | null {
   if (!ctx) return null
   ctx.drawImage(img, 0, 0)
   const imageData = ctx.getImageData(0, 0, w, h)
-  applyNightPlanoPalette(imageData.data, w, h)
+  applyNightPlanoPalette(imageData.data, w, h, options)
   ctx.putImageData(imageData, 0, 0)
   const inverted = new window.Image()
   inverted.src = canvas.toDataURL('image/png')
   return inverted
 }
 
-function useHtmlImage(url: string | null, invert = false) {
+function invertOptionsKey(opts?: NightPlanoOptions): string {
+  return `${opts?.cotaColor ?? 'auto'}:${clampGrosorMuro(opts?.grosorMuro)}`
+}
+
+function wallDrawnStroke(selected: boolean, grosor: number): number {
+  const t = 0.28 + (clampGrosorMuro(grosor) / 100) * 1.5
+  return Math.max(0.35, (selected ? 2.5 : 1.25) * t)
+}
+
+function useHtmlImage(url: string | null, invert = false, invertOptions?: NightPlanoOptions) {
   const [image, setImage] = useState<HTMLImageElement | null>(null)
   useEffect(() => {
     if (!url) {
@@ -316,7 +335,7 @@ function useHtmlImage(url: string | null, invert = false) {
         return
       }
       try {
-        const inverted = invertLoadedImage(img)
+        const inverted = invertLoadedImage(img, invertOptions)
         if (!inverted) {
           setImage(img)
           return
@@ -342,13 +361,15 @@ function useHtmlImage(url: string | null, invert = false) {
     return () => {
       cancelled = true
     }
-  }, [url, invert])
+  }, [url, invert, invertOptionsKey(invertOptions)])
   return image
 }
 
 export default function CameraPlacementTool({
   backgroundUrl,
   invertBackground = false,
+  invertOptions,
+  wallStrokeGrosor = 50,
   cameras,
   networkNodes,
   planDevices = [],
@@ -399,7 +420,7 @@ export default function CameraPlacementTool({
   const containerRef = useRef<HTMLDivElement>(null)
   const localStageRef = useRef<Konva.Stage | null>(null)
   const { width, height } = useContainerSize(containerRef)
-  const image = useHtmlImage(backgroundUrl, invertBackground)
+  const image = useHtmlImage(backgroundUrl, invertBackground, invertOptions)
   const [zoom, setZoom] = useState(1)
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 })
   const [pinching, setPinching] = useState(false)
@@ -1003,7 +1024,7 @@ export default function CameraPlacementTool({
                 <Line
                   points={[x1, y1, x2, y2]}
                   stroke={mat.color}
-                  strokeWidth={selected ? 2.5 : 1.25}
+                  strokeWidth={wallDrawnStroke(selected, wallStrokeGrosor)}
                   hitStrokeWidth={placeMode ? 0 : 16}
                   dash={mat.dash ?? undefined}
                   lineCap="round"

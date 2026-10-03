@@ -37,6 +37,7 @@ import NetworkDesigner from '@/components/netvision/NetworkDesigner'
 import NetVisionLayerHelp, {
   layerHelpTitle,
 } from '@/components/netvision/NetVisionLayerHelp'
+import NetVisionPlanoLookControls from '@/components/netvision/NetVisionPlanoLookControls'
 import StructureDesigner from '@/components/netvision/StructureDesigner'
 import UndergroundCanalizationTool from '@/components/netvision/UndergroundCanalizationTool'
 import NetVisionSelectedProps from '@/components/netvision/NetVisionSelectedProps'
@@ -203,6 +204,10 @@ import {
   popProjectHistory,
   pushProjectHistory,
 } from '@/lib/netvision/utils/projectHistory'
+import {
+  clampGrosorMuro,
+  normalizeCotaColor,
+} from '@/lib/netvision/utils/nightPlanoPalette'
 
 const CameraPlacementTool = dynamic(
   () => import('@/components/netvision/CameraPlacementTool'),
@@ -2341,22 +2346,28 @@ export default function NexusVisionArchitectClient() {
                 />
                 Noche
               </label>
-              <label
-                title={layerHelpTitle('invert')}
-                className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
-              >
-                <input
-                  type="checkbox"
-                  checked={Boolean(project.planoInvertido)}
-                  disabled={!project.planoUrl || loading}
-                  onChange={(e) =>
-                    setProject((p) => ({ ...p, planoInvertido: e.target.checked }))
-                  }
-                />
-                Fondo negro
-              </label>
             </div>
           </details>
+          <div className="rounded-md border border-white/10 bg-black/30 px-2 py-2">
+            <p className="mb-1.5 px-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-text-dim)]">
+              Apariencia
+            </p>
+            <NetVisionPlanoLookControls
+              invertido={Boolean(project.planoInvertido)}
+              cotaColor={normalizeCotaColor(project.planoCotaColor)}
+              grosorMuro={clampGrosorMuro(project.planoGrosorMuro)}
+              disabled={!project.planoUrl || loading}
+              onInvertido={(value) =>
+                setProject((p) => ({ ...p, planoInvertido: value }))
+              }
+              onCotaColor={(value) =>
+                setProject((p) => ({ ...p, planoCotaColor: value }))
+              }
+              onGrosorMuro={(value) =>
+                setProject((p) => ({ ...p, planoGrosorMuro: value }))
+              }
+            />
+          </div>
           <div className="flex overflow-hidden rounded-md border border-white/15 bg-black/40">
             <button
               type="button"
@@ -2464,6 +2475,24 @@ export default function NexusVisionArchitectClient() {
           className="inline-flex shrink-0 items-center rounded-lg border border-emerald-400/40 bg-emerald-500/15 px-2.5 py-1 text-[11px] font-semibold text-emerald-200 disabled:opacity-40"
         >
           Calcular cobertura
+        </button>
+      ) : null}
+      {viewMode === 'plano' ? (
+        <button
+          type="button"
+          disabled={!project.planoUrl || loading}
+          title={layerHelpTitle('invert')}
+          aria-pressed={Boolean(project.planoInvertido)}
+          onClick={() =>
+            setProject((p) => ({ ...p, planoInvertido: !p.planoInvertido }))
+          }
+          className={`inline-flex shrink-0 items-center rounded-lg border px-2.5 py-1 text-[11px] font-semibold disabled:opacity-40 ${
+            project.planoInvertido
+              ? 'border-white/70 bg-white text-black'
+              : 'border-white/15 text-[var(--nexus-text-muted)] hover:bg-white/5 hover:text-white'
+          }`}
+        >
+          Fondo negro
         </button>
       ) : null}
       <button
@@ -2593,13 +2622,18 @@ export default function NexusVisionArchitectClient() {
                 />
               ) : (
                 <div
-                  className={`h-[calc(100dvh-11.5rem)] min-h-[420px] w-full overflow-hidden rounded-xl border border-[rgba(0,242,254,0.2)] bg-black ${
+                  className={`relative h-[calc(100dvh-11.5rem)] min-h-[420px] w-full overflow-hidden rounded-xl border border-[rgba(0,242,254,0.2)] bg-black ${
                     placeMode ? 'cursor-crosshair' : 'cursor-default'
                   }`}
                 >
                   <CameraPlacementTool
                     backgroundUrl={project.planoUrl}
                     invertBackground={Boolean(project.planoInvertido)}
+                    invertOptions={{
+                      cotaColor: normalizeCotaColor(project.planoCotaColor),
+                      grosorMuro: clampGrosorMuro(project.planoGrosorMuro),
+                    }}
+                    wallStrokeGrosor={clampGrosorMuro(project.planoGrosorMuro)}
                     cameras={project.cameras}
                     networkNodes={project.networkNodes}
                     planDevices={planDevices}
@@ -2733,6 +2767,29 @@ export default function NexusVisionArchitectClient() {
                     zoomControlsRef={zoomControlsRef}
                     onZoomChange={(z) => setZoomPercent(Math.round(z * 100))}
                   />
+                  <div className="pointer-events-none absolute left-3 top-3 z-20 w-[min(16.75rem,calc(100%-1.5rem))]">
+                    <div className="pointer-events-auto rounded-xl border border-white/20 bg-[#071018]/92 p-2.5 shadow-xl backdrop-blur-md">
+                      <p className="mb-1.5 px-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-text-dim)]">
+                        Apariencia del plano
+                      </p>
+                      <NetVisionPlanoLookControls
+                        compact
+                        invertido={Boolean(project.planoInvertido)}
+                        cotaColor={normalizeCotaColor(project.planoCotaColor)}
+                        grosorMuro={clampGrosorMuro(project.planoGrosorMuro)}
+                        disabled={loading}
+                        onInvertido={(value) =>
+                          setProject((p) => ({ ...p, planoInvertido: value }))
+                        }
+                        onCotaColor={(value) =>
+                          setProject((p) => ({ ...p, planoCotaColor: value }))
+                        }
+                        onGrosorMuro={(value) =>
+                          setProject((p) => ({ ...p, planoGrosorMuro: value }))
+                        }
+                      />
+                    </div>
+                  </div>
                 </div>
               )}
               {viewMode === 'plano' && showActiveCoverage ? (
@@ -2929,6 +2986,10 @@ export default function NexusVisionArchitectClient() {
               detecting={loading && canDetectPdfWalls}
               onDetectFromPdf={() => void detectWallsFromLoadedPdf()}
               onShowOnPlan={setShowStructures}
+              grosorMuro={clampGrosorMuro(project.planoGrosorMuro)}
+              onGrosorMuro={(value) =>
+                setProject((p) => ({ ...p, planoGrosorMuro: value }))
+              }
               onDrawMaterial={(id) => {
                 setDrawStructureMaterial(id)
                 setStructureDraft(null)

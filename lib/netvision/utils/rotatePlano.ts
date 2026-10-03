@@ -3,7 +3,10 @@
 import type { NetVisionProject } from '@/lib/netvision/types'
 import { clamp01 } from '@/lib/netvision/utils/geometryHelpers'
 import { encodePlanoCanvas } from '@/lib/netvision/utils/renderPdfPlano'
-import { applyNightPlanoPalette } from '@/lib/netvision/utils/nightPlanoPalette'
+import {
+  applyNightPlanoPalette,
+  type NightPlanoOptions,
+} from '@/lib/netvision/utils/nightPlanoPalette'
 
 export type PlanoRotateDir = 'cw' | 'ccw'
 
@@ -154,7 +157,10 @@ export function rotatePlanoDataUrl90(
 }
 
 /** Data URL con colores invertidos (para fondo negro / líneas blancas). */
-export function invertPlanoDataUrl(dataUrl: string): Promise<string> {
+export function invertPlanoDataUrl(
+  dataUrl: string,
+  options?: NightPlanoOptions,
+): Promise<string> {
   return new Promise((resolve, reject) => {
     if (typeof Image === 'undefined' || typeof document === 'undefined') {
       reject(new Error('La inversión del plano solo funciona en el navegador.'))
@@ -186,7 +192,7 @@ export function invertPlanoDataUrl(dataUrl: string): Promise<string> {
       }
       ctx.drawImage(img, 0, 0)
       const imageData = ctx.getImageData(0, 0, w, h)
-      applyNightPlanoPalette(imageData.data, w, h)
+      applyNightPlanoPalette(imageData.data, w, h, options)
       ctx.putImageData(imageData, 0, 0)
       resolve(canvas.toDataURL('image/png'))
     }
