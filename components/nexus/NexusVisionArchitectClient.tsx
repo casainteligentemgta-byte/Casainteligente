@@ -337,8 +337,8 @@ export default function NexusVisionArchitectClient() {
       const t = e.target
       if (!(t instanceof Node)) return
       const roots = document.querySelectorAll('[data-cameras-menu]')
-      for (const root of roots) {
-        if (root.contains(t)) return
+      for (let i = 0; i < roots.length; i++) {
+        if (roots[i]?.contains(t)) return
       }
       setCamerasMenuOpen(false)
     }
