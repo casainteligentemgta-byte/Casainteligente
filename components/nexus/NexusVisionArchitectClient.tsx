@@ -2933,9 +2933,9 @@ export default function NexusVisionArchitectClient() {
               <div
                 role="listbox"
                 aria-label="Cámaras agregadas"
-                className="absolute bottom-[calc(100%+8px)] left-0 max-h-[min(50vh,320px)] w-[min(280px,80vw)] overflow-y-auto rounded-xl border border-white/15 bg-[#071018]/98 p-1.5 shadow-xl backdrop-blur-md"
+                className="absolute bottom-[calc(100%+8px)] left-0 max-h-[min(50vh,320px)] w-[min(280px,80vw)] overflow-y-auto rounded-xl border border-zinc-200 bg-white p-1.5 text-zinc-900 shadow-xl"
               >
-                <p className="px-2 py-1 text-[9px] font-semibold uppercase tracking-wide text-[var(--nexus-text-dim)]">
+                <p className="px-2 py-1 text-[9px] font-semibold uppercase tracking-wide text-zinc-500">
                   Cámaras en el plano
                 </p>
                 {project.cameras.map((c) => {
@@ -2951,13 +2951,13 @@ export default function NexusVisionArchitectClient() {
                       className={`flex w-full flex-col items-start gap-0.5 rounded-lg px-2.5 py-2 text-left ${
                         active
                           ? 'bg-[var(--nexus-cyan)] text-black'
-                          : 'text-white hover:bg-white/10'
+                          : 'text-zinc-800 hover:bg-zinc-100'
                       }`}
                     >
                       <span className="text-[12px] font-semibold">{c.label}</span>
                       <span
                         className={`line-clamp-1 text-[10px] ${
-                          active ? 'text-black/70' : 'text-[var(--nexus-text-muted)]'
+                          active ? 'text-black/70' : 'text-zinc-500'
                         }`}
                       >
                         {model.brand} · {model.name}
@@ -2972,7 +2972,7 @@ export default function NexusVisionArchitectClient() {
                     setSideTab('cctv')
                     setInspectorOpen(true)
                   }}
-                  className="mt-1 w-full rounded-lg border border-white/10 px-2.5 py-1.5 text-[10px] font-semibold text-[var(--nexus-cyan)] hover:bg-white/5"
+                  className="mt-1 w-full rounded-lg border border-zinc-200 px-2.5 py-1.5 text-[10px] font-semibold text-sky-700 hover:bg-zinc-100"
                 >
                   Abrir inspector CCTV
                 </button>

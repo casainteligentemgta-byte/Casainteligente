@@ -208,7 +208,7 @@ function SelectContent({
         zIndex: 9999,
       }}
       className={cn(
-        'overflow-y-auto overscroll-contain rounded-lg border border-white/10 bg-[#0A0A0F] p-1 shadow-2xl backdrop-blur-xl',
+        'overflow-y-auto overscroll-contain rounded-lg border border-zinc-200 bg-white p-1 text-zinc-900 shadow-2xl',
         className,
       )}
     >
@@ -226,9 +226,9 @@ function SelectContent({
               disabled={item.disabled}
               className={cn(
                 'relative flex w-full cursor-pointer select-none items-start rounded-md py-2 pl-8 pr-2 text-left text-sm outline-none',
-                'text-zinc-200 hover:bg-white/[0.08] focus:bg-white/[0.08]',
+                'text-zinc-800 hover:bg-zinc-100 focus:bg-zinc-100',
                 'disabled:pointer-events-none disabled:opacity-50',
-                isSelected && 'bg-[#FF9500]/15 text-[#FFD60A]',
+                isSelected && 'bg-sky-50 text-zinc-950',
               )}
               onClick={() => {
                 if (item.disabled) return;
@@ -284,7 +284,7 @@ function SelectLabel({ className, ...props }: React.HTMLAttributes<HTMLDivElemen
   return (
     <div
       className={cn(
-        'px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500',
+        'px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-600',
         className,
       )}
       {...props}
@@ -293,7 +293,7 @@ function SelectLabel({ className, ...props }: React.HTMLAttributes<HTMLDivElemen
 }
 
 function SelectSeparator({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('-mx-1 my-1 h-px bg-white/10', className)} {...props} />;
+  return <div className={cn('-mx-1 my-1 h-px bg-zinc-200', className)} {...props} />;
 }
 
 export {

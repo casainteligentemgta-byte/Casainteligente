@@ -128,8 +128,7 @@ export default function TrabajadoresTodosProyectosClient() {
             <select
               value={proyectoFiltro ?? ''}
               onChange={(e) => setProyectoFiltro(e.target.value || null)}
-              style={{ colorScheme: 'dark' }}
-              className="ci-select-tabulador mt-1.5 w-full min-h-[44px] cursor-pointer rounded-xl border-2 border-fuchsia-500/40 bg-zinc-950 px-3 py-2.5 text-sm font-medium text-zinc-50 outline-none focus:border-fuchsia-400 focus:ring-2 focus:ring-fuchsia-400/35"
+              className="ci-select-tabulador mt-1.5 w-full min-h-[44px] cursor-pointer rounded-xl border-2 border-fuchsia-400/60 bg-white px-3 py-2.5 text-sm font-medium text-zinc-900 outline-none focus:border-fuchsia-500 focus:ring-2 focus:ring-fuchsia-400/35"
             >
               <option value="">Todos los proyectos ({trabajadores.length})</option>
               <option value={SIN_PROYECTO}>Sin proyecto asignado ({sinProyectoCount})</option>

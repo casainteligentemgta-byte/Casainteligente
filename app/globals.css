@@ -134,16 +134,56 @@
 }
 
 @layer components {
-  /* Listas nativas de oficios: refuerzo de contraste donde el SO ignora clases en <option>. */
-  select.ci-select-tabulador {
-    color-scheme: dark;
-    background-color: #09090b;
-    color: #fafafa;
+  /*
+   * Lista nativa al abrir un <select> (especialidad, oficio, filtros…).
+   * El SO suele ignorar el tema de la página y deja texto claro sobre fondo claro.
+   * Forzamos menú blanco y texto oscuro para que se lea.
+   */
+  select {
+    color-scheme: light !important;
   }
 
-  select.ci-select-tabulador option {
-    background-color: #09090b;
-    color: #fafafa;
+  select option,
+  select optgroup {
+    background-color: #ffffff !important;
+    color: #18181b !important;
+  }
+
+  select.ci-select-tabulador {
+    color-scheme: light !important;
+    background-color: #ffffff;
+    color: #18181b;
+    -webkit-text-fill-color: #18181b;
+  }
+
+  select.ci-select-tabulador option,
+  select.ci-select-tabulador optgroup {
+    background-color: #ffffff !important;
+    color: #18181b !important;
+    -webkit-text-fill-color: #18181b;
+  }
+
+  /* Menús plegables NetVision (Archivo / Especialidad): panel claro. */
+  .nv-fold-menu {
+    --nexus-text-muted: #3f3f46;
+    --nexus-text-dim: #52525b;
+    color: #18181b;
+    color-scheme: light;
+  }
+
+  .nv-fold-menu button.text-white,
+  .nv-fold-menu a.text-white {
+    color: #18181b;
+  }
+
+  .nv-fold-menu .backdrop-blur-xl {
+    background-color: #f4f4f5;
+    border-color: #d4d4d8;
+  }
+
+  .nv-fold-menu .border-white\/10,
+  .nv-fold-menu .border-white\/15 {
+    border-color: #e4e4e7;
   }
 }
 

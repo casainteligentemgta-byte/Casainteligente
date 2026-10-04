@@ -248,7 +248,7 @@ export default function DashboardOperativoClient() {
             <select
               value={filterProjectId}
               onChange={(e) => setFilterProjectId(e.target.value)}
-              className="mt-1.5 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-sky-500/50"
+              className="ci-select-tabulador mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-sky-500/50"
             >
               <option value="">Todos los proyectos</option>
               {projectOptions.map(([id, name]) => (
@@ -263,7 +263,7 @@ export default function DashboardOperativoClient() {
             <select
               value={filterSpecialty}
               onChange={(e) => setFilterSpecialty(e.target.value)}
-              className="mt-1.5 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-sky-500/50"
+              className="ci-select-tabulador mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-sky-500/50"
             >
               <option value="">Todos los perfiles</option>
               {specialties.map((c) => (
