@@ -39,14 +39,6 @@ const styles = StyleSheet.create({
     borderBottomColor: '#334155',
     paddingBottom: 8,
   },
-  brand: {
-    fontSize: 9,
-    letterSpacing: 1.4,
-    textTransform: 'uppercase',
-    color: '#67e8f9',
-    marginBottom: 3,
-    textAlign: 'center',
-  },
   title: {
     fontSize: 18,
     fontWeight: 700,
