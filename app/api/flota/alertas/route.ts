@@ -14,7 +14,7 @@ import { listarConductores, listarDocumentosConductor } from '@/lib/flota/conduc
 import { analizarConsumo, listarGasolina } from '@/lib/flota/gasolina';
 import { listarMantenimientos } from '@/lib/flota/mantenimiento';
 import { listarVehiculos, requireAccesoFlota, respuestaMigracionPendiente } from '@/lib/flota/acceso';
-import { esUuid, parseFechaIso, parseNumero } from '@/lib/flota/utils';
+import { entidadIdDesdeSearch, esUuid, filtrarPorUnidadesEntidad, parseFechaIso, parseNumero } from '@/lib/flota/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,27 +23,40 @@ export async function GET(req: Request) {
   if (!auth.ok) return auth.response;
 
   const url = new URL(req.url);
+  const entidadId = entidadIdDesdeSearch(url.searchParams);
   const todas = url.searchParams.get('todas') === '1';
   const pendientes =
     url.searchParams.get('pendientes') === '1' || url.searchParams.get('estado') === 'pendiente';
 
   try {
     if (pendientes) {
-      const [alertas, config] = await Promise.all([
+      const [alertas, config, vehiculos] = await Promise.all([
         obtenerAlertasPendientes(),
         listarConfigAlertas(auth.supabase),
+        listarVehiculos(auth.supabase, { entidadId }),
       ]);
-      return NextResponse.json({ ok: true, alertas, config: config.items });
+      const ids = new Set(vehiculos.items.map((v) => v.id));
+      return NextResponse.json({
+        ok: true,
+        alertas: filtrarPorUnidadesEntidad(alertas, ids, entidadId),
+        config: config.items,
+      });
     }
 
-    const [alertas, config] = await Promise.all([
+    const [alertas, config, vehiculos] = await Promise.all([
       listarAlertas(auth.supabase, { soloAbiertas: !todas }),
       listarConfigAlertas(auth.supabase),
+      listarVehiculos(auth.supabase, { entidadId }),
     ]);
     if (alertas.migracionPendiente || config.migracionPendiente) {
       return respuestaMigracionPendiente({ alertas: [], config: [] });
     }
-    return NextResponse.json({ ok: true, alertas: alertas.items, config: config.items });
+    const ids = new Set(vehiculos.items.map((v) => v.id));
+    return NextResponse.json({
+      ok: true,
+      alertas: filtrarPorUnidadesEntidad(alertas.items, ids, entidadId),
+      config: config.items,
+    });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : 'Error al listar alertas' },

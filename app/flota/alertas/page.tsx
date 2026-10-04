@@ -8,9 +8,11 @@ import { apiUrl } from '@/lib/http/apiUrl';
 import { parseFetchJson } from '@/lib/utils/parseFetchJson';
 import { formatApiErrorBody } from '@/lib/utils/formatErrorMessage';
 import type { FlotaAlerta, FlotaAlertaConfig } from '@/lib/flota/alertas';
+import { useFlotaNav } from '@/components/flota/FlotaNav';
 
 export default function FlotaAlertasPage() {
   const router = useRouter();
+  const { api, loginNext, embedded } = useFlotaNav();
   const [alertas, setAlertas] = useState<FlotaAlerta[]>([]);
   const [config, setConfig] = useState<FlotaAlertaConfig[]>([]);
   const [generando, setGenerando] = useState(false);
@@ -19,9 +21,13 @@ export default function FlotaAlertasPage() {
   const [hint, setHint] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const res = await fetch(apiUrl('/api/flota/alertas'), { credentials: 'include' });
+    const res = await fetch(apiUrl(api('/api/flota/alertas')), { credentials: 'include' });
     if (res.status === 401) {
-      router.push('/login?next=/flota/alertas');
+      if (embedded) {
+        setError('Debe iniciar sesión para gestionar la flota.');
+        return;
+      }
+      router.push(`/login?next=${encodeURIComponent(loginNext)}`);
       return;
     }
     const json = await parseFetchJson<{
@@ -34,7 +40,7 @@ export default function FlotaAlertasPage() {
     setAlertas(json.alertas ?? []);
     setConfig(json.config ?? []);
     setHint(json.hint ?? null);
-  }, [router]);
+  }, [router, api, loginNext, embedded]);
 
   useEffect(() => {
     void load().catch((e) => setError(e instanceof Error ? e.message : 'Error'));
@@ -68,7 +74,7 @@ export default function FlotaAlertasPage() {
           setGenerando(true);
           setError(null);
           try {
-            const res = await fetch(apiUrl('/api/flota/alertas'), {
+            const res = await fetch(apiUrl(api('/api/flota/alertas')), {
               method: 'POST',
               credentials: 'include',
               headers: { 'Content-Type': 'application/json' },

@@ -6,6 +6,9 @@ import {
   diasHasta,
   estadoAlertaDesdeFlags,
   flagsDesdeEstadoAlerta,
+  etiquetaVehiculo,
+  filtrarPorUnidadesEntidad,
+  inferirTipoVehiculo,
   normalizarPlaca,
   normalizarSeveridadAlerta,
   normalizarTipoMantenimiento,
@@ -14,6 +17,7 @@ import {
   parseNumero,
   partirNombreCompleto,
   partirTextoEnChunks,
+  placaDesdeEquipo,
   puntuacionBusqueda,
   unirNombreCompleto,
 } from './utils';
@@ -107,5 +111,42 @@ describe('flota/utils', () => {
       apellidos: 'Díaz López',
     });
     assert.equal(unirNombreCompleto('Juan', 'Pérez'), 'Juan Pérez');
+  });
+
+  it('etiqueta maquinaria por nombre de catálogo', () => {
+    assert.equal(
+      etiquetaVehiculo({
+        placa: 'MQABC123DE',
+        nombre: 'Camion Chevrolet NPR',
+        marca: 'Chevrolet',
+        modelo: 'NPR',
+      }),
+      'Camion Chevrolet NPR',
+    );
+    assert.equal(etiquetaVehiculo({ placa: 'AB123CD', marca: 'Toyota', modelo: 'Hilux' }), 'AB123CD · Toyota Hilux');
+  });
+
+  it('deriva placa e infiere tipo desde el catálogo', () => {
+    assert.equal(placaDesdeEquipo({ id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee', serial: 'AB-12-3CD' }), 'AB123CD');
+    assert.equal(placaDesdeEquipo({ id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee', serial: null }), 'MQAAAAAAAA');
+    assert.equal(inferirTipoVehiculo('Camion Chevrolet NPR', 'Chevrolet', 'NPR'), 'camion');
+    assert.equal(inferirTipoVehiculo('Retroexcavadora CAT', 'CAT', '416'), 'maquinaria');
+    assert.equal(inferirTipoVehiculo('Moto DT', 'Yamaha', 'DT175'), 'moto');
+  });
+
+  it('filtra registros de flota por unidades de la entidad', () => {
+    const ids = new Set(['v1']);
+    const rows = [
+      { vehiculo_id: 'v1' },
+      { vehiculo_id: 'v2' },
+      { maquinaria_id: 'v1' },
+      { entidad_id: 'e1' },
+      { entidad_id: 'e2' },
+    ];
+    const out = filtrarPorUnidadesEntidad(rows, ids, 'e1');
+    assert.deepEqual(
+      out.map((r) => r.vehiculo_id || r.maquinaria_id || r.entidad_id),
+      ['v1', 'v1', 'e1'],
+    );
   });
 });
