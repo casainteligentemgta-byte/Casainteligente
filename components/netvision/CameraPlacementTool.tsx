@@ -58,6 +58,7 @@ import {
   cameraLabelStagePos,
   labelOffsetFromNorm,
 } from '@/lib/netvision/utils/cameraLabelOffset'
+import { layoutCameraLeaders } from '@/lib/netvision/utils/cameraLeaderLayout'
 import {
   CAM_MARKER_CHIPS,
   camMarkerHex,
@@ -1970,40 +1971,83 @@ export default function CameraPlacementTool({
             />
           ))}
 
-          {cameras.map((cam) => {
-            const selected = cam.id === selectedId
-            const tilt = Math.round(cam.tiltDeg ?? 0)
-            const coverageOff = coverageHiddenIds.includes(cam.id)
-            const labelPos = cameraLabelStagePos(cam, offsetX, offsetY, drawW, drawH)
-            const live =
-              draggingLabelId === cam.id && dragLabelPos ? dragLabelPos : labelPos
-            const canDragLabel = !placeMode && !readOnly && !!onPatchCamera
-            const showColorPick = selected && canDragLabel
-            const pinX = offsetX + cam.x * drawW
-            const pinY = offsetY + cam.y * drawH
-            const marker = camMarkerHex(cam.markerColor)
+          {(() => {
             const swatch = 30
             const swatchGap = 8
             const swatchPad = 10
             const swatchN = CAM_MARKER_CHIPS.length
             const pickerW = swatchPad * 2 + swatchN * swatch + (swatchN - 1) * swatchGap
             const pickerH = swatch + swatchPad * 2
+            const canDragAny = !placeMode && !readOnly && !!onPatchCamera
+            const boxes = cameras.map((cam) => {
+              const selected = cam.id === selectedId
+              const showColorPick = selected && canDragAny
+              const desired =
+                draggingLabelId === cam.id && dragLabelPos
+                  ? dragLabelPos
+                  : cameraLabelStagePos(cam, offsetX, offsetY, drawW, drawH)
+              const chipW = Math.max(
+                showColorPick ? pickerW : 108,
+                cam.label.length * 9.2 + 40,
+              )
+              const chipH = selected ? 48 : 38
+              return {
+                id: cam.id,
+                pinX: offsetX + cam.x * drawW,
+                pinY: offsetY + cam.y * drawH,
+                x: desired.x,
+                y: desired.y,
+                w: chipW,
+                h: showColorPick ? chipH + 8 + pickerH : chipH,
+              }
+            })
+            const layouts = layoutCameraLeaders(boxes, {
+              pinnedIds: draggingLabelId ? [draggingLabelId] : [],
+            })
+            const layoutOf = new Map(layouts.map((l) => [l.id, l]))
+            return cameras.map((cam) => {
+            const selected = cam.id === selectedId
+            const tilt = Math.round(cam.tiltDeg ?? 0)
+            const coverageOff = coverageHiddenIds.includes(cam.id)
+            const canDragLabel = canDragAny
+            const showColorPick = selected && canDragLabel
+            const marker = camMarkerHex(cam.markerColor)
             const chipW = Math.max(
               showColorPick ? pickerW : 108,
               cam.label.length * 9.2 + 40,
             )
             const chipH = selected ? 48 : 38
-            const lineX = live.x + 6
-            const lineY = live.y + chipH / 2
+            const live = layoutOf.get(cam.id) ?? {
+              x: offsetX + cam.x * drawW,
+              y: offsetY + cam.y * drawH,
+              points: [],
+            }
             return (
               <Fragment key={`lbl-${cam.id}`}>
                 <Line
-                  points={[pinX, pinY, lineX, lineY]}
+                  points={live.points}
                   stroke={marker}
                   strokeWidth={1}
                   lineCap="round"
+                  lineJoin="round"
                   listening={false}
                 />
+                {Array.from(
+                  { length: Math.max(0, Math.floor(live.points.length / 2) - 2) },
+                  (_, i) => {
+                    const idx = (i + 1) * 2
+                    return (
+                      <Circle
+                        key={`elb-${cam.id}-${i}`}
+                        x={live.points[idx]!}
+                        y={live.points[idx + 1]!}
+                        radius={2.2}
+                        fill={marker}
+                        listening={false}
+                      />
+                    )
+                  },
+                )}
                 <Group
                   x={live.x}
                   y={live.y}
@@ -2147,7 +2191,8 @@ export default function CameraPlacementTool({
                 ) : null}
               </Fragment>
             )
-          })}
+          })
+          })()}
         </Layer>
       </Stage>
     </div>
