@@ -1598,6 +1598,12 @@ export default function NexusVisionArchitectClient() {
         if ('fovRightDeg' in patch && patch.fovRightDeg === undefined) delete next.fovRightDeg
         if ('lensVision' in patch && patch.lensVision === undefined) delete next.lensVision
         if ('rangeM' in patch && patch.rangeM === undefined) delete next.rangeM
+        if ('labelOffsetX' in patch && patch.labelOffsetX === undefined) {
+          delete next.labelOffsetX
+        }
+        if ('labelOffsetY' in patch && patch.labelOffsetY === undefined) {
+          delete next.labelOffsetY
+        }
         return next
       }),
     }))

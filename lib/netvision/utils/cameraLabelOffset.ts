@@ -39,6 +39,12 @@ export function labelOffsetFromNorm(
   }
 }
 
+export function hasCustomLabelOffset(
+  cam: Pick<DesignCamera, 'labelOffsetX' | 'labelOffsetY'>,
+): boolean {
+  return cam.labelOffsetX != null || cam.labelOffsetY != null
+}
+
 export function rotateCameraLabelOffset(
   cam: Pick<DesignCamera, 'labelOffsetX' | 'labelOffsetY'>,
   dir: 'cw' | 'ccw',

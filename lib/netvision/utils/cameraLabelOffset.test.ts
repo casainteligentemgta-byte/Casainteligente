@@ -5,6 +5,7 @@ import {
   cameraLabelStagePos,
   clampLabelOffset,
   labelOffsetFromNorm,
+  hasCustomLabelOffset,
   rotateCameraLabelOffset,
 } from './cameraLabelOffset'
 
@@ -37,5 +38,10 @@ describe('cameraLabelOffset', () => {
   it('rechaza offsets absurdos', () => {
     assert.equal(clampLabelOffset(9), 0.85)
     assert.equal(clampLabelOffset(undefined), undefined)
+  })
+
+  it('detecta si el nombre se movió a mano', () => {
+    assert.equal(hasCustomLabelOffset({}), false)
+    assert.equal(hasCustomLabelOffset({ labelOffsetX: 0.1 }), true)
   })
 })

@@ -1,6 +1,7 @@
 'use client'
 
 import { Trash2 } from 'lucide-react'
+import { hasCustomLabelOffset } from '@/lib/netvision/utils/cameraLabelOffset'
 import { Button } from '@/components/nexus/ui/button'
 import {
   cameraCatalogGrouped,
@@ -206,6 +207,21 @@ export default function NetVisionSelectedProps({
             className={fieldClass}
           />
         </label>
+        {hasCustomLabelOffset(camera) ? (
+          <button
+            type="button"
+            onClick={() =>
+              onPatchCamera({ labelOffsetX: undefined, labelOffsetY: undefined })
+            }
+            className="text-[11px] font-semibold text-[var(--nexus-cyan)] hover:underline"
+          >
+            Volver a poner el nombre junto al pin
+          </button>
+        ) : (
+          <p className="text-[10px] text-[var(--nexus-text-dim)]">
+            En el plano puedes arrastrar el nombre para que no tape muros o cotas.
+          </p>
+        )}
         <label className="block">
           <span className="text-[var(--nexus-text-dim)]">Modelo</span>
           <select

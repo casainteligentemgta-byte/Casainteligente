@@ -450,6 +450,10 @@ export default function CameraPlacementTool({
   const [pinching, setPinching] = useState(false)
   /** Asas de apertura/orientación/alcance: visibles al elegir la cámara; se ocultan al soltar tras ajustar. */
   const [visionHandlesOpen, setVisionHandlesOpen] = useState(false)
+  const [draggingLabelId, setDraggingLabelId] = useState<string | null>(null)
+  const [dragLabelPos, setDragLabelPos] = useState<{ x: number; y: number } | null>(
+    null,
+  )
   const prevSelectedIdRef = useRef<string | null>(null)
   const viewRef = useRef({ zoom: 1, stagePos: { x: 0, y: 0 } })
   const pinchRef = useRef<PinchState | null>(null)
@@ -1857,84 +1861,6 @@ export default function CameraPlacementTool({
             )
           })}
 
-          {cameras.map((cam) => {
-            const selected = cam.id === selectedId
-            const tilt = Math.round(cam.tiltDeg ?? 0)
-            const coverageOff = coverageHiddenIds.includes(cam.id)
-            const labelPos = cameraLabelStagePos(cam, offsetX, offsetY, drawW, drawH)
-            const canDragLabel = !placeMode && !readOnly && !!onPatchCamera
-            const labelW = Math.max(56, cam.label.length * 7.2 + 16)
-            return (
-              <Fragment key={`lbl-${cam.id}`}>
-                <Group
-                  x={labelPos.x}
-                  y={labelPos.y}
-                  listening={canDragLabel || !placeMode}
-                  draggable={canDragLabel}
-                  onMouseEnter={(e) => {
-                    if (!canDragLabel) return
-                    const stage = e.target.getStage()
-                    if (stage) stage.container().style.cursor = 'grab'
-                  }}
-                  onMouseLeave={(e) => {
-                    const stage = e.target.getStage()
-                    if (stage) stage.container().style.cursor = 'default'
-                  }}
-                  onClick={(e) => {
-                    e.cancelBubble = true
-                    onSelect(cam.id)
-                  }}
-                  onTap={(e) => {
-                    e.cancelBubble = true
-                    onSelect(cam.id)
-                  }}
-                  onDragStart={(e) => {
-                    e.cancelBubble = true
-                    pauseStageDrag(e.target.getStage())
-                    onSelect(cam.id)
-                    const stage = e.target.getStage()
-                    if (stage) stage.container().style.cursor = 'grabbing'
-                  }}
-                  onDragEnd={(e: KonvaEventObject<DragEvent>) => {
-                    e.cancelBubble = true
-                    const node = e.target
-                    const n = toNorm(node.x(), node.y())
-                    onPatchCamera?.(cam.id, labelOffsetFromNorm(cam, n.x, n.y))
-                    const stage = e.target.getStage()
-                    if (stage) stage.container().style.cursor = 'default'
-                    resumeStageDrag(stage)
-                  }}
-                >
-                  <Rect
-                    x={-6}
-                    y={-4}
-                    width={labelW}
-                    height={18}
-                    fill="rgba(0,0,0,0.001)"
-                    hitStrokeWidth={8}
-                  />
-                  <Text
-                    text={cam.label}
-                    fontSize={11}
-                    fill="#e2e8f0"
-                    opacity={coverageOff ? 0.4 : 1}
-                    listening={false}
-                  />
-                </Group>
-                {selected ? (
-                  <Text
-                    x={labelPos.x}
-                    y={labelPos.y + 12}
-                    text={`${cam.mountHeightM.toFixed(1)} m · ${tilt}°`}
-                    fontSize={9}
-                    fill="#67e8f9"
-                    listening={false}
-                  />
-                ) : null}
-              </Fragment>
-            )
-          })}
-
           {planDevices.map((dev) => {
             const cx = offsetX + dev.x * drawW
             const cy = offsetY + dev.y * drawH
@@ -2019,6 +1945,112 @@ export default function CameraPlacementTool({
               listening={false}
             />
           ))}
+
+          {cameras.map((cam) => {
+            const selected = cam.id === selectedId
+            const tilt = Math.round(cam.tiltDeg ?? 0)
+            const coverageOff = coverageHiddenIds.includes(cam.id)
+            const labelPos = cameraLabelStagePos(cam, offsetX, offsetY, drawW, drawH)
+            const live =
+              draggingLabelId === cam.id && dragLabelPos ? dragLabelPos : labelPos
+            const canDragLabel = !placeMode && !readOnly && !!onPatchCamera
+            const pinX = offsetX + cam.x * drawW
+            const pinY = offsetY + cam.y * drawH
+            const chipW = Math.max(72, cam.label.length * 7.4 + 28)
+            const chipH = selected ? 40 : 32
+            return (
+              <Fragment key={`lbl-${cam.id}`}>
+                <Line
+                  points={[pinX, pinY, live.x + 8, live.y + chipH / 2]}
+                  stroke={selected ? 'rgba(103,232,249,0.7)' : 'rgba(226,232,240,0.4)'}
+                  strokeWidth={1}
+                  dash={[4, 3]}
+                  listening={false}
+                />
+                <Group
+                  x={live.x}
+                  y={live.y}
+                  listening={!placeMode}
+                  draggable={canDragLabel}
+                  dragDistance={3}
+                  onMouseEnter={(e) => {
+                    if (!canDragLabel) return
+                    const stage = e.target.getStage()
+                    if (stage) stage.container().style.cursor = 'grab'
+                  }}
+                  onMouseLeave={(e) => {
+                    const stage = e.target.getStage()
+                    if (stage) stage.container().style.cursor = 'default'
+                  }}
+                  onClick={(e) => {
+                    e.cancelBubble = true
+                    onSelect(cam.id)
+                  }}
+                  onTap={(e) => {
+                    e.cancelBubble = true
+                    onSelect(cam.id)
+                  }}
+                  onDragStart={(e) => {
+                    e.cancelBubble = true
+                    pauseStageDrag(e.target.getStage())
+                    setDraggingLabelId(cam.id)
+                    setDragLabelPos({ x: e.target.x(), y: e.target.y() })
+                    const stage = e.target.getStage()
+                    if (stage) stage.container().style.cursor = 'grabbing'
+                  }}
+                  onDragMove={(e) => {
+                    e.cancelBubble = true
+                    setDragLabelPos({ x: e.target.x(), y: e.target.y() })
+                  }}
+                  onDragEnd={(e: KonvaEventObject<DragEvent>) => {
+                    e.cancelBubble = true
+                    const node = e.target
+                    const n = toNorm(node.x(), node.y())
+                    onPatchCamera?.(cam.id, labelOffsetFromNorm(cam, n.x, n.y))
+                    setDraggingLabelId(null)
+                    setDragLabelPos(null)
+                    const stage = e.target.getStage()
+                    if (stage) stage.container().style.cursor = 'default'
+                    resumeStageDrag(stage)
+                  }}
+                >
+                  <Rect
+                    x={0}
+                    y={0}
+                    width={chipW}
+                    height={chipH}
+                    cornerRadius={8}
+                    fill={selected ? 'rgba(8, 47, 73, 0.92)' : 'rgba(7, 16, 24, 0.82)'}
+                    stroke={selected ? '#67e8f9' : 'rgba(226,232,240,0.35)'}
+                    strokeWidth={selected ? 1.25 : 1}
+                    shadowColor="black"
+                    shadowBlur={6}
+                    shadowOpacity={0.35}
+                    opacity={coverageOff ? 0.55 : 1}
+                  />
+                  <Text
+                    x={10}
+                    y={selected ? 6 : 9}
+                    text={cam.label}
+                    fontSize={12}
+                    fontStyle="bold"
+                    fill="#f8fafc"
+                    listening={false}
+                  />
+                  {selected ? (
+                    <Text
+                      x={10}
+                      y={22}
+                      text={`${cam.mountHeightM.toFixed(1)} m · ${tilt}°`}
+                      fontSize={9}
+                      fill="#67e8f9"
+                      listening={false}
+                    />
+                  ) : null}
+                </Group>
+              </Fragment>
+            )
+          })}
         </Layer>
       </Stage>
     </div>
