@@ -76,6 +76,7 @@ import {
 import {
   defaultNetworkPlanSize,
 } from '@/lib/netvision/utils/networkNodeSize'
+import { VISION_SEMAFORO_HEX, VISION_SEMAFORO_LEGEND } from '@/lib/netvision/utils/visionSemaforoPalette'
 import {
   buildCoverageSectors,
   buildVisionSpectrum,
@@ -2889,18 +2890,15 @@ export default function NexusVisionArchitectClient() {
                   <span className="font-semibold uppercase tracking-wide text-white">
                     Semáforo
                   </span>
-                  <span className="inline-flex items-center gap-1">
-                    <span className="h-2 w-2 rounded-sm bg-emerald-500" />
-                    Verde
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <span className="h-2 w-2 rounded-sm bg-yellow-400" />
-                    Amarillo
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <span className="h-2 w-2 rounded-sm bg-red-500" />
-                    Rojo
-                  </span>
+                  {VISION_SEMAFORO_LEGEND.map((item) => (
+                    <span key={item.band} className="inline-flex items-center gap-1">
+                      <span
+                        className="h-2 w-2 rounded-sm"
+                        style={{ backgroundColor: item.hex }}
+                      />
+                      {item.label}
+                    </span>
+                  ))}
                 </div>
               ) : null}
             </>
@@ -3442,17 +3440,17 @@ export default function NexusVisionArchitectClient() {
                                   {': '}
                                 </span>
                               ) : null}
-                              <span className="text-emerald-300">
+                              <span style={{ color: VISION_SEMAFORO_HEX.green }}>
                                 Verde 0–
                                 {formatLength(lb.greenMaxM, project.unitSystem ?? 'metric')}
                               </span>
                               {' · '}
-                              <span className="text-orange-300">
+                              <span style={{ color: VISION_SEMAFORO_HEX.yellow }}>
                                 naranja{' '}
                                 {formatLength(lb.yellowMaxM, project.unitSystem ?? 'metric')}
                               </span>
                               {' · '}
-                              <span className="text-red-300">
+                              <span style={{ color: VISION_SEMAFORO_HEX.red }}>
                                 rojo hasta{' '}
                                 {formatLength(lb.redMaxM, project.unitSystem ?? 'metric')}
                               </span>

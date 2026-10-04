@@ -45,6 +45,7 @@ import {
   visionPatchFromPointer,
   type VisionHandleMode,
 } from '@/lib/netvision/utils/visionAdjust'
+import { visionBandSolidFill } from '@/lib/netvision/utils/visionSemaforoPalette'
 
 export type CameraPlacementToolProps = {
   backgroundUrl: string | null
@@ -156,13 +157,6 @@ function spectrumFill(strength: number, hue: number, boost = 0) {
 
 type SpectrumBand = 'red' | 'yellow' | 'green'
 
-/** Semáforo de cobertura: verde / naranja / rojo translúcidos (se ve el plano debajo). */
-function visionBandSolidFill(band: SpectrumBand): string {
-  if (band === 'green') return 'rgba(34, 197, 94, 0.42)'
-  if (band === 'yellow') return 'rgba(249, 115, 22, 0.36)'
-  return 'rgba(239, 68, 68, 0.30)'
-}
-
 function sectorPolyPoints(
   poly: { x: number; y: number }[] | undefined,
   offsetX: number,
@@ -181,7 +175,7 @@ function sectorPolyPoints(
 /**
  * Semáforo CCTV relleno con polígonos del FOV (elipse + recorte de muros).
  * Arcos circulares no cubrían el cono en planos apaisados y dejaban huecos.
- * Se pinta rojo → amarillo → verde para que en solapes gane la mejor detección.
+ * Se pinta rojo → naranja → verde para que en solapes gane la mejor detección.
  */
 function VisionSpectrumLayer({
   sectors,
