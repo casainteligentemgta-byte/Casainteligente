@@ -1608,6 +1608,9 @@ export default function NexusVisionArchitectClient() {
         if ('labelOffsetY' in patch && patch.labelOffsetY === undefined) {
           delete next.labelOffsetY
         }
+        if ('leaderElbows' in patch && !patch.leaderElbows?.length) {
+          delete next.leaderElbows
+        }
         return next
       }),
     }))

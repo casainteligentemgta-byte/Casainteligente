@@ -3,7 +3,9 @@ import assert from 'node:assert/strict'
 import {
   boxesOverlap,
   layoutCameraLeaders,
+  orthoViaPoint,
   polylineHitsBox,
+  polylineIsOrtho,
   polylinesOverlap,
   type LeaderBox,
 } from './cameraLeaderLayout'
@@ -65,16 +67,17 @@ describe('cameraLeaderLayout', () => {
     assert.equal(boxesOverlap(laid[0]!, laid[1]!, 8), false)
   })
 
-  it('la polilínea sale del pin y llega al borde del chip', () => {
+  it('si no hay solape usa una recta del pin al borde del chip', () => {
     const laid = layoutCameraLeaders([box('a', 80, 120, 180, 40)])
     const p = laid[0]!.points
+    assert.equal(laid[0]!.mode, 'straight')
     assert.equal(p[0], 80)
     assert.equal(p[1], 120)
     const endX = p[p.length - 2]!
     const endY = p[p.length - 1]!
     assert.ok(Math.abs(endX - 180) < 1 || Math.abs(endX - 290) < 1)
     assert.ok(Math.abs(endY - (40 + 19)) < 2)
-    assert.ok(p.length >= 8)
+    assert.equal(p.length, 4)
   })
 
   it('la línea no atraviesa el otro botón', () => {
@@ -128,8 +131,63 @@ describe('cameraLeaderLayout', () => {
         assert.equal(polylineHitsBox(laid[j]!.points, laid[i]!, 2), false)
       }
       const p = laid[i]!.points
-      assert.ok(p.length >= 8)
+      assert.ok(p.length >= 4)
       assert.equal(p[0], [120, 126, 132, 118][i])
     }
+  })
+
+  it('al bajar el nodo elige la escuadra vertical', () => {
+    const pts = orthoViaPoint({ x: 80, y: 120 }, { x: 140, y: 220 }, { x: 180, y: 59 })
+    assert.equal(polylineIsOrtho(pts), true)
+    assert.ok(pts.some((v, i) => i % 2 === 1 && Math.abs(v - 220) < 1))
+  })
+
+  it('un nodo del operador se interpreta como quiebre a 90°', () => {
+    const laid = layoutCameraLeaders([box('a', 80, 120, 180, 40)], {
+      customElbows: { a: [{ x: 120, y: 80 }] },
+    })
+    assert.equal(laid[0]!.mode, 'custom')
+    assert.equal(polylineIsOrtho(laid[0]!.points), true)
+    assert.ok(laid[0]!.points.includes(120))
+  })
+
+  it('varios nodos del operador se respetan en orden', () => {
+    const laid = layoutCameraLeaders([box('a', 80, 120, 180, 40)], {
+      customElbows: {
+        a: [
+          { x: 80, y: 80 },
+          { x: 180, y: 80 },
+        ],
+      },
+    })
+    assert.equal(laid[0]!.mode, 'custom')
+    assert.equal(laid[0]!.points[2], 80)
+    assert.equal(laid[0]!.points[3], 80)
+    assert.equal(laid[0]!.points[4], 180)
+    assert.equal(laid[0]!.points[5], 80)
+  })
+
+  it('si la recta cruza otro botón usa quiebres a 90°', () => {
+    const laid = layoutCameraLeaders([
+      box('a', 40, 100, 300, 82),
+      box('b', 40, 220, 160, 80),
+    ])
+    const ra = laid.find((l) => l.id === 'a')!
+    assert.equal(ra.mode, 'ortho')
+    assert.equal(polylineIsOrtho(ra.points), true)
+    assert.ok(ra.points.length >= 6)
+    assert.equal(polylineHitsBox(ra.points, laid.find((l) => l.id === 'b')!, 2), false)
+  })
+
+  it('si el otro botón está en la horizontal elige un desvío vertical', () => {
+    const laid = layoutCameraLeaders([
+      box('a', 40, 100, 320, 81),
+      box('b', 40, 200, 160, 81),
+    ])
+    const ra = laid.find((l) => l.id === 'a')!
+    const rb = laid.find((l) => l.id === 'b')!
+    assert.equal(polylineIsOrtho(ra.points), true)
+    assert.equal(polylineHitsBox(ra.points, rb, 2), false)
+    assert.ok(ra.points.some((_, i) => i % 2 === 1 && Math.abs(ra.points[i]! - 100) > 12))
   })
 })

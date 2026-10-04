@@ -77,6 +77,11 @@ export type DesignCamera = {
    */
   markerColor?: string
   /**
+   * Quiebres de la línea pin→nombre (coords 0–1 del plano).
+   * Si falta, se usa recta o un recorte automático a 90°.
+   */
+  leaderElbows?: { x: number; y: number }[]
+  /**
    * Cámaras Dual: ajuste propio de cada lente secundaria (por id de lente, p. ej. «tele»).
    * Cada cono puede mirar a otro lugar. La lente primaria usa yawDeg / fov* / rangeM de arriba.
    */

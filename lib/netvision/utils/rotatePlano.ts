@@ -55,6 +55,9 @@ export function rotateProjectGeometry(
       y: p.y,
       yawDeg: wrapYaw(c.yawDeg + dYaw),
       ...rotateCameraLabelOffset(c, dir),
+      ...(c.leaderElbows?.length
+        ? { leaderElbows: c.leaderElbows.map((e) => rotateNormPoint(e.x, e.y, dir)) }
+        : {}),
     }
   })
   const networkNodes = project.networkNodes.map((n) => {
