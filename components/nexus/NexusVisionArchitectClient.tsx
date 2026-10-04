@@ -61,6 +61,7 @@ import {
 import {
   DEFAULT_AP_ID,
   DEFAULT_INJECTOR_ID,
+  DEFAULT_DVR_ID,
   DEFAULT_NVR_ID,
   DEFAULT_SWITCH_ID,
   getNetworkModelOrDefault,
@@ -76,6 +77,17 @@ import {
   planDeviceKinds,
   planDevicesByDiscipline,
 } from '@/lib/netvision/catalog/planDevices'
+import {
+  INFRA_KIND_PREFIX,
+  clampHddTb,
+  clampRackSizeU,
+  defaultInfraModelId,
+  getInfraModelOrDefault,
+  listMountables,
+  resizeRack,
+  unmountFromRacks,
+} from '@/lib/netvision/catalog/salaTecnica'
+import NetVisionSalaTecnica from '@/components/netvision/NetVisionSalaTecnica'
 import {
   defaultNetworkPlanSize,
 } from '@/lib/netvision/utils/networkNodeSize'
@@ -157,8 +169,11 @@ import type {
   CableType,
   DesignCableSegment,
   DesignCamera,
+  DesignInfraDevice,
   DesignNetworkNode,
   DesignPlanDevice,
+  InfraKind,
+  RackSizeU,
   DesignStructure,
   DesignUndergroundSegment,
   NetVisionProject,
@@ -338,6 +353,15 @@ export default function NexusVisionArchitectClient() {
     nvr: DEFAULT_NVR_ID,
     injector: DEFAULT_INJECTOR_ID,
   })
+  const [defaultDvrId, setDefaultDvrId] = useState(DEFAULT_DVR_ID)
+  const [defaultInfra, setDefaultInfra] = useState<Record<InfraKind, string>>({
+    monitor: defaultInfraModelId('monitor'),
+    hdd: defaultInfraModelId('hdd'),
+    ups: 'ups-1500-1u',
+    rack: 'rack-12u',
+  })
+  const [defaultHddTb, setDefaultHddTb] = useState(4)
+  const [defaultRackU, setDefaultRackU] = useState<RackSizeU>(12)
   const [calibrateMode, setCalibrateMode] = useState(false)
   const [calibPoints, setCalibPoints] = useState<{ x: number; y: number }[]>([])
   const [calibCursor, setCalibCursor] = useState<{ x: number; y: number } | null>(null)
@@ -873,6 +897,7 @@ export default function NexusVisionArchitectClient() {
         cableRoutes,
         conduitPlans,
         undergroundPlan,
+        project.infraDevices ?? [],
       ),
     [
       project.cameras,
@@ -881,6 +906,7 @@ export default function NexusVisionArchitectClient() {
       cableRoutes,
       conduitPlans,
       undergroundPlan,
+      project.infraDevices,
     ],
   )
 
@@ -904,6 +930,8 @@ export default function NexusVisionArchitectClient() {
 
   const selectedCam = project.cameras.find((c) => c.id === selectedId) ?? null
   const selectedNet = project.networkNodes.find((n) => n.id === selectedId) ?? null
+  const selectedInfra =
+    (project.infraDevices ?? []).find((d) => d.id === selectedId) ?? null
   const selectedPlanDevice = planDevices.find((d) => d.id === selectedId) ?? null
   const selectedStructure =
     structures.find((s) => s.id === selectedId) ?? null
@@ -917,6 +945,7 @@ export default function NexusVisionArchitectClient() {
   const hasSelection = !!(
     selectedCam ||
     selectedNet ||
+    selectedInfra ||
     selectedPlanDevice ||
     selectedStructure ||
     selectedManualCable ||
@@ -1207,17 +1236,26 @@ export default function NexusVisionArchitectClient() {
     [],
   )
 
-  const addNetworkAt = (kind: NetworkNodeKind, normX: number, normY: number) => {
+  const addNetworkAt = (
+    kind: NetworkNodeKind,
+    normX: number,
+    normY: number,
+    modelId?: string,
+  ) => {
     if (!project.planoUrl) return
-    const count = project.networkNodes.filter((n) => n.kind === kind).length + 1
-    const prefix = labelPrefixForKind(kind)
+    const mid = modelId ?? defaultNetModels[kind]
+    const prefix = labelPrefixForKind(kind, mid)
+    const count =
+      project.networkNodes.filter(
+        (n) => labelPrefixForKind(n.kind, n.modelId) === prefix,
+      ).length + 1
     const node: DesignNetworkNode = {
       id: uid(),
       x: Math.round(normX * 1000) / 1000,
       y: Math.round(normY * 1000) / 1000,
       label: `${prefix}-${String(count).padStart(2, '0')}`,
       kind,
-      modelId: defaultNetModels[kind],
+      modelId: mid,
       planSizeNorm: defaultNetworkPlanSize(kind),
       linkedCameraIds: [],
       wifiChannel: kind === 'ap' ? 36 : undefined,
@@ -1248,6 +1286,67 @@ export default function NexusVisionArchitectClient() {
     const idx = project.networkNodes.filter((n) => n.kind === kind).length
     const pos = buttonSpawnPos(idx, base.x, base.y)
     addNetworkAt(kind, pos.x, pos.y)
+  }
+
+  const addRecorderFromButton = (recorder: 'nvr' | 'dvr') => {
+    const modelId = recorder === 'dvr' ? defaultDvrId : defaultNetModels.nvr
+    if (!project.planoUrl) {
+      setError('Carga un plano antes de agregar equipos.')
+      return
+    }
+    const idx = project.networkNodes.filter((n) => n.kind === 'nvr').length
+    const pos = buttonSpawnPos(idx, 0.35, 0.65)
+    addNetworkAt('nvr', pos.x, pos.y, modelId)
+    setSideTab('cctv')
+    setInspectorOpen(true)
+  }
+
+  const addInfraFromButton = (kind: InfraKind) => {
+    if (!project.planoUrl) {
+      setError('Carga un plano antes de agregar equipos.')
+      return
+    }
+    const modelId =
+      kind === 'rack' ? `rack-${defaultRackU}u` : defaultInfra[kind]
+    const model = getInfraModelOrDefault(modelId, kind)
+    const count = (project.infraDevices ?? []).filter((d) => d.kind === kind).length + 1
+    const bases: Record<InfraKind, { x: number; y: number }> = {
+      monitor: { x: 0.72, y: 0.28 },
+      hdd: { x: 0.28, y: 0.72 },
+      ups: { x: 0.55, y: 0.72 },
+      rack: { x: 0.18, y: 0.55 },
+    }
+    const base = bases[kind]
+    const idx = count - 1
+    const pos = buttonSpawnPos(idx, base.x, base.y)
+    const device: DesignInfraDevice = {
+      id: uid(),
+      label: `${INFRA_KIND_PREFIX[kind]}-${String(count).padStart(2, '0')}`,
+      kind,
+      modelId: model.id,
+      x: pos.x,
+      y: pos.y,
+      ...(kind === 'hdd' ? { capacityTb: defaultHddTb } : {}),
+      ...(kind === 'rack' ? { rackUnits: defaultRackU, mounts: [] } : {}),
+    }
+    setError(null)
+    setProject((p) => ({
+      ...p,
+      infraDevices: [...(p.infraDevices ?? []), device],
+    }))
+    setSelectedId(device.id)
+    setInspectorOpen(true)
+    setSideTab('cctv')
+    setViewMode('plano')
+  }
+
+  const patchInfraDevice = (id: string, patch: Partial<DesignInfraDevice>) => {
+    setProject((p) => ({
+      ...p,
+      infraDevices: (p.infraDevices ?? []).map((d) =>
+        d.id === id ? { ...d, ...patch } : d,
+      ),
+    }))
   }
 
   const addPlanDeviceAt = (
@@ -1575,6 +1674,9 @@ export default function NexusVisionArchitectClient() {
       planDevices: (p.planDevices ?? []).map((d) =>
         d.id === id ? { ...d, x: nx, y: ny } : d,
       ),
+      infraDevices: (p.infraDevices ?? []).map((d) =>
+        d.id === id ? { ...d, x: nx, y: ny } : d,
+      ),
     }))
   }
 
@@ -1714,6 +1816,10 @@ export default function NexusVisionArchitectClient() {
         cameras: p.cameras.filter((c) => c.id !== id),
         networkNodes: p.networkNodes.filter((n) => n.id !== id),
         planDevices: (p.planDevices ?? []).filter((d) => d.id !== id),
+        infraDevices: unmountFromRacks(
+          (p.infraDevices ?? []).filter((d) => d.id !== id),
+          id,
+        ),
         structures: (p.structures ?? []).filter((s) => s.id !== id),
         undergroundSegments: (p.undergroundSegments ?? []).filter(
           (s) => s.id !== id,
@@ -1992,6 +2098,54 @@ export default function NexusVisionArchitectClient() {
             onClick={addCameraFromButton}
           >
             + Cámara
+          </button>
+          <button
+            type="button"
+            disabled={!project.planoUrl || loading}
+            className={chipClass(false)}
+            onClick={() => addRecorderFromButton('nvr')}
+          >
+            + NVR
+          </button>
+          <button
+            type="button"
+            disabled={!project.planoUrl || loading}
+            className={chipClass(false)}
+            onClick={() => addRecorderFromButton('dvr')}
+          >
+            + DVR
+          </button>
+          <button
+            type="button"
+            disabled={!project.planoUrl || loading}
+            className={chipClass(false)}
+            onClick={() => addInfraFromButton('monitor')}
+          >
+            + Pantalla
+          </button>
+          <button
+            type="button"
+            disabled={!project.planoUrl || loading}
+            className={chipClass(false)}
+            onClick={() => addInfraFromButton('hdd')}
+          >
+            + Disco
+          </button>
+          <button
+            type="button"
+            disabled={!project.planoUrl || loading}
+            className={chipClass(false)}
+            onClick={() => addInfraFromButton('ups')}
+          >
+            + UPS
+          </button>
+          <button
+            type="button"
+            disabled={!project.planoUrl || loading}
+            className={chipClass(false)}
+            onClick={() => addInfraFromButton('rack')}
+          >
+            + Rack
           </button>
           {!selectedCam ? (
             <span className="text-[10px] text-[var(--nexus-text-dim)]">
@@ -2857,6 +3011,7 @@ export default function NexusVisionArchitectClient() {
                     cameras={project.cameras}
                     networkNodes={project.networkNodes}
                     planDevices={planDevices}
+                    infraDevices={project.infraDevices ?? []}
                     structures={structures}
                     sectors={activeSectors}
                     coverageHiddenIds={hiddenLive}
@@ -2944,6 +3099,18 @@ export default function NexusVisionArchitectClient() {
                       } else if (planDevices.some((d) => d.id === id)) {
                         const dev = planDevices.find((d) => d.id === id)!
                         setSideTab(dev.discipline)
+                        setViewMode('plano')
+                        setCalibrateMode(false)
+                        setDrawStructureMaterial(null)
+                        setStructureDraft(null)
+                        setDrawUnderground(false)
+                        setUndergroundDraft(null)
+                        setDrawCable(false)
+                        clearCableDraft()
+                      } else if (
+                        (project.infraDevices ?? []).some((d) => d.id === id)
+                      ) {
+                        setSideTab('cctv')
                         setViewMode('plano')
                         setCalibrateMode(false)
                         setDrawStructureMaterial(null)
@@ -3206,6 +3373,113 @@ export default function NexusVisionArchitectClient() {
             }}
             onRemove={quitar}
           />
+          {selectedInfra ? (
+            <div className="mb-3 space-y-2 rounded-lg border border-white/15 bg-black/25 p-2.5 text-xs">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-cyan)]">
+                Seleccionado · {selectedInfra.kind === 'monitor' ? 'Pantalla' : selectedInfra.kind === 'hdd' ? 'Disco' : selectedInfra.kind === 'ups' ? 'UPS' : 'Rack'}
+              </p>
+              <label className="block">
+                <span className="text-[var(--nexus-text-dim)]">Etiqueta</span>
+                <input
+                  value={selectedInfra.label}
+                  onChange={(e) =>
+                    patchInfraDevice(selectedInfra.id, { label: e.target.value })
+                  }
+                  className="mt-0.5 w-full rounded border border-white/10 bg-black/40 px-2 py-1 text-white"
+                />
+              </label>
+              {selectedInfra.kind === 'hdd' ? (
+                <label className="block">
+                  <span className="text-[var(--nexus-text-dim)]">Capacidad</span>
+                  <select
+                    value={clampHddTb(selectedInfra.capacityTb ?? 4)}
+                    onChange={(e) =>
+                      patchInfraDevice(selectedInfra.id, {
+                        capacityTb: clampHddTb(Number(e.target.value)),
+                      })
+                    }
+                    className="mt-0.5 w-full rounded border border-white/10 bg-black/40 px-2 py-1 text-white"
+                  >
+                    {[1, 2, 4, 6, 8, 10, 12, 16, 20].map((tb) => (
+                      <option key={tb} value={tb}>
+                        {tb} TB
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+              {selectedInfra.kind === 'rack' ? (
+                <label className="block">
+                  <span className="text-[var(--nexus-text-dim)]">Tamaño</span>
+                  <select
+                    value={clampRackSizeU(selectedInfra.rackUnits)}
+                    onChange={(e) => {
+                      const u = clampRackSizeU(Number(e.target.value))
+                      const next = resizeRack(
+                        selectedInfra,
+                        u,
+                        listMountables(
+                          project.networkNodes,
+                          project.infraDevices ?? [],
+                        ),
+                      )
+                      patchInfraDevice(selectedInfra.id, {
+                        rackUnits: next.rackUnits,
+                        modelId: next.modelId,
+                        mounts: next.mounts,
+                      })
+                    }}
+                    className="mt-0.5 w-full rounded border border-white/10 bg-black/40 px-2 py-1 text-white"
+                  >
+                    {[4, 6, 9, 12, 15, 18, 22, 27, 42].map((u) => (
+                      <option key={u} value={u}>
+                        {u}U
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+              <Button
+                type="button"
+                variant="glass"
+                className="w-full"
+                onClick={() => quitar(selectedInfra.id)}
+              >
+                <Trash2 className="mr-2 h-3.5 w-3.5" />
+                Quitar
+              </Button>
+            </div>
+          ) : null}
+          {sideTab === 'cctv' ? (
+            <div className="mb-3">
+              <NetVisionSalaTecnica
+                networkNodes={project.networkNodes}
+                infraDevices={project.infraDevices ?? []}
+                defaultNvrId={defaultNetModels.nvr}
+                defaultDvrId={defaultDvrId}
+                defaultInfra={defaultInfra}
+                defaultHddTb={defaultHddTb}
+                defaultRackU={defaultRackU}
+                disabled={!project.planoUrl || loading}
+                onDefaultNvr={(id) =>
+                  setDefaultNetModels((m) => ({ ...m, nvr: id }))
+                }
+                onDefaultDvr={setDefaultDvrId}
+                onDefaultInfra={(kind, id) =>
+                  setDefaultInfra((m) => ({ ...m, [kind]: id }))
+                }
+                onDefaultHddTb={setDefaultHddTb}
+                onDefaultRackU={setDefaultRackU}
+                onAddRecorder={addRecorderFromButton}
+                onAddInfra={addInfraFromButton}
+                onPatchInfra={patchInfraDevice}
+                onSelect={(id) => {
+                  setSelectedId(id)
+                  setInspectorOpen(true)
+                }}
+              />
+            </div>
+          ) : null}
           {selectedUnderground ? (
             <div className="space-y-2 rounded-lg border border-orange-400/30 bg-orange-400/10 p-2.5 text-xs">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-orange-100">

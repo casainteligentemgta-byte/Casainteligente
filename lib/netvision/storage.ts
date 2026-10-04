@@ -2,8 +2,11 @@ import type {
   CableType,
   DesignCableSegment,
   DesignCamera,
+  DesignInfraDevice,
   DesignNetworkNode,
   DesignPlanDevice,
+  InfraKind,
+  RackMount,
   DesignStructure,
   DesignUndergroundSegment,
   PlanDeviceKind,
@@ -92,6 +95,7 @@ export function emptyProject(partial?: {
     planoGrosorMuro: 50,
     cameras: [],
     networkNodes: [],
+    infraDevices: [],
     planDevices: [],
     structures: [],
     undergroundSegments: [],
@@ -180,6 +184,15 @@ function readLibrary(): LibraryStore {
               salvaged.networkNodes = rawP.networkNodes.flatMap((n) => {
                 try {
                   return [normalizeNetworkNode(n)]
+                } catch {
+                  return []
+                }
+              })
+            }
+            if (Array.isArray(rawP.infraDevices)) {
+              salvaged.infraDevices = rawP.infraDevices.flatMap((d) => {
+                try {
+                  return [normalizeInfraDevice(d)]
                 } catch {
                   return []
                 }
@@ -537,6 +550,9 @@ function normalizeProject(
     networkNodes: Array.isArray(p.networkNodes)
       ? p.networkNodes.map(normalizeNetworkNode)
       : [],
+    infraDevices: Array.isArray(p.infraDevices)
+      ? p.infraDevices.map(normalizeInfraDevice)
+      : [],
     planDevices: Array.isArray(p.planDevices)
       ? p.planDevices.map(normalizePlanDevice)
       : [],
@@ -697,6 +713,46 @@ function normalizePlanDevice(d: Partial<DesignPlanDevice>): DesignPlanDevice {
     ...(rangeM != null ? { rangeM } : {}),
     ...(fovDeg != null ? { fovDeg } : {}),
     ...(model.id && !d.modelId ? { modelId: model.id } : {}),
+  }
+}
+
+const INFRA_KINDS: InfraKind[] = ['monitor', 'hdd', 'ups', 'rack']
+
+function normalizeRackMount(raw: unknown): RackMount | null {
+  if (!raw || typeof raw !== 'object') return null
+  const m = raw as Partial<RackMount>
+  if (!m.deviceId || typeof m.deviceId !== 'string') return null
+  const startU =
+    typeof m.startU === 'number' && Number.isFinite(m.startU)
+      ? Math.max(1, Math.round(m.startU))
+      : 1
+  return {
+    deviceId: m.deviceId,
+    source: m.source === 'network' ? 'network' : 'infra',
+    startU,
+  }
+}
+
+function normalizeInfraDevice(d: Partial<DesignInfraDevice>): DesignInfraDevice {
+  const kind = INFRA_KINDS.includes(d.kind as InfraKind)
+    ? (d.kind as InfraKind)
+    : 'monitor'
+  const looksPercent = (d.x ?? 0) > 1 || (d.y ?? 0) > 1
+  const mounts = Array.isArray(d.mounts)
+    ? d.mounts.map(normalizeRackMount).filter((m): m is RackMount => Boolean(m))
+    : []
+  return {
+    id: d.id ?? `${Date.now()}`,
+    label: d.label ?? 'EQ-01',
+    kind,
+    modelId: typeof d.modelId === 'string' && d.modelId ? d.modelId : '',
+    x: looksPercent ? (d.x ?? 0) / 100 : (d.x ?? 0.2),
+    y: looksPercent ? (d.y ?? 0) / 100 : (d.y ?? 0.2),
+    ...(typeof d.capacityTb === 'number' ? { capacityTb: d.capacityTb } : {}),
+    ...(typeof d.rackUnits === 'number' ? { rackUnits: d.rackUnits } : {}),
+    ...(mounts.length ? { mounts } : {}),
+    ...(d.rackId ? { rackId: d.rackId } : { rackId: d.rackId ?? null }),
+    ...(typeof d.rackStartU === 'number' ? { rackStartU: d.rackStartU } : {}),
   }
 }
 

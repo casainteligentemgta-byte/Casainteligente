@@ -19,11 +19,13 @@ import type {
   CoverageSector,
   DesignCamera,
   DesignNetworkNode,
+  DesignInfraDevice,
   DesignPlanDevice,
   DesignStructure,
   SpectrumCell,
 } from '@/lib/netvision/types'
 import { planDeviceColor } from '@/lib/netvision/catalog/planDevices'
+import { INFRA_KIND_COLOR } from '@/lib/netvision/catalog/salaTecnica'
 import { effectiveCameraLenses } from '@/lib/netvision/catalog/cameras'
 import { getStructureMaterialOrDefault } from '@/lib/netvision/catalog/materials'
 import { degToRad } from '@/lib/netvision/utils/geometryHelpers'
@@ -81,6 +83,7 @@ export type CameraPlacementToolProps = {
   cameras: DesignCamera[]
   networkNodes: DesignNetworkNode[]
   planDevices?: DesignPlanDevice[]
+  infraDevices?: DesignInfraDevice[]
   structures?: DesignStructure[]
   sectors: CoverageSector[]
   visionSpectrum?: SpectrumCell[]
@@ -419,6 +422,7 @@ export default function CameraPlacementTool({
   cameras,
   networkNodes,
   planDevices = [],
+  infraDevices = [],
   structures = [],
   sectors,
   wifiCircles,
@@ -1940,6 +1944,60 @@ export default function CameraPlacementTool({
                     }}
                   />
                 ) : null}
+              </Fragment>
+            )
+          })}
+
+          {infraDevices.map((dev) => {
+            const cx = offsetX + dev.x * drawW
+            const cy = offsetY + dev.y * drawH
+            const selected = dev.id === selectedId
+            const color = INFRA_KIND_COLOR[dev.kind]
+            const w = dev.kind === 'rack' ? 16 : 11
+            const h = dev.kind === 'rack' ? 22 : 11
+            return (
+              <Fragment key={dev.id}>
+                <Rect
+                  x={cx - w / 2}
+                  y={cy - h / 2}
+                  width={w}
+                  height={h}
+                  fill={color}
+                  stroke={selected ? '#fff' : '#0f172a'}
+                  strokeWidth={selected ? 1.75 : 1.2}
+                  cornerRadius={dev.kind === 'monitor' ? 2 : 3}
+                  listening={!placeMode}
+                  draggable={!placeMode && !readOnly}
+                  onClick={(e) => {
+                    e.cancelBubble = true
+                    inspect(dev.id)
+                  }}
+                  onTap={(e) => {
+                    e.cancelBubble = true
+                    inspect(dev.id)
+                  }}
+                  onDragStart={(e) => {
+                    e.cancelBubble = true
+                    pauseStageDrag(e.target.getStage())
+                    onSelect(dev.id)
+                  }}
+                  onDragEnd={(e: KonvaEventObject<DragEvent>) => {
+                    e.cancelBubble = true
+                    const r = e.target as Konva.Rect
+                    const n = toNorm(r.x() + w / 2, r.y() + h / 2)
+                    onMove(dev.id, n.x, n.y)
+                    onSelect(dev.id)
+                    resumeStageDrag(e.target.getStage())
+                  }}
+                />
+                <Text
+                  x={cx + w / 2 + 3}
+                  y={cy - 5}
+                  text={dev.label}
+                  fontSize={9}
+                  fill={selected ? '#fff' : color}
+                  listening={false}
+                />
               </Fragment>
             )
           })}

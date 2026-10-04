@@ -70,6 +70,25 @@ export function buildBimPackage(
     })
   }
 
+  for (const d of project.infraDevices ?? []) {
+    elements.push({
+      globalId: d.id,
+      type: 'IfcUnitaryEquipment',
+      bimPhase: 'equipment',
+      label: d.label,
+      x: d.x,
+      y: d.y,
+      z: 0,
+      parameters: {
+        Kind: d.kind,
+        Model: d.modelId,
+        Capacity_TB: d.capacityTb ?? 0,
+        Rack_U: d.rackUnits ?? 0,
+        NV_SKU: d.modelId,
+      },
+    })
+  }
+
   for (const n of project.networkNodes ?? []) {
     const m = getNetworkModelOrDefault(n.modelId, n.kind)
     const type =

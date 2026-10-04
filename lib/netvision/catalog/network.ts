@@ -29,7 +29,10 @@ export const DEFAULT_SWITCH_ID =
 export const DEFAULT_AP_ID =
   NETWORK_CATALOG.find((m) => m.kind === 'ap')?.id ?? 'ap-u6-lite'
 export const DEFAULT_NVR_ID =
-  NETWORK_CATALOG.find((m) => m.kind === 'nvr')?.id ?? 'nvr-ds7608'
+  NETWORK_CATALOG.find((m) => m.kind === 'nvr' && m.recorder !== 'dvr')?.id ??
+  'nvr-ds7608'
+export const DEFAULT_DVR_ID =
+  NETWORK_CATALOG.find((m) => m.recorder === 'dvr')?.id ?? 'dvr-ds7208'
 export const DEFAULT_INJECTOR_ID =
   NETWORK_CATALOG.find((m) => m.kind === 'injector')?.id ?? 'inj-poe-gig'
 
@@ -40,9 +43,19 @@ export function defaultModelIdForKind(kind: NetworkNodeKind): string {
   return DEFAULT_SWITCH_ID
 }
 
-export function labelPrefixForKind(kind: NetworkNodeKind): string {
+export function isDvrModel(modelId: string): boolean {
+  return getNetworkModel(modelId)?.recorder === 'dvr'
+}
+
+export function nvrCatalog(recorder: 'nvr' | 'dvr' = 'nvr') {
+  return NETWORK_CATALOG.filter(
+    (m) => m.kind === 'nvr' && (m.recorder ?? 'nvr') === recorder,
+  )
+}
+
+export function labelPrefixForKind(kind: NetworkNodeKind, modelId?: string): string {
   if (kind === 'ap') return 'AP'
-  if (kind === 'nvr') return 'NVR'
+  if (kind === 'nvr') return modelId && isDvrModel(modelId) ? 'DVR' : 'NVR'
   if (kind === 'injector') return 'INJ'
   return 'SW'
 }

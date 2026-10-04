@@ -40,6 +40,7 @@ export function generateConfig(project: NetVisionProject) {
     cableRoutes,
     conduitPlans,
     undergroundPlan,
+    project.infraDevices ?? [],
   )
   return {
     ...projectToExportJson(project, bom),
