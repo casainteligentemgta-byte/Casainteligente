@@ -475,6 +475,24 @@ export default function NetVisionSelectedProps({
             ))}
           </select>
         </label>
+        <label className="block">
+          <span className="flex items-center justify-between text-[var(--nexus-text-dim)]">
+            Grosor de esta línea
+            <span className="tabular-nums text-[var(--nexus-cyan)]">
+              {Math.round(structure.grosor ?? 50)}
+            </span>
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={1}
+            value={structure.grosor ?? 50}
+            onChange={(e) => onPatchStructure({ grosor: Number(e.target.value) })}
+            className="mt-1 h-1.5 w-full accent-[var(--nexus-cyan)]"
+            aria-label="Grosor de la línea seleccionada"
+          />
+        </label>
         <p className="text-[10px]" style={{ color: mat.color }}>
           {mat.blocksVision
             ? `Corta visión · WiFi −${mat.wifiLossDb} dB · Sonido −${mat.soundLossDb} dB`

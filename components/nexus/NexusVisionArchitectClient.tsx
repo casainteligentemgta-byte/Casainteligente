@@ -890,6 +890,9 @@ export default function NexusVisionArchitectClient() {
   const selectedPlanDevice = planDevices.find((d) => d.id === selectedId) ?? null
   const selectedStructure =
     structures.find((s) => s.id === selectedId) ?? null
+  const sliderGrosor = clampGrosorMuro(
+    selectedStructure?.grosor ?? project.planoGrosorMuro,
+  )
   const selectedManualCable =
     (project.cableSegments ?? []).find((s) => s.id === selectedId) ?? null
   const selectedUnderground =
@@ -1295,6 +1298,7 @@ export default function NexusVisionArchitectClient() {
       y1: Math.round(y1 * 1000) / 1000,
       x2: Math.round(x2 * 1000) / 1000,
       y2: Math.round(y2 * 1000) / 1000,
+      grosor: clampGrosorMuro(project.planoGrosorMuro),
     }
     setError(null)
     setProject((p) => {
@@ -1634,6 +1638,21 @@ export default function NexusVisionArchitectClient() {
         s.id === id ? { ...s, ...patch } : s,
       ),
     }))
+  }
+
+  /** Grosor: si hay muro elegido, solo esa línea; si no, el default del siguiente. */
+  const applyGrosorMuro = (value: number) => {
+    const grosor = clampGrosorMuro(value)
+    setProject((p) => {
+      const selected = (p.structures ?? []).find((s) => s.id === selectedId)
+      if (!selected) return { ...p, planoGrosorMuro: grosor }
+      return {
+        ...p,
+        structures: (p.structures ?? []).map((s) =>
+          s.id === selected.id ? { ...s, grosor } : s,
+        ),
+      }
+    })
   }
 
   const patchCableType = (id: string, type: CableType) => {
@@ -2459,7 +2478,7 @@ export default function NexusVisionArchitectClient() {
             <NetVisionPlanoLookControls
               invertido={Boolean(project.planoInvertido)}
               cotaColor={normalizeCotaColor(project.planoCotaColor)}
-              grosorMuro={clampGrosorMuro(project.planoGrosorMuro)}
+              grosorMuro={sliderGrosor}
               disabled={!project.planoUrl || loading}
               onInvertido={(value) =>
                 setProject((p) => ({ ...p, planoInvertido: value }))
@@ -2467,9 +2486,7 @@ export default function NexusVisionArchitectClient() {
               onCotaColor={(value) =>
                 setProject((p) => ({ ...p, planoCotaColor: value }))
               }
-              onGrosorMuro={(value) =>
-                setProject((p) => ({ ...p, planoGrosorMuro: value }))
-              }
+              onGrosorMuro={applyGrosorMuro}
             />
           </div>
           <div className="flex overflow-hidden rounded-md border border-white/15 bg-black/40">
@@ -2893,7 +2910,7 @@ export default function NexusVisionArchitectClient() {
                           compact
                           invertido={Boolean(project.planoInvertido)}
                           cotaColor={normalizeCotaColor(project.planoCotaColor)}
-                          grosorMuro={clampGrosorMuro(project.planoGrosorMuro)}
+                          grosorMuro={sliderGrosor}
                           disabled={loading}
                           onInvertido={(value) =>
                             setProject((p) => ({ ...p, planoInvertido: value }))
@@ -2901,9 +2918,7 @@ export default function NexusVisionArchitectClient() {
                           onCotaColor={(value) =>
                             setProject((p) => ({ ...p, planoCotaColor: value }))
                           }
-                          onGrosorMuro={(value) =>
-                            setProject((p) => ({ ...p, planoGrosorMuro: value }))
-                          }
+                          onGrosorMuro={applyGrosorMuro}
                         />
                       </div>
                     ) : (
@@ -3127,10 +3142,8 @@ export default function NexusVisionArchitectClient() {
               detecting={loading && canDetectPdfWalls}
               onDetectFromPdf={() => void detectWallsFromLoadedPdf()}
               onShowOnPlan={setShowStructures}
-              grosorMuro={clampGrosorMuro(project.planoGrosorMuro)}
-              onGrosorMuro={(value) =>
-                setProject((p) => ({ ...p, planoGrosorMuro: value }))
-              }
+              grosorMuro={sliderGrosor}
+              onGrosorMuro={applyGrosorMuro}
               onDrawMaterial={(id) => {
                 setDrawStructureMaterial(id)
                 setStructureDraft(null)

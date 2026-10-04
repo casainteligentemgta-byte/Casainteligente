@@ -87,7 +87,7 @@ export const NETVISION_LAYER_HELP: LayerHelpItem[] = [
     id: 'grosor',
     label: 'Grosor muro',
     blurb:
-      'Baja o sube el grosor de la línea que representa el muro: tanto las rayas del plano en negro como los muros dibujados a mano. 0 es la más fina.',
+      'Grosor de la línea del muro seleccionado (bloque y concreto se ven igual). Si no hay muro elegido, vale para el siguiente que dibujes y para las rayas del plano en fondo negro. 0 es la más fina.',
   },
   {
     id: 'calibrate',

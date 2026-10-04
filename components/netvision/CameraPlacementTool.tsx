@@ -49,6 +49,10 @@ import {
   visionBandSolidFill,
   visionOverlayAlpha,
 } from '@/lib/netvision/utils/visionSemaforoPalette'
+import {
+  wallDrawnStrokePx,
+  wallStrokeColor,
+} from '@/lib/netvision/utils/structureStroke'
 
 export type CameraPlacementToolProps = {
   backgroundUrl: string | null
@@ -318,23 +322,6 @@ function invertLoadedImage(
 
 function invertOptionsKey(opts?: NightPlanoOptions): string {
   return `${opts?.cotaColor ?? 'auto'}:${clampGrosorMuro(opts?.grosorMuro)}`
-}
-
-function wallDrawnStroke(selected: boolean, grosor: number): number {
-  const t = 0.28 + (clampGrosorMuro(grosor) / 100) * 1.5
-  return Math.max(0.35, (selected ? 2.5 : 1.25) * t)
-}
-
-/** Bloque/concreto son oscuros: en plano negro se pierden si no se aclaran. */
-function wallStrokeColor(
-  mat: { id: string; color: string },
-  invert: boolean,
-  selected: boolean,
-): string {
-  if (!invert) return mat.color
-  if (mat.id === 'concrete') return selected ? '#f5f5f4' : '#d6d3d1'
-  if (mat.id === 'block') return selected ? '#fde68a' : '#e7e5e4'
-  return mat.color
 }
 
 function useHtmlImage(url: string | null, invert = false, invertOptions?: NightPlanoOptions) {
@@ -1059,7 +1046,10 @@ export default function CameraPlacementTool({
                 <Line
                   points={[x1, y1, x2, y2]}
                   stroke={wallStrokeColor(mat, invertBackground, selected)}
-                  strokeWidth={wallDrawnStroke(selected, wallStrokeGrosor)}
+                  strokeWidth={wallDrawnStrokePx(
+                    clampGrosorMuro(s.grosor ?? wallStrokeGrosor),
+                    selected,
+                  )}
                   hitStrokeWidth={placeMode ? 0 : 16}
                   dash={mat.dash ?? undefined}
                   lineCap="round"

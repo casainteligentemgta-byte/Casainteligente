@@ -691,6 +691,7 @@ function normalizeStructure(s: Partial<DesignStructure>): DesignStructure {
     y1: typeof s.y1 === 'number' ? s.y1 : 0.3,
     x2: typeof s.x2 === 'number' ? s.x2 : 0.7,
     y2: typeof s.y2 === 'number' ? s.y2 : 0.3,
+    grosor: clampGrosorMuro(s.grosor),
   }
 }
 

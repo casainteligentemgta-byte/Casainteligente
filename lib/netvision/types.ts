@@ -191,6 +191,8 @@ export type DesignStructure = {
   y1: number
   x2: number
   y2: number
+  /** Grosor visual de esta línea (0 = fina, 100 = gruesa). */
+  grosor?: number
 }
 
 /** Tramo de canalización subterránea dibujado a mano en el plano (2 puntos). */
