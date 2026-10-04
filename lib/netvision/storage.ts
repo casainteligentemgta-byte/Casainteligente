@@ -40,6 +40,10 @@ import {
   normalizeCotaColor,
 } from '@/lib/netvision/utils/nightPlanoPalette'
 import { clampLabelOffset } from '@/lib/netvision/utils/cameraLabelOffset'
+import {
+  DEFAULT_CAM_MARKER_COLOR,
+  normalizeCamMarkerColor,
+} from '@/lib/netvision/utils/cameraMarkerColor'
 
 /** Copia activa de trabajo (rápida). */
 export const NETVISION_STORAGE_KEY = 'nexus.netvision.v1'
@@ -593,9 +597,11 @@ function normalizeCamera(c: Partial<DesignCamera> & { label?: string }): DesignC
     ...(() => {
       const labelOffsetX = clampLabelOffset(c.labelOffsetX)
       const labelOffsetY = clampLabelOffset(c.labelOffsetY)
+      const markerColor = normalizeCamMarkerColor(c.markerColor)
       return {
         ...(labelOffsetX != null ? { labelOffsetX } : {}),
         ...(labelOffsetY != null ? { labelOffsetY } : {}),
+        ...(markerColor !== DEFAULT_CAM_MARKER_COLOR ? { markerColor } : {}),
       }
     })(),
     ...(fovDeg != null ? { fovDeg } : {}),

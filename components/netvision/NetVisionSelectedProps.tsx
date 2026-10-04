@@ -2,6 +2,10 @@
 
 import { Trash2 } from 'lucide-react'
 import { hasCustomLabelOffset } from '@/lib/netvision/utils/cameraLabelOffset'
+import {
+  CAM_MARKER_CHIPS,
+  normalizeCamMarkerColor,
+} from '@/lib/netvision/utils/cameraMarkerColor'
 import { Button } from '@/components/nexus/ui/button'
 import {
   cameraCatalogGrouped,
@@ -222,6 +226,43 @@ export default function NetVisionSelectedProps({
             En el plano puedes arrastrar el nombre para que no tape muros o cotas.
           </p>
         )}
+        <div>
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-text-dim)]">
+            Color en el plano
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {CAM_MARKER_CHIPS.map((chip) => {
+              const active = normalizeCamMarkerColor(camera.markerColor) === chip.id
+              return (
+                <button
+                  key={chip.id}
+                  type="button"
+                  title={chip.label}
+                  aria-pressed={active}
+                  onClick={() => onPatchCamera({ markerColor: chip.id })}
+                  className={`inline-flex min-h-9 items-center gap-1.5 rounded-md px-2.5 text-[11px] font-semibold ${
+                    active ? 'ring-1 ring-white/80' : 'border border-white/15 bg-black/30 hover:bg-white/5'
+                  }`}
+                  style={{
+                    color: chip.hex,
+                    backgroundColor: active ? `${chip.hex}22` : undefined,
+                    boxShadow: active ? `0 0 10px ${chip.hex}` : undefined,
+                  }}
+                >
+                  <span
+                    aria-hidden
+                    className="h-2.5 w-2.5 shrink-0 rounded-full"
+                    style={{
+                      backgroundColor: chip.hex,
+                      boxShadow: `0 0 7px ${chip.hex}`,
+                    }}
+                  />
+                  {chip.label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
         <label className="block">
           <span className="text-[var(--nexus-text-dim)]">Modelo</span>
           <select

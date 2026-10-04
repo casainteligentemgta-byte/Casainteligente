@@ -213,6 +213,7 @@ import {
   clampGrosorMuro,
   normalizeCotaColor,
 } from '@/lib/netvision/utils/nightPlanoPalette'
+import { nextCamMarkerColor } from '@/lib/netvision/utils/cameraMarkerColor'
 import {
   isolateHiddenCameraIds,
   pruneHiddenCameraIds,
@@ -1074,6 +1075,7 @@ export default function NexusVisionArchitectClient() {
       yawDeg: 0,
       mountHeightM: DEFAULT_MOUNT_HEIGHT_M,
       tiltDeg: DEFAULT_TILT_DEG,
+      markerColor: nextCamMarkerColor(project.cameras.length),
       ...vision,
     }
     setError(null)
