@@ -190,6 +190,7 @@ export default function NetVisionClienteView() {
           <NetVisionCameraVisionToggles
             cameras={cameras}
             hiddenIds={hiddenLive}
+            readOnlyHint
             onShowAll={() => {
               setHiddenIds([])
               setSelectedId(null)

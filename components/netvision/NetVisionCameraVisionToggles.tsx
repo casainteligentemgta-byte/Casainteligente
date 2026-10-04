@@ -12,6 +12,8 @@ export type NetVisionCameraVisionTogglesProps = {
   onToggle: (id: string) => void
   onSelect?: (id: string) => void
   compact?: boolean
+  /** Oculta la pista de arrastrar nombres (vista cliente). */
+  readOnlyHint?: boolean
 }
 
 export default function NetVisionCameraVisionToggles({
@@ -22,6 +24,7 @@ export default function NetVisionCameraVisionToggles({
   onToggle,
   onSelect,
   compact = false,
+  readOnlyHint = false,
 }: NetVisionCameraVisionTogglesProps) {
   if (cameras.length === 0) return null
   const allOn = hiddenIds.length === 0
@@ -84,7 +87,9 @@ export default function NetVisionCameraVisionToggles({
       </div>
       <p className="text-[10px] text-[var(--nexus-text-dim)]">
         Todas · toca el nombre para ver solo esa zona · el ojo apaga o enciende una.
-        En el plano puedes arrastrar el nombre de cada cámara.
+        {readOnlyHint
+          ? ''
+          : ' En el plano puedes arrastrar el nombre de cada cámara.'}
       </p>
     </div>
   )

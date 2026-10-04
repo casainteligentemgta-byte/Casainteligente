@@ -5,6 +5,7 @@ import {
   Arc,
   Circle,
   Image as KonvaImage,
+  Group,
   Layer,
   Line,
   Rect,
@@ -1862,18 +1863,14 @@ export default function CameraPlacementTool({
             const coverageOff = coverageHiddenIds.includes(cam.id)
             const labelPos = cameraLabelStagePos(cam, offsetX, offsetY, drawW, drawH)
             const canDragLabel = !placeMode && !readOnly && !!onPatchCamera
+            const labelW = Math.max(56, cam.label.length * 7.2 + 16)
             return (
               <Fragment key={`lbl-${cam.id}`}>
-                <Text
+                <Group
                   x={labelPos.x}
                   y={labelPos.y}
-                  text={cam.label}
-                  fontSize={11}
-                  fill="#e2e8f0"
-                  opacity={coverageOff ? 0.4 : 1}
                   listening={canDragLabel || !placeMode}
                   draggable={canDragLabel}
-                  hitStrokeWidth={14}
                   onMouseEnter={(e) => {
                     if (!canDragLabel) return
                     const stage = e.target.getStage()
@@ -1900,14 +1897,30 @@ export default function CameraPlacementTool({
                   }}
                   onDragEnd={(e: KonvaEventObject<DragEvent>) => {
                     e.cancelBubble = true
-                    const node = e.target as Konva.Text
+                    const node = e.target
                     const n = toNorm(node.x(), node.y())
                     onPatchCamera?.(cam.id, labelOffsetFromNorm(cam, n.x, n.y))
                     const stage = e.target.getStage()
                     if (stage) stage.container().style.cursor = 'default'
                     resumeStageDrag(stage)
                   }}
-                />
+                >
+                  <Rect
+                    x={-6}
+                    y={-4}
+                    width={labelW}
+                    height={18}
+                    fill="rgba(0,0,0,0.001)"
+                    hitStrokeWidth={8}
+                  />
+                  <Text
+                    text={cam.label}
+                    fontSize={11}
+                    fill="#e2e8f0"
+                    opacity={coverageOff ? 0.4 : 1}
+                    listening={false}
+                  />
+                </Group>
                 {selected ? (
                   <Text
                     x={labelPos.x}
