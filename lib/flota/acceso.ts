@@ -90,7 +90,10 @@ export async function listarVehiculos(
   }
   if (esMigracionPendiente(result.error)) return { items: [], migracionPendiente: true };
   if (result.error) throw new Error(result.error.message);
-  return { items: (result.data ?? []) as FlotaVehiculo[], migracionPendiente: false };
+  return {
+    items: (result.data ?? []) as unknown as FlotaVehiculo[],
+    migracionPendiente: false,
+  };
 }
 
 export async function crearVehiculo(
