@@ -34,6 +34,12 @@ export type CameraModel = {
   priceUsd: number
   /** Facultades de visión (FOV de ficha, IR/color, PTZ, dual, etc.). */
   notes?: string
+  /**
+   * Foto del modelo para la ficha del cliente. Ruta pública
+   * (p. ej. `/netvision/camaras/ezviz-h9c.webp`) o URL absoluta.
+   * Sin foto, la ficha dibuja la silueta según `formFactor`.
+   */
+  imageUrl?: string
 }
 
 export type DesignCamera = {
