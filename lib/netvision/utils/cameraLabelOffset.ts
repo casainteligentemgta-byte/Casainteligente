@@ -1,8 +1,8 @@
 import type { DesignCamera } from '@/lib/netvision/types'
 
-/** Desplazamiento por defecto del nombre (px de stage, esquina superior derecha del pin). */
-export const DEFAULT_CAM_LABEL_DX_PX = 12
-export const DEFAULT_CAM_LABEL_DY_PX = -18
+/** Desplazamiento por defecto del nombre: lo bastante lejos para ver la línea de color. */
+export const DEFAULT_CAM_LABEL_DX_PX = 64
+export const DEFAULT_CAM_LABEL_DY_PX = -56
 
 const OFFSET_MAX = 0.85
 

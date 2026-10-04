@@ -2,6 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   DEFAULT_CAM_LABEL_DX_PX,
+  DEFAULT_CAM_LABEL_DY_PX,
   cameraLabelStagePos,
   clampLabelOffset,
   labelOffsetFromNorm,
@@ -10,7 +11,7 @@ import {
 } from './cameraLabelOffset'
 
 describe('cameraLabelOffset', () => {
-  it('sin offset usa +12 / -18 px', () => {
+  it('sin offset usa el desplazamiento por defecto', () => {
     const p = cameraLabelStagePos(
       { id: 'c', label: 'CAM', x: 0.5, y: 0.5, modelId: 'x', yawDeg: 0, mountHeightM: 2.8 },
       10,
@@ -19,7 +20,9 @@ describe('cameraLabelOffset', () => {
       100,
     )
     assert.equal(p.x, 10 + 100 + DEFAULT_CAM_LABEL_DX_PX)
-    assert.equal(p.y, 20 + 50 - 18)
+    assert.equal(p.y, 20 + 50 + DEFAULT_CAM_LABEL_DY_PX)
+    assert.ok(DEFAULT_CAM_LABEL_DX_PX >= 48)
+    assert.ok(DEFAULT_CAM_LABEL_DY_PX <= -40)
   })
 
   it('guarda el offset en coords normalizadas', () => {

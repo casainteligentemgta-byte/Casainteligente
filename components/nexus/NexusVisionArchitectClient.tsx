@@ -1076,6 +1076,8 @@ export default function NexusVisionArchitectClient() {
       mountHeightM: DEFAULT_MOUNT_HEIGHT_M,
       tiltDeg: DEFAULT_TILT_DEG,
       markerColor: nextCamMarkerColor(project.cameras.length),
+      labelOffsetX: 0.07 + (project.cameras.length % 3) * 0.035,
+      labelOffsetY: -0.09 - (Math.floor(project.cameras.length / 3) % 3) * 0.05,
       ...vision,
     }
     setError(null)

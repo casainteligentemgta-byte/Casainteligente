@@ -238,6 +238,7 @@ export default function NetVisionSelectedProps({
                   key={chip.id}
                   type="button"
                   title={chip.label}
+                  data-nv-marker={chip.id}
                   aria-pressed={active}
                   onClick={() => onPatchCamera({ markerColor: chip.id })}
                   className={`inline-flex min-h-9 items-center gap-1.5 rounded-md px-2.5 text-[11px] font-semibold ${
