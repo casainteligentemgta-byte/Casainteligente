@@ -64,6 +64,9 @@ describe('clienteCameraCard', () => {
     )
     assert.equal(wired.wired, true)
     assert.ok(wired.qualities.includes('m'))
+    assert.equal(wired.formFactor, 'dome')
+    // Sin foto en catálogo → null (la ficha dibuja la silueta por forma).
+    assert.equal(wired.imageUrl, null)
     const wireless = buildClienteCameraCard(
       { id: 'c1', label: 'CAM-01', x: 0.2, y: 0.3, modelId: 'ezviz-bc1c', yawDeg: 0, mountHeightM: 2.8 },
       [route],

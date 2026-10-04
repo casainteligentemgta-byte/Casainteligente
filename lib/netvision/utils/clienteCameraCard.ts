@@ -25,6 +25,9 @@ export type ClienteCameraCard = {
   label: string
   modelName: string
   brand: string
+  formFactor: CameraModel['formFactor']
+  /** Foto del modelo (catálogo); `null` → la ficha dibuja la silueta por forma. */
+  imageUrl: string | null
   formLabel: string
   resolution: string
   fovLabel: string
@@ -71,6 +74,8 @@ export function buildClienteCameraCard(
     label: cam.label,
     modelName: model.name,
     brand: model.brand,
+    formFactor: model.formFactor,
+    imageUrl: model.imageUrl?.trim() || null,
     formLabel,
     resolution: model.resolution,
     fovLabel,

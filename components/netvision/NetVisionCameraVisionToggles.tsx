@@ -14,6 +14,8 @@ export type NetVisionCameraVisionTogglesProps = {
   compact?: boolean
   /** Oculta la pista de arrastrar nombres (vista cliente). */
   readOnlyHint?: boolean
+  /** `tactico`: fichas rectas en verde fósforo (presentación al cliente). */
+  variant?: 'nexus' | 'tactico'
 }
 
 export default function NetVisionCameraVisionToggles({
@@ -25,9 +27,12 @@ export default function NetVisionCameraVisionToggles({
   onSelect,
   compact = false,
   readOnlyHint = false,
+  variant = 'nexus',
 }: NetVisionCameraVisionTogglesProps) {
   if (cameras.length === 0) return null
   const allOn = hiddenIds.length === 0
+  const tac = variant === 'tactico'
+  const rowH = tac ? 'min-h-11' : compact ? 'min-h-9' : 'min-h-8'
 
   return (
     <div className={compact ? 'min-w-0' : 'space-y-1.5'}>
@@ -37,12 +42,18 @@ export default function NetVisionCameraVisionToggles({
           title="Mostrar el semáforo de todas las cámaras"
           aria-pressed={allOn}
           onClick={onShowAll}
-          className={`shrink-0 rounded-md px-2.5 text-[11px] font-semibold ${
-            compact ? 'min-h-9' : 'min-h-8'
-          } ${
-            allOn
-              ? 'bg-[var(--nexus-cyan)] text-black'
-              : 'border border-white/15 text-[var(--nexus-cyan)] hover:bg-white/5'
+          className={`shrink-0 text-[11px] ${rowH} ${
+            tac
+              ? `px-3.5 font-bold uppercase tracking-[0.12em] ${
+                  allOn
+                    ? 'bg-[#8cffb5] text-[#07110d]'
+                    : 'border border-[#8cffb5] text-[#8cffb5] hover:bg-[#8cffb5]/10'
+                }`
+              : `rounded-md px-2.5 font-semibold ${
+                  allOn
+                    ? 'bg-[var(--nexus-cyan)] text-black'
+                    : 'border border-white/15 text-[var(--nexus-cyan)] hover:bg-white/5'
+                }`
           }`}
         >
           Todas
@@ -53,10 +64,16 @@ export default function NetVisionCameraVisionToggles({
           return (
             <span
               key={cam.id}
-              className={`inline-flex shrink-0 items-center overflow-hidden rounded-md border ${
-                on
-                  ? 'border-emerald-400/45 bg-emerald-500/15'
-                  : 'border-white/15 bg-black/30 opacity-70'
+              className={`inline-flex shrink-0 items-center overflow-hidden border ${
+                tac
+                  ? on
+                    ? 'border-[#4ade80] bg-[#0b1a14]'
+                    : 'border-[#2e7d54] bg-[#07110d] opacity-60'
+                  : `rounded-md ${
+                      on
+                        ? 'border-emerald-400/45 bg-emerald-500/15'
+                        : 'border-white/15 bg-black/30 opacity-70'
+                    }`
               }`}
             >
               <button
@@ -70,8 +87,10 @@ export default function NetVisionCameraVisionToggles({
                   onSolo(cam.id)
                   onSelect?.(cam.id)
                 }}
-                className={`whitespace-nowrap px-2 text-[11px] font-semibold text-white ${
-                  compact ? 'min-h-9' : 'min-h-8'
+                className={`whitespace-nowrap text-[11px] ${rowH} ${
+                  tac
+                    ? 'px-3 font-bold tracking-[0.08em] text-[#d6ffe5]'
+                    : 'px-2 font-semibold text-white'
                 }`}
               >
                 {cam.label}
@@ -81,8 +100,10 @@ export default function NetVisionCameraVisionToggles({
                 title={on ? `Apagar visión de ${cam.label}` : `Encender visión de ${cam.label}`}
                 aria-pressed={on}
                 onClick={() => onToggle(cam.id)}
-                className={`flex min-w-9 items-center justify-center border-l border-white/10 text-white/90 hover:bg-white/10 ${
-                  compact ? 'min-h-9' : 'min-h-8'
+                className={`flex items-center justify-center border-l ${rowH} ${
+                  tac
+                    ? 'min-w-11 border-[#2e7d54] text-[#8cffb5] hover:bg-[#8cffb5]/10'
+                    : 'min-w-9 border-white/10 text-white/90 hover:bg-white/10'
                 }`}
               >
                 {on ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
