@@ -173,9 +173,9 @@ function sectorPolyPoints(
 }
 
 /**
- * Semáforo CCTV relleno con polígonos del FOV (elipse + recorte de muros).
- * Arcos circulares no cubrían el cono en planos apaisados y dejaban huecos.
- * Se pinta rojo → naranja → verde para que en solapes gane la mejor detección.
+ * Semáforo CCTV: anillos exclusivos (rojo / naranja / verde).
+ * La opacidad va en el relleno; Konva no aplana la capa y si se apilan
+ * se ensucia el color.
  */
 function VisionSpectrumLayer({
   sectors,
@@ -195,13 +195,13 @@ function VisionSpectrumLayer({
 }) {
   const bands: { band: SpectrumBand; polyOf: (s: CoverageSector) => { x: number; y: number }[] | undefined }[] =
     [
-      { band: 'red', polyOf: (s) => s.polygon },
+      { band: 'red', polyOf: (s) => s.redPolygon },
       { band: 'yellow', polyOf: (s) => s.yellowPolygon },
       { band: 'green', polyOf: (s) => s.greenPolygon },
     ]
-  const layerOpacity = Math.min(1, Math.max(0.1, opacity))
+  const fillAlpha = Math.min(1, Math.max(0.1, opacity))
   return (
-    <Layer listening={false} opacity={layerOpacity}>
+    <Layer listening={false}>
       {bands.flatMap(({ band, polyOf }) =>
         sectors.flatMap((s) => {
           const pts = sectorPolyPoints(polyOf(s), offsetX, offsetY, drawW, drawH)
@@ -212,7 +212,7 @@ function VisionSpectrumLayer({
               key={`vis-band-${band}-${s.cameraId}-${lens}`}
               points={pts}
               closed
-              fill={visionBandSolidFill(band)}
+              fill={visionBandSolidFill(band, fillAlpha)}
               listening={false}
               perfectDrawEnabled={false}
               strokeEnabled={false}

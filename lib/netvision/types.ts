@@ -298,8 +298,10 @@ export type CoverageSector = {
   yellowRadiusNorm?: number
   /** Polígono de la banda verde (mismo recorte de muros que `polygon`). */
   greenPolygon?: { x: number; y: number }[]
-  /** Polígono de la banda amarilla. */
+  /** Anillo naranja (entre verde y rojo), no el pie completo. */
   yellowPolygon?: { x: number; y: number }[]
+  /** Anillo rojo (del naranja al borde del cono). */
+  redPolygon?: { x: number; y: number }[]
 }
 
 /** Semáforo de cobertura CCTV (metros de ficha; el cono estirado no los agranda). */

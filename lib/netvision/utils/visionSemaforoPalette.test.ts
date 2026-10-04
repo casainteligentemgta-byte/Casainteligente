@@ -1,7 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  VISION_SEMAFORO_FILL_ALPHA,
   VISION_SEMAFORO_HEX,
   VISION_SEMAFORO_LEGEND,
   VISION_SEMAFORO_RGB,
@@ -18,11 +17,10 @@ describe('visionSemaforoPalette', () => {
     assert.ok(rr >= 240 && rg <= 50 && rb <= 50, 'rojo vivo')
   })
 
-  it('el relleno es casi opaco para que la capa sola controle la transparencia', () => {
-    for (const band of ['green', 'yellow', 'red'] as const) {
-      assert.ok(VISION_SEMAFORO_FILL_ALPHA[band] >= 0.85)
-      assert.match(visionBandSolidFill(band), /^rgba\(\d+, \d+, \d+, 0\.\d+\)$/)
-    }
+  it('el relleno usa la opacidad de la capa (sin alpha extra)', () => {
+    assert.equal(visionBandSolidFill('green', 0.36), 'rgba(0, 255, 65, 0.36)')
+    assert.equal(visionBandSolidFill('yellow', 0.36), 'rgba(255, 140, 0, 0.36)')
+    assert.equal(visionBandSolidFill('red', 0.36), 'rgba(255, 32, 32, 0.36)')
   })
 
   it('la leyenda dice Naranja (no Amarillo) y comparte el hex del relleno', () => {
