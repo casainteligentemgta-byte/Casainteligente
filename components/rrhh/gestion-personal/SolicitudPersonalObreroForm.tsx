@@ -26,9 +26,9 @@ type LineaPersonal = {
 const NIVELES_ORDEN = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 
 const selectOficioClass =
-  'ci-select-tabulador mt-1 w-full min-h-[44px] cursor-pointer rounded-xl border-2 border-zinc-500/80 bg-zinc-950 px-3 py-2.5 text-sm font-medium text-zinc-50 outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-400/35 disabled:cursor-not-allowed disabled:opacity-50';
+  'ci-select-tabulador mt-1 w-full min-h-[44px] cursor-pointer rounded-xl border-2 border-zinc-300 bg-white px-3 py-2.5 text-sm font-medium text-zinc-900 outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-400/35 disabled:cursor-not-allowed disabled:opacity-50';
 const selectProyectoClass =
-  'ci-select-tabulador mt-1 w-full min-h-[44px] cursor-pointer rounded-xl border-2 border-violet-500/50 bg-zinc-950 px-3 py-2.5 text-sm font-medium text-zinc-50 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-400/35 disabled:cursor-not-allowed disabled:opacity-50';
+  'ci-select-tabulador mt-1 w-full min-h-[44px] cursor-pointer rounded-xl border-2 border-violet-400/70 bg-white px-3 py-2.5 text-sm font-medium text-zinc-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-400/35 disabled:cursor-not-allowed disabled:opacity-50';
 const inputCantidadClass =
   'mt-1 w-full min-h-[44px] rounded-xl border-2 border-zinc-500/80 bg-zinc-950 px-3 py-2.5 text-sm font-semibold text-zinc-50 outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-400/35';
 const sublabelClass = 'text-[10px] font-bold uppercase tracking-wide text-zinc-300';
@@ -234,20 +234,17 @@ export default function SolicitudPersonalObreroForm({
                       prev.map((l) => (l.id === linea.id ? { ...l, cargoCodigo: v } : l)),
                     );
                   }}
-                  style={{ colorScheme: 'dark' }}
                   className={selectOficioClass}
                   aria-label="Seleccionar oficio del tabulador"
                 >
-                  <option value="" className="bg-zinc-950 text-zinc-100">
-                    — Selecciona oficio —
-                  </option>
+                  <option value="">— Selecciona oficio —</option>
                   {NIVELES_ORDEN.map((nv) => {
                     const lista = gruposTabulador.get(nv);
                     if (!lista?.length) return null;
                     return (
                       <optgroup key={nv} label={`Nivel ${nv}`}>
                         {lista.map((c) => (
-                          <option key={c.codigo} value={c.codigo} className="bg-zinc-950 text-zinc-100">
+                          <option key={c.codigo} value={c.codigo}>
                             {c.codigo} — {c.nombre}
                           </option>
                         ))}
@@ -291,7 +288,6 @@ export default function SolicitudPersonalObreroForm({
           value={proyectoKey}
           onChange={(e) => setProyectoKey(e.target.value)}
           disabled={cargandoProyectos}
-          style={{ colorScheme: 'dark' }}
           className={selectProyectoClass}
         >
           {cargandoProyectos ? (
@@ -300,7 +296,7 @@ export default function SolicitudPersonalObreroForm({
             <option value="">— Crea un proyecto en Proyectos —</option>
           ) : (
             opciones.map((p) => (
-              <option key={p.key} value={p.key} className="bg-zinc-950 text-zinc-100">
+              <option key={p.key} value={p.key}>
                 {p.etiqueta}
               </option>
             ))

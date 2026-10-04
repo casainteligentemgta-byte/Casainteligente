@@ -59,7 +59,7 @@ function BranchChips({
               'min-h-9 shrink-0 rounded-md px-2.5 py-1 text-[11px] font-semibold transition',
               isActive
                 ? 'bg-[var(--nexus-cyan)] text-black'
-                : 'text-[var(--nexus-text-muted)] hover:bg-white/5 hover:text-white',
+                : 'border border-zinc-200 bg-zinc-50 text-zinc-800 hover:bg-zinc-100 hover:text-zinc-950',
             )}
             aria-pressed={isActive}
             onClick={() => onSelect(id)}
@@ -107,7 +107,7 @@ function FoldButton({
         <ChevronDown className={cn('h-3.5 w-3.5', isOpen && 'rotate-180')} />
       </button>
       {isOpen ? (
-        <div className="absolute left-0 top-full z-[80] mt-1 w-[min(92vw,22rem)] rounded-xl border border-white/15 bg-[#12141c]/98 p-2 shadow-2xl backdrop-blur-md">
+        <div className="nv-fold-menu absolute left-0 top-full z-[80] mt-1 w-[min(92vw,22rem)] rounded-xl border border-zinc-200 bg-white p-2 text-zinc-900 shadow-[0_16px_40px_rgba(0,0,0,0.28)]">
           {children}
         </div>
       ) : null}
@@ -160,7 +160,7 @@ export default function NetVisionBranchNav({
           onToggle={toggle}
         >
           <div className="space-y-2">
-            <p className="px-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-text-dim)]">
+            <p className="px-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
               Sistemas
             </p>
             <BranchChips
@@ -168,7 +168,7 @@ export default function NetVisionBranchNav({
               active={active}
               onSelect={onSelect}
             />
-            <p className="px-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-text-dim)]">
+            <p className="px-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
               Herramientas
             </p>
             <BranchChips
@@ -178,7 +178,7 @@ export default function NetVisionBranchNav({
             />
             {submenu ? (
               <div
-                className="flex flex-wrap items-center gap-2 border-t border-white/10 pt-2"
+                className="flex flex-wrap items-center gap-2 border-t border-zinc-200 pt-2"
                 onClick={() => setOpen(null)}
               >
                 {submenu}

@@ -267,8 +267,7 @@ export default function ControlPlanosObra({ proyectoId, className = '' }: PlanoP
             <select
               value={disciplina}
               onChange={(e) => onDisciplinaChange(e.target.value as DisciplinaPlanoId)}
-              style={{ colorScheme: 'dark' }}
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white outline-none"
+              className="ci-select-tabulador w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-xs text-zinc-900 outline-none"
             >
               {DISCIPLINAS_PLANO.map((d) => (
                 <option key={d.id} value={d.id}>

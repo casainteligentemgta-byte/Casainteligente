@@ -116,11 +116,10 @@ export default function LaborRequestDirectorForm({
               value={projectId}
               onChange={(e) => setProjectId(e.target.value)}
               disabled={loadingOpts}
-              style={{ colorScheme: 'dark' }}
-              className="mt-1.5 w-full rounded-md border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-white"
+              className="ci-select-tabulador mt-1.5 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
             >
               {proyectosDestino.map((p) => (
-                <option key={p.id} value={p.id} className="bg-zinc-900">
+                <option key={p.id} value={p.id}>
                   {(p.nombre ?? 'Sin nombre').trim() || p.id.slice(0, 8)}
                 </option>
               ))}
@@ -131,12 +130,11 @@ export default function LaborRequestDirectorForm({
             <select
               value={cargoCodigo}
               onChange={(e) => setCargoCodigo(e.target.value)}
-              style={{ colorScheme: 'dark' }}
-              className="mt-1.5 w-full rounded-md border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-white"
+              className="ci-select-tabulador mt-1.5 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
             >
               <option value="">— Seleccione —</option>
               {CARGOS_OBREROS.map((c) => (
-                <option key={c.codigo} value={c.codigo} className="bg-zinc-900">
+                <option key={c.codigo} value={c.codigo}>
                   {c.codigo} — {c.nombre}
                 </option>
               ))}
