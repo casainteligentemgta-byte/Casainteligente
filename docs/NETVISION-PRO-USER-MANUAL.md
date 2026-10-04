@@ -186,7 +186,7 @@ El plano se carga pero necesita escala real:
 En el propio plano aparece el panel **Apariencia del plano** (también en **Archivo → Vista del plano** y el botón **Fondo negro** de la barra):
 
 1. Activa **Fondo negro**: el papel pasa a negro y las rayas del plano (muros) a blanco.
-2. Elige el color de las **cotas**: Auto, Verde, Naranja o Amarillo fluorescente (tipo monitor).
+2. Elige el color de las **cotas**: Auto, Verde, Naranja, Azul eléctrico o **Blanco**. Con Blanco, muros y cotas blancos se ven **encima** del semáforo de las cámaras.
 3. Baja **Grosor muro** si la línea que representa el muro se ve demasiado gruesa. El mismo control está en la pestaña **Muros**.
 
 No modifica el archivo original; se puede desactivar cuando quieras.

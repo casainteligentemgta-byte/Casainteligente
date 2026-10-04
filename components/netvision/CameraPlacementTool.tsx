@@ -39,6 +39,7 @@ import { nearestSegmentOnRoute, MANUAL_CABLE_TO_ID } from '@/lib/netvision/servi
 import {
   applyNightPlanoPalette,
   clampGrosorMuro,
+  liftWhitePlanOverVision,
   type NightPlanoOptions,
 } from '@/lib/netvision/utils/nightPlanoPalette'
 import { shouldSmoothPlanoImage } from '@/lib/netvision/utils/renderPdfPlano'
@@ -214,6 +215,8 @@ function VisionSpectrumLayer({
   drawH,
   opacity = 0.36,
   invert = false,
+  liftWhitePlan = false,
+  planImage = null,
 }: {
   sectors: CoverageSector[]
   offsetX: number
@@ -223,6 +226,9 @@ function VisionSpectrumLayer({
   /** 0–1: qué tan opaco se ve el semáforo sobre el plano. */
   opacity?: number
   invert?: boolean
+  /** Cota blanca: el plano (muros/cotas) gana al semáforo. */
+  liftWhitePlan?: boolean
+  planImage?: HTMLImageElement | CanvasImageSource | null
 }) {
   const bands: { band: SpectrumBand; polyOf: (s: CoverageSector) => { x: number; y: number }[] | undefined }[] =
     [
@@ -252,6 +258,18 @@ function VisionSpectrumLayer({
           ]
         }),
       )}
+      {liftWhitePlan && planImage ? (
+        <KonvaImage
+          image={planImage}
+          x={offsetX}
+          y={offsetY}
+          width={drawW}
+          height={drawH}
+          globalCompositeOperation="lighten"
+          listening={false}
+          perfectDrawEnabled={false}
+        />
+      ) : null}
     </Layer>
   )
 }
@@ -846,6 +864,11 @@ export default function CameraPlacementTool({
             drawH={drawH}
             opacity={visionOpacity}
             invert={invertBackground}
+            liftWhitePlan={liftWhitePlanOverVision(
+              invertBackground,
+              invertOptions?.cotaColor,
+            )}
+            planImage={image}
           />
         ) : null}
         <Layer>
