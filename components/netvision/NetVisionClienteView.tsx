@@ -221,8 +221,8 @@ export default function NetVisionClienteView() {
   }
 
   return (
-    <div className="nv-cliente space-y-3">
-      <header className="flex flex-wrap items-start justify-between gap-3">
+    <div className="nv-cliente flex h-[calc(100dvh-7.25rem)] min-h-[28rem] flex-col gap-2 overflow-hidden print:h-auto print:min-h-0 print:overflow-visible">
+      <header className="flex shrink-0 flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-text-dim)]">
             Presentación cliente · NetVision
@@ -266,7 +266,7 @@ export default function NetVisionClienteView() {
         </div>
       </header>
 
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-white/70 print:hidden">
+      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-white/70 print:hidden">
         <span className="font-semibold uppercase tracking-wide text-white">Semáforo</span>
         {VISION_SEMAFORO_LEGEND.map((item) => (
           <span key={item.band} className="inline-flex items-center gap-1">
@@ -277,7 +277,7 @@ export default function NetVisionClienteView() {
       </div>
 
       {cameras.length > 0 ? (
-        <div className="print:hidden">
+        <div className="shrink-0 print:hidden">
           <NetVisionCameraVisionToggles
             cameras={cameras}
             hiddenIds={hiddenLive}
@@ -292,8 +292,8 @@ export default function NetVisionClienteView() {
         <p className="text-[12px] text-white/60">Este proyecto aún no tiene cámaras.</p>
       )}
 
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="min-h-[420px] overflow-hidden rounded-2xl border border-white/10 bg-[#05080d] print:min-h-[360px]">
+      <div className="grid min-h-0 flex-1 grid-rows-[minmax(200px,42dvh)_minmax(0,1fr)] gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(260px,320px)] lg:grid-rows-[minmax(0,1fr)]">
+        <div className="min-h-0 overflow-hidden rounded-2xl border border-white/10 bg-[#05080d] print:min-h-[360px]">
           {project.planoUrl ? (
             <CameraPlacementTool
               backgroundUrl={project.planoUrl}
@@ -346,29 +346,32 @@ export default function NetVisionClienteView() {
           )}
         </div>
 
-        <aside className="space-y-2">
-          <p className="px-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-text-dim)]">
+        <aside className="flex min-h-0 flex-col">
+          <p className="shrink-0 px-0.5 pb-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-text-dim)]">
             {selectedCard ? 'Ficha de la cámara' : 'Todas las cámaras'}
           </p>
-          {selectedCard ? (
-            <CameraFicha card={selectedCard} unitSystem={project.unitSystem} />
-          ) : (
-            cards.map((card) => (
-              <CameraFicha
-                key={card.id}
-                card={card}
-                unitSystem={project.unitSystem}
-                compact
-              />
-            ))
-          )}
+          <div className="nv-cliente-list min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-y-contain pr-1 [scrollbar-width:thin]">
+            {selectedCard ? (
+              <CameraFicha card={selectedCard} unitSystem={project.unitSystem} />
+            ) : (
+              cards.map((card) => (
+                <CameraFicha
+                  key={card.id}
+                  card={card}
+                  unitSystem={project.unitSystem}
+                  compact
+                />
+              ))
+            )}
+          </div>
         </aside>
       </div>
 
       <style>{`
         @media print {
           nav, [data-nv-copiar-enlace] { display: none !important; }
-          .nv-cliente { color: #111 !important; }
+          .nv-cliente { color: #111 !important; height: auto !important; overflow: visible !important; }
+          .nv-cliente-list { overflow: visible !important; height: auto !important; }
         }
       `}</style>
     </div>
