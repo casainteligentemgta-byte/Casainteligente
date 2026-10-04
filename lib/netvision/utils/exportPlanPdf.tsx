@@ -22,6 +22,7 @@ export type NetVisionPlanPdfInput = {
   filename?: string
   company?: string
   planType?: string
+  logoSrc?: string
 }
 
 const styles = StyleSheet.create({
@@ -61,6 +62,17 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#334155',
     paddingTop: 8,
+  },
+  footerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    maxWidth: '34%',
+  },
+  logo: {
+    width: 18,
+    height: 18,
+    borderRadius: 3,
+    marginRight: 6,
   },
   footerCell: {
     fontSize: 9,
@@ -126,9 +138,14 @@ function NetVisionPlanPdfDoc(props: NetVisionPlanPdfInput) {
           <Image src={props.imageDataUrl} style={styles.image} />
         </View>
         <View style={styles.footerRow}>
-          <Text style={styles.footerCell}>
-            {props.company || 'Casa Inteligente C.A.'}
-          </Text>
+          <View style={styles.footerLeft}>
+            {props.logoSrc ? (
+              <Image src={props.logoSrc} style={styles.logo} />
+            ) : null}
+            <Text style={styles.footerCell}>
+              {props.company || 'Casa Inteligente C.A.'}
+            </Text>
+          </View>
           <Text style={styles.footerCell}>{when}</Text>
           <Text style={styles.footerType}>{props.planType || 'CCTV'}</Text>
         </View>
@@ -147,14 +164,46 @@ function safeFilename(name: string): string {
   return base || 'netvision-plano'
 }
 
-/** Genera y descarga un PDF A4 apaisado con la captura del plano. */
+function prefersOpenInsteadOfDownload(): boolean {
+  if (typeof navigator === 'undefined') return false
+  const ua = navigator.userAgent || ''
+  return (
+    /iPad|iPhone|iPod/.test(ua) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  )
+}
+
+async function fetchLogoDataUrl(): Promise<string | undefined> {
+  if (typeof fetch === 'undefined') return undefined
+  try {
+    const res = await fetch('/logo-casa-inteligente.png')
+    if (!res.ok) return undefined
+    const blob = await res.blob()
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(String(reader.result))
+      reader.onerror = () => reject(reader.error)
+      reader.readAsDataURL(blob)
+    })
+  } catch {
+    return undefined
+  }
+}
+
+/** Genera y descarga un PDF A4 apaisado. En iPad no abre un blob (queda en blanco). */
 export async function downloadNetVisionPlanPdf(
   input: NetVisionPlanPdfInput,
 ): Promise<void> {
   if (!input.imageDataUrl?.startsWith('data:image/')) {
     throw new Error('No hay imagen del plano para exportar.')
   }
-  const node = createElement(NetVisionPlanPdfDoc, input)
+  if (prefersOpenInsteadOfDownload()) {
+    throw new Error(
+      'En iPad el PDF se abre con Imprimir / PDF en la página de vista previa.',
+    )
+  }
+  const logoSrc = input.logoSrc ?? (await fetchLogoDataUrl())
+  const node = createElement(NetVisionPlanPdfDoc, { ...input, logoSrc })
   const blob = await pdf(node as Parameters<typeof pdf>[0]).toBlob()
   const filename =
     input.filename?.trim() ||
@@ -163,6 +212,9 @@ export async function downloadNetVisionPlanPdf(
   const a = document.createElement('a')
   a.href = url
   a.download = filename.endsWith('.pdf') ? filename : `${filename}.pdf`
+  a.rel = 'noopener'
+  document.body.appendChild(a)
   a.click()
-  URL.revokeObjectURL(url)
+  a.remove()
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
 }

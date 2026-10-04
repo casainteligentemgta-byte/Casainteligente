@@ -20,7 +20,10 @@ function NexusShellHeader({
   setMenuOpen: React.Dispatch<React.SetStateAction<boolean>>;
 }) {
   const pathname = usePathname();
-  const isNetVision = pathname === '/nexus/vision' || pathname.startsWith('/nexus/vision/');
+  const isPlanoPrint = pathname.startsWith('/nexus/vision/imprimir');
+  const isNetVision =
+    !isPlanoPrint &&
+    (pathname === '/nexus/vision' || pathname.startsWith('/nexus/vision/'));
   const rightPanel = useNexusRightPanelSlot()?.panel ?? null;
 
   return (
@@ -79,7 +82,10 @@ function NexusShellHeader({
 function NexusShellInner({ children }: { children: React.ReactNode }) {
   /** Menú de módulos: cerrado en móvil; abierto en desktop por defecto. */
   const pathname = usePathname();
-  const isNetVision = pathname === '/nexus/vision' || pathname.startsWith('/nexus/vision/');
+  const isPlanoPrint = pathname.startsWith('/nexus/vision/imprimir');
+  const isNetVision =
+    !isPlanoPrint &&
+    (pathname === '/nexus/vision' || pathname.startsWith('/nexus/vision/'));
   const [menuOpen, setMenuOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
   const menuInicializadoRef = React.useRef(false);
@@ -114,6 +120,10 @@ function NexusShellInner({ children }: { children: React.ReactNode }) {
       document.body.style.overflow = prev;
     };
   }, [isDesktop, menuOpen]);
+
+  if (isPlanoPrint) {
+    return <div className="min-h-screen bg-slate-200 text-slate-900">{children}</div>
+  }
 
   return (
     <div className="flex min-h-screen bg-[var(--nexus-bg-base)] text-white">

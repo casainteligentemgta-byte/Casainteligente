@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react'
 import type { PlanoRotuloInfo } from '@/lib/netvision/utils/planoRotulo'
+import NetVisionCompanyMark from '@/components/netvision/NetVisionCompanyMark'
 
 export default function NetVisionPlanoRotulo({
   rotulo,
@@ -19,7 +20,11 @@ export default function NetVisionPlanoRotulo({
       </header>
       <div className="min-h-0 min-w-0 flex-1">{children}</div>
       <footer className="pointer-events-none grid shrink-0 grid-cols-3 items-center gap-2 border-t border-[rgba(0,242,254,0.28)] bg-[#071018] px-3 py-2 text-[10px] font-semibold uppercase tracking-wide sm:text-[11px]">
-        <span className="truncate text-white">{rotulo.company}</span>
+        <NetVisionCompanyMark
+          company={rotulo.company}
+          size={26}
+          className="text-white"
+        />
         <span className="truncate text-center text-white/80">{rotulo.dateLabel}</span>
         <span className="truncate text-right text-[var(--nexus-cyan)]">{rotulo.planType}</span>
       </footer>

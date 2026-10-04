@@ -2,6 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   ROTULO_COMPANY,
+  ROTULO_LOGO_SRC,
   buildPlanoRotulo,
   formatRotuloFecha,
   planoTipoFromBranch,
@@ -12,6 +13,10 @@ describe('planoRotulo', () => {
     assert.equal(planoTipoFromBranch('cctv'), 'CCTV')
     assert.equal(planoTipoFromBranch(null), 'CCTV')
     assert.equal(planoTipoFromBranch('sonido'), 'Sonido')
+  })
+
+  it('usa el logo oficial junto al nombre de la empresa', () => {
+    assert.equal(ROTULO_LOGO_SRC, '/logo-casa-inteligente.png')
   })
 
   it('arma el rótulo con empresa, fecha y tipo', () => {
