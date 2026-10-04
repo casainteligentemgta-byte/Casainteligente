@@ -397,7 +397,10 @@ export function layoutCameraLeaders(
     let points: number[]
     let mode: LeaderLayout['mode']
     if (elbows && elbows.length > 0) {
-      points = pointsFromElbows(box, elbows)
+      points =
+        elbows.length === 1
+          ? orthoViaPoint({ x: box.pinX, y: box.pinY }, elbows[0]!, attachPoint(box))
+          : pointsFromElbows(box, elbows)
       mode = 'custom'
     } else {
       const attach = attachPoint(box)

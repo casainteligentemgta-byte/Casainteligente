@@ -135,13 +135,29 @@ describe('cameraLeaderLayout', () => {
     }
   })
 
-  it('respeta quiebres que coloca el operador', () => {
+  it('un nodo del operador se interpreta como quiebre a 90°', () => {
     const laid = layoutCameraLeaders([box('a', 80, 120, 180, 40)], {
       customElbows: { a: [{ x: 120, y: 80 }] },
     })
     assert.equal(laid[0]!.mode, 'custom')
-    assert.equal(laid[0]!.points[2], 120)
+    assert.equal(polylineIsOrtho(laid[0]!.points), true)
+    assert.ok(laid[0]!.points.includes(120))
+  })
+
+  it('varios nodos del operador se respetan en orden', () => {
+    const laid = layoutCameraLeaders([box('a', 80, 120, 180, 40)], {
+      customElbows: {
+        a: [
+          { x: 80, y: 80 },
+          { x: 180, y: 80 },
+        ],
+      },
+    })
+    assert.equal(laid[0]!.mode, 'custom')
+    assert.equal(laid[0]!.points[2], 80)
     assert.equal(laid[0]!.points[3], 80)
+    assert.equal(laid[0]!.points[4], 180)
+    assert.equal(laid[0]!.points[5], 80)
   })
 
   it('si la recta cruza otro botón usa quiebres a 90°', () => {
