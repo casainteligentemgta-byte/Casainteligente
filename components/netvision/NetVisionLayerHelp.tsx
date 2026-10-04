@@ -15,7 +15,7 @@ export const NETVISION_LAYER_HELP: LayerHelpItem[] = [
     id: 'fov',
     label: 'Visión',
     blurb:
-      'Cobertura automática por alcance (semáforo): verde, naranja y rojo translúcidos sobre el plano. Verde y naranja son metros de ficha; estirar el cono solo alarga el rojo. En Dual (H9c) el gran angular y la PTZ tele usan el mismo semáforo. Si se solapan, gana verde sobre naranja y naranja sobre rojo. Ajusta la opacidad junto a Visión. Debajo del semáforo: Todas, o el nombre de cada cámara (solo esa zona) y el ojo para apagarla.',
+      'Cobertura automática por alcance (semáforo): verde, naranja y rojo translúcidos sobre el plano. Verde y naranja son metros de ficha; estirar el cono solo alarga el rojo. En Dual (H9c) el gran angular y la PTZ tele usan el mismo semáforo. Si se solapan, gana verde sobre naranja y naranja sobre rojo. Ajusta la opacidad junto a Visión. Debajo del semáforo: Todas, o el nombre de cada cámara (solo esa zona) y el ojo para apagarla. Arrastra el nombre en el plano para que no tape muros o cotas.',
   },
   {
     id: 'wifi',
@@ -75,7 +75,7 @@ export const NETVISION_LAYER_HELP: LayerHelpItem[] = [
     id: 'invert',
     label: 'Fondo negro',
     blurb:
-      'Pasa el papel a negro y las rayas del plano (muros) a blanco. Las acotaciones se pueden pintar en verde, naranja o azul eléctrico. No modifica el archivo y se puede desactivar.',
+      'Pasa el papel a negro y las rayas del plano (muros) a blanco. Las acotaciones se pueden pintar en verde, naranja, azul eléctrico o blanco. No modifica el archivo y se puede desactivar.',
   },
   {
     id: 'cotas',

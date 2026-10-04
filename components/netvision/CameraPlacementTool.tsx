@@ -53,6 +53,10 @@ import {
   wallDrawnStrokePx,
   wallStrokeColor,
 } from '@/lib/netvision/utils/structureStroke'
+import {
+  cameraLabelStagePos,
+  labelOffsetFromNorm,
+} from '@/lib/netvision/utils/cameraLabelOffset'
 
 export type CameraPlacementToolProps = {
   backgroundUrl: string | null
@@ -102,6 +106,10 @@ export type CameraPlacementToolProps = {
   /** En placeMode, tocar cámara/nodo ancla el trazo a ese punto. */
   snapPlaceToDevices?: boolean
   onMove: (id: string, normX: number, normY: number) => void
+  /** Mover el nombre de la cámara en el plano (offset persistido). */
+  onPatchCamera?: (id: string, patch: Partial<DesignCamera>) => void
+  /** Vista cliente / presentación: sin arrastres ni asas. */
+  readOnly?: boolean
   /** Ajuste interactivo de óptica (yaw / FOV por lado / alcance) desde el plano. */
   onAdjustCameraVision?: (
     id: string,
@@ -410,6 +418,8 @@ export default function CameraPlacementTool({
   onFinishPlace,
   snapPlaceToDevices = false,
   onMove,
+  onPatchCamera,
+  readOnly = false,
   onAdjustCameraVision,
   metersPerNormX = 40,
   metersPerNormY = 40,
@@ -877,7 +887,8 @@ export default function CameraPlacementTool({
                 selected &&
                 !!onAdjustCameraVision &&
                 !snapPlaceToDevices &&
-                !placeMode
+                !placeMode &&
+                !readOnly
               const applyYawFromEvent = (e: KonvaEventObject<DragEvent>) => {
                 const stage = e.target.getStage()
                 const pos = stage?.getRelativePointerPosition()
@@ -1040,7 +1051,7 @@ export default function CameraPlacementTool({
             const y1 = offsetY + s.y1 * drawH
             const x2 = offsetX + s.x2 * drawW
             const y2 = offsetY + s.y2 * drawH
-            const canDrag = !!onStructureMove && !placeMode
+            const canDrag = !!onStructureMove && !placeMode && !readOnly
             return (
               <Fragment key={`str-${s.id}`}>
                 <Line
@@ -1478,7 +1489,7 @@ export default function CameraPlacementTool({
                 shadowBlur={3}
                 shadowOpacity={0.3}
                 listening={!placeMode || snapPlaceToDevices}
-                draggable={!placeMode}
+                draggable={!placeMode && !readOnly}
                 onClick={(e) => {
                   e.cancelBubble = true
                   if (snapPlaceToDevices && placeMode) {
@@ -1519,6 +1530,7 @@ export default function CameraPlacementTool({
           {/* Asas de visión: al seleccionar; se ocultan al soltar tras ajustar apertura/orient./alcance */}
           {showFov &&
             onAdjustCameraVision &&
+            !readOnly &&
             !snapPlaceToDevices &&
             visionHandlesOpen &&
             cameras
@@ -1769,7 +1781,7 @@ export default function CameraPlacementTool({
                   shadowOpacity={0.28}
                   hitStrokeWidth={Math.max(10, 14 - size)}
                   listening={!placeMode || snapPlaceToDevices}
-                  draggable={!placeMode}
+                  draggable={!placeMode && !readOnly}
                   onClick={(e) => {
                     e.cancelBubble = true
                     if (snapPlaceToDevices && placeMode) {
@@ -1848,21 +1860,58 @@ export default function CameraPlacementTool({
             const selected = cam.id === selectedId
             const tilt = Math.round(cam.tiltDeg ?? 0)
             const coverageOff = coverageHiddenIds.includes(cam.id)
+            const labelPos = cameraLabelStagePos(cam, offsetX, offsetY, drawW, drawH)
+            const canDragLabel = !placeMode && !readOnly && !!onPatchCamera
             return (
               <Fragment key={`lbl-${cam.id}`}>
                 <Text
-                  x={offsetX + cam.x * drawW + 12}
-                  y={offsetY + cam.y * drawH - 18}
+                  x={labelPos.x}
+                  y={labelPos.y}
                   text={cam.label}
                   fontSize={11}
                   fill="#e2e8f0"
                   opacity={coverageOff ? 0.4 : 1}
-                  listening={false}
+                  listening={canDragLabel || !placeMode}
+                  draggable={canDragLabel}
+                  hitStrokeWidth={14}
+                  onMouseEnter={(e) => {
+                    if (!canDragLabel) return
+                    const stage = e.target.getStage()
+                    if (stage) stage.container().style.cursor = 'grab'
+                  }}
+                  onMouseLeave={(e) => {
+                    const stage = e.target.getStage()
+                    if (stage) stage.container().style.cursor = 'default'
+                  }}
+                  onClick={(e) => {
+                    e.cancelBubble = true
+                    onSelect(cam.id)
+                  }}
+                  onTap={(e) => {
+                    e.cancelBubble = true
+                    onSelect(cam.id)
+                  }}
+                  onDragStart={(e) => {
+                    e.cancelBubble = true
+                    pauseStageDrag(e.target.getStage())
+                    onSelect(cam.id)
+                    const stage = e.target.getStage()
+                    if (stage) stage.container().style.cursor = 'grabbing'
+                  }}
+                  onDragEnd={(e: KonvaEventObject<DragEvent>) => {
+                    e.cancelBubble = true
+                    const node = e.target as Konva.Text
+                    const n = toNorm(node.x(), node.y())
+                    onPatchCamera?.(cam.id, labelOffsetFromNorm(cam, n.x, n.y))
+                    const stage = e.target.getStage()
+                    if (stage) stage.container().style.cursor = 'default'
+                    resumeStageDrag(stage)
+                  }}
                 />
                 {selected ? (
                   <Text
-                    x={offsetX + cam.x * drawW + 12}
-                    y={offsetY + cam.y * drawH - 6}
+                    x={labelPos.x}
+                    y={labelPos.y + 12}
                     text={`${cam.mountHeightM.toFixed(1)} m · ${tilt}°`}
                     fontSize={9}
                     fill="#67e8f9"
@@ -1892,7 +1941,7 @@ export default function CameraPlacementTool({
                 shadowBlur={3}
                 shadowOpacity={0.3}
                 listening={!placeMode || snapPlaceToDevices}
-                draggable={!placeMode}
+                draggable={!placeMode && !readOnly}
                 onClick={(e) => {
                   e.cancelBubble = true
                   if (snapPlaceToDevices && placeMode) {

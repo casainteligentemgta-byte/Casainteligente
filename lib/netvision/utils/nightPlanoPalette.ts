@@ -9,7 +9,7 @@ export const NIGHT_NEON: ReadonlyArray<readonly [number, number, number]> = [
   [0, 168, 255],
 ]
 
-export const NIGHT_COTA_COLORES = ['auto', 'verde', 'naranja', 'azul'] as const
+export const NIGHT_COTA_COLORES = ['auto', 'verde', 'naranja', 'azul', 'blanco'] as const
 export type NightCotaColor = (typeof NIGHT_COTA_COLORES)[number]
 
 export type NightPlanoOptions = {
@@ -22,10 +22,12 @@ export type NightPlanoOptions = {
   grosorMuro?: number
 }
 
+/** Índice en NIGHT_NEON, o -1 = blanco (mismo RGB que muros). */
 export function neonIndexForColor(color: NightCotaColor): number | null {
   if (color === 'verde') return 0
   if (color === 'naranja') return 1
   if (color === 'azul') return 2
+  if (color === 'blanco') return -1
   return null
 }
 
@@ -43,7 +45,9 @@ export function wallDilateFromGrosor(grosor: unknown): number {
 export function normalizeCotaColor(raw: unknown): NightCotaColor {
   const t = String(raw ?? '').trim().toLowerCase()
   if (t === 'amarillo') return 'azul'
-  if (t === 'verde' || t === 'naranja' || t === 'azul' || t === 'auto') return t
+  if (t === 'verde' || t === 'naranja' || t === 'azul' || t === 'blanco' || t === 'auto') {
+    return t
+  }
   return 'auto'
 }
 
@@ -310,7 +314,8 @@ export function applyNightPlanoPalette(
     }
     const nid = labels[i]!
     const neon = nid ? neonById.get(nid) : undefined
-    const rgb = neon !== undefined ? NIGHT_NEON[neon]! : NIGHT_WALL
+    const rgb =
+      neon === -1 ? NIGHT_WALL : neon !== undefined ? NIGHT_NEON[neon]! : NIGHT_WALL
     data[p] = rgb[0]
     data[p + 1] = rgb[1]
     data[p + 2] = rgb[2]

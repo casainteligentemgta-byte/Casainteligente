@@ -12,6 +12,7 @@ import {
   Copy,
   Download,
   FilePlus,
+  Presentation,
   RotateCcw,
   RotateCw,
   Save,
@@ -2297,6 +2298,25 @@ export default function NexusVisionArchitectClient() {
         <Download className="mr-1.5 h-3.5 w-3.5" />
         {exportingPdf ? 'PDF…' : 'PDF'}
       </Button>
+      <Button
+        type="button"
+        variant="glass"
+        size="sm"
+        className="w-full justify-start"
+        data-nv-vista-cliente
+        onClick={() => {
+          saveProject(project)
+          window.open(
+            `/nexus/vision/cliente?id=${encodeURIComponent(project.id)}`,
+            '_blank',
+            'noopener,noreferrer',
+          )
+        }}
+        disabled={!project.planoUrl}
+      >
+        <Presentation className="mr-1.5 h-3.5 w-3.5" />
+        Vista cliente
+      </Button>
       <Button type="button" variant="glass" size="sm" className="w-full justify-start" asChild>
         <Link href="/nexus/vision/manual/usuario">
           <BookOpen className="mr-1.5 h-3.5 w-3.5" />
@@ -2836,6 +2856,7 @@ export default function NexusVisionArchitectClient() {
                     onFinishPlace={drawCable ? finishCableDraft : undefined}
                     snapPlaceToDevices={drawCable}
                     onMove={onMove}
+                    onPatchCamera={(id, patch) => patchCamera(id, patch)}
                     onAdjustCameraVision={adjustCameraVision}
                     metersPerNormX={project.scale.metersPerNormX}
                     metersPerNormY={project.scale.metersPerNormY}

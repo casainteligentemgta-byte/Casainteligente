@@ -67,6 +67,12 @@ export type DesignCamera = {
   /** Alcance de visión en metros (override día/noche del catálogo). */
   rangeM?: number
   /**
+   * Desplazamiento del nombre en el plano (normalizado, relativo al pin).
+   * Si falta, el texto queda a +12 / −18 px del pin.
+   */
+  labelOffsetX?: number
+  labelOffsetY?: number
+  /**
    * Cámaras Dual: ajuste propio de cada lente secundaria (por id de lente, p. ej. «tele»).
    * Cada cono puede mirar a otro lugar. La lente primaria usa yawDeg / fov* / rangeM de arriba.
    */
@@ -238,7 +244,7 @@ export type NetVisionProject = {
   /** Si true, el plano se muestra invertido (fondo negro, trazos blancos). */
   planoInvertido?: boolean
   /** Color de cotas/números en modo fondo negro. */
-  planoCotaColor?: 'auto' | 'verde' | 'naranja' | 'azul' | 'amarillo'
+  planoCotaColor?: 'auto' | 'verde' | 'naranja' | 'azul' | 'blanco' | 'amarillo'
   /** Grosor visual de la línea de muro (0 = fina, 100 = gruesa). */
   planoGrosorMuro?: number
   cameras: DesignCamera[]

@@ -113,6 +113,20 @@ describe('applyNightPlanoPalette', () => {
     assert.deepEqual([...tick], [...NIGHT_NEON[2]!])
   })
 
+  it('cotaColor blanco pinta dígito y cota en blanco', () => {
+    const w = 400
+    const h = 320
+    const data = blank(w, h)
+    paint(data, w, 80, 70, 81, 86)
+    paint(data, w, 74, 78, 88, 79)
+    paint(data, w, 70, 88, 130, 88)
+    applyNightPlanoPalette(data, w, h, { cotaColor: 'blanco' })
+    const digit = rgbAt(data, w, 80, 76)
+    const tick = rgbAt(data, w, 120, 88)
+    assert.deepEqual([...digit], [...NIGHT_WALL])
+    assert.deepEqual([...tick], [...NIGHT_WALL])
+  })
+
   it('cotaColor naranja pinta dígito y cota del mismo neón', () => {
     const w = 400
     const h = 320
@@ -169,6 +183,8 @@ describe('night plano helpers', () => {
     assert.equal(neonIndexForColor('naranja'), 1)
     assert.equal(normalizeCotaColor('amarillo'), 'azul')
     assert.equal(neonIndexForColor('azul'), 2)
+    assert.equal(neonIndexForColor('blanco'), -1)
+    assert.equal(normalizeCotaColor('blanco'), 'blanco')
     assert.equal(neonIndexForColor('auto'), null)
   })
 })

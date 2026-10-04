@@ -39,6 +39,7 @@ import {
   clampGrosorMuro,
   normalizeCotaColor,
 } from '@/lib/netvision/utils/nightPlanoPalette'
+import { clampLabelOffset } from '@/lib/netvision/utils/cameraLabelOffset'
 
 /** Copia activa de trabajo (rápida). */
 export const NETVISION_STORAGE_KEY = 'nexus.netvision.v1'
@@ -303,6 +304,14 @@ export function openProject(id: string): NetVisionProject | null {
   setActiveId(id)
   persistWorkingCopy(opened)
   return opened
+}
+
+/** Lee un proyecto de la biblioteca sin cambiar el activo (vista cliente). */
+export function peekLocalProject(id: string): NetVisionProject | null {
+  const lib = readLibrary()
+  const p = lib.projects[id]
+  if (!p) return null
+  return attachStoredPlano(p)
 }
 
 export function deleteProject(id: string): NetVisionProject {
@@ -581,6 +590,14 @@ function normalizeCamera(c: Partial<DesignCamera> & { label?: string }): DesignC
       typeof c.mountHeightM === 'number' ? c.mountHeightM : DEFAULT_MOUNT_HEIGHT_M,
     ),
     tiltDeg: clampTiltDeg(typeof c.tiltDeg === 'number' ? c.tiltDeg : DEFAULT_TILT_DEG),
+    ...(() => {
+      const labelOffsetX = clampLabelOffset(c.labelOffsetX)
+      const labelOffsetY = clampLabelOffset(c.labelOffsetY)
+      return {
+        ...(labelOffsetX != null ? { labelOffsetX } : {}),
+        ...(labelOffsetY != null ? { labelOffsetY } : {}),
+      }
+    })(),
     ...(fovDeg != null ? { fovDeg } : {}),
     ...(fovLeftDeg != null ? { fovLeftDeg } : {}),
     ...(fovRightDeg != null ? { fovRightDeg } : {}),

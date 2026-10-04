@@ -17,6 +17,7 @@ const COTA_CHIPS: Array<{
   { id: 'verde', label: 'Verde', color: `rgb(${NIGHT_NEON[0]!.join(',')})` },
   { id: 'naranja', label: 'Naranja', color: `rgb(${NIGHT_NEON[1]!.join(',')})` },
   { id: 'azul', label: 'Azul eléctrico', color: `rgb(${NIGHT_NEON[2]!.join(',')})` },
+  { id: 'blanco', label: 'Blanco', color: '#ffffff' },
 ]
 
 export type NetVisionPlanoLookControlsProps = {

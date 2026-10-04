@@ -84,6 +84,7 @@ export default function NetVisionCameraVisionToggles({
       </div>
       <p className="text-[10px] text-[var(--nexus-text-dim)]">
         Todas · toca el nombre para ver solo esa zona · el ojo apaga o enciende una.
+        En el plano puedes arrastrar el nombre de cada cámara.
       </p>
     </div>
   )
