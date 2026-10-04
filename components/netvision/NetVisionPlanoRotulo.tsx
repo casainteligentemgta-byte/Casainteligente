@@ -18,9 +18,9 @@ export default function NetVisionPlanoRotulo({
         </p>
       </header>
       <div className="min-h-0 min-w-0 flex-1">{children}</div>
-      <footer className="pointer-events-none grid shrink-0 grid-cols-3 items-center gap-2 border-t border-[rgba(0,242,254,0.22)] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide sm:text-[11px]">
-        <span className="truncate text-white/80">{rotulo.company}</span>
-        <span className="truncate text-center text-white/70">{rotulo.dateLabel}</span>
+      <footer className="pointer-events-none grid shrink-0 grid-cols-3 items-center gap-2 border-t border-[rgba(0,242,254,0.28)] bg-[#071018] px-3 py-2 text-[10px] font-semibold uppercase tracking-wide sm:text-[11px]">
+        <span className="truncate text-white">{rotulo.company}</span>
+        <span className="truncate text-center text-white/80">{rotulo.dateLabel}</span>
         <span className="truncate text-right text-[var(--nexus-cyan)]">{rotulo.planType}</span>
       </footer>
     </div>

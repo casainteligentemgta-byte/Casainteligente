@@ -3037,7 +3037,7 @@ export default function NexusVisionArchitectClient() {
                   </div>
                   {project.cameras.length > 0 && !inspectorOpen ? (
                     <div
-                      className="absolute inset-x-2 bottom-2 z-20 flex items-center gap-2 rounded-xl border border-white/15 bg-[#071018]/90 px-2 py-1.5 shadow-lg backdrop-blur-md"
+                      className="absolute inset-x-2 bottom-12 z-20 flex items-center gap-2 rounded-xl border border-white/15 bg-[#071018]/90 px-2 py-1.5 shadow-lg backdrop-blur-md"
                       data-cameras-menu
                     >
                       <div className="relative shrink-0">
