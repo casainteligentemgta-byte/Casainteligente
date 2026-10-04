@@ -323,6 +323,18 @@ function wallDrawnStroke(selected: boolean, grosor: number): number {
   return Math.max(0.35, (selected ? 2.5 : 1.25) * t)
 }
 
+/** Bloque/concreto son oscuros: en plano negro se pierden si no se aclaran. */
+function wallStrokeColor(
+  mat: { id: string; color: string },
+  invert: boolean,
+  selected: boolean,
+): string {
+  if (!invert) return mat.color
+  if (mat.id === 'concrete') return selected ? '#f5f5f4' : '#d6d3d1'
+  if (mat.id === 'block') return selected ? '#fde68a' : '#e7e5e4'
+  return mat.color
+}
+
 function useHtmlImage(url: string | null, invert = false, invertOptions?: NightPlanoOptions) {
   const [image, setImage] = useState<HTMLImageElement | null>(null)
   useEffect(() => {
@@ -426,6 +438,10 @@ export default function CameraPlacementTool({
 }: CameraPlacementToolProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const localStageRef = useRef<Konva.Stage | null>(null)
+  const onAddAtRef = useRef(onAddAt)
+  onAddAtRef.current = onAddAt
+  const hasDrawDraft =
+    (draftPoints?.length ?? 0) > 0 || Boolean(draftPoint)
   const { width, height } = useContainerSize(containerRef)
   const image = useHtmlImage(backgroundUrl, invertBackground, invertOptions)
   const [zoom, setZoom] = useState(1)
@@ -622,24 +638,32 @@ export default function CameraPlacementTool({
     )
   }
 
+  const pointerNorm = () => {
+    const stage = localStageRef.current
+    if (!stage) return null
+    const pos = stage.getRelativePointerPosition()
+    if (!pos) return null
+    return toNorm(pos.x, pos.y)
+  }
+
+  const placeAtPointer = () => {
+    const n = pointerNorm()
+    if (!n) return false
+    onAddAtRef.current(n.x, n.y)
+    return true
+  }
+
   const handleStageClick = (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
     if (pinching) return
     if (Date.now() < suppressTapUntilRef.current) return
-    if (e.target !== e.target.getStage()) return
-    // Toque vacío: ocultar asas tras configurar la apertura (la cámara sigue seleccionada).
     if (!placeMode) {
-      setVisionHandlesOpen(false)
+      if (e.target === e.target.getStage()) setVisionHandlesOpen(false)
       return
     }
     const now = Date.now()
     if (now - lastPlaceAtRef.current < 280) return
     lastPlaceAtRef.current = now
-    const stage = e.target.getStage()
-    if (!stage) return
-    const pos = stage.getRelativePointerPosition()
-    if (!pos) return
-    const n = toNorm(pos.x, pos.y)
-    onAddAt(n.x, n.y)
+    placeAtPointer()
   }
 
   const handleStageMouseMove = () => {
@@ -724,7 +748,7 @@ export default function CameraPlacementTool({
         scaleY={zoom}
         x={stagePos.x}
         y={stagePos.y}
-        draggable={canPan}
+        draggable={canPan && !(placeMode && hasDrawDraft)}
         dragDistance={placeMode ? 16 : 6}
         onDragEnd={(e) => {
           if (e.target !== e.target.getStage()) return
@@ -1030,7 +1054,7 @@ export default function CameraPlacementTool({
               <Fragment key={`str-${s.id}`}>
                 <Line
                   points={[x1, y1, x2, y2]}
-                  stroke={mat.color}
+                  stroke={wallStrokeColor(mat, invertBackground, selected)}
                   strokeWidth={wallDrawnStroke(selected, wallStrokeGrosor)}
                   hitStrokeWidth={placeMode ? 0 : 16}
                   dash={mat.dash ?? undefined}
@@ -1388,7 +1412,8 @@ export default function CameraPlacementTool({
                   dash={[10, 6]}
                   lineCap="round"
                   lineJoin="round"
-                  hitStrokeWidth={16}
+                  hitStrokeWidth={placeMode ? 0 : 16}
+                  listening={!placeMode}
                   onClick={(e) => {
                     e.cancelBubble = true
                     onSelect(run.id)
