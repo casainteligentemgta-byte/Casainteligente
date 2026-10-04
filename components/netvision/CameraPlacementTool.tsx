@@ -133,7 +133,7 @@ export type CameraPlacementToolProps = {
   metersPerNormX?: number
   metersPerNormY?: number
   nightMode?: boolean
-  onSelect: (id: string) => void
+  onSelect: (id: string | null) => void
   /** Toque (no arrastre): abrir ficha de configuración. */
   onInspect?: (id: string) => void
   /** Mover un quiebre (índice 0-based entre extremos) de una ruta auto. */
@@ -466,6 +466,8 @@ export default function CameraPlacementTool({
   const suppressTapUntilRef = useRef(0)
   /** Konva dispara onClick y onTap en el mismo toque (tablet); no colocar dos veces. */
   const lastPlaceAtRef = useRef(0)
+  const lastChipEventAtRef = useRef(0)
+  const lastChipTapRef = useRef<{ id: string; at: number } | null>(null)
 
   viewRef.current = { zoom, stagePos }
 
@@ -698,6 +700,27 @@ export default function CameraPlacementTool({
   const inspect = (id: string) => {
     onSelect(id)
     onInspect?.(id)
+  }
+
+  /** Un toque abre el menú del nombre; el segundo toque (o doble clic) lo guarda y cierra. */
+  const activateOrCloseChip = (camId: string, isSelected: boolean) => {
+    const now = Date.now()
+    if (now - lastChipEventAtRef.current < 80) return
+    lastChipEventAtRef.current = now
+    const prev = lastChipTapRef.current
+    if (isSelected && prev && prev.id === camId && now - prev.at < 550) {
+      lastChipTapRef.current = null
+      onSelect(null)
+      return
+    }
+    lastChipTapRef.current = { id: camId, at: now }
+    onSelect(camId)
+  }
+
+  const closeChipMenu = (isSelected: boolean) => {
+    if (!isSelected) return
+    lastChipTapRef.current = null
+    onSelect(null)
   }
 
   const pauseStageDrag = (stage: Konva.Stage | null) => {
@@ -2065,11 +2088,19 @@ export default function CameraPlacementTool({
                   }}
                   onClick={(e) => {
                     e.cancelBubble = true
-                    onSelect(cam.id)
+                    activateOrCloseChip(cam.id, selected)
                   }}
                   onTap={(e) => {
                     e.cancelBubble = true
-                    onSelect(cam.id)
+                    activateOrCloseChip(cam.id, selected)
+                  }}
+                  onDblClick={(e) => {
+                    e.cancelBubble = true
+                    closeChipMenu(selected)
+                  }}
+                  onDblTap={(e) => {
+                    e.cancelBubble = true
+                    closeChipMenu(selected)
                   }}
                   onDragStart={(e) => {
                     e.cancelBubble = true
