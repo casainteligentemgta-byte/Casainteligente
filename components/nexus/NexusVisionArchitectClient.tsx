@@ -357,7 +357,7 @@ export default function NexusVisionArchitectClient() {
   const [defaultInfra, setDefaultInfra] = useState<Record<InfraKind, string>>({
     monitor: defaultInfraModelId('monitor'),
     hdd: defaultInfraModelId('hdd'),
-    ups: defaultInfraModelId('ups'),
+    ups: 'ups-1500-1u',
     rack: 'rack-12u',
   })
   const [defaultHddTb, setDefaultHddTb] = useState(4)
@@ -1244,8 +1244,11 @@ export default function NexusVisionArchitectClient() {
   ) => {
     if (!project.planoUrl) return
     const mid = modelId ?? defaultNetModels[kind]
-    const count = project.networkNodes.filter((n) => n.kind === kind).length + 1
     const prefix = labelPrefixForKind(kind, mid)
+    const count =
+      project.networkNodes.filter(
+        (n) => labelPrefixForKind(n.kind, n.modelId) === prefix,
+      ).length + 1
     const node: DesignNetworkNode = {
       id: uid(),
       x: Math.round(normX * 1000) / 1000,
