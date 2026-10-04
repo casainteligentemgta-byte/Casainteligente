@@ -181,6 +181,11 @@ import {
 import { downloadDataUrl } from '@/lib/netvision/utils/exporters'
 import { downloadNetVisionPlanPdf } from '@/lib/netvision/utils/exportPlanPdf'
 import {
+  buildPlanoRotulo,
+  composePlanoRotuloImage,
+} from '@/lib/netvision/utils/planoRotulo'
+import NetVisionPlanoRotulo from '@/components/netvision/NetVisionPlanoRotulo'
+import {
   rotateNormPoint,
   rotatePlanoDataUrl90,
   rotateProjectGeometry,
@@ -1851,10 +1856,36 @@ export default function NexusVisionArchitectClient() {
     return () => window.removeEventListener('keydown', onKey)
   }, [persistProjectNow])
 
-  const exportPng = () => {
+  const planoRotulo = useMemo(
+    () =>
+      buildPlanoRotulo({
+        projectName: project.name,
+        branch: sideTab,
+      }),
+    [project.name, sideTab],
+  )
+
+  const capturePlanoConRotulo = async (mimeType?: 'image/jpeg') => {
     const stage = stageRef.current
-    if (!stage) return
-    downloadDataUrl('netvision-plano.png', stage.toDataURL({ pixelRatio: 2 }))
+    if (!stage) return null
+    const raw = mimeType
+      ? stage.toDataURL({ pixelRatio: 2, mimeType, quality: 0.92 })
+      : stage.toDataURL({ pixelRatio: 2 })
+    return composePlanoRotuloImage(
+      raw,
+      buildPlanoRotulo({
+        projectName: project.name,
+        branch: sideTab,
+      }),
+      { night: Boolean(project.planoInvertido) },
+    )
+  }
+
+  const exportPng = () => {
+    void (async () => {
+      const framed = await capturePlanoConRotulo()
+      if (framed) downloadDataUrl('netvision-plano.png', framed)
+    })()
   }
 
   const exportPdf = async () => {
@@ -1863,19 +1894,27 @@ export default function NexusVisionArchitectClient() {
     setExportingPdf(true)
     setError(null)
     try {
-      // JPEG reduce tamaño del PDF; capas visibles del Stage se capturan tal cual
-      const imageDataUrl = stage.toDataURL({
-        pixelRatio: 2,
-        mimeType: 'image/jpeg',
-        quality: 0.92,
+      const rotulo = buildPlanoRotulo({
+        projectName: project.name,
+        branch: sideTab,
       })
+      const imageDataUrl =
+        (await capturePlanoConRotulo('image/jpeg')) ??
+        stage.toDataURL({
+          pixelRatio: 2,
+          mimeType: 'image/jpeg',
+          quality: 0.92,
+        })
       await downloadNetVisionPlanPdf({
         imageDataUrl,
-        projectName: project.name || 'Proyecto NetVision',
+        projectName: rotulo.projectName,
         planoNombre: project.planoNombre,
         cameraCount: project.cameras.length,
         networkCount: project.networkNodes.length,
         structureCount: (project.structures ?? []).length,
+        company: rotulo.company,
+        planType: rotulo.planType,
+        generatedAt: rotulo.dateLabel,
       })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo exportar el PDF del plano.')
@@ -2800,10 +2839,11 @@ export default function NexusVisionArchitectClient() {
                 />
               ) : (
                 <div
-                  className={`relative h-[calc(100dvh-11.5rem)] min-h-[420px] w-full overflow-hidden rounded-xl border border-[rgba(0,242,254,0.2)] bg-black ${
+                  className={`relative h-[calc(100dvh-11.5rem)] min-h-[420px] w-full overflow-hidden rounded-xl bg-black ${
                     placeMode ? 'cursor-crosshair' : 'cursor-default'
                   }`}
                 >
+                  <NetVisionPlanoRotulo rotulo={planoRotulo}>
                   <CameraPlacementTool
                     backgroundUrl={project.planoUrl}
                     invertBackground={Boolean(project.planoInvertido)}
@@ -2947,7 +2987,8 @@ export default function NexusVisionArchitectClient() {
                     zoomControlsRef={zoomControlsRef}
                     onZoomChange={(z) => setZoomPercent(Math.round(z * 100))}
                   />
-                  <div className="pointer-events-none absolute left-3 top-3 z-20 w-[min(16.75rem,calc(100%-1.5rem))]">
+                  </NetVisionPlanoRotulo>
+                  <div className="pointer-events-none absolute left-3 top-14 z-20 w-[min(16.75rem,calc(100%-1.5rem))]">
                     {lookPanelOpen ? (
                       <div className="pointer-events-auto rounded-xl border border-white/20 bg-[#071018]/92 p-2.5 shadow-xl backdrop-blur-md">
                         <div className="mb-1.5 flex items-center justify-between gap-2">
@@ -3085,7 +3126,7 @@ export default function NexusVisionArchitectClient() {
                     <button
                       type="button"
                       onClick={() => setInspectorOpen(true)}
-                      className="absolute right-3 top-3 z-20 rounded-full bg-[var(--nexus-cyan)] px-3.5 py-2 text-[11px] font-semibold text-black shadow-lg"
+                      className="absolute right-3 top-14 z-20 rounded-full bg-[var(--nexus-cyan)] px-3.5 py-2 text-[11px] font-semibold text-black shadow-lg"
                     >
                       Configurar{' '}
                       {selectedCam?.label ||

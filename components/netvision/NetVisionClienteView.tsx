@@ -26,6 +26,8 @@ import {
 } from '@/lib/netvision/utils/clienteCameraCard'
 import { formatLength } from '@/lib/netvision/utils/units'
 import { normalizeCotaColor } from '@/lib/netvision/utils/nightPlanoPalette'
+import { buildPlanoRotulo } from '@/lib/netvision/utils/planoRotulo'
+import NetVisionPlanoRotulo from '@/components/netvision/NetVisionPlanoRotulo'
 
 function loadClienteProject(id: string | null): NetVisionProject | null {
   if (id) {
@@ -295,6 +297,12 @@ export default function NetVisionClienteView() {
       <div className="grid min-h-0 flex-1 grid-rows-[minmax(200px,42dvh)_minmax(0,1fr)] gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(260px,320px)] lg:grid-rows-[minmax(0,1fr)]">
         <div className="min-h-0 overflow-hidden rounded-2xl border border-white/10 bg-[#05080d] print:min-h-[360px]">
           {project.planoUrl ? (
+            <NetVisionPlanoRotulo
+              rotulo={buildPlanoRotulo({
+                projectName: project.name,
+                branch: 'cctv',
+              })}
+            >
             <CameraPlacementTool
               backgroundUrl={project.planoUrl}
               invertBackground={Boolean(project.planoInvertido)}
@@ -341,6 +349,7 @@ export default function NetVisionClienteView() {
               }}
               showZoomOverlay
             />
+            </NetVisionPlanoRotulo>
           ) : (
             <p className="p-6 text-sm text-white/70">Este proyecto no tiene plano cargado.</p>
           )}
