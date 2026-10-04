@@ -10,7 +10,7 @@ import {
 } from '@react-pdf/renderer'
 
 export type NetVisionPlanPdfInput = {
-  /** Data URL PNG/JPEG del Stage Konva */
+  /** Data URL PNG/JPEG del Stage Konva (ya puede traer el rótulo). */
   imageDataUrl: string
   projectName: string
   planoNombre?: string
@@ -20,6 +20,8 @@ export type NetVisionPlanPdfInput = {
   /** Fecha ISO o texto ya formateado */
   generatedAt?: string
   filename?: string
+  company?: string
+  planType?: string
 }
 
 const styles = StyleSheet.create({
@@ -32,25 +34,44 @@ const styles = StyleSheet.create({
     fontFamily: 'Helvetica',
   },
   header: {
-    marginBottom: 12,
-  },
-  brand: {
-    fontSize: 10,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-    color: '#67e8f9',
-    marginBottom: 4,
+    marginBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#334155',
+    paddingBottom: 8,
   },
   title: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 700,
     color: '#f8fafc',
-    marginBottom: 4,
+    marginBottom: 2,
+    textAlign: 'center',
+    textTransform: 'uppercase',
   },
   meta: {
     fontSize: 9,
     color: '#94a3b8',
     marginBottom: 2,
+    textAlign: 'center',
+  },
+  footerRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#334155',
+    paddingTop: 8,
+  },
+  footerCell: {
+    fontSize: 9,
+    color: '#cbd5e1',
+    textTransform: 'uppercase',
+  },
+  footerType: {
+    fontSize: 10,
+    color: '#67e8f9',
+    fontWeight: 700,
+    textTransform: 'uppercase',
   },
   imageWrap: {
     flexGrow: 1,
@@ -67,11 +88,6 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
     maxHeight: '100%',
     objectFit: 'contain',
-  },
-  footer: {
-    marginTop: 10,
-    fontSize: 8,
-    color: '#64748b',
   },
 })
 
@@ -98,20 +114,24 @@ function NetVisionPlanPdfDoc(props: NetVisionPlanPdfInput) {
     >
       <Page size="A4" orientation="landscape" style={styles.page}>
         <View style={styles.header}>
-          <Text style={styles.brand}>NetVision Pro</Text>
           <Text style={styles.title}>{props.projectName || 'Proyecto sin nombre'}</Text>
-          <Text style={styles.meta}>
-            Plano: {props.planoNombre?.trim() || '—'}
-            {counts ? ` · ${counts}` : ''}
-          </Text>
-          <Text style={styles.meta}>Generado: {when}</Text>
+          {counts || props.planoNombre?.trim() ? (
+            <Text style={styles.meta}>
+              {props.planoNombre?.trim() ? `Plano: ${props.planoNombre.trim()}` : ''}
+              {counts ? `${props.planoNombre?.trim() ? ' · ' : ''}${counts}` : ''}
+            </Text>
+          ) : null}
         </View>
         <View style={styles.imageWrap}>
           <Image src={props.imageDataUrl} style={styles.image} />
         </View>
-        <Text style={styles.footer}>
-          Casa Inteligente · casainteligente.company · Exportación del plano NetVision
-        </Text>
+        <View style={styles.footerRow}>
+          <Text style={styles.footerCell}>
+            {props.company || 'Casa Inteligente C.A.'}
+          </Text>
+          <Text style={styles.footerCell}>{when}</Text>
+          <Text style={styles.footerType}>{props.planType || 'CCTV'}</Text>
+        </View>
       </Page>
     </Document>
   )
