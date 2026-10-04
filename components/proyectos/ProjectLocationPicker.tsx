@@ -38,6 +38,10 @@ function crearIconoMarcador() {
   });
 }
 
+function etiquetaCoords(lat: number, lng: number) {
+  return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+}
+
 function ClickCapture({ onPick }: { onPick: (lat: number, lng: number) => void }) {
   useMapEvents({
     click(e) {
@@ -225,7 +229,9 @@ export default function ProjectLocationPicker({ lat, lng, onChange, onLabelFromS
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setGeoLoading(false);
-        onChange({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        onChange({ lat, lng, label: etiquetaCoords(lat, lng) });
       },
       (err) => {
         setGeoLoading(false);
@@ -339,7 +345,7 @@ export default function ProjectLocationPicker({ lat, lng, onChange, onLabelFromS
             />
             <ClickCapture
               onPick={(a, b) => {
-                onChange({ lat: a, lng: b });
+                onChange({ lat: a, lng: b, label: etiquetaCoords(a, b) });
               }}
             />
             {lat != null && lng != null ? <Marker icon={pin} position={[lat, lng]} /> : null}

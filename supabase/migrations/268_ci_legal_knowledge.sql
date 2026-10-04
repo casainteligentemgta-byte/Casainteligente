@@ -133,8 +133,7 @@ grant execute on function public.match_ci_legal_knowledge(
 
 notify pgrst, 'reload schema';
 
--- --- dedup_hash contabilidad (antes 268_contabilidad_compras_dedup_hash.sql) ---
-
+-- === dedup_hash compras (antes 268_contabilidad_compras_dedup_hash.sql) ===
 -- Anti-duplicados CSV / libro: hash de llave natural (fecha+factura+proveedor+monto+obra).
 
 alter table public.contabilidad_compras

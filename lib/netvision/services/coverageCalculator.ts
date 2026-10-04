@@ -12,6 +12,7 @@ import type {
   SpectrumCell,
   VisionBand,
 } from '@/lib/netvision/types'
+import { projectGroundCoverage } from '@/lib/netvision/utils/cameraMount'
 import {
   distMeters,
   fovSectorAngles,
@@ -35,38 +36,136 @@ export function defaultScale(): ScaleCalibration {
   }
 }
 
+/**
+ * Semáforo en metros de ficha (`catalogRangeM`), no del cono estirado.
+ * Estirar el anillo solo alarga el rojo; el verde de 2 m sigue en 2 m.
+ */
 export function visionBandForDistance(
   distanceM: number,
-  rangeM: number,
+  drawnRangeM: number,
+  catalogRangeM = drawnRangeM,
 ): VisionBand | null {
-  if (rangeM <= 0 || distanceM < 0 || distanceM > rangeM + 1e-6) return null
-  const t = distanceM / rangeM
-  if (t <= VISION_BAND_FRAC.greenMax) return 'green'
-  if (t <= VISION_BAND_FRAC.yellowMax) return 'yellow'
+  if (drawnRangeM <= 0 || distanceM < 0 || distanceM > drawnRangeM + 1e-6) return null
+  const qualityM = Math.max(catalogRangeM, 1e-6)
+  if (distanceM <= qualityM * VISION_BAND_FRAC.greenMax) return 'green'
+  if (distanceM <= qualityM * VISION_BAND_FRAC.yellowMax) return 'yellow'
   return 'red'
 }
 
-function bandRank(band: VisionBand): number {
+/** Mayor = mejor detección. Verde prevalece sobre naranja; naranja sobre rojo. */
+export function visionBandRank(band: VisionBand): number {
   if (band === 'green') return 3
   if (band === 'yellow') return 2
   return 1
 }
 
-/** Metros por banda de semáforo según el alcance efectivo. */
-export function visionBandRangesM(rangeM: number): {
+/** En un solape, qué banda se muestra (calidad de detección, no mezcla). */
+export function preferredVisionBand(a: VisionBand, b: VisionBand): VisionBand {
+  return visionBandRank(a) >= visionBandRank(b) ? a : b
+}
+
+function round1(n: number) {
+  return Math.round(n * 10) / 10
+}
+
+/**
+ * Metros de cada banda.
+ * Verde/amarillo salen de la ficha (`catalogRangeM`); el rojo llega al borde dibujado.
+ */
+export function visionBandRangesM(
+  drawnRangeM: number,
+  catalogRangeM = drawnRangeM,
+): {
   greenMaxM: number
   yellowMaxM: number
   redMaxM: number
 } {
+  const qualityM = Math.max(catalogRangeM, 0)
+  const drawn = Math.max(drawnRangeM, 0)
   return {
-    greenMaxM: Math.round(rangeM * VISION_BAND_FRAC.greenMax * 10) / 10,
-    yellowMaxM: Math.round(rangeM * VISION_BAND_FRAC.yellowMax * 10) / 10,
-    redMaxM: Math.round(rangeM * 10) / 10,
+    greenMaxM: round1(Math.min(drawn, qualityM * VISION_BAND_FRAC.greenMax)),
+    yellowMaxM: round1(Math.min(drawn, qualityM * VISION_BAND_FRAC.yellowMax)),
+    redMaxM: round1(drawn),
   }
+}
+
+/**
+ * Polígonos de cada banda del semáforo, recortados por muros.
+ * Se pintan apilados (rojo → amarillo → verde) para rellenar el cono
+ * aunque el plano no sea cuadrado (un Arc circular no cubre la elipse).
+ */
+export function coverageBandPolygons(opts: {
+  cx: number
+  cy: number
+  startAngleRad: number
+  endAngleRad: number
+  innerRadiusNorm: number
+  greenRadiusNorm: number
+  yellowRadiusNorm: number
+  structures: DesignStructure[]
+}): Pick<CoverageSector, 'greenPolygon' | 'yellowPolygon'> {
+  const inner = Math.max(0, opts.innerRadiusNorm)
+  const greenR = Math.max(0, opts.greenRadiusNorm)
+  const yellowR = Math.max(0, opts.yellowRadiusNorm)
+  const rays = 96
+  const greenPolygon =
+    greenR > inner + 1e-4
+      ? buildFovPolygon(
+          opts.cx,
+          opts.cy,
+          greenR,
+          opts.startAngleRad,
+          opts.endAngleRad,
+          opts.structures,
+          rays,
+          inner,
+        )
+      : undefined
+  const yellowPolygon =
+    yellowR > inner + 1e-4
+      ? buildFovPolygon(
+          opts.cx,
+          opts.cy,
+          yellowR,
+          opts.startAngleRad,
+          opts.endAngleRad,
+          opts.structures,
+          rays,
+          inner,
+        )
+      : undefined
+  return { greenPolygon, yellowPolygon }
 }
 
 function hasOpaqueWalls(structures: DesignStructure[]): boolean {
   return structures.some((s) => getStructureMaterialOrDefault(s.materialId).blocksVision)
+}
+
+function lensGroundOnPlan(
+  cam: DesignCamera,
+  lens: { fovDeg: number; rangeM: number },
+  scale: ScaleCalibration,
+) {
+  const ground = projectGroundCoverage({
+    heightM: cam.mountHeightM,
+    tiltDeg: cam.tiltDeg ?? 0,
+    hFovDeg: lens.fovDeg,
+    rangeM: lens.rangeM,
+  })
+  return {
+    nearM: ground.nearM,
+    farM: ground.farM,
+    innerRadiusNorm: metersToNormRadius(
+      ground.nearM,
+      scale.metersPerNormX,
+      scale.metersPerNormY,
+    ),
+    radiusNorm: metersToNormRadius(
+      ground.farM,
+      scale.metersPerNormX,
+      scale.metersPerNormY,
+    ),
+  }
 }
 
 export function buildCoverageSectors(
@@ -78,11 +177,7 @@ export function buildCoverageSectors(
   return cameras.flatMap((cam) => {
     const lenses = effectiveCameraLenses(cam, mode)
     return lenses.map((lens) => {
-      const radiusNorm = metersToNormRadius(
-        lens.rangeM,
-        scale.metersPerNormX,
-        scale.metersPerNormY,
-      )
+      const ground = lensGroundOnPlan(cam, lens, scale)
       const { startAngleRad, endAngleRad } = fovSectorAngles(
         lens.yawDeg,
         lens.fovLeftDeg,
@@ -92,21 +187,47 @@ export function buildCoverageSectors(
       const polygon = buildFovPolygon(
         cam.x,
         cam.y,
-        radiusNorm,
+        ground.radiusNorm,
         startAngleRad,
         endAngleRad,
         structures,
+        96,
+        ground.innerRadiusNorm,
+      )
+      const bands = visionBandRangesM(ground.farM, lens.catalogRangeM)
+      const greenRadiusNorm = metersToNormRadius(
+        bands.greenMaxM,
+        scale.metersPerNormX,
+        scale.metersPerNormY,
+      )
+      const yellowRadiusNorm = metersToNormRadius(
+        bands.yellowMaxM,
+        scale.metersPerNormX,
+        scale.metersPerNormY,
       )
       return {
         cameraId: cam.id,
         lensId: lens.lensId,
         cx: cam.x,
         cy: cam.y,
-        radiusNorm,
+        radiusNorm: ground.radiusNorm,
+        innerRadiusNorm: ground.innerRadiusNorm,
         startAngleRad,
         endAngleRad,
         mode,
         polygon,
+        greenRadiusNorm,
+        yellowRadiusNorm,
+        ...coverageBandPolygons({
+          cx: cam.x,
+          cy: cam.y,
+          startAngleRad,
+          endAngleRad,
+          innerRadiusNorm: ground.innerRadiusNorm,
+          greenRadiusNorm,
+          yellowRadiusNorm,
+          structures,
+        }),
       }
     })
   })
@@ -123,7 +244,7 @@ export function buildVisionSpectrum(
   scale: ScaleCalibration,
   mode: 'day' | 'night' = 'day',
   structures: DesignStructure[] = [],
-  grid = 36,
+  grid = 64,
 ): SpectrumCell[] {
   if (cameras.length === 0) return []
 
@@ -132,11 +253,7 @@ export function buildVisionSpectrum(
 
   const prepared = cameras.flatMap((cam) =>
     effectiveCameraLenses(cam, mode).map((lens) => {
-      const radiusNorm = metersToNormRadius(
-        lens.rangeM,
-        scale.metersPerNormX,
-        scale.metersPerNormY,
-      )
+      const ground = lensGroundOnPlan(cam, lens, scale)
       const { startAngleRad, endAngleRad } = fovSectorAngles(
         lens.yawDeg,
         lens.fovLeftDeg,
@@ -145,15 +262,19 @@ export function buildVisionSpectrum(
       const polygon = buildFovPolygon(
         cam.x,
         cam.y,
-        radiusNorm,
+        ground.radiusNorm,
         startAngleRad,
         endAngleRad,
         structures,
+        96,
+        ground.innerRadiusNorm,
       )
       return {
         cam,
-        rangeM: lens.rangeM,
-        radiusNorm,
+        rangeM: ground.farM,
+        catalogRangeM: lens.catalogRangeM,
+        nearM: ground.nearM,
+        radiusNorm: ground.radiusNorm,
         startAngleRad,
         endAngleRad,
         polygon,
@@ -182,12 +303,13 @@ export function buildVisionSpectrum(
           scale.metersPerNormX,
           scale.metersPerNormY,
         )
-        const band = visionBandForDistance(d, p.rangeM)
+        if (d + 1e-6 < p.nearM) continue
+        const band = visionBandForDistance(d, p.rangeM, p.catalogRangeM)
         if (!band) continue
-        const strength = Math.max(0.15, 1 - d / Math.max(p.rangeM, 1))
+        const strength = Math.max(0.15, 1 - d / Math.max(p.catalogRangeM, 1))
         if (
           !bestBand ||
-          bandRank(band) > bandRank(bestBand) ||
+          visionBandRank(band) > visionBandRank(bestBand) ||
           (band === bestBand && strength > bestStrength)
         ) {
           bestBand = band

@@ -32,6 +32,8 @@ export type CameraModel = {
   bitrateMbps: number
   poeWatts: number
   priceUsd: number
+  /** Facultades de visión (FOV de ficha, IR/color, PTZ, dual, etc.). */
+  notes?: string
 }
 
 export type DesignCamera = {
@@ -43,7 +45,13 @@ export type DesignCamera = {
   modelId: string
   /** Orientación en grados (0 = este; en canvas Y-down crece en sentido horario) */
   yawDeg: number
+  /** Altura de montaje sobre el piso (m). */
   mountHeightM: number
+  /**
+   * Inclinación hacia el piso: 0° = horizonte (cono 2D actual), 90° = nadir.
+   * Con inclinación > 0 aparece zona ciega bajo la cámara y se recorta el fondo.
+   */
+  tiltDeg?: number
   /** Apertura FOV total en grados (override del catálogo). Si faltan lados, se reparte 50/50. */
   fovDeg?: number
   /**
@@ -58,6 +66,11 @@ export type DesignCamera = {
   fovRightDeg?: number
   /** Alcance de visión en metros (override día/noche del catálogo). */
   rangeM?: number
+  /**
+   * Cámaras Dual: ajuste propio de cada lente secundaria (por id de lente, p. ej. «tele»).
+   * Cada cono puede mirar a otro lugar. La lente primaria usa yawDeg / fov* / rangeM de arriba.
+   */
+  lensVision?: Record<string, LensVisionOverride>
 }
 
 export type ScaleCalibration = {
@@ -69,6 +82,48 @@ export type ScaleCalibration = {
 }
 
 export type NetworkNodeKind = 'switch' | 'ap' | 'nvr' | 'injector'
+
+/** Planos de especialidad (además de CCTV / Internet). */
+export type PlanDiscipline = 'sonido' | 'domotica' | 'electrico'
+
+export type PlanDeviceKind =
+  | 'speaker'
+  | 'siren'
+  | 'mic'
+  | 'hub'
+  | 'sensor'
+  | 'relay'
+  | 'keypad'
+  | 'panel'
+  | 'outlet'
+  | 'light'
+  | 'transformer'
+
+export type PlanDeviceModel = {
+  id: string
+  discipline: PlanDiscipline
+  kind: PlanDeviceKind
+  brand: string
+  name: string
+  /** Alcance útil en metros (ficha). */
+  rangeM: number
+  /** Apertura. 360 = omnidireccional. */
+  fovDeg: number
+  priceUsd: number
+}
+
+export type DesignPlanDevice = {
+  id: string
+  label: string
+  x: number
+  y: number
+  discipline: PlanDiscipline
+  kind: PlanDeviceKind
+  modelId: string
+  yawDeg?: number
+  rangeM?: number
+  fovDeg?: number
+}
 
 export type NetworkDeviceModel = {
   id: string
@@ -160,6 +215,9 @@ export type NetVisionProjectIndexEntry = {
   planoNombre: string
   cameraCount: number
   networkCount: number
+  /** Domótica / sonido / eléctrico y otros del plano. */
+  planDeviceCount: number
+  structureCount: number
 }
 
 export type NetVisionProject = {
@@ -175,8 +233,12 @@ export type NetVisionProject = {
   distributorMarginPct: number
   planoUrl: string | null
   planoNombre: string
+  /** Si true, el plano se muestra invertido (fondo negro, trazos blancos). */
+  planoInvertido?: boolean
   cameras: DesignCamera[]
   networkNodes: DesignNetworkNode[]
+  /** Altavoces, sensores, tableros, etc. (planos de especialidad). */
+  planDevices: DesignPlanDevice[]
   structures: DesignStructure[]
   /** Tramos subterráneos dibujados en el plano (además de los derivados de cable ≥ 8 m). */
   undergroundSegments: DesignUndergroundSegment[]
@@ -190,6 +252,15 @@ export type NetVisionProject = {
   scale: ScaleCalibration
   retentionDays: number
   complianceProfileId: string
+}
+
+/** Orientación / apertura / alcance propios de una lente secundaria. */
+export type LensVisionOverride = {
+  yawDeg?: number
+  fovDeg?: number
+  fovLeftDeg?: number
+  fovRightDeg?: number
+  rangeM?: number
 }
 
 export type ValidationLevel = 'ERROR' | 'WARNING' | 'INFO'
@@ -210,14 +281,24 @@ export type CoverageSector = {
   cx: number
   cy: number
   radiusNorm: number
+  /** Radio interior (zona ciega por inclinación) en coords 0–1. */
+  innerRadiusNorm?: number
   startAngleRad: number
   endAngleRad: number
   mode: 'day' | 'night'
   /** Polígono FOV recortado por muros opacos (incluye el centro). */
   polygon?: { x: number; y: number }[]
+  /** Radio del verde en coords 0–1 (metros de ficha, no del cono estirado). */
+  greenRadiusNorm?: number
+  /** Radio del amarillo en coords 0–1 (metros de ficha). */
+  yellowRadiusNorm?: number
+  /** Polígono de la banda verde (mismo recorte de muros que `polygon`). */
+  greenPolygon?: { x: number; y: number }[]
+  /** Polígono de la banda amarilla. */
+  yellowPolygon?: { x: number; y: number }[]
 }
 
-/** Semáforo de cobertura CCTV (alcance relativo). */
+/** Semáforo de cobertura CCTV (metros de ficha; el cono estirado no los agranda). */
 export type VisionBand = 'green' | 'yellow' | 'red'
 
 /** Celda de mapa de calor (WiFi, sonido o visión). */

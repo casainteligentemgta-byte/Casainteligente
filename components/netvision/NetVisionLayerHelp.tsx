@@ -15,7 +15,7 @@ export const NETVISION_LAYER_HELP: LayerHelpItem[] = [
     id: 'fov',
     label: 'Visión',
     blurb:
-      'Cobertura automática por alcance (semáforo): verde detección objetos/personas, amarillo más lejos, rojo detección dudosa. Drywall, bloque y concreto cortan la vista; el espectro no atraviesa esos muros.',
+      'Cobertura automática por alcance (semáforo): verde, naranja y rojo translúcidos sobre el plano. Verde y naranja son metros de ficha; estirar el cono solo alarga el rojo. En Dual (H9c) el gran angular y la PTZ tele usan el mismo semáforo. Si se solapan, gana verde sobre naranja y naranja sobre rojo. Ajusta la opacidad junto a Visión.',
   },
   {
     id: 'wifi',
@@ -27,7 +27,25 @@ export const NETVISION_LAYER_HELP: LayerHelpItem[] = [
     id: 'sound',
     label: 'Sonido',
     blurb:
-      'Espectro acústico estimado desde las cámaras (mic). Los muros reducen el alcance según el material.',
+      'Plano de sonido: coloca altavoces, sirenas y micrófonos, luego configúralos. El semáforo muestra alcance; los muros atenúan.',
+  },
+  {
+    id: 'internet',
+    label: 'Internet',
+    blurb:
+      'Plano de red / WiFi. Coloca AP, switch, NVR o inyector en el plano amplio; tócalos para el modelo. El semáforo del AP usa el alcance de ficha.',
+  },
+  {
+    id: 'domotica',
+    label: 'Domótica',
+    blurb:
+      'Hubs, sensores, relés y teclados. Primero ubícalos en el plano; después ajusta modelo y alcance en la ficha.',
+  },
+  {
+    id: 'electrico',
+    label: 'Eléctrico',
+    blurb:
+      'Tableros, tomas, luminarias y transformadores. Mismo flujo: colocar en el plano amplio y configurar cada uno.',
   },
   {
     id: 'links',
@@ -54,10 +72,22 @@ export const NETVISION_LAYER_HELP: LayerHelpItem[] = [
       'Recalcula el FOV en modo nocturno (alcance IR / visión de noche). No oscurece el plano: simula cobertura de noche.',
   },
   {
+    id: 'invert',
+    label: 'Fondo negro',
+    blurb:
+      'Pasa el papel a negro. Muros y objetos gruesos quedan en blanco; cotas y números en neón (verde, naranja o amarillo). No modifica el archivo y se puede desactivar.',
+  },
+  {
     id: 'calibrate',
     label: 'Calibrar',
     blurb:
-      'Marca dos puntos en el plano e indica la distancia real en metros para fijar la escala del diseño.',
+      'Traza una línea sobre un acotamiento del plano. Si el PDF trae el número (4.40, 3.20…), se usa solo. Si no, escríbelo y toca los dos extremos.',
+  },
+  {
+    id: 'rotate',
+    label: 'Rotar',
+    blurb:
+      'Gira el PDF o la imagen del plano 90° (izquierda o derecha). Las cámaras, muros y cables se mueven con el plano.',
   },
   {
     id: 'structures',
@@ -69,7 +99,7 @@ export const NETVISION_LAYER_HELP: LayerHelpItem[] = [
     id: 'muros',
     label: 'Muros',
     blurb:
-      'Pestaña Muros: dibuja drywall, bloque, concreto, vidrio, ventana o puerta (2 toques). Drywall/bloque/concreto cortan el FOV. Arrastra para mover; la capa Estructuras las muestra u oculta.',
+      'Pestaña Muros: detecta muros, puertas y ventanas de un PDF vectorial (CAD) o dibújalos a mano. Drywall/bloque/concreto cortan el FOV. Arrastra para mover; la capa Estructuras las muestra u oculta.',
   },
 ]
 

@@ -7,8 +7,7 @@ comment on column public.contabilidad_compras.monto_pagado_usd is
 
 notify pgrst, 'reload schema';
 
--- --- cco_snapshots (antes 275_cco_snapshots_restauracion.sql) ---
-
+-- === cco_snapshots (antes 275_cco_snapshots_restauracion.sql) ===
 -- ══════════════════════════════════════════════════════════════
 -- 275 · Snapshots CCO por obra (punto de restauración)
 -- Permite capturar y restablecer el libro CCO de una obra

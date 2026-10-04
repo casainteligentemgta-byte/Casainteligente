@@ -89,7 +89,7 @@ begin
   end loop;
 end $$;
 
--- ========== 320_ensure_tablas_base.sql (antes 0311/0312/1980) ==========
+-- ========== 324_ensure_tablas_base.sql (antes 0311/0312/1980 / 320) ==========
 create table if not exists public.recruitment_needs (
   id uuid primary key default gen_random_uuid() not null,
   title text not null,
@@ -1172,7 +1172,7 @@ comment on column public.budgets.saldo is
 
 notify pgrst, 'reload schema';
 
--- ========== 319_ci_flota_alertas_ensure_resuelta.sql ==========
+-- ========== 323_ci_flota_alertas_ensure_resuelta.sql ==========
 -- Idempotente: cubre el caso en que 313 ya se registró o la tabla existía
 -- sin leida/resuelta.
 
@@ -1213,8 +1213,8 @@ values
   ('316', '316_ci_flota_mantenimiento_maquinaria.sql', array['applied via sql editor']),
   ('317', '317_ci_flota_alertas_maquinaria.sql', array['applied via sql editor']),
   ('318', '318_budgets_abonos_cuotas.sql', array['applied via sql editor']),
-  ('319', '319_ci_flota_alertas_ensure_resuelta.sql', array['applied via sql editor']),
-  ('320', '320_ensure_tablas_base.sql', array['applied via sql editor'])
+  ('323', '323_ci_flota_alertas_ensure_resuelta.sql', array['applied via sql editor']),
+  ('324', '324_ensure_tablas_base.sql', array['applied via sql editor'])
 on conflict (version) do nothing;
 
 notify pgrst, 'reload schema';

@@ -137,7 +137,7 @@ export default function NetVisionProjectsPanel({
         type="button"
         variant="glass"
         size={triggerSize}
-        className="shrink-0"
+        className="w-full shrink-0 justify-start"
         onClick={() => setOpen((v) => !v)}
       >
         <FolderOpen
@@ -280,6 +280,10 @@ export default function NetVisionProjectsPanel({
                           <p className="truncate text-[10px] text-[var(--nexus-text-dim)]">
                             <Mono>
                               {e.cameraCount} cam · {e.networkCount} red
+                              {e.planDeviceCount
+                                ? ` · ${e.planDeviceCount} eq`
+                                : ''}
+                              {e.structureCount ? ` · ${e.structureCount} muros` : ''}
                             </Mono>
                             {e.updatedAt ? ` · ${formatWhen(e.updatedAt)}` : ''}
                           </p>
@@ -343,7 +347,9 @@ export default function NetVisionProjectsPanel({
             </div>
 
             <p className="mt-2 shrink-0 text-[10px] text-[var(--nexus-text-dim)]">
-              Local siempre disponible. Nube: usuario autenticado + migración 274.
+              Guarda CCTV, internet, domótica, sonido y eléctrico en este
+              navegador. Nube: usuario autenticado + migración 274. Atajo:{' '}
+              <Mono>Ctrl+S</Mono>.
             </p>
           </div>
         </div>

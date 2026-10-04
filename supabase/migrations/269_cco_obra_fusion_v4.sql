@@ -169,8 +169,7 @@ grant select, insert, update, delete on public.cco_auditoria_eventos to anon, au
 
 notify pgrst, 'reload schema';
 
--- --- match_legal_knowledge (antes 269_match_legal_knowledge.sql) ---
-
+-- === match_legal_knowledge (antes 269_match_legal_knowledge.sql) ===
 -- RPC de búsqueda semántica alineada al cliente RAG:
 -- match_legal_knowledge(query_embedding, match_threshold, match_count, filter_metadata)
 

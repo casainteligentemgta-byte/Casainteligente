@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient as createSupabaseJsClient, type SupabaseClient } from '@supabase/supabase-js';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
-import { etiquetaCliente } from '@/lib/clientes/etiquetaCliente';
+import { coordsCliente, direccionCliente, etiquetaCliente } from '@/lib/clientes/etiquetaCliente';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -15,7 +15,14 @@ function json(data: unknown) {
   return NextResponse.json(data, { headers: API_HEADERS });
 }
 
-type Item = { id: string; label: string; rif: string };
+type Item = {
+  id: string;
+  label: string;
+  rif: string;
+  direccion: string;
+  lat: number | null;
+  lng: number | null;
+};
 
 /** Columnas base (migración 009); si `*` falla en PostgREST, este listado suele funcionar. */
 const CUSTOMERS_SELECT_SAFE =
@@ -44,10 +51,14 @@ function mapRow(raw: unknown): Item | null {
     if (!id) return null;
     const rifRaw = row.rif;
     const rif = typeof rifRaw === 'string' ? rifRaw.trim() : '';
+    const gps = coordsCliente(row);
     return {
       id,
       label: etiquetaCliente(row),
       rif,
+      direccion: direccionCliente(row),
+      lat: gps?.lat ?? null,
+      lng: gps?.lng ?? null,
     };
   } catch {
     return null;

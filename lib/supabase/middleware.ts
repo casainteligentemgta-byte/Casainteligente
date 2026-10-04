@@ -33,7 +33,16 @@ const RUTAS_PROTEGIDAS = [
   '/metron',
   '/empleados',
   '/cambiar-password',
+  '/obra-digital',
+  '/entidades',
 ];
+
+/** Rutas de personal que cuelgan de un prefijo público: siempre exigen sesión. */
+const RUTAS_STAFF_BAJO_PREFIJO_PUBLICO = ['/reclutamiento/hoja-de-vida/view'];
+
+function esRutaStaffBajoPublico(pathname: string): boolean {
+  return RUTAS_STAFF_BAJO_PREFIJO_PUBLICO.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
 
 function esRutaPublica(pathname: string): boolean {
   return RUTAS_PUBLICAS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
@@ -85,7 +94,7 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
 
   let supabaseResponse = NextResponse.next({ request });
 
-  if (!url || !key) {
+  if (!url || !key || /example\.supabase\.co/i.test(url) || url.includes('your-project-url')) {
     return supabaseResponse;
   }
 
@@ -139,7 +148,7 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
     return NextResponse.redirect(new URL('/cambiar-password', request.url));
   }
 
-  if (!user && esRutaProtegida(pathname) && !esRutaPublica(pathname)) {
+  if (!user && ((esRutaProtegida(pathname) && !esRutaPublica(pathname)) || esRutaStaffBajoPublico(pathname))) {
     const loginUrl = new URL('/login', request.url);
     const retorno = `${pathname}${request.nextUrl.search || ''}`;
     loginUrl.searchParams.set('next', retorno);

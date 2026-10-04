@@ -50,6 +50,8 @@ export async function GET() {
         planoNombre: full.planoNombre,
         cameraCount: full.cameras.length,
         networkCount: full.networkNodes.length,
+        planDeviceCount: (full.planDevices ?? []).length,
+        structureCount: (full.structures ?? []).length,
         hasPlano: Boolean((row as { has_plano?: boolean }).has_plano),
         source: 'cloud' as const,
       }

@@ -1,5 +1,12 @@
 /** Fila mínima que esperan los selects de proyectos (label = nombre legible). */
-export type ClienteApiItem = { id: string; label: string; rif?: string };
+export type ClienteApiItem = {
+  id: string;
+  label: string;
+  rif?: string;
+  direccion?: string;
+  lat?: number | null;
+  lng?: number | null;
+};
 
 /**
  * Lee el cuerpo de `/api/proyectos/clientes` una sola vez (texto) y evita fallos si el servidor

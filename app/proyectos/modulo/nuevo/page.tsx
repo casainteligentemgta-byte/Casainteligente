@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { createClient } from '@/lib/supabase/client';
-import { etiquetaCliente, idCliente, rifCliente } from '@/lib/clientes/etiquetaCliente';
+import { coordsCliente, direccionCliente, etiquetaCliente, idCliente, idsClienteIguales, rifCliente } from '@/lib/clientes/etiquetaCliente';
 import { apiUrl } from '@/lib/http/apiUrl';
 import { withTimeout } from '@/lib/http/withTimeout';
 import { parseClientesApiResponse } from '@/lib/proyectos/parseClientesApiResponse';
@@ -83,6 +83,28 @@ function formatoUSD(n: number) {
   return new Intl.NumberFormat('es-VE', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(n);
 }
 
+function etiquetaGps(lat: number, lng: number) {
+  return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+}
+
+function textoCampoFormulario(form: HTMLFormElement, name: string, stateVal: string): string {
+  const fromState = stateVal.trim();
+  if (fromState) return fromState;
+  const el = form.elements.namedItem(name);
+  if (el && 'value' in el) return String((el as { value?: unknown }).value ?? '').trim();
+  return '';
+}
+
+function mensajeCamposFaltantes(faltan: string[]): string {
+  if (faltan.length === 1) {
+    if (faltan[0] === 'cliente') return 'Selecciona un cliente.';
+    if (faltan[0] === 'nombre') return 'Indica el nombre del proyecto.';
+    return 'Indica la ubicación (texto o pin en el mapa).';
+  }
+  if (faltan.length === 3) return 'Cliente, nombre y ubicación son obligatorios.';
+  return `Faltan ${faltan.join(' y ')}.`;
+}
+
 const ProjectLocationPicker = dynamic(
   () => import('@/components/proyectos/ProjectLocationPicker'),
   {
@@ -100,6 +122,8 @@ const ProjectLocationPicker = dynamic(
 export default function NuevoProyectoModuloPage() {
   const searchParams = useSearchParams();
   const customerIdFromUrl = searchParams.get('customerId')?.trim() ?? '';
+  const nombreFromUrl = searchParams.get('nombre')?.trim() ?? '';
+  const ubicacionFromUrl = searchParams.get('ubicacion')?.trim() ?? '';
 
   /** Cliente solo en el navegador (evita instanciar @supabase/ssr durante el SSR del componente). */
   const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null);
@@ -138,6 +162,8 @@ export default function NuevoProyectoModuloPage() {
   /** Evita carrera con React Strict Mode: el `finally` solo apaga loading si esta sigue siendo la carga vigente. */
   const clientesCargaIdRef = useRef(0);
   const [mapReady, setMapReady] = useState(false);
+  /** Evita rellenar de nuevo nombre/ubicación si el usuario ya los editó para este cliente. */
+  const prefillClienteIdRef = useRef('');
 
   type EntidadOpt = { id: string; nombre: string | null; nombre_legal: string | null; rif: string | null };
   const [entidades, setEntidades] = useState<EntidadOpt[]>([]);
@@ -148,6 +174,16 @@ export default function NuevoProyectoModuloPage() {
     if (!customerIdFromUrl) return;
     setCustomerId((prev) => prev || customerIdFromUrl);
   }, [customerIdFromUrl]);
+
+  useEffect(() => {
+    if (!nombreFromUrl) return;
+    setNombre((prev) => prev || nombreFromUrl);
+  }, [nombreFromUrl]);
+
+  useEffect(() => {
+    if (!ubicacionFromUrl) return;
+    setUbicacion((prev) => prev || ubicacionFromUrl);
+  }, [ubicacionFromUrl]);
 
   useEffect(() => {
     let cancelled = false;
@@ -303,13 +339,16 @@ export default function NuevoProyectoModuloPage() {
           }
         };
 
-        const mapApiItems = (body: { items?: Array<{ id: string; label: string; rif?: string }> }): Customer[] =>
+        const mapApiItems = (body: { items?: Array<{ id: string; label: string; rif?: string; direccion?: string; lat?: number | null; lng?: number | null }> }): Customer[] =>
           (body.items ?? [])
             .filter((x) => x != null && String(x.id ?? '').trim().length > 0)
             .map((x) => ({
               id: String(x.id).trim(),
               nombre: (x.label ?? '').trim() || 'Sin nombre',
               rif: typeof x.rif === 'string' ? x.rif : '',
+              direccion: typeof x.direccion === 'string' ? x.direccion : '',
+              latitude: typeof x.lat === 'number' ? x.lat : null,
+              longitude: typeof x.lng === 'number' ? x.lng : null,
             }));
 
         const loadFromApi = async (): Promise<Customer[]> => {
@@ -357,6 +396,10 @@ export default function NuevoProyectoModuloPage() {
           }
         } else {
           setCustomers(custRows);
+          if (customerIdFromUrl) {
+            const match = custRows.find((c) => idsClienteIguales(c.id, customerIdFromUrl));
+            if (match) setCustomerId((prev) => (prev && idsClienteIguales(prev, match.id) ? match.id : prev || match.id));
+          }
         }
       } catch (e: unknown) {
         if (!stale()) {
@@ -375,9 +418,27 @@ export default function NuevoProyectoModuloPage() {
   }, [getSupabase]);
 
   const clienteSeleccionado = useMemo(
-    () => customers.find((c) => c.id === customerId) ?? null,
+    () => customers.find((c) => idsClienteIguales(c.id, customerId)) ?? null,
     [customers, customerId],
   );
+
+  useEffect(() => {
+    if (!clienteSeleccionado) return;
+    const cid = clienteSeleccionado.id;
+    if (prefillClienteIdRef.current === cid) return;
+    prefillClienteIdRef.current = cid;
+
+    setNombre((prev) => (prev.trim() ? prev : etiquetaCliente(clienteSeleccionado)));
+    const dir = direccionCliente(clienteSeleccionado);
+    if (dir) {
+      setUbicacion((prev) => (prev.trim() ? prev : dir));
+    }
+    const gps = coordsCliente(clienteSeleccionado);
+    if (gps) {
+      setLat((prev) => (prev.trim() ? prev : String(gps.lat)));
+      setLng((prev) => (prev.trim() ? prev : String(gps.lng)));
+    }
+  }, [clienteSeleccionado]);
 
   const presupuestoSeleccionado = useMemo(
     () => budgetsCliente.find((x) => x.id === budgetId) ?? null,
@@ -406,7 +467,7 @@ export default function NuevoProyectoModuloPage() {
         }
         return;
       }
-      const c = customers.find((x) => x.id === customerId) ?? null;
+      const c = customers.find((x) => idsClienteIguales(x.id, customerId)) ?? null;
 
       const byCustomerId = await supabase
         .from('budgets')
@@ -516,10 +577,25 @@ export default function NuevoProyectoModuloPage() {
     return any ? sum : null;
   }
 
-  async function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!customerId || !nombre.trim() || !ubicacion.trim()) {
-      setError('Cliente, nombre y ubicación son obligatorios.');
+    const form = e.currentTarget;
+    const nombreVal = textoCampoFormulario(form, 'nombre', nombre);
+    let ubicacionVal = textoCampoFormulario(form, 'ubicacion', ubicacion);
+    const clienteId = textoCampoFormulario(form, 'customer_id', customerId);
+    const latVal = lat.trim();
+    const lngVal = lng.trim();
+    const latNum = latVal ? Number(latVal) : NaN;
+    const lngNum = lngVal ? Number(lngVal) : NaN;
+    if (!ubicacionVal && Number.isFinite(latNum) && Number.isFinite(lngNum)) {
+      ubicacionVal = etiquetaGps(latNum, lngNum);
+    }
+    const faltan: string[] = [];
+    if (!clienteId) faltan.push('cliente');
+    if (!nombreVal) faltan.push('nombre');
+    if (!ubicacionVal) faltan.push('ubicación');
+    if (faltan.length) {
+      setError(mensajeCamposFaltantes(faltan));
       return;
     }
     if (!entidadId.trim()) {
@@ -550,16 +626,16 @@ export default function NuevoProyectoModuloPage() {
     }
 
     const payload: Record<string, unknown> = {
-      customer_id: customerId,
+      customer_id: clienteId,
       budget_id: budgetId.trim() || null,
       budgets_adicionales: budgetId.trim() ? budgetIdsAdicionales : [],
       entidad_id: entidadId.trim() || null,
-      nombre: nombre.trim(),
-      nombre_proyecto: nombre.trim(),
+      nombre: nombreVal,
+      nombre_proyecto: nombreVal,
       estado,
-      ubicacion_texto: ubicacion.trim(),
-      lat: lat.trim() ? Number(lat) : null,
-      lng: lng.trim() ? Number(lng) : null,
+      ubicacion_texto: ubicacionVal,
+      lat: Number.isFinite(latNum) ? latNum : null,
+      lng: Number.isFinite(lngNum) ? lngNum : null,
       monto_aproximado: montoFinal,
       moneda: 'USD',
       observaciones: obs.trim() || null,
@@ -567,6 +643,15 @@ export default function NuevoProyectoModuloPage() {
     const { data, error: insErr } = await supabase.from('ci_proyectos').insert(payload).select('id').single();
     setSaving(false);
     if (insErr) {
+      if (insErr.message.includes('nombre_proyecto')) {
+        const sinNombreProyecto = { ...payload };
+        delete sinNombreProyecto.nombre_proyecto;
+        const retry = await supabase.from('ci_proyectos').insert(sinNombreProyecto).select('id').single();
+        if (!retry.error && retry.data) {
+          setOkId((retry.data as { id: string }).id);
+          return;
+        }
+      }
       setError(
         insErr.message.includes('budgets_adicionales')
           ? `${insErr.message} — Ejecuta en Supabase la migración 072_ci_proyectos_budgets_adicionales.sql.`
@@ -621,6 +706,7 @@ export default function NuevoProyectoModuloPage() {
           onSubmit={(e) => void onSubmit(e)}
           className="space-y-4 rounded-2xl border border-white/10 bg-zinc-900/70 p-6 shadow-lg backdrop-blur-xl"
         >
+          <input type="hidden" name="customer_id" value={customerId} />
           <div ref={clienteMenuRef} className="relative">
             <label className={labelClass}>CLIENTE</label>
             <button
@@ -631,10 +717,14 @@ export default function NuevoProyectoModuloPage() {
             >
               <span className="min-w-0 truncate">
                 {loadingRefs
-                  ? 'Cargando clientes...'
+                  ? customerId
+                    ? 'Cliente precargado · cargando lista…'
+                    : 'Cargando clientes...'
                   : clienteSeleccionado
                     ? `${etiquetaCliente(clienteSeleccionado)}${rifCliente(clienteSeleccionado) ? ` · ${rifCliente(clienteSeleccionado)}` : ''}`
-                    : 'Elige un cliente de la lista…'}
+                    : customerId
+                      ? 'Cliente ya seleccionado'
+                      : 'Elige un cliente de la lista…'}
               </span>
               <span className="shrink-0 text-zinc-500" aria-hidden>
                 {clienteMenuOpen ? '▲' : '▼'}
@@ -688,7 +778,7 @@ export default function NuevoProyectoModuloPage() {
                 </li>
                 {customers.map((c) => {
                   const label = `${etiquetaCliente(c)}${rifCliente(c) ? ` · ${rifCliente(c)}` : ''}`;
-                  const active = c.id === customerId;
+                  const active = idsClienteIguales(c.id, customerId);
                   return (
                     <li key={c.id}>
                       <button
@@ -929,7 +1019,14 @@ export default function NuevoProyectoModuloPage() {
 
           <div>
             <label className={labelClass}>Nombre del proyecto *</label>
-            <input value={nombre} onChange={(e) => setNombre(e.target.value)} className={fieldClass} />
+            <input
+              name="nombre"
+              autoComplete="off"
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              className={fieldClass}
+              placeholder="Se rellena con el cliente si lo dejas vacío"
+            />
           </div>
           <div>
             <label className={labelClass}>Estado</label>
@@ -948,7 +1045,15 @@ export default function NuevoProyectoModuloPage() {
           </div>
           <div>
             <label className={labelClass}>Ubicación escrita *</label>
-            <textarea value={ubicacion} onChange={(e) => setUbicacion(e.target.value)} className={fieldClass} rows={2} />
+            <textarea
+              name="ubicacion"
+              autoComplete="off"
+              value={ubicacion}
+              onChange={(e) => setUbicacion(e.target.value)}
+              className={fieldClass}
+              rows={2}
+              placeholder="Dirección, o pin en el mapa / GPS"
+            />
           </div>
           {mapReady ? (
             <ProjectLocationPicker
@@ -957,10 +1062,14 @@ export default function NuevoProyectoModuloPage() {
               onChange={(v) => {
                 setLat(String(v.lat));
                 setLng(String(v.lng));
-                if (v.label && !ubicacion.trim()) setUbicacion(v.label);
+                setUbicacion((prev) => {
+                  if (prev.trim()) return prev;
+                  const label = (v.label ?? '').trim();
+                  return label || etiquetaGps(v.lat, v.lng);
+                });
               }}
               onLabelFromShare={(label) => {
-                if (!ubicacion.trim()) setUbicacion(label);
+                setUbicacion((prev) => prev.trim() || label);
               }}
             />
           ) : (

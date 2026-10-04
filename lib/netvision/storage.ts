@@ -3,8 +3,11 @@ import type {
   DesignCableSegment,
   DesignCamera,
   DesignNetworkNode,
+  DesignPlanDevice,
   DesignStructure,
   DesignUndergroundSegment,
+  PlanDeviceKind,
+  PlanDiscipline,
   NetVisionCurrency,
   NetVisionProject,
   NetVisionProjectIndexEntry,
@@ -16,8 +19,18 @@ import type {
 import { DRAWABLE_CABLE_TYPES } from '@/lib/netvision/services/cableCalculator'
 import { defaultScale } from '@/lib/netvision/services/coverageCalculator'
 import { DEFAULT_CAMERA_MODEL_ID } from '@/lib/netvision/catalog/cameras'
+import {
+  clampMountHeightM,
+  clampTiltDeg,
+  DEFAULT_MOUNT_HEIGHT_M,
+  DEFAULT_TILT_DEG,
+} from '@/lib/netvision/utils/cameraMount'
 import { DEFAULT_STRUCTURE_MATERIAL_ID } from '@/lib/netvision/catalog/materials'
 import { defaultModelIdForKind } from '@/lib/netvision/catalog/network'
+import {
+  defaultPlanDeviceId,
+  getPlanDeviceModelOrDefault,
+} from '@/lib/netvision/catalog/planDevices'
 import {
   clampNetworkPlanSize,
   defaultNetworkPlanSize,
@@ -62,8 +75,10 @@ export function emptyProject(partial?: {
     distributorMarginPct: 15,
     planoUrl: null,
     planoNombre: '',
+    planoInvertido: false,
     cameras: [],
     networkNodes: [],
+    planDevices: [],
     structures: [],
     undergroundSegments: [],
     cableSegments: [],
@@ -139,6 +154,8 @@ export function listProjectIndex(): NetVisionProjectIndexEntry[] {
       planoNombre: p.planoNombre,
       cameraCount: p.cameras.length,
       networkCount: p.networkNodes.length,
+      planDeviceCount: (p.planDevices ?? []).length,
+      structureCount: (p.structures ?? []).length,
     }))
     .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))
 }
@@ -304,6 +321,32 @@ export function saveProject(project: NetVisionProject) {
   lib.projects[next.id] = next
   writeLibrary(lib)
   setActiveId(next.id)
+  return next
+}
+
+/** Copia el proyecto con nuevo id/nombre y lo deja activo. */
+export function duplicateProject(
+  source: NetVisionProject,
+  name?: string,
+): NetVisionProject {
+  const id = newId()
+  const label =
+    (name?.trim() || `${source.name.trim() || 'Proyecto'} (copia)`).slice(0, 120)
+  const copy = normalizeProject(
+    {
+      ...source,
+      id,
+      name: label,
+      updatedAt: nowIso(),
+    },
+    id,
+  )
+  const lib = readLibrary()
+  lib.projects[copy.id] = copy
+  writeLibrary(lib)
+  setActiveId(copy.id)
+  persistWorkingCopy(copy)
+  return copy
 }
 
 export function clearProjectStorage() {
@@ -379,9 +422,13 @@ function normalizeProject(
     distributorMarginPct: margin,
     planoUrl: p.planoUrl ?? null,
     planoNombre: p.planoNombre ?? '',
+    planoInvertido: Boolean(p.planoInvertido),
     cameras: Array.isArray(p.cameras) ? p.cameras.map(normalizeCamera) : [],
     networkNodes: Array.isArray(p.networkNodes)
       ? p.networkNodes.map(normalizeNetworkNode)
+      : [],
+    planDevices: Array.isArray(p.planDevices)
+      ? p.planDevices.map(normalizePlanDevice)
       : [],
     structures: Array.isArray(p.structures)
       ? p.structures.map(normalizeStructure)
@@ -434,11 +481,84 @@ function normalizeCamera(c: Partial<DesignCamera> & { label?: string }): DesignC
     y: looksPercent ? (c.y ?? 0) / 100 : (c.y ?? 0),
     modelId: c.modelId ?? DEFAULT_CAMERA_MODEL_ID,
     yawDeg: typeof c.yawDeg === 'number' ? c.yawDeg : 0,
-    mountHeightM: typeof c.mountHeightM === 'number' ? c.mountHeightM : 2.8,
+    mountHeightM: clampMountHeightM(
+      typeof c.mountHeightM === 'number' ? c.mountHeightM : DEFAULT_MOUNT_HEIGHT_M,
+    ),
+    tiltDeg: clampTiltDeg(typeof c.tiltDeg === 'number' ? c.tiltDeg : DEFAULT_TILT_DEG),
     ...(fovDeg != null ? { fovDeg } : {}),
     ...(fovLeftDeg != null ? { fovLeftDeg } : {}),
     ...(fovRightDeg != null ? { fovRightDeg } : {}),
     ...(rangeM != null ? { rangeM } : {}),
+    ...normalizeLensVision(c.lensVision),
+  }
+}
+
+/** Ajuste propio de las lentes secundarias (Dual): se conserva al guardar/cargar el diseño. */
+function normalizeLensVision(raw: unknown): Pick<DesignCamera, 'lensVision'> | Record<string, never> {
+  if (!raw || typeof raw !== 'object') return {}
+  const num = (v: unknown, min: number, max: number) =>
+    typeof v === 'number' && Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : undefined
+  const out: NonNullable<DesignCamera['lensVision']> = {}
+  for (const [lensId, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (!lensId || !v || typeof v !== 'object') continue
+    const o = v as Record<string, unknown>
+    const yaw = typeof o.yawDeg === 'number' && Number.isFinite(o.yawDeg) ? ((o.yawDeg % 360) + 360) % 360 : undefined
+    const lens = {
+      ...(yaw != null ? { yawDeg: yaw } : {}),
+      ...(num(o.fovDeg, 20, 170) != null ? { fovDeg: num(o.fovDeg, 20, 170) } : {}),
+      ...(num(o.fovLeftDeg, 10, 85) != null ? { fovLeftDeg: num(o.fovLeftDeg, 10, 85) } : {}),
+      ...(num(o.fovRightDeg, 10, 85) != null ? { fovRightDeg: num(o.fovRightDeg, 10, 85) } : {}),
+      ...(num(o.rangeM, 2, 120) != null ? { rangeM: num(o.rangeM, 2, 120) } : {}),
+    }
+    if (Object.keys(lens).length) out[lensId] = lens
+  }
+  return Object.keys(out).length ? { lensVision: out } : {}
+}
+
+const PLAN_DISCIPLINES: PlanDiscipline[] = ['sonido', 'domotica', 'electrico']
+const PLAN_KINDS: PlanDeviceKind[] = [
+  'speaker',
+  'siren',
+  'mic',
+  'hub',
+  'sensor',
+  'relay',
+  'keypad',
+  'panel',
+  'outlet',
+  'light',
+  'transformer',
+]
+
+function normalizePlanDevice(d: Partial<DesignPlanDevice>): DesignPlanDevice {
+  const discipline = PLAN_DISCIPLINES.includes(d.discipline as PlanDiscipline)
+    ? (d.discipline as PlanDiscipline)
+    : 'sonido'
+  const kind = PLAN_KINDS.includes(d.kind as PlanDeviceKind)
+    ? (d.kind as PlanDeviceKind)
+    : getPlanDeviceModelOrDefault(d.modelId ?? '', discipline).kind
+  const looksPercent = (d.x ?? 0) > 1 || (d.y ?? 0) > 1
+  const model = getPlanDeviceModelOrDefault(d.modelId ?? '', discipline)
+  const rangeM =
+    typeof d.rangeM === 'number' && Number.isFinite(d.rangeM)
+      ? Math.min(40, Math.max(0.4, d.rangeM))
+      : undefined
+  const fovDeg =
+    typeof d.fovDeg === 'number' && Number.isFinite(d.fovDeg)
+      ? Math.min(360, Math.max(10, d.fovDeg))
+      : undefined
+  return {
+    id: d.id ?? `${Date.now()}`,
+    label: d.label ?? 'EQ-01',
+    x: looksPercent ? (d.x ?? 0) / 100 : (d.x ?? 0),
+    y: looksPercent ? (d.y ?? 0) / 100 : (d.y ?? 0),
+    discipline,
+    kind,
+    modelId: d.modelId ?? defaultPlanDeviceId(discipline),
+    yawDeg: typeof d.yawDeg === 'number' ? ((d.yawDeg % 360) + 360) % 360 : 0,
+    ...(rangeM != null ? { rangeM } : {}),
+    ...(fovDeg != null ? { fovDeg } : {}),
+    ...(model.id && !d.modelId ? { modelId: model.id } : {}),
   }
 }
 

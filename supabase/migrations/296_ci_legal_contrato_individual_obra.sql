@@ -110,8 +110,7 @@ end $$;
 
 notify pgrst, 'reload schema';
 
--- --- ci_obra_tours (antes 296_ci_obra_tours_video_reconstruccion.sql) ---
-
+-- === obra tours (antes 296_ci_obra_tours_video_reconstruccion.sql) ===
 -- Tours de obra: video (celular/dron) → reconstrucción 3D → tour DJI + modo piloto.
 -- Worker GPU externo actualiza jobs; la app orquesta subida, preview y export.
 

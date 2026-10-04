@@ -17,6 +17,11 @@ create index if not exists idx_empresas_nombre on public.empresas (nombre);
 
 alter table public.empresas enable row level security;
 
+drop policy if exists "Permitir leer empresas" on public.empresas;
+drop policy if exists "Permitir insertar empresas" on public.empresas;
+drop policy if exists "Permitir actualizar empresas" on public.empresas;
+drop policy if exists "Permitir borrar empresas" on public.empresas;
+
 create policy "Permitir leer empresas"
   on public.empresas for select to anon using (true);
 

@@ -1,5 +1,5 @@
 import equipment from '@/data/netvision/equipment.json'
-import type { CameraBrand, CameraModel, DesignCamera } from '@/lib/netvision/types'
+import type { CameraBrand, CameraModel, DesignCamera, LensVisionOverride } from '@/lib/netvision/types'
 import { clampFovHalf } from '@/lib/netvision/utils/geometryHelpers'
 
 export const CAMERA_CATALOG: CameraModel[] = equipment.cameras as CameraModel[]
@@ -36,6 +36,28 @@ export function cameraCatalogGrouped(): { brand: CameraBrand; models: CameraMode
   })).filter((g) => g.models.length > 0)
 }
 
+/** FOV de catálogo para la lista: dual muestra ambas ópticas. */
+export function catalogFovLabel(model: CameraModel): string {
+  if (model.lenses && model.lenses.length >= 2) {
+    const wide = model.lenses[0]!
+    const tele = model.lenses[1]!
+    return `Dual ${wide.fovDeg}°+${tele.fovDeg}°`
+  }
+  return `${model.fovDeg}°`
+}
+
+/** Etiqueta del selector de modelo (nombre + facultades de visión). */
+export function cameraCatalogOptionLabel(model: CameraModel): string {
+  return `${model.name} · ${catalogFovLabel(model)}`
+}
+
+/** Resumen corto para inspector: resolución, forma, FOV, alcances día/noche. */
+export function cameraVisionSummary(model: CameraModel): string {
+  const form =
+    model.formFactor === 'ptz' ? 'PTZ' : model.formFactor === 'bullet' ? 'bullet' : 'domo'
+  return `${model.resolution} · ${form} · ${catalogFovLabel(model)} · día ${model.rangeDayM} m / noche ${model.rangeNightM} m`
+}
+
 export type EffectiveLensVision = {
   lensId: string
   label: string
@@ -45,7 +67,10 @@ export type EffectiveLensVision = {
   fovLeftDeg: number
   /** Medio FOV derecho (desde yaw). */
   fovRightDeg: number
+  /** Alcance dibujado (cono / anillo). */
   rangeM: number
+  /** Alcance de ficha día/noche. El semáforo usa estos metros fijos. */
+  catalogRangeM: number
   yawDeg: number
 }
 
@@ -87,7 +112,8 @@ export function resolveFovHalves(
 /**
  * Ópticas efectivas por cámara.
  * Dual (≥2 lentes en catálogo) → una entrada por lente (2 espectros en el plano).
- * Overrides fov / rangeM del pin solo afectan la lente primaria (primera).
+ * La lente primaria usa yaw / fov / rangeM del pin; cada lente secundaria usa cam.lensVision[lensId]
+ * (por defecto mira hacia donde mira la primaria). Así cada cono puede apuntar a un lugar distinto.
  */
 export function effectiveCameraLenses(
   cam: DesignCamera,
@@ -105,22 +131,27 @@ export function effectiveCameraLenses(
   if (lenses && lenses.length >= 2) {
     return lenses.map((lens, index) => {
       const catalogRange = mode === 'night' ? lens.rangeNightM : lens.rangeDayM
-      const useOverride = index === 0
-      const halves = useOverride
-        ? resolveFovHalves(cam, lens.fovDeg)
-        : resolveFovHalves({}, lens.fovDeg)
+      const lensId = lens.id || (index === 0 ? 'wide' : `lens-${index}`)
+      // Primaria: campos de la cámara. Secundarias: su propio ajuste (cada cono mira donde se le indique).
+      const own: LensVisionOverride = index === 0 ? cam : (cam.lensVision?.[lensId] ?? {})
+      const halves = resolveFovHalves(own, lens.fovDeg)
       const rangeM =
-        useOverride && typeof cam.rangeM === 'number' && Number.isFinite(cam.rangeM)
-          ? clampRange(cam.rangeM)
+        typeof own.rangeM === 'number' && Number.isFinite(own.rangeM)
+          ? clampRange(own.rangeM)
           : clampRange(catalogRange)
+      const lensYaw =
+        index > 0 && typeof own.yawDeg === 'number' && Number.isFinite(own.yawDeg)
+          ? ((own.yawDeg % 360) + 360) % 360
+          : yawDeg
       return {
-        lensId: lens.id || (index === 0 ? 'wide' : `lens-${index}`),
+        lensId,
         label: lens.label || (index === 0 ? 'Gran angular' : 'Tele'),
         fovDeg: halves.total,
         fovLeftDeg: halves.left,
         fovRightDeg: halves.right,
         rangeM,
-        yawDeg,
+        catalogRangeM: clampRange(catalogRange),
+        yawDeg: lensYaw,
       }
     })
   }
@@ -139,6 +170,7 @@ export function effectiveCameraLenses(
       fovLeftDeg: halves.left,
       fovRightDeg: halves.right,
       rangeM,
+      catalogRangeM: clampRange(catalogRange),
       yawDeg,
     },
   ]
@@ -153,6 +185,7 @@ export function effectiveCameraVision(
   fovLeftDeg: number
   fovRightDeg: number
   rangeM: number
+  catalogRangeM: number
   yawDeg: number
 } {
   const primary = effectiveCameraLenses(cam, mode)[0]!
@@ -161,6 +194,7 @@ export function effectiveCameraVision(
     fovLeftDeg: primary.fovLeftDeg,
     fovRightDeg: primary.fovRightDeg,
     rangeM: primary.rangeM,
+    catalogRangeM: primary.catalogRangeM,
     yawDeg: primary.yawDeg,
   }
 }
@@ -182,6 +216,7 @@ export function catalogVisionDefaults(
   fovLeftDeg: number
   fovRightDeg: number
   rangeM: number
+  lensVision: DesignCamera['lensVision']
 } {
   const model = getCameraModelOrDefault(modelId)
   const primaryFov =
@@ -202,5 +237,34 @@ export function catalogVisionDefaults(
     fovLeftDeg: halves.left,
     fovRightDeg: halves.right,
     rangeM: clampRange(primaryRange),
+    // Al cambiar de modelo o restaurar, las lentes secundarias vuelven a seguir a la primaria.
+    lensVision: undefined,
+  }
+}
+
+/** Id de la lente primaria de una cámara Dual (la que usa los campos del pin), o null si no es Dual. */
+export function primaryLensId(modelId: string): string | null {
+  const model = getCameraModel(modelId)
+  if (!model?.lenses || model.lenses.length < 2) return null
+  return model.lenses[0]!.id || 'wide'
+}
+
+/**
+ * Parche de cámara para ajustar una lente concreta.
+ * Primaria (o cámara de una sola óptica) → campos del pin. Secundaria → cam.lensVision[lensId].
+ */
+export function cameraPatchForLens(
+  cam: DesignCamera,
+  lensId: string | undefined,
+  patch: LensVisionOverride,
+): Partial<DesignCamera> {
+  const primary = primaryLensId(cam.modelId)
+  if (!lensId || !primary || lensId === primary || lensId === 'main') return { ...patch }
+  const prev = cam.lensVision?.[lensId] ?? {}
+  return {
+    lensVision: {
+      ...(cam.lensVision ?? {}),
+      [lensId]: { ...prev, ...patch },
+    },
   }
 }

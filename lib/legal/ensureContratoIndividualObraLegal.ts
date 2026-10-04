@@ -17,10 +17,20 @@ const TITULO = 'Contrato individual de trabajo por obra determinada';
 const DESCRIPCION =
   'Formato LOTTT / CCT construcción — contrato individual de trabajo por obra determinada (Venezuela). Revisar con asesoría legal antes de firmar.';
 
+/**
+ * Texto anterior al tabulador homologado del 19/08/2026: «compensación por culminación» que
+ * liquidaba prestaciones, utilidades y vacaciones (renuncia nula) y prueba de 90 días.
+ * Si la plantilla aún lo trae, se reemplaza por el cuerpo vigente.
+ */
+function esTextoAnterior2026(cuerpo: string | null | undefined): boolean {
+  return /COMPENSACI[ÓO]N POR CULMINACI[ÓO]N|PERIODO DE PRUEBA DE NOVENTA/i.test(String(cuerpo ?? ''));
+}
+
 function esStubCorto(cuerpo: string | null | undefined): boolean {
   const t = String(cuerpo ?? '').trim();
   if (t.length < 800) return true;
-  return !/PERIODO DE PRUEBA|CONTRATO INDIVIDUAL DE TRABAJO POR OBRA DETERMINADA/i.test(t);
+  if (esTextoAnterior2026(t)) return true;
+  return !/TIEMPO DE PRUEBA|PERIODO DE PRUEBA|CONTRATO INDIVIDUAL DE TRABAJO (POR|PARA) (UNA )?OBRA DETERMINADA/i.test(t);
 }
 
 function payload() {

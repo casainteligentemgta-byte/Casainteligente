@@ -3,8 +3,9 @@
 import { Trash2 } from 'lucide-react'
 import { Button } from '@/components/nexus/ui/button'
 import {
-  CAMERA_BRANDS,
   cameraCatalogGrouped,
+  cameraCatalogOptionLabel,
+  cameraVisionSummary,
   catalogVisionDefaults,
   getCameraModelOrDefault,
 } from '@/lib/netvision/catalog/cameras'
@@ -27,10 +28,32 @@ import type {
   DesignCableSegment,
   DesignCamera,
   DesignNetworkNode,
+  DesignPlanDevice,
   DesignStructure,
   NetworkNodeKind,
   StructureMaterialId,
+  UnitSystem,
 } from '@/lib/netvision/types'
+import {
+  PLAN_DISCIPLINE_LABEL,
+  PLAN_KIND_LABEL,
+  getPlanDeviceModelOrDefault,
+  planDevicesByDiscipline,
+} from '@/lib/netvision/catalog/planDevices'
+import {
+  DEFAULT_MOUNT_HEIGHT_M,
+  HEIGHT_PRESETS_M,
+  MAX_MOUNT_HEIGHT_M,
+  MAX_TILT_DEG,
+  MIN_MOUNT_HEIGHT_M,
+  MIN_TILT_DEG,
+  TILT_PRESETS_DEG,
+  clampMountHeightM,
+  clampTiltDeg,
+  projectGroundCoverage,
+} from '@/lib/netvision/utils/cameraMount'
+import { formatLength } from '@/lib/netvision/utils/units'
+import { effectiveCameraVision } from '@/lib/netvision/catalog/cameras'
 import {
   defaultNetworkPlanSize,
   networkPlanSizePct,
@@ -53,11 +76,14 @@ const fieldClass =
 type Props = {
   camera: DesignCamera | null
   network: DesignNetworkNode | null
+  planDevice?: DesignPlanDevice | null
   structure: DesignStructure | null
   cable: DesignCableSegment | null
   nightMode?: boolean
+  unitSystem?: UnitSystem
   onPatchCamera: (patch: Partial<DesignCamera>) => void
   onPatchNetwork: (patch: Partial<DesignNetworkNode>) => void
+  onPatchPlanDevice?: (patch: Partial<DesignPlanDevice>) => void
   onPatchStructure: (patch: Partial<DesignStructure>) => void
   onPatchCableType: (type: CableType) => void
   onRemove: (id: string) => void
@@ -70,15 +96,102 @@ type Props = {
 export default function NetVisionSelectedProps({
   camera,
   network,
+  planDevice = null,
   structure,
   cable,
   nightMode = false,
+  unitSystem = 'metric',
   onPatchCamera,
   onPatchNetwork,
+  onPatchPlanDevice,
   onPatchStructure,
   onPatchCableType,
   onRemove,
 }: Props) {
+  if (planDevice && onPatchPlanDevice) {
+    const model = getPlanDeviceModelOrDefault(planDevice.modelId, planDevice.discipline)
+    const rangeM = planDevice.rangeM ?? model.rangeM
+    const fovDeg = planDevice.fovDeg ?? model.fovDeg
+    return (
+      <div className="space-y-2 rounded-lg border border-[rgba(0,242,254,0.28)] bg-[rgba(0,242,254,0.06)] p-2.5 text-xs">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-cyan)]">
+          Seleccionado · {PLAN_DISCIPLINE_LABEL[planDevice.discipline]} ·{' '}
+          {PLAN_KIND_LABEL[planDevice.kind]}
+        </p>
+        <label className="block">
+          <span className="text-[var(--nexus-text-dim)]">Etiqueta</span>
+          <input
+            value={planDevice.label}
+            onChange={(e) => onPatchPlanDevice({ label: e.target.value })}
+            className={fieldClass}
+          />
+        </label>
+        <label className="block">
+          <span className="text-[var(--nexus-text-dim)]">Modelo</span>
+          <select
+            value={planDevice.modelId}
+            onChange={(e) => {
+              const next = getPlanDeviceModelOrDefault(e.target.value, planDevice.discipline)
+              onPatchPlanDevice({
+                modelId: next.id,
+                kind: next.kind,
+                rangeM: undefined,
+                fovDeg: undefined,
+              })
+            }}
+            className={fieldClass}
+          >
+            {planDevicesByDiscipline(planDevice.discipline).map((m) => (
+              <option key={m.id} value={m.id}>
+                {PLAN_KIND_LABEL[m.kind]} · {m.brand} {m.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <span className="text-[var(--nexus-text-dim)]">
+            Alcance {formatLength(rangeM, unitSystem)}
+          </span>
+          <input
+            type="range"
+            min={0.5}
+            max={30}
+            step={0.5}
+            value={rangeM}
+            onChange={(e) => onPatchPlanDevice({ rangeM: Number(e.target.value) })}
+            className="mt-1 w-full"
+          />
+        </label>
+        {fovDeg < 359 ? (
+          <label className="block">
+            <span className="text-[var(--nexus-text-dim)]">Apertura {Math.round(fovDeg)}°</span>
+            <input
+              type="range"
+              min={20}
+              max={360}
+              step={5}
+              value={fovDeg}
+              onChange={(e) => onPatchPlanDevice({ fovDeg: Number(e.target.value) })}
+              className="mt-1 w-full"
+            />
+          </label>
+        ) : null}
+        <p className="text-[10px] text-[var(--nexus-text-dim)]">
+          {model.brand} · {model.name} · ficha {formatLength(model.rangeM, unitSystem)}
+        </p>
+        <Button
+          type="button"
+          variant="glass"
+          className="w-full"
+          onClick={() => onRemove(planDevice.id)}
+        >
+          <Trash2 className="mr-2 h-3.5 w-3.5" />
+          Quitar
+        </Button>
+      </div>
+    )
+  }
+
   if (camera) {
     return (
       <div className="space-y-2 rounded-lg border border-[rgba(0,242,254,0.28)] bg-[rgba(0,242,254,0.06)] p-2.5 text-xs">
@@ -108,16 +221,119 @@ export default function NetVisionSelectedProps({
               <optgroup key={g.brand} label={g.brand}>
                 {g.models.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.name}
+                    {cameraCatalogOptionLabel(m)}
                   </option>
                 ))}
               </optgroup>
             ))}
           </select>
         </label>
-        <p className="text-[10px] text-[var(--nexus-text-dim)]">
-          {getCameraModelOrDefault(camera.modelId).brand} · {CAMERA_BRANDS.length} marcas
-        </p>
+        {(() => {
+          const model = getCameraModelOrDefault(camera.modelId)
+          const vision = effectiveCameraVision(camera, nightMode ? 'night' : 'day')
+          const heightM = camera.mountHeightM || DEFAULT_MOUNT_HEIGHT_M
+          const tiltDeg = camera.tiltDeg ?? 0
+          const ground = projectGroundCoverage({
+            heightM,
+            tiltDeg,
+            hFovDeg: vision.fovDeg,
+            rangeM: vision.rangeM,
+          })
+          return (
+            <>
+              <div className="space-y-1 text-[10px] leading-relaxed text-[var(--nexus-text-dim)]">
+                <p>
+                  {model.brand} · {cameraVisionSummary(model)}
+                </p>
+                {model.notes ? <p>{model.notes}</p> : null}
+              </div>
+              <div className="space-y-2 rounded-md border border-white/10 bg-black/25 px-2 py-1.5">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-cyan)]">
+                  Montaje
+                </p>
+                <label className="block">
+                  <span className="text-[var(--nexus-text-dim)]">
+                    Altura {formatLength(heightM, unitSystem)}
+                  </span>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {HEIGHT_PRESETS_M.map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        className={`min-h-8 rounded-md px-2 text-[11px] font-semibold ${
+                          Math.abs(heightM - m) < 0.05
+                            ? 'bg-[var(--nexus-cyan)] text-black'
+                            : 'border border-white/15 text-[var(--nexus-cyan)]'
+                        }`}
+                        onClick={() => onPatchCamera({ mountHeightM: m })}
+                      >
+                        {formatLength(m, unitSystem, 1)}
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    type="range"
+                    min={MIN_MOUNT_HEIGHT_M}
+                    max={MAX_MOUNT_HEIGHT_M}
+                    step={0.1}
+                    value={heightM}
+                    onChange={(e) =>
+                      onPatchCamera({ mountHeightM: clampMountHeightM(Number(e.target.value)) })
+                    }
+                    className="mt-1 w-full"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-[var(--nexus-text-dim)]">
+                    Inclinación {Math.round(tiltDeg)}°
+                    {tiltDeg < 0.5 ? ' · horizonte' : tiltDeg >= 89 ? ' · al piso' : ' · hacia el piso'}
+                  </span>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {TILT_PRESETS_DEG.map((d) => (
+                      <button
+                        key={d}
+                        type="button"
+                        className={`min-h-8 rounded-md px-2 text-[11px] font-semibold ${
+                          Math.abs(tiltDeg - d) < 0.5
+                            ? 'bg-[var(--nexus-cyan)] text-black'
+                            : 'border border-white/15 text-[var(--nexus-cyan)]'
+                        }`}
+                        onClick={() => onPatchCamera({ tiltDeg: d })}
+                      >
+                        {d}°
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    type="range"
+                    min={MIN_TILT_DEG}
+                    max={MAX_TILT_DEG}
+                    step={1}
+                    value={tiltDeg}
+                    onChange={(e) =>
+                      onPatchCamera({ tiltDeg: clampTiltDeg(Number(e.target.value)) })
+                    }
+                    className="mt-1 w-full"
+                  />
+                </label>
+                <p className="text-[10px] leading-relaxed text-[var(--nexus-text-muted)]">
+                  {tiltDeg < 0.5 ? (
+                    <>
+                      Mira al horizonte: el cono llega{' '}
+                      {formatLength(ground.farM, unitSystem)}. Inclina hacia el piso para
+                      cubrir más cerca y recortar el fondo.
+                    </>
+                  ) : (
+                    <>
+                      En el piso: zona ciega {formatLength(ground.nearM, unitSystem)} ·
+                      llega {formatLength(ground.farM, unitSystem)}.
+                    </>
+                  )}
+                </p>
+              </div>
+            </>
+          )
+        })()}
         <Button
           type="button"
           variant="glass"

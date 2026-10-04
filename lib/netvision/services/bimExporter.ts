@@ -63,6 +63,7 @@ export function buildBimPackage(
         PoE_W: m.poeWatts,
         Bitrate_Mbps: m.bitrateMbps,
         Yaw_deg: c.yawDeg,
+        Tilt_deg: c.tiltDeg ?? 0,
         MountHeight_m: c.mountHeightM,
         NV_SKU: m.id,
       },

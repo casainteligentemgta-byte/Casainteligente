@@ -155,6 +155,8 @@ Cabecera → **Cargar PDF / imagen** (o zona de carga del canvas).
 
 Ejemplo: `Centro_Comercial.pdf` → Abrir.
 
+Si el PDF es vectorial (exportado de CAD), NetVision detecta **muros**, **puertas** y **ventanas** al cargar. Los muros quedan como **bloque**; las aberturas como puerta/ventana (editables). Un escaneo o imagen no trae vectores: dibuja a mano en **Muros**, o usa **Detectar muros, puertas y ventanas** si recargas un CAD. No se detectan muebles ni archivos DWG/DXF.
+
 ### Paso 4: Calibración (importante)
 
 El plano se carga pero necesita escala real:
@@ -194,7 +196,8 @@ Usa **[+ Cámara]** y el selector de marca/modelo:
 │  ├─ Uniview
 │  ├─ Dahua
 │  ├─ Sony
-│  └─ (catálogo ampliable: Ezviz, Aqara, …)
+│  ├─ Ezviz
+│  └─ Aqara (G5 Pro, G350 Dual, G3 PTZ, E1, G100, timbres G410/G400/G4)
 ```
 
 ### Paso 2: Seleccionar cámara
@@ -219,7 +222,7 @@ Activa la capa **Visión**. Verás el cono/espectro de cobertura. Ajusta:
 
 - Orientación (yaw)
 - Apertura FOV°
-- Alcance (m)
+- Alcance (m): el anillo estira el cono, pero verde/amarillo siguen en metros de ficha
 - Asas en el plano / sliders
 
 Consulta **?** en la barra de capas para Visión / WiFi / Sonido / Enlaces / Rutas / Sub / Noche.

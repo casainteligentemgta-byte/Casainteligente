@@ -6,6 +6,11 @@ import Link from 'next/link';
 import { withTimeout } from '@/lib/http/withTimeout';
 import { createClient } from '@/lib/supabase/client';
 import ProductSearch, { Product } from '@/components/ventas/ProductSearch';
+import PresupuestoLineItems, {
+    EditableNumberInput,
+    formatUSD,
+    type LineItem,
+} from '@/components/ventas/PresupuestoLineItems';
 import {
     esErrorColumnaFecha,
     esFechaIso,
@@ -14,42 +19,6 @@ import {
     formatFechaPresupuestoLarga,
     hoyFechaPresupuesto,
 } from '@/lib/presupuesto/fecha';
-
-/** Miniatura en líneas del presupuesto (solo UI; al guardar en BD se omite `imagen` en `product_data`). */
-function LineItemProductThumb({ imagen }: { imagen?: string | null }) {
-    const [failed, setFailed] = useState(false);
-    const url = typeof imagen === 'string' ? imagen.trim() : '';
-    if (!url || failed) return null;
-    return (
-        <img
-            src={url}
-            alt=""
-            width={44}
-            height={44}
-            onError={() => setFailed(true)}
-            style={{
-                width: 44,
-                height: 44,
-                borderRadius: 12,
-                objectFit: 'cover',
-                flexShrink: 0,
-                border: '1px solid rgba(255,255,255,0.12)',
-                background: 'rgba(0,0,0,0.35)',
-            }}
-        />
-    );
-}
-
-interface LineItem {
-    id: string;
-    product: Product;
-    qty: number;
-    unitPrice: number;
-    discount: number;
-    // Asignación interna (uso empresa / garantía): qué artículo del inventario y serial reservó esta línea.
-    inventoryItemIds?: (string | null)[];
-    serialNumbers?: (string | null)[];
-}
 
 /** Fila mínima de `customers` para el selector de presupuesto */
 interface CustomerPickerRow {
@@ -89,118 +58,49 @@ function saveVentasCustomersToCache(rows: CustomerPickerRow[]) {
 
 const MARGIN_PRESETS = [0, 10, 15, 20];
 
-function formatUSD(n: number) {
-    return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-/**
- * Input numérico que permite borrar todo el valor mientras se edita.
- * Solo confirma el número al escribir un valor válido o al salir del campo
- * (evita el “siempre hay un 0/1” que produce montos como 0120 en móvil).
- */
-function EditableNumberInput({
-    value,
-    onCommit,
-    emptyFallback,
-    min,
-    max,
-    step,
-    integer = false,
-    inputMode = 'decimal',
-    style,
-    'aria-label': ariaLabel,
-}: {
-    value: number;
-    onCommit: (n: number) => void;
-    emptyFallback: number;
-    min?: number;
-    max?: number;
-    step?: number | string;
-    integer?: boolean;
-    inputMode?: 'decimal' | 'numeric';
-    style?: React.CSSProperties;
-    'aria-label'?: string;
-}) {
-    const [draft, setDraft] = useState<string | null>(null);
-
-    const clamp = (n: number) => {
-        let next = n;
-        if (min !== undefined) next = Math.max(min, next);
-        if (max !== undefined) next = Math.min(max, next);
-        return next;
-    };
-
-    const parseRaw = (raw: string): number | null => {
-        if (raw === '' || raw === '-' || raw === '.' || raw === '-.') return null;
-        const n = integer ? parseInt(raw, 10) : parseFloat(raw);
-        return Number.isFinite(n) ? n : null;
-    };
-
-    const display = draft !== null ? draft : String(value);
-
-    return (
-        <input
-            type="text"
-            inputMode={inputMode}
-            step={step}
-            aria-label={ariaLabel}
-            value={display}
-            onFocus={(e) => {
-                setDraft(String(value));
-                e.target.select();
-            }}
-            onChange={(e) => {
-                let raw = e.target.value.replace(',', '.');
-                if (raw !== '' && !/^-?\d*\.?\d*$/.test(raw)) return;
-                // Evitar ceros a la izquierda tipo "0120" al teclear tras un 0 forzado.
-                if (!integer && /^0\d/.test(raw)) raw = raw.replace(/^0+/, '');
-                if (integer && /^0\d+/.test(raw)) raw = raw.replace(/^0+/, '') || '0';
-                setDraft(raw);
-                if (raw.endsWith('.')) return;
-                const n = parseRaw(raw);
-                if (n === null) return;
-                onCommit(clamp(n));
-            }}
-            onBlur={() => {
-                const raw = draft;
-                setDraft(null);
-                const n = raw === null ? value : parseRaw(raw);
-                onCommit(clamp(n === null ? emptyFallback : n));
-            }}
-            style={style}
-        />
-    );
-}
-
-function CategoryBadge({ cat }: { cat: string | null }) {
-    const colorMap: Record<string, { bg: string; text: string }> = {
-        'Cámaras IP': { bg: 'rgba(0,122,255,0.15)', text: '#007AFF' },
-        'Cámaras Análogas': { bg: 'rgba(88,86,214,0.15)', text: '#5856D6' },
-        'C.C.T.V': { bg: 'rgba(88,86,214,0.15)', text: '#5856D6' },
-        'Servicio': { bg: 'rgba(52,199,89,0.15)', text: '#34C759' },
-        'Cercos Eléctricos': { bg: 'rgba(255,149,0,0.15)', text: '#FF9500' },
-        'Internet': { bg: 'rgba(0,199,190,0.15)', text: '#00C7BE' },
-        'Domótica': { bg: 'rgba(255,45,85,0.15)', text: '#FF2D55' },
-        'Network': { bg: 'rgba(0,199,190,0.15)', text: '#00C7BE' },
-        'Materiales': { bg: 'rgba(142,142,147,0.15)', text: '#8E8E93' },
-    };
-    const c = colorMap[cat ?? ''] ?? { bg: 'rgba(142,142,147,0.15)', text: '#8E8E93' };
-    return (
-        <span style={{
-            background: c.bg, color: c.text,
-            fontSize: '10px', fontWeight: 600, padding: '2px 7px',
-            borderRadius: '6px', letterSpacing: '0.3px', whiteSpace: 'nowrap',
-        }}>
-            {cat ?? 'General'}
-        </span>
-    );
+function demoLineItems(): LineItem[] {
+    const demoItem = (
+        n: number,
+        nombre: string,
+        categoria: string,
+        unitPrice: number,
+        costo: number,
+        qty = 1,
+    ): LineItem => ({
+        id: `demo-${n}`,
+        product: {
+            id: 9000 + n,
+            external_id: null,
+            nombre,
+            categoria,
+            modelo: null,
+            marca: null,
+            descripcion: null,
+            costo,
+            precio: unitPrice,
+            utilidad: unitPrice - costo,
+        },
+        qty,
+        unitPrice,
+        discount: 0,
+        inventoryItemIds: [],
+        serialNumbers: [],
+    });
+    return [
+        demoItem(1, 'Brochas 3"', 'General', 4.8, 4),
+        demoItem(2, 'Brocha 2.5"', 'General', 3, 2.5),
+        demoItem(3, 'Fondo 3 en 1 (1 galón)', 'Materiales', 60, 50),
+        demoItem(4, 'Rodillo de pintar', 'General', 7.2, 6),
+        demoItem(5, 'Mano de Obra Herrería', 'General', 6000, 4000),
+    ];
 }
 
 function VentasContent() {
     const searchParams = useSearchParams();
-    const [items, setItems] = useState<LineItem[]>([]);
+    const isDemo = searchParams.get('demo') === '1' && !searchParams.get('id');
+    const [items, setItems] = useState<LineItem[]>(() => (isDemo ? demoLineItems() : []));
     /** Con productos en la lista, el buscador se oculta hasta “Agregar producto”. */
-    const [showProductSearch, setShowProductSearch] = useState(true);
+    const [showProductSearch, setShowProductSearch] = useState(!isDemo);
     const [globalMargin, setGlobalMargin] = useState(20);
     const [clientName, setClientName] = useState('');
     const [clientRif, setClientRif] = useState('');
@@ -348,6 +248,8 @@ function VentasContent() {
         if (id) setBudgetId(id);
         if (cId) setCustomerId(cId);
 
+        if (isDemo) return;
+
         const supabase = createClient();
 
         if (id) {
@@ -453,7 +355,7 @@ function VentasContent() {
                     });
             }
         }
-    }, [searchParams, globalMargin, applyCustomer]);
+    }, [searchParams, globalMargin, applyCustomer, isDemo]);
 
     const filteredCustomers = useMemo(() => {
         const q = customerQuery.trim().toLowerCase();
@@ -1146,152 +1048,15 @@ function VentasContent() {
                         </p>
                     </div>
                 ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
-                        {items.map((item, idx) => {
-                            const total = lineTotal(item);
-                            const cost = lineCost(item);
-                            const profit = total - cost;
-                            const profitPct = total > 0 ? (profit / total) * 100 : 0;
-
-                            return (
-                                <div
-                                    key={item.id}
-                                    style={{
-                                        ...glass,
-                                        padding: '16px',
-                                        animation: 'slideUp 0.3s ease',
-                                    }}
-                                >
-                                    {/* Top row */}
-                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '12px' }}>
-                                        {/* Number */}
-                                        <div style={{
-                                            width: '28px', height: '28px', borderRadius: '8px',
-                                            background: 'rgba(0,122,255,0.15)', border: '1px solid rgba(0,122,255,0.25)',
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            flexShrink: 0, fontSize: '12px', fontWeight: 700, color: '#007AFF',
-                                        }}>
-                                            {idx + 1}
-                                        </div>
-                                        <LineItemProductThumb imagen={item.product.imagen} />
-                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
-                                                <CategoryBadge cat={item.product.categoria} />
-                                                {item.product.marca && (
-                                                    <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)' }}>{item.product.marca}</span>
-                                                )}
-                                            </div>
-                                            <p style={{ color: 'var(--label-primary)', fontSize: '14px', fontWeight: 600, lineHeight: 1.3 }}>
-                                                {item.product.nombre}
-                                            </p>
-                                            {item.product.modelo && (
-                                                <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '12px', marginTop: '2px' }}>
-                                                    Modelo: {item.product.modelo}
-                                                </p>
-                                            )}
-                                        </div>
-                                        <button
-                                            onClick={() => removeItem(item.id)}
-                                            style={{
-                                                background: 'rgba(255,59,48,0.1)', border: '1px solid rgba(255,59,48,0.2)',
-                                                borderRadius: '8px', width: '30px', height: '30px',
-                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                cursor: 'pointer', flexShrink: 0,
-                                            }}
-                                        >
-                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                                                <path d="M18 6L6 18M6 6l12 12" stroke="#FF3B30" strokeWidth="2.5" strokeLinecap="round" />
-                                            </svg>
-                                        </button>
-                                    </div>
-
-                                    {/* Controls row */}
-                                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-                                        {/* Qty */}
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0', background: 'rgba(255,255,255,0.06)', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.1)', overflow: 'hidden' }}>
-                                            <button onClick={() => updateQty(item.id, item.qty - 1)} style={{ width: '34px', height: '34px', background: 'none', border: 'none', cursor: 'pointer', color: 'white', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
-                                            <EditableNumberInput
-                                                value={item.qty}
-                                                emptyFallback={1}
-                                                min={1}
-                                                integer
-                                                inputMode="numeric"
-                                                onCommit={(n) => updateQty(item.id, n)}
-                                                aria-label="Cantidad"
-                                                style={{ width: '40px', background: 'transparent', border: 'none', outline: 'none', textAlign: 'center', color: 'white', fontSize: '14px', fontWeight: 700, fontFamily: 'inherit' }}
-                                            />
-                                            <button onClick={() => updateQty(item.id, item.qty + 1)} style={{ width: '34px', height: '34px', background: 'none', border: 'none', cursor: 'pointer', color: '#007AFF', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
-                                        </div>
-
-                                        {/* Unit Price */}
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(255,255,255,0.06)', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.1)', padding: '0 10px', height: '34px' }}>
-                                            <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '13px' }}>$</span>
-                                            <EditableNumberInput
-                                                value={item.unitPrice}
-                                                emptyFallback={0}
-                                                min={0}
-                                                step={0.01}
-                                                inputMode="decimal"
-                                                onCommit={(n) => updatePrice(item.id, n)}
-                                                aria-label="Precio unitario"
-                                                style={{ width: '70px', background: 'transparent', border: 'none', outline: 'none', color: 'white', fontSize: '14px', fontWeight: 600, fontFamily: 'inherit' }}
-                                            />
-                                        </div>
-
-                                        {/* Discount */}
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(255,149,0,0.08)', borderRadius: '10px', border: '1px solid rgba(255,149,0,0.2)', padding: '0 10px', height: '34px' }}>
-                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                                                <path d="M19 5L5 19M9 7a2 2 0 11-4 0 2 2 0 014 0zm10 10a2 2 0 11-4 0 2 2 0 014 0z" stroke="#FF9500" strokeWidth="2" strokeLinecap="round" />
-                                            </svg>
-                                            <EditableNumberInput
-                                                value={item.discount}
-                                                emptyFallback={0}
-                                                min={0}
-                                                max={100}
-                                                inputMode="decimal"
-                                                onCommit={(n) => updateDiscount(item.id, n)}
-                                                aria-label="Descuento"
-                                                style={{ width: '36px', background: 'transparent', border: 'none', outline: 'none', color: '#FF9500', fontSize: '14px', fontWeight: 600, fontFamily: 'inherit' }}
-                                            />
-                                            <span style={{ color: '#FF9500', fontSize: '13px' }}>%</span>
-                                        </div>
-
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                            <button
-                                                type="button"
-                                                onClick={() => openSerialModalForLine(item)}
-                                                style={{
-                                                    background: 'rgba(142,142,147,0.12)',
-                                                    border: '1px solid rgba(142,142,147,0.25)',
-                                                    color: 'rgba(255,255,255,0.85)',
-                                                    borderRadius: '10px',
-                                                    height: '34px',
-                                                    padding: '0 12px',
-                                                    cursor: 'pointer',
-                                                    fontSize: '12px',
-                                                    fontWeight: 700,
-                                                    whiteSpace: 'nowrap',
-                                                }}
-                                            >
-                                                Seriales
-                                            </button>
-                                            <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)' }}>
-                                                {(item.inventoryItemIds ?? []).filter((x): x is string => Boolean(x)).length}/{item.qty}
-                                            </span>
-                                        </div>
-
-                                        {/* Line total */}
-                                        <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
-                                            <div style={{ color: '#34C759', fontSize: '16px', fontWeight: 700 }}>${formatUSD(total)}</div>
-                                            <div style={{ fontSize: '11px', color: profitPct >= 20 ? 'rgba(52,199,89,0.7)' : 'rgba(255,149,0,0.7)' }}>
-                                                Margen {profitPct.toFixed(0)}% · +${formatUSD(profit)}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
+                    <PresupuestoLineItems
+                        items={items}
+                        onReorder={setItems}
+                        onRemove={removeItem}
+                        onUpdateQty={updateQty}
+                        onUpdatePrice={updatePrice}
+                        onUpdateDiscount={updateDiscount}
+                        onOpenSerials={openSerialModalForLine}
+                    />
                 )}
 
                 {/* ── Seriales Modal (uso interno) ── */}

@@ -17,8 +17,7 @@ comment on table public.recruitment_needs is
 
 alter table public.recruitment_needs enable row level security;
 
--- --- 031_ci_preguntas (antes 031_ci_preguntas.sql) ---
-
+-- === ci_preguntas (antes 031_ci_preguntas.sql) ===
 -- Banco de preguntas por tipo de vacante (p. ej. obrero): texto + opciones JSON con marca de correcta.
 -- `opciones`: array JSON [{ "texto": string, "es_correcta": boolean }, ...]
 

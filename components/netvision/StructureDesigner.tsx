@@ -22,6 +22,9 @@ type Props = {
   onFinishDraft?: () => void
   onSelect: (id: string) => void
   onRemove: (id: string) => void
+  canDetectPdf?: boolean
+  detecting?: boolean
+  onDetectFromPdf?: () => void
 }
 
 export default function StructureDesigner({
@@ -36,6 +39,9 @@ export default function StructureDesigner({
   onFinishDraft,
   onSelect,
   onRemove,
+  canDetectPdf = false,
+  detecting = false,
+  onDetectFromPdf,
 }: Props) {
   return (
     <div className="space-y-3">
@@ -45,8 +51,9 @@ export default function StructureDesigner({
         </h2>
         <p className="text-[11px] text-[var(--nexus-text-dim)]">
           Toca puntos en el plano: cada tramo se ajusta a 90° (H/V) y puedes seguir desde la
-          esquina. Pulsa «Terminar» al cerrar el muro. Arrastra el segmento o los extremos para
-          mover.
+          esquina. Verás la guía antes de confirmar. Pulsa «Terminar» o Enter al cerrar el
+          muro. Arrastra el segmento o los extremos para mover. En un PDF vectorial (CAD) se
+          detectan muros, puertas y ventanas; puedes corregir o dibujar a mano.
         </p>
       </div>
 
@@ -64,6 +71,20 @@ export default function StructureDesigner({
         </label>
       ) : null}
 
+      {onDetectFromPdf ? (
+        <button
+          type="button"
+          disabled={disabled || detecting || !canDetectPdf}
+          onClick={onDetectFromPdf}
+          className="w-full rounded-lg border border-[rgba(0,242,254,0.3)] bg-[rgba(0,242,254,0.08)] px-2 py-1.5 text-[11px] font-semibold text-[var(--nexus-cyan)] disabled:opacity-40"
+        >
+          {detecting
+            ? 'Detectando…'
+            : canDetectPdf
+              ? 'Detectar muros, puertas y ventanas'
+              : 'Carga un PDF vectorial (CAD) para detectar muros y aberturas'}
+        </button>
+      ) : null}
       <div className="flex flex-wrap gap-1.5">
         {STRUCTURE_MATERIALS.map((m) => {
           const active = drawMaterialId === m.id

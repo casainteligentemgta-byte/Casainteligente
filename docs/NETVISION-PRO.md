@@ -13,15 +13,16 @@ Diseño CCTV / redes / cableado / subterráneo / normativas / BIM en Nexus (`/ne
 
 ### 1 — CCTV
 FOV, catálogo multi-marca, calibración, BOM base, exports JSON/CSV/PNG/**PDF del plano** (captura A4 apaisada).
-**Marcas:** Hikvision, Axis, Uniview, Dahua, Sony, Ezviz (catálogo amplio), Aqara (catálogo amplio).
+**Marcas:** Hikvision, Axis, Uniview, Dahua, Sony, Ezviz (catálogo amplio), Aqara (G2H/G3/E1/G100, G350 Dual 4K, G5 Pro color night, timbres G4/G400/G410).
 Agregar cámara con botón **+ Cámara** (no por clic en el plano); luego arrastrar el pin.
 Espectro de visión ajustable por cámara: orientación, apertura FOV y alcance (sliders + asas en el plano).
-Cámaras **Dual** (p. ej. Ezviz H9c): dos conos/espectros — gran angular (cyan) + tele (naranja).
-**Calcular cobertura**: semáforo por alcance — verde (detección objetos/personas ≤40%), amarillo (≤70%), rojo (visión dudosa hasta 100%).
+Cámaras **Dual** (Ezviz H9c, Aqara G350): dos conos/espectros — gran angular (cyan) + tele (naranja). El FOV del catálogo es **horizontal** (si la ficha publica diagonal, se convierte).
+**Calcular cobertura**: semáforo en **metros de ficha** — verde (detección ≤40% del alcance del modelo), amarillo (≤70%), rojo (hasta el borde del cono). Estirar el espectro no agranda el verde: 2 m siguen siendo 2 m.
 Guía rápida de capas (Visión / WiFi / Sonido / Enlaces / Rutas / Sub / Noche): botón **?** en la barra del plano (`NetVisionLayerHelp`).
 
 ### 1b — Muros / materiales
-Pestaña **Muros**: drywall, bloque, **concreto**, vidrio, ventana, **puerta** (2 toques); arrastrar segmento o extremos. Capa **Estructuras** (checkbox) muestra/oculta en el plano; lista colapsable en el panel. Drywall/bloque/concreto cortan FOV (el espectro no atraviesa); aberturas no.
+Pestaña **Muros**: detecta muros, **puertas** y **ventanas** de un PDF vectorial (CAD) o dibuja drywall, bloque, **concreto**, vidrio, ventana, **puerta**; arrastrar segmento o extremos. Capa **Estructuras** (checkbox) muestra/oculta en el plano; lista colapsable en el panel. Drywall/bloque/concreto cortan FOV (el espectro no atraviesa); aberturas no.
+- Al cargar un PDF exportado de CAD: paso 2 elige el color de muro (polígonos largos y delgados); paso 3 detecta **puertas** (huecos / arco / hoja marrón) y **ventanas** (relleno cian-azul en el muro). Se puede repetir con **Detectar muros, puertas y ventanas**. No hay import DWG/DXF ni detección de muebles.
 - Drywall/bloque/concreto cortan FOV; vidrio/ventana dejan ver.
 - WiFi y Sonido usan mapa de calor atenuado por material (`structureAttenuation`, `buildWifiSpectrum`, `buildSoundSpectrum`).
 

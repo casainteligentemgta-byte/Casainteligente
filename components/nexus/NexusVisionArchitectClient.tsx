@@ -8,10 +8,16 @@ import Link from 'next/link'
 import {
   BookOpen,
   Camera,
+  ChevronDown,
+  Copy,
   Download,
+  FilePlus,
+  RotateCcw,
+  RotateCw,
+  Save,
   Trash2,
-  Upload,
   Undo2,
+  Upload,
 } from 'lucide-react'
 import { Button } from '@/components/nexus/ui/button'
 import { GlassCardMotion } from '@/components/nexus/GlassCard'
@@ -40,9 +46,12 @@ import {
   CAMERA_BRANDS,
   DEFAULT_CAMERA_MODEL_ID,
   cameraCatalogGrouped,
+  cameraCatalogOptionLabel,
+  cameraVisionSummary,
   effectiveCameraLenses,
   effectiveCameraVision,
   catalogVisionDefaults,
+  cameraPatchForLens,
   getCameraModelOrDefault,
 } from '@/lib/netvision/catalog/cameras'
 import {
@@ -50,9 +59,19 @@ import {
   DEFAULT_INJECTOR_ID,
   DEFAULT_NVR_ID,
   DEFAULT_SWITCH_ID,
+  getNetworkModelOrDefault,
   labelPrefixForKind,
   networkCatalogByKind,
 } from '@/lib/netvision/catalog/network'
+import {
+  PLAN_DISCIPLINE_LABEL,
+  PLAN_KIND_LABEL,
+  defaultPlanDeviceId,
+  getPlanDeviceModelOrDefault,
+  labelPrefixForPlanKind,
+  planDeviceKinds,
+  planDevicesByDiscipline,
+} from '@/lib/netvision/catalog/planDevices'
 import {
   defaultNetworkPlanSize,
 } from '@/lib/netvision/utils/networkNodeSize'
@@ -76,6 +95,10 @@ import {
   buildWifiSpectrum,
 } from '@/lib/netvision/services/wifiPredictor'
 import { buildSoundSpectrum } from '@/lib/netvision/services/soundPredictor'
+import {
+  buildApCoverageSectors,
+  buildPlanDeviceSectors,
+} from '@/lib/netvision/services/planDeviceCoverage'
 import { STRUCTURE_MATERIALS } from '@/lib/netvision/catalog/materials'
 import {
   buildCableRoutes,
@@ -113,6 +136,7 @@ import {
 } from '@/lib/netvision/services/complianceValidator'
 import { cloudUpsertProject } from '@/lib/netvision/cloud'
 import {
+  duplicateProject,
   emptyProject,
   loadProject,
   resetActiveDesign,
@@ -129,20 +153,56 @@ import type {
   DesignCableSegment,
   DesignCamera,
   DesignNetworkNode,
+  DesignPlanDevice,
   DesignStructure,
   DesignUndergroundSegment,
   NetVisionProject,
   NetworkNodeKind,
+  PlanDeviceKind,
+  PlanDiscipline,
   StructureMaterialId,
 } from '@/lib/netvision/types'
-import { snapOrtho90 } from '@/lib/netvision/utils/structureDraw'
+import {
+  snapOrtho90,
+  snapToStructureJoints,
+  snapToStructureJointsAligned,
+  structureLabelPrefix,
+} from '@/lib/netvision/utils/structureDraw'
 import {
   sanitizeCablePoints,
   snapCableDrawPoint,
 } from '@/lib/netvision/utils/cableDraw'
 import { downloadDataUrl } from '@/lib/netvision/utils/exporters'
 import { downloadNetVisionPlanPdf } from '@/lib/netvision/utils/exportPlanPdf'
+import {
+  rotateNormPoint,
+  rotatePlanoDataUrl90,
+  rotateProjectGeometry,
+  type PlanoRotateDir,
+} from '@/lib/netvision/utils/rotatePlano'
+import { FOV_PRESETS_DEG, RANGE_PRESETS_M } from '@/lib/netvision/utils/visionAdjust'
+import {
+  DEFAULT_MOUNT_HEIGHT_M,
+  DEFAULT_TILT_DEG,
+  projectGroundCoverage,
+} from '@/lib/netvision/utils/cameraMount'
+import {
+  detectWallsFromPdfBytes,
+  structuresFromWallDetection,
+  summarizePdfDetection,
+} from '@/lib/netvision/detectWallsFromPdf'
 import type { NetVisionZoomControls } from '@/components/netvision/CameraPlacementTool'
+import { renderPdfFirstPageFromBytes } from '@/lib/netvision/utils/renderPdfPlano'
+import {
+  extractPdfDimensionsFromBytes,
+  pickDimensionForSegment,
+  rotatePlanoDimensions,
+  type PlanoDimension,
+} from '@/lib/netvision/utils/extractPdfDimensions'
+import {
+  popProjectHistory,
+  pushProjectHistory,
+} from '@/lib/netvision/utils/projectHistory'
 
 const CameraPlacementTool = dynamic(
   () => import('@/components/netvision/CameraPlacementTool'),
@@ -160,27 +220,30 @@ function uid(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
 }
 
-async function renderPdfFirstPage(file: File): Promise<string> {
-  const pdfjs = await import('pdfjs-dist')
-  pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`
-  const data = new Uint8Array(await file.arrayBuffer())
-  const doc = await pdfjs.getDocument({ data }).promise
-  const page = await doc.getPage(1)
-  const viewport = page.getViewport({ scale: 1.5 })
-  const canvas = document.createElement('canvas')
-  canvas.width = viewport.width
-  canvas.height = viewport.height
-  const ctx = canvas.getContext('2d')
-  if (!ctx) throw new Error('No se pudo crear el canvas del PDF.')
-  await page.render({ canvasContext: ctx, viewport }).promise
-  return canvas.toDataURL('image/jpeg', 0.92)
+function rotateStructuresCwQuarters(
+  structures: DesignStructure[],
+  quarters: number,
+): DesignStructure[] {
+  const q = ((quarters % 4) + 4) % 4
+  if (q === 0) return structures
+  return structures.map((s) => {
+    let a = { x: s.x1, y: s.y1 }
+    let b = { x: s.x2, y: s.y2 }
+    for (let i = 0; i < q; i++) {
+      a = rotateNormPoint(a.x, a.y, 'cw')
+      b = rotateNormPoint(b.x, b.y, 'cw')
+    }
+    return { ...s, x1: a.x, y1: a.y, x2: b.x, y2: b.y }
+  })
 }
 
 export default function NexusVisionArchitectClient() {
   const [project, setProject] = useState<NetVisionProject>(() => emptyProject())
   const [hydrated, setHydrated] = useState(false)
   const [showFov, setShowFov] = useState(true)
-  const [showWifi, setShowWifi] = useState(true)
+  /** Opacidad del semáforo (translúcido por defecto para ver el plano). */
+  const [visionOpacity, setVisionOpacity] = useState(0.36)
+  const [showWifi, setShowWifi] = useState(false)
   const [showSound, setShowSound] = useState(false)
   const [showLinks, setShowLinks] = useState(true)
   const [showCableRoutes, setShowCableRoutes] = useState(true)
@@ -191,6 +254,10 @@ export default function NexusVisionArchitectClient() {
   const [structureDraft, setStructureDraft] = useState<{ x: number; y: number } | null>(
     null,
   )
+  const [structureCursor, setStructureCursor] = useState<{
+    x: number
+    y: number
+  } | null>(null)
   const [drawUnderground, setDrawUnderground] = useState(false)
   const [undergroundDraft, setUndergroundDraft] = useState<{
     x: number
@@ -214,8 +281,9 @@ export default function NexusVisionArchitectClient() {
     () => [
       ...project.cameras.map((c) => ({ x: c.x, y: c.y })),
       ...project.networkNodes.map((n) => ({ x: n.x, y: n.y })),
+      ...(project.planDevices ?? []).map((d) => ({ x: d.x, y: d.y })),
     ],
-    [project.cameras, project.networkNodes],
+    [project.cameras, project.networkNodes, project.planDevices],
   )
   const [ugZone, setUgZone] = useState<ZoneType>('vehicle')
   const [ugTerrain, setUgTerrain] = useState<TerrainType>('medium')
@@ -224,6 +292,10 @@ export default function NexusVisionArchitectClient() {
   const [loading, setLoading] = useState(false)
   const [exportingPdf, setExportingPdf] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [info, setInfo] = useState<string | null>(null)
+  const pdfBytesRef = useRef<Uint8Array | null>(null)
+  const pdfRotateQuartersRef = useRef(0)
+  const [canDetectPdfWalls, setCanDetectPdfWalls] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [defaultModelId, setDefaultModelId] = useState(DEFAULT_CAMERA_MODEL_ID)
   const [defaultNetModels, setDefaultNetModels] = useState<Record<NetworkNodeKind, string>>({
@@ -234,12 +306,24 @@ export default function NexusVisionArchitectClient() {
   })
   const [calibrateMode, setCalibrateMode] = useState(false)
   const [calibPoints, setCalibPoints] = useState<{ x: number; y: number }[]>([])
+  const [calibCursor, setCalibCursor] = useState<{ x: number; y: number } | null>(null)
   const [calibMeters, setCalibMeters] = useState('10')
+  const [planoDims, setPlanoDims] = useState<PlanoDimension[]>([])
   const [sideTab, setSideTab] = useState<NetVisionBranchId>('cctv')
   const [redFocusKind, setRedFocusKind] = useState<NetworkNodeKind>('switch')
   const [headerNavEl, setHeaderNavEl] = useState<HTMLElement | null>(null)
   /** Panel derecho (inspector): visible por defecto; se oculta con el botón. */
-  const [inspectorOpen, setInspectorOpen] = useState(true)
+  const [inspectorOpen, setInspectorOpen] = useState(false)
+  /** Menú desplegable con todas las cámaras del plano. */
+  const [camerasMenuOpen, setCamerasMenuOpen] = useState(false)
+  const [defaultPlanModels, setDefaultPlanModels] = useState<
+    Record<PlanDiscipline, string>
+  >({
+    sonido: defaultPlanDeviceId('sonido'),
+    domotica: defaultPlanDeviceId('domotica'),
+    electrico: defaultPlanDeviceId('electrico'),
+  })
+  const [planFocusKind, setPlanFocusKind] = useState<PlanDeviceKind>('speaker')
   useRegisterNexusRightPanel(inspectorOpen, setInspectorOpen)
   const [viewMode, setViewMode] = useState<'plano' | 'diagrama'>('plano')
   const [complianceCountry, setComplianceCountry] = useState('VE')
@@ -247,16 +331,44 @@ export default function NexusVisionArchitectClient() {
   const stageRef = useRef<Konva.Stage | null>(null)
   const zoomControlsRef = useRef<NetVisionZoomControls | null>(null)
   const [zoomPercent, setZoomPercent] = useState(100)
+  const [canUndo, setCanUndo] = useState(false)
+  const historyRef = useRef<NetVisionProject[]>([])
+  const lastProjectRef = useRef<NetVisionProject | null>(null)
+  const undoApplyingRef = useRef(false)
 
   useEffect(() => {
     setHeaderNavEl(document.getElementById('netvision-header-nav'))
   }, [])
 
   useEffect(() => {
+    if (!camerasMenuOpen) return
+    const onDoc = (e: MouseEvent | TouchEvent) => {
+      const t = e.target
+      if (!(t instanceof Node)) return
+      const roots = document.querySelectorAll('[data-cameras-menu]')
+      for (let i = 0; i < roots.length; i++) {
+        if (roots[i]?.contains(t)) return
+      }
+      setCamerasMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('touchstart', onDoc)
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      document.removeEventListener('touchstart', onDoc)
+    }
+  }, [camerasMenuOpen])
+
+  useEffect(() => {
+    if (project.cameras.length === 0) setCamerasMenuOpen(false)
+  }, [project.cameras.length])
+
+  useEffect(() => {
     const p = loadProject()
     setProject(p)
     if (p.complianceProfileId) setComplianceCountry(p.complianceProfileId)
     setCalibMeters(defaultCalibrationInput(p.unitSystem ?? 'metric'))
+    lastProjectRef.current = p
     setHydrated(true)
   }, [])
 
@@ -264,6 +376,62 @@ export default function NexusVisionArchitectClient() {
     if (!hydrated) return
     saveProject(project)
   }, [project, hydrated])
+
+  useEffect(() => {
+    if (!hydrated) return
+    if (undoApplyingRef.current) {
+      undoApplyingRef.current = false
+      lastProjectRef.current = project
+      return
+    }
+    const prev = lastProjectRef.current
+    if (prev && prev !== project) {
+      historyRef.current = pushProjectHistory(historyRef.current, prev)
+      setCanUndo(historyRef.current.length > 0)
+    }
+    lastProjectRef.current = project
+  }, [hydrated, project])
+
+  const undoLast = useCallback(() => {
+    const { rest, restored } = popProjectHistory(historyRef.current)
+    if (!restored) return
+    historyRef.current = rest
+    setCanUndo(rest.length > 0)
+    undoApplyingRef.current = true
+    setProject(restored)
+    setCalibrateMode(false)
+    setCalibPoints([])
+    setCalibCursor(null)
+    setDrawStructureMaterial(null)
+    setStructureDraft(null)
+    setStructureCursor(null)
+    setDrawUnderground(false)
+    setUndergroundDraft(null)
+    setDrawCable(false)
+    clearCableDraft()
+    setError(null)
+    setInfo('Se deshizo el último cambio.')
+  }, [clearCableDraft])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key !== 'z' || e.shiftKey) return
+      const t = e.target as HTMLElement | null
+      if (
+        t &&
+        (t.tagName === 'INPUT' ||
+          t.tagName === 'TEXTAREA' ||
+          t.tagName === 'SELECT' ||
+          t.isContentEditable)
+      ) {
+        return
+      }
+      e.preventDefault()
+      undoLast()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [undoLast])
 
   /** Sync diferido a Supabase (si hay sesión). */
   useEffect(() => {
@@ -285,6 +453,10 @@ export default function NexusVisionArchitectClient() {
     setCalibMeters(defaultCalibrationInput(project.unitSystem ?? 'metric'))
   }, [project.unitSystem, hydrated])
 
+  useEffect(() => {
+    if (!drawStructureMaterial) setStructureCursor(null)
+  }, [drawStructureMaterial])
+
   /** Escape / Enter: cable polilínea y muros. */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -303,7 +475,21 @@ export default function NexusVisionArchitectClient() {
         if (structureDraft) {
           setStructureDraft(null)
           e.preventDefault()
+          return
         }
+        if (drawStructureMaterial) {
+          setDrawStructureMaterial(null)
+          e.preventDefault()
+        }
+        return
+      }
+      if (
+        (e.key === 'Enter' || e.key === ' ') &&
+        drawStructureMaterial &&
+        structureDraft
+      ) {
+        e.preventDefault()
+        setStructureDraft(null)
         return
       }
       if (
@@ -323,6 +509,7 @@ export default function NexusVisionArchitectClient() {
     // addCableSegmentFromPoints is stable enough via closure on project length
   }, [
     structureDraft,
+    drawStructureMaterial,
     cableDraftPoints,
     drawCable,
     drawCableType,
@@ -363,10 +550,57 @@ export default function NexusVisionArchitectClient() {
     [project.networkNodes, project.scale, structures],
   )
 
+  const planDevices = project.planDevices ?? []
+
   const soundSpectrum = useMemo(
-    () => buildSoundSpectrum(project.cameras, project.scale, structures),
-    [project.cameras, project.scale, structures],
+    () =>
+      buildSoundSpectrum(
+        project.cameras,
+        project.scale,
+        structures,
+        28,
+        8,
+        planDevices
+          .filter((d) => d.discipline === 'sonido')
+          .map((d) => ({
+            x: d.x,
+            y: d.y,
+            rangeM:
+              d.rangeM ??
+              getPlanDeviceModelOrDefault(d.modelId, 'sonido').rangeM,
+          })),
+      ),
+    [project.cameras, project.scale, structures, planDevices],
   )
+
+  const planSectors = useMemo(() => {
+    if (sideTab === 'sonido' || sideTab === 'domotica' || sideTab === 'electrico') {
+      return buildPlanDeviceSectors(
+        planDevices,
+        project.scale,
+        structures,
+        sideTab,
+      )
+    }
+    if (sideTab === 'internet') {
+      return buildApCoverageSectors(
+        project.networkNodes,
+        (n) => getNetworkModelOrDefault(n.modelId, 'ap').wifiRangeM || 12,
+        project.scale,
+        structures,
+      )
+    }
+    return []
+  }, [sideTab, planDevices, project.scale, project.networkNodes, structures])
+
+  const activeSectors = sideTab === 'cctv' ? sectors : planSectors
+  const showActiveCoverage =
+    sideTab === 'cctv'
+      ? showFov
+      : sideTab === 'sonido' ||
+        sideTab === 'internet' ||
+        sideTab === 'domotica' ||
+        sideTab === 'electrico'
 
   const linkAdvice = useMemo(
     () => adviseCameraLinks(project.cameras, project.networkNodes, project.scale),
@@ -604,6 +838,7 @@ export default function NexusVisionArchitectClient() {
 
   const selectedCam = project.cameras.find((c) => c.id === selectedId) ?? null
   const selectedNet = project.networkNodes.find((n) => n.id === selectedId) ?? null
+  const selectedPlanDevice = planDevices.find((d) => d.id === selectedId) ?? null
   const selectedStructure =
     structures.find((s) => s.id === selectedId) ?? null
   const selectedManualCable =
@@ -613,6 +848,7 @@ export default function NexusVisionArchitectClient() {
   const hasSelection = !!(
     selectedCam ||
     selectedNet ||
+    selectedPlanDevice ||
     selectedStructure ||
     selectedManualCable ||
     selectedUnderground
@@ -621,14 +857,53 @@ export default function NexusVisionArchitectClient() {
   const onFile = useCallback(async (file: File | null) => {
     if (!file) return
     setError(null)
+    setInfo(null)
     setLoading(true)
     try {
-      const isPdf =
-        file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+      const lower = file.name.toLowerCase()
+      if (/\.(dwg|dxf|dgn)$/.test(lower)) {
+        throw new Error(
+          'El CAD nativo (.dwg / .dxf) no se abre aquí. En AutoCAD o Revit exporta el plano a PDF y pulsa Cargar plano.',
+        )
+      }
+      const isPdf = file.type === 'application/pdf' || lower.endsWith('.pdf')
       let url: string
+      let detected: DesignStructure[] = []
       if (isPdf) {
-        url = await renderPdfFirstPage(file)
+        const data = new Uint8Array(await file.arrayBuffer())
+        pdfBytesRef.current = data.slice()
+        pdfRotateQuartersRef.current = 0
+        setCanDetectPdfWalls(true)
+        url = await renderPdfFirstPageFromBytes(data)
+        let dims: PlanoDimension[] = []
+        try {
+          dims = await extractPdfDimensionsFromBytes(data)
+        } catch {
+          dims = []
+        }
+        setPlanoDims(dims)
+        const dimHint =
+          dims.length > 0
+            ? ` ${dims.length} cota(s) leídas. Pulsa Calibrar y traza una línea sobre un acotamiento.`
+            : ' No se leyeron cotas de texto; al calibrar escribe los metros a mano.'
+        try {
+          const result = await detectWallsFromPdfBytes(data)
+          detected = structuresFromWallDetection(result, { makeId: uid })
+          setInfo(summarizePdfDetection(result) + dimHint)
+          if (detected.length > 0) {
+            setSideTab('muros')
+            setShowStructures(true)
+          }
+        } catch {
+          setInfo(
+            `PDF cargado. No se pudieron leer muros vectoriales; dibújalos en Muros.${dimHint}`,
+          )
+        }
       } else if (file.type.startsWith('image/')) {
+        pdfBytesRef.current = null
+        pdfRotateQuartersRef.current = 0
+        setCanDetectPdfWalls(false)
+        setPlanoDims([])
         url = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader()
           reader.onload = () => resolve(String(reader.result))
@@ -636,7 +911,7 @@ export default function NexusVisionArchitectClient() {
           reader.readAsDataURL(file)
         })
       } else {
-        throw new Error('Usa una imagen (JPG/PNG/WEBP) o un PDF.')
+        throw new Error('Usa un PDF (exportado del CAD) o una imagen (JPG/PNG/WEBP).')
       }
       setProject((p) => ({
         ...p,
@@ -644,7 +919,7 @@ export default function NexusVisionArchitectClient() {
         planoNombre: file.name,
         cameras: [],
         networkNodes: [],
-        structures: [],
+        structures: detected,
         undergroundSegments: [],
         cableSegments: [],
         cableRouteOverrides: {},
@@ -652,6 +927,7 @@ export default function NexusVisionArchitectClient() {
       setSelectedId(null)
       setCalibrateMode(false)
       setCalibPoints([])
+      setCalibCursor(null)
       setDrawStructureMaterial(null)
       setStructureDraft(null)
       setDrawUnderground(false)
@@ -663,7 +939,30 @@ export default function NexusVisionArchitectClient() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [clearCableDraft])
+
+  const rotatePlano = useCallback(
+    async (dir: PlanoRotateDir) => {
+      const url = project.planoUrl
+      if (!url || loading) return
+      setError(null)
+      setLoading(true)
+      try {
+        const rotated = await rotatePlanoDataUrl90(url, dir)
+        pdfRotateQuartersRef.current =
+          (pdfRotateQuartersRef.current + (dir === 'cw' ? 1 : 3)) % 4
+        setProject((p) => ({ ...rotateProjectGeometry(p, dir), planoUrl: rotated }))
+        setCalibPoints((pts) => pts.map((pt) => rotateNormPoint(pt.x, pt.y, dir)))
+        setCalibCursor((c) => (c ? rotateNormPoint(c.x, c.y, dir) : null))
+        setPlanoDims((dims) => rotatePlanoDimensions(dims, dir))
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'No se pudo rotar el plano')
+      } finally {
+        setLoading(false)
+      }
+    },
+    [project.planoUrl, loading],
+  )
 
   /** Posición inicial al agregar por botón (leve desplazamiento para no apilar). */
   const buttonSpawnPos = (index: number, baseX: number, baseY: number) => {
@@ -686,18 +985,21 @@ export default function NexusVisionArchitectClient() {
       label: `CAM-${String(n).padStart(2, '0')}`,
       modelId: defaultModelId,
       yawDeg: 0,
-      mountHeightM: 2.8,
+      mountHeightM: DEFAULT_MOUNT_HEIGHT_M,
+      tiltDeg: DEFAULT_TILT_DEG,
       ...vision,
     }
     setError(null)
     setProject((p) => ({ ...p, cameras: [...p.cameras, pin] }))
     setSelectedId(pin.id)
+    setInspectorOpen(false)
     setSideTab('cctv')
     setViewMode('plano')
     setCalibrateMode(false)
     setCalibPoints([])
     setDrawStructureMaterial(null)
     setStructureDraft(null)
+    setStructureCursor(null)
   }
 
   /** Agrega cámara por botón (centro del plano, con leve desplazamiento si ya hay otras). */
@@ -710,10 +1012,44 @@ export default function NexusVisionArchitectClient() {
     addCameraAt(pos.x, pos.y)
   }
 
+  /** Elige una cámara de la lista desplegable (plano + asas / ficha). */
+  const selectCameraFromMenu = (id: string, openInspector = false) => {
+    setSelectedId(id)
+    setSideTab('cctv')
+    setShowFov(true)
+    setViewMode('plano')
+    setCamerasMenuOpen(false)
+    setInspectorOpen(openInspector)
+  }
+
+  const toggleCamerasMenu = () => {
+    setCamerasMenuOpen((open) => {
+      const next = !open
+      if (next) setInspectorOpen(false)
+      return next
+    })
+  }
+
   const selectSideTab = useCallback(
     (id: NetVisionBranchId) => {
       setSideTab(id)
-      setInspectorOpen(true)
+      if (id === 'cctv') {
+        setShowFov(true)
+        setViewMode('plano')
+      } else if (id === 'sonido') {
+        setViewMode('plano')
+        setPlanFocusKind('speaker')
+      } else if (id === 'internet') {
+        setViewMode('plano')
+      } else if (id === 'domotica') {
+        setShowFov(true)
+        setViewMode('plano')
+        setPlanFocusKind('hub')
+      } else if (id === 'electrico') {
+        setShowFov(true)
+        setViewMode('plano')
+        setPlanFocusKind('panel')
+      }
       if (id === 'sub') {
         setShowUnderground(true)
         setViewMode('plano')
@@ -769,7 +1105,8 @@ export default function NexusVisionArchitectClient() {
     setError(null)
     setProject((p) => ({ ...p, networkNodes: [...p.networkNodes, node] }))
     setSelectedId(node.id)
-    setSideTab('red')
+    setInspectorOpen(false)
+    setSideTab('internet')
     setViewMode('plano')
     setCalibrateMode(false)
     setCalibPoints([])
@@ -793,6 +1130,58 @@ export default function NexusVisionArchitectClient() {
     addNetworkAt(kind, pos.x, pos.y)
   }
 
+  const addPlanDeviceAt = (
+    discipline: PlanDiscipline,
+    kind: PlanDeviceKind,
+    normX: number,
+    normY: number,
+  ) => {
+    if (!project.planoUrl) return
+    const modelId =
+      defaultPlanModels[discipline] &&
+      getPlanDeviceModelOrDefault(defaultPlanModels[discipline], discipline).kind === kind
+        ? defaultPlanModels[discipline]
+        : planDevicesByDiscipline(discipline).find((m) => m.kind === kind)?.id ??
+          defaultPlanDeviceId(discipline)
+    const model = getPlanDeviceModelOrDefault(modelId, discipline)
+    const count = planDevices.filter((d) => d.kind === model.kind).length + 1
+    const prefix = labelPrefixForPlanKind(model.kind)
+    const device: DesignPlanDevice = {
+      id: uid(),
+      x: Math.round(normX * 1000) / 1000,
+      y: Math.round(normY * 1000) / 1000,
+      label: `${prefix}-${String(count).padStart(2, '0')}`,
+      discipline: model.discipline,
+      kind: model.kind,
+      modelId: model.id,
+      yawDeg: 0,
+    }
+    setError(null)
+    setProject((p) => ({
+      ...p,
+      planDevices: [...(p.planDevices ?? []), device],
+    }))
+    setSelectedId(device.id)
+    setInspectorOpen(false)
+    setSideTab(discipline)
+    setViewMode('plano')
+    setCalibrateMode(false)
+    setCalibPoints([])
+    setDrawStructureMaterial(null)
+    setStructureDraft(null)
+    setStructureCursor(null)
+  }
+
+  const addPlanDeviceFromButton = (discipline: PlanDiscipline, kind: PlanDeviceKind) => {
+    if (!project.planoUrl) {
+      setError('Carga un plano antes de agregar equipos.')
+      return
+    }
+    const idx = planDevices.filter((d) => d.discipline === discipline).length
+    const pos = buttonSpawnPos(idx, 0.48, 0.42)
+    addPlanDeviceAt(discipline, kind, pos.x, pos.y)
+  }
+
   const addStructureSegment = (
     materialId: StructureMaterialId,
     x1: number,
@@ -800,20 +1189,10 @@ export default function NexusVisionArchitectClient() {
     x2: number,
     y2: number,
   ) => {
-    const n = (project.structures?.length ?? 0) + 1
-    const prefix =
-      materialId === 'door'
-        ? 'PUE'
-        : materialId === 'window'
-          ? 'VEN'
-          : materialId === 'glass'
-            ? 'VID'
-            : materialId === 'block'
-              ? 'BLO'
-              : 'DRY'
+    const prefix = structureLabelPrefix(materialId)
     const seg: DesignStructure = {
       id: uid(),
-      label: `${prefix}-${String(n).padStart(2, '0')}`,
+      label: `${prefix}-00`,
       materialId,
       x1: Math.round(x1 * 1000) / 1000,
       y1: Math.round(y1 * 1000) / 1000,
@@ -821,13 +1200,21 @@ export default function NexusVisionArchitectClient() {
       y2: Math.round(y2 * 1000) / 1000,
     }
     setError(null)
-    setProject((p) => ({
-      ...p,
-      structures: [...(p.structures ?? []), seg],
-    }))
+    setProject((p) => {
+      const n = (p.structures ?? []).length + 1
+      const labeled = {
+        ...seg,
+        label: `${prefix}-${String(n).padStart(2, '0')}`,
+      }
+      return {
+        ...p,
+        structures: [...(p.structures ?? []), labeled],
+      }
+    })
     setSelectedId(seg.id)
     setSideTab('muros')
     setViewMode('plano')
+    setShowStructures(true)
   }
 
   const addUndergroundSegment = (
@@ -899,6 +1286,16 @@ export default function NexusVisionArchitectClient() {
     clearCableDraft()
   }
 
+  const onCalibPointerMove = (normX: number, normY: number) => {
+    if (!calibrateMode) return
+    const cursor = { x: normX, y: normY }
+    setCalibCursor(cursor)
+    const origin = calibPoints[0]
+    if (!origin) return
+    const hit = pickDimensionForSegment(origin, cursor, planoDims)
+    if (hit) setCalibMeters(hit.label)
+  }
+
   const onCablePointerMove = (normX: number, normY: number) => {
     if (!drawCable) return
     const from = cableDraftPoints[cableDraftPoints.length - 1] ?? null
@@ -910,6 +1307,24 @@ export default function NexusVisionArchitectClient() {
     setCableCursor(snapped)
   }
 
+  const onStructurePointerMove = (normX: number, normY: number) => {
+    if (!drawStructureMaterial) return
+    if (!structureDraft) {
+      setStructureCursor(
+        snapToStructureJoints({ x: normX, y: normY }, project.structures ?? []),
+      )
+      return
+    }
+    const snapped = snapOrtho90(structureDraft, { x: normX, y: normY })
+    setStructureCursor(
+      snapToStructureJointsAligned(
+        structureDraft,
+        snapped,
+        project.structures ?? [],
+      ),
+    )
+  }
+
   const onAddAt = (normX: number, normY: number) => {
     if (!project.planoUrl) return
 
@@ -918,10 +1333,13 @@ export default function NexusVisionArchitectClient() {
       if (next.length >= 2) {
         const a = next[0]!
         const b = next[1]!
-        const meters = parseCalibrationToMeters(
-          calibMeters,
-          project.unitSystem ?? 'metric',
-        )
+        const hit = pickDimensionForSegment(a, b, planoDims)
+        const meters = hit
+          ? hit.meters
+          : parseCalibrationToMeters(
+              calibMeters,
+              project.unitSystem ?? 'metric',
+            )
         const distN = Math.hypot(a.x - b.x, a.y - b.y) || 1e-6
         const metersPerNorm = meters / distN
         setProject((p) => ({
@@ -933,9 +1351,18 @@ export default function NexusVisionArchitectClient() {
           },
         }))
         setCalibPoints([])
+        setCalibCursor(null)
         setCalibrateMode(false)
+        if (hit) setCalibMeters(hit.label)
+        setInfo(
+          hit
+            ? `Escala lista: ${hit.label} m según el acotamiento del plano.`
+            : `Escala lista: ${formatLength(meters, project.unitSystem ?? 'metric')} (valor indicado).`,
+        )
+        setError(null)
       } else {
         setCalibPoints(next)
+        setCalibCursor(null)
       }
       return
     }
@@ -982,14 +1409,19 @@ export default function NexusVisionArchitectClient() {
     }
 
     if (drawStructureMaterial) {
+      const walls = project.structures ?? []
       if (!structureDraft) {
-        setStructureDraft({ x: normX, y: normY })
+        const start = snapToStructureJoints({ x: normX, y: normY }, walls)
+        setStructureDraft(start)
+        setStructureCursor(start)
+        setError(null)
         return
       }
       // Snap a 90° (horizontal o vertical) para esquinas ortogonales.
       const snapped = snapOrtho90(structureDraft, { x: normX, y: normY })
-      const dx = Math.abs(structureDraft.x - snapped.x)
-      const dy = Math.abs(structureDraft.y - snapped.y)
+      const joined = snapToStructureJointsAligned(structureDraft, snapped, walls)
+      const dx = Math.abs(structureDraft.x - joined.x)
+      const dy = Math.abs(structureDraft.y - joined.y)
       if (dx + dy < 0.008) {
         setError('El segmento es demasiado corto; elige otro punto.')
         return
@@ -998,11 +1430,12 @@ export default function NexusVisionArchitectClient() {
         drawStructureMaterial,
         structureDraft.x,
         structureDraft.y,
-        snapped.x,
-        snapped.y,
+        joined.x,
+        joined.y,
       )
       // Continuar dibujando desde la esquina (muro polilínea con tramos H/V).
-      setStructureDraft({ x: snapped.x, y: snapped.y })
+      setStructureDraft({ x: joined.x, y: joined.y })
+      setStructureCursor({ x: joined.x, y: joined.y })
       setError(null)
     }
   }
@@ -1014,6 +1447,9 @@ export default function NexusVisionArchitectClient() {
       ...p,
       cameras: p.cameras.map((c) => (c.id === id ? { ...c, x: nx, y: ny } : c)),
       networkNodes: p.networkNodes.map((n) => (n.id === id ? { ...n, x: nx, y: ny } : n)),
+      planDevices: (p.planDevices ?? []).map((d) =>
+        d.id === id ? { ...d, x: nx, y: ny } : d,
+      ),
     }))
   }
 
@@ -1047,6 +1483,7 @@ export default function NexusVisionArchitectClient() {
         if ('fovDeg' in patch && patch.fovDeg === undefined) delete next.fovDeg
         if ('fovLeftDeg' in patch && patch.fovLeftDeg === undefined) delete next.fovLeftDeg
         if ('fovRightDeg' in patch && patch.fovRightDeg === undefined) delete next.fovRightDeg
+        if ('lensVision' in patch && patch.lensVision === undefined) delete next.lensVision
         if ('rangeM' in patch && patch.rangeM === undefined) delete next.rangeM
         return next
       }),
@@ -1067,8 +1504,25 @@ export default function NexusVisionArchitectClient() {
       fovRightDeg?: number
       rangeM?: number
     },
+    lensId?: string,
   ) => {
-    patchCamera(id, patch)
+    const cam = project.cameras.find((c) => c.id === id)
+    if (!cam) return
+    // Dual: cada cono se ajusta por separado (la lente secundaria guarda su propio yaw/FOV/alcance).
+    patchCamera(id, cameraPatchForLens(cam, lensId, patch))
+  }
+
+  const patchPlanDevice = (id: string, patch: Partial<DesignPlanDevice>) => {
+    setProject((p) => ({
+      ...p,
+      planDevices: (p.planDevices ?? []).map((d) => {
+        if (d.id !== id) return d
+        const next: DesignPlanDevice = { ...d, ...patch }
+        if ('rangeM' in patch && patch.rangeM === undefined) delete next.rangeM
+        if ('fovDeg' in patch && patch.fovDeg === undefined) delete next.fovDeg
+        return next
+      }),
+    }))
   }
 
   const patchNetworkNode = (id: string, patch: Partial<DesignNetworkNode>) => {
@@ -1110,6 +1564,7 @@ export default function NexusVisionArchitectClient() {
         ...p,
         cameras: p.cameras.filter((c) => c.id !== id),
         networkNodes: p.networkNodes.filter((n) => n.id !== id),
+        planDevices: (p.planDevices ?? []).filter((d) => d.id !== id),
         structures: (p.structures ?? []).filter((s) => s.id !== id),
         undergroundSegments: (p.undergroundSegments ?? []).filter(
           (s) => s.id !== id,
@@ -1126,7 +1581,45 @@ export default function NexusVisionArchitectClient() {
     setProject(next)
     setSelectedId(null)
     setError(null)
+    setInfo(null)
+    pdfBytesRef.current = null
+    pdfRotateQuartersRef.current = 0
+    setCanDetectPdfWalls(false)
+    setPlanoDims([])
+    setCalibCursor(null)
   }
+
+  const detectWallsFromLoadedPdf = useCallback(async () => {
+    const data = pdfBytesRef.current
+    if (!data || !project.planoUrl || loading) return
+    if ((project.structures?.length ?? 0) > 0) {
+      const ok = window.confirm(
+        'Esto reemplaza los muros, puertas y ventanas actuales por los detectados en el PDF. ¿Continuar?',
+      )
+      if (!ok) return
+    }
+    setError(null)
+    setInfo(null)
+    setLoading(true)
+    try {
+      const result = await detectWallsFromPdfBytes(data)
+      const detected = rotateStructuresCwQuarters(
+        structuresFromWallDetection(result, { makeId: uid }),
+        pdfRotateQuartersRef.current,
+      )
+      setInfo(summarizePdfDetection(result))
+      setProject((p) => ({ ...p, structures: detected }))
+      setSelectedId(null)
+      if (detected.length > 0) {
+        setSideTab('muros')
+        setShowStructures(true)
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudieron detectar muros del PDF')
+    } finally {
+      setLoading(false)
+    }
+  }, [loading, project.planoUrl, project.structures?.length])
 
   const switchToProject = (p: NetVisionProject) => {
     setProject(p)
@@ -1136,7 +1629,70 @@ export default function NexusVisionArchitectClient() {
     setCalibrateMode(false)
     setCalibMeters(defaultCalibrationInput(p.unitSystem ?? 'metric'))
     setError(null)
+    setInfo(null)
+    pdfBytesRef.current = null
+    pdfRotateQuartersRef.current = 0
+    setCanDetectPdfWalls(false)
+    setPlanoDims([])
+    setCalibCursor(null)
   }
+
+  const persistProjectNow = useCallback(async () => {
+    const saved = saveProject(project)
+    setProject(saved)
+    const r = await cloudUpsertProject(saved)
+    const cam = saved.cameras.length
+    const red = saved.networkNodes.length
+    const eq = (saved.planDevices ?? []).length
+    const parts = [
+      cam ? `${cam} cam` : null,
+      red ? `${red} red` : null,
+      eq ? `${eq} equipos` : null,
+    ].filter(Boolean)
+    const summary = parts.length ? parts.join(' · ') : 'diseño vacío'
+    if (r.ok && r.authenticated) {
+      setInfo(`Proyecto guardado («${saved.name}»: ${summary}) · nube OK`)
+    } else if (r.authenticated === false) {
+      setInfo(`Proyecto guardado en este navegador («${saved.name}»: ${summary})`)
+    } else {
+      setInfo(`Proyecto guardado localmente («${saved.name}»: ${summary})`)
+    }
+    setError(null)
+  }, [project])
+
+  const saveProjectAsCopy = useCallback(() => {
+    const suggested = `${project.name.trim() || 'Proyecto'} (copia)`
+    const name = window.prompt('Nombre del nuevo proyecto', suggested)
+    if (name == null) return
+    const copy = duplicateProject(project, name)
+    switchToProject(copy)
+    setInfo(`Copia guardada como «${copy.name}»`)
+  }, [project])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 's') return
+      const t = e.target as HTMLElement | null
+      if (
+        t &&
+        (t.tagName === 'INPUT' ||
+          t.tagName === 'TEXTAREA' ||
+          t.tagName === 'SELECT' ||
+          t.isContentEditable)
+      ) {
+        // En inputs de nombre también queremos guardar con Ctrl+S
+        if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA') {
+          e.preventDefault()
+          void persistProjectNow()
+        }
+        return
+      }
+      e.preventDefault()
+      void persistProjectNow()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [persistProjectNow])
 
   const exportPng = () => {
     const stage = stageRef.current
@@ -1177,12 +1733,17 @@ export default function NexusVisionArchitectClient() {
     cableDraftPoints.length > 0
       ? cableDraftPoints[cableDraftPoints.length - 1]!
       : undergroundDraft ?? structureDraft
-  const draftColor =
-    drawCable || cableDraftPoints.length > 0
+  const draftColor = calibrateMode
+    ? '#a3e635'
+    : drawCable || cableDraftPoints.length > 0
       ? '#facc15'
       : undergroundDraft || drawUnderground
         ? '#fb923c'
         : '#22d3ee'
+  const draftLabel =
+    calibrateMode && calibPoints.length >= 1
+      ? `${calibMeters} m`
+      : null
 
   const chipClass = (active: boolean) =>
     `rounded-md px-2 py-1 text-[11px] font-semibold disabled:opacity-40 ${
@@ -1220,21 +1781,87 @@ export default function NexusVisionArchitectClient() {
               <optgroup key={g.brand} label={g.brand}>
                 {g.models.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.name}
+                    {cameraCatalogOptionLabel(m)}
                   </option>
                 ))}
               </optgroup>
             ))}
           </select>
+          <button
+            type="button"
+            disabled={!project.planoUrl || loading}
+            className={chipClass(false)}
+            onClick={addCameraFromButton}
+          >
+            + Cámara
+          </button>
           {!selectedCam ? (
             <span className="text-[10px] text-[var(--nexus-text-dim)]">
-              Modelo al agregar · {CAMERA_BRANDS.slice(0, 3).join(', ')}…
+              Coloca primero · configura al tocar
             </span>
           ) : null}
         </>
       )
     }
-    if (sideTab === 'red') {
+    if (sideTab === 'sonido' || sideTab === 'domotica' || sideTab === 'electrico') {
+      const kinds = planDeviceKinds(sideTab)
+      const focus =
+        kinds.includes(planFocusKind) ? planFocusKind : kinds[0]!
+      return (
+        <>
+          {kinds.map((k) => (
+            <button
+              key={k}
+              type="button"
+              disabled={!project.planoUrl || loading}
+              className={chipClass(focus === k)}
+              onClick={() => {
+                setPlanFocusKind(k)
+                setDrawStructureMaterial(null)
+                setStructureDraft(null)
+                setCalibrateMode(false)
+                addPlanDeviceFromButton(sideTab, k)
+              }}
+            >
+              + {PLAN_KIND_LABEL[k]}
+            </button>
+          ))}
+          <select
+            value={
+              selectedPlanDevice?.discipline === sideTab
+                ? selectedPlanDevice.modelId
+                : defaultPlanModels[sideTab]
+            }
+            onChange={(e) => {
+              const id = e.target.value
+              const model = getPlanDeviceModelOrDefault(id, sideTab)
+              setDefaultPlanModels((m) => ({ ...m, [sideTab]: id }))
+              setPlanFocusKind(model.kind)
+              if (selectedPlanDevice?.discipline === sideTab) {
+                patchPlanDevice(selectedPlanDevice.id, {
+                  modelId: model.id,
+                  kind: model.kind,
+                  rangeM: undefined,
+                  fovDeg: undefined,
+                })
+              }
+            }}
+            className="max-w-[min(100%,240px)] rounded border border-white/10 bg-black/40 px-2 py-1 text-[11px] text-white"
+            title={`Modelo ${PLAN_DISCIPLINE_LABEL[sideTab]}`}
+          >
+            {planDevicesByDiscipline(sideTab).map((m) => (
+              <option key={m.id} value={m.id}>
+                {PLAN_KIND_LABEL[m.kind]} · {m.brand} {m.name}
+              </option>
+            ))}
+          </select>
+          <span className="text-[10px] text-[var(--nexus-text-dim)]">
+            Coloca en el plano · toca para configurar
+          </span>
+        </>
+      )
+    }
+    if (sideTab === 'internet') {
       const kinds: { kind: NetworkNodeKind; label: string }[] = [
         { kind: 'switch', label: 'Switch' },
         { kind: 'ap', label: 'AP' },
@@ -1300,7 +1927,6 @@ export default function NexusVisionArchitectClient() {
                   if (next) {
                     setCalibrateMode(false)
                     setViewMode('plano')
-                    setShowFov(true)
                     setShowStructures(true)
                   }
                 }}
@@ -1446,38 +2072,56 @@ export default function NexusVisionArchitectClient() {
     )
   })()
 
-  const projectActions = (
+  const openPlanoPicker = () => fileRef.current?.click()
+
+  const archivoMenu = (
     <>
       <Button
         type="button"
         variant="glass"
         size="sm"
-        className="shrink-0"
-        onClick={limpiarPlano}
-        disabled={!project.planoUrl}
+        className="w-full justify-start"
+        onClick={() => void persistProjectNow()}
+        title="Guardar CCTV, red, domótica y resto del diseño (Ctrl+S)"
       >
-        <Undo2 className="mr-1.5 h-3.5 w-3.5" />
-        Nuevo plano
+        <Save className="mr-1.5 h-3.5 w-3.5" />
+        Guardar proyecto
       </Button>
       <Button
         type="button"
         variant="glass"
         size="sm"
-        className="shrink-0"
-        onClick={() => fileRef.current?.click()}
+        className="w-full justify-start"
+        onClick={saveProjectAsCopy}
+        title="Duplicar el proyecto con otro nombre"
+      >
+        <Copy className="mr-1.5 h-3.5 w-3.5" />
+        Guardar como…
+      </Button>
+      <Button
+        type="button"
+        variant="glass"
+        size="sm"
+        className="w-full justify-start"
+        onClick={openPlanoPicker}
         disabled={loading}
+        title="PDF (exportado de CAD) o imagen JPG/PNG"
       >
         <Upload className="mr-1.5 h-3.5 w-3.5" />
-        {loading ? 'Cargando…' : 'Cargar'}
+        {loading ? 'Cargando…' : 'Cargar plano'}
       </Button>
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/*,application/pdf,.pdf"
-        className="hidden"
-        onChange={(e) => void onFile(e.target.files?.[0] ?? null)}
-      />
-      <div className="shrink-0">
+      <Button
+        type="button"
+        variant="glass"
+        size="sm"
+        className="w-full justify-start"
+        onClick={limpiarPlano}
+        disabled={!project.planoUrl}
+      >
+        <FilePlus className="mr-1.5 h-3.5 w-3.5" />
+        Nuevo plano
+      </Button>
+      <div className="w-full">
         <NetVisionProjectsPanel
           activeId={project.id}
           projectName={project.name}
@@ -1492,7 +2136,7 @@ export default function NexusVisionArchitectClient() {
         type="button"
         variant="glass"
         size="sm"
-        className="shrink-0"
+        className="w-full justify-start"
         onClick={exportPng}
         disabled={!project.planoUrl}
       >
@@ -1503,19 +2147,341 @@ export default function NexusVisionArchitectClient() {
         type="button"
         variant="glass"
         size="sm"
-        className="shrink-0"
+        className="w-full justify-start"
         onClick={() => void exportPdf()}
         disabled={!project.planoUrl || exportingPdf}
       >
         <Download className="mr-1.5 h-3.5 w-3.5" />
         {exportingPdf ? 'PDF…' : 'PDF'}
       </Button>
-      <Button type="button" variant="glass" size="sm" className="shrink-0" asChild>
+      <Button type="button" variant="glass" size="sm" className="w-full justify-start" asChild>
         <Link href="/nexus/vision/manual/usuario">
           <BookOpen className="mr-1.5 h-3.5 w-3.5" />
           Manual
         </Link>
       </Button>
+      {project.planoUrl && viewMode === 'plano' ? (
+        <div className="mt-1 space-y-2 border-t border-white/10 pt-2">
+          <p className="px-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-text-dim)]">
+            Vista del plano
+          </p>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              title="Rotar el plano 90° a la izquierda"
+              aria-label="Rotar el plano a la izquierda"
+              disabled={loading}
+              className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-md text-white hover:bg-white/10 disabled:opacity-40"
+              onClick={() => void rotatePlano('ccw')}
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+            </button>
+            <span className="text-[11px] font-semibold text-[var(--nexus-cyan)]">Rotar</span>
+            <button
+              type="button"
+              title="Rotar el plano 90° a la derecha"
+              aria-label="Rotar el plano a la derecha"
+              disabled={loading}
+              className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-md text-white hover:bg-white/10 disabled:opacity-40"
+              onClick={() => void rotatePlano('cw')}
+            >
+              <RotateCw className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <button
+            type="button"
+            title={layerHelpTitle('calibrate')}
+            className={`w-full rounded-md px-2 py-1.5 text-left text-[11px] font-semibold ${
+              calibrateMode
+                ? 'bg-[var(--nexus-cyan)] text-black'
+                : 'text-[var(--nexus-cyan)] hover:bg-white/5'
+            }`}
+            onClick={() => {
+              setCalibrateMode((v) => !v)
+              setCalibPoints([])
+              setCalibCursor(null)
+              setDrawStructureMaterial(null)
+              setStructureDraft(null)
+              setDrawUnderground(false)
+              setUndergroundDraft(null)
+              setDrawCable(false)
+              clearCableDraft()
+            }}
+          >
+            Calibrar
+          </button>
+          {calibrateMode ? (
+            <label className="flex items-center gap-1 px-1 text-[11px] text-[var(--nexus-text-dim)]">
+              {lengthUnitLabel(project.unitSystem ?? 'metric')}
+              <input
+                value={calibMeters}
+                onChange={(e) => setCalibMeters(e.target.value)}
+                className="w-14 rounded border border-white/10 bg-black/40 px-1 py-0.5 text-xs text-white"
+                title="Si el PDF trae la cota, se rellena al trazar. Si no, escríbela."
+              />
+              ({calibPoints.length}/2)
+              {planoDims.length > 0 ? (
+                <span className="text-[10px] text-lime-300/90">{planoDims.length} cotas</span>
+              ) : (
+                <span className="text-[10px] text-amber-200/80">sin cotas PDF</span>
+              )}
+            </label>
+          ) : null}
+          <NetVisionLayerHelp />
+          <details className="rounded-md border border-white/10 bg-black/30 px-2 py-1">
+            <summary className="cursor-pointer text-[11px] font-semibold text-[var(--nexus-cyan)]">
+              Capas
+            </summary>
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 pb-1">
+              <label
+                title={layerHelpTitle('fov')}
+                className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
+              >
+                <input
+                  type="checkbox"
+                  checked={showFov}
+                  onChange={(e) => setShowFov(e.target.checked)}
+                />
+                Visión
+              </label>
+              {showFov ? (
+                <label
+                  className="inline-flex min-w-[9rem] flex-1 cursor-pointer items-center gap-1.5 text-[10px] text-[var(--nexus-text-muted)]"
+                  title="Translucidez del semáforo sobre el plano"
+                >
+                  <span className="shrink-0">Opacidad</span>
+                  <input
+                    type="range"
+                    min={15}
+                    max={80}
+                    step={1}
+                    value={Math.round(visionOpacity * 100)}
+                    onChange={(e) => setVisionOpacity(Number(e.target.value) / 100)}
+                    className="h-1.5 w-full accent-[var(--nexus-cyan)]"
+                  />
+                  <span className="w-8 tabular-nums text-[var(--nexus-cyan)]">
+                    {Math.round(visionOpacity * 100)}%
+                  </span>
+                </label>
+              ) : null}
+              <label
+                title={layerHelpTitle('wifi')}
+                className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
+              >
+                <input
+                  type="checkbox"
+                  checked={showWifi}
+                  onChange={(e) => setShowWifi(e.target.checked)}
+                />
+                WiFi
+              </label>
+              <label
+                title={layerHelpTitle('sound')}
+                className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
+              >
+                <input
+                  type="checkbox"
+                  checked={showSound}
+                  onChange={(e) => setShowSound(e.target.checked)}
+                />
+                Sonido
+              </label>
+              <label
+                title={layerHelpTitle('links')}
+                className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
+              >
+                <input
+                  type="checkbox"
+                  checked={showLinks}
+                  onChange={(e) => setShowLinks(e.target.checked)}
+                />
+                Enlaces
+              </label>
+              <label
+                title={layerHelpTitle('routes')}
+                className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
+              >
+                <input
+                  type="checkbox"
+                  checked={showCableRoutes}
+                  onChange={(e) => setShowCableRoutes(e.target.checked)}
+                />
+                Rutas
+              </label>
+              <label
+                title={layerHelpTitle('structures')}
+                className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
+              >
+                <input
+                  type="checkbox"
+                  checked={showStructures}
+                  onChange={(e) => setShowStructures(e.target.checked)}
+                />
+                Estructuras
+              </label>
+              <label
+                title={layerHelpTitle('sub')}
+                className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
+              >
+                <input
+                  type="checkbox"
+                  checked={showUnderground}
+                  onChange={(e) => setShowUnderground(e.target.checked)}
+                />
+                Sub
+              </label>
+              <label
+                title={layerHelpTitle('night')}
+                className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
+              >
+                <input
+                  type="checkbox"
+                  checked={nightMode}
+                  onChange={(e) => setNightMode(e.target.checked)}
+                />
+                Noche
+              </label>
+              <label
+                title={layerHelpTitle('invert')}
+                className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
+              >
+                <input
+                  type="checkbox"
+                  checked={Boolean(project.planoInvertido)}
+                  disabled={!project.planoUrl || loading}
+                  onChange={(e) =>
+                    setProject((p) => ({ ...p, planoInvertido: e.target.checked }))
+                  }
+                />
+                Fondo negro
+              </label>
+            </div>
+          </details>
+          <div className="flex overflow-hidden rounded-md border border-white/15 bg-black/40">
+            <button
+              type="button"
+              title="Acercar"
+              aria-label="Acercar"
+              className="min-h-9 min-w-9 px-2 text-sm font-medium text-white hover:bg-white/10"
+              onClick={() => zoomControlsRef.current?.zoomIn()}
+            >
+              +
+            </button>
+            <button
+              type="button"
+              title="Alejar"
+              aria-label="Alejar"
+              className="min-h-9 min-w-9 border-l border-white/15 px-2 text-sm font-medium text-white hover:bg-white/10"
+              onClick={() => zoomControlsRef.current?.zoomOut()}
+            >
+              −
+            </button>
+            <button
+              type="button"
+              title="Restablecer zoom"
+              aria-label="Restablecer zoom"
+              className="min-h-9 min-w-[3rem] border-l border-white/15 px-2 text-[11px] font-medium tabular-nums text-[var(--nexus-text-muted)] hover:bg-white/10"
+              onClick={() => zoomControlsRef.current?.reset()}
+            >
+              {zoomPercent}%
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </>
+  )
+
+  const fileLine = <Mono>{project.planoNombre || 'Sin plano'}</Mono>
+
+  const workLine = (
+    <>
+      <div className="flex shrink-0 gap-0.5 rounded-lg border border-white/10 bg-black/40 p-0.5">
+        <button
+          type="button"
+          className={`rounded-md px-2.5 py-1 text-[11px] font-semibold ${
+            viewMode === 'plano'
+              ? 'bg-[var(--nexus-cyan)] text-black'
+              : 'text-[var(--nexus-text-muted)]'
+          }`}
+          onClick={() => setViewMode('plano')}
+        >
+          Plano
+        </button>
+        <button
+          type="button"
+          className={`rounded-md px-2.5 py-1 text-[11px] font-semibold ${
+            viewMode === 'diagrama'
+              ? 'bg-[var(--nexus-cyan)] text-black'
+              : 'text-[var(--nexus-text-muted)]'
+          }`}
+          onClick={() => setViewMode('diagrama')}
+        >
+          Diagrama
+        </button>
+      </div>
+      {viewMode === 'plano' ? (
+        <button
+          type="button"
+          disabled={!project.planoUrl || loading}
+          onClick={addCameraFromButton}
+          className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-[var(--nexus-cyan)] px-2.5 py-1 text-[11px] font-semibold text-black disabled:opacity-40"
+        >
+          <Camera className="h-3.5 w-3.5" />
+          Cámara
+        </button>
+      ) : null}
+      {viewMode === 'plano' && project.cameras.length > 0 ? (
+        <button
+          type="button"
+          aria-expanded={camerasMenuOpen}
+          aria-haspopup="listbox"
+          title="Ver todas las cámaras del plano"
+          data-cameras-menu
+          onClick={toggleCamerasMenu}
+          className={`inline-flex shrink-0 items-center gap-1 rounded-lg border px-2.5 py-1 text-[11px] font-semibold ${
+            camerasMenuOpen
+              ? 'border-[var(--nexus-cyan)] bg-[var(--nexus-cyan)]/20 text-[var(--nexus-cyan)]'
+              : 'border-white/15 text-[var(--nexus-text-muted)] hover:bg-white/5 hover:text-white'
+          }`}
+        >
+          Cámaras · {project.cameras.length}
+          <ChevronDown
+            className={`h-3.5 w-3.5 transition-transform ${camerasMenuOpen ? 'rotate-180' : ''}`}
+          />
+        </button>
+      ) : null}
+      {viewMode === 'plano' ? (
+        <button
+          type="button"
+          disabled={!project.planoUrl || loading || project.cameras.length === 0}
+          title="Calcula cobertura automática por alcance (semáforo verde/amarillo/rojo)"
+          onClick={() => {
+            setShowFov(true)
+            setViewMode('plano')
+            setSideTab('cctv')
+            setError(null)
+          }}
+          className="inline-flex shrink-0 items-center rounded-lg border border-emerald-400/40 bg-emerald-500/15 px-2.5 py-1 text-[11px] font-semibold text-emerald-200 disabled:opacity-40"
+        >
+          Calcular cobertura
+        </button>
+      ) : null}
+      <button
+        type="button"
+        disabled={!canUndo}
+        title="Deshacer el último cambio (Ctrl+Z)"
+        aria-label="Deshacer"
+        onClick={undoLast}
+        className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-white/15 px-2.5 py-1 text-[11px] font-semibold text-[var(--nexus-text-muted)] hover:bg-white/5 hover:text-white disabled:opacity-40"
+      >
+        <Undo2 className="h-3.5 w-3.5" />
+        Deshacer
+      </button>
+      {calibrateMode ? (
+        <span className="shrink-0 text-[10px] font-semibold text-lime-300">
+          Calibrando {calibMeters} m ({calibPoints.length}/2)
+        </span>
+      ) : null}
     </>
   )
 
@@ -1525,7 +2491,9 @@ export default function NexusVisionArchitectClient() {
       <NetVisionBranchNav
         active={sideTab}
         onSelect={selectSideTab}
-        projectActions={projectActions}
+        fileLine={fileLine}
+        archivo={archivoMenu}
+        tools={workLine}
         submenu={branchSubmenu}
       />,
       headerNavEl,
@@ -1571,263 +2539,45 @@ export default function NexusVisionArchitectClient() {
   )
 
   return (
-    <div className="space-y-3">
+    <div className="flex min-h-[calc(100dvh-7.25rem)] flex-col gap-2">
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*,application/pdf,.pdf,.dwg,.dxf"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0] ?? null
+          e.target.value = ''
+          void onFile(file)
+        }}
+      />
       {headerNav}
-
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex gap-0.5 rounded-lg border border-white/10 bg-black/40 p-0.5">
-          <button
-            type="button"
-            className={`rounded-md px-2.5 py-1 text-[11px] font-semibold ${
-              viewMode === 'plano'
-                ? 'bg-[var(--nexus-cyan)] text-black'
-                : 'text-[var(--nexus-text-muted)]'
-            }`}
-            onClick={() => setViewMode('plano')}
-          >
-            Plano
-          </button>
-          <button
-            type="button"
-            className={`rounded-md px-2.5 py-1 text-[11px] font-semibold ${
-              viewMode === 'diagrama'
-                ? 'bg-[var(--nexus-cyan)] text-black'
-                : 'text-[var(--nexus-text-muted)]'
-            }`}
-            onClick={() => setViewMode('diagrama')}
-          >
-            Diagrama
-          </button>
-        </div>
-        {project.planoUrl ? (
-          <p className="truncate text-xs text-[var(--nexus-text-muted)]">
-            <Mono>{project.planoNombre || 'Plano'}</Mono>
-            {' · '}
-            {project.cameras.length} cam · {project.networkNodes.length} red
-            {' · '}
-            {project.scale.calibrated ? (
-              <span className="text-[var(--nexus-green)]">escala OK</span>
-            ) : (
-              <span className="text-amber-300">
-                escala ~{formatLength(40, project.unitSystem ?? 'metric', 0)}
-              </span>
-            )}
-          </p>
-        ) : null}
-        {viewMode === 'plano' ? (
-          <button
-            type="button"
-            disabled={!project.planoUrl || loading}
-            onClick={addCameraFromButton}
-            className="inline-flex items-center gap-1 rounded-lg bg-[var(--nexus-cyan)] px-2.5 py-1 text-[11px] font-semibold text-black disabled:opacity-40"
-          >
-            <Camera className="h-3.5 w-3.5" />
-            + Cámara
-          </button>
-        ) : null}
-        {viewMode === 'plano' ? (
-          <button
-            type="button"
-            disabled={!project.planoUrl || loading || project.cameras.length === 0}
-            title="Calcula cobertura automática por alcance (semáforo verde/amarillo/rojo)"
-            onClick={() => {
-              setShowFov(true)
-              setViewMode('plano')
-              setSideTab('cctv')
-              setError(null)
-            }}
-            className="inline-flex items-center rounded-lg border border-emerald-400/40 bg-emerald-500/15 px-2.5 py-1 text-[11px] font-semibold text-emerald-200 disabled:opacity-40"
-          >
-            Calcular cobertura
-          </button>
-        ) : null}
-        {viewMode === 'plano' && project.planoUrl ? (
-          <>
-            <NetVisionLayerHelp />
-            <label
-              title={layerHelpTitle('fov')}
-              className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
-            >
-              <input
-                type="checkbox"
-                checked={showFov}
-                onChange={(e) => setShowFov(e.target.checked)}
-              />
-              Visión
-            </label>
-            <label
-              title={layerHelpTitle('wifi')}
-              className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
-            >
-              <input
-                type="checkbox"
-                checked={showWifi}
-                onChange={(e) => setShowWifi(e.target.checked)}
-              />
-              WiFi
-            </label>
-            <label
-              title={layerHelpTitle('sound')}
-              className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
-            >
-              <input
-                type="checkbox"
-                checked={showSound}
-                onChange={(e) => setShowSound(e.target.checked)}
-              />
-              Sonido
-            </label>
-            <label
-              title={layerHelpTitle('links')}
-              className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
-            >
-              <input
-                type="checkbox"
-                checked={showLinks}
-                onChange={(e) => setShowLinks(e.target.checked)}
-              />
-              Enlaces
-            </label>
-            <label
-              title={layerHelpTitle('routes')}
-              className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
-            >
-              <input
-                type="checkbox"
-                checked={showCableRoutes}
-                onChange={(e) => setShowCableRoutes(e.target.checked)}
-              />
-              Rutas
-            </label>
-            <label
-              title={layerHelpTitle('structures')}
-              className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
-            >
-              <input
-                type="checkbox"
-                checked={showStructures}
-                onChange={(e) => setShowStructures(e.target.checked)}
-              />
-              Estructuras
-            </label>
-            <label
-              title={layerHelpTitle('sub')}
-              className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
-            >
-              <input
-                type="checkbox"
-                checked={showUnderground}
-                onChange={(e) => setShowUnderground(e.target.checked)}
-              />
-              Sub
-            </label>
-            <label
-              title={layerHelpTitle('night')}
-              className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
-            >
-              <input
-                type="checkbox"
-                checked={nightMode}
-                onChange={(e) => setNightMode(e.target.checked)}
-              />
-              Noche
-            </label>
-            <button
-              type="button"
-              title={layerHelpTitle('calibrate')}
-              className={`rounded px-2 py-0.5 text-xs font-semibold ${
-                calibrateMode
-                  ? 'bg-[var(--nexus-cyan)] text-black'
-                  : 'text-[var(--nexus-cyan)]'
-              }`}
-              onClick={() => {
-                setCalibrateMode((v) => !v)
-                setCalibPoints([])
-                setDrawStructureMaterial(null)
-                setStructureDraft(null)
-                setDrawUnderground(false)
-                setUndergroundDraft(null)
-                setDrawCable(false)
-                clearCableDraft()
-              }}
-            >
-              Calibrar
-            </button>
-            {calibrateMode ? (
-              <label className="flex items-center gap-1 text-[11px] text-[var(--nexus-text-dim)]">
-                {lengthUnitLabel(project.unitSystem ?? 'metric')}
-                <input
-                  value={calibMeters}
-                  onChange={(e) => setCalibMeters(e.target.value)}
-                  className="w-14 rounded border border-white/10 bg-black/40 px-1 py-0.5 text-xs text-white"
-                />
-                ({calibPoints.length}/2)
-              </label>
-            ) : null}
-            <div
-              className="flex overflow-hidden rounded-md border border-white/15 bg-black/40"
-              title="Zoom del plano"
-            >
-              <button
-                type="button"
-                title="Acercar"
-                aria-label="Acercar"
-                disabled={!project.planoUrl}
-                className="min-h-8 min-w-8 touch-manipulation px-2 py-1 text-sm font-medium text-white hover:bg-white/10 disabled:opacity-40"
-                onClick={() => zoomControlsRef.current?.zoomIn()}
-              >
-                +
-              </button>
-              <button
-                type="button"
-                title="Alejar"
-                aria-label="Alejar"
-                disabled={!project.planoUrl}
-                className="min-h-8 min-w-8 touch-manipulation border-l border-white/15 px-2 py-1 text-sm font-medium text-white hover:bg-white/10 disabled:opacity-40"
-                onClick={() => zoomControlsRef.current?.zoomOut()}
-              >
-                −
-              </button>
-              <button
-                type="button"
-                title="Restablecer zoom"
-                aria-label="Restablecer zoom"
-                disabled={!project.planoUrl}
-                className="min-h-8 min-w-[3rem] touch-manipulation border-l border-white/15 px-2 py-1 text-[11px] font-medium tabular-nums text-[var(--nexus-text-muted)] hover:bg-white/10 disabled:opacity-40"
-                onClick={() => zoomControlsRef.current?.reset()}
-              >
-                {zoomPercent}%
-              </button>
-            </div>
-          </>
-        ) : null}
-      </div>
 
       {error ? (
         <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
           {error}
         </p>
       ) : null}
+      {info ? (
+        <p className="rounded-lg border border-[rgba(0,242,254,0.3)] bg-[rgba(0,242,254,0.08)] px-3 py-2 text-sm text-[var(--nexus-cyan)]">
+          {info}
+        </p>
+      ) : null}
 
-      <div
-        className={
-          inspectorOpen
-            ? 'grid gap-6 xl:grid-cols-[1fr_300px]'
-            : 'grid gap-6 xl:grid-cols-1'
-        }
-      >
-        <GlassCardMotion className="overflow-hidden p-3 sm:p-4">
+      <div className="relative min-h-0 flex-1">
+        <GlassCardMotion className="flex h-full min-h-[360px] flex-col overflow-hidden p-1.5 sm:p-2">
           {!project.planoUrl ? (
             <button
               type="button"
-              onClick={() => fileRef.current?.click()}
+              onClick={openPlanoPicker}
               className="flex min-h-[320px] w-full flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-[rgba(0,242,254,0.35)] bg-[radial-gradient(ellipse_at_center,rgba(0,242,254,0.12),transparent_70%)] px-4 text-center transition hover:border-[rgba(0,242,254,0.55)]"
             >
               <Camera className="h-10 w-10 text-[var(--nexus-cyan)]" />
               <p className="text-sm font-semibold text-white">Sube el plano del inmueble</p>
               <p className="max-w-sm text-xs text-[var(--nexus-text-dim)]">
-                Agrega cámara, switch, AP o NVR con los botones +; luego arrastra en el plano.
-                CCTV: {CAMERA_BRANDS.join(', ')}.
+                PDF vectorial (CAD): se detectan muros, puertas y ventanas al cargar.
+                Luego coloca equipos en el plano amplio y tócalos para configurarlos.
+                CCTV, sonido, internet, domótica y eléctrico.
               </p>
             </button>
           ) : (
@@ -1843,16 +2593,18 @@ export default function NexusVisionArchitectClient() {
                 />
               ) : (
                 <div
-                  className={`h-[min(62vh,560px)] w-full overflow-hidden rounded-xl border border-[rgba(0,242,254,0.2)] bg-black ${
+                  className={`h-[calc(100dvh-11.5rem)] min-h-[420px] w-full overflow-hidden rounded-xl border border-[rgba(0,242,254,0.2)] bg-black ${
                     placeMode ? 'cursor-crosshair' : 'cursor-default'
                   }`}
                 >
                   <CameraPlacementTool
                     backgroundUrl={project.planoUrl}
+                    invertBackground={Boolean(project.planoInvertido)}
                     cameras={project.cameras}
                     networkNodes={project.networkNodes}
+                    planDevices={planDevices}
                     structures={structures}
-                    sectors={sectors}
+                    sectors={activeSectors}
                     visionSpectrum={visionSpectrum}
                     wifiCircles={wifiCircles}
                     wifiSpectrum={wifiSpectrum}
@@ -1863,18 +2615,44 @@ export default function NexusVisionArchitectClient() {
                     selectedId={selectedId}
                     placeMode={placeMode}
                     draftPoint={draftPoint}
-                    draftPoints={drawCable ? cableDraftPoints : undefined}
-                    draftCursor={drawCable ? cableCursor : null}
+                    draftPoints={
+                      calibrateMode
+                        ? calibPoints
+                        : drawCable
+                          ? cableDraftPoints
+                          : drawStructureMaterial && structureDraft
+                            ? [structureDraft]
+                            : undefined
+                    }
+                    draftCursor={
+                      calibrateMode
+                        ? calibCursor
+                        : drawCable
+                          ? cableCursor
+                          : drawStructureMaterial
+                            ? structureCursor
+                            : null
+                    }
                     draftColor={draftColor}
-                    showFov={showFov}
-                    showWifi={showWifi}
-                    showSound={showSound}
+                    draftLabel={draftLabel}
+                    showFov={showActiveCoverage}
+                    visionOpacity={visionOpacity}
+                    showWifi={showWifi && sideTab !== 'sonido' && sideTab !== 'domotica' && sideTab !== 'electrico'}
+                    showSound={showSound && sideTab === 'sonido'}
                     showLinks={showLinks}
                     showCableRoutes={showCableRoutes}
                     showUnderground={showUnderground || sideTab === 'sub'}
                     showStructures={showStructures}
                     onAddAt={onAddAt}
-                    onDraftPointerMove={drawCable ? onCablePointerMove : undefined}
+                    onDraftPointerMove={
+                      drawCable
+                        ? onCablePointerMove
+                        : calibrateMode
+                          ? onCalibPointerMove
+                          : drawStructureMaterial
+                            ? onStructurePointerMove
+                            : undefined
+                    }
                     onFinishPlace={drawCable ? finishCableDraft : undefined}
                     snapPlaceToDevices={drawCable}
                     onMove={onMove}
@@ -1882,15 +2660,16 @@ export default function NexusVisionArchitectClient() {
                     metersPerNormX={project.scale.metersPerNormX}
                     metersPerNormY={project.scale.metersPerNormY}
                     nightMode={nightMode}
+                    onInspect={() => setInspectorOpen(true)}
                     onSelect={(id) => {
                       setSelectedId(id)
-                      setInspectorOpen(true)
                       if (project.cameras.some((c) => c.id === id)) {
                         setShowFov(true)
                         setSideTab('cctv')
                         setViewMode('plano')
                         setCalibrateMode(false)
                         setDrawStructureMaterial(null)
+                        setStructureDraft(null)
                         setDrawUnderground(false)
                         setUndergroundDraft(null)
                         setDrawCable(false)
@@ -1899,6 +2678,18 @@ export default function NexusVisionArchitectClient() {
                         setSideTab('muros')
                         setViewMode('plano')
                         setShowStructures(true)
+                        if (!drawStructureMaterial) {
+                          setStructureDraft(null)
+                          setDrawUnderground(false)
+                          setUndergroundDraft(null)
+                          setDrawCable(false)
+                          clearCableDraft()
+                        }
+                      } else if (planDevices.some((d) => d.id === id)) {
+                        const dev = planDevices.find((d) => d.id === id)!
+                        setSideTab(dev.discipline)
+                        setViewMode('plano')
+                        setCalibrateMode(false)
                         setDrawStructureMaterial(null)
                         setStructureDraft(null)
                         setDrawUnderground(false)
@@ -1906,7 +2697,7 @@ export default function NexusVisionArchitectClient() {
                         setDrawCable(false)
                         clearCableDraft()
                       } else if (project.networkNodes.some((n) => n.id === id)) {
-                        setSideTab('red')
+                        setSideTab('internet')
                         setViewMode('plano')
                         setCalibrateMode(false)
                         setDrawStructureMaterial(null)
@@ -1944,22 +2735,22 @@ export default function NexusVisionArchitectClient() {
                   />
                 </div>
               )}
-              {viewMode === 'plano' && showFov && project.cameras.length > 0 ? (
-                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-white/10 bg-black/30 px-2.5 py-1.5 text-[10px] text-[var(--nexus-text-muted)]">
+              {viewMode === 'plano' && showActiveCoverage ? (
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[10px] text-[var(--nexus-text-muted)]">
                   <span className="font-semibold uppercase tracking-wide text-white">
-                    Semáforo cobertura
+                    Semáforo
                   </span>
                   <span className="inline-flex items-center gap-1">
-                    <span className="h-2.5 w-2.5 rounded-sm bg-emerald-500" />
-                    Verde · detección objetos/personas
+                    <span className="h-2 w-2 rounded-sm bg-emerald-500" />
+                    Verde
                   </span>
                   <span className="inline-flex items-center gap-1">
-                    <span className="h-2.5 w-2.5 rounded-sm bg-yellow-400" />
-                    Amarillo · más lejos
+                    <span className="h-2 w-2 rounded-sm bg-yellow-400" />
+                    Amarillo
                   </span>
                   <span className="inline-flex items-center gap-1">
-                    <span className="h-2.5 w-2.5 rounded-sm bg-red-500" />
-                    Rojo · detección dudosa (con visión)
+                    <span className="h-2 w-2 rounded-sm bg-red-500" />
+                    Rojo
                   </span>
                 </div>
               ) : null}
@@ -1967,14 +2758,123 @@ export default function NexusVisionArchitectClient() {
           )}
         </GlassCardMotion>
 
+        {project.planoUrl &&
+        viewMode === 'plano' &&
+        project.cameras.length > 0 &&
+        !inspectorOpen ? (
+          <div
+            className="absolute bottom-4 left-4 z-20"
+            data-cameras-menu
+          >
+            <button
+              type="button"
+              aria-expanded={camerasMenuOpen}
+              aria-haspopup="listbox"
+              title="Ver todas las cámaras agregadas"
+              onClick={toggleCamerasMenu}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-[11px] font-semibold shadow-lg backdrop-blur-md ${
+                camerasMenuOpen
+                  ? 'border-[var(--nexus-cyan)] bg-[var(--nexus-cyan)] text-black'
+                  : 'border-white/20 bg-[#071018]/90 text-[var(--nexus-cyan)]'
+              }`}
+            >
+              <Camera className="h-3.5 w-3.5" />
+              Cámaras · {project.cameras.length}
+              <ChevronDown
+                className={`h-3.5 w-3.5 transition-transform ${camerasMenuOpen ? 'rotate-180' : ''}`}
+              />
+            </button>
+            {camerasMenuOpen ? (
+              <div
+                role="listbox"
+                aria-label="Cámaras agregadas"
+                className="absolute bottom-[calc(100%+8px)] left-0 max-h-[min(50vh,320px)] w-[min(280px,80vw)] overflow-y-auto rounded-xl border border-white/15 bg-[#071018]/98 p-1.5 shadow-xl backdrop-blur-md"
+              >
+                <p className="px-2 py-1 text-[9px] font-semibold uppercase tracking-wide text-[var(--nexus-text-dim)]">
+                  Cámaras en el plano
+                </p>
+                {project.cameras.map((c) => {
+                  const model = getCameraModelOrDefault(c.modelId)
+                  const active = selectedId === c.id
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      role="option"
+                      aria-selected={active}
+                      onClick={() => selectCameraFromMenu(c.id, false)}
+                      className={`flex w-full flex-col items-start gap-0.5 rounded-lg px-2.5 py-2 text-left ${
+                        active
+                          ? 'bg-[var(--nexus-cyan)] text-black'
+                          : 'text-white hover:bg-white/10'
+                      }`}
+                    >
+                      <span className="text-[12px] font-semibold">{c.label}</span>
+                      <span
+                        className={`line-clamp-1 text-[10px] ${
+                          active ? 'text-black/70' : 'text-[var(--nexus-text-muted)]'
+                        }`}
+                      >
+                        {model.brand} · {model.name}
+                      </span>
+                    </button>
+                  )
+                })}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCamerasMenuOpen(false)
+                    setSideTab('cctv')
+                    setInspectorOpen(true)
+                  }}
+                  className="mt-1 w-full rounded-lg border border-white/10 px-2.5 py-1.5 text-[10px] font-semibold text-[var(--nexus-cyan)] hover:bg-white/5"
+                >
+                  Abrir inspector CCTV
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {selectedId && !inspectorOpen && project.planoUrl && viewMode === 'plano' ? (
+          <button
+            type="button"
+            onClick={() => setInspectorOpen(true)}
+            className="absolute bottom-4 right-4 z-20 rounded-full bg-[var(--nexus-cyan)] px-3.5 py-2 text-[11px] font-semibold text-black shadow-lg"
+          >
+            Configurar{' '}
+            {selectedCam?.label ||
+              selectedNet?.label ||
+              selectedPlanDevice?.label ||
+              selectedStructure?.label ||
+              selectedManualCable?.label ||
+              selectedUnderground?.label ||
+              'elemento'}
+          </button>
+        ) : null}
+
         {inspectorOpen ? (
-        <GlassCardMotion delay={0.04} className="space-y-3 p-4">
+        <div className="absolute inset-x-0 bottom-0 z-30 max-h-[min(52dvh,480px)] overflow-y-auto rounded-t-2xl border border-white/15 bg-[#071018]/96 p-3 shadow-[0_-12px_40px_rgba(0,0,0,0.45)] backdrop-blur-md xl:inset-y-2 xl:bottom-2 xl:left-auto xl:right-2 xl:w-[min(340px,40vw)] xl:max-h-[calc(100%-1rem)] xl:rounded-2xl">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-text-muted)]">
+              Configurar elemento
+            </p>
+            <button
+              type="button"
+              onClick={() => setInspectorOpen(false)}
+              className="rounded-md px-2 py-1 text-[11px] font-semibold text-[var(--nexus-cyan)] hover:bg-white/10"
+            >
+              Cerrar · volver al plano
+            </button>
+          </div>
           <NetVisionSelectedProps
             camera={selectedCam}
             network={selectedNet}
+            planDevice={selectedPlanDevice}
             structure={selectedStructure}
             cable={selectedManualCable}
             nightMode={nightMode}
+            unitSystem={project.unitSystem ?? 'metric'}
             onPatchCamera={(patch) => {
               if (!selectedCam) return
               patchCamera(selectedCam.id, patch)
@@ -1982,6 +2882,10 @@ export default function NexusVisionArchitectClient() {
             onPatchNetwork={(patch) => {
               if (!selectedNet) return
               patchNetworkNode(selectedNet.id, patch)
+            }}
+            onPatchPlanDevice={(patch) => {
+              if (!selectedPlanDevice) return
+              patchPlanDevice(selectedPlanDevice.id, patch)
             }}
             onPatchStructure={(patch) => {
               if (!selectedStructure) return
@@ -2021,10 +2925,14 @@ export default function NexusVisionArchitectClient() {
               draftPoint={structureDraft}
               disabled={!project.planoUrl || loading}
               showOnPlan={showStructures}
+              canDetectPdf={canDetectPdfWalls}
+              detecting={loading && canDetectPdfWalls}
+              onDetectFromPdf={() => void detectWallsFromLoadedPdf()}
               onShowOnPlan={setShowStructures}
               onDrawMaterial={(id) => {
                 setDrawStructureMaterial(id)
                 setStructureDraft(null)
+                setStructureCursor(null)
                 setDrawUnderground(false)
                 setUndergroundDraft(null)
                 setDrawCable(false)
@@ -2032,7 +2940,6 @@ export default function NexusVisionArchitectClient() {
                 if (id) {
                   setCalibrateMode(false)
                   setViewMode('plano')
-                  setShowFov(true)
                   setShowStructures(true)
                 }
               }}
@@ -2042,7 +2949,10 @@ export default function NexusVisionArchitectClient() {
                 setSideTab('muros')
               }}
               onRemove={quitar}
-              onFinishDraft={() => setStructureDraft(null)}
+              onFinishDraft={() => {
+                setStructureDraft(null)
+                setStructureCursor(null)
+              }}
             />
           ) : sideTab === 'norm' ? (
             <ComplianceValidatorPanel
@@ -2155,7 +3065,45 @@ export default function NexusVisionArchitectClient() {
                 />
               </div>
             </div>
-          ) : sideTab === 'red' ? (
+          ) : sideTab === 'sonido' || sideTab === 'domotica' || sideTab === 'electrico' ? (
+            <div className="space-y-2">
+              <h2 className="text-sm font-bold uppercase tracking-wide text-[var(--nexus-text-muted)]">
+                Plano {PLAN_DISCIPLINE_LABEL[sideTab]}
+              </h2>
+              <p className="text-[10px] text-[var(--nexus-text-dim)]">
+                Coloca todos los equipos en el plano. Luego toca cada uno para
+                modelo, alcance y orientación.
+              </p>
+              {planDevices.filter((d) => d.discipline === sideTab).length > 0 ? (
+                <div className="flex flex-wrap gap-1">
+                  {planDevices
+                    .filter((d) => d.discipline === sideTab)
+                    .map((d) => (
+                      <button
+                        key={d.id}
+                        type="button"
+                        className={`min-h-8 rounded-md px-2 text-[11px] font-semibold ${
+                          selectedId === d.id
+                            ? 'bg-[var(--nexus-cyan)] text-black'
+                            : 'border border-white/15 text-[var(--nexus-cyan)]'
+                        }`}
+                        onClick={() => {
+                          setSelectedId(d.id)
+                          setInspectorOpen(true)
+                        }}
+                      >
+                        {d.label}
+                      </button>
+                    ))}
+                </div>
+              ) : (
+                <p className="text-[10px] text-[var(--nexus-text-dim)]">
+                  Usa + {PLAN_KIND_LABEL[planDeviceKinds(sideTab)[0]!]} arriba para
+                  agregar el primero.
+                </p>
+              )}
+            </div>
+          ) : sideTab === 'internet' ? (
             <NetworkDesigner
               nodes={project.networkNodes}
               defaultModels={defaultNetModels}
@@ -2190,7 +3138,7 @@ export default function NexusVisionArchitectClient() {
               onSelectNode={(id) => {
                 setSelectedId(id)
                 setInspectorOpen(true)
-                setSideTab('red')
+                setSideTab('internet')
               }}
               onRemoveNode={quitar}
             />
@@ -2208,22 +3156,43 @@ export default function NexusVisionArchitectClient() {
                 <Camera className="h-3.5 w-3.5" />
                 + Agregar cámara
               </button>
-              <p className="text-[10px] text-[var(--nexus-text-dim)]">
-                La cámara se agrega al plano; arrástrala para ubicarla. Elige el tipo en el
-                submenú CCTV bajo NetVision.
-              </p>
+              {project.cameras.length > 0 ? (
+                <div className="flex flex-wrap gap-1">
+                  {project.cameras.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      className={`min-h-8 rounded-md px-2 text-[11px] font-semibold ${
+                        selectedId === c.id
+                          ? 'bg-[var(--nexus-cyan)] text-black'
+                          : 'border border-white/15 text-[var(--nexus-cyan)]'
+                      }`}
+                      onClick={() => selectCameraFromMenu(c.id, true)}
+                    >
+                      {c.label}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[10px] text-[var(--nexus-text-dim)]">
+                  La cámara se agrega al plano; arrástrala para ubicarla. Elige el tipo en el
+                  submenú CCTV bajo NetVision.
+                </p>
+              )}
               {selectedCam ? (
                 <div className="space-y-2 text-xs">
-                  <p className="text-[10px] text-[var(--nexus-text-dim)]">
-                    Modelo y etiqueta arriba · aquí ajustas la óptica.
-                  </p>
                   {(() => {
                     const mode = nightMode ? 'night' : 'day'
                     const vision = effectiveCameraVision(selectedCam, mode)
                     const lenses = effectiveCameraLenses(selectedCam, mode)
                     const isDual = lenses.length >= 2
                     const model = getCameraModelOrDefault(selectedCam.modelId)
-                    const bands = visionBandRangesM(vision.rangeM)
+                    const ground = projectGroundCoverage({
+                      heightM: selectedCam.mountHeightM,
+                      tiltDeg: selectedCam.tiltDeg ?? 0,
+                      hFovDeg: vision.fovDeg,
+                      rangeM: vision.rangeM,
+                    })
                     const dualSummary = isDual
                       ? lenses
                           .map(
@@ -2240,8 +3209,15 @@ export default function NexusVisionArchitectClient() {
                             ? `${vision.yawDeg}° · Dual · ${dualSummary}`
                             : dualSummary
                         }
-                        defaultOpen={false}
+                        defaultOpen
                       >
+                        <div className="rounded-lg border border-white/10 bg-black/25 px-2 py-1.5 text-[10px] leading-relaxed">
+                          <p className="font-semibold text-white">{model.name}</p>
+                          <p className="text-[var(--nexus-cyan)]">{cameraVisionSummary(model)}</p>
+                          {model.notes ? (
+                            <p className="mt-1 text-[var(--nexus-text-muted)]">{model.notes}</p>
+                          ) : null}
+                        </div>
                         {isDual ? (
                           <div className="space-y-1.5 rounded-lg border border-orange-400/25 bg-orange-400/5 px-2 py-1.5 text-[10px]">
                             <p className="font-semibold uppercase tracking-wide text-orange-200">
@@ -2256,37 +3232,91 @@ export default function NexusVisionArchitectClient() {
                                     : 'text-[var(--nexus-cyan)]'
                                 }
                               >
-                                {l.lensId === 'tele' ? 'Naranja' : 'Cyan'} · {l.label}: FOV{' '}
+                                {l.lensId === 'tele' ? 'Naranja' : 'Cyan'} · {l.label}: {l.yawDeg}° · FOV{' '}
                                 {l.fovDeg}° ·{' '}
                                 {formatLength(l.rangeM, project.unitSystem ?? 'metric')}
                               </p>
+                            ))}
+                            {lenses.slice(1).map((l) => (
+                              <div key={`yaw-${l.lensId}`} className="flex flex-wrap items-center gap-2">
+                                <label className="flex items-center gap-1 text-orange-200">
+                                  Orientación {l.label.replace(/\s*\d.*$/, '').toLowerCase()}
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={359}
+                                    step={5}
+                                    value={l.yawDeg}
+                                    onChange={(e) => {
+                                      const v = Number(e.target.value)
+                                      if (!Number.isFinite(v)) return
+                                      adjustCameraVision(selectedCam.id, { yawDeg: ((v % 360) + 360) % 360 }, l.lensId)
+                                    }}
+                                    className="w-16 rounded border border-white/10 bg-black/40 px-1.5 py-0.5 text-[11px] text-white"
+                                  />
+                                  °
+                                </label>
+                                <button
+                                  type="button"
+                                  className="text-[10px] text-[var(--nexus-text-muted)] underline"
+                                  onClick={() => {
+                                    const rest = { ...(selectedCam.lensVision ?? {}) }
+                                    delete rest[l.lensId]
+                                    updateSelectedCam({
+                                      lensVision: Object.keys(rest).length ? rest : undefined,
+                                    })
+                                  }}
+                                >
+                                  Alinear con {lenses[0]!.label.replace(/\s*\d.*$/, '').toLowerCase()}
+                                </button>
+                              </div>
                             ))}
                           </div>
                         ) : null}
                         <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-cyan)]">
                           Espectro de visión · semáforo
-                          {isDual ? ' (gran angular)' : ''}
                         </p>
-                        <ul className="space-y-0.5 rounded-lg border border-white/10 bg-black/25 px-2 py-1.5 text-[10px]">
-                          <li className="flex items-center gap-1.5 text-emerald-300">
-                            <span className="h-2 w-2 rounded-sm bg-emerald-500" />
-                            0–
-                            {formatLength(bands.greenMaxM, project.unitSystem ?? 'metric')} ·
-                            detección objetos/personas
-                          </li>
-                          <li className="flex items-center gap-1.5 text-yellow-200">
-                            <span className="h-2 w-2 rounded-sm bg-yellow-400" />
-                            {formatLength(bands.greenMaxM, project.unitSystem ?? 'metric')}–
-                            {formatLength(bands.yellowMaxM, project.unitSystem ?? 'metric')} · más
-                            lejos
-                          </li>
-                          <li className="flex items-center gap-1.5 text-red-300">
-                            <span className="h-2 w-2 rounded-sm bg-red-500" />
-                            {formatLength(bands.yellowMaxM, project.unitSystem ?? 'metric')}–
-                            {formatLength(bands.redMaxM, project.unitSystem ?? 'metric')} ·
-                            detección dudosa
-                          </li>
-                        </ul>
+                        {lenses.map((l) => {
+                          const lb = visionBandRangesM(l.rangeM, l.catalogRangeM)
+                          return (
+                            <p
+                              key={`bands-${l.lensId}`}
+                              className="rounded-lg border border-white/10 bg-black/25 px-2 py-1.5 text-[10px] leading-relaxed"
+                            >
+                              {isDual ? (
+                                <span className="font-semibold text-white/80">
+                                  {l.lensId === 'tele' ? 'PTZ tele' : l.label.split(' (')[0]}
+                                  {': '}
+                                </span>
+                              ) : null}
+                              <span className="text-emerald-300">
+                                Verde 0–
+                                {formatLength(lb.greenMaxM, project.unitSystem ?? 'metric')}
+                              </span>
+                              {' · '}
+                              <span className="text-orange-300">
+                                naranja{' '}
+                                {formatLength(lb.yellowMaxM, project.unitSystem ?? 'metric')}
+                              </span>
+                              {' · '}
+                              <span className="text-red-300">
+                                rojo hasta{' '}
+                                {formatLength(lb.redMaxM, project.unitSystem ?? 'metric')}
+                              </span>
+                              .
+                            </p>
+                          )
+                        })}
+                        <p className="rounded-lg border border-white/10 bg-black/25 px-2 py-1.5 text-[10px] leading-relaxed">
+                          Montaje {formatLength(selectedCam.mountHeightM, project.unitSystem ?? 'metric')} ·
+                          inclinación {Math.round(selectedCam.tiltDeg ?? 0)}°
+                          {ground.nearM > 0.05
+                            ? ` · en el piso ciega ${formatLength(ground.nearM, project.unitSystem ?? 'metric')} / llega ${formatLength(ground.farM, project.unitSystem ?? 'metric')}`
+                            : ` · horizonte, llega ${formatLength(ground.farM, project.unitSystem ?? 'metric')}`}
+                          . Ajústalo en la ficha de la cámara (arriba).
+                          Verde y naranja son metros de ficha: estirar el cono no los agranda.
+                          Si se solapan, prevalece verde sobre naranja y naranja sobre rojo.
+                        </p>
                         <label className="block">
                           <span className="text-[var(--nexus-text-dim)]">
                             Orientación {vision.yawDeg}°
@@ -2304,7 +3334,7 @@ export default function NexusVisionArchitectClient() {
                         </label>
                         <label className="block">
                           <span className="text-[var(--nexus-text-dim)]">
-                            Apertura total {vision.fovDeg}°
+                            Apertura {vision.fovDeg}°
                             {isDual ? ' · gran angular' : ''}
                             {selectedCam.fovDeg == null &&
                             selectedCam.fovLeftDeg == null &&
@@ -2312,6 +3342,29 @@ export default function NexusVisionArchitectClient() {
                               ? ' · catálogo'
                               : ''}
                           </span>
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {FOV_PRESETS_DEG.map((deg) => (
+                              <button
+                                key={deg}
+                                type="button"
+                                className={`min-h-8 rounded-md px-2 text-[11px] font-semibold ${
+                                  Math.abs(vision.fovDeg - deg) <= 2
+                                    ? 'bg-[var(--nexus-cyan)] text-black'
+                                    : 'border border-white/15 text-[var(--nexus-cyan)]'
+                                }`}
+                                onClick={() => {
+                                  const half = Math.round(deg / 2)
+                                  updateSelectedCam({
+                                    fovDeg: deg,
+                                    fovLeftDeg: half,
+                                    fovRightDeg: deg - half,
+                                  })
+                                }}
+                              >
+                                {deg}°
+                              </button>
+                            ))}
+                          </div>
                           <input
                             type="range"
                             min={20}
@@ -2329,50 +3382,6 @@ export default function NexusVisionArchitectClient() {
                             className="mt-1 w-full"
                           />
                         </label>
-                        <div className="grid grid-cols-2 gap-2">
-                          <label className="block">
-                            <span className="text-[var(--nexus-text-dim)]">
-                              Lado izq. {vision.fovLeftDeg}°
-                            </span>
-                            <input
-                              type="range"
-                              min={10}
-                              max={85}
-                              value={vision.fovLeftDeg}
-                              onChange={(e) => {
-                                const left = Number(e.target.value)
-                                const right = vision.fovRightDeg
-                                updateSelectedCam({
-                                  fovLeftDeg: left,
-                                  fovRightDeg: right,
-                                  fovDeg: left + right,
-                                })
-                              }}
-                              className="mt-1 w-full"
-                            />
-                          </label>
-                          <label className="block">
-                            <span className="text-[var(--nexus-text-dim)]">
-                              Lado der. {vision.fovRightDeg}°
-                            </span>
-                            <input
-                              type="range"
-                              min={10}
-                              max={85}
-                              value={vision.fovRightDeg}
-                              onChange={(e) => {
-                                const right = Number(e.target.value)
-                                const left = vision.fovLeftDeg
-                                updateSelectedCam({
-                                  fovLeftDeg: left,
-                                  fovRightDeg: right,
-                                  fovDeg: left + right,
-                                })
-                              }}
-                              className="mt-1 w-full"
-                            />
-                          </label>
-                        </div>
                         <label className="block">
                           <span className="text-[var(--nexus-text-dim)]">
                             Alcance{' '}
@@ -2381,6 +3390,22 @@ export default function NexusVisionArchitectClient() {
                             {selectedCam.rangeM == null ? ' · catálogo' : ''}
                             {nightMode ? ' · noche' : ' · día'}
                           </span>
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {RANGE_PRESETS_M.map((meters) => (
+                              <button
+                                key={meters}
+                                type="button"
+                                className={`min-h-8 rounded-md px-2 text-[11px] font-semibold ${
+                                  Math.abs(vision.rangeM - meters) <= 0.6
+                                    ? 'bg-[var(--nexus-cyan)] text-black'
+                                    : 'border border-white/15 text-[var(--nexus-cyan)]'
+                                }`}
+                                onClick={() => updateSelectedCam({ rangeM: meters })}
+                              >
+                                {formatLength(meters, project.unitSystem ?? 'metric', 0)}
+                              </button>
+                            ))}
+                          </div>
                           <input
                             type="range"
                             min={2}
@@ -2393,6 +3418,71 @@ export default function NexusVisionArchitectClient() {
                             className="mt-1 w-full"
                           />
                         </label>
+                        {Math.abs(vision.fovLeftDeg - vision.fovRightDeg) > 1 ? (
+                          <button
+                            type="button"
+                            className="min-h-8 w-full rounded-md border border-[var(--nexus-cyan)]/40 bg-[var(--nexus-cyan)]/10 text-[11px] font-semibold text-[var(--nexus-cyan)]"
+                            onClick={() => {
+                              const half = Math.round(vision.fovDeg / 2)
+                              updateSelectedCam({
+                                fovDeg: half * 2,
+                                fovLeftDeg: half,
+                                fovRightDeg: half,
+                              })
+                            }}
+                          >
+                            Igualar lados ({vision.fovLeftDeg}° / {vision.fovRightDeg}°)
+                          </button>
+                        ) : null}
+                        <details className="rounded-lg border border-white/10 bg-black/20 px-2 py-1">
+                          <summary className="cursor-pointer text-[10px] text-[var(--nexus-text-dim)]">
+                            Ajuste fino por lado (avanzado)
+                          </summary>
+                          <div className="mt-1.5 grid grid-cols-2 gap-2">
+                            <label className="block">
+                              <span className="text-[var(--nexus-text-dim)]">
+                                Lado izq. {vision.fovLeftDeg}°
+                              </span>
+                              <input
+                                type="range"
+                                min={10}
+                                max={85}
+                                value={vision.fovLeftDeg}
+                                onChange={(e) => {
+                                  const left = Number(e.target.value)
+                                  const right = vision.fovRightDeg
+                                  updateSelectedCam({
+                                    fovLeftDeg: left,
+                                    fovRightDeg: right,
+                                    fovDeg: left + right,
+                                  })
+                                }}
+                                className="mt-1 w-full"
+                              />
+                            </label>
+                            <label className="block">
+                              <span className="text-[var(--nexus-text-dim)]">
+                                Lado der. {vision.fovRightDeg}°
+                              </span>
+                              <input
+                                type="range"
+                                min={10}
+                                max={85}
+                                value={vision.fovRightDeg}
+                                onChange={(e) => {
+                                  const right = Number(e.target.value)
+                                  const left = vision.fovLeftDeg
+                                  updateSelectedCam({
+                                    fovLeftDeg: left,
+                                    fovRightDeg: right,
+                                    fovDeg: left + right,
+                                  })
+                                }}
+                                className="mt-1 w-full"
+                              />
+                            </label>
+                          </div>
+                        </details>
                         <button
                           type="button"
                           className="text-[10px] text-[var(--nexus-text-muted)] underline"
@@ -2408,12 +3498,11 @@ export default function NexusVisionArchitectClient() {
                           {nightMode ? model.rangeNightM : model.rangeDayM} m)
                         </button>
                         <p className="text-[10px] text-[var(--nexus-text-dim)]">
-                          En el plano: punto cyan = orientación/alcance; laterales = apertura de
-                          cada lado (independiente). Grados en el centro del espectro.
+                          Plano: arrastra el cono o el punto del medio para girar; los lados
+                          para la apertura; el anillo de la punta para el alcance.
                           {isDual
-                            ? ' Dual: cono cyan (angular) + naranja (tele).'
+                            ? ' Dual: cada cono es autónomo; arrastra el cyan (angular) o el naranja (tele) para que miren a lugares distintos.'
                             : ''}
-                          {` · ${model.poeWatts} W · ${model.bitrateMbps} Mbps`}
                         </p>
                       </NetVisionCollapsible>
                     )
@@ -2421,14 +3510,14 @@ export default function NexusVisionArchitectClient() {
                 </div>
               ) : !hasSelection ? (
                 <p className="text-xs text-[var(--nexus-text-dim)]">
-                  Selecciona una cámara, nodo, muro o cable en el plano.
+                  Coloca equipos en el plano amplio. Toca uno para configurarlo.
                 </p>
               ) : null}
             </>
           )}
 
           {inspectorFooter}
-        </GlassCardMotion>
+        </div>
         ) : null}
       </div>
     </div>

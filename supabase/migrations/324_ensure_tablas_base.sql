@@ -1,6 +1,6 @@
 -- Tablas base que a veces faltan en Preview si el padre ya marcó 004/008/031
 -- como applied con otro contenido histórico. Idempotente.
--- Versión 320: no comparte prefijo con 031 ni 198 (el CLI ordena por
+-- Versión 324: no comparte prefijo con 031 ni 198 (el CLI ordena por
 -- nombre de archivo y 0311/1980 hacían parecer que 031/198 faltaban).
 
 create table if not exists public.empresas (
