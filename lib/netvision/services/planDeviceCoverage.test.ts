@@ -63,6 +63,6 @@ describe('buildApCoverageSectors', () => {
       [],
     )
     assert.equal(sectors.length, 1)
-    assert.ok((sectors[0]!.yellowPolygon?.length ?? 0) >= 3)
+    assert.ok((sectors[0]!.greenPolygon?.length ?? 0) >= 3)
   })
 })
