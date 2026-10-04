@@ -71,22 +71,25 @@ export default function NetVisionPlanoLookControls({
         >
           Cotas
         </p>
-        <div className="flex flex-wrap gap-1">
+        <div className="flex flex-wrap gap-1.5">
           {COTA_CHIPS.map((chip) => {
             const active = color === chip.id
             return (
               <button
                 key={chip.id}
                 type="button"
+                data-nv-cota={chip.id}
                 disabled={disabled || !invertido}
                 title={
                   chip.id === 'auto'
                     ? 'Neón automático según la forma de cada cota'
-                    : `Acotaciones en ${chip.label.toLowerCase()} fluorescente`
+                    : chip.id === 'blanco'
+                      ? 'Acotaciones en blanco'
+                      : `Acotaciones en ${chip.label.toLowerCase()}`
                 }
                 aria-pressed={active}
                 onClick={() => onCotaColor(chip.id)}
-                className={`min-h-8 rounded-md px-2 text-[11px] font-semibold disabled:opacity-40 ${
+                className={`inline-flex min-h-9 items-center gap-1.5 rounded-md px-2.5 text-[11px] font-semibold disabled:opacity-40 ${
                   active
                     ? 'ring-1 ring-white/80'
                     : 'border border-white/15 bg-black/30 hover:bg-white/5'
@@ -103,6 +106,16 @@ export default function NetVisionPlanoLookControls({
                       : { color: 'var(--nexus-text-muted)' }
                 }
               >
+                {chip.color ? (
+                  <span
+                    aria-hidden
+                    className="h-2.5 w-2.5 shrink-0 rounded-full"
+                    style={{
+                      backgroundColor: chip.color,
+                      boxShadow: `0 0 7px ${chip.color}`,
+                    }}
+                  />
+                ) : null}
                 {chip.label}
               </button>
             )
