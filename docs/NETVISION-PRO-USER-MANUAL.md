@@ -406,7 +406,7 @@ Vista **Diagrama** → PNG / SVG / PDF.
 
 ### Plano
 
-Cabecera → **PNG**.
+**Archivo → PDF** abre una hoja de impresión (no un archivo ciego en iPad): logo de Casa Inteligente junto a *Casa Inteligente C.A.*, **Atrás** para volver al editor e **Imprimir / PDF** para guardar o imprimir. **PNG** descarga la captura con el mismo rótulo.
 
 ### Presupuesto / reporte largo
 

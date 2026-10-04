@@ -1,6 +1,7 @@
 /** Rótulo de plano: proyecto arriba; empresa, fecha y tipo abajo. */
 
 export const ROTULO_COMPANY = 'Casa Inteligente C.A.'
+export const ROTULO_LOGO_SRC = '/logo-casa-inteligente.png'
 
 export const PLANO_TIPO_POR_RAMA = {
   cctv: 'CCTV',
@@ -64,6 +65,14 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   })
 }
 
+async function loadLogoOptional(): Promise<HTMLImageElement | null> {
+  try {
+    return await loadImage(ROTULO_LOGO_SRC)
+  } catch {
+    return null
+  }
+}
+
 /** Enmarca la captura con el rótulo para PNG / PDF. */
 export async function composePlanoRotuloImage(
   imageDataUrl: string,
@@ -107,8 +116,16 @@ export async function composePlanoRotuloImage(
   ctx.font = `600 ${Math.round(band * 0.32)}px system-ui, sans-serif`
   const footerY = canvas.height - band / 2
   const col = canvas.width / 3
+  const logo = await loadLogoOptional()
+  const logoSize = Math.round(band * 0.7)
+  let companyX = pad
+  if (logo) {
+    const logoY = Math.round(footerY - logoSize / 2)
+    ctx.drawImage(logo, pad, logoY, logoSize, logoSize)
+    companyX = pad + logoSize + Math.max(6, Math.round(pad * 0.45))
+  }
   ctx.textAlign = 'left'
-  ctx.fillText(rotulo.company, pad, footerY, col - pad)
+  ctx.fillText(rotulo.company, companyX, footerY, Math.max(24, col - (companyX - pad) - 4))
   ctx.textAlign = 'center'
   ctx.fillText(rotulo.dateLabel, canvas.width / 2, footerY, col)
   ctx.textAlign = 'right'

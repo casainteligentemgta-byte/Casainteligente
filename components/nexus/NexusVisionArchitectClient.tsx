@@ -179,7 +179,10 @@ import {
   snapCableDrawPoint,
 } from '@/lib/netvision/utils/cableDraw'
 import { downloadDataUrl } from '@/lib/netvision/utils/exporters'
-import { downloadNetVisionPlanPdf } from '@/lib/netvision/utils/exportPlanPdf'
+import {
+  planoPrintHref,
+  savePlanoPrintPayloadResilient,
+} from '@/lib/netvision/utils/planoPrint'
 import {
   buildPlanoRotulo,
   composePlanoRotuloImage,
@@ -1894,31 +1897,30 @@ export default function NexusVisionArchitectClient() {
     setExportingPdf(true)
     setError(null)
     try {
+      saveProject(project)
       const rotulo = buildPlanoRotulo({
         projectName: project.name,
         branch: sideTab,
       })
-      const imageDataUrl =
-        (await capturePlanoConRotulo('image/jpeg')) ??
-        stage.toDataURL({
-          pixelRatio: 2,
-          mimeType: 'image/jpeg',
-          quality: 0.92,
-        })
-      await downloadNetVisionPlanPdf({
+      const imageDataUrl = stage.toDataURL({
+        pixelRatio: 1.5,
+        mimeType: 'image/jpeg',
+        quality: 0.82,
+      })
+      await savePlanoPrintPayloadResilient({
+        v: 1,
+        projectId: project.id,
+        returnHref: '/nexus/vision',
         imageDataUrl,
-        projectName: rotulo.projectName,
+        rotulo,
         planoNombre: project.planoNombre,
         cameraCount: project.cameras.length,
         networkCount: project.networkNodes.length,
         structureCount: (project.structures ?? []).length,
-        company: rotulo.company,
-        planType: rotulo.planType,
-        generatedAt: rotulo.dateLabel,
       })
+      window.location.assign(planoPrintHref(project.id, sideTab))
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo exportar el PDF del plano.')
-    } finally {
       setExportingPdf(false)
     }
   }
