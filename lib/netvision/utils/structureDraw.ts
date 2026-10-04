@@ -82,3 +82,47 @@ export function structureLabelPrefix(materialId: string): string {
   if (materialId === 'concrete') return 'CON'
   return 'DRY'
 }
+
+export type StructureDrawPoint = { x: number; y: number }
+
+export type StructureDrawAdvance =
+  | { type: 'start'; draft: StructureDrawPoint }
+  | { type: 'too-short'; draft: StructureDrawPoint }
+  | {
+      type: 'segment'
+      x1: number
+      y1: number
+      x2: number
+      y2: number
+      nextDraft: StructureDrawPoint
+    }
+
+const MIN_STRUCTURE_LEN = 0.008
+
+/**
+ * Primer clic = origen. Segundo clic = graba el tramo H/V y sigue desde esa esquina.
+ * Usa el borrador que le pases (no el de un closure viejo).
+ */
+export function advanceStructureDraw(
+  draft: StructureDrawPoint | null,
+  raw: StructureDrawPoint,
+  walls: { x1: number; y1: number; x2: number; y2: number }[],
+  minLen = MIN_STRUCTURE_LEN,
+): StructureDrawAdvance {
+  if (!draft) {
+    return { type: 'start', draft: snapToStructureJoints(raw, walls) }
+  }
+  const snapped = snapOrtho90(draft, raw)
+  const joined = snapToStructureJointsAligned(draft, snapped, walls)
+  const dx = Math.abs(draft.x - joined.x)
+  const dy = Math.abs(draft.y - joined.y)
+  if (dx + dy < minLen) return { type: 'too-short', draft }
+  return {
+    type: 'segment',
+    x1: draft.x,
+    y1: draft.y,
+    x2: joined.x,
+    y2: joined.y,
+    nextDraft: joined,
+  }
+}

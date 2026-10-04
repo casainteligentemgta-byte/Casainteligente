@@ -164,6 +164,7 @@ import type {
   StructureMaterialId,
 } from '@/lib/netvision/types'
 import {
+  advanceStructureDraw,
   snapOrtho90,
   snapToStructureJoints,
   snapToStructureJointsAligned,
@@ -263,6 +264,8 @@ export default function NexusVisionArchitectClient() {
     x: number
     y: number
   } | null>(null)
+  const structureDraftRef = useRef<{ x: number; y: number } | null>(null)
+  const drawStructureMaterialRef = useRef<StructureMaterialId | null>(null)
   const [drawUnderground, setDrawUnderground] = useState(false)
   const [undergroundDraft, setUndergroundDraft] = useState<{
     x: number
@@ -473,6 +476,11 @@ export default function NexusVisionArchitectClient() {
   }, [project.unitSystem, hydrated])
 
   useEffect(() => {
+    structureDraftRef.current = structureDraft
+  }, [structureDraft])
+
+  useEffect(() => {
+    drawStructureMaterialRef.current = drawStructureMaterial
     if (!drawStructureMaterial) setStructureCursor(null)
   }, [drawStructureMaterial])
 
@@ -1459,34 +1467,30 @@ export default function NexusVisionArchitectClient() {
       return
     }
 
-    if (drawStructureMaterial) {
+    const material = drawStructureMaterialRef.current ?? drawStructureMaterial
+    if (material) {
       const walls = project.structures ?? []
-      if (!structureDraft) {
-        const start = snapToStructureJoints({ x: normX, y: normY }, walls)
-        setStructureDraft(start)
-        setStructureCursor(start)
+      const next = advanceStructureDraw(
+        structureDraftRef.current ?? structureDraft,
+        { x: normX, y: normY },
+        walls,
+      )
+      if (next.type === 'start') {
+        structureDraftRef.current = next.draft
+        setStructureDraft(next.draft)
+        setStructureCursor(next.draft)
         setError(null)
         return
       }
-      // Snap a 90° (horizontal o vertical) para esquinas ortogonales.
-      const snapped = snapOrtho90(structureDraft, { x: normX, y: normY })
-      const joined = snapToStructureJointsAligned(structureDraft, snapped, walls)
-      const dx = Math.abs(structureDraft.x - joined.x)
-      const dy = Math.abs(structureDraft.y - joined.y)
-      if (dx + dy < 0.008) {
+      if (next.type === 'too-short') {
         setError('El segmento es demasiado corto; elige otro punto.')
         return
       }
-      addStructureSegment(
-        drawStructureMaterial,
-        structureDraft.x,
-        structureDraft.y,
-        joined.x,
-        joined.y,
-      )
+      addStructureSegment(material, next.x1, next.y1, next.x2, next.y2)
       // Continuar dibujando desde la esquina (muro polilínea con tramos H/V).
-      setStructureDraft({ x: joined.x, y: joined.y })
-      setStructureCursor({ x: joined.x, y: joined.y })
+      structureDraftRef.current = next.nextDraft
+      setStructureDraft(next.nextDraft)
+      setStructureCursor(next.nextDraft)
       setError(null)
     }
   }

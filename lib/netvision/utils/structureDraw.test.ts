@@ -4,6 +4,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  advanceStructureDraw,
   snapOrtho90,
   snapToStructureJoints,
   snapToStructureJointsAligned,
@@ -58,6 +59,40 @@ describe('structureLabelPrefix', () => {
   it('usa CON para concreto (no DRY)', () => {
     assert.equal(structureLabelPrefix('concrete'), 'CON')
     assert.equal(structureLabelPrefix('drywall'), 'DRY')
+    assert.equal(structureLabelPrefix('block'), 'BLO')
     assert.equal(structureLabelPrefix('glass'), 'VID')
+  })
+})
+
+describe('advanceStructureDraw', () => {
+  it('el primer clic solo deja el origen', () => {
+    const next = advanceStructureDraw(null, { x: 0.2, y: 0.3 }, [])
+    assert.equal(next.type, 'start')
+    if (next.type === 'start') {
+      assert.deepEqual(next.draft, { x: 0.2, y: 0.3 })
+    }
+  })
+
+  it('el segundo clic graba el tramo ortogonal (bloque/concreto)', () => {
+    const start = advanceStructureDraw(null, { x: 0.2, y: 0.3 }, [])
+    assert.equal(start.type, 'start')
+    if (start.type !== 'start') return
+    const next = advanceStructureDraw(start.draft, { x: 0.55, y: 0.34 }, [])
+    assert.equal(next.type, 'segment')
+    if (next.type !== 'segment') return
+    assert.equal(next.x1, 0.2)
+    assert.equal(next.y1, 0.3)
+    assert.equal(next.x2, 0.55)
+    assert.equal(next.y2, 0.3)
+    assert.deepEqual(next.nextDraft, { x: 0.55, y: 0.3 })
+  })
+
+  it('no pierde el origen si el segundo clic queda pegado', () => {
+    const draft = { x: 0.4, y: 0.4 }
+    const next = advanceStructureDraw(draft, { x: 0.401, y: 0.402 }, [])
+    assert.equal(next.type, 'too-short')
+    if (next.type === 'too-short') {
+      assert.deepEqual(next.draft, draft)
+    }
   })
 })
