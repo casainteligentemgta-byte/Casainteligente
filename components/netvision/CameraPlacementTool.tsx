@@ -45,7 +45,10 @@ import {
   visionPatchFromPointer,
   type VisionHandleMode,
 } from '@/lib/netvision/utils/visionAdjust'
-import { visionBandSolidFill } from '@/lib/netvision/utils/visionSemaforoPalette'
+import {
+  visionBandSolidFill,
+  visionOverlayAlpha,
+} from '@/lib/netvision/utils/visionSemaforoPalette'
 
 export type CameraPlacementToolProps = {
   backgroundUrl: string | null
@@ -80,6 +83,8 @@ export type CameraPlacementToolProps = {
   showFov: boolean
   /** Opacidad del semáforo CCTV (0–1). Por defecto translúcido para ver el plano. */
   visionOpacity?: number
+  /** Cámaras con cobertura apagada (el pin sigue). */
+  coverageHiddenIds?: string[]
   showWifi: boolean
   showSound?: boolean
   showLinks: boolean
@@ -184,6 +189,7 @@ function VisionSpectrumLayer({
   drawW,
   drawH,
   opacity = 0.36,
+  invert = false,
 }: {
   sectors: CoverageSector[]
   offsetX: number
@@ -192,6 +198,7 @@ function VisionSpectrumLayer({
   drawH: number
   /** 0–1: qué tan opaco se ve el semáforo sobre el plano. */
   opacity?: number
+  invert?: boolean
 }) {
   const bands: { band: SpectrumBand; polyOf: (s: CoverageSector) => { x: number; y: number }[] | undefined }[] =
     [
@@ -199,7 +206,7 @@ function VisionSpectrumLayer({
       { band: 'yellow', polyOf: (s) => s.yellowPolygon },
       { band: 'green', polyOf: (s) => s.greenPolygon },
     ]
-  const fillAlpha = Math.min(1, Math.max(0.1, opacity))
+  const fillAlpha = visionOverlayAlpha(opacity, invert)
   return (
     <Layer listening={false}>
       {bands.flatMap(({ band, polyOf }) =>
@@ -213,6 +220,7 @@ function VisionSpectrumLayer({
               points={pts}
               closed
               fill={visionBandSolidFill(band, fillAlpha)}
+              globalCompositeOperation={invert ? 'screen' : 'source-over'}
               listening={false}
               perfectDrawEnabled={false}
               strokeEnabled={false}
@@ -403,6 +411,7 @@ export default function CameraPlacementTool({
   draftLabel = null,
   showFov,
   visionOpacity = 0.36,
+  coverageHiddenIds = [],
   showWifi,
   showSound = false,
   showLinks,
@@ -793,6 +802,7 @@ export default function CameraPlacementTool({
             drawW={drawW}
             drawH={drawH}
             opacity={visionOpacity}
+            invert={invertBackground}
           />
         ) : null}
         <Layer>
@@ -1462,6 +1472,7 @@ export default function CameraPlacementTool({
             const cx = offsetX + cam.x * drawW
             const cy = offsetY + cam.y * drawH
             const selected = cam.id === selectedId
+            const coverageOff = coverageHiddenIds.includes(cam.id)
             return (
               <Circle
                 key={cam.id}
@@ -1469,6 +1480,7 @@ export default function CameraPlacementTool({
                 y={cy}
                 radius={selected ? 5 : 4}
                 fill={selected ? '#22d3ee' : '#06b6d4'}
+                opacity={coverageOff ? 0.38 : 1}
                 stroke="#0f172a"
                 strokeWidth={1.25}
                 hitStrokeWidth={16}
@@ -1845,6 +1857,7 @@ export default function CameraPlacementTool({
           {cameras.map((cam) => {
             const selected = cam.id === selectedId
             const tilt = Math.round(cam.tiltDeg ?? 0)
+            const coverageOff = coverageHiddenIds.includes(cam.id)
             return (
               <Fragment key={`lbl-${cam.id}`}>
                 <Text
@@ -1853,6 +1866,7 @@ export default function CameraPlacementTool({
                   text={cam.label}
                   fontSize={11}
                   fill="#e2e8f0"
+                  opacity={coverageOff ? 0.4 : 1}
                   listening={false}
                 />
                 {selected ? (

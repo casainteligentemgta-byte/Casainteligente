@@ -24,6 +24,16 @@ export const VISION_SEMAFORO_LEGEND: { band: VisionBand; label: string; hex: str
   { band: 'red', label: 'Rojo', hex: VISION_SEMAFORO_HEX.red },
 ]
 
+/**
+ * El slider (36 %) se mantiene. En fondo negro source-over se ve apagado
+ * (el color se mezcla con 0); se sube el alpha en la misma proporción.
+ */
+export function visionOverlayAlpha(slider = 0.36, invertido = false): number {
+  const s = Math.min(0.8, Math.max(0.15, slider))
+  if (!invertido) return s
+  return Math.min(0.95, 0.22 + s * 1.55)
+}
+
 export function visionBandSolidFill(band: VisionBand, alpha = 0.36): string {
   const a = Math.min(1, Math.max(0.08, alpha))
   const [r, g, b] = VISION_SEMAFORO_RGB[band]

@@ -2,14 +2,14 @@
 
 export const NIGHT_BG: readonly [number, number, number] = [0, 0, 0]
 export const NIGHT_WALL: readonly [number, number, number] = [255, 255, 255]
-/** Verde, naranja, amarillo fluorescentes (monitor). */
+/** Verde, naranja, azul eléctrico (monitor). */
 export const NIGHT_NEON: ReadonlyArray<readonly [number, number, number]> = [
   [57, 255, 32],
   [255, 140, 0],
-  [255, 230, 32],
+  [0, 168, 255],
 ]
 
-export const NIGHT_COTA_COLORES = ['auto', 'verde', 'naranja', 'amarillo'] as const
+export const NIGHT_COTA_COLORES = ['auto', 'verde', 'naranja', 'azul'] as const
 export type NightCotaColor = (typeof NIGHT_COTA_COLORES)[number]
 
 export type NightPlanoOptions = {
@@ -25,7 +25,7 @@ export type NightPlanoOptions = {
 export function neonIndexForColor(color: NightCotaColor): number | null {
   if (color === 'verde') return 0
   if (color === 'naranja') return 1
-  if (color === 'amarillo') return 2
+  if (color === 'azul') return 2
   return null
 }
 
@@ -42,7 +42,8 @@ export function wallDilateFromGrosor(grosor: unknown): number {
 
 export function normalizeCotaColor(raw: unknown): NightCotaColor {
   const t = String(raw ?? '').trim().toLowerCase()
-  if (t === 'verde' || t === 'naranja' || t === 'amarillo' || t === 'auto') return t
+  if (t === 'amarillo') return 'azul'
+  if (t === 'verde' || t === 'naranja' || t === 'azul' || t === 'auto') return t
   return 'auto'
 }
 
@@ -215,7 +216,7 @@ function nearestTextNeon(
   return best
 }
 
-/** Verde horizontal, naranja vertical, amarillo el resto. */
+/** Verde horizontal, naranja vertical, azul el resto. */
 function neonByShape(c: Component): number {
   const bw = c.maxX - c.minX + 1
   const bh = c.maxY - c.minY + 1

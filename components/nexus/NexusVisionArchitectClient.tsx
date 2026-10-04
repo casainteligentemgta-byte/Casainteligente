@@ -38,6 +38,7 @@ import NetVisionLayerHelp, {
   layerHelpTitle,
 } from '@/components/netvision/NetVisionLayerHelp'
 import NetVisionPlanoLookControls from '@/components/netvision/NetVisionPlanoLookControls'
+import NetVisionCameraVisionToggles from '@/components/netvision/NetVisionCameraVisionToggles'
 import StructureDesigner from '@/components/netvision/StructureDesigner'
 import UndergroundCanalizationTool from '@/components/netvision/UndergroundCanalizationTool'
 import NetVisionSelectedProps from '@/components/netvision/NetVisionSelectedProps'
@@ -210,6 +211,11 @@ import {
   clampGrosorMuro,
   normalizeCotaColor,
 } from '@/lib/netvision/utils/nightPlanoPalette'
+import {
+  isolateHiddenCameraIds,
+  pruneHiddenCameraIds,
+  toggleHiddenCameraId,
+} from '@/lib/netvision/utils/cameraVisionVisibility'
 
 const CameraPlacementTool = dynamic(
   () => import('@/components/netvision/CameraPlacementTool'),
@@ -250,6 +256,8 @@ export default function NexusVisionArchitectClient() {
   const [showFov, setShowFov] = useState(true)
   /** Opacidad del semáforo (translúcido por defecto para ver el plano). */
   const [visionOpacity, setVisionOpacity] = useState(0.36)
+  /** Ids cuyo semáforo está apagado. Las cámaras nuevas se ven. */
+  const [hiddenCoverageIds, setHiddenCoverageIds] = useState<string[]>([])
   const [showWifi, setShowWifi] = useState(false)
   const [showSound, setShowSound] = useState(false)
   const [showLinks, setShowLinks] = useState(true)
@@ -626,7 +634,15 @@ export default function NexusVisionArchitectClient() {
     return []
   }, [sideTab, planDevices, project.scale, project.networkNodes, structures])
 
-  const activeSectors = sideTab === 'cctv' ? sectors : planSectors
+  const cameraIds = useMemo(() => project.cameras.map((c) => c.id), [project.cameras])
+  const hiddenLive = useMemo(
+    () => pruneHiddenCameraIds(hiddenCoverageIds, cameraIds),
+    [hiddenCoverageIds, cameraIds],
+  )
+  const activeSectors =
+    sideTab === 'cctv'
+      ? sectors.filter((s) => !hiddenLive.includes(s.cameraId))
+      : planSectors
   const showActiveCoverage =
     sideTab === 'cctv'
       ? showFov
@@ -1080,6 +1096,27 @@ export default function NexusVisionArchitectClient() {
     setViewMode('plano')
     setCamerasMenuOpen(false)
     setInspectorOpen(openInspector)
+  }
+
+  const showAllCameraCoverage = () => {
+    setHiddenCoverageIds([])
+    setShowFov(true)
+    setSideTab('cctv')
+    setViewMode('plano')
+  }
+
+  const soloCameraCoverage = (id: string) => {
+    setHiddenCoverageIds(isolateHiddenCameraIds(cameraIds, id))
+    setShowFov(true)
+    setSideTab('cctv')
+    setViewMode('plano')
+  }
+
+  const toggleCameraCoverage = (id: string) => {
+    setHiddenCoverageIds((prev) => toggleHiddenCameraId(prev, id))
+    setShowFov(true)
+    setSideTab('cctv')
+    setViewMode('plano')
   }
 
   const toggleCamerasMenu = () => {
@@ -2532,7 +2569,7 @@ export default function NexusVisionArchitectClient() {
         <button
           type="button"
           disabled={!project.planoUrl || loading || project.cameras.length === 0}
-          title="Calcula cobertura automática por alcance (semáforo verde/amarillo/rojo)"
+          title="Calcula cobertura automática por alcance (semáforo verde/naranja/rojo)"
           onClick={() => {
             setShowFov(true)
             setViewMode('plano')
@@ -2706,6 +2743,7 @@ export default function NexusVisionArchitectClient() {
                     planDevices={planDevices}
                     structures={structures}
                     sectors={activeSectors}
+                    coverageHiddenIds={hiddenLive}
                     visionSpectrum={visionSpectrum}
                     wifiCircles={wifiCircles}
                     wifiSpectrum={wifiSpectrum}
@@ -2899,6 +2937,19 @@ export default function NexusVisionArchitectClient() {
                       {item.label}
                     </span>
                   ))}
+                  {project.cameras.length > 0 ? (
+                    <div className="basis-full pt-0.5">
+                      <NetVisionCameraVisionToggles
+                        cameras={project.cameras}
+                        hiddenIds={hiddenLive}
+                        compact
+                        onShowAll={showAllCameraCoverage}
+                        onSolo={soloCameraCoverage}
+                        onToggle={toggleCameraCoverage}
+                        onSelect={(id) => selectCameraFromMenu(id, false)}
+                      />
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
             </>
@@ -3308,22 +3359,17 @@ export default function NexusVisionArchitectClient() {
                 + Agregar cámara
               </button>
               {project.cameras.length > 0 ? (
-                <div className="flex flex-wrap gap-1">
-                  {project.cameras.map((c) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      className={`min-h-8 rounded-md px-2 text-[11px] font-semibold ${
-                        selectedId === c.id
-                          ? 'bg-[var(--nexus-cyan)] text-black'
-                          : 'border border-white/15 text-[var(--nexus-cyan)]'
-                      }`}
-                      onClick={() => selectCameraFromMenu(c.id, true)}
-                    >
-                      {c.label}
-                    </button>
-                  ))}
-                </div>
+                <NetVisionCameraVisionToggles
+                  cameras={project.cameras}
+                  hiddenIds={hiddenLive}
+                  onShowAll={showAllCameraCoverage}
+                  onSolo={(id) => {
+                    soloCameraCoverage(id)
+                    selectCameraFromMenu(id, true)
+                  }}
+                  onToggle={toggleCameraCoverage}
+                  onSelect={(id) => selectCameraFromMenu(id, true)}
+                />
               ) : (
                 <p className="text-[10px] text-[var(--nexus-text-dim)]">
                   La cámara se agrega al plano; arrástrala para ubicarla. Elige el tipo en el
