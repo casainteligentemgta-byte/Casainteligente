@@ -84,7 +84,7 @@ export default function NetVisionPlanoLookControls({
                   chip.id === 'auto'
                     ? 'Neón automático según la forma de cada cota'
                     : chip.id === 'blanco'
-                      ? 'Acotaciones en blanco'
+                      ? 'Acotaciones en blanco, por encima del semáforo de las cámaras'
                       : `Acotaciones en ${chip.label.toLowerCase()}`
                 }
                 aria-pressed={active}

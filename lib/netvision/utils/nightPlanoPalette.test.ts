@@ -7,6 +7,7 @@ import {
   NIGHT_WALL,
   applyNightPlanoPalette,
   clampGrosorMuro,
+  liftWhitePlanOverVision,
   neonIndexForColor,
   normalizeCotaColor,
   wallDilateFromGrosor,
@@ -202,5 +203,8 @@ describe('night plano helpers', () => {
     assert.equal(neonIndexForColor('blanco'), -1)
     assert.equal(normalizeCotaColor('blanco'), 'blanco')
     assert.equal(neonIndexForColor('auto'), null)
+    assert.equal(liftWhitePlanOverVision(true, 'blanco'), true)
+    assert.equal(liftWhitePlanOverVision(true, 'azul'), false)
+    assert.equal(liftWhitePlanOverVision(false, 'blanco'), false)
   })
 })

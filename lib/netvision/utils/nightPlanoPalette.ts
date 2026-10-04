@@ -55,6 +55,14 @@ export function normalizeCotaColor(raw: unknown): NightCotaColor {
   return 'auto'
 }
 
+/** Blanco sobre fondo negro: las cotas/muros blancos van encima del semáforo. */
+export function liftWhitePlanOverVision(
+  invert: boolean,
+  cotaColor?: unknown,
+): boolean {
+  return Boolean(invert) && normalizeCotaColor(cotaColor) === 'blanco'
+}
+
 const INF = 1_000_000
 const CHAMFER_A = 3
 const CHAMFER_B = 4
