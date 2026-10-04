@@ -2,6 +2,10 @@
 
 export const NIGHT_BG: readonly [number, number, number] = [0, 0, 0]
 export const NIGHT_WALL: readonly [number, number, number] = [255, 255, 255]
+/** Trazo de detalle (muebles, autos, hatches) no debe quedar más oscuro que esto. */
+export const NIGHT_DETAIL_MIN = 168
+/** Por encima de esto se considera papel. */
+export const NIGHT_PAPER_LUMA = 236
 /** Verde, naranja, azul eléctrico (monitor). */
 export const NIGHT_NEON: ReadonlyArray<readonly [number, number, number]> = [
   [57, 255, 32],
@@ -68,11 +72,40 @@ type Component = {
   sumY: number
 }
 
+function invertAndLift(
+  r: number,
+  g: number,
+  b: number,
+): readonly [number, number, number] {
+  const ir = 255 - r
+  const ig = 255 - g
+  const ib = 255 - b
+  const y = luma(ir, ig, ib)
+  if (y >= NIGHT_DETAIL_MIN) return [ir, ig, ib]
+  if (y < 1) return [NIGHT_DETAIL_MIN, NIGHT_DETAIL_MIN, NIGHT_DETAIL_MIN]
+  const s = NIGHT_DETAIL_MIN / y
+  return [
+    Math.min(255, Math.round(ir * s)),
+    Math.min(255, Math.round(ig * s)),
+    Math.min(255, Math.round(ib * s)),
+  ]
+}
+
 function invertRgbFallback(data: Uint8ClampedArray | number[]): void {
   for (let i = 0; i + 2 < data.length; i += 4) {
-    data[i] = 255 - (data[i] as number)
-    data[i + 1] = 255 - (data[i + 1] as number)
-    data[i + 2] = 255 - (data[i + 2] as number)
+    const r = data[i] as number
+    const g = data[i + 1] as number
+    const b = data[i + 2] as number
+    if (luma(r, g, b) >= NIGHT_PAPER_LUMA) {
+      data[i] = NIGHT_BG[0]
+      data[i + 1] = NIGHT_BG[1]
+      data[i + 2] = NIGHT_BG[2]
+      continue
+    }
+    const rgb = invertAndLift(r, g, b)
+    data[i] = rgb[0]
+    data[i + 1] = rgb[1]
+    data[i + 2] = rgb[2]
   }
 }
 
@@ -235,8 +268,9 @@ function isMediumDimLine(c: Component, pageMin: number): boolean {
 }
 
 /**
- * Papel → negro; muros/objetos gruesos → blanco; cotas y números → neón.
- * Si el bitmap no parece un plano de líneas, cae a inversión RGB simple.
+ * Papel → negro; muros gruesos → blanco; cotas → neón;
+ * muebles/autos/hatches (grises) → trazo claro para que no se pierdan.
+ * Si el bitmap no parece un plano de líneas, invierte y levanta el detalle.
  */
 export function applyNightPlanoPalette(
   data: Uint8ClampedArray | number[],
@@ -260,7 +294,7 @@ export function applyNightPlanoPalette(
     if (y < 88) {
       ink[i] = 1
       inkCount++
-    } else if (y <= 200) {
+    } else if (y < NIGHT_PAPER_LUMA) {
       midCount++
     }
   }
@@ -307,9 +341,21 @@ export function applyNightPlanoPalette(
 
   for (let i = 0, p = 0; i < n; i++, p += 4) {
     if (!ink[i]) {
-      data[p] = NIGHT_BG[0]
-      data[p + 1] = NIGHT_BG[1]
-      data[p + 2] = NIGHT_BG[2]
+      const y = luma(data[p] as number, data[p + 1] as number, data[p + 2] as number)
+      if (y >= NIGHT_PAPER_LUMA) {
+        data[p] = NIGHT_BG[0]
+        data[p + 1] = NIGHT_BG[1]
+        data[p + 2] = NIGHT_BG[2]
+      } else {
+        const rgb = invertAndLift(
+          data[p] as number,
+          data[p + 1] as number,
+          data[p + 2] as number,
+        )
+        data[p] = rgb[0]
+        data[p + 1] = rgb[1]
+        data[p + 2] = rgb[2]
+      }
       continue
     }
     const nid = labels[i]!
