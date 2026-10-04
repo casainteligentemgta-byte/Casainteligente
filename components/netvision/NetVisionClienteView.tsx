@@ -332,6 +332,11 @@ export default function NetVisionClienteView() {
               metersPerNormX={project.scale.metersPerNormX}
               metersPerNormY={project.scale.metersPerNormY}
               onSelect={(id) => {
+                if (!id) {
+                  setSelectedId(null)
+                  showAll()
+                  return
+                }
                 if (cameras.some((c) => c.id === id)) showSolo(id)
               }}
               showZoomOverlay

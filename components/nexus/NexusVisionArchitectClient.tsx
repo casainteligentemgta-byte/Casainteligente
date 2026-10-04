@@ -2874,7 +2874,7 @@ export default function NexusVisionArchitectClient() {
                     onInspect={() => setInspectorOpen(true)}
                     onSelect={(id) => {
                       setSelectedId(id)
-                      if (project.cameras.some((c) => c.id === id)) {
+                      if (id && project.cameras.some((c) => c.id === id)) {
                         setShowFov(true)
                         setSideTab('cctv')
                         setViewMode('plano')
