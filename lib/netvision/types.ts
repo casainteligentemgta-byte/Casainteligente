@@ -309,7 +309,7 @@ export type CoverageSector = {
   mode: 'day' | 'night'
   /** Polígono FOV recortado por muros opacos (incluye el centro). */
   polygon?: { x: number; y: number }[]
-  /** Radio del verde en coords 0–1 (metros de ficha, no del cono estirado). */
+  /** Radio del verde en coords 0–1 (metraje de visualización de ficha). */
   greenRadiusNorm?: number
   /** Radio del amarillo en coords 0–1 (metros de ficha). */
   yellowRadiusNorm?: number
@@ -321,7 +321,7 @@ export type CoverageSector = {
   redPolygon?: { x: number; y: number }[]
 }
 
-/** Semáforo de cobertura CCTV (metros de ficha; el cono estirado no los agranda). */
+/** Semáforo de cobertura CCTV (verde = ficha; el cono estirado no agranda el verde). */
 export type VisionBand = 'green' | 'yellow' | 'red'
 
 /** Celda de mapa de calor (WiFi, sonido o visión). */

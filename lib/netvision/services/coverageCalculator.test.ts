@@ -44,37 +44,44 @@ describe('preferredVisionBand', () => {
 })
 
 describe('visionBandForDistance', () => {
-  it('parte el alcance de ficha en verde / naranja / rojo', () => {
+  it('todo el metraje de ficha es verde', () => {
     assert.equal(visionBandForDistance(3, 10), 'green')
-    assert.equal(visionBandForDistance(5.5, 10), 'yellow')
-    assert.equal(visionBandForDistance(9, 10), 'red')
+    assert.equal(visionBandForDistance(5.5, 10), 'green')
+    assert.equal(visionBandForDistance(9, 10), 'green')
+    assert.equal(visionBandForDistance(10, 10), 'green')
   })
 
-  it('estirar el cono no alarga el verde: 3 m siguen verdes', () => {
-    assert.equal(visionBandForDistance(3, 10, 10), 'green')
+  it('estirar el cono no alarga el verde: más allá de la ficha es rojo', () => {
     assert.equal(visionBandForDistance(3, 50, 10), 'green')
-    assert.equal(visionBandForDistance(5.5, 50, 10), 'yellow')
-    assert.equal(visionBandForDistance(8, 50, 10), 'red')
+    assert.equal(visionBandForDistance(9, 50, 10), 'green')
+    assert.equal(visionBandForDistance(10, 50, 10), 'green')
+    assert.equal(visionBandForDistance(15, 50, 10), 'red')
   })
 })
 
 describe('visionBandRangesM', () => {
-  it('verde y amarillo quedan fijos al estirar', () => {
+  it('el verde es el metraje de ficha y no crece al estirar', () => {
     const a = visionBandRangesM(10, 10)
     const b = visionBandRangesM(50, 10)
-    assert.equal(a.greenMaxM, 4)
-    assert.equal(b.greenMaxM, 4)
-    assert.equal(a.yellowMaxM, 7)
-    assert.equal(b.yellowMaxM, 7)
+    assert.equal(a.greenMaxM, 10)
+    assert.equal(b.greenMaxM, 10)
+    assert.equal(a.yellowMaxM, 10)
+    assert.equal(b.yellowMaxM, 10)
     assert.equal(a.redMaxM, 10)
     assert.equal(b.redMaxM, 50)
+  })
+
+  it('Hik DS-2CD2143G2-I 25 m día pinta 25 m verdes', () => {
+    const bands = visionBandRangesM(25, 25)
+    assert.equal(bands.greenMaxM, 25)
+    assert.equal(bands.redMaxM, 25)
   })
 })
 
 describe('buildVisionSpectrum stretch', () => {
   it('con cono largo el verde no cubre decenas de metros', () => {
     const scale = { metersPerNormX: 100, metersPerNormY: 100, calibrated: true }
-    // hik-ds2cd2143: 25 m día → verde 10 m, amarillo 17.5 m
+    // hik-ds2cd2143: 25 m día → verde 25 m; 40 m estirados son rojo
     const cells = buildVisionSpectrum(
       [testCam({ id: 'a', x: 0.1, yawDeg: 0, rangeM: 80 })],
       scale,
@@ -226,11 +233,9 @@ describe('buildCoverageSectors band polygons', () => {
     const s = sectors[0]!
     assert.ok((s.polygon?.length ?? 0) >= 3)
     assert.ok((s.greenPolygon?.length ?? 0) >= 3)
-    assert.ok((s.yellowPolygon?.length ?? 0) >= 3)
-    assert.ok((s.redPolygon?.length ?? 0) >= 3)
-    assert.ok((s.redPolygon?.length ?? 0) >= 3)
-    assert.ok((s.greenRadiusNorm ?? 0) < (s.yellowRadiusNorm ?? 0))
+    assert.ok((s.greenRadiusNorm ?? 0) > 0)
     assert.ok((s.yellowRadiusNorm ?? 0) <= s.radiusNorm + 1e-9)
+    assert.ok(Math.abs((s.greenRadiusNorm ?? 0) - (s.yellowRadiusNorm ?? 0)) < 1e-6)
   })
 
   it('H9c Dual pinta semáforo en el gran angular y en la PTZ tele', () => {
@@ -257,9 +262,8 @@ describe('buildCoverageSectors band polygons', () => {
     for (const s of [wide, tele]) {
       assert.ok((s.polygon?.length ?? 0) >= 3)
       assert.ok((s.greenPolygon?.length ?? 0) >= 3)
-      assert.ok((s.yellowPolygon?.length ?? 0) >= 3)
       assert.ok((s.greenRadiusNorm ?? 0) > 0)
-      assert.ok((s.yellowRadiusNorm ?? 0) > (s.greenRadiusNorm ?? 0))
+      assert.ok((s.yellowRadiusNorm ?? 0) + 1e-9 >= (s.greenRadiusNorm ?? 0))
     }
   })
 })

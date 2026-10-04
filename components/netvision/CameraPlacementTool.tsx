@@ -202,7 +202,7 @@ function sectorPolyPoints(
 }
 
 /**
- * Semáforo CCTV: anillos exclusivos (rojo / naranja / verde).
+ * Semáforo CCTV: anillos exclusivos (verde = ficha; rojo si se estira).
  * La opacidad va en el relleno; Konva no aplana la capa y si se apilan
  * se ensucia el color.
  */

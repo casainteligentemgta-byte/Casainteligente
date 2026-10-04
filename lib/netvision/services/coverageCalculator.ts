@@ -21,10 +21,14 @@ import {
   pointInSector,
 } from '@/lib/netvision/utils/geometryHelpers'
 
-/** Fracciones del alcance: verde detección, amarillo lejos, rojo dudoso. */
+/**
+ * El metraje de visualización de la ficha (día/noche) es verde.
+ * Naranja no recorta esa ficha: solo aparece si un día se define un tramo extra.
+ * Estirar el cono más allá de la ficha pinta rojo.
+ */
 export const VISION_BAND_FRAC = {
-  greenMax: 0.4,
-  yellowMax: 0.7,
+  greenMax: 1,
+  yellowMax: 1,
 } as const
 
 export function defaultScale(): ScaleCalibration {
@@ -38,7 +42,7 @@ export function defaultScale(): ScaleCalibration {
 
 /**
  * Semáforo en metros de ficha (`catalogRangeM`), no del cono estirado.
- * Estirar el anillo solo alarga el rojo; el verde de 2 m sigue en 2 m.
+ * Verde = metraje de visualización de la ficha. Estirar el anillo solo alarga el rojo.
  */
 export function visionBandForDistance(
   distanceM: number,
@@ -70,7 +74,7 @@ function round1(n: number) {
 
 /**
  * Metros de cada banda.
- * Verde/amarillo salen de la ficha (`catalogRangeM`); el rojo llega al borde dibujado.
+ * Verde = ficha (`catalogRangeM`). El rojo llega al borde dibujado si se estira.
  */
 export function visionBandRangesM(
   drawnRangeM: number,
@@ -229,8 +233,8 @@ export function buildCoverageSectors(
 
 /**
  * Espectro de visión CCTV con semáforo de cobertura automática:
- * verde = detección objetos/personas, amarillo = más lejos,
- * rojo = detección dudosa pero con visión.
+ * verde = metraje de visualización de la ficha,
+ * rojo = más allá de la ficha (cono estirado).
  * Las celdas solo cuentan si caen dentro del polígono FOV recortado por muros.
  */
 export function buildVisionSpectrum(

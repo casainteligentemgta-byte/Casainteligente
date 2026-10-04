@@ -2674,7 +2674,7 @@ export default function NexusVisionArchitectClient() {
         <button
           type="button"
           disabled={!project.planoUrl || loading || project.cameras.length === 0}
-          title="Calcula cobertura automática por alcance (semáforo verde/naranja/rojo)"
+          title="Calcula cobertura automática: verde = metraje de ficha; rojo solo si se estira el cono"
           onClick={() => {
             setShowFov(true)
             setViewMode('plano')
@@ -3596,17 +3596,27 @@ export default function NexusVisionArchitectClient() {
                               <span style={{ color: VISION_SEMAFORO_HEX.green }}>
                                 Verde 0–
                                 {formatLength(lb.greenMaxM, project.unitSystem ?? 'metric')}
+                                {' '}
+                                (ficha)
                               </span>
-                              {' · '}
-                              <span style={{ color: VISION_SEMAFORO_HEX.yellow }}>
-                                naranja{' '}
-                                {formatLength(lb.yellowMaxM, project.unitSystem ?? 'metric')}
-                              </span>
-                              {' · '}
-                              <span style={{ color: VISION_SEMAFORO_HEX.red }}>
-                                rojo hasta{' '}
-                                {formatLength(lb.redMaxM, project.unitSystem ?? 'metric')}
-                              </span>
+                              {lb.yellowMaxM > lb.greenMaxM + 0.05 ? (
+                                <>
+                                  {' · '}
+                                  <span style={{ color: VISION_SEMAFORO_HEX.yellow }}>
+                                    naranja{' '}
+                                    {formatLength(lb.yellowMaxM, project.unitSystem ?? 'metric')}
+                                  </span>
+                                </>
+                              ) : null}
+                              {lb.redMaxM > lb.greenMaxM + 0.05 ? (
+                                <>
+                                  {' · '}
+                                  <span style={{ color: VISION_SEMAFORO_HEX.red }}>
+                                    rojo hasta{' '}
+                                    {formatLength(lb.redMaxM, project.unitSystem ?? 'metric')}
+                                  </span>
+                                </>
+                              ) : null}
                               .
                             </p>
                           )
@@ -3618,7 +3628,8 @@ export default function NexusVisionArchitectClient() {
                             ? ` · en el piso ciega ${formatLength(ground.nearM, project.unitSystem ?? 'metric')} / llega ${formatLength(ground.farM, project.unitSystem ?? 'metric')}`
                             : ` · horizonte, llega ${formatLength(ground.farM, project.unitSystem ?? 'metric')}`}
                           . Ajústalo en la ficha de la cámara (arriba).
-                          Verde y naranja son metros de ficha: estirar el cono no los agranda.
+                          Verde es el metraje de visualización de la ficha.
+                          Estirar el cono no agranda el verde: solo alarga el rojo.
                           Si se solapan, prevalece verde sobre naranja y naranja sobre rojo.
                         </p>
                         <label className="block">
