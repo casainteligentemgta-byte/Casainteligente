@@ -328,16 +328,14 @@ function tryRoute(
   fanY: number,
   attach: { x: number; y: number },
 ): number[] {
-  return simplify([
-    box.pinX,
-    box.pinY,
-    fanX,
-    fanY,
-    fanX,
-    attach.y,
-    attach.x,
-    attach.y,
-  ])
+  return orthoViaPoint({ x: box.pinX, y: box.pinY }, { x: fanX, y: fanY }, attach)
+}
+
+export function polylineIsOrtho(points: number[]): boolean {
+  for (const s of polylineToSegs(points)) {
+    if (Math.abs(s.x0 - s.x1) >= 0.5 && Math.abs(s.y0 - s.y1) >= 0.5) return false
+  }
+  return true
 }
 
 function routeOrtho(

@@ -73,6 +73,28 @@ describe('rotateProjectGeometry', () => {
     assert.equal(next.cameras[0]!.labelOffsetY, 0.1)
   })
 
+  it('rota los quiebres de la línea al nombre', () => {
+    const base = emptyProject({ id: 't', name: 't' })
+    const project = {
+      ...base,
+      cameras: [
+        {
+          id: 'c1',
+          label: 'CAM-01',
+          x: 0.25,
+          y: 0.1,
+          modelId: 'x',
+          yawDeg: 0,
+          mountHeightM: 2.8,
+          leaderElbows: [{ x: 0.4, y: 0.2 }],
+        },
+      ],
+    }
+    const next = rotateProjectGeometry(project, 'cw')
+    assert.equal(next.cameras[0]!.leaderElbows?.[0]?.x, 0.8)
+    assert.equal(next.cameras[0]!.leaderElbows?.[0]?.y, 0.4)
+  })
+
   it('rota equipos de plano de especialidad', () => {
     const base = emptyProject({ id: 't', name: 't' })
     const project = {

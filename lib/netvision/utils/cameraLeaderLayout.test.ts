@@ -4,6 +4,7 @@ import {
   boxesOverlap,
   layoutCameraLeaders,
   polylineHitsBox,
+  polylineIsOrtho,
   polylinesOverlap,
   type LeaderBox,
 } from './cameraLeaderLayout'
@@ -141,5 +142,17 @@ describe('cameraLeaderLayout', () => {
     assert.equal(laid[0]!.mode, 'custom')
     assert.equal(laid[0]!.points[2], 120)
     assert.equal(laid[0]!.points[3], 80)
+  })
+
+  it('si la recta cruza otro botón usa quiebres a 90°', () => {
+    const laid = layoutCameraLeaders([
+      box('a', 40, 100, 300, 82),
+      box('b', 40, 220, 160, 80),
+    ])
+    const ra = laid.find((l) => l.id === 'a')!
+    assert.equal(ra.mode, 'ortho')
+    assert.equal(polylineIsOrtho(ra.points), true)
+    assert.ok(ra.points.length >= 6)
+    assert.equal(polylineHitsBox(ra.points, laid.find((l) => l.id === 'b')!, 2), false)
   })
 })
