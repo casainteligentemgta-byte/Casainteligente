@@ -90,9 +90,9 @@ export function visionBandRangesM(
 }
 
 /**
- * Polígonos de cada banda del semáforo, recortados por muros.
- * Se pintan apilados (rojo → amarillo → verde) para rellenar el cono
- * aunque el plano no sea cuadrado (un Arc circular no cubre la elipse).
+ * Anillos exclusivos del semáforo (verde / naranja / rojo), recortados por muros.
+ * No se apilan: Konva aplica la opacidad por polígono y si se solapan
+ * el verde se ensucia con el naranja.
  */
 export function coverageBandPolygons(opts: {
   cx: number
@@ -102,39 +102,32 @@ export function coverageBandPolygons(opts: {
   innerRadiusNorm: number
   greenRadiusNorm: number
   yellowRadiusNorm: number
+  redRadiusNorm?: number
   structures: DesignStructure[]
-}): Pick<CoverageSector, 'greenPolygon' | 'yellowPolygon'> {
+}): Pick<CoverageSector, 'greenPolygon' | 'yellowPolygon' | 'redPolygon'> {
   const inner = Math.max(0, opts.innerRadiusNorm)
   const greenR = Math.max(0, opts.greenRadiusNorm)
   const yellowR = Math.max(0, opts.yellowRadiusNorm)
+  const redR = Math.max(0, opts.redRadiusNorm ?? 0)
   const rays = 96
-  const greenPolygon =
-    greenR > inner + 1e-4
+  const ring = (outer: number, hole: number) =>
+    outer > hole + 1e-4
       ? buildFovPolygon(
           opts.cx,
           opts.cy,
-          greenR,
+          outer,
           opts.startAngleRad,
           opts.endAngleRad,
           opts.structures,
           rays,
-          inner,
+          hole,
         )
       : undefined
-  const yellowPolygon =
-    yellowR > inner + 1e-4
-      ? buildFovPolygon(
-          opts.cx,
-          opts.cy,
-          yellowR,
-          opts.startAngleRad,
-          opts.endAngleRad,
-          opts.structures,
-          rays,
-          inner,
-        )
-      : undefined
-  return { greenPolygon, yellowPolygon }
+  return {
+    greenPolygon: ring(greenR, inner),
+    yellowPolygon: ring(yellowR, Math.max(inner, greenR)),
+    redPolygon: ring(redR, Math.max(inner, yellowR)),
+  }
 }
 
 function hasOpaqueWalls(structures: DesignStructure[]): boolean {
@@ -226,6 +219,7 @@ export function buildCoverageSectors(
           innerRadiusNorm: ground.innerRadiusNorm,
           greenRadiusNorm,
           yellowRadiusNorm,
+          redRadiusNorm: ground.radiusNorm,
           structures,
         }),
       }

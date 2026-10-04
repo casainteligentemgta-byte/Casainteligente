@@ -12,6 +12,7 @@ import {
   Copy,
   Download,
   FilePlus,
+  Presentation,
   RotateCcw,
   RotateCw,
   Save,
@@ -38,6 +39,8 @@ import NetVisionLayerHelp, {
   layerHelpTitle,
 } from '@/components/netvision/NetVisionLayerHelp'
 import NetVisionPlanoLookControls from '@/components/netvision/NetVisionPlanoLookControls'
+import NetVisionCameraVisionToggles from '@/components/netvision/NetVisionCameraVisionToggles'
+import NetVisionCalibracionOkModal from '@/components/netvision/NetVisionCalibracionOkModal'
 import StructureDesigner from '@/components/netvision/StructureDesigner'
 import UndergroundCanalizationTool from '@/components/netvision/UndergroundCanalizationTool'
 import NetVisionSelectedProps from '@/components/netvision/NetVisionSelectedProps'
@@ -76,6 +79,7 @@ import {
 import {
   defaultNetworkPlanSize,
 } from '@/lib/netvision/utils/networkNodeSize'
+import { VISION_SEMAFORO_HEX, VISION_SEMAFORO_LEGEND } from '@/lib/netvision/utils/visionSemaforoPalette'
 import {
   buildCoverageSectors,
   buildVisionSpectrum,
@@ -209,6 +213,16 @@ import {
   clampGrosorMuro,
   normalizeCotaColor,
 } from '@/lib/netvision/utils/nightPlanoPalette'
+import {
+  isolateHiddenCameraIds,
+  pruneHiddenCameraIds,
+  toggleHiddenCameraId,
+} from '@/lib/netvision/utils/cameraVisionVisibility'
+import {
+  calibrationToScale,
+  computePlanCalibration,
+  type CalibrationOk,
+} from '@/lib/netvision/utils/scaleCalibration'
 
 const CameraPlacementTool = dynamic(
   () => import('@/components/netvision/CameraPlacementTool'),
@@ -249,6 +263,8 @@ export default function NexusVisionArchitectClient() {
   const [showFov, setShowFov] = useState(true)
   /** Opacidad del semáforo (translúcido por defecto para ver el plano). */
   const [visionOpacity, setVisionOpacity] = useState(0.36)
+  /** Ids cuyo semáforo está apagado. Las cámaras nuevas se ven. */
+  const [hiddenCoverageIds, setHiddenCoverageIds] = useState<string[]>([])
   const [showWifi, setShowWifi] = useState(false)
   const [showSound, setShowSound] = useState(false)
   const [showLinks, setShowLinks] = useState(true)
@@ -317,6 +333,7 @@ export default function NexusVisionArchitectClient() {
   const [calibPoints, setCalibPoints] = useState<{ x: number; y: number }[]>([])
   const [calibCursor, setCalibCursor] = useState<{ x: number; y: number } | null>(null)
   const [calibMeters, setCalibMeters] = useState('10')
+  const [calibOk, setCalibOk] = useState<CalibrationOk | null>(null)
   const [planoDims, setPlanoDims] = useState<PlanoDimension[]>([])
   const [sideTab, setSideTab] = useState<NetVisionBranchId>('cctv')
   const [redFocusKind, setRedFocusKind] = useState<NetworkNodeKind>('switch')
@@ -625,7 +642,15 @@ export default function NexusVisionArchitectClient() {
     return []
   }, [sideTab, planDevices, project.scale, project.networkNodes, structures])
 
-  const activeSectors = sideTab === 'cctv' ? sectors : planSectors
+  const cameraIds = useMemo(() => project.cameras.map((c) => c.id), [project.cameras])
+  const hiddenLive = useMemo(
+    () => pruneHiddenCameraIds(hiddenCoverageIds, cameraIds),
+    [hiddenCoverageIds, cameraIds],
+  )
+  const activeSectors =
+    sideTab === 'cctv'
+      ? sectors.filter((s) => !hiddenLive.includes(s.cameraId))
+      : planSectors
   const showActiveCoverage =
     sideTab === 'cctv'
       ? showFov
@@ -873,6 +898,9 @@ export default function NexusVisionArchitectClient() {
   const selectedPlanDevice = planDevices.find((d) => d.id === selectedId) ?? null
   const selectedStructure =
     structures.find((s) => s.id === selectedId) ?? null
+  const sliderGrosor = clampGrosorMuro(
+    selectedStructure?.grosor ?? project.planoGrosorMuro,
+  )
   const selectedManualCable =
     (project.cableSegments ?? []).find((s) => s.id === selectedId) ?? null
   const selectedUnderground =
@@ -1081,6 +1109,27 @@ export default function NexusVisionArchitectClient() {
     setInspectorOpen(openInspector)
   }
 
+  const showAllCameraCoverage = () => {
+    setHiddenCoverageIds([])
+    setShowFov(true)
+    setSideTab('cctv')
+    setViewMode('plano')
+  }
+
+  const soloCameraCoverage = (id: string) => {
+    setHiddenCoverageIds(isolateHiddenCameraIds(cameraIds, id))
+    setShowFov(true)
+    setSideTab('cctv')
+    setViewMode('plano')
+  }
+
+  const toggleCameraCoverage = (id: string) => {
+    setHiddenCoverageIds((prev) => toggleHiddenCameraId(prev, id))
+    setShowFov(true)
+    setSideTab('cctv')
+    setViewMode('plano')
+  }
+
   const toggleCamerasMenu = () => {
     setCamerasMenuOpen((open) => {
       const next = !open
@@ -1257,6 +1306,7 @@ export default function NexusVisionArchitectClient() {
       y1: Math.round(y1 * 1000) / 1000,
       x2: Math.round(x2 * 1000) / 1000,
       y2: Math.round(y2 * 1000) / 1000,
+      grosor: clampGrosorMuro(project.planoGrosorMuro),
     }
     setError(null)
     setProject((p) => {
@@ -1399,25 +1449,33 @@ export default function NexusVisionArchitectClient() {
               calibMeters,
               project.unitSystem ?? 'metric',
             )
-        const distN = Math.hypot(a.x - b.x, a.y - b.y) || 1e-6
-        const metersPerNorm = meters / distN
+        const outcome = computePlanCalibration({
+          a,
+          b,
+          meters,
+          source: hit ? 'cota' : 'manual',
+          label: hit ? hit.label : calibMeters,
+        })
+        if (!outcome.ok) {
+          setCalibPoints([])
+          setCalibCursor(null)
+          setError(
+            outcome.reason === 'short'
+              ? 'El trazo es demasiado corto. Marca los dos extremos de una cota más larga.'
+              : 'Revisa los metros de la cota e inténtalo otra vez.',
+          )
+          return
+        }
         setProject((p) => ({
           ...p,
-          scale: {
-            metersPerNormX: metersPerNorm,
-            metersPerNormY: metersPerNorm,
-            calibrated: true,
-          },
+          scale: calibrationToScale(outcome),
         }))
         setCalibPoints([])
         setCalibCursor(null)
         setCalibrateMode(false)
         if (hit) setCalibMeters(hit.label)
-        setInfo(
-          hit
-            ? `Escala lista: ${hit.label} m según el acotamiento del plano.`
-            : `Escala lista: ${formatLength(meters, project.unitSystem ?? 'metric')} (valor indicado).`,
-        )
+        setCalibOk(outcome)
+        setInfo(null)
         setError(null)
       } else {
         setCalibPoints(next)
@@ -1540,6 +1598,12 @@ export default function NexusVisionArchitectClient() {
         if ('fovRightDeg' in patch && patch.fovRightDeg === undefined) delete next.fovRightDeg
         if ('lensVision' in patch && patch.lensVision === undefined) delete next.lensVision
         if ('rangeM' in patch && patch.rangeM === undefined) delete next.rangeM
+        if ('labelOffsetX' in patch && patch.labelOffsetX === undefined) {
+          delete next.labelOffsetX
+        }
+        if ('labelOffsetY' in patch && patch.labelOffsetY === undefined) {
+          delete next.labelOffsetY
+        }
         return next
       }),
     }))
@@ -1596,6 +1660,21 @@ export default function NexusVisionArchitectClient() {
         s.id === id ? { ...s, ...patch } : s,
       ),
     }))
+  }
+
+  /** Grosor: si hay muro elegido, solo esa línea; si no, el default del siguiente. */
+  const applyGrosorMuro = (value: number) => {
+    const grosor = clampGrosorMuro(value)
+    setProject((p) => {
+      const selected = (p.structures ?? []).find((s) => s.id === selectedId)
+      if (!selected) return { ...p, planoGrosorMuro: grosor }
+      return {
+        ...p,
+        structures: (p.structures ?? []).map((s) =>
+          s.id === selected.id ? { ...s, grosor } : s,
+        ),
+      }
+    })
   }
 
   const patchCableType = (id: string, type: CableType) => {
@@ -2225,6 +2304,25 @@ export default function NexusVisionArchitectClient() {
         <Download className="mr-1.5 h-3.5 w-3.5" />
         {exportingPdf ? 'PDF…' : 'PDF'}
       </Button>
+      <Button
+        type="button"
+        variant="glass"
+        size="sm"
+        className="w-full justify-start"
+        data-nv-vista-cliente
+        onClick={() => {
+          saveProject(project)
+          window.open(
+            `/nexus/vision/cliente?id=${encodeURIComponent(project.id)}`,
+            '_blank',
+            'noopener,noreferrer',
+          )
+        }}
+        disabled={!project.planoUrl}
+      >
+        <Presentation className="mr-1.5 h-3.5 w-3.5" />
+        Vista cliente
+      </Button>
       <Button type="button" variant="glass" size="sm" className="w-full justify-start" asChild>
         <Link href="/nexus/vision/manual/usuario">
           <BookOpen className="mr-1.5 h-3.5 w-3.5" />
@@ -2261,6 +2359,7 @@ export default function NexusVisionArchitectClient() {
           </div>
           <button
             type="button"
+            data-nv-calibrar
             title={layerHelpTitle('calibrate')}
             className={`w-full rounded-md px-2 py-1.5 text-left text-[11px] font-semibold ${
               calibrateMode
@@ -2421,7 +2520,7 @@ export default function NexusVisionArchitectClient() {
             <NetVisionPlanoLookControls
               invertido={Boolean(project.planoInvertido)}
               cotaColor={normalizeCotaColor(project.planoCotaColor)}
-              grosorMuro={clampGrosorMuro(project.planoGrosorMuro)}
+              grosorMuro={sliderGrosor}
               disabled={!project.planoUrl || loading}
               onInvertido={(value) =>
                 setProject((p) => ({ ...p, planoInvertido: value }))
@@ -2429,9 +2528,7 @@ export default function NexusVisionArchitectClient() {
               onCotaColor={(value) =>
                 setProject((p) => ({ ...p, planoCotaColor: value }))
               }
-              onGrosorMuro={(value) =>
-                setProject((p) => ({ ...p, planoGrosorMuro: value }))
-              }
+              onGrosorMuro={applyGrosorMuro}
             />
           </div>
           <div className="flex overflow-hidden rounded-md border border-white/15 bg-black/40">
@@ -2531,7 +2628,7 @@ export default function NexusVisionArchitectClient() {
         <button
           type="button"
           disabled={!project.planoUrl || loading || project.cameras.length === 0}
-          title="Calcula cobertura automática por alcance (semáforo verde/amarillo/rojo)"
+          title="Calcula cobertura automática por alcance (semáforo verde/naranja/rojo)"
           onClick={() => {
             setShowFov(true)
             setViewMode('plano')
@@ -2648,6 +2745,14 @@ export default function NexusVisionArchitectClient() {
       />
       {headerNav}
 
+      {calibOk ? (
+        <NetVisionCalibracionOkModal
+          result={calibOk}
+          unitSystem={project.unitSystem ?? 'metric'}
+          onClose={() => setCalibOk(null)}
+        />
+      ) : null}
+
       {error ? (
         <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
           {error}
@@ -2705,6 +2810,7 @@ export default function NexusVisionArchitectClient() {
                     planDevices={planDevices}
                     structures={structures}
                     sectors={activeSectors}
+                    coverageHiddenIds={hiddenLive}
                     visionSpectrum={visionSpectrum}
                     wifiCircles={wifiCircles}
                     wifiSpectrum={wifiSpectrum}
@@ -2756,6 +2862,7 @@ export default function NexusVisionArchitectClient() {
                     onFinishPlace={drawCable ? finishCableDraft : undefined}
                     snapPlaceToDevices={drawCable}
                     onMove={onMove}
+                    onPatchCamera={(id, patch) => patchCamera(id, patch)}
                     onAdjustCameraVision={adjustCameraVision}
                     metersPerNormX={project.scale.metersPerNormX}
                     metersPerNormY={project.scale.metersPerNormY}
@@ -2854,7 +2961,7 @@ export default function NexusVisionArchitectClient() {
                           compact
                           invertido={Boolean(project.planoInvertido)}
                           cotaColor={normalizeCotaColor(project.planoCotaColor)}
-                          grosorMuro={clampGrosorMuro(project.planoGrosorMuro)}
+                          grosorMuro={sliderGrosor}
                           disabled={loading}
                           onInvertido={(value) =>
                             setProject((p) => ({ ...p, planoInvertido: value }))
@@ -2862,9 +2969,7 @@ export default function NexusVisionArchitectClient() {
                           onCotaColor={(value) =>
                             setProject((p) => ({ ...p, planoCotaColor: value }))
                           }
-                          onGrosorMuro={(value) =>
-                            setProject((p) => ({ ...p, planoGrosorMuro: value }))
-                          }
+                          onGrosorMuro={applyGrosorMuro}
                         />
                       </div>
                     ) : (
@@ -2889,18 +2994,28 @@ export default function NexusVisionArchitectClient() {
                   <span className="font-semibold uppercase tracking-wide text-white">
                     Semáforo
                   </span>
-                  <span className="inline-flex items-center gap-1">
-                    <span className="h-2 w-2 rounded-sm bg-emerald-500" />
-                    Verde
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <span className="h-2 w-2 rounded-sm bg-yellow-400" />
-                    Amarillo
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <span className="h-2 w-2 rounded-sm bg-red-500" />
-                    Rojo
-                  </span>
+                  {VISION_SEMAFORO_LEGEND.map((item) => (
+                    <span key={item.band} className="inline-flex items-center gap-1">
+                      <span
+                        className="h-2 w-2 rounded-sm"
+                        style={{ backgroundColor: item.hex }}
+                      />
+                      {item.label}
+                    </span>
+                  ))}
+                  {project.cameras.length > 0 ? (
+                    <div className="basis-full pt-0.5">
+                      <NetVisionCameraVisionToggles
+                        cameras={project.cameras}
+                        hiddenIds={hiddenLive}
+                        compact
+                        onShowAll={showAllCameraCoverage}
+                        onSolo={soloCameraCoverage}
+                        onToggle={toggleCameraCoverage}
+                        onSelect={(id) => selectCameraFromMenu(id, false)}
+                      />
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
             </>
@@ -3078,10 +3193,8 @@ export default function NexusVisionArchitectClient() {
               detecting={loading && canDetectPdfWalls}
               onDetectFromPdf={() => void detectWallsFromLoadedPdf()}
               onShowOnPlan={setShowStructures}
-              grosorMuro={clampGrosorMuro(project.planoGrosorMuro)}
-              onGrosorMuro={(value) =>
-                setProject((p) => ({ ...p, planoGrosorMuro: value }))
-              }
+              grosorMuro={sliderGrosor}
+              onGrosorMuro={applyGrosorMuro}
               onDrawMaterial={(id) => {
                 setDrawStructureMaterial(id)
                 setStructureDraft(null)
@@ -3310,22 +3423,17 @@ export default function NexusVisionArchitectClient() {
                 + Agregar cámara
               </button>
               {project.cameras.length > 0 ? (
-                <div className="flex flex-wrap gap-1">
-                  {project.cameras.map((c) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      className={`min-h-8 rounded-md px-2 text-[11px] font-semibold ${
-                        selectedId === c.id
-                          ? 'bg-[var(--nexus-cyan)] text-black'
-                          : 'border border-white/15 text-[var(--nexus-cyan)]'
-                      }`}
-                      onClick={() => selectCameraFromMenu(c.id, true)}
-                    >
-                      {c.label}
-                    </button>
-                  ))}
-                </div>
+                <NetVisionCameraVisionToggles
+                  cameras={project.cameras}
+                  hiddenIds={hiddenLive}
+                  onShowAll={showAllCameraCoverage}
+                  onSolo={(id) => {
+                    soloCameraCoverage(id)
+                    selectCameraFromMenu(id, true)
+                  }}
+                  onToggle={toggleCameraCoverage}
+                  onSelect={(id) => selectCameraFromMenu(id, true)}
+                />
               ) : (
                 <p className="text-[10px] text-[var(--nexus-text-dim)]">
                   La cámara se agrega al plano; arrástrala para ubicarla. Elige el tipo en el
@@ -3442,17 +3550,17 @@ export default function NexusVisionArchitectClient() {
                                   {': '}
                                 </span>
                               ) : null}
-                              <span className="text-emerald-300">
+                              <span style={{ color: VISION_SEMAFORO_HEX.green }}>
                                 Verde 0–
                                 {formatLength(lb.greenMaxM, project.unitSystem ?? 'metric')}
                               </span>
                               {' · '}
-                              <span className="text-orange-300">
+                              <span style={{ color: VISION_SEMAFORO_HEX.yellow }}>
                                 naranja{' '}
                                 {formatLength(lb.yellowMaxM, project.unitSystem ?? 'metric')}
                               </span>
                               {' · '}
-                              <span className="text-red-300">
+                              <span style={{ color: VISION_SEMAFORO_HEX.red }}>
                                 rojo hasta{' '}
                                 {formatLength(lb.redMaxM, project.unitSystem ?? 'metric')}
                               </span>

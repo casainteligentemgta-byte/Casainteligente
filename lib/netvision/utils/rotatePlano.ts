@@ -7,6 +7,7 @@ import {
   applyNightPlanoPalette,
   type NightPlanoOptions,
 } from '@/lib/netvision/utils/nightPlanoPalette'
+import { rotateCameraLabelOffset } from '@/lib/netvision/utils/cameraLabelOffset'
 
 export type PlanoRotateDir = 'cw' | 'ccw'
 
@@ -48,7 +49,13 @@ export function rotateProjectGeometry(
   const dYaw = dir === 'cw' ? 90 : -90
   const cameras = project.cameras.map((c) => {
     const p = rotateNormPoint(c.x, c.y, dir)
-    return { ...c, x: p.x, y: p.y, yawDeg: wrapYaw(c.yawDeg + dYaw) }
+    return {
+      ...c,
+      x: p.x,
+      y: p.y,
+      yawDeg: wrapYaw(c.yawDeg + dYaw),
+      ...rotateCameraLabelOffset(c, dir),
+    }
   })
   const networkNodes = project.networkNodes.map((n) => {
     const p = rotateNormPoint(n.x, n.y, dir)

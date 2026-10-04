@@ -162,6 +162,29 @@ describe('coverageBandPolygons', () => {
     assert.ok((polys.yellowPolygon?.length ?? 0) >= 3)
   })
 
+  it('naranja y rojo son anillos (no cubren el centro si hay verde)', () => {
+    const polys = coverageBandPolygons({
+      cx: 0.4,
+      cy: 0.5,
+      startAngleRad: -Math.PI / 4,
+      endAngleRad: Math.PI / 4,
+      innerRadiusNorm: 0,
+      greenRadiusNorm: 0.08,
+      yellowRadiusNorm: 0.14,
+      redRadiusNorm: 0.22,
+      structures: [],
+    })
+    assert.ok((polys.redPolygon?.length ?? 0) >= 3)
+    const yellowHasCenter = (polys.yellowPolygon ?? []).some(
+      (p) => Math.abs(p.x - 0.4) < 1e-9 && Math.abs(p.y - 0.5) < 1e-9,
+    )
+    const redHasCenter = (polys.redPolygon ?? []).some(
+      (p) => Math.abs(p.x - 0.4) < 1e-9 && Math.abs(p.y - 0.5) < 1e-9,
+    )
+    assert.equal(yellowHasCenter, false)
+    assert.equal(redHasCenter, false)
+  })
+
   it('sin radio verde no genera polígono verde', () => {
     const polys = coverageBandPolygons({
       cx: 0.5,
@@ -204,6 +227,8 @@ describe('buildCoverageSectors band polygons', () => {
     assert.ok((s.polygon?.length ?? 0) >= 3)
     assert.ok((s.greenPolygon?.length ?? 0) >= 3)
     assert.ok((s.yellowPolygon?.length ?? 0) >= 3)
+    assert.ok((s.redPolygon?.length ?? 0) >= 3)
+    assert.ok((s.redPolygon?.length ?? 0) >= 3)
     assert.ok((s.greenRadiusNorm ?? 0) < (s.yellowRadiusNorm ?? 0))
     assert.ok((s.yellowRadiusNorm ?? 0) <= s.radiusNorm + 1e-9)
   })

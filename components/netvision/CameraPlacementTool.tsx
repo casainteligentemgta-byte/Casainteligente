@@ -5,6 +5,7 @@ import {
   Arc,
   Circle,
   Image as KonvaImage,
+  Group,
   Layer,
   Line,
   Rect,
@@ -45,6 +46,18 @@ import {
   visionPatchFromPointer,
   type VisionHandleMode,
 } from '@/lib/netvision/utils/visionAdjust'
+import {
+  visionBandSolidFill,
+  visionOverlayAlpha,
+} from '@/lib/netvision/utils/visionSemaforoPalette'
+import {
+  wallDrawnStrokePx,
+  wallStrokeColor,
+} from '@/lib/netvision/utils/structureStroke'
+import {
+  cameraLabelStagePos,
+  labelOffsetFromNorm,
+} from '@/lib/netvision/utils/cameraLabelOffset'
 
 export type CameraPlacementToolProps = {
   backgroundUrl: string | null
@@ -79,6 +92,8 @@ export type CameraPlacementToolProps = {
   showFov: boolean
   /** Opacidad del semáforo CCTV (0–1). Por defecto translúcido para ver el plano. */
   visionOpacity?: number
+  /** Cámaras con cobertura apagada (el pin sigue). */
+  coverageHiddenIds?: string[]
   showWifi: boolean
   showSound?: boolean
   showLinks: boolean
@@ -92,6 +107,10 @@ export type CameraPlacementToolProps = {
   /** En placeMode, tocar cámara/nodo ancla el trazo a ese punto. */
   snapPlaceToDevices?: boolean
   onMove: (id: string, normX: number, normY: number) => void
+  /** Mover el nombre de la cámara en el plano (offset persistido). */
+  onPatchCamera?: (id: string, patch: Partial<DesignCamera>) => void
+  /** Vista cliente / presentación: sin arrastres ni asas. */
+  readOnly?: boolean
   /** Ajuste interactivo de óptica (yaw / FOV por lado / alcance) desde el plano. */
   onAdjustCameraVision?: (
     id: string,
@@ -156,13 +175,6 @@ function spectrumFill(strength: number, hue: number, boost = 0) {
 
 type SpectrumBand = 'red' | 'yellow' | 'green'
 
-/** Semáforo de cobertura: verde / naranja / rojo translúcidos (se ve el plano debajo). */
-function visionBandSolidFill(band: SpectrumBand): string {
-  if (band === 'green') return 'rgba(34, 197, 94, 0.42)'
-  if (band === 'yellow') return 'rgba(249, 115, 22, 0.36)'
-  return 'rgba(239, 68, 68, 0.30)'
-}
-
 function sectorPolyPoints(
   poly: { x: number; y: number }[] | undefined,
   offsetX: number,
@@ -179,9 +191,9 @@ function sectorPolyPoints(
 }
 
 /**
- * Semáforo CCTV relleno con polígonos del FOV (elipse + recorte de muros).
- * Arcos circulares no cubrían el cono en planos apaisados y dejaban huecos.
- * Se pinta rojo → amarillo → verde para que en solapes gane la mejor detección.
+ * Semáforo CCTV: anillos exclusivos (rojo / naranja / verde).
+ * La opacidad va en el relleno; Konva no aplana la capa y si se apilan
+ * se ensucia el color.
  */
 function VisionSpectrumLayer({
   sectors,
@@ -190,6 +202,7 @@ function VisionSpectrumLayer({
   drawW,
   drawH,
   opacity = 0.36,
+  invert = false,
 }: {
   sectors: CoverageSector[]
   offsetX: number
@@ -198,16 +211,17 @@ function VisionSpectrumLayer({
   drawH: number
   /** 0–1: qué tan opaco se ve el semáforo sobre el plano. */
   opacity?: number
+  invert?: boolean
 }) {
   const bands: { band: SpectrumBand; polyOf: (s: CoverageSector) => { x: number; y: number }[] | undefined }[] =
     [
-      { band: 'red', polyOf: (s) => s.polygon },
+      { band: 'red', polyOf: (s) => s.redPolygon },
       { band: 'yellow', polyOf: (s) => s.yellowPolygon },
       { band: 'green', polyOf: (s) => s.greenPolygon },
     ]
-  const layerOpacity = Math.min(1, Math.max(0.1, opacity))
+  const fillAlpha = visionOverlayAlpha(opacity, invert)
   return (
-    <Layer listening={false} opacity={layerOpacity}>
+    <Layer listening={false}>
       {bands.flatMap(({ band, polyOf }) =>
         sectors.flatMap((s) => {
           const pts = sectorPolyPoints(polyOf(s), offsetX, offsetY, drawW, drawH)
@@ -218,7 +232,8 @@ function VisionSpectrumLayer({
               key={`vis-band-${band}-${s.cameraId}-${lens}`}
               points={pts}
               closed
-              fill={visionBandSolidFill(band)}
+              fill={visionBandSolidFill(band, fillAlpha)}
+              globalCompositeOperation={invert ? 'screen' : 'source-over'}
               listening={false}
               perfectDrawEnabled={false}
               strokeEnabled={false}
@@ -318,23 +333,6 @@ function invertOptionsKey(opts?: NightPlanoOptions): string {
   return `${opts?.cotaColor ?? 'auto'}:${clampGrosorMuro(opts?.grosorMuro)}`
 }
 
-function wallDrawnStroke(selected: boolean, grosor: number): number {
-  const t = 0.28 + (clampGrosorMuro(grosor) / 100) * 1.5
-  return Math.max(0.35, (selected ? 2.5 : 1.25) * t)
-}
-
-/** Bloque/concreto son oscuros: en plano negro se pierden si no se aclaran. */
-function wallStrokeColor(
-  mat: { id: string; color: string },
-  invert: boolean,
-  selected: boolean,
-): string {
-  if (!invert) return mat.color
-  if (mat.id === 'concrete') return selected ? '#f5f5f4' : '#d6d3d1'
-  if (mat.id === 'block') return selected ? '#fde68a' : '#e7e5e4'
-  return mat.color
-}
-
 function useHtmlImage(url: string | null, invert = false, invertOptions?: NightPlanoOptions) {
   const [image, setImage] = useState<HTMLImageElement | null>(null)
   useEffect(() => {
@@ -409,6 +407,7 @@ export default function CameraPlacementTool({
   draftLabel = null,
   showFov,
   visionOpacity = 0.36,
+  coverageHiddenIds = [],
   showWifi,
   showSound = false,
   showLinks,
@@ -420,6 +419,8 @@ export default function CameraPlacementTool({
   onFinishPlace,
   snapPlaceToDevices = false,
   onMove,
+  onPatchCamera,
+  readOnly = false,
   onAdjustCameraVision,
   metersPerNormX = 40,
   metersPerNormY = 40,
@@ -449,6 +450,10 @@ export default function CameraPlacementTool({
   const [pinching, setPinching] = useState(false)
   /** Asas de apertura/orientación/alcance: visibles al elegir la cámara; se ocultan al soltar tras ajustar. */
   const [visionHandlesOpen, setVisionHandlesOpen] = useState(false)
+  const [draggingLabelId, setDraggingLabelId] = useState<string | null>(null)
+  const [dragLabelPos, setDragLabelPos] = useState<{ x: number; y: number } | null>(
+    null,
+  )
   const prevSelectedIdRef = useRef<string | null>(null)
   const viewRef = useRef({ zoom: 1, stagePos: { x: 0, y: 0 } })
   const pinchRef = useRef<PinchState | null>(null)
@@ -799,6 +804,7 @@ export default function CameraPlacementTool({
             drawW={drawW}
             drawH={drawH}
             opacity={visionOpacity}
+            invert={invertBackground}
           />
         ) : null}
         <Layer>
@@ -886,7 +892,8 @@ export default function CameraPlacementTool({
                 selected &&
                 !!onAdjustCameraVision &&
                 !snapPlaceToDevices &&
-                !placeMode
+                !placeMode &&
+                !readOnly
               const applyYawFromEvent = (e: KonvaEventObject<DragEvent>) => {
                 const stage = e.target.getStage()
                 const pos = stage?.getRelativePointerPosition()
@@ -1049,13 +1056,16 @@ export default function CameraPlacementTool({
             const y1 = offsetY + s.y1 * drawH
             const x2 = offsetX + s.x2 * drawW
             const y2 = offsetY + s.y2 * drawH
-            const canDrag = !!onStructureMove && !placeMode
+            const canDrag = !!onStructureMove && !placeMode && !readOnly
             return (
               <Fragment key={`str-${s.id}`}>
                 <Line
                   points={[x1, y1, x2, y2]}
                   stroke={wallStrokeColor(mat, invertBackground, selected)}
-                  strokeWidth={wallDrawnStroke(selected, wallStrokeGrosor)}
+                  strokeWidth={wallDrawnStrokePx(
+                    clampGrosorMuro(s.grosor ?? wallStrokeGrosor),
+                    selected,
+                  )}
                   hitStrokeWidth={placeMode ? 0 : 16}
                   dash={mat.dash ?? undefined}
                   lineCap="round"
@@ -1468,6 +1478,7 @@ export default function CameraPlacementTool({
             const cx = offsetX + cam.x * drawW
             const cy = offsetY + cam.y * drawH
             const selected = cam.id === selectedId
+            const coverageOff = coverageHiddenIds.includes(cam.id)
             return (
               <Circle
                 key={cam.id}
@@ -1475,6 +1486,7 @@ export default function CameraPlacementTool({
                 y={cy}
                 radius={selected ? 5 : 4}
                 fill={selected ? '#22d3ee' : '#06b6d4'}
+                opacity={coverageOff ? 0.38 : 1}
                 stroke="#0f172a"
                 strokeWidth={1.25}
                 hitStrokeWidth={16}
@@ -1482,7 +1494,7 @@ export default function CameraPlacementTool({
                 shadowBlur={3}
                 shadowOpacity={0.3}
                 listening={!placeMode || snapPlaceToDevices}
-                draggable={!placeMode}
+                draggable={!placeMode && !readOnly}
                 onClick={(e) => {
                   e.cancelBubble = true
                   if (snapPlaceToDevices && placeMode) {
@@ -1523,6 +1535,7 @@ export default function CameraPlacementTool({
           {/* Asas de visión: al seleccionar; se ocultan al soltar tras ajustar apertura/orient./alcance */}
           {showFov &&
             onAdjustCameraVision &&
+            !readOnly &&
             !snapPlaceToDevices &&
             visionHandlesOpen &&
             cameras
@@ -1773,7 +1786,7 @@ export default function CameraPlacementTool({
                   shadowOpacity={0.28}
                   hitStrokeWidth={Math.max(10, 14 - size)}
                   listening={!placeMode || snapPlaceToDevices}
-                  draggable={!placeMode}
+                  draggable={!placeMode && !readOnly}
                   onClick={(e) => {
                     e.cancelBubble = true
                     if (snapPlaceToDevices && placeMode) {
@@ -1848,33 +1861,6 @@ export default function CameraPlacementTool({
             )
           })}
 
-          {cameras.map((cam) => {
-            const selected = cam.id === selectedId
-            const tilt = Math.round(cam.tiltDeg ?? 0)
-            return (
-              <Fragment key={`lbl-${cam.id}`}>
-                <Text
-                  x={offsetX + cam.x * drawW + 12}
-                  y={offsetY + cam.y * drawH - 18}
-                  text={cam.label}
-                  fontSize={11}
-                  fill="#e2e8f0"
-                  listening={false}
-                />
-                {selected ? (
-                  <Text
-                    x={offsetX + cam.x * drawW + 12}
-                    y={offsetY + cam.y * drawH - 6}
-                    text={`${cam.mountHeightM.toFixed(1)} m · ${tilt}°`}
-                    fontSize={9}
-                    fill="#67e8f9"
-                    listening={false}
-                  />
-                ) : null}
-              </Fragment>
-            )
-          })}
-
           {planDevices.map((dev) => {
             const cx = offsetX + dev.x * drawW
             const cy = offsetY + dev.y * drawH
@@ -1894,7 +1880,7 @@ export default function CameraPlacementTool({
                 shadowBlur={3}
                 shadowOpacity={0.3}
                 listening={!placeMode || snapPlaceToDevices}
-                draggable={!placeMode}
+                draggable={!placeMode && !readOnly}
                 onClick={(e) => {
                   e.cancelBubble = true
                   if (snapPlaceToDevices && placeMode) {
@@ -1959,6 +1945,112 @@ export default function CameraPlacementTool({
               listening={false}
             />
           ))}
+
+          {cameras.map((cam) => {
+            const selected = cam.id === selectedId
+            const tilt = Math.round(cam.tiltDeg ?? 0)
+            const coverageOff = coverageHiddenIds.includes(cam.id)
+            const labelPos = cameraLabelStagePos(cam, offsetX, offsetY, drawW, drawH)
+            const live =
+              draggingLabelId === cam.id && dragLabelPos ? dragLabelPos : labelPos
+            const canDragLabel = !placeMode && !readOnly && !!onPatchCamera
+            const pinX = offsetX + cam.x * drawW
+            const pinY = offsetY + cam.y * drawH
+            const chipW = Math.max(72, cam.label.length * 7.4 + 28)
+            const chipH = selected ? 40 : 32
+            return (
+              <Fragment key={`lbl-${cam.id}`}>
+                <Line
+                  points={[pinX, pinY, live.x + 8, live.y + chipH / 2]}
+                  stroke={selected ? 'rgba(103,232,249,0.7)' : 'rgba(226,232,240,0.4)'}
+                  strokeWidth={1}
+                  dash={[4, 3]}
+                  listening={false}
+                />
+                <Group
+                  x={live.x}
+                  y={live.y}
+                  listening={!placeMode}
+                  draggable={canDragLabel}
+                  dragDistance={3}
+                  onMouseEnter={(e) => {
+                    if (!canDragLabel) return
+                    const stage = e.target.getStage()
+                    if (stage) stage.container().style.cursor = 'grab'
+                  }}
+                  onMouseLeave={(e) => {
+                    const stage = e.target.getStage()
+                    if (stage) stage.container().style.cursor = 'default'
+                  }}
+                  onClick={(e) => {
+                    e.cancelBubble = true
+                    onSelect(cam.id)
+                  }}
+                  onTap={(e) => {
+                    e.cancelBubble = true
+                    onSelect(cam.id)
+                  }}
+                  onDragStart={(e) => {
+                    e.cancelBubble = true
+                    pauseStageDrag(e.target.getStage())
+                    setDraggingLabelId(cam.id)
+                    setDragLabelPos({ x: e.target.x(), y: e.target.y() })
+                    const stage = e.target.getStage()
+                    if (stage) stage.container().style.cursor = 'grabbing'
+                  }}
+                  onDragMove={(e) => {
+                    e.cancelBubble = true
+                    setDragLabelPos({ x: e.target.x(), y: e.target.y() })
+                  }}
+                  onDragEnd={(e: KonvaEventObject<DragEvent>) => {
+                    e.cancelBubble = true
+                    const node = e.target
+                    const n = toNorm(node.x(), node.y())
+                    onPatchCamera?.(cam.id, labelOffsetFromNorm(cam, n.x, n.y))
+                    setDraggingLabelId(null)
+                    setDragLabelPos(null)
+                    const stage = e.target.getStage()
+                    if (stage) stage.container().style.cursor = 'default'
+                    resumeStageDrag(stage)
+                  }}
+                >
+                  <Rect
+                    x={0}
+                    y={0}
+                    width={chipW}
+                    height={chipH}
+                    cornerRadius={8}
+                    fill={selected ? 'rgba(8, 47, 73, 0.92)' : 'rgba(7, 16, 24, 0.82)'}
+                    stroke={selected ? '#67e8f9' : 'rgba(226,232,240,0.35)'}
+                    strokeWidth={selected ? 1.25 : 1}
+                    shadowColor="black"
+                    shadowBlur={6}
+                    shadowOpacity={0.35}
+                    opacity={coverageOff ? 0.55 : 1}
+                  />
+                  <Text
+                    x={10}
+                    y={selected ? 6 : 9}
+                    text={cam.label}
+                    fontSize={12}
+                    fontStyle="bold"
+                    fill="#f8fafc"
+                    listening={false}
+                  />
+                  {selected ? (
+                    <Text
+                      x={10}
+                      y={22}
+                      text={`${cam.mountHeightM.toFixed(1)} m · ${tilt}°`}
+                      fontSize={9}
+                      fill="#67e8f9"
+                      listening={false}
+                    />
+                  ) : null}
+                </Group>
+              </Fragment>
+            )
+          })}
         </Layer>
       </Stage>
     </div>

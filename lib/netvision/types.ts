@@ -67,6 +67,12 @@ export type DesignCamera = {
   /** Alcance de visión en metros (override día/noche del catálogo). */
   rangeM?: number
   /**
+   * Desplazamiento del nombre en el plano (normalizado, relativo al pin).
+   * Si falta, el texto queda a +12 / −18 px del pin.
+   */
+  labelOffsetX?: number
+  labelOffsetY?: number
+  /**
    * Cámaras Dual: ajuste propio de cada lente secundaria (por id de lente, p. ej. «tele»).
    * Cada cono puede mirar a otro lugar. La lente primaria usa yawDeg / fov* / rangeM de arriba.
    */
@@ -191,6 +197,8 @@ export type DesignStructure = {
   y1: number
   x2: number
   y2: number
+  /** Grosor visual de esta línea (0 = fina, 100 = gruesa). */
+  grosor?: number
 }
 
 /** Tramo de canalización subterránea dibujado a mano en el plano (2 puntos). */
@@ -236,7 +244,7 @@ export type NetVisionProject = {
   /** Si true, el plano se muestra invertido (fondo negro, trazos blancos). */
   planoInvertido?: boolean
   /** Color de cotas/números en modo fondo negro. */
-  planoCotaColor?: 'auto' | 'verde' | 'naranja' | 'amarillo'
+  planoCotaColor?: 'auto' | 'verde' | 'naranja' | 'azul' | 'blanco' | 'amarillo'
   /** Grosor visual de la línea de muro (0 = fina, 100 = gruesa). */
   planoGrosorMuro?: number
   cameras: DesignCamera[]
@@ -298,8 +306,10 @@ export type CoverageSector = {
   yellowRadiusNorm?: number
   /** Polígono de la banda verde (mismo recorte de muros que `polygon`). */
   greenPolygon?: { x: number; y: number }[]
-  /** Polígono de la banda amarilla. */
+  /** Anillo naranja (entre verde y rojo), no el pie completo. */
   yellowPolygon?: { x: number; y: number }[]
+  /** Anillo rojo (del naranja al borde del cono). */
+  redPolygon?: { x: number; y: number }[]
 }
 
 /** Semáforo de cobertura CCTV (metros de ficha; el cono estirado no los agranda). */

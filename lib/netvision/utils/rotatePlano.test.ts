@@ -50,6 +50,29 @@ describe('rotateProjectGeometry', () => {
     assert.equal(next.scale.metersPerNormY, 10)
   })
 
+  it('rota el offset del nombre de la cámara', () => {
+    const base = emptyProject({ id: 't', name: 't' })
+    const project = {
+      ...base,
+      cameras: [
+        {
+          id: 'c1',
+          label: 'CAM-01',
+          x: 0.25,
+          y: 0.1,
+          modelId: 'x',
+          yawDeg: 0,
+          mountHeightM: 2.8,
+          labelOffsetX: 0.1,
+          labelOffsetY: -0.2,
+        },
+      ],
+    }
+    const next = rotateProjectGeometry(project, 'cw')
+    assert.equal(next.cameras[0]!.labelOffsetX, 0.2)
+    assert.equal(next.cameras[0]!.labelOffsetY, 0.1)
+  })
+
   it('rota equipos de plano de especialidad', () => {
     const base = emptyProject({ id: 't', name: 't' })
     const project = {

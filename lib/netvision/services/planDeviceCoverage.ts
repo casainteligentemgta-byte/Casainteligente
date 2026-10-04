@@ -83,6 +83,7 @@ export function buildPlanDeviceSectors(
           innerRadiusNorm: 0,
           greenRadiusNorm,
           yellowRadiusNorm,
+          redRadiusNorm: radiusNorm,
           structures,
         }),
       }
@@ -148,6 +149,7 @@ export function buildApCoverageSectors(
           innerRadiusNorm: 0,
           greenRadiusNorm,
           yellowRadiusNorm,
+          redRadiusNorm: radiusNorm,
           structures,
         }),
       }

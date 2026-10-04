@@ -1,6 +1,7 @@
 'use client'
 
 import { Trash2 } from 'lucide-react'
+import { hasCustomLabelOffset } from '@/lib/netvision/utils/cameraLabelOffset'
 import { Button } from '@/components/nexus/ui/button'
 import {
   cameraCatalogGrouped,
@@ -206,6 +207,21 @@ export default function NetVisionSelectedProps({
             className={fieldClass}
           />
         </label>
+        {hasCustomLabelOffset(camera) ? (
+          <button
+            type="button"
+            onClick={() =>
+              onPatchCamera({ labelOffsetX: undefined, labelOffsetY: undefined })
+            }
+            className="text-[11px] font-semibold text-[var(--nexus-cyan)] hover:underline"
+          >
+            Volver a poner el nombre junto al pin
+          </button>
+        ) : (
+          <p className="text-[10px] text-[var(--nexus-text-dim)]">
+            En el plano puedes arrastrar el nombre para que no tape muros o cotas.
+          </p>
+        )}
         <label className="block">
           <span className="text-[var(--nexus-text-dim)]">Modelo</span>
           <select
@@ -474,6 +490,24 @@ export default function NetVisionSelectedProps({
               </option>
             ))}
           </select>
+        </label>
+        <label className="block">
+          <span className="flex items-center justify-between text-[var(--nexus-text-dim)]">
+            Grosor de esta línea
+            <span className="tabular-nums text-[var(--nexus-cyan)]">
+              {Math.round(structure.grosor ?? 50)}
+            </span>
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={1}
+            value={structure.grosor ?? 50}
+            onChange={(e) => onPatchStructure({ grosor: Number(e.target.value) })}
+            className="mt-1 h-1.5 w-full accent-[var(--nexus-cyan)]"
+            aria-label="Grosor de la línea seleccionada"
+          />
         </label>
         <p className="text-[10px]" style={{ color: mat.color }}>
           {mat.blocksVision

@@ -78,7 +78,7 @@ export default function StructureDesigner({
       {onGrosorMuro ? (
         <label className="block rounded-lg border border-white/10 bg-black/25 px-2.5 py-2">
           <span className="flex items-center justify-between text-[11px] text-[var(--nexus-text-muted)]">
-            Grosor de la línea del muro
+            Grosor de la línea {selectedId ? 'seleccionada' : 'del siguiente muro'}
             <span className="tabular-nums text-[var(--nexus-cyan)]">
               {Math.round(grosorMuro ?? 50)}
             </span>
