@@ -217,14 +217,14 @@ export default function NetVisionPlanoPrintView() {
             )}
           </div>
 
-          <footer className="grid grid-cols-3 items-center gap-2 border-t border-slate-300 px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-700 sm:text-xs">
+          <footer className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-slate-300 px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-700 sm:grid sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_auto] sm:text-xs">
             <NetVisionCompanyMark
               company={payload.rotulo.company}
-              size={32}
-              className="text-slate-800"
+              size={36}
+              className="min-w-[11rem] text-slate-800"
             />
-            <span className="truncate text-center">{payload.rotulo.dateLabel}</span>
-            <span className="truncate text-right text-cyan-800">
+            <span className="text-center">{payload.rotulo.dateLabel}</span>
+            <span className="text-right text-cyan-800">
               {payload.rotulo.planType}
             </span>
           </footer>

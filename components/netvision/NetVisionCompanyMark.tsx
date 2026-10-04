@@ -22,7 +22,7 @@ export default function NetVisionCompanyMark({
         className="shrink-0 rounded-md object-cover"
         style={{ width: size, height: size }}
       />
-      <span className="truncate">{company}</span>
+      <span className="leading-tight">{company}</span>
     </span>
   )
 }
