@@ -93,7 +93,7 @@ export const NETVISION_LAYER_HELP: LayerHelpItem[] = [
     id: 'calibrate',
     label: 'Calibrar',
     blurb:
-      'Traza una línea sobre un acotamiento del plano. Si el PDF trae el número (4.40, 3.20…), se usa solo. Si no, escríbelo y toca los dos extremos.',
+      'Traza una línea sobre un acotamiento del plano. Si el PDF trae el número (4.40, 3.20…), se usa solo. Si no, escríbelo y toca los dos extremos. Al terminar verás un aviso de calibrado exitoso con el ancho real del plano.',
   },
   {
     id: 'rotate',

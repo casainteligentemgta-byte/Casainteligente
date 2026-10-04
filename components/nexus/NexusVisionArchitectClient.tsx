@@ -39,6 +39,7 @@ import NetVisionLayerHelp, {
 } from '@/components/netvision/NetVisionLayerHelp'
 import NetVisionPlanoLookControls from '@/components/netvision/NetVisionPlanoLookControls'
 import NetVisionCameraVisionToggles from '@/components/netvision/NetVisionCameraVisionToggles'
+import NetVisionCalibracionOkModal from '@/components/netvision/NetVisionCalibracionOkModal'
 import StructureDesigner from '@/components/netvision/StructureDesigner'
 import UndergroundCanalizationTool from '@/components/netvision/UndergroundCanalizationTool'
 import NetVisionSelectedProps from '@/components/netvision/NetVisionSelectedProps'
@@ -216,6 +217,11 @@ import {
   pruneHiddenCameraIds,
   toggleHiddenCameraId,
 } from '@/lib/netvision/utils/cameraVisionVisibility'
+import {
+  calibrationToScale,
+  computePlanCalibration,
+  type CalibrationOk,
+} from '@/lib/netvision/utils/scaleCalibration'
 
 const CameraPlacementTool = dynamic(
   () => import('@/components/netvision/CameraPlacementTool'),
@@ -326,6 +332,7 @@ export default function NexusVisionArchitectClient() {
   const [calibPoints, setCalibPoints] = useState<{ x: number; y: number }[]>([])
   const [calibCursor, setCalibCursor] = useState<{ x: number; y: number } | null>(null)
   const [calibMeters, setCalibMeters] = useState('10')
+  const [calibOk, setCalibOk] = useState<CalibrationOk | null>(null)
   const [planoDims, setPlanoDims] = useState<PlanoDimension[]>([])
   const [sideTab, setSideTab] = useState<NetVisionBranchId>('cctv')
   const [redFocusKind, setRedFocusKind] = useState<NetworkNodeKind>('switch')
@@ -1441,25 +1448,33 @@ export default function NexusVisionArchitectClient() {
               calibMeters,
               project.unitSystem ?? 'metric',
             )
-        const distN = Math.hypot(a.x - b.x, a.y - b.y) || 1e-6
-        const metersPerNorm = meters / distN
+        const outcome = computePlanCalibration({
+          a,
+          b,
+          meters,
+          source: hit ? 'cota' : 'manual',
+          label: hit ? hit.label : calibMeters,
+        })
+        if (!outcome.ok) {
+          setCalibPoints([])
+          setCalibCursor(null)
+          setError(
+            outcome.reason === 'short'
+              ? 'El trazo es demasiado corto. Marca los dos extremos de una cota más larga.'
+              : 'Revisa los metros de la cota e inténtalo otra vez.',
+          )
+          return
+        }
         setProject((p) => ({
           ...p,
-          scale: {
-            metersPerNormX: metersPerNorm,
-            metersPerNormY: metersPerNorm,
-            calibrated: true,
-          },
+          scale: calibrationToScale(outcome),
         }))
         setCalibPoints([])
         setCalibCursor(null)
         setCalibrateMode(false)
         if (hit) setCalibMeters(hit.label)
-        setInfo(
-          hit
-            ? `Escala lista: ${hit.label} m según el acotamiento del plano.`
-            : `Escala lista: ${formatLength(meters, project.unitSystem ?? 'metric')} (valor indicado).`,
-        )
+        setCalibOk(outcome)
+        setInfo(null)
         setError(null)
       } else {
         setCalibPoints(next)
@@ -2318,6 +2333,7 @@ export default function NexusVisionArchitectClient() {
           </div>
           <button
             type="button"
+            data-nv-calibrar
             title={layerHelpTitle('calibrate')}
             className={`w-full rounded-md px-2 py-1.5 text-left text-[11px] font-semibold ${
               calibrateMode
@@ -2702,6 +2718,14 @@ export default function NexusVisionArchitectClient() {
         }}
       />
       {headerNav}
+
+      {calibOk ? (
+        <NetVisionCalibracionOkModal
+          result={calibOk}
+          unitSystem={project.unitSystem ?? 'metric'}
+          onClose={() => setCalibOk(null)}
+        />
+      ) : null}
 
       {error ? (
         <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
