@@ -37,6 +37,7 @@ import NetworkDesigner from '@/components/netvision/NetworkDesigner'
 import NetVisionLayerHelp, {
   layerHelpTitle,
 } from '@/components/netvision/NetVisionLayerHelp'
+import NetVisionPlanoLookControls from '@/components/netvision/NetVisionPlanoLookControls'
 import StructureDesigner from '@/components/netvision/StructureDesigner'
 import UndergroundCanalizationTool from '@/components/netvision/UndergroundCanalizationTool'
 import NetVisionSelectedProps from '@/components/netvision/NetVisionSelectedProps'
@@ -203,6 +204,10 @@ import {
   popProjectHistory,
   pushProjectHistory,
 } from '@/lib/netvision/utils/projectHistory'
+import {
+  clampGrosorMuro,
+  normalizeCotaColor,
+} from '@/lib/netvision/utils/nightPlanoPalette'
 
 const CameraPlacementTool = dynamic(
   () => import('@/components/netvision/CameraPlacementTool'),
@@ -289,6 +294,7 @@ export default function NexusVisionArchitectClient() {
   const [ugTerrain, setUgTerrain] = useState<TerrainType>('medium')
   const [ugChamberMat, setUgChamberMat] = useState<ChamberMaterial>('polietileno')
   const [nightMode, setNightMode] = useState(false)
+  const [lookPanelOpen, setLookPanelOpen] = useState(true)
   const [loading, setLoading] = useState(false)
   const [exportingPdf, setExportingPdf] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -364,11 +370,24 @@ export default function NexusVisionArchitectClient() {
   }, [project.cameras.length])
 
   useEffect(() => {
-    const p = loadProject()
-    setProject(p)
-    if (p.complianceProfileId) setComplianceCountry(p.complianceProfileId)
-    setCalibMeters(defaultCalibrationInput(p.unitSystem ?? 'metric'))
-    lastProjectRef.current = p
+    try {
+      const p = loadProject()
+      setProject(p)
+      if (p.complianceProfileId) setComplianceCountry(p.complianceProfileId)
+      setCalibMeters(defaultCalibrationInput(p.unitSystem ?? 'metric'))
+      lastProjectRef.current = p
+      if (p.cameras.length > 0 && !p.planoUrl) {
+        setInfo(
+          `Proyecto «${p.name}» con ${p.cameras.length} cámaras. El plano no está en este dispositivo; pulsa Cargar plano (las cámaras se conservan).`,
+        )
+      }
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? e.message
+          : 'No se pudo abrir el último proyecto. Entra en Mis proyectos.',
+      )
+    }
     setHydrated(true)
   }, [])
 
@@ -531,13 +550,15 @@ export default function NexusVisionArchitectClient() {
 
   const visionSpectrum = useMemo(
     () =>
-      buildVisionSpectrum(
-        project.cameras,
-        project.scale,
-        nightMode ? 'night' : 'day',
-        structures,
-      ),
-    [project.cameras, project.scale, nightMode, structures],
+      showFov
+        ? buildVisionSpectrum(
+            project.cameras,
+            project.scale,
+            nightMode ? 'night' : 'day',
+            structures,
+          )
+        : [],
+    [showFov, project.cameras, project.scale, nightMode, structures],
   )
 
   const wifiCircles = useMemo(
@@ -546,31 +567,34 @@ export default function NexusVisionArchitectClient() {
   )
 
   const wifiSpectrum = useMemo(
-    () => buildWifiSpectrum(project.networkNodes, project.scale, structures),
-    [project.networkNodes, project.scale, structures],
+    () =>
+      showWifi ? buildWifiSpectrum(project.networkNodes, project.scale, structures) : [],
+    [showWifi, project.networkNodes, project.scale, structures],
   )
 
   const planDevices = project.planDevices ?? []
 
   const soundSpectrum = useMemo(
     () =>
-      buildSoundSpectrum(
-        project.cameras,
-        project.scale,
-        structures,
-        28,
-        8,
-        planDevices
-          .filter((d) => d.discipline === 'sonido')
-          .map((d) => ({
-            x: d.x,
-            y: d.y,
-            rangeM:
-              d.rangeM ??
-              getPlanDeviceModelOrDefault(d.modelId, 'sonido').rangeM,
-          })),
-      ),
-    [project.cameras, project.scale, structures, planDevices],
+      showSound
+        ? buildSoundSpectrum(
+            project.cameras,
+            project.scale,
+            structures,
+            28,
+            8,
+            planDevices
+              .filter((d) => d.discipline === 'sonido')
+              .map((d) => ({
+                x: d.x,
+                y: d.y,
+                rangeM:
+                  d.rangeM ??
+                  getPlanDeviceModelOrDefault(d.modelId, 'sonido').rangeM,
+              })),
+          )
+        : [],
+    [showSound, project.cameras, project.scale, structures, planDevices],
   )
 
   const planSectors = useMemo(() => {
@@ -913,17 +937,44 @@ export default function NexusVisionArchitectClient() {
       } else {
         throw new Error('Usa un PDF (exportado del CAD) o una imagen (JPG/PNG/WEBP).')
       }
-      setProject((p) => ({
-        ...p,
-        planoUrl: url,
-        planoNombre: file.name,
-        cameras: [],
-        networkNodes: [],
-        structures: detected,
-        undergroundSegments: [],
-        cableSegments: [],
-        cableRouteOverrides: {},
-      }))
+      const keepDesign =
+        project.cameras.length > 0 ||
+        project.networkNodes.length > 0 ||
+        (project.planDevices?.length ?? 0) > 0 ||
+        (project.cableSegments?.length ?? 0) > 0
+      if (keepDesign) {
+        const cam = project.cameras.length
+        setInfo(
+          `${file.name} actualizado. Se conservan ${cam} cámara${cam === 1 ? '' : 's'} y el resto del diseño.`,
+        )
+      }
+      setProject((p) => {
+        const preserve =
+          p.cameras.length > 0 ||
+          p.networkNodes.length > 0 ||
+          (p.planDevices?.length ?? 0) > 0 ||
+          (p.cableSegments?.length ?? 0) > 0
+        if (preserve) {
+          return {
+            ...p,
+            planoUrl: url,
+            planoNombre: file.name,
+            structures:
+              (p.structures?.length ?? 0) > 0 ? p.structures : detected,
+          }
+        }
+        return {
+          ...p,
+          planoUrl: url,
+          planoNombre: file.name,
+          cameras: [],
+          networkNodes: [],
+          structures: detected,
+          undergroundSegments: [],
+          cableSegments: [],
+          cableRouteOverrides: {},
+        }
+      })
       setSelectedId(null)
       setCalibrateMode(false)
       setCalibPoints([])
@@ -939,7 +990,7 @@ export default function NexusVisionArchitectClient() {
     } finally {
       setLoading(false)
     }
-  }, [clearCableDraft])
+  }, [clearCableDraft, project.cameras.length, project.networkNodes.length, project.planDevices, project.cableSegments])
 
   const rotatePlano = useCallback(
     async (dir: PlanoRotateDir) => {
@@ -1622,19 +1673,35 @@ export default function NexusVisionArchitectClient() {
   }, [loading, project.planoUrl, project.structures?.length])
 
   const switchToProject = (p: NetVisionProject) => {
-    setProject(p)
-    setSelectedId(null)
-    setComplianceCountry(p.complianceProfileId || 'VE')
-    setCalibPoints([])
-    setCalibrateMode(false)
-    setCalibMeters(defaultCalibrationInput(p.unitSystem ?? 'metric'))
-    setError(null)
-    setInfo(null)
-    pdfBytesRef.current = null
-    pdfRotateQuartersRef.current = 0
-    setCanDetectPdfWalls(false)
-    setPlanoDims([])
-    setCalibCursor(null)
+    try {
+      setProject(p)
+      setSelectedId(null)
+      setComplianceCountry(p.complianceProfileId || 'VE')
+      setCalibPoints([])
+      setCalibrateMode(false)
+      setCalibMeters(defaultCalibrationInput(p.unitSystem ?? 'metric'))
+      setError(null)
+      pdfBytesRef.current = null
+      pdfRotateQuartersRef.current = 0
+      setCanDetectPdfWalls(false)
+      setPlanoDims([])
+      setCalibCursor(null)
+      if (p.cameras.length > 0 && !p.planoUrl) {
+        setInfo(
+          `Abierto «${p.name}» (${p.cameras.length} cámaras). Falta el plano en este iPad/navegador: Cargar plano no borra las cámaras.`,
+        )
+      } else {
+        setInfo(
+          `Abierto «${p.name}»${p.cameras.length ? ` · ${p.cameras.length} cámaras` : ''}`,
+        )
+      }
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? e.message
+          : 'No se pudo abrir el proyecto. Prueba de nuevo o recarga la página.',
+      )
+    }
   }
 
   const persistProjectNow = useCallback(async () => {
@@ -2341,22 +2408,28 @@ export default function NexusVisionArchitectClient() {
                 />
                 Noche
               </label>
-              <label
-                title={layerHelpTitle('invert')}
-                className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--nexus-cyan)]"
-              >
-                <input
-                  type="checkbox"
-                  checked={Boolean(project.planoInvertido)}
-                  disabled={!project.planoUrl || loading}
-                  onChange={(e) =>
-                    setProject((p) => ({ ...p, planoInvertido: e.target.checked }))
-                  }
-                />
-                Fondo negro
-              </label>
             </div>
           </details>
+          <div className="rounded-md border border-white/10 bg-black/30 px-2 py-2">
+            <p className="mb-1.5 px-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-text-dim)]">
+              Apariencia
+            </p>
+            <NetVisionPlanoLookControls
+              invertido={Boolean(project.planoInvertido)}
+              cotaColor={normalizeCotaColor(project.planoCotaColor)}
+              grosorMuro={clampGrosorMuro(project.planoGrosorMuro)}
+              disabled={!project.planoUrl || loading}
+              onInvertido={(value) =>
+                setProject((p) => ({ ...p, planoInvertido: value }))
+              }
+              onCotaColor={(value) =>
+                setProject((p) => ({ ...p, planoCotaColor: value }))
+              }
+              onGrosorMuro={(value) =>
+                setProject((p) => ({ ...p, planoGrosorMuro: value }))
+              }
+            />
+          </div>
           <div className="flex overflow-hidden rounded-md border border-white/15 bg-black/40">
             <button
               type="button"
@@ -2464,6 +2537,24 @@ export default function NexusVisionArchitectClient() {
           className="inline-flex shrink-0 items-center rounded-lg border border-emerald-400/40 bg-emerald-500/15 px-2.5 py-1 text-[11px] font-semibold text-emerald-200 disabled:opacity-40"
         >
           Calcular cobertura
+        </button>
+      ) : null}
+      {viewMode === 'plano' ? (
+        <button
+          type="button"
+          disabled={!project.planoUrl || loading}
+          title={layerHelpTitle('invert')}
+          aria-pressed={Boolean(project.planoInvertido)}
+          onClick={() =>
+            setProject((p) => ({ ...p, planoInvertido: !p.planoInvertido }))
+          }
+          className={`inline-flex shrink-0 items-center rounded-lg border px-2.5 py-1 text-[11px] font-semibold disabled:opacity-40 ${
+            project.planoInvertido
+              ? 'border-white/70 bg-white text-black'
+              : 'border-white/15 text-[var(--nexus-text-muted)] hover:bg-white/5 hover:text-white'
+          }`}
+        >
+          Fondo negro
         </button>
       ) : null}
       <button
@@ -2593,13 +2684,18 @@ export default function NexusVisionArchitectClient() {
                 />
               ) : (
                 <div
-                  className={`h-[calc(100dvh-11.5rem)] min-h-[420px] w-full overflow-hidden rounded-xl border border-[rgba(0,242,254,0.2)] bg-black ${
+                  className={`relative h-[calc(100dvh-11.5rem)] min-h-[420px] w-full overflow-hidden rounded-xl border border-[rgba(0,242,254,0.2)] bg-black ${
                     placeMode ? 'cursor-crosshair' : 'cursor-default'
                   }`}
                 >
                   <CameraPlacementTool
                     backgroundUrl={project.planoUrl}
                     invertBackground={Boolean(project.planoInvertido)}
+                    invertOptions={{
+                      cotaColor: normalizeCotaColor(project.planoCotaColor),
+                      grosorMuro: clampGrosorMuro(project.planoGrosorMuro),
+                    }}
+                    wallStrokeGrosor={clampGrosorMuro(project.planoGrosorMuro)}
                     cameras={project.cameras}
                     networkNodes={project.networkNodes}
                     planDevices={planDevices}
@@ -2733,6 +2829,55 @@ export default function NexusVisionArchitectClient() {
                     zoomControlsRef={zoomControlsRef}
                     onZoomChange={(z) => setZoomPercent(Math.round(z * 100))}
                   />
+                  <div className="pointer-events-none absolute left-3 top-3 z-20 w-[min(16.75rem,calc(100%-1.5rem))]">
+                    {lookPanelOpen ? (
+                      <div className="pointer-events-auto rounded-xl border border-white/20 bg-[#071018]/92 p-2.5 shadow-xl backdrop-blur-md">
+                        <div className="mb-1.5 flex items-center justify-between gap-2">
+                          <p className="px-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-text-dim)]">
+                            Apariencia del plano
+                          </p>
+                          <button
+                            type="button"
+                            title="Ocultar apariencia"
+                            aria-label="Ocultar apariencia"
+                            onClick={() => setLookPanelOpen(false)}
+                            className="rounded-md px-1.5 py-0.5 text-[11px] text-[var(--nexus-text-muted)] hover:bg-white/10 hover:text-white"
+                          >
+                            −
+                          </button>
+                        </div>
+                        <NetVisionPlanoLookControls
+                          compact
+                          invertido={Boolean(project.planoInvertido)}
+                          cotaColor={normalizeCotaColor(project.planoCotaColor)}
+                          grosorMuro={clampGrosorMuro(project.planoGrosorMuro)}
+                          disabled={loading}
+                          onInvertido={(value) =>
+                            setProject((p) => ({ ...p, planoInvertido: value }))
+                          }
+                          onCotaColor={(value) =>
+                            setProject((p) => ({ ...p, planoCotaColor: value }))
+                          }
+                          onGrosorMuro={(value) =>
+                            setProject((p) => ({ ...p, planoGrosorMuro: value }))
+                          }
+                        />
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        title={layerHelpTitle('invert')}
+                        onClick={() => setLookPanelOpen(true)}
+                        className={`pointer-events-auto min-h-9 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold shadow-lg backdrop-blur-md ${
+                          project.planoInvertido
+                            ? 'border-white/70 bg-white text-black'
+                            : 'border-white/20 bg-[#071018]/92 text-[var(--nexus-cyan)]'
+                        }`}
+                      >
+                        Apariencia
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
               {viewMode === 'plano' && showActiveCoverage ? (
@@ -2929,6 +3074,10 @@ export default function NexusVisionArchitectClient() {
               detecting={loading && canDetectPdfWalls}
               onDetectFromPdf={() => void detectWallsFromLoadedPdf()}
               onShowOnPlan={setShowStructures}
+              grosorMuro={clampGrosorMuro(project.planoGrosorMuro)}
+              onGrosorMuro={(value) =>
+                setProject((p) => ({ ...p, planoGrosorMuro: value }))
+              }
               onDrawMaterial={(id) => {
                 setDrawStructureMaterial(id)
                 setStructureDraft(null)

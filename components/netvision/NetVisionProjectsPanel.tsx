@@ -267,10 +267,22 @@ export default function NetVisionProjectsPanel({
                           type="button"
                           className="min-w-0 flex-1 text-left"
                           onClick={() => {
-                            const p = openProject(e.id)
-                            if (p) {
+                            try {
+                              const p = openProject(e.id)
+                              if (!p) {
+                                setCloudMsg(
+                                  `No se pudo abrir «${e.name}». Elige otro o recarga la página.`,
+                                )
+                                return
+                              }
                               onOpen(p)
                               setOpen(false)
+                            } catch (err) {
+                              setCloudMsg(
+                                err instanceof Error
+                                  ? err.message
+                                  : `No se pudo abrir «${e.name}».`,
+                              )
                             }
                           }}
                         >

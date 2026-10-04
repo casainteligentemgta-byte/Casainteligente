@@ -2,12 +2,49 @@
 
 export const NIGHT_BG: readonly [number, number, number] = [0, 0, 0]
 export const NIGHT_WALL: readonly [number, number, number] = [255, 255, 255]
-/** Verde, naranja, amarillo fluorescentes. */
+/** Verde, naranja, amarillo fluorescentes (monitor). */
 export const NIGHT_NEON: ReadonlyArray<readonly [number, number, number]> = [
   [57, 255, 32],
   [255, 140, 0],
   [255, 230, 32],
 ]
+
+export const NIGHT_COTA_COLORES = ['auto', 'verde', 'naranja', 'amarillo'] as const
+export type NightCotaColor = (typeof NIGHT_COTA_COLORES)[number]
+
+export type NightPlanoOptions = {
+  /** Fuerza el neón de cotas/números. `auto` = según forma y cercanía. */
+  cotaColor?: NightCotaColor
+  /**
+   * Grosor de la línea de muro (0 = más fina, 100 = más gruesa).
+   * Default 50 = dilatar 2 px (comportamiento actual).
+   */
+  grosorMuro?: number
+}
+
+export function neonIndexForColor(color: NightCotaColor): number | null {
+  if (color === 'verde') return 0
+  if (color === 'naranja') return 1
+  if (color === 'amarillo') return 2
+  return null
+}
+
+export function clampGrosorMuro(raw: unknown): number {
+  const n = typeof raw === 'number' ? raw : Number(raw)
+  if (!Number.isFinite(n)) return 50
+  return Math.min(100, Math.max(0, Math.round(n)))
+}
+
+/** Radio de dilatación del núcleo de muro (0–4). */
+export function wallDilateFromGrosor(grosor: unknown): number {
+  return Math.round((clampGrosorMuro(grosor) / 100) * 4)
+}
+
+export function normalizeCotaColor(raw: unknown): NightCotaColor {
+  const t = String(raw ?? '').trim().toLowerCase()
+  if (t === 'verde' || t === 'naranja' || t === 'amarillo' || t === 'auto') return t
+  return 'auto'
+}
 
 const INF = 1_000_000
 const CHAMFER_A = 3
@@ -200,6 +237,7 @@ export function applyNightPlanoPalette(
   data: Uint8ClampedArray | number[],
   width: number,
   height: number,
+  options?: NightPlanoOptions,
 ): void {
   const w = width | 0
   const h = height | 0
@@ -232,7 +270,7 @@ export function applyNightPlanoPalette(
   for (let i = 0; i < n; i++) {
     if (ink[i] && dist[i]! >= THICK_CORE) core[i] = 1
   }
-  const thick = dilateMask(core, w, h, 2)
+  const thick = dilateMask(core, w, h, wallDilateFromGrosor(options?.grosorMuro))
   const thin = new Uint8Array(n)
   for (let i = 0; i < n; i++) {
     if (ink[i] && !thick[i]) thin[i] = 1
@@ -240,15 +278,20 @@ export function applyNightPlanoPalette(
 
   const pageMin = Math.min(w, h)
   const { labels, comps } = labelThinComponents(thin, w, h)
+  const locked = neonIndexForColor(normalizeCotaColor(options?.cotaColor))
   const texts = comps.filter((c) => isCompactText(c, pageMin)).map((c) => ({
     ...c,
-    neon: neonIndexFor(c),
+    neon: locked ?? neonIndexFor(c),
   }))
   const neonById = new Map<number, number>()
   for (const t of texts) neonById.set(t.id, t.neon)
   for (const c of comps) {
     if (neonById.has(c.id)) continue
     if (c.area < 3) continue
+    if (locked != null) {
+      neonById.set(c.id, locked)
+      continue
+    }
     const near = nearestTextNeon(c, texts, pageMin)
     if (near !== null) {
       neonById.set(c.id, near)

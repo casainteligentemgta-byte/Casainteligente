@@ -35,12 +35,18 @@ import {
   clampNetworkPlanSize,
   defaultNetworkPlanSize,
 } from '@/lib/netvision/utils/networkNodeSize'
+import {
+  clampGrosorMuro,
+  normalizeCotaColor,
+} from '@/lib/netvision/utils/nightPlanoPalette'
 
 /** Copia activa de trabajo (rápida). */
 export const NETVISION_STORAGE_KEY = 'nexus.netvision.v1'
 /** Biblioteca multi-proyecto en localStorage. */
 export const NETVISION_LIBRARY_KEY = 'nexus.netvision.library.v1'
 export const NETVISION_ACTIVE_ID_KEY = 'nexus.netvision.activeId.v1'
+/** Plano (data URL) aparte para no tumbar la biblioteca si el CAD es grande. */
+export const NETVISION_PLANO_KEY_PREFIX = 'nexus.netvision.plano.'
 
 const LEGACY_V2 = 'nexus.vision.architect.v2'
 const LEGACY_V1 = 'nexus.vision.architect.v1'
@@ -76,6 +82,8 @@ export function emptyProject(partial?: {
     planoUrl: null,
     planoNombre: '',
     planoInvertido: false,
+    planoCotaColor: 'auto',
+    planoGrosorMuro: 50,
     cameras: [],
     networkNodes: [],
     planDevices: [],
@@ -89,6 +97,46 @@ export function emptyProject(partial?: {
   }
 }
 
+function planoStorageKey(id: string): string {
+  return `${NETVISION_PLANO_KEY_PREFIX}${id}`
+}
+
+function readStoredPlano(id: string): string | null {
+  try {
+    const raw = localStorage.getItem(planoStorageKey(id))
+    return raw && raw.length > 8 ? raw : null
+  } catch {
+    return null
+  }
+}
+
+function writeStoredPlano(id: string, planoUrl: string | null): void {
+  try {
+    const key = planoStorageKey(id)
+    if (!planoUrl) {
+      localStorage.removeItem(key)
+      return
+    }
+    localStorage.setItem(key, planoUrl)
+  } catch {
+    try {
+      localStorage.removeItem(planoStorageKey(id))
+    } catch {
+      /* ignore quota */
+    }
+  }
+}
+
+function attachStoredPlano(project: NetVisionProject): NetVisionProject {
+  if (project.planoUrl) return project
+  const stored = readStoredPlano(project.id)
+  return stored ? { ...project, planoUrl: stored } : project
+}
+
+function stripPlano(project: NetVisionProject): NetVisionProject {
+  return project.planoUrl ? { ...project, planoUrl: null } : project
+}
+
 function readLibrary(): LibraryStore {
   try {
     const raw = localStorage.getItem(NETVISION_LIBRARY_KEY)
@@ -97,7 +145,51 @@ function readLibrary(): LibraryStore {
     const projects: Record<string, NetVisionProject> = {}
     if (parsed.projects && typeof parsed.projects === 'object') {
       for (const [id, p] of Object.entries(parsed.projects)) {
-        projects[id] = normalizeProject(p as Partial<NetVisionProject>, id)
+        try {
+          const normalized = normalizeProject(p as Partial<NetVisionProject>, id)
+          if (normalized.planoUrl) {
+            writeStoredPlano(normalized.id, normalized.planoUrl)
+          } else {
+            const stored = readStoredPlano(normalized.id)
+            if (stored) normalized.planoUrl = stored
+          }
+          projects[id] = normalized
+        } catch {
+          try {
+            const rawP = p as Partial<NetVisionProject>
+            const salvaged = emptyProject({
+              id,
+              name: typeof rawP.name === 'string' ? rawP.name : undefined,
+            })
+            if (Array.isArray(rawP.cameras)) {
+              salvaged.cameras = rawP.cameras.flatMap((c) => {
+                try {
+                  return [normalizeCamera(c)]
+                } catch {
+                  return []
+                }
+              })
+            }
+            if (Array.isArray(rawP.networkNodes)) {
+              salvaged.networkNodes = rawP.networkNodes.flatMap((n) => {
+                try {
+                  return [normalizeNetworkNode(n)]
+                } catch {
+                  return []
+                }
+              })
+            }
+            salvaged.planoNombre =
+              typeof rawP.planoNombre === 'string' ? rawP.planoNombre : ''
+            const stored = readStoredPlano(salvaged.id)
+            salvaged.planoUrl =
+              stored ||
+              (typeof rawP.planoUrl === 'string' && rawP.planoUrl ? rawP.planoUrl : null)
+            projects[id] = salvaged
+          } catch {
+            /* se omite solo ese registro */
+          }
+        }
       }
     }
     return { version: 1, projects }
@@ -107,21 +199,16 @@ function readLibrary(): LibraryStore {
 }
 
 function writeLibrary(store: LibraryStore) {
+  const slim: LibraryStore = {
+    version: 1,
+    projects: Object.fromEntries(
+      Object.entries(store.projects).map(([id, p]) => [id, stripPlano(p)]),
+    ),
+  }
   try {
-    localStorage.setItem(NETVISION_LIBRARY_KEY, JSON.stringify(store))
+    localStorage.setItem(NETVISION_LIBRARY_KEY, JSON.stringify(slim))
   } catch {
-    try {
-      const slimProjects: Record<string, NetVisionProject> = {}
-      for (const [id, p] of Object.entries(store.projects)) {
-        slimProjects[id] = { ...p, planoUrl: null }
-      }
-      localStorage.setItem(
-        NETVISION_LIBRARY_KEY,
-        JSON.stringify({ version: 1, projects: slimProjects }),
-      )
-    } catch {
-      /* ignore quota */
-    }
+    /* la biblioteca sin plano ya es liviana; si aún falla, no borrar cámaras */
   }
 }
 
@@ -185,6 +272,7 @@ export function upsertLocalProject(project: NetVisionProject): NetVisionProject 
     // Conserva plano local si la nube no trae imagen
     next.planoUrl = prev.planoUrl
   }
+  writeStoredPlano(next.id, next.planoUrl)
   lib.projects[next.id] = next
   writeLibrary(lib)
   return next
@@ -211,14 +299,16 @@ export function openProject(id: string): NetVisionProject | null {
   const lib = readLibrary()
   const p = lib.projects[id]
   if (!p) return null
+  const opened = attachStoredPlano(p)
   setActiveId(id)
-  persistWorkingCopy(p)
-  return p
+  persistWorkingCopy(opened)
+  return opened
 }
 
 export function deleteProject(id: string): NetVisionProject {
   const lib = readLibrary()
   delete lib.projects[id]
+  writeStoredPlano(id, null)
   writeLibrary(lib)
   const active = getActiveId()
   if (active === id) {
@@ -251,13 +341,14 @@ export function renameProject(id: string, name: string): void {
 }
 
 function persistWorkingCopy(project: NetVisionProject) {
+  writeStoredPlano(project.id, project.planoUrl)
   try {
     sessionStorage.setItem(NETVISION_STORAGE_KEY, JSON.stringify(project))
   } catch {
     try {
       sessionStorage.setItem(
         NETVISION_STORAGE_KEY,
-        JSON.stringify({ ...project, planoUrl: null }),
+        JSON.stringify(stripPlano(project)),
       )
     } catch {
       /* ignore */
@@ -270,7 +361,9 @@ export function loadProject(): NetVisionProject {
   try {
     const raw = sessionStorage.getItem(NETVISION_STORAGE_KEY)
     if (raw) {
-      const parsed = normalizeProject(JSON.parse(raw) as Partial<NetVisionProject>)
+      const parsed = attachStoredPlano(
+        normalizeProject(JSON.parse(raw) as Partial<NetVisionProject>),
+      )
       ensureInLibrary(parsed)
       setActiveId(parsed.id)
       return parsed
@@ -282,7 +375,7 @@ export function loadProject(): NetVisionProject {
   const activeId = getActiveId()
   const lib = readLibrary()
   if (activeId && lib.projects[activeId]) {
-    const p = lib.projects[activeId]!
+    const p = attachStoredPlano(lib.projects[activeId]!)
     persistWorkingCopy(p)
     return p
   }
@@ -303,9 +396,10 @@ export function loadProject(): NetVisionProject {
 
   const first = Object.values(lib.projects)[0]
   if (first) {
-    setActiveId(first.id)
-    persistWorkingCopy(first)
-    return first
+    const opened = attachStoredPlano(first)
+    setActiveId(opened.id)
+    persistWorkingCopy(opened)
+    return opened
   }
 
   return createProject('Mi primer proyecto')
@@ -423,6 +517,8 @@ function normalizeProject(
     planoUrl: p.planoUrl ?? null,
     planoNombre: p.planoNombre ?? '',
     planoInvertido: Boolean(p.planoInvertido),
+    planoCotaColor: normalizeCotaColor(p.planoCotaColor),
+    planoGrosorMuro: clampGrosorMuro(p.planoGrosorMuro),
     cameras: Array.isArray(p.cameras) ? p.cameras.map(normalizeCamera) : [],
     networkNodes: Array.isArray(p.networkNodes)
       ? p.networkNodes.map(normalizeNetworkNode)

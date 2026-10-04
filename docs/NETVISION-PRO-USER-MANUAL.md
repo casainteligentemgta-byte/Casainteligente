@@ -181,6 +181,16 @@ El plano se carga pero necesita escala real:
 
 **Resultado:** el plano tiene escala real para FOV, WiFi y cables.
 
+### Paso 5: Apariencia del plano (fondo negro)
+
+En el propio plano aparece el panel **Apariencia del plano** (también en **Archivo → Vista del plano** y el botón **Fondo negro** de la barra):
+
+1. Activa **Fondo negro**: el papel pasa a negro y las rayas del plano (muros) a blanco.
+2. Elige el color de las **cotas**: Auto, Verde, Naranja o Amarillo fluorescente (tipo monitor).
+3. Baja **Grosor muro** si la línea que representa el muro se ve demasiado gruesa. El mismo control está en la pestaña **Muros**.
+
+No modifica el archivo original; se puede desactivar cuando quieras.
+
 ---
 
 ## Diseñar CCTV
