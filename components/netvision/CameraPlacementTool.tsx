@@ -58,6 +58,11 @@ import {
   cameraLabelStagePos,
   labelOffsetFromNorm,
 } from '@/lib/netvision/utils/cameraLabelOffset'
+import {
+  CAM_MARKER_CHIPS,
+  camMarkerHex,
+  camMarkerRing,
+} from '@/lib/netvision/utils/cameraMarkerColor'
 
 export type CameraPlacementToolProps = {
   backgroundUrl: string | null
@@ -1479,20 +1484,31 @@ export default function CameraPlacementTool({
             const cy = offsetY + cam.y * drawH
             const selected = cam.id === selectedId
             const coverageOff = coverageHiddenIds.includes(cam.id)
+            const marker = camMarkerHex(cam.markerColor)
+            const ring = camMarkerRing(marker)
+            const pinR = selected ? 11 : 9
             return (
+              <Fragment key={cam.id}>
               <Circle
-                key={cam.id}
                 x={cx}
                 y={cy}
-                radius={selected ? 5 : 4}
-                fill={selected ? '#22d3ee' : '#06b6d4'}
-                opacity={coverageOff ? 0.38 : 1}
-                stroke="#0f172a"
-                strokeWidth={1.25}
-                hitStrokeWidth={16}
-                shadowColor="black"
-                shadowBlur={3}
-                shadowOpacity={0.3}
+                radius={pinR + 5}
+                fill="#0f172a"
+                opacity={coverageOff ? 0.4 : 0.82}
+                listening={false}
+              />
+              <Circle
+                x={cx}
+                y={cy}
+                radius={pinR}
+                fill={marker}
+                opacity={coverageOff ? 0.5 : 1}
+                stroke={ring}
+                strokeWidth={selected ? 3.5 : 3}
+                hitStrokeWidth={28}
+                shadowColor={marker}
+                shadowBlur={selected ? 14 : 9}
+                shadowOpacity={0.75}
                 listening={!placeMode || snapPlaceToDevices}
                 draggable={!placeMode && !readOnly}
                 onClick={(e) => {
@@ -1529,6 +1545,14 @@ export default function CameraPlacementTool({
                   resumeStageDrag(e.target.getStage())
                 }}
               />
+              <Circle
+                x={cx}
+                y={cy}
+                radius={3}
+                fill={ring}
+                listening={false}
+              />
+              </Fragment>
             )
           })}
 
@@ -1954,17 +1978,51 @@ export default function CameraPlacementTool({
             const live =
               draggingLabelId === cam.id && dragLabelPos ? dragLabelPos : labelPos
             const canDragLabel = !placeMode && !readOnly && !!onPatchCamera
+            const showColorPick = selected && canDragLabel
             const pinX = offsetX + cam.x * drawW
             const pinY = offsetY + cam.y * drawH
-            const chipW = Math.max(72, cam.label.length * 7.4 + 28)
-            const chipH = selected ? 40 : 32
+            const marker = camMarkerHex(cam.markerColor)
+            const ring = camMarkerRing(marker)
+            const swatch = 30
+            const swatchGap = 8
+            const swatchPad = 10
+            const swatchN = CAM_MARKER_CHIPS.length
+            const pickerW = swatchPad * 2 + swatchN * swatch + (swatchN - 1) * swatchGap
+            const pickerH = swatch + swatchPad * 2
+            const chipW = Math.max(
+              showColorPick ? pickerW : 108,
+              cam.label.length * 9.2 + 40,
+            )
+            const chipH = selected ? 48 : 38
+            const lineX = live.x + 6
+            const lineY = live.y + chipH / 2
             return (
               <Fragment key={`lbl-${cam.id}`}>
                 <Line
-                  points={[pinX, pinY, live.x + 8, live.y + chipH / 2]}
-                  stroke={selected ? 'rgba(103,232,249,0.7)' : 'rgba(226,232,240,0.4)'}
-                  strokeWidth={1}
-                  dash={[4, 3]}
+                  points={[pinX, pinY, lineX, lineY]}
+                  stroke="#0f172a"
+                  strokeWidth={9}
+                  lineCap="round"
+                  opacity={0.8}
+                  listening={false}
+                />
+                <Line
+                  points={[pinX, pinY, lineX, lineY]}
+                  stroke={marker}
+                  strokeWidth={selected ? 5 : 4}
+                  lineCap="round"
+                  shadowColor={marker}
+                  shadowBlur={8}
+                  shadowOpacity={0.65}
+                  listening={false}
+                />
+                <Circle
+                  x={lineX}
+                  y={lineY}
+                  radius={5}
+                  fill={marker}
+                  stroke={ring}
+                  strokeWidth={2}
                   listening={false}
                 />
                 <Group
@@ -2019,35 +2077,95 @@ export default function CameraPlacementTool({
                     y={0}
                     width={chipW}
                     height={chipH}
-                    cornerRadius={8}
-                    fill={selected ? 'rgba(8, 47, 73, 0.92)' : 'rgba(7, 16, 24, 0.82)'}
-                    stroke={selected ? '#67e8f9' : 'rgba(226,232,240,0.35)'}
-                    strokeWidth={selected ? 1.25 : 1}
-                    shadowColor="black"
-                    shadowBlur={6}
-                    shadowOpacity={0.35}
-                    opacity={coverageOff ? 0.55 : 1}
+                    cornerRadius={10}
+                    fill={selected ? 'rgba(8, 47, 73, 0.98)' : 'rgba(7, 16, 24, 0.96)'}
+                    stroke={marker}
+                    strokeWidth={selected ? 3 : 2.5}
+                    shadowColor={marker}
+                    shadowBlur={selected ? 16 : 10}
+                    shadowOpacity={0.55}
+                    opacity={coverageOff ? 0.7 : 1}
+                  />
+                  <Rect
+                    x={0}
+                    y={0}
+                    width={6}
+                    height={chipH}
+                    cornerRadius={3}
+                    fill={marker}
+                    listening={false}
                   />
                   <Text
-                    x={10}
-                    y={selected ? 6 : 9}
+                    x={14}
+                    y={selected ? 7 : 10}
                     text={cam.label}
-                    fontSize={12}
+                    fontSize={15}
                     fontStyle="bold"
-                    fill="#f8fafc"
+                    fill="#ffffff"
+                    shadowColor="#0f172a"
+                    shadowBlur={5}
+                    shadowOpacity={0.85}
                     listening={false}
                   />
                   {selected ? (
                     <Text
-                      x={10}
-                      y={22}
+                      x={14}
+                      y={27}
                       text={`${cam.mountHeightM.toFixed(1)} m · ${tilt}°`}
-                      fontSize={9}
-                      fill="#67e8f9"
+                      fontSize={12}
+                      fontStyle="bold"
+                      fill={marker}
                       listening={false}
                     />
                   ) : null}
                 </Group>
+                {showColorPick ? (
+                  <Group
+                    x={live.x}
+                    y={live.y + chipH + 8}
+                    listening
+                    onClick={(e) => e.cancelBubble = true}
+                    onTap={(e) => e.cancelBubble = true}
+                  >
+                    <Rect
+                      x={0}
+                      y={0}
+                      width={chipW}
+                      height={pickerH}
+                      cornerRadius={10}
+                      fill="rgba(7, 16, 24, 0.96)"
+                      stroke={marker}
+                      strokeWidth={2}
+                    />
+                    {CAM_MARKER_CHIPS.map((chip, i) => {
+                      const active = camMarkerHex(cam.markerColor) === chip.hex
+                      const x = swatchPad + i * (swatch + swatchGap)
+                      const y = swatchPad
+                      return (
+                        <Fragment key={chip.id}>
+                          <Rect
+                            x={x}
+                            y={y}
+                            width={swatch}
+                            height={swatch}
+                            cornerRadius={8}
+                            fill={chip.hex}
+                            stroke={active ? '#ffffff' : '#0f172a'}
+                            strokeWidth={active ? 3 : 1.5}
+                            onClick={(e) => {
+                              e.cancelBubble = true
+                              onPatchCamera?.(cam.id, { markerColor: chip.id })
+                            }}
+                            onTap={(e) => {
+                              e.cancelBubble = true
+                              onPatchCamera?.(cam.id, { markerColor: chip.id })
+                            }}
+                          />
+                        </Fragment>
+                      )
+                    })}
+                  </Group>
+                ) : null}
               </Fragment>
             )
           })}

@@ -73,6 +73,10 @@ export type DesignCamera = {
   labelOffsetX?: number
   labelOffsetY?: number
   /**
+   * Color del pin, la línea al nombre y el chip (cian / verde / naranja / azul / blanco / magenta).
+   */
+  markerColor?: string
+  /**
    * Cámaras Dual: ajuste propio de cada lente secundaria (por id de lente, p. ej. «tele»).
    * Cada cono puede mirar a otro lugar. La lente primaria usa yawDeg / fov* / rangeM de arriba.
    */

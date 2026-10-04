@@ -2,6 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   NIGHT_BG,
+  NIGHT_DETAIL_MIN,
   NIGHT_NEON,
   NIGHT_WALL,
   applyNightPlanoPalette,
@@ -160,12 +161,27 @@ describe('applyNightPlanoPalette', () => {
     assert.deepEqual([...nearFat], [...NIGHT_WALL])
   })
 
-  it('foto con medios tonos cae a inversión RGB', () => {
+  it('foto con medios tonos se invierte y se levanta para verse en negro', () => {
     const w = 20
     const h = 20
     const data = blank(w, h, [128, 128, 128])
     applyNightPlanoPalette(data, w, h)
-    assert.deepEqual([...rgbAt(data, w, 2, 2)], [127, 127, 127])
+    const rgb = rgbAt(data, w, 2, 2)
+    const y = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]
+    assert.ok(y >= NIGHT_DETAIL_MIN - 1, `detalle ${rgb.join(',')} luma ${y}`)
+  })
+
+  it('gris de mueble/auto no se pierde en el fondo negro', () => {
+    const w = 200
+    const h = 160
+    const data = blank(w, h)
+    paint(data, w, 40, 40, 90, 70, [176, 176, 176])
+    applyNightPlanoPalette(data, w, h)
+    assert.deepEqual([...rgbAt(data, w, 4, 4)], [...NIGHT_BG])
+    const detail = rgbAt(data, w, 60, 55)
+    const y = 0.2126 * detail[0] + 0.7152 * detail[1] + 0.0722 * detail[2]
+    assert.ok(y >= NIGHT_DETAIL_MIN - 1, `mueble ${detail.join(',')} luma ${y}`)
+    assert.ok(detail[0] > 40, 'no debe quedar casi negro')
   })
 })
 
