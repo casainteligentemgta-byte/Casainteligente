@@ -3080,7 +3080,7 @@ export default function NexusVisionArchitectClient() {
                     <button
                       type="button"
                       onClick={() => setInspectorOpen(true)}
-                      className="absolute bottom-[4.25rem] right-3 z-20 rounded-full bg-[var(--nexus-cyan)] px-3.5 py-2 text-[11px] font-semibold text-black shadow-lg"
+                      className="absolute right-3 top-3 z-20 rounded-full bg-[var(--nexus-cyan)] px-3.5 py-2 text-[11px] font-semibold text-black shadow-lg"
                     >
                       Configurar{' '}
                       {selectedCam?.label ||
