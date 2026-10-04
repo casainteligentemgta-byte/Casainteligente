@@ -1,4 +1,4 @@
-/** Enruta líneas pin→nombre sin cruzar chips ni apilarse unas sobre otras. */
+/** Enruta pin→nombre: recta si no se cruza; si no, quiebres a 90° (movibles). */
 
 export type LeaderBox = {
   id: string
@@ -10,6 +10,8 @@ export type LeaderBox = {
   h: number
 }
 
+export type LeaderElbow = { x: number; y: number }
+
 export type LeaderLayout = {
   id: string
   x: number
@@ -17,6 +19,7 @@ export type LeaderLayout = {
   w: number
   h: number
   points: number[]
+  mode: 'straight' | 'ortho' | 'custom'
 }
 
 const PAD = 12
@@ -134,7 +137,23 @@ export function segsCollinearOverlap(a: Seg, b: Seg, minOverlap = 2): boolean {
     const b1 = Math.max(b.y0, b.y1)
     return Math.min(a1, b1) - Math.max(a0, b0) > minOverlap
   }
-  return false
+  const ax = a.x1 - a.x0
+  const ay = a.y1 - a.y0
+  const bx = b.x1 - b.x0
+  const by = b.y1 - b.y0
+  const al = Math.hypot(ax, ay)
+  const bl = Math.hypot(bx, by)
+  if (al < 2 || bl < 2) return false
+  const parallel = Math.abs(ax * by - ay * bx) / (al * bl) < 0.12
+  if (!parallel) return false
+  const dist = Math.abs((a.x0 - b.x0) * by - (a.y0 - b.y0) * bx) / bl
+  if (dist > 5) return false
+  const proj = (x: number, y: number) => ((x - a.x0) * ax + (y - a.y0) * ay) / al
+  const a0 = 0
+  const a1 = al
+  const b0 = proj(b.x0, b.y0)
+  const b1 = proj(b.x1, b.y1)
+  return Math.min(a1, Math.max(b0, b1)) - Math.max(a0, Math.min(b0, b1)) > minOverlap
 }
 
 export function polylinesOverlap(a: number[], b: number[]): boolean {
@@ -212,7 +231,7 @@ export function separateLeaderBoxes(
   return next
 }
 
-function attachPoint(box: LeaderBox, yBias = 0): { x: number; y: number } {
+export function attachPoint(box: LeaderBox, yBias = 0): { x: number; y: number } {
   const midY = Math.min(
     box.y + box.h - 6,
     Math.max(box.y + 6, box.y + box.h / 2 + yBias),
@@ -221,7 +240,7 @@ function attachPoint(box: LeaderBox, yBias = 0): { x: number; y: number } {
   return { x: box.x + box.w, y: midY }
 }
 
-function simplify(points: number[]): number[] {
+export function simplify(points: number[]): number[] {
   if (points.length < 6) return points
   const out = [points[0]!, points[1]!]
   for (let i = 2; i + 1 < points.length; i += 2) {
@@ -244,6 +263,55 @@ function simplify(points: number[]): number[] {
     out.push(x, y)
   }
   return out
+}
+
+export function elbowsFromPoints(points: number[]): LeaderElbow[] {
+  const out: LeaderElbow[] = []
+  for (let i = 2; i + 3 < points.length; i += 2) {
+    out.push({ x: points[i]!, y: points[i + 1]! })
+  }
+  return out
+}
+
+export function pointsFromElbows(
+  box: LeaderBox,
+  elbows: readonly LeaderElbow[],
+): number[] {
+  const attach = attachPoint(box)
+  const raw = [box.pinX, box.pinY]
+  for (const e of elbows) raw.push(e.x, e.y)
+  raw.push(attach.x, attach.y)
+  return simplify(raw)
+}
+
+/** Quiebre a 90° pasando por un punto que mueve el operador. */
+export function orthoViaPoint(
+  pin: LeaderElbow,
+  via: LeaderElbow,
+  attach: LeaderElbow,
+): number[] {
+  const hvh = simplify([
+    pin.x,
+    pin.y,
+    via.x,
+    pin.y,
+    via.x,
+    attach.y,
+    attach.x,
+    attach.y,
+  ])
+  const vhv = simplify([
+    pin.x,
+    pin.y,
+    pin.x,
+    via.y,
+    attach.x,
+    via.y,
+    attach.x,
+    attach.y,
+  ])
+  const preferH = Math.abs(via.x - pin.x) >= Math.abs(via.y - pin.y)
+  return preferH ? hvh : vhv
 }
 
 function hitsForeignChip(points: number[], selfId: string, obstacles: LeaderBox[]): boolean {
@@ -272,7 +340,7 @@ function tryRoute(
   ])
 }
 
-function routeOne(
+function routeOrtho(
   box: LeaderBox,
   channel: number,
   obstacles: LeaderBox[],
@@ -312,9 +380,13 @@ function routeOne(
 
 export function layoutCameraLeaders(
   boxes: LeaderBox[],
-  opts?: { pinnedIds?: readonly string[] },
+  opts?: {
+    pinnedIds?: readonly string[]
+    customElbows?: Readonly<Record<string, readonly LeaderElbow[]>>
+  },
 ): LeaderLayout[] {
   const pinned = new Set(opts?.pinnedIds ?? [])
+  const custom = opts?.customElbows ?? {}
   const placed = separateLeaderBoxes(boxes, pinned)
   const order = [...placed].sort(
     (a, b) => a.pinY - b.pinY || a.pinX - b.pinX || a.id.localeCompare(b.id),
@@ -323,7 +395,25 @@ export function layoutCameraLeaders(
   const reserved: number[][] = []
   const byId = new Map<string, LeaderLayout>()
   for (const box of order) {
-    const points = routeOne(box, channelOf.get(box.id) ?? 0, placed, reserved)
+    const elbows = custom[box.id]
+    let points: number[]
+    let mode: LeaderLayout['mode']
+    if (elbows && elbows.length > 0) {
+      points = pointsFromElbows(box, elbows)
+      mode = 'custom'
+    } else {
+      const attach = attachPoint(box)
+      const straight = [box.pinX, box.pinY, attach.x, attach.y]
+      const blocked =
+        hitsForeignChip(straight, box.id, placed) || reservedConflict(straight, reserved)
+      if (!blocked) {
+        points = straight
+        mode = 'straight'
+      } else {
+        points = routeOrtho(box, channelOf.get(box.id) ?? 0, placed, reserved)
+        mode = 'ortho'
+      }
+    }
     reserved.push(points)
     byId.set(box.id, {
       id: box.id,
@@ -332,6 +422,7 @@ export function layoutCameraLeaders(
       w: box.w,
       h: box.h,
       points,
+      mode,
     })
   }
   return placed.map((box) => byId.get(box.id)!)

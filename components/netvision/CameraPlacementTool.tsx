@@ -58,7 +58,12 @@ import {
   cameraLabelStagePos,
   labelOffsetFromNorm,
 } from '@/lib/netvision/utils/cameraLabelOffset'
-import { layoutCameraLeaders } from '@/lib/netvision/utils/cameraLeaderLayout'
+import {
+  attachPoint,
+  elbowsFromPoints,
+  layoutCameraLeaders,
+  orthoViaPoint,
+} from '@/lib/netvision/utils/cameraLeaderLayout'
 import {
   CAM_MARKER_CHIPS,
   camMarkerHex,
@@ -460,6 +465,11 @@ export default function CameraPlacementTool({
   const [dragLabelPos, setDragLabelPos] = useState<{ x: number; y: number } | null>(
     null,
   )
+  const [dragElbow, setDragElbow] = useState<{
+    id: string
+    x: number
+    y: number
+  } | null>(null)
   const prevSelectedIdRef = useRef<string | null>(null)
   const viewRef = useRef({ zoom: 1, stagePos: { x: 0, y: 0 } })
   const pinchRef = useRef<PinchState | null>(null)
@@ -2024,8 +2034,29 @@ export default function CameraPlacementTool({
                 h: showColorPick ? chipH + 8 + pickerH : chipH,
               }
             })
+            const customElbows: Record<string, { x: number; y: number }[]> = {}
+            for (const cam of cameras) {
+              if (dragElbow && dragElbow.id === cam.id) {
+                const box = boxes.find((b) => b.id === cam.id)
+                if (!box) continue
+                const pts = orthoViaPoint(
+                  { x: box.pinX, y: box.pinY },
+                  { x: dragElbow.x, y: dragElbow.y },
+                  attachPoint(box),
+                )
+                customElbows[cam.id] = elbowsFromPoints(pts)
+                continue
+              }
+              if (cam.leaderElbows?.length) {
+                customElbows[cam.id] = cam.leaderElbows.map((e) => ({
+                  x: offsetX + e.x * drawW,
+                  y: offsetY + e.y * drawH,
+                }))
+              }
+            }
             const layouts = layoutCameraLeaders(boxes, {
               pinnedIds: draggingLabelId ? [draggingLabelId] : [],
+              customElbows,
             })
             const layoutOf = new Map(layouts.map((l) => [l.id, l]))
             return cameras.map((cam) => {
@@ -2055,22 +2086,86 @@ export default function CameraPlacementTool({
                   lineJoin="round"
                   listening={false}
                 />
-                {Array.from(
-                  { length: Math.max(0, Math.floor(live.points.length / 2) - 2) },
-                  (_, i) => {
-                    const idx = (i + 1) * 2
-                    return (
-                      <Circle
-                        key={`elb-${cam.id}-${i}`}
-                        x={live.points[idx]!}
-                        y={live.points[idx + 1]!}
-                        radius={2.2}
-                        fill={marker}
-                        listening={false}
-                      />
-                    )
-                  },
-                )}
+                {(() => {
+                  const elbows = elbowsFromPoints(live.points)
+                  const handles =
+                    dragElbow?.id === cam.id
+                      ? [dragElbow]
+                      : elbows.length > 0
+                        ? elbows
+                        : live.points.length >= 4 && canDragLabel && selected
+                          ? [
+                              {
+                                x: (live.points[0]! + live.points[2]!) / 2,
+                                y: (live.points[1]! + live.points[3]!) / 2,
+                              },
+                            ]
+                          : []
+                  return handles.map((h, i) => (
+                    <Circle
+                      key={`elb-${cam.id}-${i}`}
+                      x={h.x}
+                      y={h.y}
+                      radius={selected ? 6 : 4.5}
+                      fill={elbows.length > 0 ? marker : 'rgba(7,16,24,0.85)'}
+                      stroke={marker}
+                      strokeWidth={1.5}
+                      hitStrokeWidth={22}
+                      listening={canDragLabel}
+                      draggable={canDragLabel}
+                      dragDistance={2}
+                      onMouseEnter={(e) => {
+                        if (!canDragLabel) return
+                        const stage = e.target.getStage()
+                        if (stage) stage.container().style.cursor = 'grab'
+                      }}
+                      onMouseLeave={(e) => {
+                        const stage = e.target.getStage()
+                        if (stage) stage.container().style.cursor = 'default'
+                      }}
+                      onDragStart={(e) => {
+                        e.cancelBubble = true
+                        pauseStageDrag(e.target.getStage())
+                        setDragElbow({ id: cam.id, x: e.target.x(), y: e.target.y() })
+                      }}
+                      onDragMove={(e) => {
+                        e.cancelBubble = true
+                        setDragElbow({ id: cam.id, x: e.target.x(), y: e.target.y() })
+                      }}
+                      onDragEnd={(e) => {
+                        e.cancelBubble = true
+                        const box = {
+                          id: cam.id,
+                          pinX: offsetX + cam.x * drawW,
+                          pinY: offsetY + cam.y * drawH,
+                          x: live.x,
+                          y: live.y,
+                          w: chipW,
+                          h: showColorPick ? chipH + 8 + pickerH : chipH,
+                        }
+                        const pts = orthoViaPoint(
+                          { x: box.pinX, y: box.pinY },
+                          { x: e.target.x(), y: e.target.y() },
+                          attachPoint(box),
+                        )
+                        const saved = elbowsFromPoints(pts).map((p) => toNorm(p.x, p.y))
+                        onPatchCamera?.(cam.id, {
+                          leaderElbows: saved.length ? saved : undefined,
+                        })
+                        setDragElbow(null)
+                        resumeStageDrag(e.target.getStage())
+                      }}
+                      onDblClick={(e) => {
+                        e.cancelBubble = true
+                        onPatchCamera?.(cam.id, { leaderElbows: undefined })
+                      }}
+                      onDblTap={(e) => {
+                        e.cancelBubble = true
+                        onPatchCamera?.(cam.id, { leaderElbows: undefined })
+                      }}
+                    />
+                  ))
+                })()}
                 <Group
                   x={live.x}
                   y={live.y}

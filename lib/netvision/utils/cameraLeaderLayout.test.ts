@@ -65,16 +65,17 @@ describe('cameraLeaderLayout', () => {
     assert.equal(boxesOverlap(laid[0]!, laid[1]!, 8), false)
   })
 
-  it('la polilínea sale del pin y llega al borde del chip', () => {
+  it('si no hay solape usa una recta del pin al borde del chip', () => {
     const laid = layoutCameraLeaders([box('a', 80, 120, 180, 40)])
     const p = laid[0]!.points
+    assert.equal(laid[0]!.mode, 'straight')
     assert.equal(p[0], 80)
     assert.equal(p[1], 120)
     const endX = p[p.length - 2]!
     const endY = p[p.length - 1]!
     assert.ok(Math.abs(endX - 180) < 1 || Math.abs(endX - 290) < 1)
     assert.ok(Math.abs(endY - (40 + 19)) < 2)
-    assert.ok(p.length >= 8)
+    assert.equal(p.length, 4)
   })
 
   it('la línea no atraviesa el otro botón', () => {
@@ -128,8 +129,17 @@ describe('cameraLeaderLayout', () => {
         assert.equal(polylineHitsBox(laid[j]!.points, laid[i]!, 2), false)
       }
       const p = laid[i]!.points
-      assert.ok(p.length >= 8)
+      assert.ok(p.length >= 4)
       assert.equal(p[0], [120, 126, 132, 118][i])
     }
+  })
+
+  it('respeta quiebres que coloca el operador', () => {
+    const laid = layoutCameraLeaders([box('a', 80, 120, 180, 40)], {
+      customElbows: { a: [{ x: 120, y: 80 }] },
+    })
+    assert.equal(laid[0]!.mode, 'custom')
+    assert.equal(laid[0]!.points[2], 120)
+    assert.equal(laid[0]!.points[3], 80)
   })
 })

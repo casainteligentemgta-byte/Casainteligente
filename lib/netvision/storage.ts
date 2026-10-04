@@ -40,6 +40,7 @@ import {
   normalizeCotaColor,
 } from '@/lib/netvision/utils/nightPlanoPalette'
 import { clampLabelOffset } from '@/lib/netvision/utils/cameraLabelOffset'
+import { clamp01 } from '@/lib/netvision/utils/geometryHelpers'
 import {
   DEFAULT_CAM_MARKER_COLOR,
   normalizeCamMarkerColor,
@@ -565,6 +566,23 @@ function normalizeCurrency(v: unknown): NetVisionCurrency {
   return 'USD'
 }
 
+function normalizeLeaderElbows(
+  raw: unknown,
+): Pick<DesignCamera, 'leaderElbows'> | Record<string, never> {
+  if (!Array.isArray(raw) || raw.length === 0) return {}
+  const out: NonNullable<DesignCamera['leaderElbows']> = []
+  for (const p of raw) {
+    if (!p || typeof p !== 'object') continue
+    const x = (p as { x?: unknown }).x
+    const y = (p as { y?: unknown }).y
+    if (typeof x !== 'number' || !Number.isFinite(x)) continue
+    if (typeof y !== 'number' || !Number.isFinite(y)) continue
+    out.push({ x: clamp01(x), y: clamp01(y) })
+    if (out.length >= 8) break
+  }
+  return out.length > 0 ? { leaderElbows: out } : {}
+}
+
 function normalizeCamera(c: Partial<DesignCamera> & { label?: string }): DesignCamera {
   const looksPercent = (c.x ?? 0) > 1 || (c.y ?? 0) > 1
   const fovDeg =
@@ -602,6 +620,7 @@ function normalizeCamera(c: Partial<DesignCamera> & { label?: string }): DesignC
         ...(labelOffsetX != null ? { labelOffsetX } : {}),
         ...(labelOffsetY != null ? { labelOffsetY } : {}),
         ...(markerColor !== DEFAULT_CAM_MARKER_COLOR ? { markerColor } : {}),
+        ...normalizeLeaderElbows(c.leaderElbows),
       }
     })(),
     ...(fovDeg != null ? { fovDeg } : {}),
