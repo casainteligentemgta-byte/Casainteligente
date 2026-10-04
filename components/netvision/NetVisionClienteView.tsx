@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { Printer, ArrowLeft } from 'lucide-react'
+import { Printer, ArrowLeft, Link2, Check } from 'lucide-react'
 import CameraPlacementTool from '@/components/netvision/CameraPlacementTool'
 import NetVisionCameraVisionToggles from '@/components/netvision/NetVisionCameraVisionToggles'
 import { VISION_SEMAFORO_LEGEND } from '@/lib/netvision/utils/visionSemaforoPalette'
@@ -21,6 +21,7 @@ import { loadProject, peekLocalProject } from '@/lib/netvision/storage'
 import type { DesignCamera, NetVisionProject } from '@/lib/netvision/types'
 import {
   buildClienteCameraCard,
+  totalClienteCableMeters,
   type ClienteCameraCard,
 } from '@/lib/netvision/utils/clienteCameraCard'
 import { formatLength } from '@/lib/netvision/utils/units'
@@ -40,22 +41,63 @@ function loadClienteProject(id: string | null): NetVisionProject | null {
 function CameraFicha({
   card,
   unitSystem,
+  compact,
 }: {
   card: ClienteCameraCard
   unitSystem: NetVisionProject['unitSystem']
+  compact?: boolean
 }) {
   return (
-    <article className="rounded-xl border border-white/12 bg-black/35 p-3">
+    <article
+      data-nv-ficha={card.id}
+      className="rounded-xl border border-white/12 bg-black/35 p-3"
+    >
       <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-text-dim)]">
         {card.brand}
       </p>
       <h3 className="mt-0.5 text-sm font-bold text-white">{card.label}</h3>
       <p className="text-[12px] text-[var(--nexus-cyan)]">{card.modelName}</p>
-      <p className="mt-1.5 text-[12px] leading-relaxed text-white/80">{card.qualities}</p>
+      <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-white/80">
+        <div>
+          <dt className="text-[var(--nexus-text-dim)]">Forma</dt>
+          <dd className="font-semibold text-white">{card.formLabel}</dd>
+        </div>
+        <div>
+          <dt className="text-[var(--nexus-text-dim)]">Resolución</dt>
+          <dd className="font-semibold text-white">{card.resolution}</dd>
+        </div>
+        <div>
+          <dt className="text-[var(--nexus-text-dim)]">Ángulo</dt>
+          <dd className="font-semibold text-white">{card.fovLabel}</dd>
+        </div>
+        <div>
+          <dt className="text-[var(--nexus-text-dim)]">Alcance</dt>
+          <dd className="font-semibold text-white">
+            {card.rangeDayM} m día / {card.rangeNightM} m noche
+          </dd>
+        </div>
+        {!compact ? (
+          <>
+            <div>
+              <dt className="text-[var(--nexus-text-dim)]">Montaje</dt>
+              <dd className="font-semibold text-white">
+                {formatLength(card.mountHeightM, unitSystem)} · {card.tiltDeg}°
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[var(--nexus-text-dim)]">Señal</dt>
+              <dd className="font-semibold text-white">{card.bitrateMbps} Mbps</dd>
+            </div>
+          </>
+        ) : null}
+      </dl>
       {card.notes ? (
-        <p className="mt-1 text-[11px] leading-relaxed text-white/65">{card.notes}</p>
+        <p className="mt-1.5 text-[11px] leading-relaxed text-white/65">{card.notes}</p>
       ) : null}
-      <p className="mt-2 text-[11px] font-semibold text-emerald-300">{card.connectionLabel}</p>
+      <p className="mt-2 text-[11px] font-semibold text-emerald-300">
+        {card.connectionLabel}
+        {card.wired && card.poeWatts > 0 ? ` · ${card.poeWatts} W PoE` : ''}
+      </p>
       {card.wired ? (
         card.cables.length > 0 ? (
           <ul className="mt-1.5 space-y-1 text-[12px] text-white/85">
@@ -80,7 +122,9 @@ function CameraFicha({
           </p>
         )
       ) : (
-        <p className="mt-1 text-[11px] text-white/60">Sin metros de cable: no requiere tendido PoE.</p>
+        <p className="mt-1 text-[11px] text-white/60">
+          Sin metros de cable: no requiere tendido PoE.
+        </p>
       )}
     </article>
   )
@@ -91,11 +135,19 @@ export default function NetVisionClienteView() {
   const [project, setProject] = useState<NetVisionProject | null>(null)
   const [hiddenIds, setHiddenIds] = useState<string[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     const loaded = loadClienteProject(search.get('id'))
     setProject(loaded)
-    setSelectedId(loaded?.cameras[0]?.id ?? null)
+    const cam = search.get('cam')
+    if (cam && loaded?.cameras.some((c) => c.id === cam)) {
+      setSelectedId(cam)
+      setHiddenIds(isolateHiddenCameraIds(loaded.cameras.map((c) => c.id), cam))
+    } else {
+      setSelectedId(null)
+      setHiddenIds([])
+    }
   }, [search])
 
   const cameras: DesignCamera[] = project?.cameras ?? []
@@ -132,6 +184,30 @@ export default function NetVisionClienteView() {
   const selectedCard = cards.find((c) => c.id === selectedId) ?? null
   const visibleSectors = sectors.filter((s) => !hiddenLive.includes(s.cameraId))
   const allOn = hiddenLive.length === 0
+  const cableTotal = totalClienteCableMeters(cards)
+
+  const showAll = () => {
+    setHiddenIds([])
+    setSelectedId(null)
+  }
+  const showSolo = (id: string) => {
+    setHiddenIds(isolateHiddenCameraIds(cameraIds, id))
+    setSelectedId(id)
+  }
+
+  const copyLink = async () => {
+    if (!project) return
+    const url = new URL('/nexus/vision/cliente', window.location.origin)
+    url.searchParams.set('id', project.id)
+    if (selectedId) url.searchParams.set('cam', selectedId)
+    try {
+      await navigator.clipboard.writeText(url.toString())
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1600)
+    } catch {
+      setCopied(false)
+    }
+  }
 
   if (!project) {
     return (
@@ -146,15 +222,21 @@ export default function NetVisionClienteView() {
 
   return (
     <div className="nv-cliente space-y-3">
-      <header className="flex flex-wrap items-start justify-between gap-3 print:block">
+      <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-text-dim)]">
-            Vista cliente · NetVision
+            Presentación cliente · NetVision
           </p>
           <h1 className="text-lg font-bold text-white">{project.name || 'Proyecto'}</h1>
           {project.client ? (
             <p className="text-[12px] text-white/70">Cliente: {project.client}</p>
           ) : null}
+          <p className="mt-1 text-[12px] text-white/70">
+            {cameras.length} cámara{cameras.length === 1 ? '' : 's'}
+            {cableTotal > 0
+              ? ` · ${formatLength(cableTotal, project.unitSystem)} de cable PoE`
+              : ''}
+          </p>
         </div>
         <div className="flex flex-wrap gap-2 print:hidden">
           <Link
@@ -164,6 +246,15 @@ export default function NetVisionClienteView() {
             <ArrowLeft className="h-3.5 w-3.5" />
             Editor
           </Link>
+          <button
+            type="button"
+            data-nv-copiar-enlace
+            onClick={() => void copyLink()}
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-white/15 px-3 text-[12px] font-semibold text-white hover:bg-white/10"
+          >
+            {copied ? <Check className="h-3.5 w-3.5" /> : <Link2 className="h-3.5 w-3.5" />}
+            {copied ? 'Enlace copiado' : 'Copiar enlace'}
+          </button>
           <button
             type="button"
             onClick={() => window.print()}
@@ -191,14 +282,8 @@ export default function NetVisionClienteView() {
             cameras={cameras}
             hiddenIds={hiddenLive}
             readOnlyHint
-            onShowAll={() => {
-              setHiddenIds([])
-              setSelectedId(null)
-            }}
-            onSolo={(id) => {
-              setHiddenIds(isolateHiddenCameraIds(cameraIds, id))
-              setSelectedId(id)
-            }}
+            onShowAll={showAll}
+            onSolo={showSolo}
             onToggle={(id) => setHiddenIds((prev) => toggleHiddenCameraId(prev, id))}
             onSelect={setSelectedId}
           />
@@ -207,8 +292,8 @@ export default function NetVisionClienteView() {
         <p className="text-[12px] text-white/60">Este proyecto aún no tiene cámaras.</p>
       )}
 
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_300px]">
-        <div className="min-h-[420px] overflow-hidden rounded-2xl border border-white/10 bg-[#05080d]">
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="min-h-[420px] overflow-hidden rounded-2xl border border-white/10 bg-[#05080d] print:min-h-[360px]">
           {project.planoUrl ? (
             <CameraPlacementTool
               backgroundUrl={project.planoUrl}
@@ -225,7 +310,13 @@ export default function NetVisionClienteView() {
               sectors={visibleSectors}
               wifiCircles={[]}
               linkLines={[]}
-              cableRoutes={allOn ? cableRoutes : cableRoutes.filter((r) => !hiddenLive.includes(r.fromId) && !hiddenLive.includes(r.toId))}
+              cableRoutes={
+                allOn
+                  ? cableRoutes
+                  : cableRoutes.filter(
+                      (r) => !hiddenLive.includes(r.fromId) && !hiddenLive.includes(r.toId),
+                    )
+              }
               selectedId={selectedId}
               placeMode={false}
               showFov
@@ -241,7 +332,7 @@ export default function NetVisionClienteView() {
               metersPerNormX={project.scale.metersPerNormX}
               metersPerNormY={project.scale.metersPerNormY}
               onSelect={(id) => {
-                if (cameras.some((c) => c.id === id)) setSelectedId(id)
+                if (cameras.some((c) => c.id === id)) showSolo(id)
               }}
               showZoomOverlay
             />
@@ -258,7 +349,12 @@ export default function NetVisionClienteView() {
             <CameraFicha card={selectedCard} unitSystem={project.unitSystem} />
           ) : (
             cards.map((card) => (
-              <CameraFicha key={card.id} card={card} unitSystem={project.unitSystem} />
+              <CameraFicha
+                key={card.id}
+                card={card}
+                unitSystem={project.unitSystem}
+                compact
+              />
             ))
           )}
         </aside>
@@ -266,7 +362,8 @@ export default function NetVisionClienteView() {
 
       <style>{`
         @media print {
-          nav { display: none !important; }
+          nav, [data-nv-copiar-enlace] { display: none !important; }
+          .nv-cliente { color: #111 !important; }
         }
       `}</style>
     </div>

@@ -5,6 +5,7 @@ import {
   buildClienteCameraCard,
   cameraCableMeters,
   inferCameraConnection,
+  totalClienteCableMeters,
 } from './clienteCameraCard'
 
 const poe: CameraModel = {
@@ -69,5 +70,6 @@ describe('clienteCameraCard', () => {
     )
     assert.equal(wireless.wired, false)
     assert.equal(wireless.cableMeters, 0)
+    assert.equal(totalClienteCableMeters([wired, wireless]), wired.cableMeters)
   })
 })

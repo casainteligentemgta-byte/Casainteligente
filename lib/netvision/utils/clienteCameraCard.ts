@@ -1,5 +1,5 @@
 import type { CameraModel, CableRoute, DesignCamera } from '@/lib/netvision/types'
-import { getCameraModelOrDefault } from '@/lib/netvision/catalog/cameras'
+import { catalogFovLabel, getCameraModelOrDefault } from '@/lib/netvision/catalog/cameras'
 import { cableTypeLabel } from '@/lib/netvision/services/cableCalculator'
 
 export type CameraConnectionKind = 'poe' | 'wifi' | 'battery'
@@ -25,6 +25,15 @@ export type ClienteCameraCard = {
   label: string
   modelName: string
   brand: string
+  formLabel: string
+  resolution: string
+  fovLabel: string
+  rangeDayM: number
+  rangeNightM: number
+  mountHeightM: number
+  tiltDeg: number
+  poeWatts: number
+  bitrateMbps: number
   qualities: string
   notes: string
   connection: CameraConnectionKind
@@ -34,6 +43,12 @@ export type ClienteCameraCard = {
   wired: boolean
 }
 
+export function formFactorLabel(form: CameraModel['formFactor']): string {
+  if (form === 'ptz') return 'PTZ'
+  if (form === 'bullet') return 'Bala'
+  return 'Domo'
+}
+
 export function buildClienteCameraCard(
   cam: DesignCamera,
   routes: CableRoute[],
@@ -41,6 +56,8 @@ export function buildClienteCameraCard(
   const model = getCameraModelOrDefault(cam.modelId)
   const connection = inferCameraConnection(model)
   const wired = connection === 'poe'
+  const formLabel = formFactorLabel(model.formFactor)
+  const fovLabel = catalogFovLabel(model)
   const cables = wired
     ? cablesForCamera(routes, cam.id).map((r) => ({
         id: r.id,
@@ -54,9 +71,16 @@ export function buildClienteCameraCard(
     label: cam.label,
     modelName: model.name,
     brand: model.brand,
-    qualities: `${model.resolution} · ${
-      model.formFactor === 'ptz' ? 'PTZ' : model.formFactor === 'bullet' ? 'bullet' : 'domo'
-    } · ${model.fovDeg}° · día ${model.rangeDayM} m / noche ${model.rangeNightM} m`,
+    formLabel,
+    resolution: model.resolution,
+    fovLabel,
+    rangeDayM: model.rangeDayM,
+    rangeNightM: model.rangeNightM,
+    mountHeightM: cam.mountHeightM,
+    tiltDeg: Math.round(cam.tiltDeg ?? 0),
+    poeWatts: model.poeWatts,
+    bitrateMbps: model.bitrateMbps,
+    qualities: `${model.resolution} · ${formLabel} · ${fovLabel} · día ${model.rangeDayM} m / noche ${model.rangeNightM} m`,
     notes: (model.notes ?? '').trim(),
     connection,
     connectionLabel:
@@ -69,4 +93,9 @@ export function buildClienteCameraCard(
     cableMeters: wired ? cameraCableMeters(routes, cam.id) : 0,
     wired,
   }
+}
+
+export function totalClienteCableMeters(cards: ClienteCameraCard[]): number {
+  const m = cards.filter((c) => c.wired).reduce((s, c) => s + c.cableMeters, 0)
+  return Math.round(m * 10) / 10
 }
