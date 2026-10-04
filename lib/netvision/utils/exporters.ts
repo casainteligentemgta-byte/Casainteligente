@@ -59,6 +59,7 @@ export function projectToExportJson(project: NetVisionProject, bom: BomSummary) 
         },
       }
     }),
+    infraDevices: project.infraDevices ?? [],
     networkNodes: (project.networkNodes ?? []).map((n) => {
       const m = getNetworkModelOrDefault(n.modelId, n.kind)
       return {

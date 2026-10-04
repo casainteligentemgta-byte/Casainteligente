@@ -466,7 +466,8 @@
       "wifiRangeM": 0,
       "band": "none",
       "ports": 8,
-      "priceUsd": 109
+      "priceUsd": 109,
+      "rackUnits": 1
     },
     {
       "id": "sw-poe-24",
@@ -479,7 +480,8 @@
       "wifiRangeM": 0,
       "band": "none",
       "ports": 24,
-      "priceUsd": 399
+      "priceUsd": 399,
+      "rackUnits": 1
     },
     {
       "id": "sw-poe-16-hik",
@@ -492,7 +494,8 @@
       "wifiRangeM": 0,
       "band": "none",
       "ports": 16,
-      "priceUsd": 189
+      "priceUsd": 189,
+      "rackUnits": 1
     },
     {
       "id": "ap-u6-lite",
@@ -531,7 +534,10 @@
       "wifiRangeM": 0,
       "band": "none",
       "ports": 8,
-      "priceUsd": 280
+      "priceUsd": 280,
+      "recorder": "nvr",
+      "hddBays": 2,
+      "rackUnits": 1
     },
     {
       "id": "nvr-ds7616",
@@ -544,7 +550,58 @@
       "wifiRangeM": 0,
       "band": "none",
       "ports": 16,
-      "priceUsd": 420
+      "priceUsd": 420,
+      "recorder": "nvr",
+      "hddBays": 2,
+      "rackUnits": 1
+    },
+    {
+      "id": "nvr-ds7732",
+      "kind": "nvr",
+      "brand": "Hikvision",
+      "name": "DS-7732NI-M4/16P",
+      "poePorts": 16,
+      "poeBudgetW": 200,
+      "drawWatts": 30,
+      "wifiRangeM": 0,
+      "band": "none",
+      "ports": 16,
+      "priceUsd": 690,
+      "recorder": "nvr",
+      "hddBays": 4,
+      "rackUnits": 2
+    },
+    {
+      "id": "dvr-ds7208",
+      "kind": "nvr",
+      "brand": "Hikvision",
+      "name": "DS-7208HGHI-K1",
+      "poePorts": 0,
+      "poeBudgetW": 0,
+      "drawWatts": 10,
+      "wifiRangeM": 0,
+      "band": "none",
+      "ports": 8,
+      "priceUsd": 160,
+      "recorder": "dvr",
+      "hddBays": 1,
+      "rackUnits": 1
+    },
+    {
+      "id": "dvr-ds7216",
+      "kind": "nvr",
+      "brand": "Hikvision",
+      "name": "DS-7216HGHI-K2",
+      "poePorts": 0,
+      "poeBudgetW": 0,
+      "drawWatts": 12,
+      "wifiRangeM": 0,
+      "band": "none",
+      "ports": 16,
+      "priceUsd": 240,
+      "recorder": "dvr",
+      "hddBays": 2,
+      "rackUnits": 1
     },
     {
       "id": "inj-poe-gig",

@@ -156,6 +156,10 @@ export type NetworkDeviceModel = {
   band: 'none' | '2.4' | '5' | 'dual'
   ports: number
   priceUsd: number
+  /** Grabador: NVR IP o DVR analog/híbrido. */
+  recorder?: 'nvr' | 'dvr'
+  hddBays?: number
+  rackUnits?: number
 }
 
 export type DesignNetworkNode = {
@@ -174,6 +178,52 @@ export type DesignNetworkNode = {
   wifiChannel?: number
   /** IDs de cámaras asignadas a este switch/injector (PoE) */
   linkedCameraIds: string[]
+}
+
+/** Equipo de sala técnica CCTV (además del NVR/DVR en red). */
+export type InfraKind = 'monitor' | 'hdd' | 'ups' | 'rack'
+
+export type RackSizeU = 4 | 6 | 9 | 12 | 15 | 18 | 22 | 27 | 42
+
+export type RackMountSource = 'network' | 'infra'
+
+export type RackMount = {
+  deviceId: string
+  source: RackMountSource
+  /** Unidad de inicio, 1 = arriba. */
+  startU: number
+}
+
+export type InfraDeviceModel = {
+  id: string
+  kind: InfraKind
+  brand: string
+  name: string
+  priceUsd: number
+  /** Altura en U si va al rack. 0 = no entra al rack (p. ej. monitor de pared). */
+  rackUnits: number
+  inches?: number
+  capacityTb?: number
+  va?: number
+  totalU?: number
+}
+
+export type DesignInfraDevice = {
+  id: string
+  label: string
+  kind: InfraKind
+  modelId: string
+  x: number
+  y: number
+  /** Disco: TB elegidos. */
+  capacityTb?: number
+  /** Rack: tamaño en U. */
+  rackUnits?: number
+  /** Montajes dentro de este rack. */
+  mounts?: RackMount[]
+  /** Si este equipo está dentro de un rack. */
+  rackId?: string | null
+  rackStartU?: number
 }
 
 /** Material constructivo que afecta visión / WiFi / sonido. */
@@ -258,6 +308,8 @@ export type NetVisionProject = {
   planoGrosorMuro?: number
   cameras: DesignCamera[]
   networkNodes: DesignNetworkNode[]
+  /** Pantalla, disco, UPS y rack de la sala técnica CCTV. */
+  infraDevices: DesignInfraDevice[]
   /** Altavoces, sensores, tableros, etc. (planos de especialidad). */
   planDevices: DesignPlanDevice[]
   structures: DesignStructure[]
@@ -340,6 +392,9 @@ export type BomCategory =
   | 'camera'
   | 'nvr'
   | 'storage'
+  | 'monitor'
+  | 'power'
+  | 'rack'
   | 'poe'
   | 'accessory'
   | 'network'

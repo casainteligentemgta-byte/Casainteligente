@@ -117,6 +117,29 @@ describe('rotateProjectGeometry', () => {
     assert.equal(next.planDevices[0]!.y, 0.25)
     assert.equal(next.planDevices[0]!.yawDeg, 100)
   })
+
+  it('rota equipos de sala técnica', () => {
+    const base = emptyProject({ id: 't', name: 't' })
+    const project = {
+      ...base,
+      infraDevices: [
+        {
+          id: 'r1',
+          label: 'RACK-01',
+          kind: 'rack' as const,
+          modelId: 'rack-12u',
+          x: 0.25,
+          y: 0.1,
+          rackUnits: 12,
+          mounts: [],
+        },
+      ],
+    }
+    const next = rotateProjectGeometry(project, 'cw')
+    assert.equal(next.infraDevices[0]!.x, 0.9)
+    assert.equal(next.infraDevices[0]!.y, 0.25)
+    assert.equal(next.infraDevices[0]!.kind, 'rack')
+  })
 })
 
 describe('invertRgbPixels', () => {

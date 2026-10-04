@@ -7,11 +7,17 @@ import {
   buildUndergroundBomLines,
   type UndergroundPlan,
 } from '@/lib/netvision/services/canalizationCalculator'
+import {
+  clampHddTb,
+  getInfraModelOrDefault,
+  hddPriceUsd,
+} from '@/lib/netvision/catalog/salaTecnica'
 import type {
   BomLine,
   BomSummary,
   CableRoute,
   DesignCamera,
+  DesignInfraDevice,
   DesignNetworkNode,
 } from '@/lib/netvision/types'
 
@@ -37,6 +43,7 @@ export function buildBom(
   cableRoutes: CableRoute[] = [],
   conduitPlans: ConduitPlan[] = [],
   undergroundPlan?: UndergroundPlan | null,
+  infraDevices: DesignInfraDevice[] = [],
 ): BomSummary {
   const lines: BomLine[] = []
   const byModel = new Map<string, { qty: number; unit: number; desc: string }>()
@@ -109,7 +116,22 @@ export function buildBom(
   const bw = totalBandwidthMbps(cameras)
   const storageTb = Math.ceil(estimateStorageTb(bw, retentionDays) * 10) / 10
   const storageUnits = storageTb > 0 ? Math.max(1, Math.ceil(storageTb)) : 0
-  if (storageUnits > 0) {
+  const physicalDisks = infraDevices.filter((d) => d.kind === 'hdd')
+  if (physicalDisks.length > 0) {
+    for (const disk of physicalDisks) {
+      const model = getInfraModelOrDefault(disk.modelId, 'hdd')
+      const tb = clampHddTb(disk.capacityTb ?? model.capacityTb)
+      const unit = hddPriceUsd(model, tb)
+      lines.push({
+        sku: `${model.id}-${tb}tb`,
+        category: 'storage',
+        description: `${model.brand} ${model.name} ${tb} TB`,
+        qty: 1,
+        unitUsd: unit,
+        totalUsd: unit,
+      })
+    }
+  } else if (storageUnits > 0) {
     lines.push({
       sku: 'HDD-TB',
       category: 'storage',
@@ -117,6 +139,22 @@ export function buildBom(
       qty: storageUnits,
       unitUsd: equipment.storageUsdPerTb,
       totalUsd: storageUnits * equipment.storageUsdPerTb,
+    })
+  }
+
+  for (const d of infraDevices.filter((x) => x.kind !== 'hdd')) {
+    const model = getInfraModelOrDefault(d.modelId, d.kind)
+    const category: BomLine['category'] =
+      d.kind === 'monitor' ? 'monitor' : d.kind === 'ups' ? 'power' : 'rack'
+    const size =
+      d.kind === 'rack' && d.rackUnits ? ` ${d.rackUnits}U` : ''
+    lines.push({
+      sku: `${model.id}-${d.id.slice(-4)}`,
+      category,
+      description: `${model.brand} ${model.name}${size}`,
+      qty: 1,
+      unitUsd: model.priceUsd,
+      totalUsd: model.priceUsd,
     })
   }
 

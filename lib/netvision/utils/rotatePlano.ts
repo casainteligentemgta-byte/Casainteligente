@@ -73,6 +73,10 @@ export function rotateProjectGeometry(
       yawDeg: wrapYaw((d.yawDeg ?? 0) + dYaw),
     }
   })
+  const infraDevices = (project.infraDevices ?? []).map((d) => {
+    const p = rotateNormPoint(d.x, d.y, dir)
+    return { ...d, x: p.x, y: p.y }
+  })
   const structures = project.structures.map((s) => {
     const a = rotateNormPoint(s.x1, s.y1, dir)
     const b = rotateNormPoint(s.x2, s.y2, dir)
@@ -105,6 +109,7 @@ export function rotateProjectGeometry(
     cameras,
     networkNodes,
     planDevices,
+    infraDevices,
     structures,
     undergroundSegments,
     cableSegments,

@@ -6,7 +6,7 @@ Guía práctica paso a paso para usar NetVision Pro.
 > En la app: [`/nexus/vision/manual/usuario`](/nexus/vision/manual/usuario).  
 > Estado técnico: [`NETVISION-PRO.md`](./NETVISION-PRO.md).
 
-**Nota de interfaz:** Los nombres de botones de este manual describen el flujo completo del producto. En la app actual: **Cargar PDF / imagen**, **+ Cámara / + Switch / + AP / + NVR / + Injector**, pestañas Plano · Diagrama · Red · Cable · Sub · Norm · BIM, capas con **?**, y **Manual** en la cabecera. El diseño se guarda en `sessionStorage` del navegador.
+**Nota de interfaz:** Los nombres de botones de este manual describen el flujo completo del producto. En la app actual: **Cargar PDF / imagen**, **+ Cámara / + NVR / + DVR / + Pantalla / + Disco / + UPS / + Rack**, **+ Switch / + AP / + Injector**, pestañas Plano · Diagrama · Red · Cable · Sub · Norm · BIM, capas con **?**, y **Manual** en la cabecera. El diseño se guarda en `sessionStorage` del navegador.
 
 ---
 
@@ -258,6 +258,15 @@ RECOMENDACIONES:
 ```
 
 **Muros:** pestaña **Muros** — dos toques en el plano (drywall, bloque, vidrio, ventana).
+
+### Sala técnica (NVR, DVR, pantalla, disco, UPS, rack)
+
+En **CCTV** usa **+ NVR**, **+ DVR**, **+ Pantalla**, **+ Disco**, **+ UPS** y **+ Rack**. El inspector muestra el panel **Sala técnica**.
+
+- Elige el modelo de grabador (NVR IP o DVR analógico/híbrido).
+- Disco: SkyHawk o Purple y capacidad **1–20 TB**.
+- Rack: **4U, 6U, 9U, 12U, 15U, 18U, 22U, 27U, 42U**.
+- **Armar rack**: toca un equipo montable (NVR, DVR, switch, disco, UPS de rack) y luego una unidad **U** libre. **Sacar** lo desmonta. Cambiar el tamaño U reacomoda el gabinete y suelta lo que ya no cabe.
 
 ---
 
