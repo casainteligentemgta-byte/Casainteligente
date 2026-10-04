@@ -333,8 +333,29 @@ create index if not exists idx_ci_flota_manual_chunks_fts
 comment on table public.ci_flota_manual_chunks is
   'Fragmentos de manuales para buscar contexto del mecánico.';
 
-insert into public.ci_flota_alertas_config (tipo, dias_anticipacion, umbral_consumo_km_l, activa)
-select v.tipo, v.dias, v.umbral, true
+do $$
+declare
+  col text;
+begin
+  foreach col in array array['maquinaria_id', 'tipo_alerta', 'frecuencia_tipo', 'frecuencia_valor']
+  loop
+    if exists (
+      select 1 from information_schema.columns
+      where table_schema = 'public'
+        and table_name = 'ci_flota_alertas_config'
+        and column_name = col
+        and is_nullable = 'NO'
+    ) then
+      execute format(
+        'alter table public.ci_flota_alertas_config alter column %I drop not null',
+        col
+      );
+    end if;
+  end loop;
+end $$;
+
+insert into public.ci_flota_alertas_config (tipo, tipo_alerta, dias_anticipacion, umbral_consumo_km_l, activa)
+select v.tipo, v.tipo, v.dias, v.umbral, true
 from (values
   ('licencia_vence', 15, null::numeric),
   ('certificado_vence', 15, null::numeric),

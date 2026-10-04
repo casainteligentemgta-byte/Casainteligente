@@ -65,6 +65,30 @@ begin
   end if;
 end $$;
 
+do $$
+declare
+  col text;
+begin
+  if to_regclass('public.ci_flota_alertas_config') is null then
+    return;
+  end if;
+  foreach col in array array['maquinaria_id', 'tipo_alerta', 'frecuencia_tipo', 'frecuencia_valor']
+  loop
+    if exists (
+      select 1 from information_schema.columns
+      where table_schema = 'public'
+        and table_name = 'ci_flota_alertas_config'
+        and column_name = col
+        and is_nullable = 'NO'
+    ) then
+      execute format(
+        'alter table public.ci_flota_alertas_config alter column %I drop not null',
+        col
+      );
+    end if;
+  end loop;
+end $$;
+
 -- ========== 320_ensure_tablas_base.sql (antes 0311/0312/1980) ==========
 create table if not exists public.recruitment_needs (
   id uuid primary key default gen_random_uuid() not null,
@@ -464,8 +488,8 @@ create index if not exists idx_ci_flota_manual_chunks_fts
 comment on table public.ci_flota_manual_chunks is
   'Fragmentos de manuales para buscar contexto del mecánico.';
 
-insert into public.ci_flota_alertas_config (tipo, dias_anticipacion, umbral_consumo_km_l, activa)
-select v.tipo, v.dias, v.umbral, true
+insert into public.ci_flota_alertas_config (tipo, tipo_alerta, dias_anticipacion, umbral_consumo_km_l, activa)
+select v.tipo, v.tipo, v.dias, v.umbral, true
 from (values
   ('licencia_vence', 15, null::numeric),
   ('certificado_vence', 15, null::numeric),
@@ -688,6 +712,9 @@ alter table public.ci_flota_alertas_config
     check (frecuencia_valor is null or frecuencia_valor >= 0),
   add column if not exists proxima_alerta_km numeric(12, 1),
   add column if not exists proxima_alerta_fecha date;
+
+alter table public.ci_flota_alertas_config
+  alter column maquinaria_id drop not null;
 
 alter table public.ci_flota_alertas_config
   drop constraint if exists ci_flota_alertas_config_tipo_unique;

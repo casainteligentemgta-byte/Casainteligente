@@ -10,6 +10,10 @@ alter table public.ci_flota_alertas_config
   add column if not exists proxima_alerta_km numeric(12, 1),
   add column if not exists proxima_alerta_fecha date;
 
+-- Umbral global: maquinaria_id null. El esquema maquinaria lo tenía NOT NULL.
+alter table public.ci_flota_alertas_config
+  alter column maquinaria_id drop not null;
+
 alter table public.ci_flota_alertas_config
   drop constraint if exists ci_flota_alertas_config_tipo_unique;
 
