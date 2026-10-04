@@ -322,13 +322,35 @@ function reservedConflict(points: number[], reserved: number[][]): boolean {
   return reserved.some((other) => polylinesOverlap(points, other))
 }
 
-function tryRoute(
+function tryRoutes(
   box: LeaderBox,
   fanX: number,
   fanY: number,
   attach: { x: number; y: number },
-): number[] {
-  return orthoViaPoint({ x: box.pinX, y: box.pinY }, { x: fanX, y: fanY }, attach)
+): number[][] {
+  const pin = { x: box.pinX, y: box.pinY }
+  const via = { x: fanX, y: fanY }
+  const hvh = simplify([
+    pin.x,
+    pin.y,
+    via.x,
+    pin.y,
+    via.x,
+    attach.y,
+    attach.x,
+    attach.y,
+  ])
+  const vhv = simplify([
+    pin.x,
+    pin.y,
+    pin.x,
+    via.y,
+    attach.x,
+    via.y,
+    attach.x,
+    attach.y,
+  ])
+  return [hvh, vhv]
 }
 
 export function polylineIsOrtho(points: number[]): boolean {
@@ -346,12 +368,12 @@ function routeOrtho(
 ): number[] {
   const dirXPreferred = box.x + box.w / 2 >= box.pinX ? 1 : -1
   const dirYPreferred = box.y + box.h / 2 >= box.pinY ? 1 : -1
-  let fallback = tryRoute(
+  let fallback = tryRoutes(
     box,
     box.pinX + dirXPreferred * (22 + channel * LANE),
     box.pinY + dirYPreferred * (ESCAPE + channel * 6),
     attachPoint(box),
-  )
+  )[1]!
 
   for (let attachBias = 0; attachBias <= 4; attachBias++) {
     const yBias = ((attachBias % 2 === 0 ? 1 : -1) * Math.ceil(attachBias / 2)) * 6
@@ -364,10 +386,11 @@ function routeOrtho(
           const fanY = box.pinY + ySign * (ESCAPE + fy * LANE)
           for (let fx = 0; fx < 16; fx++) {
             const fanX = box.pinX + xSign * (22 + (channel + fx) * LANE)
-            const pts = tryRoute(box, fanX, fanY, attach)
-            if (hitsForeignChip(pts, box.id, obstacles)) continue
-            if (reservedConflict(pts, reserved)) continue
-            return pts
+            for (const pts of tryRoutes(box, fanX, fanY, attach)) {
+              if (hitsForeignChip(pts, box.id, obstacles)) continue
+              if (reservedConflict(pts, reserved)) continue
+              return pts
+            }
           }
         }
       }

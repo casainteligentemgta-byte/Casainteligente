@@ -171,4 +171,16 @@ describe('cameraLeaderLayout', () => {
     assert.ok(ra.points.length >= 6)
     assert.equal(polylineHitsBox(ra.points, laid.find((l) => l.id === 'b')!, 2), false)
   })
+
+  it('si el otro botón está en la horizontal elige un desvío vertical', () => {
+    const laid = layoutCameraLeaders([
+      box('a', 40, 100, 320, 81),
+      box('b', 40, 200, 160, 81),
+    ])
+    const ra = laid.find((l) => l.id === 'a')!
+    const rb = laid.find((l) => l.id === 'b')!
+    assert.equal(polylineIsOrtho(ra.points), true)
+    assert.equal(polylineHitsBox(ra.points, rb, 2), false)
+    assert.ok(ra.points.some((_, i) => i % 2 === 1 && Math.abs(ra.points[i]! - 100) > 12))
+  })
 })
