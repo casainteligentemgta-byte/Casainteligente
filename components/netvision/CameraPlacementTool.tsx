@@ -1982,7 +1982,6 @@ export default function CameraPlacementTool({
             const pinX = offsetX + cam.x * drawW
             const pinY = offsetY + cam.y * drawH
             const marker = camMarkerHex(cam.markerColor)
-            const ring = camMarkerRing(marker)
             const swatch = 30
             const swatchGap = 8
             const swatchPad = 10
@@ -2000,29 +1999,9 @@ export default function CameraPlacementTool({
               <Fragment key={`lbl-${cam.id}`}>
                 <Line
                   points={[pinX, pinY, lineX, lineY]}
-                  stroke="#0f172a"
-                  strokeWidth={9}
-                  lineCap="round"
-                  opacity={0.8}
-                  listening={false}
-                />
-                <Line
-                  points={[pinX, pinY, lineX, lineY]}
                   stroke={marker}
-                  strokeWidth={selected ? 5 : 4}
+                  strokeWidth={1}
                   lineCap="round"
-                  shadowColor={marker}
-                  shadowBlur={8}
-                  shadowOpacity={0.65}
-                  listening={false}
-                />
-                <Circle
-                  x={lineX}
-                  y={lineY}
-                  radius={5}
-                  fill={marker}
-                  stroke={ring}
-                  strokeWidth={2}
                   listening={false}
                 />
                 <Group
