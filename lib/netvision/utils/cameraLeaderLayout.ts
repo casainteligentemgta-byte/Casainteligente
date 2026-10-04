@@ -284,6 +284,15 @@ export function pointsFromElbows(
   return simplify(raw)
 }
 
+function nearestElbowDist(points: number[], via: LeaderElbow): number {
+  let best = Infinity
+  for (const e of elbowsFromPoints(points)) {
+    const d = Math.hypot(e.x - via.x, e.y - via.y)
+    if (d < best) best = d
+  }
+  return best
+}
+
 /** Quiebre a 90° pasando por un punto que mueve el operador. */
 export function orthoViaPoint(
   pin: LeaderElbow,
@@ -310,8 +319,13 @@ export function orthoViaPoint(
     attach.x,
     attach.y,
   ])
-  const preferH = Math.abs(via.x - pin.x) >= Math.abs(via.y - pin.y)
-  return preferH ? hvh : vhv
+  const dh = nearestElbowDist(hvh, via)
+  const dv = nearestElbowDist(vhv, via)
+  if (Math.abs(dh - dv) < 1) {
+    const preferH = Math.abs(via.x - pin.x) >= Math.abs(via.y - pin.y)
+    return preferH ? hvh : vhv
+  }
+  return dh < dv ? hvh : vhv
 }
 
 function hitsForeignChip(points: number[], selfId: string, obstacles: LeaderBox[]): boolean {

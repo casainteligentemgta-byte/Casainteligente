@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   boxesOverlap,
   layoutCameraLeaders,
+  orthoViaPoint,
   polylineHitsBox,
   polylineIsOrtho,
   polylinesOverlap,
@@ -133,6 +134,12 @@ describe('cameraLeaderLayout', () => {
       assert.ok(p.length >= 4)
       assert.equal(p[0], [120, 126, 132, 118][i])
     }
+  })
+
+  it('al bajar el nodo elige la escuadra vertical', () => {
+    const pts = orthoViaPoint({ x: 80, y: 120 }, { x: 140, y: 220 }, { x: 180, y: 59 })
+    assert.equal(polylineIsOrtho(pts), true)
+    assert.ok(pts.some((v, i) => i % 2 === 1 && Math.abs(v - 220) < 1))
   })
 
   it('un nodo del operador se interpreta como quiebre a 90°', () => {
