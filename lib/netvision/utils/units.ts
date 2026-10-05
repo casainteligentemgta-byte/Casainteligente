@@ -41,20 +41,56 @@ export function formatLength(
   return `${meters.toFixed(digits)} m`
 }
 
+/**
+ * Interpreta el metraje que el usuario escribe al calibrar.
+ * Acepta 4,40 · 4.40 · 4.40 m · 10 ft. Devuelve metros, o null si está vacío
+ * o no se entiende (no inventa 10 m).
+ */
+export function parseCalibrationInput(
+  value: string | number,
+  system: UnitSystem,
+): number | null {
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value) || value <= 0) return null
+    return system === 'imperial' ? feetToMeters(value) : value
+  }
+  const raw = value.trim()
+  if (!raw) return null
+  let s = raw.replace(/\s+/g, '').replace(/,/g, '.')
+  let asImperial = system === 'imperial'
+  const pieRe = /(?:pies|pie|ft|')$/i
+  const metroRe = /(?:metros|metro|mts|mt|m)$/i
+  if (pieRe.test(s)) {
+    asImperial = true
+    s = s.replace(pieRe, '')
+  } else if (metroRe.test(s)) {
+    asImperial = false
+    s = s.replace(metroRe, '')
+  }
+  if (!/^\d+(?:\.\d+)?$/.test(s)) return null
+  const n = Number(s)
+  if (!Number.isFinite(n) || n <= 0) return null
+  return asImperial ? feetToMeters(n) : n
+}
+
 /** Interpreta valor de calibración ingresado por el usuario → metros. */
 export function parseCalibrationToMeters(
   value: string | number,
   system: UnitSystem,
 ): number {
-  const n = typeof value === 'number' ? value : Number(value)
-  const safe = Number.isFinite(n) && n > 0 ? n : 10
-  if (system === 'imperial') return Math.max(0.5, feetToMeters(safe))
-  return Math.max(0.5, safe)
+  const parsed = parseCalibrationInput(value, system)
+  if (parsed != null) return Math.max(0.5, parsed)
+  return system === 'imperial' ? Math.max(0.5, feetToMeters(10)) : 10
 }
 
 /** Valor sugerido para el input de calibración según sistema. */
 export function defaultCalibrationInput(system: UnitSystem): string {
   return system === 'imperial' ? '33' : '10'
+}
+
+/** Placeholder del campo de metros al calibrar. */
+export function calibrationInputPlaceholder(system: UnitSystem): string {
+  return system === 'imperial' ? 'ej. 33' : 'ej. 4,40'
 }
 
 export function formatDepth(

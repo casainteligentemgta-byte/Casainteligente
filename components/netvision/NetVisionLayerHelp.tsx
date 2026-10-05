@@ -93,7 +93,7 @@ export const NETVISION_LAYER_HELP: LayerHelpItem[] = [
     id: 'calibrate',
     label: 'Calibrar',
     blurb:
-      'Traza una línea sobre un acotamiento del plano. Si el PDF trae el número (4.40, 3.20…), se usa solo. Si no, escríbelo y toca los dos extremos. Al terminar verás un aviso de calibrado exitoso con el ancho real del plano.',
+      'Marca los dos extremos de un segmento en el plano y escribe cuántos metros mide en la realidad (4,40 o 4.40). Si el PDF trae la cota, se sugiere sola; siempre puedes corregirla. Luego pulsa Aplicar escala.',
   },
   {
     id: 'rotate',

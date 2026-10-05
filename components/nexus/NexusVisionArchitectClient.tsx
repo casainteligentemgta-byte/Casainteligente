@@ -176,10 +176,10 @@ import {
   saveProject,
 } from '@/lib/netvision/storage'
 import {
-  defaultCalibrationInput,
+  calibrationInputPlaceholder,
   formatLength,
   lengthUnitLabel,
-  parseCalibrationToMeters,
+  parseCalibrationInput,
 } from '@/lib/netvision/utils/units'
 import type {
   CableType,
@@ -271,6 +271,7 @@ import {
 } from '@/lib/netvision/utils/cameraVisionVisibility'
 import {
   ajustarEscalaSinCalibrar,
+  CALIB_MIN_SEGMENT_NORM,
   calibrationToScale,
   computePlanCalibration,
   estadoEscala,
@@ -415,8 +416,10 @@ export default function NexusVisionArchitectClient() {
   const [calibrateMode, setCalibrateMode] = useState(false)
   const [calibPoints, setCalibPoints] = useState<{ x: number; y: number }[]>([])
   const [calibCursor, setCalibCursor] = useState<{ x: number; y: number } | null>(null)
-  const [calibMeters, setCalibMeters] = useState('10')
+  const [calibMeters, setCalibMeters] = useState('')
+  const [calibMetersTouched, setCalibMetersTouched] = useState(false)
   const [calibOk, setCalibOk] = useState<CalibrationOk | null>(null)
+  const calibInputRef = useRef<HTMLInputElement | null>(null)
   /** Proporción alto/ancho de la imagen del plano (null mientras no se conoce). */
   const [planoAspect, setPlanoAspect] = useState<number | null>(null)
   const [planoDims, setPlanoDims] = useState<PlanoDimension[]>([])
@@ -483,7 +486,8 @@ export default function NexusVisionArchitectClient() {
       const p = loadProject()
       setProject(p)
       if (p.complianceProfileId) setComplianceCountry(p.complianceProfileId)
-      setCalibMeters(defaultCalibrationInput(p.unitSystem ?? 'metric'))
+      setCalibMeters('')
+      setCalibMetersTouched(false)
       lastProjectRef.current = p
       if (p.cameras.length > 0 && !p.planoUrl) {
         setInfo(
@@ -608,7 +612,10 @@ export default function NexusVisionArchitectClient() {
     clearCableDraft()
     setViewMode('plano')
     setError(null)
-    setInfo('Calibrar: toca los dos extremos de una medida que conozcas y escribe cuánto mide.')
+    setCalibMetersTouched(false)
+    setInfo(
+      'Calibrar: marca los dos extremos del segmento y escribe cuántos metros mide en el plano (ej. 4,40).',
+    )
   }
 
   const undoLast = useCallback(() => applyHistoryStep('undo'), [applyHistoryStep])
@@ -676,8 +683,18 @@ export default function NexusVisionArchitectClient() {
 
   useEffect(() => {
     if (!hydrated) return
-    setCalibMeters(defaultCalibrationInput(project.unitSystem ?? 'metric'))
+    setCalibMeters('')
+    setCalibMetersTouched(false)
   }, [project.unitSystem, hydrated])
+
+  useEffect(() => {
+    if (!calibrateMode || calibPoints.length !== 2) return
+    const t = window.setTimeout(() => {
+      calibInputRef.current?.focus()
+      calibInputRef.current?.select()
+    }, 0)
+    return () => window.clearTimeout(t)
+  }, [calibrateMode, calibPoints.length])
 
   useEffect(() => {
     structureDraftRef.current = structureDraft
@@ -711,6 +728,17 @@ export default function NexusVisionArchitectClient() {
         if (drawStructureMaterial) {
           setDrawStructureMaterial(null)
           e.preventDefault()
+          return
+        }
+        if (calibrateMode) {
+          e.preventDefault()
+          if (calibPoints.length > 0) {
+            setCalibPoints([])
+            setCalibCursor(null)
+          } else {
+            setCalibrateMode(false)
+            setInfo(null)
+          }
         }
         return
       }
@@ -745,6 +773,8 @@ export default function NexusVisionArchitectClient() {
     drawCable,
     drawCableType,
     clearCableDraft,
+    calibrateMode,
+    calibPoints.length,
   ])
 
   const structures = project.structures ?? []
@@ -1687,6 +1717,7 @@ export default function NexusVisionArchitectClient() {
     if (!calibrateMode) return
     const cursor = { x: normX, y: normY }
     setCalibCursor(cursor)
+    if (calibMetersTouched || calibPoints.length >= 2) return
     const origin = calibPoints[0]
     if (!origin) return
     const hit = pickDimensionForSegment(origin, cursor, planoDims)
@@ -1722,51 +1753,89 @@ export default function NexusVisionArchitectClient() {
     )
   }
 
+  const applyCalibScale = useCallback(() => {
+    if (calibPoints.length < 2) {
+      setError('Marca los dos extremos del segmento en el plano.')
+      return
+    }
+    const a = calibPoints[0]!
+    const b = calibPoints[1]!
+    const system = project.unitSystem ?? 'metric'
+    const meters = parseCalibrationInput(calibMeters, system)
+    if (meters == null) {
+      setError(
+        system === 'imperial'
+          ? 'Escribe cuántos pies mide este tramo en el plano (ej. 14.5).'
+          : 'Escribe cuántos metros mide este tramo en el plano (ej. 4,40).',
+      )
+      return
+    }
+    const hit = pickDimensionForSegment(a, b, planoDims)
+    const usedCota =
+      Boolean(hit) &&
+      !calibMetersTouched &&
+      hit != null &&
+      Math.abs(hit.meters - meters) < 1e-6
+    const outcome = computePlanCalibration({
+      a,
+      b,
+      meters,
+      aspect: planoAspect ?? undefined,
+      source: usedCota ? 'cota' : 'manual',
+      label: calibMeters.trim() || (hit && usedCota ? hit.label : String(meters)),
+    })
+    if (!outcome.ok) {
+      setError(
+        outcome.reason === 'short'
+          ? 'El trazo es demasiado corto. Marca los dos extremos de una cota más larga.'
+          : 'Revisa los metros del tramo e inténtalo otra vez (entre 0,4 y 200 m).',
+      )
+      return
+    }
+    setProject((p) => ({
+      ...p,
+      scale: calibrationToScale(outcome),
+    }))
+    setCalibPoints([])
+    setCalibCursor(null)
+    setCalibrateMode(false)
+    setCalibMetersTouched(false)
+    setCalibOk(outcome)
+    setInfo(null)
+    setError(null)
+  }, [
+    calibPoints,
+    calibMeters,
+    calibMetersTouched,
+    project.unitSystem,
+    planoAspect,
+    planoDims,
+  ])
+
   const onAddAt = (normX: number, normY: number) => {
     if (!project.planoUrl) return
 
     if (calibrateMode) {
+      if (calibPoints.length >= 2) return
       const next = [...calibPoints, { x: normX, y: normY }]
       if (next.length >= 2) {
         const a = next[0]!
         const b = next[1]!
-        const hit = pickDimensionForSegment(a, b, planoDims)
-        const meters = hit
-          ? hit.meters
-          : parseCalibrationToMeters(
-              calibMeters,
-              project.unitSystem ?? 'metric',
-            )
-        const outcome = computePlanCalibration({
-          a,
-          b,
-          meters,
-          // El plano casi nunca es cuadrado: sin esto el alto se mediría como el ancho.
-          aspect: planoAspect ?? undefined,
-          source: hit ? 'cota' : 'manual',
-          label: hit ? hit.label : calibMeters,
-        })
-        if (!outcome.ok) {
+        const segmentNorm = Math.hypot(a.x - b.x, a.y - b.y)
+        if (!(segmentNorm >= CALIB_MIN_SEGMENT_NORM)) {
           setCalibPoints([])
           setCalibCursor(null)
           setError(
-            outcome.reason === 'short'
-              ? 'El trazo es demasiado corto. Marca los dos extremos de una cota más larga.'
-              : 'Revisa los metros de la cota e inténtalo otra vez.',
+            'El trazo es demasiado corto. Marca los dos extremos de un segmento más largo.',
           )
           return
         }
-        setProject((p) => ({
-          ...p,
-          scale: calibrationToScale(outcome),
-        }))
-        setCalibPoints([])
+        const hit = pickDimensionForSegment(a, b, planoDims)
+        if (hit && !calibMetersTouched) setCalibMeters(hit.label)
+        setCalibPoints(next)
         setCalibCursor(null)
-        setCalibrateMode(false)
-        if (hit) setCalibMeters(hit.label)
-        setCalibOk(outcome)
-        setInfo(null)
         setError(null)
+        setInfo(null)
       } else {
         setCalibPoints(next)
         setCalibCursor(null)
@@ -2151,7 +2220,8 @@ export default function NexusVisionArchitectClient() {
       setComplianceCountry(p.complianceProfileId || 'VE')
       setCalibPoints([])
       setCalibrateMode(false)
-      setCalibMeters(defaultCalibrationInput(p.unitSystem ?? 'metric'))
+      setCalibMeters('')
+      setCalibMetersTouched(false)
       setError(null)
       pdfBytesRef.current = null
       pdfRotateQuartersRef.current = 0
@@ -2356,7 +2426,9 @@ export default function NexusVisionArchitectClient() {
         : '#22d3ee'
   const draftLabel =
     calibrateMode && calibPoints.length >= 1
-      ? `${calibMeters} m`
+      ? calibMeters.trim()
+        ? `${calibMeters.trim()} ${lengthUnitLabel(project.unitSystem ?? 'metric')}`
+        : '¿metros?'
       : null
 
   const chipClass = (active: boolean) =>
@@ -2885,35 +2957,74 @@ export default function NexusVisionArchitectClient() {
                 : 'text-[var(--nexus-cyan)] hover:bg-white/5'
             }`}
             onClick={() => {
-              setCalibrateMode((v) => !v)
-              setCalibPoints([])
-              setCalibCursor(null)
-              setDrawStructureMaterial(null)
-              setStructureDraft(null)
-              setDrawUnderground(false)
-              setUndergroundDraft(null)
-              setDrawCable(false)
-              clearCableDraft()
+              if (calibrateMode) {
+                setCalibrateMode(false)
+                setCalibPoints([])
+                setCalibCursor(null)
+                setCalibMetersTouched(false)
+                setInfo(null)
+                return
+              }
+              iniciarCalibracion()
             }}
           >
             Calibrar
           </button>
           {calibrateMode ? (
-            <label className="flex items-center gap-1 px-1 text-[11px] text-[var(--nexus-text-dim)]">
-              {lengthUnitLabel(project.unitSystem ?? 'metric')}
-              <input
-                value={calibMeters}
-                onChange={(e) => setCalibMeters(e.target.value)}
-                className="w-14 rounded border border-white/10 bg-black/40 px-1 py-0.5 text-xs text-white"
-                title="Si el PDF trae la cota, se rellena al trazar. Si no, escríbela."
-              />
-              ({calibPoints.length}/2)
-              {planoDims.length > 0 ? (
-                <span className="text-[10px] text-lime-300/90">{planoDims.length} cotas</span>
-              ) : (
-                <span className="text-[10px] text-amber-200/80">sin cotas PDF</span>
-              )}
-            </label>
+            <div className="flex flex-col gap-1.5 px-1">
+              <label className="flex flex-col gap-1 text-[11px] text-[var(--nexus-text-dim)]">
+                <span>Este tramo mide en el plano</span>
+                <span className="flex items-center gap-1.5">
+                  <input
+                    data-nv-calib-metros
+                    inputMode="decimal"
+                    autoComplete="off"
+                    placeholder={calibrationInputPlaceholder(
+                      project.unitSystem ?? 'metric',
+                    )}
+                    value={calibMeters}
+                    onChange={(e) => {
+                      setCalibMeters(e.target.value)
+                      setCalibMetersTouched(true)
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        applyCalibScale()
+                      }
+                    }}
+                    className="min-w-0 flex-1 rounded border border-lime-400/40 bg-black/50 px-2 py-1.5 text-sm font-semibold text-white"
+                    title="Metraje real de la línea que marcas: 4,40 o 4.40"
+                  />
+                  <span className="shrink-0 text-xs font-semibold text-lime-200">
+                    {lengthUnitLabel(project.unitSystem ?? 'metric')}
+                  </span>
+                </span>
+              </label>
+              <p className="text-[10px] text-[var(--nexus-text-muted)]">
+                {calibPoints.length < 2
+                  ? `Marca los dos extremos (${calibPoints.length}/2).`
+                  : 'Confirma el metraje y pulsa Aplicar.'}
+                {planoDims.length > 0 ? (
+                  <span className="text-lime-300/90">
+                    {' '}
+                    {planoDims.length} cotas PDF
+                  </span>
+                ) : (
+                  <span className="text-amber-200/80"> sin cotas PDF</span>
+                )}
+              </p>
+              {calibPoints.length >= 2 ? (
+                <button
+                  type="button"
+                  data-nv-calib-aplicar-side
+                  onClick={applyCalibScale}
+                  className="w-full rounded-md bg-lime-400 px-2 py-1.5 text-[11px] font-bold text-black"
+                >
+                  Aplicar escala
+                </button>
+              ) : null}
+            </div>
           ) : null}
           <NetVisionLayerHelp />
           <details className="rounded-md border border-white/10 bg-black/30 px-2 py-1">
@@ -3217,7 +3328,11 @@ export default function NexusVisionArchitectClient() {
       </button>
       {calibrateMode ? (
         <span className="shrink-0 text-[10px] font-semibold text-lime-300">
-          Calibrando {calibMeters} m ({calibPoints.length}/2)
+          {calibPoints.length < 2
+            ? `Calibrando (${calibPoints.length}/2): marca el segmento`
+            : calibMeters.trim()
+              ? `Calibrando ${calibMeters.trim()} ${lengthUnitLabel(project.unitSystem ?? 'metric')}`
+              : 'Calibrando: escribe el metraje del tramo'}
         </span>
       ) : null}
     </>
@@ -3578,6 +3693,66 @@ export default function NexusVisionArchitectClient() {
                     onZoomChange={(z) => setZoomPercent(Math.round(z * 100))}
                   />
                   </NetVisionPlanoRotulo>
+                  {calibrateMode && calibPoints.length >= 2 ? (
+                    <div
+                      data-nv-calib-panel
+                      className="absolute left-1/2 top-3 z-30 w-[min(22rem,calc(100%-1.5rem))] -translate-x-1/2 rounded-xl border border-lime-400/45 bg-[#071018]/95 p-3 shadow-2xl backdrop-blur-md"
+                      onPointerDown={(e) => e.stopPropagation()}
+                    >
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-lime-200">
+                        Escala del plano
+                      </p>
+                      <label className="mt-2 flex flex-col gap-1 text-[12px] text-white/85">
+                        Este tramo mide, en el plano
+                        <span className="flex items-center gap-2">
+                          <input
+                            ref={calibInputRef}
+                            data-nv-calib-metros-overlay
+                            inputMode="decimal"
+                            autoComplete="off"
+                            placeholder={calibrationInputPlaceholder(
+                              project.unitSystem ?? 'metric',
+                            )}
+                            value={calibMeters}
+                            onChange={(e) => {
+                              setCalibMeters(e.target.value)
+                              setCalibMetersTouched(true)
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault()
+                                applyCalibScale()
+                              }
+                            }}
+                            className="min-h-11 min-w-0 flex-1 rounded-lg border border-lime-400/50 bg-black/60 px-3 text-lg font-bold text-white"
+                          />
+                          <span className="shrink-0 text-sm font-semibold text-lime-200">
+                            {lengthUnitLabel(project.unitSystem ?? 'metric')}
+                          </span>
+                        </span>
+                      </label>
+                      <div className="mt-2.5 flex gap-2">
+                        <button
+                          type="button"
+                          data-nv-calib-aplicar
+                          onClick={applyCalibScale}
+                          className="min-h-10 flex-1 rounded-lg bg-lime-400 px-3 text-[12px] font-bold text-black hover:bg-lime-300"
+                        >
+                          Aplicar escala
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCalibPoints([])
+                            setCalibCursor(null)
+                          }}
+                          className="min-h-10 rounded-lg border border-white/25 px-3 text-[12px] font-semibold text-white/80 hover:bg-white/10"
+                        >
+                          Trazar de nuevo
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
                   <div className="pointer-events-none absolute left-3 top-14 z-20 w-[min(16.75rem,calc(100%-1.5rem))]">
                     {lookPanelOpen ? (
                       <div className="pointer-events-auto rounded-xl border border-white/20 bg-[#071018]/92 p-2.5 shadow-xl backdrop-blur-md">
