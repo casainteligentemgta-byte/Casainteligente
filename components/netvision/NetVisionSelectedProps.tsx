@@ -7,6 +7,8 @@ import {
   normalizeCamMarkerColor,
 } from '@/lib/netvision/utils/cameraMarkerColor'
 import { Button } from '@/components/nexus/ui/button'
+import NetVisionAlcanceUtil from '@/components/netvision/NetVisionAlcanceUtil'
+import { alcanceUtilCamara } from '@/lib/netvision/services/dimensionamiento'
 import {
   cameraCatalogGrouped,
   cameraCatalogOptionLabel,
@@ -305,6 +307,10 @@ export default function NetVisionSelectedProps({
                 </p>
                 {model.notes ? <p>{model.notes}</p> : null}
               </div>
+              <NetVisionAlcanceUtil
+                alcance={alcanceUtilCamara(camera)}
+                unitSystem={unitSystem}
+              />
               <div className="space-y-2 rounded-md border border-white/10 bg-black/25 px-2 py-1.5">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-cyan)]">
                   Montaje

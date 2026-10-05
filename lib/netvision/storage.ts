@@ -103,6 +103,7 @@ export function emptyProject(partial?: {
     cableRouteOverrides: {},
     scale: defaultScale(),
     retentionDays: 30,
+    upsBackupMin: 30,
     complianceProfileId: 'VE',
   }
 }
@@ -491,6 +492,7 @@ export function resetActiveDesign(current: NetVisionProject): NetVisionProject {
     distributorMarginPct: current.distributorMarginPct,
     complianceProfileId: current.complianceProfileId,
     retentionDays: current.retentionDays,
+    upsBackupMin: current.upsBackupMin,
     updatedAt: nowIso(),
   }
   saveProject(next)
@@ -568,6 +570,10 @@ function normalizeProject(
     cableRouteOverrides: normalizeCableRouteOverrides(p.cableRouteOverrides),
     scale,
     retentionDays: typeof p.retentionDays === 'number' ? p.retentionDays : 30,
+    upsBackupMin:
+      typeof p.upsBackupMin === 'number' && Number.isFinite(p.upsBackupMin)
+        ? Math.min(480, Math.max(5, Math.round(p.upsBackupMin)))
+        : 30,
     complianceProfileId: p.complianceProfileId ?? 'VE',
   }
 }

@@ -29,6 +29,8 @@ import { normalizeCotaColor } from '@/lib/netvision/utils/nightPlanoPalette'
 import { buildPlanoRotulo } from '@/lib/netvision/utils/planoRotulo'
 import NetVisionPlanoRotulo from '@/components/netvision/NetVisionPlanoRotulo'
 import NetVisionCameraPhoto from '@/components/netvision/NetVisionCameraPhoto'
+import NetVisionAlcanceUtil from '@/components/netvision/NetVisionAlcanceUtil'
+import { resumenAlcanceUtil } from '@/lib/netvision/services/dimensionamiento'
 import NetVisionSplitterSymbol from '@/components/netvision/NetVisionSplitterSymbol'
 import { contarSplittersPoe } from '@/lib/netvision/catalog/cameras'
 
@@ -110,6 +112,19 @@ function CameraFicha({
       {card.notes ? (
         <p className="mt-2 text-[11px] leading-relaxed text-[#a9e8c4]">{card.notes}</p>
       ) : null}
+      {compact ? (
+        <p data-nv-alcance-resumen className="mt-2 text-[11px] leading-relaxed text-[#a9e8c4]">
+          {resumenAlcanceUtil(card.alcanceUtil)}
+        </p>
+      ) : (
+        <div className="mt-2">
+          <NetVisionAlcanceUtil
+            alcance={card.alcanceUtil}
+            unitSystem={unitSystem}
+            variant="tactico"
+          />
+        </div>
+      )}
       <p className="mt-2 text-[11px] font-bold text-[#8cffb5]">
         {card.connectionLabel}
         {card.wired && card.poeWatts > 0 ? ` · ${card.poeWatts} W PoE` : ''}

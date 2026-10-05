@@ -1,6 +1,10 @@
 import type { CameraModel, CableRoute, DesignCamera } from '@/lib/netvision/types'
 import { catalogFovLabel, getCameraModelOrDefault } from '@/lib/netvision/catalog/cameras'
 import { cableTypeLabel } from '@/lib/netvision/services/cableCalculator'
+import {
+  alcanceUtilCamara,
+  type AlcanceUtilCamara,
+} from '@/lib/netvision/services/dimensionamiento'
 
 export type CameraConnectionKind = 'poe' | 'wifi' | 'battery'
 
@@ -46,6 +50,8 @@ export type ClienteCameraCard = {
   wired: boolean
   /** Voltaje del adaptador PoE (splitter) si el modelo lo necesita. */
   poeSplitterV: 5 | 12 | null
+  /** Hasta dónde identifica, reconoce y detecta (según resolución y ángulo). */
+  alcanceUtil: AlcanceUtilCamara
 }
 
 export function formFactorLabel(form: CameraModel['formFactor']): string {
@@ -100,6 +106,7 @@ export function buildClienteCameraCard(
     cableMeters: wired ? cameraCableMeters(routes, cam.id) : 0,
     wired,
     poeSplitterV: wired && (model.poeSplitterV === 5 || model.poeSplitterV === 12) ? model.poeSplitterV : null,
+    alcanceUtil: alcanceUtilCamara(cam),
   }
 }
 

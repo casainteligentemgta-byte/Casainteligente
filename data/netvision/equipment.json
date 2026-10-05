@@ -621,6 +621,7 @@
       "ports": 8,
       "priceUsd": 280,
       "recorder": "nvr",
+      "channels": 8,
       "hddBays": 2,
       "rackUnits": 1
     },
@@ -637,6 +638,7 @@
       "ports": 16,
       "priceUsd": 420,
       "recorder": "nvr",
+      "channels": 16,
       "hddBays": 2,
       "rackUnits": 1
     },
@@ -653,6 +655,7 @@
       "ports": 16,
       "priceUsd": 690,
       "recorder": "nvr",
+      "channels": 32,
       "hddBays": 4,
       "rackUnits": 2
     },
@@ -669,6 +672,7 @@
       "ports": 8,
       "priceUsd": 160,
       "recorder": "dvr",
+      "channels": 8,
       "hddBays": 1,
       "rackUnits": 1
     },
@@ -685,6 +689,7 @@
       "ports": 16,
       "priceUsd": 240,
       "recorder": "dvr",
+      "channels": 16,
       "hddBays": 2,
       "rackUnits": 1
     },

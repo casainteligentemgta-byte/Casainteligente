@@ -169,6 +169,8 @@ export type NetworkDeviceModel = {
   priceUsd: number
   /** Grabador: NVR IP o DVR analog/híbrido. */
   recorder?: 'nvr' | 'dvr'
+  /** Grabador: cámaras que admite (puede ser mayor que sus puertos PoE). */
+  channels?: number
   hddBays?: number
   rackUnits?: number
 }
@@ -334,7 +336,10 @@ export type NetVisionProject = {
    */
   cableRouteOverrides: Record<string, { x: number; y: number }[]>
   scale: ScaleCalibration
+  /** Días de grabación que se quieren guardar (30 por defecto). */
   retentionDays: number
+  /** Minutos de respaldo que debe dar el UPS (30 por defecto). */
+  upsBackupMin?: number
   complianceProfileId: string
 }
 
