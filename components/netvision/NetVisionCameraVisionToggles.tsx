@@ -32,24 +32,34 @@ export default function NetVisionCameraVisionToggles({
   if (cameras.length === 0) return null
   const allOn = hiddenIds.length === 0
   const tac = variant === 'tactico'
-  const rowH = tac ? 'min-h-11' : compact ? 'min-h-9' : 'min-h-8'
+  // Vista cliente: ~30 % más chicos que min-h-11 / px-3.5, para no comerse el plano.
+  const rowH = tac ? 'h-[31px] min-h-[31px]' : compact ? 'min-h-9' : 'min-h-8'
+  const labelPx = tac ? 'px-2' : compact ? 'px-2' : 'px-2'
+  const allPx = tac ? 'px-2.5' : 'px-2.5'
+  const eyeW = tac ? 'min-w-[31px]' : 'min-w-9'
+  const type = tac ? 'text-[10px]' : 'text-[11px]'
+  const iconClass = tac ? 'h-2.5 w-2.5' : 'h-3.5 w-3.5'
 
   return (
     <div className={compact ? 'min-w-0' : 'space-y-1.5'}>
-      <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto overscroll-x-contain pb-0.5 [scrollbar-width:thin]">
+      <div
+        className={`flex flex-nowrap items-center overflow-x-auto overscroll-x-contain pb-0.5 [scrollbar-width:thin] ${
+          tac ? 'gap-1' : 'gap-1.5'
+        }`}
+      >
         <button
           type="button"
           title="Mostrar el semáforo de todas las cámaras"
           aria-pressed={allOn}
           onClick={onShowAll}
-          className={`shrink-0 text-[11px] ${rowH} ${
+          className={`shrink-0 ${type} ${rowH} ${
             tac
-              ? `px-3.5 font-bold uppercase tracking-[0.12em] ${
+              ? `${allPx} font-bold uppercase tracking-[0.12em] ${
                   allOn
                     ? 'bg-[#8cffb5] text-[#07110d]'
                     : 'border border-[#8cffb5] text-[#8cffb5] hover:bg-[#8cffb5]/10'
                 }`
-              : `rounded-md px-2.5 font-semibold ${
+              : `rounded-md ${allPx} font-semibold ${
                   allOn
                     ? 'bg-[var(--nexus-cyan)] text-black'
                     : 'border border-white/15 text-[var(--nexus-cyan)] hover:bg-white/5'
@@ -87,10 +97,10 @@ export default function NetVisionCameraVisionToggles({
                   onSolo(cam.id)
                   onSelect?.(cam.id)
                 }}
-                className={`whitespace-nowrap text-[11px] ${rowH} ${
+                className={`whitespace-nowrap ${type} ${rowH} ${
                   tac
-                    ? 'px-3 font-bold tracking-[0.08em] text-[#d6ffe5]'
-                    : 'px-2 font-semibold text-white'
+                    ? `${labelPx} font-bold tracking-[0.08em] text-[#d6ffe5]`
+                    : `${labelPx} font-semibold text-white`
                 }`}
               >
                 {cam.label}
@@ -100,13 +110,13 @@ export default function NetVisionCameraVisionToggles({
                 title={on ? `Apagar visión de ${cam.label}` : `Encender visión de ${cam.label}`}
                 aria-pressed={on}
                 onClick={() => onToggle(cam.id)}
-                className={`flex items-center justify-center border-l ${rowH} ${
+                className={`flex items-center justify-center border-l ${rowH} ${eyeW} ${
                   tac
-                    ? 'min-w-11 border-[#2e7d54] text-[#8cffb5] hover:bg-[#8cffb5]/10'
-                    : 'min-w-9 border-white/10 text-white/90 hover:bg-white/10'
+                    ? 'border-[#2e7d54] text-[#8cffb5] hover:bg-[#8cffb5]/10'
+                    : 'border-white/10 text-white/90 hover:bg-white/10'
                 }`}
               >
-                {on ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                {on ? <Eye className={iconClass} /> : <EyeOff className={iconClass} />}
               </button>
             </span>
           )

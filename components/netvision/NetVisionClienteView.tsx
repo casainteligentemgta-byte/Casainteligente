@@ -595,7 +595,7 @@ export default function NetVisionClienteView() {
       </div>
 
       {cameras.length > 0 ? (
-        <div className="shrink-0 print:hidden">
+        <div className="shrink-0 print:hidden" data-nv-cam-toggles>
           <NetVisionCameraVisionToggles
             cameras={cameras}
             hiddenIds={hiddenLive}
@@ -653,6 +653,7 @@ export default function NetVisionClienteView() {
               showCableRoutes
               showStructures
               readOnly
+              showCameraLabels={false}
               onAddAt={() => undefined}
               onMove={() => undefined}
               metersPerNormX={project.scale.metersPerNormX}

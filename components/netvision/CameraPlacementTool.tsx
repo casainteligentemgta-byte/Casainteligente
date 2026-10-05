@@ -184,6 +184,11 @@ export type CameraPlacementToolProps = {
   onPatchCamera?: (id: string, patch: Partial<DesignCamera>) => void
   /** Vista cliente / presentación: sin arrastres ni asas. */
   readOnly?: boolean
+  /**
+   * Nombres de cámara (chips con línea al pin). En la vista del cliente se
+   * apagan para no tapar el plano: los nombres viven en la fila de botones.
+   */
+  showCameraLabels?: boolean
   /** Ajuste interactivo de óptica (yaw / FOV por lado / alcance) desde el plano. */
   onAdjustCameraVision?: (
     id: string,
@@ -526,6 +531,7 @@ export default function CameraPlacementTool({
   onMove,
   onPatchCamera,
   readOnly = false,
+  showCameraLabels = true,
   onAdjustCameraVision,
   metersPerNormX = 40,
   metersPerNormY = 40,
@@ -2286,7 +2292,7 @@ export default function CameraPlacementTool({
             />
           ))}
 
-          {(() => {
+          {showCameraLabels ? (() => {
             const swatch = 30
             const swatchGap = 8
             const swatchPad = 10
@@ -2650,7 +2656,7 @@ export default function CameraPlacementTool({
               </Fragment>
             )
           })
-          })()}
+          })() : null}
           {cameras.map((cam) => {
             if (splitterDeCamara(cam) === null) return null
             const selected = cam.id === selectedId
