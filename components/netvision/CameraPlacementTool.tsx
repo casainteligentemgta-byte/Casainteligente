@@ -6,10 +6,12 @@ import {
   Circle,
   Image as KonvaImage,
   Group,
+  Label,
   Layer,
   Line,
   Rect,
   Stage,
+  Tag,
   Text,
 } from 'react-konva'
 import type Konva from 'konva'
@@ -37,7 +39,11 @@ import {
 } from '@/lib/netvision/utils/networkNodeSize'
 import type { WifiCoverageCircle } from '@/lib/netvision/services/wifiPredictor'
 import type { AccessChamber, UndergroundRun } from '@/lib/netvision/services/canalizationCalculator'
-import { nearestSegmentOnRoute, MANUAL_CABLE_TO_ID } from '@/lib/netvision/services/cableRoutingEngine'
+import {
+  nearestSegmentOnRoute,
+  routeMidpoint,
+  MANUAL_CABLE_TO_ID,
+} from '@/lib/netvision/services/cableRoutingEngine'
 import {
   applyNightPlanoPalette,
   clampGrosorMuro,
@@ -145,6 +151,13 @@ export type CameraPlacementToolProps = {
   onSelect: (id: string | null) => void
   /** Toque (no arrastre): abrir ficha de configuración. */
   onInspect?: (id: string) => void
+  /** Selección múltiple: equipos elegidos (se marcan con un aro). */
+  multiSelectedIds?: string[]
+  /**
+   * Si se pasa, el plano está en modo selección múltiple: tocar un equipo lo
+   * agrega o lo quita del grupo en vez de abrir su ficha.
+   */
+  onToggleMulti?: (id: string) => void
   /** Mover un quiebre (índice 0-based entre extremos) de una ruta auto. */
   onCableWaypointMove?: (
     routeId: string,
@@ -176,6 +189,9 @@ export type CameraPlacementToolProps = {
   /** API imperativa para botones externos de zoom. */
   zoomControlsRef?: React.MutableRefObject<NetVisionZoomControls | null>
 }
+
+/** Zona de toque mínima (px) para equipos y asas pequeñas: cómoda para el dedo en iPad. */
+const TOUCH_HIT_PX = 40
 
 export type NetVisionZoomControls = {
   zoomIn: () => void
@@ -460,6 +476,8 @@ export default function CameraPlacementTool({
   nightMode = false,
   onSelect,
   onInspect,
+  multiSelectedIds,
+  onToggleMulti,
   onCableWaypointMove,
   onCableWaypointInsert,
   onCableWaypointRemove,
@@ -502,6 +520,8 @@ export default function CameraPlacementTool({
   const lastPlaceAtRef = useRef(0)
   const lastChipEventAtRef = useRef(0)
   const lastChipTapRef = useRef<{ id: string; at: number } | null>(null)
+  /** Mismo motivo: en selección múltiple un toque no debe agregar y quitar a la vez. */
+  const lastMultiToggleRef = useRef<{ id: string; at: number } | null>(null)
 
   viewRef.current = { zoom, stagePos }
 
@@ -732,6 +752,14 @@ export default function CameraPlacementTool({
   const canPan = !pinching
 
   const inspect = (id: string) => {
+    if (onToggleMulti) {
+      const now = Date.now()
+      const prev = lastMultiToggleRef.current
+      if (prev && prev.id === id && now - prev.at < 350) return
+      lastMultiToggleRef.current = { id, at: now }
+      onToggleMulti(id)
+      return
+    }
     onSelect(id)
     onInspect?.(id)
   }
@@ -1134,7 +1162,7 @@ export default function CameraPlacementTool({
                     clampGrosorMuro(s.grosor ?? wallStrokeGrosor),
                     selected,
                   )}
-                  hitStrokeWidth={placeMode ? 0 : 16}
+                  hitStrokeWidth={placeMode ? 0 : 22}
                   dash={mat.dash ?? undefined}
                   lineCap="round"
                   opacity={selected ? 1 : 0.9}
@@ -1187,7 +1215,7 @@ export default function CameraPlacementTool({
                         fill={mat.color}
                         stroke="#fff"
                         strokeWidth={1}
-                        hitStrokeWidth={14}
+                        hitStrokeWidth={TOUCH_HIT_PX - 5}
                         draggable
                         onClick={(e) => {
                           e.cancelBubble = true
@@ -1365,9 +1393,11 @@ export default function CameraPlacementTool({
                       ? '#fef08a'
                       : stroke
                   }
-                  strokeWidth={selected ? 3.5 : r.warn ? 2.5 : 2}
+                  strokeWidth={selected ? 3.5 : r.overLimit ? 3 : r.warn ? 2.5 : 2}
                   dash={
-                    r.type === 'FIBER'
+                    r.overLimit
+                      ? [10, 5]
+                      : r.type === 'FIBER'
                       ? [6, 4]
                       : r.type === 'AUDIO' || r.type === 'POWER_12V'
                         ? [4, 3]
@@ -1414,6 +1444,41 @@ export default function CameraPlacementTool({
               )
             })}
 
+          {/* Cable de red de más de 100 m: rótulo sobre el tramo */}
+          {showCableRoutes &&
+            !showUnderground &&
+            cableRoutes
+              .filter((r) => r.overLimit)
+              .map((r) => {
+                const mid = routeMidpoint(r.points)
+                if (!mid) return null
+                return (
+                  <Label
+                    key={`${r.id}-limite`}
+                    x={offsetX + mid.x * drawW}
+                    y={offsetY + mid.y * drawH - 6}
+                    listening={false}
+                  >
+                    <Tag
+                      fill="#7f1d1d"
+                      stroke="#fca5a5"
+                      strokeWidth={1}
+                      cornerRadius={4}
+                      pointerDirection="down"
+                      pointerWidth={8}
+                      pointerHeight={5}
+                    />
+                    <Text
+                      text={`${r.routeM} m · falta switch`}
+                      fontSize={10}
+                      fontStyle="bold"
+                      fill="#fee2e2"
+                      padding={4}
+                    />
+                  </Label>
+                )
+              })}
+
           {/* Quiebres arrastrables de la ruta seleccionada */}
           {showCableRoutes &&
             !showUnderground &&
@@ -1434,6 +1499,7 @@ export default function CameraPlacementTool({
                       fill="#facc15"
                       stroke="#fff"
                       strokeWidth={1.5}
+                      hitStrokeWidth={TOUCH_HIT_PX - 14}
                       draggable
                       onClick={(e) => {
                         e.cancelBubble = true
@@ -1903,7 +1969,7 @@ export default function CameraPlacementTool({
                   shadowColor="black"
                   shadowBlur={selected ? 6 : 4}
                   shadowOpacity={0.28}
-                  hitStrokeWidth={Math.max(10, 14 - size)}
+                  hitStrokeWidth={Math.max(10, TOUCH_HIT_PX - size * 2)}
                   listening={!placeMode || snapPlaceToDevices}
                   draggable={!placeMode && !readOnly}
                   onClick={(e) => {
@@ -1944,6 +2010,7 @@ export default function CameraPlacementTool({
                     fill="#f8fafc"
                     stroke="#0f172a"
                     strokeWidth={1.25}
+                    hitStrokeWidth={TOUCH_HIT_PX - handleR * 2}
                     draggable
                     onClick={(e) => {
                       e.cancelBubble = true
@@ -1998,6 +2065,7 @@ export default function CameraPlacementTool({
                   stroke={selected ? '#fff' : '#0f172a'}
                   strokeWidth={selected ? 1.75 : 1.2}
                   cornerRadius={dev.kind === 'monitor' ? 2 : 3}
+                  hitStrokeWidth={TOUCH_HIT_PX - Math.min(w, h)}
                   listening={!placeMode}
                   draggable={!placeMode && !readOnly}
                   onClick={(e) => {
@@ -2048,7 +2116,7 @@ export default function CameraPlacementTool({
                 fill={color}
                 stroke={selected ? '#fff' : '#0f172a'}
                 strokeWidth={selected ? 1.75 : 1.25}
-                hitStrokeWidth={16}
+                hitStrokeWidth={TOUCH_HIT_PX - 10}
                 shadowColor="black"
                 shadowBlur={3}
                 shadowOpacity={0.3}
@@ -2086,6 +2154,25 @@ export default function CameraPlacementTool({
               />
             )
           })}
+
+          {/* Selección múltiple: aro punteado sobre cada equipo elegido */}
+          {multiSelectedIds?.length
+            ? [...cameras, ...networkNodes, ...infraDevices, ...planDevices]
+                .filter((e) => multiSelectedIds.includes(e.id))
+                .map((e) => (
+                  <Circle
+                    key={`multi-${e.id}`}
+                    x={offsetX + e.x * drawW}
+                    y={offsetY + e.y * drawH}
+                    radius={19}
+                    stroke="#22d3ee"
+                    strokeWidth={2}
+                    dash={[5, 3]}
+                    fill="rgba(34,211,238,0.14)"
+                    listening={false}
+                  />
+                ))
+            : null}
 
           {networkNodes.map((node) => {
             const planSize = resolveNetworkPlanSize(node)
@@ -2261,7 +2348,7 @@ export default function CameraPlacementTool({
                           fill={elbows.length > 0 || dragElbow?.id === cam.id ? '#fff' : '#071018'}
                           stroke={marker}
                           strokeWidth={2}
-                          hitStrokeWidth={22}
+                          hitStrokeWidth={TOUCH_HIT_PX - node}
                           listening={canDragLabel}
                           draggable={canDragLabel}
                           dragDistance={2}
