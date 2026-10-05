@@ -67,6 +67,8 @@ describe('conexión de la cámara · cable de red o Wi‑Fi', () => {
     assert.equal(splitterDeCamara(porCable), 12)
     assert.equal(splitterDeCamara(porWifi), null)
     assert.equal(contarSplittersPoe(camaras), 1)
+    assert.equal(splitterDeCamara(cam('h4', 'ezviz-h4')), null)
+    assert.equal(splitterDeCamara(cam('h4c', 'ezviz-h4', { conexion: 'cable' })), 12)
 
     const rutas = buildCableRoutes(camaras, [sw], scale)
     assert.deepEqual(rutas.map((r) => r.fromId), ['a'])

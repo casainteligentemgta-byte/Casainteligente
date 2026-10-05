@@ -266,6 +266,10 @@ import {
   siguienteEtiquetaCamara,
 } from '@/lib/netvision/utils/seleccionMultiple'
 import {
+  modeloPorDefectoDelProyecto,
+  plantillaNuevaCamara,
+} from '@/lib/netvision/utils/nuevaCamara'
+import {
   isolateHiddenCameraIds,
   pruneHiddenCameraIds,
   toggleHiddenCameraId,
@@ -487,6 +491,7 @@ export default function NexusVisionArchitectClient() {
     try {
       const p = loadProject()
       setProject(p)
+      setDefaultModelId(modeloPorDefectoDelProyecto(p.cameras, DEFAULT_CAMERA_MODEL_ID))
       if (p.complianceProfileId) setComplianceCountry(p.complianceProfileId)
       setCalibMeters('')
       setCalibMetersTouched(false)
@@ -1139,6 +1144,10 @@ export default function NexusVisionArchitectClient() {
   }, [linkAdvice, project.cameras, project.networkNodes])
 
   const selectedCam = project.cameras.find((c) => c.id === selectedId) ?? null
+  useEffect(() => {
+    if (!selectedCam) return
+    setDefaultModelId(selectedCam.modelId)
+  }, [selectedCam])
   const selectedNet = project.networkNodes.find((n) => n.id === selectedId) ?? null
   const selectedInfra =
     (project.infraDevices ?? []).find((d) => d.id === selectedId) ?? null
@@ -1311,13 +1320,14 @@ export default function NexusVisionArchitectClient() {
 
   const addCameraAt = (normX: number, normY: number) => {
     if (!project.planoUrl) return
-    const vision = catalogVisionDefaults(defaultModelId, nightMode ? 'night' : 'day')
+    const plantilla = plantillaNuevaCamara(project.cameras, selectedId, defaultModelId)
+    const vision = catalogVisionDefaults(plantilla.modelId, nightMode ? 'night' : 'day')
     const pin: DesignCamera = {
       id: uid(),
       x: Math.round(normX * 1000) / 1000,
       y: Math.round(normY * 1000) / 1000,
       label: siguienteEtiquetaCamara(project.cameras.map((c) => c.label)),
-      modelId: defaultModelId,
+      modelId: plantilla.modelId,
       yawDeg: 0,
       mountHeightM: DEFAULT_MOUNT_HEIGHT_M,
       tiltDeg: DEFAULT_TILT_DEG,
@@ -1325,6 +1335,7 @@ export default function NexusVisionArchitectClient() {
       labelOffsetX: 0.07 + (project.cameras.length % 3) * 0.035,
       labelOffsetY: -0.09 - (Math.floor(project.cameras.length / 3) % 3) * 0.05,
       ...vision,
+      ...(plantilla.conexion ? { conexion: plantilla.conexion } : {}),
     }
     setError(null)
     setProject((p) => ({ ...p, cameras: [...p.cameras, pin] }))
@@ -2019,6 +2030,7 @@ export default function NexusVisionArchitectClient() {
   }
 
   const patchCamera = (id: string, patch: Partial<DesignCamera>) => {
+    if (patch.modelId) setDefaultModelId(patch.modelId)
     setProject((p) => ({
       ...p,
       cameras: p.cameras.map((c) => {
@@ -2281,6 +2293,7 @@ export default function NexusVisionArchitectClient() {
     try {
       setProject(p)
       setSelectedId(null)
+      setDefaultModelId(modeloPorDefectoDelProyecto(p.cameras, DEFAULT_CAMERA_MODEL_ID))
       setComplianceCountry(p.complianceProfileId || 'VE')
       setCalibPoints([])
       setCalibrateMode(false)
@@ -2520,9 +2533,8 @@ export default function NexusVisionArchitectClient() {
                   modelId: id,
                   ...vision,
                 })
-              } else {
-                setDefaultModelId(id)
               }
+              setDefaultModelId(id)
             }}
             className="max-w-[min(100%,280px)] rounded border border-white/10 bg-black/40 px-2 py-1 text-[11px] text-white"
             title="Tipo / modelo de cámara"

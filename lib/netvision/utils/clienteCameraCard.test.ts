@@ -5,6 +5,7 @@ import {
   CAMERA_CATALOG,
   cameraPoeSplitterV,
   contarSplittersPoe,
+  splitterDeCamara,
 } from '@/lib/netvision/catalog/cameras'
 import {
   buildClienteCameraCard,
@@ -132,11 +133,18 @@ describe('clienteCameraCard', () => {
   })
 
   it('marca con splitter solo a las Ezviz de corriente sin PoE propio', () => {
-    const cam = (modelId: string) => ({ modelId })
+    const cam = (modelId: string, extra: { conexion?: 'cable' | 'wifi' } = {}) => ({
+      modelId,
+      ...extra,
+    })
     assert.equal(cameraPoeSplitterV('ezviz-h9c'), 12)
     assert.equal(cameraPoeSplitterV('ezviz-c6n'), 5)
-    // PoE nativo, Wi-Fi, batería u otras marcas: sin splitter.
-    for (const id of ['ezviz-h4-poe', 'ezviz-h4', 'ezviz-bc1c', 'ezviz-eb8', 'hik-ds2cd2143']) {
+    // H4 Wi‑Fi: el modelo no trae PoE; el adaptador solo sale si va por cable.
+    assert.equal(cameraPoeSplitterV('ezviz-h4'), 12)
+    assert.equal(splitterDeCamara(cam('ezviz-h4')), null)
+    assert.equal(splitterDeCamara(cam('ezviz-h4', { conexion: 'cable' })), 12)
+    // PoE nativo, batería u otras marcas: sin splitter.
+    for (const id of ['ezviz-h4-poe', 'ezviz-bc1c', 'ezviz-eb8', 'hik-ds2cd2143']) {
       assert.equal(cameraPoeSplitterV(id), null, id)
     }
     assert.equal(
@@ -144,7 +152,7 @@ describe('clienteCameraCard', () => {
       2,
     )
     const conSplitter = CAMERA_CATALOG.filter((m) => m.poeSplitterV).map((m) => m.id)
-    assert.equal(conSplitter.length, 8)
+    assert.equal(conSplitter.length, 9)
     for (const m of CAMERA_CATALOG.filter((x) => x.poeSplitterV)) {
       assert.match(m.notes ?? '', new RegExp(`splitter\\) de ${m.poeSplitterV} V`), m.id)
     }
@@ -157,9 +165,17 @@ describe('clienteCameraCard', () => {
     assert.equal(wifiCard.fovLabel, '106° · lente 2.8 mm')
     assert.equal(wifiCard.wired, false)
     assert.equal(wifiCard.cableMeters, 0)
+    assert.equal(wifiCard.poeSplitterV, null)
+    const cableCard = buildClienteCameraCard(
+      { ...cam, modelId: 'ezviz-h4', conexion: 'cable' },
+      [],
+    )
+    assert.equal(cableCard.wired, true)
+    assert.equal(cableCard.poeSplitterV, 12)
     const poeCard = buildClienteCameraCard({ ...cam, modelId: 'ezviz-h4-poe' }, [])
     assert.equal(poeCard.wired, true)
     assert.equal(poeCard.connectionLabel, 'Cableada (PoE)')
     assert.equal(poeCard.poeWatts, 8)
+    assert.equal(poeCard.poeSplitterV, null)
   })
 })

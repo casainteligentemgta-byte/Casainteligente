@@ -8,6 +8,7 @@ import {
 } from '@/lib/netvision/utils/cameraMarkerColor'
 import { Button } from '@/components/nexus/ui/button'
 import NetVisionAlcanceUtil from '@/components/netvision/NetVisionAlcanceUtil'
+import NetVisionSplitterSymbol from '@/components/netvision/NetVisionSplitterSymbol'
 import { alcanceUtilCamara } from '@/lib/netvision/services/dimensionamiento'
 import {
   cameraCatalogGrouped,
@@ -20,6 +21,7 @@ import {
   lenteElegida,
   opcionesLente,
   parcheLente,
+  splitterDeCamara,
 } from '@/lib/netvision/catalog/cameras'
 import {
   STRUCTURE_MATERIALS,
@@ -336,6 +338,28 @@ export default function NetVisionSelectedProps({
                 </p>
               )}
               <p className="text-[10px] leading-relaxed text-[var(--nexus-text-dim)]">{explica}</p>
+              {(() => {
+                const splitterV = splitterDeCamara(camera)
+                if (splitterV) {
+                  return (
+                    <p
+                      data-nv-splitter={splitterV}
+                      className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-300"
+                    >
+                      <NetVisionSplitterSymbol size={14} />
+                      Adaptador PoE (splitter) de {splitterV} V
+                    </p>
+                  )
+                }
+                if (actual === 'cable') {
+                  return (
+                    <p data-nv-splitter="propio" className="text-[11px] text-[var(--nexus-text-dim)]">
+                      Este modelo trae PoE propio: no lleva adaptador.
+                    </p>
+                  )
+                }
+                return null
+              })()}
             </div>
           )
         })()}

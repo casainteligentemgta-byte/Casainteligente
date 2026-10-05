@@ -79,6 +79,50 @@ import {
   camMarkerRing,
 } from '@/lib/netvision/utils/cameraMarkerColor'
 
+/** Símbolo del adaptador PoE, pegado a la esquina inferior derecha del pin. */
+function SplitterMark({
+  cx,
+  cy,
+  pinR,
+  dimmed,
+}: {
+  cx: number
+  cy: number
+  pinR: number
+  dimmed?: boolean
+}) {
+  return (
+    <Group
+      x={cx + pinR - 1}
+      y={cy + pinR - 1}
+      opacity={dimmed ? 0.5 : 1}
+      listening={false}
+    >
+      <Rect
+        width={13}
+        height={13}
+        cornerRadius={3}
+        fill="#ffb000"
+        stroke="#0f172a"
+        strokeWidth={1.5}
+      />
+      <Line
+        points={[2.5, 6.5, 6, 6.5, 10.5, 3.5]}
+        stroke="#0f172a"
+        strokeWidth={1.6}
+        lineCap="round"
+        lineJoin="round"
+      />
+      <Line
+        points={[6, 6.5, 10.5, 9.5]}
+        stroke="#0f172a"
+        strokeWidth={1.6}
+        lineCap="round"
+      />
+    </Group>
+  )
+}
+
 export type CameraPlacementToolProps = {
   backgroundUrl: string | null
   /** Invierte el plano en pantalla (fondo negro, trazos blancos). No altera el archivo. */
@@ -1683,8 +1727,6 @@ export default function CameraPlacementTool({
             const marker = camMarkerHex(cam.markerColor)
             const ring = camMarkerRing(marker)
             const pinR = selected ? 11 : 9
-            // Cámaras sin PoE propio: llevan adaptador (splitter) en el punto de instalación.
-            const llevaSplitter = splitterDeCamara(cam) !== null
             return (
               <Fragment key={cam.id}>
               <Circle
@@ -1750,36 +1792,6 @@ export default function CameraPlacementTool({
                 fill={ring}
                 listening={false}
               />
-              {llevaSplitter ? (
-                <Group
-                  x={cx + pinR + 3}
-                  y={cy - pinR - 13}
-                  opacity={coverageOff ? 0.5 : 1}
-                  listening={false}
-                >
-                  <Rect
-                    width={13}
-                    height={13}
-                    cornerRadius={3}
-                    fill="#ffb000"
-                    stroke="#0f172a"
-                    strokeWidth={1.5}
-                  />
-                  <Line
-                    points={[2.5, 6.5, 6, 6.5, 10.5, 3.5]}
-                    stroke="#0f172a"
-                    strokeWidth={1.6}
-                    lineCap="round"
-                    lineJoin="round"
-                  />
-                  <Line
-                    points={[6, 6.5, 10.5, 9.5]}
-                    stroke="#0f172a"
-                    strokeWidth={1.6}
-                    lineCap="round"
-                  />
-                </Group>
-              ) : null}
               </Fragment>
             )
           })}
@@ -2639,6 +2651,20 @@ export default function CameraPlacementTool({
             )
           })
           })()}
+          {cameras.map((cam) => {
+            if (splitterDeCamara(cam) === null) return null
+            const selected = cam.id === selectedId
+            const pinR = selected ? 11 : 9
+            return (
+              <SplitterMark
+                key={`split-${cam.id}`}
+                cx={offsetX + cam.x * drawW}
+                cy={offsetY + cam.y * drawH}
+                pinR={pinR}
+                dimmed={coverageHiddenIds.includes(cam.id)}
+              />
+            )
+          })}
         </Layer>
       </Stage>
     </div>

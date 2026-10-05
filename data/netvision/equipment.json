@@ -240,8 +240,9 @@
       "bitrateMbps": 3,
       "poeWatts": 8,
       "priceUsd": 85,
-      "notes": "Tipo torreta. Lente 2.8 mm: 106° H, 122° diagonal (con lente 4 mm: 86° H; 6 mm: 52° H). 2304 × 1296, IR 30 m y visión nocturna a color, IP67. Wi-Fi 2.4 GHz o puerto de red RJ45; alimentación 12 V / 1 A (máx. 8 W), sin PoE.",
-      "imageUrl": "https://mfs.ezvizlife.com/c29c0eb502880d70e951b9050a9a8c6b.png"
+      "notes": "Tipo torreta. Lente 2.8 mm: 106° H, 122° diagonal (con lente 4 mm: 86° H; 6 mm: 52° H). 2304 × 1296, IR 30 m y visión nocturna a color, IP67. Wi-Fi 2.4 GHz o puerto de red RJ45. No trae PoE: para alimentarla por el cable de red lleva un adaptador PoE (splitter) de 12 V.",
+      "imageUrl": "https://mfs.ezvizlife.com/c29c0eb502880d70e951b9050a9a8c6b.png",
+      "poeSplitterV": 12
     },
     {
       "id": "ezviz-h4-poe",

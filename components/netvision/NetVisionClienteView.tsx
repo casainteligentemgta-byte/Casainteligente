@@ -45,7 +45,7 @@ import NetVisionCameraPhoto from '@/components/netvision/NetVisionCameraPhoto'
 import NetVisionAlcanceUtil from '@/components/netvision/NetVisionAlcanceUtil'
 import { resumenAlcanceUtil } from '@/lib/netvision/services/dimensionamiento'
 import NetVisionSplitterSymbol from '@/components/netvision/NetVisionSplitterSymbol'
-import { contarSplittersPoe } from '@/lib/netvision/catalog/cameras'
+import { contarSplittersPoe, esCamaraCableada } from '@/lib/netvision/catalog/cameras'
 
 function loadClienteProject(id: string | null): NetVisionProject | null {
   if (id) {
@@ -149,6 +149,10 @@ function CameraFicha({
         >
           <NetVisionSplitterSymbol size={14} />
           Adaptador PoE (splitter) de {card.poeSplitterV} V
+        </p>
+      ) : card.wired ? (
+        <p data-nv-splitter="propio" className="mt-1 text-[11px] text-[#a9e8c4]">
+          PoE propio: no lleva adaptador.
         </p>
       ) : null}
       {card.wired ? (
@@ -315,6 +319,9 @@ export default function NetVisionClienteView() {
   const allOn = hiddenLive.length === 0
   const cableTotal = totalClienteCableMeters(cards)
   const splitters = contarSplittersPoe(cameras)
+  const cableadas = cameras.filter(esCamaraCableada).length
+  const poePropio = Math.max(0, cableadas - splitters)
+  const porWifi = cameras.length - cableadas
 
   const showAll = () => {
     setHiddenIds([])
@@ -466,6 +473,16 @@ export default function NetVisionClienteView() {
               <span className="inline-flex items-center gap-1.5">
                 <NetVisionSplitterSymbol size={12} />
                 {splitters} adaptador{splitters === 1 ? '' : 'es'} PoE
+              </span>
+            ) : null}
+            {poePropio > 0 ? (
+              <span data-nv-poe-propio>
+                {poePropio} con PoE propio
+              </span>
+            ) : null}
+            {porWifi > 0 ? (
+              <span data-nv-wifi>
+                {porWifi} por Wi‑Fi
               </span>
             ) : null}
           </p>
