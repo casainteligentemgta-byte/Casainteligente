@@ -1,56 +1,8 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { debeCambiarPassword } from '@/lib/auth/passwordPolicy';
+import { requiereSesion } from '@/lib/supabase/rutasAcceso';
 import { supabaseFetch } from '@/lib/supabase/supabaseFetch';
-
-const RUTAS_PUBLICAS = [
-  '/login',
-  '/auth',
-  '/rrhh/registro',
-  '/registro',
-  '/reclutamiento',
-  '/onboarding',
-  '/talento/examen',
-  '/talento/evaluacion',
-  '/talento/evaluacion-obrero',
-  '/talento/evaluacion-color',
-  '/nexus',
-  '/abogado',
-];
-
-const RUTAS_PROTEGIDAS = [
-  '/contabilidad',
-  '/almacen',
-  '/configuracion',
-  '/admin',
-  '/proyectos',
-  '/netvision',
-  '/rrhh',
-  '/procura',
-  '/legal',
-  '/agenda',
-  '/pheme',
-  '/metron',
-  '/empleados',
-  '/cambiar-password',
-  '/obra-digital',
-  '/entidades',
-];
-
-/** Rutas de personal que cuelgan de un prefijo público: siempre exigen sesión. */
-const RUTAS_STAFF_BAJO_PREFIJO_PUBLICO = ['/reclutamiento/hoja-de-vida/view'];
-
-function esRutaStaffBajoPublico(pathname: string): boolean {
-  return RUTAS_STAFF_BAJO_PREFIJO_PUBLICO.some((p) => pathname === p || pathname.startsWith(`${p}/`));
-}
-
-function esRutaPublica(pathname: string): boolean {
-  return RUTAS_PUBLICAS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
-}
-
-function esRutaProtegida(pathname: string): boolean {
-  return RUTAS_PROTEGIDAS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
-}
 
 function esHostLocalDev(request: NextRequest): boolean {
   if (process.env.NODE_ENV === 'production') return false;
@@ -148,7 +100,7 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
     return NextResponse.redirect(new URL('/cambiar-password', request.url));
   }
 
-  if (!user && ((esRutaProtegida(pathname) && !esRutaPublica(pathname)) || esRutaStaffBajoPublico(pathname))) {
+  if (!user && requiereSesion(pathname)) {
     const loginUrl = new URL('/login', request.url);
     const retorno = `${pathname}${request.nextUrl.search || ''}`;
     loginUrl.searchParams.set('next', retorno);
