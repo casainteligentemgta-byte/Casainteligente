@@ -300,6 +300,9 @@ export type NetVisionProjectIndexEntry = {
   structureCount: number
 }
 
+/** Quién hace y cobra la zanja de la canalización subterránea. */
+export type ZanjaModo = 'cobrar' | 'no_cobrar' | 'otro_contratista'
+
 export type NetVisionProject = {
   version: 1 | 2
   id: string
@@ -340,6 +343,11 @@ export type NetVisionProject = {
   retentionDays: number
   /** Minutos de respaldo que debe dar el UPS (30 por defecto). */
   upsBackupMin?: number
+  /**
+   * Canalización subterránea (zanja): solo se cobra si se elige «cobrar».
+   * Por defecto no se cobra; también puede ir a cargo de otro contratista.
+   */
+  zanjaModo?: ZanjaModo
   complianceProfileId: string
 }
 
@@ -421,6 +429,11 @@ export type BomCategory =
 
 export type BomLine = {
   sku: string
+  /**
+   * Clave estable para enlazar el renglón con un producto de Ventas cuando
+   * el `sku` lleva un sufijo propio del equipo. Sin valor se usa `sku`.
+   */
+  linkKey?: string
   category: BomCategory
   description: string
   qty: number

@@ -20,6 +20,22 @@ export type NetVisionCloudProjectResponse = {
   error?: string
 }
 
+/** `fetch` que no lanza: sin conexión devuelve una respuesta de error legible. */
+async function fetchSeguro(input: string, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(input, init)
+  } catch {
+    return new Response(
+      JSON.stringify({
+        ok: false,
+        authenticated: true,
+        error: 'Sin conexión: no se pudo contactar la nube.',
+      }),
+      { status: 503, headers: { 'Content-Type': 'application/json' } },
+    )
+  }
+}
+
 async function parseJson<T>(res: Response): Promise<T> {
   try {
     return (await res.json()) as T
@@ -30,7 +46,7 @@ async function parseJson<T>(res: Response): Promise<T> {
 
 /** Lista proyectos del usuario en Supabase (requiere sesión). */
 export async function cloudListProjects(): Promise<NetVisionCloudListResponse> {
-  const res = await fetch('/api/netvision/projects', {
+  const res = await fetchSeguro('/api/netvision/projects', {
     method: 'GET',
     credentials: 'same-origin',
     cache: 'no-store',
@@ -41,7 +57,7 @@ export async function cloudListProjects(): Promise<NetVisionCloudListResponse> {
 export async function cloudGetProject(
   id: string,
 ): Promise<NetVisionCloudProjectResponse> {
-  const res = await fetch(`/api/netvision/projects/${encodeURIComponent(id)}`, {
+  const res = await fetchSeguro(`/api/netvision/projects/${encodeURIComponent(id)}`, {
     method: 'GET',
     credentials: 'same-origin',
     cache: 'no-store',
@@ -53,7 +69,7 @@ export async function cloudUpsertProject(
   project: NetVisionProject,
 ): Promise<NetVisionCloudProjectResponse> {
   const payload = projectForCloud(project)
-  const res = await fetch(
+  const res = await fetchSeguro(
     `/api/netvision/projects/${encodeURIComponent(project.id)}`,
     {
       method: 'PUT',
@@ -68,7 +84,7 @@ export async function cloudUpsertProject(
 export async function cloudDeleteProject(
   id: string,
 ): Promise<{ ok: boolean; authenticated: boolean; error?: string }> {
-  const res = await fetch(`/api/netvision/projects/${encodeURIComponent(id)}`, {
+  const res = await fetchSeguro(`/api/netvision/projects/${encodeURIComponent(id)}`, {
     method: 'DELETE',
     credentials: 'same-origin',
   })
@@ -98,4 +114,61 @@ export async function cloudPushAll(
     authenticated = r.authenticated
   }
   return { ok: true, authenticated, saved }
+}
+
+export type NetVisionCompartirResponse = {
+  ok: boolean
+  authenticated: boolean
+  /** Código del enlace; null si el proyecto no está compartido. */
+  token?: string | null
+  error?: string
+}
+
+function rutaCompartir(id: string): string {
+  return `/api/netvision/projects/${encodeURIComponent(id)}/compartir`
+}
+
+/** ¿El proyecto ya tiene enlace para el cliente? */
+export async function cloudEstadoCompartir(id: string): Promise<NetVisionCompartirResponse> {
+  const res = await fetchSeguro(rutaCompartir(id), {
+    method: 'GET',
+    credentials: 'same-origin',
+    cache: 'no-store',
+  })
+  return parseJson<NetVisionCompartirResponse>(res)
+}
+
+/** Crea (o recupera) el enlace para el cliente. */
+export async function cloudCompartir(id: string): Promise<NetVisionCompartirResponse> {
+  const res = await fetchSeguro(rutaCompartir(id), {
+    method: 'POST',
+    credentials: 'same-origin',
+  })
+  return parseJson<NetVisionCompartirResponse>(res)
+}
+
+/** Anula el enlace: lo que se envió deja de abrir. */
+export async function cloudDejarDeCompartir(id: string): Promise<NetVisionCompartirResponse> {
+  const res = await fetchSeguro(rutaCompartir(id), {
+    method: 'DELETE',
+    credentials: 'same-origin',
+  })
+  return parseJson<NetVisionCompartirResponse>(res)
+}
+
+export type NetVisionCompartidoResponse = {
+  ok: boolean
+  project?: NetVisionProject
+  /** URL temporal del plano cuando no viene dentro del proyecto. */
+  planoSignedUrl?: string | null
+  error?: string
+}
+
+/** Proyecto compartido con el cliente (público, por código). */
+export async function cloudProyectoCompartido(token: string): Promise<NetVisionCompartidoResponse> {
+  const res = await fetchSeguro(`/api/netvision/compartido/${encodeURIComponent(token)}`, {
+    method: 'GET',
+    cache: 'no-store',
+  })
+  return parseJson<NetVisionCompartidoResponse>(res)
 }

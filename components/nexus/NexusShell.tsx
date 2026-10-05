@@ -112,6 +112,15 @@ function NexusShellInner({ children }: { children: React.ReactNode }) {
     if (isNetVision) setMenuOpen(false);
   }, [isNetVision]);
 
+  /** ¿Es la vista del cliente abierta con un enlace compartido (?c=)? */
+  const [isClienteCompartido, setIsClienteCompartido] = useState(false);
+  useEffect(() => {
+    setIsClienteCompartido(
+      pathname === '/nexus/vision/cliente' &&
+        new URLSearchParams(window.location.search).has('c'),
+    );
+  }, [pathname]);
+
   useEffect(() => {
     if (isDesktop || !menuOpen) return;
     const prev = document.body.style.overflow;
@@ -123,6 +132,15 @@ function NexusShellInner({ children }: { children: React.ReactNode }) {
 
   if (isPlanoPrint) {
     return <div className="min-h-screen bg-slate-200 text-slate-900">{children}</div>
+  }
+
+  // Enlace del cliente: solo la presentación, sin el menú interno de la empresa.
+  if (isClienteCompartido) {
+    return (
+      <div data-nv-shell-cliente className="min-h-screen bg-[#07110d] p-2 text-white lg:p-3">
+        {children}
+      </div>
+    )
   }
 
   return (
