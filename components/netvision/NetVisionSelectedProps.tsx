@@ -14,7 +14,12 @@ import {
   cameraCatalogOptionLabel,
   cameraVisionSummary,
   catalogVisionDefaults,
+  conexionCamara,
+  conexionesModelo,
   getCameraModelOrDefault,
+  lenteElegida,
+  opcionesLente,
+  parcheLente,
 } from '@/lib/netvision/catalog/cameras'
 import {
   STRUCTURE_MATERIALS,
@@ -273,7 +278,8 @@ export default function NetVisionSelectedProps({
             onChange={(e) => {
               const id = e.target.value
               const vision = catalogVisionDefaults(id, nightMode ? 'night' : 'day')
-              onPatchCamera({ modelId: id, ...vision })
+              // Otro modelo: vuelve a la conexión de ficha de ese modelo.
+              onPatchCamera({ modelId: id, ...vision, conexion: undefined })
             }}
             className={fieldClass}
           >
@@ -288,6 +294,85 @@ export default function NetVisionSelectedProps({
             ))}
           </select>
         </label>
+        {(() => {
+          // Cómo llega la señal: por cable de red o por Wi‑Fi (si el modelo lo permite).
+          const opciones = conexionesModelo(getCameraModelOrDefault(camera.modelId))
+          const actual = conexionCamara(camera)
+          const nombre = { cable: 'Cable de red', wifi: 'Wi‑Fi', bateria: 'Batería' } as const
+          const elegibles = opciones.filter((o): o is 'cable' | 'wifi' => o !== 'bateria')
+          const explica =
+            actual === 'cable'
+              ? 'Se calcula su cable, su puerto en el switch y su canal en el grabador.'
+              : actual === 'wifi'
+                ? 'Sin cable de red: solo necesita un enchufe cerca y buena señal Wi‑Fi. No ocupa puerto ni canal del grabador.'
+                : 'Sin cables: funciona con batería y Wi‑Fi. No ocupa puerto ni canal del grabador.'
+          return (
+            <div data-nv-conexion={actual} className="space-y-1">
+              <span className="text-[var(--nexus-text-dim)]">Conexión</span>
+              {elegibles.length > 1 ? (
+                <div className="flex flex-wrap gap-1">
+                  {elegibles.map((o) => (
+                    <button
+                      key={o}
+                      type="button"
+                      data-nv-conexion-opcion={o}
+                      aria-pressed={actual === o}
+                      className={`min-h-9 rounded-md px-2.5 text-[11px] font-semibold ${
+                        actual === o
+                          ? 'bg-[var(--nexus-cyan)] text-black'
+                          : 'border border-white/15 text-[var(--nexus-cyan)]'
+                      }`}
+                      onClick={() =>
+                        onPatchCamera({ conexion: o === opciones[0] ? undefined : o })
+                      }
+                    >
+                      {nombre[o]}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[11px] font-semibold text-white">
+                  {actual === 'bateria' ? 'Batería y Wi‑Fi' : `Solo ${nombre[actual].toLowerCase()}`}
+                </p>
+              )}
+              <p className="text-[10px] leading-relaxed text-[var(--nexus-text-dim)]">{explica}</p>
+            </div>
+          )
+        })()}
+        {(() => {
+          // Modelos que se venden con varias lentes fijas: se elige la que se va a comprar.
+          const model = getCameraModelOrDefault(camera.modelId)
+          const opciones = opcionesLente(model)
+          if (opciones.length === 0) return null
+          const actual = lenteElegida(model, camera)
+          return (
+            <div data-nv-lente className="space-y-1">
+              <span className="text-[var(--nexus-text-dim)]">Lente</span>
+              <div className="flex flex-wrap gap-1">
+                {opciones.map((o) => (
+                  <button
+                    key={o.focalMm}
+                    type="button"
+                    data-nv-lente-opcion={o.focalMm}
+                    aria-pressed={actual?.focalMm === o.focalMm}
+                    className={`min-h-9 rounded-md px-2.5 text-[11px] font-semibold ${
+                      actual?.focalMm === o.focalMm
+                        ? 'bg-[var(--nexus-cyan)] text-black'
+                        : 'border border-white/15 text-[var(--nexus-cyan)]'
+                    }`}
+                    onClick={() => onPatchCamera(parcheLente(camera.modelId, o.focalMm))}
+                  >
+                    {o.focalMm} mm · {o.fovDeg}°
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] leading-relaxed text-[var(--nexus-text-dim)]">
+                Más milímetros = ángulo más cerrado y rostros identificables más lejos. Es otra
+                referencia al comprar.
+              </p>
+            </div>
+          )
+        })()}
         {(() => {
           const model = getCameraModelOrDefault(camera.modelId)
           const vision = effectiveCameraVision(camera, nightMode ? 'night' : 'day')

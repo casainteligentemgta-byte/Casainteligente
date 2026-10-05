@@ -1,5 +1,10 @@
 import equipment from '@/data/netvision/equipment.json'
-import { cameraPoeSplitterV, getCameraModelOrDefault } from '@/lib/netvision/catalog/cameras'
+import {
+  camarasCableadas,
+  getCameraModelOrDefault,
+  lenteNoEstandar,
+  splitterDeCamara,
+} from '@/lib/netvision/catalog/cameras'
 import { getNetworkModelOrDefault } from '@/lib/netvision/catalog/network'
 import { buildCableBomLines } from '@/lib/netvision/services/cableCalculator'
 import { buildConduitBomLines, type ConduitPlan } from '@/lib/netvision/services/conduitCalculator'
@@ -63,9 +68,17 @@ export function buildBom(
 
   for (const cam of cameras) {
     const m = getCameraModelOrDefault(cam.modelId)
-    const prev = byModel.get(m.id)
+    // Con una lente distinta a la de ficha es otra referencia de compra: renglón aparte.
+    const lente = lenteNoEstandar(cam)
+    const clave = lente ? `${m.id}-${lente}mm` : m.id
+    const prev = byModel.get(clave)
     if (prev) prev.qty += 1
-    else byModel.set(m.id, { qty: 1, unit: m.priceUsd, desc: `${m.brand} ${m.name}` })
+    else
+      byModel.set(clave, {
+        qty: 1,
+        unit: m.priceUsd,
+        desc: lente ? `${m.brand} ${m.name} · lente ${lente} mm` : `${m.brand} ${m.name}`,
+      })
   }
 
   Array.from(byModel.entries()).forEach(([sku, v]) => {
@@ -111,7 +124,7 @@ export function buildBom(
   // Adaptadores PoE (splitter) de las cámaras que no traen PoE propio.
   const splitters: Record<5 | 12, number> = { 5: 0, 12: 0 }
   for (const cam of cameras) {
-    const v = cameraPoeSplitterV(cam.modelId)
+    const v = splitterDeCamara(cam)
     if (v) splitters[v] += 1
   }
   for (const v of [12, 5] as const) {
@@ -126,9 +139,12 @@ export function buildBom(
     })
   }
 
+  // Por Wi‑Fi o batería graban en su memoria o en la nube: no ocupan canal del
+  // grabador, ni disco, ni PoE.
+  const cableadas = camarasCableadas(cameras)
   const hasPhysicalNvr = networkNodes.some((n) => n.kind === 'nvr')
   const nvrMeta = equipment.nvr
-  const channels = cameras.length
+  const channels = cableadas.length
   if (!hasPhysicalNvr && channels > 0) {
     const nvrUnits = Math.ceil(channels / nvrMeta.channelsPerUnit)
     const unit =
@@ -145,7 +161,8 @@ export function buildBom(
   }
 
   const bw = totalBandwidthMbps(cameras)
-  const storageTb = Math.ceil(estimateStorageTb(bw, retentionDays) * 10) / 10
+  const storageTb =
+    Math.ceil(estimateStorageTb(totalBandwidthMbps(cableadas), retentionDays) * 10) / 10
   const storageUnits = storageTb > 0 ? Math.max(1, Math.ceil(storageTb)) : 0
   const physicalDisks = infraDevices.filter((d) => d.kind === 'hdd')
   if (physicalDisks.length > 0) {
@@ -190,7 +207,7 @@ export function buildBom(
     })
   }
 
-  const poe = totalPoeWatts(cameras)
+  const poe = totalPoeWatts(cableadas)
   const poeBudgetOnSite = networkNodes.reduce((s, n) => {
     const m = getNetworkModelOrDefault(n.modelId, n.kind)
     return s + m.poeBudgetW

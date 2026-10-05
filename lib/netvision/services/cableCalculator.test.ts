@@ -14,6 +14,7 @@ import {
   MANUAL_CABLE_TO_ID,
   buildCableRoutes,
   cableSegmentToRoute,
+  planNetworkUplinks,
   routeMidpoint,
   validateCableRoutes,
 } from './cableRoutingEngine'
@@ -147,5 +148,69 @@ describe('punto medio del recorrido', () => {
     assert.ok(Math.abs(m.y - 0.2) < 1e-9)
     assert.equal(routeMidpoint([]), null)
     assert.deepEqual(routeMidpoint([{ x: 0.3, y: 0.3 }, { x: 0.3, y: 0.3 }]), { x: 0.3, y: 0.3 })
+  })
+})
+
+describe('cable entre equipos de red (switch → grabador)', () => {
+  // Plano de 200 m × 100 m. Cámara a 150 m del grabador.
+  const scale = { metersPerNormX: 200, metersPerNormY: 100, calibrated: true, aspect: 0.5 }
+  const camara = { id: 'cam-1', label: 'CAM-01', x: 0.1, y: 0.5, modelId: 'ezviz-h4-poe', yawDeg: 0, mountHeightM: 3 }
+  const nvr = { id: 'nvr-1', label: 'NVR-01', x: 0.85, y: 0.5, kind: 'nvr' as const, modelId: 'nvr-ds7608', linkedCameraIds: [] }
+  const sw = { id: 'sw-1', label: 'SW-01', x: 0.45, y: 0.5, kind: 'switch' as const, modelId: 'sw-poe-8', linkedCameraIds: [] }
+
+  it('sin switch el tramo avisa; con el switch quedan dos tramos válidos', () => {
+    const solo = buildCableRoutes([camara], [nvr], scale)
+    assert.equal(solo.length, 1)
+    assert.equal(solo[0]!.overLimit, true)
+
+    const rutas = buildCableRoutes([camara], [nvr, sw], scale)
+    const camSw = rutas.find((r) => r.fromId === 'cam-1')!
+    const swNvr = rutas.find((r) => r.fromId === 'sw-1')!
+    assert.equal(camSw.toId, 'sw-1')
+    assert.equal(swNvr.toId, 'nvr-1')
+    assert.equal(swNvr.uplink, true)
+    assert.ok(!camSw.uplink)
+    // 70 m y 80 m en el plano, más la holgura.
+    assert.ok(Math.abs(camSw.routeM - 80.5) < 0.11, `cámara→switch ${camSw.routeM}`)
+    assert.ok(Math.abs(swNvr.routeM - 92) < 0.11, `switch→grabador ${swNvr.routeM}`)
+    assert.equal(camSw.overLimit, false)
+    assert.equal(swNvr.overLimit, false)
+    // Se dibuja: tiene recorrido con extremos en los dos equipos.
+    assert.deepEqual(swNvr.points[0], { x: 0.45, y: 0.5 })
+    assert.deepEqual(swNvr.points[swNvr.points.length - 1], { x: 0.85, y: 0.5 })
+  })
+
+  it('el cable del switch al grabador se cobra', () => {
+    const rutas = buildCableRoutes([camara], [nvr, sw], scale)
+    const cat6 = buildCableBomLines(rutas).find((l) => l.sku === 'CABLE-CAT6')!
+    assert.ok(Math.abs(cat6.qty - (80.5 + 92)) < 0.21, `cobra ${cat6.qty} m`)
+    const sinEnlace = buildCableBomLines(rutas.filter((r) => !r.uplink)).find((l) => l.sku === 'CABLE-CAT6')!
+    assert.ok(cat6.qty > sinEnlace.qty + 90)
+  })
+
+  it('un enlace entre equipos de más de 100 m también avisa', () => {
+    const lejos = { ...sw, x: 0.2 }
+    const rutas = buildCableRoutes([], [nvr, lejos], scale)
+    assert.equal(rutas.length, 1)
+    assert.equal(rutas[0]!.uplink, true)
+    assert.equal(rutas[0]!.overLimit, true)
+    assert.match(rutas[0]!.warning!, /necesita un switch intermedio/)
+    assert.match(rutas[0]!.warning!, /incluye 15 % de holgura/)
+  })
+
+  it('arma el árbol más corto y no repite enlaces', () => {
+    const sw2 = { ...sw, id: 'sw-2', label: 'SW-02', x: 0.2 }
+    const inj = { ...sw, id: 'inj-1', label: 'INJ-01', x: 0.22, y: 0.4, kind: 'injector' as const, modelId: 'inj-poe-gig' }
+    const enlaces = planNetworkUplinks([sw2, sw, nvr, inj], scale)
+    assert.deepEqual(enlaces, [
+      { fromId: 'sw-1', toId: 'nvr-1' },
+      { fromId: 'sw-2', toId: 'sw-1' },
+      { fromId: 'inj-1', toId: 'sw-2' },
+    ])
+    // Un solo equipo de red no necesita enlace; sin grabador la raíz es el primer switch.
+    assert.deepEqual(planNetworkUplinks([sw], scale), [])
+    assert.deepEqual(planNetworkUplinks([sw, sw2], scale), [{ fromId: 'sw-2', toId: 'sw-1' }])
+    const ids = buildCableRoutes([], [sw2, sw, nvr, inj], scale).map((r) => r.id)
+    assert.equal(new Set(ids).size, ids.length)
   })
 })

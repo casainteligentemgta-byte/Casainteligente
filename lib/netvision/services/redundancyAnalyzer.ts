@@ -1,13 +1,21 @@
-import type { CoverageSector, DesignCamera, ValidationResult } from '@/lib/netvision/types'
-import { distNorm, pointInSector } from '@/lib/netvision/utils/geometryHelpers'
+import type {
+  CoverageSector,
+  DesignCamera,
+  ScaleCalibration,
+  ValidationResult,
+} from '@/lib/netvision/types'
+import { pointInSector, planIso } from '@/lib/netvision/utils/geometryHelpers'
 import { estimateCoverageRatio } from '@/lib/netvision/services/coverageCalculator'
 
 /** Detecta solapamiento fuerte (redundancia) y huecos de cobertura. */
 export function analyzeRedundancy(
   cameras: DesignCamera[],
   sectors: CoverageSector[],
+  /** Escala del plano: con ella las distancias y ángulos son reales aunque no sea cuadrado. */
+  scale?: ScaleCalibration,
 ): ValidationResult[] {
   const results: ValidationResult[] = []
+  const iso = planIso(scale?.metersPerNormX ?? 1, scale?.metersPerNormY ?? 1)
 
   for (let i = 0; i < cameras.length; i++) {
     for (let j = i + 1; j < cameras.length; j++) {
@@ -17,7 +25,7 @@ export function analyzeRedundancy(
       const sb = sectors.find((s) => s.cameraId === b.id)
       if (!sa || !sb) continue
 
-      const d = distNorm(a.x, a.y, b.x, b.y)
+      const d = Math.hypot((a.x - b.x) * iso.ex, (a.y - b.y) * iso.ey)
       const minR = Math.min(sa.radiusNorm, sb.radiusNorm)
       if (d < minR * 0.35) {
         results.push({
@@ -31,8 +39,8 @@ export function analyzeRedundancy(
 
       // Centro de A dentro del sector de B
       if (
-        pointInSector(a.x, a.y, sb.cx, sb.cy, sb.radiusNorm, sb.startAngleRad, sb.endAngleRad) &&
-        pointInSector(b.x, b.y, sa.cx, sa.cy, sa.radiusNorm, sa.startAngleRad, sa.endAngleRad)
+        pointInSector(a.x, a.y, sb.cx, sb.cy, sb.radiusNorm, sb.startAngleRad, sb.endAngleRad, iso) &&
+        pointInSector(b.x, b.y, sa.cx, sa.cy, sa.radiusNorm, sa.startAngleRad, sa.endAngleRad, iso)
       ) {
         results.push({
           level: 'INFO',
@@ -45,7 +53,7 @@ export function analyzeRedundancy(
     }
   }
 
-  const { coveredRatio, uncoveredCells, totalCells } = estimateCoverageRatio(sectors)
+  const { coveredRatio, uncoveredCells, totalCells } = estimateCoverageRatio(sectors, 24, [], iso)
   if (cameras.length > 0 && coveredRatio < 0.45) {
     results.push({
       level: 'WARNING',

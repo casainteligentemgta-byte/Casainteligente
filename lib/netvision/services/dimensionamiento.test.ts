@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import type { DesignCamera, DesignInfraDevice, DesignNetworkNode } from '@/lib/netvision/types'
-import { getCameraModelOrDefault } from '@/lib/netvision/catalog/cameras'
+import { CAMERA_CATALOG, getCameraModelOrDefault } from '@/lib/netvision/catalog/cameras'
 import { estimateStorageTb } from '@/lib/netvision/services/bandwidthCalculator'
 import {
   DIAS_GRABACION_DEFECTO,
@@ -12,6 +12,7 @@ import {
   dimensionarGrabacion,
   dimensionarUps,
   discosRecomendados,
+  distanciaEnPiso,
   distanciaParaDensidad,
   pixelesHorizontales,
   resumenAlcanceUtil,
@@ -228,14 +229,17 @@ describe('dimensionamiento · distancia útil', () => {
     assert.equal(pixelesHorizontales(''), 1920)
   })
 
-  it('aplica la fórmula de densidad de píxeles', () => {
-    // 1920 px con 90°: a 3,84 m la escena mide 7,68 m → 250 px/m.
-    assert.equal(distanciaParaDensidad(1920, 90, 250), 3.8)
-    assert.equal(distanciaParaDensidad(1920, 90, 125), 7.7)
-    assert.equal(distanciaParaDensidad(1920, 90, 25), 38.4)
+  it('densidad angular: d = píxeles / (px por metro · ángulo en radianes)', () => {
+    // 1800 px repartidos en 90° (π/2 rad): a 1 m hay 1800/(π/2) ≈ 1146 px/m.
+    const d = distanciaParaDensidad(1800, 90, 250)
+    assert.ok(Math.abs(d - 1800 / (250 * (Math.PI / 2))) < 1e-9)
+    // La densidad cae en proporción a la distancia: 10 veces menos exigencia = 10 veces más lejos.
+    assert.ok(Math.abs(distanciaParaDensidad(1800, 90, 25) - d * 10) < 1e-9)
     assert.equal(distanciaParaDensidad(0, 90, 250), 0)
-    // Ángulos extremos no dan infinito ni negativos.
-    assert.ok(distanciaParaDensidad(1920, 180, 250) > 0)
+    assert.equal(distanciaParaDensidad(1920, 0, 250), 0)
+    // Lentes de timbre (170°) dan una distancia razonable, no cero ni infinito.
+    const timbre = distanciaParaDensidad(2304, 170, 250)
+    assert.ok(timbre > 2 && timbre < 4, String(timbre))
   })
 
   it('más resolución o menos ángulo = más distancia', () => {
@@ -243,33 +247,134 @@ describe('dimensionamiento · distancia útil', () => {
     assert.ok(distanciaParaDensidad(1920, 50, 250) > distanciaParaDensidad(1920, 100, 250))
   })
 
-  it('la H3 3K identifica más cerca de lo que detecta', () => {
-    const a = alcanceUtilCamara(cam(1, 'ezviz-h3'))
-    assert.equal(a.resolucion, '3K')
-    assert.equal(a.pixelesAncho, 2880)
-    assert.equal(a.lentes.length, 1)
-    const l = a.lentes[0]!
-    assert.equal(l.fovDeg, 96)
-    assert.equal(l.identificarM, distanciaParaDensidad(2880, 96, 250))
-    assert.ok(l.identificarM < l.reconocerM && l.reconocerM < l.detectarM)
-    assert.match(resumenAlcanceUtil(a), /^Identifica rostros hasta [\d.]+ m · reconoce personas hasta [\d.]+ m$/)
+  it('el cálculo queda cerca y por debajo de las tablas DORI oficiales de Hikvision', () => {
+    // [ancho px, ángulo H de la ficha, distancia de detección de la ficha]
+    const fichas: [number, number, number][] = [
+      [2688, 103, 67], // DS-2CD2143G2-I 2.8 mm
+      [2688, 84, 80], // DS-2CD2143G2-I 4 mm
+      [2688, 112, 58], // DS-2CD2T47G2-L 2.8 mm
+      [2688, 95, 77], // DS-2CD2T47G2-L 4 mm
+      [2688, 58, 115], // DS-2CD2T47G2-L 6 mm
+    ]
+    for (const [px, fov, oficial] of fichas) {
+      const d = distanciaParaDensidad(px, fov, 25)
+      assert.ok(d <= oficial, `${fov}°: ${d} no debe prometer más que la ficha (${oficial})`)
+      assert.ok(d >= oficial * 0.8, `${fov}°: ${d} demasiado lejos de la ficha (${oficial})`)
+    }
   })
 
-  it('una cámara de dos lentes da una distancia por lente', () => {
-    const a = alcanceUtilCamara(cam(1, 'ezviz-h9c'))
-    assert.equal(a.lentes.length, 2)
-    const [gran, tele] = a.lentes as [(typeof a.lentes)[number], (typeof a.lentes)[number]]
+  it('pasa la distancia al piso según la altura de montaje', () => {
+    // Cámara a 4,6 m, rostro a 1,6 m: 3 m de desnivel. Triángulo 3-4-5.
+    assert.ok(Math.abs(distanciaEnPiso(5, 4.6) - 4) < 1e-9)
+    // A la altura del rostro o más baja no se pierde nada.
+    assert.equal(distanciaEnPiso(5, 1.6), 5)
+    assert.equal(distanciaEnPiso(5, 1.2), 5)
+    // Si la recta no alcanza ni a bajar hasta el rostro, no llega.
+    assert.equal(distanciaEnPiso(3, 4.6), 0)
+    assert.equal(distanciaEnPiso(2.9, 4.6), 0)
+  })
+
+  it('Hikvision usa la tabla DORI de su ficha', () => {
+    const a = alcanceUtilCamara({ ...cam(1, 'hik-ds2cd2143'), mountHeightM: 1.6 })
+    const l = a.lentes[0]!
+    assert.equal(l.fuente, 'fabricante')
+    assert.equal(l.focalMm, 2.8)
+    assert.equal(l.fovDeg, 103)
+    assert.equal(l.pixelesAncho, 2688)
+    // Ficha: D 67 m → R 13,4 m → I 6,7 m (a la altura del rostro no hay corrección).
+    assert.equal(l.detectarM, 67)
+    assert.equal(l.reconocerM, 13.4)
+    assert.equal(l.identificarM, 6.7)
+    assert.equal(l.nocheM, 30)
+  })
+
+  it('RECORTAR EL CONO EN EL PLANO NO CAMBIA LA DISTANCIA', () => {
+    const ficha = alcanceUtilCamara(cam(1, 'hik-ds2cd2143')).lentes[0]!
+    for (const fov of [20, 45, 60, 150]) {
+      const recortada = alcanceUtilCamara({
+        ...cam(1, 'hik-ds2cd2143'),
+        fovDeg: fov,
+        fovLeftDeg: fov / 2,
+        fovRightDeg: fov / 2,
+        rangeM: 5,
+      }).lentes[0]!
+      assert.deepEqual(recortada, ficha, `cono a ${fov}°`)
+    }
+    // Igual en un modelo sin tabla del fabricante.
+    const h3 = alcanceUtilCamara(cam(1, 'ezviz-h3')).lentes[0]!
+    const h3Recortada = alcanceUtilCamara({ ...cam(1, 'ezviz-h3'), fovDeg: 20 }).lentes[0]!
+    assert.deepEqual(h3Recortada, h3)
+    // El caso que salió mal: 20° daba «identifica a 29 m».
+    assert.ok(ficha.identificarM < 7, String(ficha.identificarM))
+  })
+
+  it('lo que sí la cambia es la lente elegida', () => {
+    const de28 = alcanceUtilCamara(cam(1, 'hik-ds2cd2143')).lentes[0]!
+    const de4 = alcanceUtilCamara({ ...cam(1, 'hik-ds2cd2143'), lensFocalMm: 4 }).lentes[0]!
+    assert.equal(de4.focalMm, 4)
+    assert.equal(de4.fovDeg, 84)
+    assert.ok(de4.identificarM > de28.identificarM)
+    // Ficha de 4 mm: D 80 m.
+    assert.equal(alcanceUtilCamara({ ...cam(1, 'hik-ds2cd2143'), lensFocalMm: 4, mountHeightM: 1.6 }).lentes[0]!.detectarM, 80)
+    // Una lente que el modelo no tiene se ignora: queda la de ficha.
+    const rara = alcanceUtilCamara({ ...cam(1, 'hik-ds2cd2143'), lensFocalMm: 12 }).lentes[0]!
+    assert.deepEqual(rara, de28)
+    // Ezviz H4 con lente de 6 mm (52°) llega más lejos que con la de 2.8 mm (106°).
+    const h4 = alcanceUtilCamara(cam(1, 'ezviz-h4')).lentes[0]!
+    const h4de6 = alcanceUtilCamara({ ...cam(1, 'ezviz-h4'), lensFocalMm: 6 }).lentes[0]!
+    assert.equal(h4.fuente, 'calculo')
+    assert.equal(h4de6.fovDeg, 52)
+    assert.ok(h4de6.identificarM > h4.identificarM * 1.8)
+  })
+
+  it('siempre identificar ≤ reconocer ≤ detectar, en todo el catálogo', () => {
+    for (const m of CAMERA_CATALOG) {
+      for (const altura of [1.4, 2.8, 4, 6]) {
+        const a = alcanceUtilCamara({ ...cam(1, m.id), mountHeightM: altura })
+        assert.ok(a.lentes.length >= 1, m.id)
+        for (const l of a.lentes) {
+          assert.ok(l.identificarM <= l.reconocerM, `${m.id} a ${altura} m: I ${l.identificarM} > R ${l.reconocerM}`)
+          assert.ok(l.reconocerM <= l.detectarM, `${m.id} a ${altura} m: R ${l.reconocerM} > D ${l.detectarM}`)
+          assert.ok(l.detectarM > 0 && l.detectarM < 400, `${m.id}: D ${l.detectarM}`)
+          assert.ok(l.pixelesAncho >= 1280, m.id)
+        }
+      }
+    }
+  })
+
+  it('una cámara de dos lentes usa el ancho de imagen de cada lente', () => {
+    const h9c = alcanceUtilCamara(cam(1, 'ezviz-h9c'))
+    assert.equal(h9c.lentes.length, 2)
+    const [gran, tele] = h9c.lentes as [(typeof h9c.lentes)[number], (typeof h9c.lentes)[number]]
     assert.equal(gran.fovDeg, 108)
     assert.equal(tele.fovDeg, 55)
+    assert.equal(tele.focalMm, 6)
     assert.ok(tele.identificarM > gran.identificarM)
+    // Aqara G350: gran angular 4K (3840 px) y tele 2.5K (2560 px), no 3840 para las dos.
+    const g350 = alcanceUtilCamara(cam(1, 'aqara-g350'))
+    assert.deepEqual(g350.lentes.map((l) => l.pixelesAncho), [3840, 2560])
     // El resumen del cliente usa la lente que llega más lejos.
-    assert.ok(resumenAlcanceUtil(a).startsWith(`Identifica rostros hasta ${tele.identificarM} m`))
+    assert.ok(resumenAlcanceUtil(h9c).startsWith(`Identifica rostros hasta ${tele.identificarM.toFixed(1)} m`))
   })
 
-  it('si se cierra el ángulo en el plano, la distancia sube', () => {
-    const ficha = alcanceUtilCamara(cam(1, 'ezviz-h3')).lentes[0]!
-    const cerrada = alcanceUtilCamara({ ...cam(1, 'ezviz-h3'), fovDeg: 60 }).lentes[0]!
-    assert.equal(cerrada.fovDeg, 60)
-    assert.ok(cerrada.identificarM > ficha.identificarM)
+  it('avisa cuando la altura estropea la identificación', () => {
+    const normal = alcanceUtilCamara({ ...cam(1, 'ezviz-h3'), mountHeightM: 2.8 }).lentes[0]!
+    assert.equal(normal.aviso, null)
+    assert.ok(normal.anguloRostroDeg <= 15)
+    const alta = alcanceUtilCamara({ ...cam(1, 'ezviz-h3'), mountHeightM: 6 }).lentes[0]!
+    assert.ok(alta.identificarM < normal.identificarM)
+    assert.match(alta.aviso!, /A 6 m de altura ve los rostros desde arriba \(\d+°\)/)
+    const muyAlta = alcanceUtilCamara({ ...cam(1, 'ezviz-c6n'), mountHeightM: 8 }).lentes[0]!
+    assert.equal(muyAlta.identificarM, 0)
+    assert.match(muyAlta.aviso!, /A 8 m de altura no llega a identificar rostros/)
+    assert.ok(muyAlta.reconocerM > 0)
+  })
+
+  it('el resumen respeta las unidades del proyecto', () => {
+    const a = alcanceUtilCamara(cam(1, 'ezviz-h3'))
+    assert.match(resumenAlcanceUtil(a), /^Identifica rostros hasta [\d.]+ m · reconoce personas hasta [\d.]+ m$/)
+    assert.match(resumenAlcanceUtil(a, 'imperial'), /^Identifica rostros hasta [\d.]+ ft · reconoce personas hasta [\d.]+ ft$/)
+    const sinRostro = alcanceUtilCamara({ ...cam(1, 'ezviz-c6n'), mountHeightM: 8 })
+    assert.match(resumenAlcanceUtil(sinRostro), /^A esta altura no identifica rostros · reconoce personas hasta [\d.]+ m$/)
   })
 })

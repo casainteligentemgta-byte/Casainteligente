@@ -91,8 +91,32 @@ export function isSameGestureChange(prev: NetVisionProject, next: NetVisionProje
   return true
 }
 
+/** Campos que cambian al guardar sin que cambie el diseño. */
+const CAMPOS_DE_GUARDADO = new Set(['updatedAt'])
+
+/**
+ * ¿Es el mismo diseño? Guardar solo cambia la fecha: eso no es un paso que se
+ * pueda deshacer ni debe borrar lo que quedaba por rehacer.
+ */
+export function isSameDesign(prev: NetVisionProject, next: NetVisionProject): boolean {
+  if (prev === next) return true
+  const a = prev as unknown as Record<string, unknown>
+  const b = next as unknown as Record<string, unknown>
+  const keys = Array.from(new Set([...Object.keys(a), ...Object.keys(b)]))
+  for (const key of keys) {
+    if (CAMPOS_DE_GUARDADO.has(key)) continue
+    const va = a[key]
+    const vb = b[key]
+    if (va === vb) continue
+    if (typeof va === 'string' || typeof vb === 'string') return false
+    if (JSON.stringify(va ?? null) !== JSON.stringify(vb ?? null)) return false
+  }
+  return true
+}
+
 /**
  * Registra un cambio hecho por el usuario (de `prev` a `next`).
+ * - Mismo diseño (solo se guardó): el historial queda igual.
  * - Otro proyecto: el historial empieza de cero (no se deshace hacia el anterior).
  * - Cambio seguido del anterior (mismo gesto): no gasta otro paso.
  * - Cualquier cambio nuevo descarta lo que quedaba por rehacer.
@@ -105,6 +129,15 @@ export function recordProjectChange(
   max = NETVISION_HISTORY_MAX,
 ): ProjectHistory {
   if (prev.id !== next.id) return emptyProjectHistory(next.id)
+  if (history.projectId === next.id && isSameDesign(prev, next)) {
+    // Nada cambió (se guardó, o un arrastre topó con el borde del plano). Si venía
+    // un gesto en curso, sigue siendo el mismo gesto.
+    const enGesto =
+      history.lastChangeAt > 0 &&
+      now - history.lastChangeAt >= 0 &&
+      now - history.lastChangeAt < NETVISION_HISTORY_COALESCE_MS
+    return enGesto ? { ...history, lastChangeAt: now } : history
+  }
   const sameProject = history.projectId === next.id
   const base = sameProject ? history : emptyProjectHistory(next.id)
   const sameGesture =

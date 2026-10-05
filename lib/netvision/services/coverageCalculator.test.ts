@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import type { DesignCamera } from '../types'
+import type { DesignCamera, DesignStructure } from '../types'
+import { distMeters } from '../utils/geometryHelpers'
 import { catalogVisionDefaults } from '../catalog/cameras'
 import {
   buildCoverageSectors,
@@ -265,5 +266,78 @@ describe('buildCoverageSectors band polygons', () => {
       assert.ok((s.greenRadiusNorm ?? 0) > 0)
       assert.ok((s.yellowRadiusNorm ?? 0) + 1e-9 >= (s.greenRadiusNorm ?? 0))
     }
+  })
+})
+
+describe('cobertura en planos que no son cuadrados', () => {
+  // Plano de 40 m de ancho × 20 m de alto.
+  const scale = { metersPerNormX: 40, metersPerNormY: 20, calibrated: true, aspect: 0.5 }
+  const camara = (yawDeg: number) => ({
+    id: 'c1',
+    label: 'CAM-01',
+    x: 0.5,
+    y: 0.5,
+    modelId: 'ezviz-h3',
+    yawDeg,
+    mountHeightM: 2.8,
+    tiltDeg: 0,
+    fovDeg: 90,
+    fovLeftDeg: 45,
+    fovRightDeg: 45,
+    rangeM: 8,
+  })
+  const metros = (p: { x: number; y: number }) =>
+    distMeters(0.5, 0.5, p.x, p.y, scale.metersPerNormX, scale.metersPerNormY)
+  const anguloReal = (p: { x: number; y: number }) =>
+    (Math.atan2((p.y - 0.5) * scale.metersPerNormY, (p.x - 0.5) * scale.metersPerNormX) * 180) / Math.PI
+
+  for (const yaw of [0, 90, 45, 200]) {
+    it(`el cono llega a los mismos metros en cualquier dirección (mirando a ${yaw}°)`, () => {
+      const [s] = buildCoverageSectors([camara(yaw)], scale, 'day', [])
+      assert.ok(s?.polygon && s.polygon.length > 10)
+      const avgM = (scale.metersPerNormX + scale.metersPerNormY) / 2
+      const alcance = s!.radiusNorm * avgM
+      assert.ok(Math.abs(alcance - 8) < 0.05, `alcance ${alcance}`)
+      // Todos los puntos del borde (sin el vértice de la cámara) están a 8 m reales.
+      const borde = s!.polygon!.filter((p) => metros(p) > 0.5)
+      for (const p of borde) {
+        assert.ok(Math.abs(metros(p) - alcance) < 1e-6, `punto a ${metros(p)} m, no ${alcance}`)
+      }
+      // Y abren 90° reales, centrados en el yaw.
+      const angs = borde.map((p) => {
+        let d = anguloReal(p) - yaw
+        while (d > 180) d -= 360
+        while (d < -180) d += 360
+        return d
+      })
+      assert.ok(Math.abs(Math.min(...angs) + 45) < 0.5, `mín ${Math.min(...angs)}`)
+      assert.ok(Math.abs(Math.max(...angs) - 45) < 0.5, `máx ${Math.max(...angs)}`)
+    })
+  }
+
+  it('con la escala antigua (cuadrada) el mismo plano deformaba el cono', () => {
+    // Así estaba: 40 × 40 sobre una imagen 2:1. Hacia abajo el cono medía el doble en la imagen.
+    const vieja = { metersPerNormX: 40, metersPerNormY: 40, calibrated: true }
+    const [s] = buildCoverageSectors([camara(90)], vieja, 'day', [])
+    const punta = s!.polygon!.reduce((a, b) => (b.y > a.y ? b : a))
+    // En metros reales del plano (40 × 20) esa punta queda a 4 m, no a 8.
+    assert.ok(Math.abs(metros(punta) - 4) < 0.05, `punta a ${metros(punta)} m`)
+  })
+
+  it('un muro corta el cono en el mismo punto real', () => {
+    // Muro vertical 4 m a la derecha de la cámara (x = 0.5 + 4/40 = 0.6).
+    const muro = {
+      id: 'm1',
+      label: 'Muro',
+      materialId: 'concrete',
+      x1: 0.6,
+      y1: 0,
+      x2: 0.6,
+      y2: 1,
+    } as DesignStructure
+    const [s] = buildCoverageSectors([camara(0)], scale, 'day', [muro])
+    const maxX = Math.max(...s!.polygon!.map((p) => p.x))
+    assert.ok(maxX <= 0.6 + 1e-6, `el cono pasa el muro: x=${maxX}`)
+    assert.ok(maxX > 0.58, `el cono se corta antes de tiempo: x=${maxX}`)
   })
 })

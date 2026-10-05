@@ -50,10 +50,14 @@ export default function NetVisionCalibracionOkModal({
             </p>
             <p className="mt-1.5 text-[12px] leading-relaxed text-white/80">
               El plano queda en unos{' '}
-              <span className="font-semibold text-white">
+              <span data-nv-calib-ancho className="font-semibold text-white">
                 {formatLength(result.planWidthM, unitSystem)}
               </span>{' '}
-              de lado a lado. Las cámaras ya usan metros reales.
+              de ancho por{' '}
+              <span data-nv-calib-alto className="font-semibold text-white">
+                {formatLength(result.planHeightM, unitSystem)}
+              </span>{' '}
+              de alto. Las cámaras ya usan metros reales.
             </p>
             <p className="mt-1.5 text-[11px] text-[var(--nexus-text-dim)]">{source}</p>
           </div>

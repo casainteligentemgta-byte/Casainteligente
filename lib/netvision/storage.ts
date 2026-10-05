@@ -659,6 +659,10 @@ function normalizeCamera(c: Partial<DesignCamera> & { label?: string }): DesignC
     ...(fovLeftDeg != null ? { fovLeftDeg } : {}),
     ...(fovRightDeg != null ? { fovRightDeg } : {}),
     ...(rangeM != null ? { rangeM } : {}),
+    ...(typeof c.lensFocalMm === 'number' && Number.isFinite(c.lensFocalMm) && c.lensFocalMm > 0
+      ? { lensFocalMm: c.lensFocalMm }
+      : {}),
+    ...(c.conexion === 'cable' || c.conexion === 'wifi' ? { conexion: c.conexion } : {}),
     ...normalizeLensVision(c.lensVision),
   }
 }

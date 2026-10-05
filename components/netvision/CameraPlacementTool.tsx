@@ -28,7 +28,7 @@ import type {
 } from '@/lib/netvision/types'
 import { planDeviceColor } from '@/lib/netvision/catalog/planDevices'
 import { INFRA_KIND_COLOR } from '@/lib/netvision/catalog/salaTecnica'
-import { cameraPoeSplitterV, effectiveCameraLenses } from '@/lib/netvision/catalog/cameras'
+import { effectiveCameraLenses, splitterDeCamara } from '@/lib/netvision/catalog/cameras'
 import { getStructureMaterialOrDefault } from '@/lib/netvision/catalog/materials'
 import { degToRad } from '@/lib/netvision/utils/geometryHelpers'
 import { snapOrtho90 } from '@/lib/netvision/utils/structureDraw'
@@ -994,15 +994,15 @@ export default function CameraPlacementTool({
                 const stage = e.target.getStage()
                 const pos = stage?.getRelativePointerPosition()
                 if (!pos || !onAdjustCameraVision) return
-                const n = toNorm(pos.x, pos.y)
+                // Ángulo real en pantalla (píxeles), no en coordenadas 0–1 del plano.
                 onAdjustCameraVision(
                   s.cameraId,
                   visionPatchFromPointer({
                     mode: 'yaw',
-                    camX: s.cx,
-                    camY: s.cy,
-                    pointerX: n.x,
-                    pointerY: n.y,
+                    camX: offsetX + s.cx * drawW,
+                    camY: offsetY + s.cy * drawH,
+                    pointerX: pos.x,
+                    pointerY: pos.y,
                     yawDeg: 0,
                     avgMPerNorm: 1,
                   }),
@@ -1013,24 +1013,9 @@ export default function CameraPlacementTool({
               const hitCy = offsetY + s.cy * drawH
               const hitSweep = ((s.endAngleRad - s.startAngleRad) * 180) / Math.PI
               const hitRot = (s.startAngleRad * 180) / Math.PI
-              const hitInner = Math.max(
-                0,
-                Math.hypot(
-                  Math.cos((s.startAngleRad + s.endAngleRad) / 2) *
-                    (s.innerRadiusNorm ?? 0) *
-                    drawW,
-                  Math.sin((s.startAngleRad + s.endAngleRad) / 2) *
-                    (s.innerRadiusNorm ?? 0) *
-                    drawH,
-                ),
-              )
-              const hitR = Math.max(
-                16,
-                Math.hypot(
-                  Math.cos((s.startAngleRad + s.endAngleRad) / 2) * s.radiusNorm * drawW,
-                  Math.sin((s.startAngleRad + s.endAngleRad) / 2) * s.radiusNorm * drawH,
-                ),
-              )
+              // Mismo radio en píxeles que el arco dibujado (círculo real, no elipse).
+              const hitInner = Math.max(0, (s.innerRadiusNorm ?? 0) * avg)
+              const hitR = Math.max(16, s.radiusNorm * avg)
               if (poly && poly.length >= 3) {
                 const pts: number[] = []
                 for (const p of poly) {
@@ -1393,7 +1378,7 @@ export default function CameraPlacementTool({
                       ? '#fef08a'
                       : stroke
                   }
-                  strokeWidth={selected ? 3.5 : r.overLimit ? 3 : r.warn ? 2.5 : 2}
+                  strokeWidth={selected ? 3.5 : r.overLimit ? 3 : r.uplink ? 3.2 : r.warn ? 2.5 : 2}
                   dash={
                     r.overLimit
                       ? [10, 5]
@@ -1617,7 +1602,7 @@ export default function CameraPlacementTool({
             const ring = camMarkerRing(marker)
             const pinR = selected ? 11 : 9
             // Cámaras sin PoE propio: llevan adaptador (splitter) en el punto de instalación.
-            const llevaSplitter = cameraPoeSplitterV(cam.modelId) !== null
+            const llevaSplitter = splitterDeCamara(cam) !== null
             return (
               <Fragment key={cam.id}>
               <Circle
@@ -1749,21 +1734,21 @@ export default function CameraPlacementTool({
                 const rightAng = midAng + rightHalf
                 /** Asas a mitad de la zona visible (entre ciega e alcance). */
                 const handleR = innerNorm + (radiusNorm - innerNorm) * 0.5
-                const tipX = offsetX + (cam.x + Math.cos(midAng) * handleR) * drawW
-                const tipY = offsetY + (cam.y + Math.sin(midAng) * handleR) * drawH
-                const leftX = offsetX + (cam.x + Math.cos(leftAng) * handleR) * drawW
-                const leftY = offsetY + (cam.y + Math.sin(leftAng) * handleR) * drawH
-                const rightX = offsetX + (cam.x + Math.cos(rightAng) * handleR) * drawW
-                const rightY = offsetY + (cam.y + Math.sin(rightAng) * handleR) * drawH
-                const midLabelR = radiusNorm * 0.22
-                const midLabelX = offsetX + (cam.x + Math.cos(midAng) * midLabelR) * drawW
-                const midLabelY = offsetY + (cam.y + Math.sin(midAng) * midLabelR) * drawH
-                const tipLabelX = offsetX + (cam.x + Math.cos(midAng) * radiusNorm) * drawW
-                const tipLabelY = offsetY + (cam.y + Math.sin(midAng) * radiusNorm) * drawH
-                const farX = tipLabelX
-                const farY = tipLabelY
                 const cx = offsetX + cam.x * drawW
                 const cy = offsetY + cam.y * drawH
+                // Las asas van sobre el arco real: mismo radio en píxeles a lo ancho y a lo alto
+                // (en un plano alargado, usar ancho y alto por separado las sacaba del cono).
+                const enArco = (ang: number, rNorm: number) => ({
+                  x: cx + Math.cos(ang) * rNorm * avg,
+                  y: cy + Math.sin(ang) * rNorm * avg,
+                })
+                const { x: tipX, y: tipY } = enArco(midAng, handleR)
+                const { x: leftX, y: leftY } = enArco(leftAng, handleR)
+                const { x: rightX, y: rightY } = enArco(rightAng, handleR)
+                const { x: midLabelX, y: midLabelY } = enArco(midAng, radiusNorm * 0.22)
+                const { x: tipLabelX, y: tipLabelY } = enArco(midAng, radiusNorm)
+                const farX = tipLabelX
+                const farY = tipLabelY
 
                 const applyFromPointer = (
                   px: number,
@@ -1771,15 +1756,16 @@ export default function CameraPlacementTool({
                   mode: VisionHandleMode,
                   fovStep?: number,
                 ) => {
-                  const n = toNorm(px, py)
+                  // En píxeles (÷ avg): así el ángulo y la distancia son los reales
+                  // aunque el plano no sea cuadrado.
                   onAdjustCameraVision(
                     cam.id,
                     visionPatchFromPointer({
                       mode,
-                      camX: cam.x,
-                      camY: cam.y,
-                      pointerX: n.x,
-                      pointerY: n.y,
+                      camX: cx / avg,
+                      camY: cy / avg,
+                      pointerX: px / avg,
+                      pointerY: py / avg,
                       yawDeg: vision.yawDeg,
                       avgMPerNorm,
                       fovStep,

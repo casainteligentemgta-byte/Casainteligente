@@ -1,5 +1,17 @@
-import type { CameraModel, CableRoute, DesignCamera } from '@/lib/netvision/types'
-import { catalogFovLabel, getCameraModelOrDefault } from '@/lib/netvision/catalog/cameras'
+import type {
+  CameraModel,
+  CableRoute,
+  ConexionCamara,
+  DesignCamera,
+} from '@/lib/netvision/types'
+import {
+  catalogFovLabel,
+  conexionCamara,
+  conexionesModelo,
+  getCameraModelOrDefault,
+  lenteElegida,
+  splitterDeCamara,
+} from '@/lib/netvision/catalog/cameras'
 import { cableTypeLabel } from '@/lib/netvision/services/cableCalculator'
 import {
   alcanceUtilCamara,
@@ -8,11 +20,15 @@ import {
 
 export type CameraConnectionKind = 'poe' | 'wifi' | 'battery'
 
+const KIND: Record<ConexionCamara, CameraConnectionKind> = {
+  cable: 'poe',
+  wifi: 'wifi',
+  bateria: 'battery',
+}
+
+/** Conexión de ficha de un modelo. */
 export function inferCameraConnection(model: CameraModel): CameraConnectionKind {
-  const blob = `${model.id} ${model.name} ${model.notes ?? ''}`.toLowerCase()
-  if (/bater[ií]a|battery|\bbc1c\b|\beb8\b/.test(blob)) return 'battery'
-  if (/wifi|wi-?fi|inalámbr/.test(blob)) return 'wifi'
-  return 'poe'
+  return KIND[conexionesModelo(model)[0]!]
 }
 
 export function cablesForCamera(routes: CableRoute[], cameraId: string): CableRoute[] {
@@ -65,10 +81,13 @@ export function buildClienteCameraCard(
   routes: CableRoute[],
 ): ClienteCameraCard {
   const model = getCameraModelOrDefault(cam.modelId)
-  const connection = inferCameraConnection(model)
+  // La que eligió el instalador para esta cámara (cable o Wi‑Fi), no solo la de ficha.
+  const connection = KIND[conexionCamara(cam)]
   const wired = connection === 'poe'
   const formLabel = formFactorLabel(model.formFactor)
-  const fovLabel = catalogFovLabel(model)
+  // Con lentes intercambiables se muestra la que lleva esta cámara.
+  const lente = lenteElegida(model, cam)
+  const fovLabel = lente ? `${lente.fovDeg}° · lente ${lente.focalMm} mm` : catalogFovLabel(model)
   const cables = wired
     ? cablesForCamera(routes, cam.id).map((r) => ({
         id: r.id,
@@ -105,7 +124,7 @@ export function buildClienteCameraCard(
     cables,
     cableMeters: wired ? cameraCableMeters(routes, cam.id) : 0,
     wired,
-    poeSplitterV: wired && (model.poeSplitterV === 5 || model.poeSplitterV === 12) ? model.poeSplitterV : null,
+    poeSplitterV: splitterDeCamara(cam),
     alcanceUtil: alcanceUtilCamara(cam),
   }
 }

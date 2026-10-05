@@ -118,6 +118,10 @@ export function rotateProjectGeometry(
       ...project.scale,
       metersPerNormX: project.scale.metersPerNormY,
       metersPerNormY: project.scale.metersPerNormX,
+      // Al girar 90° el alto pasa a ser el ancho: la proporción se invierte.
+      ...(typeof project.scale.aspect === 'number' && project.scale.aspect > 0
+        ? { aspect: 1 / project.scale.aspect }
+        : {}),
     },
   }
 }
