@@ -44,6 +44,8 @@ export type ClienteCameraCard = {
   cables: Array<{ id: string; toLabel: string; typeLabel: string; meters: number }>
   cableMeters: number
   wired: boolean
+  /** Voltaje del adaptador PoE (splitter) si el modelo lo necesita. */
+  poeSplitterV: 5 | 12 | null
 }
 
 export function formFactorLabel(form: CameraModel['formFactor']): string {
@@ -97,6 +99,7 @@ export function buildClienteCameraCard(
     cables,
     cableMeters: wired ? cameraCableMeters(routes, cam.id) : 0,
     wired,
+    poeSplitterV: wired && (model.poeSplitterV === 5 || model.poeSplitterV === 12) ? model.poeSplitterV : null,
   }
 }
 

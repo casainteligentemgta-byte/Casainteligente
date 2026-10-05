@@ -40,6 +40,11 @@ export type CameraModel = {
    * Sin foto, la ficha dibuja la silueta según `formFactor`.
    */
   imageUrl?: string
+  /**
+   * La cámara no trae PoE: para alimentarla por el cable de red lleva un
+   * adaptador PoE (splitter) de este voltaje. El plano lo marca con un símbolo.
+   */
+  poeSplitterV?: 5 | 12
 }
 
 export type DesignCamera = {
