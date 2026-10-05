@@ -191,6 +191,36 @@
       "imageUrl": "https://mfs.ezvizlife.com/6363a11141dfd145fa145aaf5ff49fe9.png"
     },
     {
+      "id": "ezviz-h4",
+      "brand": "Ezviz",
+      "name": "H4 2K Wi-Fi Turret",
+      "formFactor": "dome",
+      "fovDeg": 106,
+      "rangeDayM": 28,
+      "rangeNightM": 25,
+      "resolution": "2K",
+      "bitrateMbps": 3,
+      "poeWatts": 8,
+      "priceUsd": 85,
+      "notes": "Tipo torreta. Lente 2.8 mm: 106° H, 122° diagonal (con lente 4 mm: 86° H; 6 mm: 52° H). 2304 × 1296, IR 30 m y visión nocturna a color, IP67. Wi-Fi 2.4 GHz o puerto de red RJ45; alimentación 12 V / 1 A (máx. 8 W), sin PoE.",
+      "imageUrl": "https://mfs.ezvizlife.com/c29c0eb502880d70e951b9050a9a8c6b.png"
+    },
+    {
+      "id": "ezviz-h4-poe",
+      "brand": "Ezviz",
+      "name": "H4 PoE 2K Turret",
+      "formFactor": "dome",
+      "fovDeg": 106,
+      "rangeDayM": 28,
+      "rangeNightM": 25,
+      "resolution": "2K",
+      "bitrateMbps": 3,
+      "poeWatts": 8,
+      "priceUsd": 85,
+      "notes": "Tipo torreta. Lente 2.8 mm: 106° H, 122° diagonal (con lente 4 mm: 86° H). 2304 × 1296, IR 30 m y visión nocturna a color con dos focos, IP67. Alimentación PoE o 12 V / 1 A (máx. 8 W); conexión solo por cable de red RJ45.",
+      "imageUrl": "https://mfs.ezvizlife.com/453c28ff11b84aff838ec20ba3142f44.png"
+    },
+    {
       "id": "ezviz-h8c",
       "brand": "Ezviz",
       "name": "H8c Outdoor Panoramic",
