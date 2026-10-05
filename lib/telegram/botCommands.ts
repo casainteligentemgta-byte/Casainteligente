@@ -16,6 +16,7 @@ export const TELEGRAM_BOT_COMMANDS: Array<{ command: string; description: string
   { command: 'ayuda', description: 'Lista completa de comandos' },
   ...TELEGRAM_COMANDOS_COMPRAS_ABASTECIMIENTO,
   { command: 'agenda', description: 'Cumpleaños, citas y recordatorios (IA)' },
+  { command: 'tecnico', description: 'Técnico de cámaras y redes (IA): /tecnico <pregunta>' },
   { command: 'ingreso', description: 'Menú ingreso: factura, nota, sin nota, precargadas' },
   { command: 'salida', description: 'Menú salidas: obra, almacén o préstamo/traspaso' },
   { command: 'bitacora', description: 'Bitácora de obra por nota de voz' },
@@ -53,6 +54,8 @@ export const MENSAJE_MENU_TELEGRAM =
   '<b>Agenda personal</b>\n' +
   '• /agenda — guardar o consultar fechas especiales (IA)\n' +
   '• /limpiar_agenda — borrar historial del chat\n\n' +
+  '<b>Técnico de dispositivos</b>\n' +
+  '• /tecnico &lt;pregunta&gt; — cámaras, grabadores, PoE y redes (IA)\n\n' +
   '• /cancelar — volver al menú';
 
 export const MENSAJE_AYUDA_TELEGRAM =
@@ -63,6 +66,7 @@ export const MENSAJE_AYUDA_TELEGRAM =
   '<b>Salidas</b>: /salida\n' +
   '<b>Campo</b>: /bitacora /agua\n' +
   '<b>Agenda</b>: /agenda /limpiar_agenda\n' +
+  '<b>Técnico IA</b>: /tecnico ¿cuántos W consume la H9c?\n' +
   '<b>Stock</b>: /stock · /stock rancho flamboyant · /stock cemento\n\n' +
   '<b>Atajos</b> (sin menú): /nota /entrada /emergencia /ingresofactura /egreso\n\n' +
   '/menu — menú · /cancelar — reiniciar';

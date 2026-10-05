@@ -17,6 +17,7 @@ import {
   limpiarHistorialAgendaTelegram,
   manejarAgendaTelegram,
 } from '@/lib/telegram/agendaHandler';
+import { manejarTecnicoTelegram } from '@/lib/telegram/tecnicoHandler';
 import {
   manejarFacturaTelegram,
   manejarFotoObraTelegram,
@@ -339,6 +340,11 @@ async function aplicarComando(
 
   if (cmd.comandoLimpiarAgenda) {
     await limpiarHistorialAgendaTelegram(chatId);
+    return;
+  }
+
+  if (cmd.comandoTecnico) {
+    await manejarTecnicoTelegram(chatId, cmd.tecnicoPregunta ?? '');
     return;
   }
 
