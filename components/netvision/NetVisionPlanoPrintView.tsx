@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ArrowLeft, Printer } from 'lucide-react'
 import CameraPlacementTool from '@/components/netvision/CameraPlacementTool'
-import NetVisionCompanyMark from '@/components/netvision/NetVisionCompanyMark'
+import NetVisionPlanoPrintSheet from '@/components/netvision/NetVisionPlanoPrintSheet'
 import { loadProject, peekLocalProject } from '@/lib/netvision/storage'
 import { buildCoverageSectors } from '@/lib/netvision/services/coverageCalculator'
 import {
@@ -14,10 +14,18 @@ import {
 import { normalizeCotaColor } from '@/lib/netvision/utils/nightPlanoPalette'
 import { buildPlanoRotulo } from '@/lib/netvision/utils/planoRotulo'
 import {
-  buildPlanoPrintMeta,
   loadPlanoPrintPayload,
   type PlanoPrintPayload,
 } from '@/lib/netvision/utils/planoPrint'
+import {
+  PLANO_PRINT_TEMAS,
+  PLANO_PRINT_TEMA_DEFAULT,
+  PLANO_PRINT_TEMA_LABEL,
+  PLANO_PRINT_TEMA_PAGE_BG,
+  loadPlanoPrintTema,
+  savePlanoPrintTema,
+  type PlanoPrintTema,
+} from '@/lib/netvision/utils/planoPrintTema'
 import type { NetVisionProject } from '@/lib/netvision/types'
 
 function loadPrintProject(id: string | null): NetVisionProject | null {
@@ -55,6 +63,16 @@ export default function NetVisionPlanoPrintView() {
   const [payload, setPayload] = useState<PlanoPrintPayload | null>(null)
   const [project, setProject] = useState<NetVisionProject | null>(null)
   const [ready, setReady] = useState(false)
+  const [tema, setTema] = useState<PlanoPrintTema>(PLANO_PRINT_TEMA_DEFAULT)
+
+  useEffect(() => {
+    setTema(loadPlanoPrintTema(search.get('tema')))
+  }, [search])
+
+  const elegirTema = (next: PlanoPrintTema) => {
+    setTema(next)
+    savePlanoPrintTema(next)
+  }
 
   useEffect(() => {
     const id = search.get('id')
@@ -95,8 +113,8 @@ export default function NetVisionPlanoPrintView() {
     )
   }, [project])
 
-  const meta = payload ? buildPlanoPrintMeta(payload) : ''
   const hasImage = Boolean(payload?.imageDataUrl?.startsWith('data:image/'))
+  const pageBg = PLANO_PRINT_TEMA_PAGE_BG[tema]
 
   const goBack = () => {
     if (typeof window !== 'undefined' && window.history.length > 1) {
@@ -152,31 +170,43 @@ export default function NetVisionPlanoPrintView() {
           <Printer className="h-4 w-4" />
           Imprimir / PDF
         </button>
+        <div
+          role="group"
+          aria-label="Tema de la hoja"
+          className="flex basis-full flex-wrap items-center gap-2"
+        >
+          <span className="text-[12px] font-semibold uppercase tracking-wide text-slate-600">
+            Tema de la hoja
+          </span>
+          {PLANO_PRINT_TEMAS.map((t) => (
+            <button
+              key={t}
+              type="button"
+              data-nv-print-tema={t}
+              aria-pressed={tema === t}
+              onClick={() => elegirTema(t)}
+              className={`inline-flex min-h-11 items-center rounded-lg border px-4 text-sm font-semibold ${
+                tema === t
+                  ? 'border-slate-900 bg-slate-900 text-white'
+                  : 'border-slate-300 bg-white text-slate-800 hover:bg-slate-50'
+              }`}
+            >
+              {PLANO_PRINT_TEMA_LABEL[t]}
+            </button>
+          ))}
+        </div>
         <p className="basis-full text-[12px] text-slate-500">
           En iPad: pulsa Imprimir / PDF y elige Guardar en Archivos. Atrás vuelve al editor.
         </p>
       </div>
 
       <div className="mx-auto max-w-[297mm] px-3 py-4 print:max-w-none print:p-0">
-        <article className="nv-print-sheet overflow-hidden rounded-lg border border-slate-300 bg-white shadow-sm print:rounded-none print:border-0 print:shadow-none">
-          <header className="border-b border-slate-300 px-5 py-3 text-center">
-            <h1 className="text-lg font-bold uppercase tracking-[0.12em] text-slate-900 sm:text-xl">
-              {payload.rotulo.projectName}
-            </h1>
-            {meta ? (
-              <p className="mt-1 text-[12px] text-slate-600">{meta}</p>
-            ) : null}
-          </header>
-
-          <div className="min-h-[42vh] bg-white print:min-h-0">
-            {hasImage ? (
-              <img
-                src={payload.imageDataUrl}
-                alt={payload.rotulo.projectName}
-                className="mx-auto block h-auto max-h-[70vh] w-full object-contain print:max-h-[78vh]"
-              />
-            ) : project?.planoUrl ? (
-              <div className="h-[min(70vh,720px)] min-h-[320px] print:h-[70vh]">
+        <div className="overflow-hidden rounded-lg shadow-sm print:rounded-none print:shadow-none">
+          <NetVisionPlanoPrintSheet
+            tema={tema}
+            payload={payload}
+            livePlano={
+              !hasImage && project?.planoUrl ? (
                 <CameraPlacementTool
                   backgroundUrl={project.planoUrl}
                   invertBackground={Boolean(project.planoInvertido)}
@@ -209,34 +239,69 @@ export default function NetVisionPlanoPrintView() {
                   onSelect={() => undefined}
                   showZoomOverlay={false}
                 />
-              </div>
-            ) : (
-              <p className="p-8 text-center text-sm text-slate-600">
-                No hay captura del plano. Pulsa Atrás y vuelve a exportar el PDF.
-              </p>
-            )}
-          </div>
-
-          <footer className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-slate-300 px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-700 sm:grid sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_auto] sm:text-xs">
-            <NetVisionCompanyMark
-              company={payload.rotulo.company}
-              size={36}
-              className="min-w-[11rem] text-slate-800"
-            />
-            <span className="text-center">{payload.rotulo.dateLabel}</span>
-            <span className="text-right text-cyan-800">
-              {payload.rotulo.planType}
-            </span>
-          </footer>
-        </article>
+              ) : null
+            }
+          />
+        </div>
       </div>
 
       <style>{`
-        @page { size: A4 landscape; margin: 8mm; }
+        /* Líneas de barrido del tema táctico (el plano las tapa). */
+        .nv-print-scan {
+          background-image: repeating-linear-gradient(
+            0deg,
+            rgba(0, 0, 0, 0.22) 0px,
+            rgba(0, 0, 0, 0.22) 1px,
+            transparent 1px,
+            transparent 3px
+          );
+        }
+        /* En tablet/escritorio la hoja se ve con proporción A4 y el plano llena su recuadro. */
+        @media (min-width: 640px) {
+          .nv-print-sheet { aspect-ratio: 297 / 210; }
+          .nv-print-plano { flex: 1 1 0%; min-height: 0; }
+          .nv-print-plano > img,
+          .nv-print-plano > .nv-print-live {
+            position: absolute;
+            inset: 1px;
+            width: calc(100% - 2px);
+            height: calc(100% - 2px);
+            max-height: none;
+            min-height: 0;
+            object-fit: contain;
+          }
+        }
+        /* Hoja a sangre: la página toma el color del tema para que no queden bordes blancos. */
+        @page { size: A4 landscape; margin: 0; }
         @media print {
-          html, body { background: #fff !important; }
+          /* 209 mm: llena una A4 apaisada sin pasar a una segunda página. */
+          .nv-print-sheet { aspect-ratio: auto; min-height: 209mm; }
+          .nv-print-plano { flex: 1 1 0%; min-height: 0; }
+          .nv-print-plano > img,
+          .nv-print-plano > .nv-print-live {
+            position: absolute;
+            inset: 1px;
+            width: calc(100% - 2px);
+            height: calc(100% - 2px);
+            max-height: none;
+            min-height: 0;
+            object-fit: contain;
+          }
+          html, body {
+            background: ${pageBg} !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
           .nv-print-toolbar { display: none !important; }
-          .nv-plano-print { background: #fff !important; }
+          .nv-plano-print,
+          div:has(> .nv-plano-print) {
+            background: ${pageBg} !important;
+            min-height: 0 !important;
+          }
+          .nv-print-sheet, .nv-print-sheet * {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
           .nv-print-sheet { break-inside: avoid; }
         }
       `}</style>
