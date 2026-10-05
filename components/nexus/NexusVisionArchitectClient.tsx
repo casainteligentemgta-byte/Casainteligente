@@ -2008,8 +2008,9 @@ export default function NexusVisionArchitectClient() {
         projectName: project.name,
         branch: sideTab,
       })
+      // 2× para que el plano siga nítido cuando la hoja recorta el margen y lo agranda.
       const imageDataUrl = stage.toDataURL({
-        pixelRatio: 1.5,
+        pixelRatio: 2,
         mimeType: 'image/jpeg',
         quality: 0.82,
       })

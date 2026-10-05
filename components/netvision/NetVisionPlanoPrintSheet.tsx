@@ -1,8 +1,9 @@
 'use client'
 
-import type { CSSProperties, ReactNode } from 'react'
+import { useRef, type CSSProperties, type PointerEvent, type ReactNode } from 'react'
 import NetVisionCompanyMark from '@/components/netvision/NetVisionCompanyMark'
 import type { PlanoPrintPayload } from '@/lib/netvision/utils/planoPrint'
+import { acotarDesplazamiento } from '@/lib/netvision/utils/planoRecorte'
 import {
   contadorDosDigitos,
   rotuloFechaDigitos,
@@ -19,6 +20,75 @@ type SheetProps = {
   payload: PlanoPrintPayload
   /** Plano interactivo cuando no hay captura guardada. */
   livePlano: ReactNode | null
+  /** Ampliación del plano dentro de su recuadro (se conserva al imprimir). */
+  vista?: PlanoVista
+}
+
+export type PlanoVista = {
+  zoom: number
+  /** Desplazamiento como fracción del recuadro. */
+  pan: { x: number; y: number }
+  onPan?: (pan: { x: number; y: number }) => void
+}
+
+/** Captura del plano: ampliable y arrastrable dentro de su recuadro. */
+function PlanoImagen({ src, alt, vista }: { src: string; alt: string; vista?: PlanoVista }) {
+  const zoom = vista?.zoom ?? 1
+  const pan = vista?.pan ?? { x: 0, y: 0 }
+  const arrastre = useRef<{
+    id: number
+    x: number
+    y: number
+    pan: { x: number; y: number }
+    w: number
+    h: number
+  } | null>(null)
+  const movible = zoom > 1 && Boolean(vista?.onPan)
+
+  const onDown = (e: PointerEvent<HTMLDivElement>) => {
+    if (!movible) return
+    const r = e.currentTarget.getBoundingClientRect()
+    if (r.width < 1 || r.height < 1) return
+    arrastre.current = { id: e.pointerId, x: e.clientX, y: e.clientY, pan, w: r.width, h: r.height }
+    e.currentTarget.setPointerCapture?.(e.pointerId)
+  }
+  const onMove = (e: PointerEvent<HTMLDivElement>) => {
+    const a = arrastre.current
+    if (!a || a.id !== e.pointerId) return
+    vista?.onPan?.(
+      acotarDesplazamiento(
+        { x: a.pan.x + (e.clientX - a.x) / a.w, y: a.pan.y + (e.clientY - a.y) / a.h },
+        zoom,
+      ),
+    )
+  }
+  const onUp = (e: PointerEvent<HTMLDivElement>) => {
+    if (arrastre.current?.id === e.pointerId) arrastre.current = null
+  }
+
+  return (
+    <div
+      className="nv-print-clip"
+      data-nv-plano-zoom={zoom}
+      onPointerDown={onDown}
+      onPointerMove={onMove}
+      onPointerUp={onUp}
+      onPointerCancel={onUp}
+      style={movible ? { touchAction: 'none', cursor: 'grab' } : undefined}
+    >
+      <img
+        src={src}
+        alt={alt}
+        draggable={false}
+        className="mx-auto block h-auto max-h-[62vh] w-full select-none object-contain"
+        style={
+          zoom > 1
+            ? { transform: `translate(${pan.x * 100}%, ${pan.y * 100}%) scale(${zoom})` }
+            : undefined
+        }
+      />
+    </div>
+  )
 }
 
 /**
@@ -29,14 +99,15 @@ type SheetProps = {
 function PlanoSlot({
   payload,
   livePlano,
+  vista,
   emptyClass,
 }: SheetProps & { emptyClass: string }) {
   if (payload.imageDataUrl?.startsWith('data:image/')) {
     return (
-      <img
+      <PlanoImagen
         src={payload.imageDataUrl}
         alt={`Plano de ${payload.rotulo.projectName}`}
-        className="mx-auto block h-auto max-h-[62vh] w-full object-contain"
+        vista={vista}
       />
     )
   }
@@ -59,7 +130,7 @@ function plural(n: number | undefined, uno: string, varios: string) {
 const TAC_BRACKET = 'pointer-events-none absolute z-10 h-5 w-5 border-[#8cffb5]'
 const TAC_LABEL = 'text-[10px] uppercase tracking-[0.22em] text-[#5fbf8a]'
 
-function SheetTactico({ payload, livePlano }: SheetProps) {
+function SheetTactico({ payload, livePlano, vista }: SheetProps) {
   const { rotulo } = payload
   const segmentos = Math.min(Math.max(payload.cameraCount ?? 0, 0), 40)
   return (
@@ -80,6 +151,7 @@ function SheetTactico({ payload, livePlano }: SheetProps) {
         <PlanoSlot
           payload={payload}
           livePlano={livePlano}
+          vista={vista}
           emptyClass="text-[#a9e8c4]"
         />
       </div>
@@ -158,7 +230,7 @@ const TR_BOX = 'border-2 border-[#ffb000] px-4 py-3'
 const TR_LABEL = 'text-[12px] font-semibold uppercase tracking-[0.22em] text-[#c8c8c8]'
 const TR_DIGITS: CSSProperties = { textShadow: '0 0 14px rgba(255, 176, 0, 0.55)' }
 
-function SheetTiempoReal({ payload, livePlano }: SheetProps) {
+function SheetTiempoReal({ payload, livePlano, vista }: SheetProps) {
   const { rotulo } = payload
   const fecha = rotuloFechaDigitos(rotulo.dateLabel)
   const contadores: Array<[string, number | undefined]> = [
@@ -172,7 +244,12 @@ function SheetTiempoReal({ payload, livePlano }: SheetProps) {
       style={CONDENSED}
     >
       <div className="nv-print-plano relative min-w-0 border-2 border-[#ffb000] bg-[#05080d]">
-        <PlanoSlot payload={payload} livePlano={livePlano} emptyClass="text-[#c8c8c8]" />
+        <PlanoSlot
+          payload={payload}
+          livePlano={livePlano}
+          vista={vista}
+          emptyClass="text-[#c8c8c8]"
+        />
       </div>
 
       <div className="flex min-w-0 flex-col gap-2">
@@ -236,7 +313,7 @@ const ARCADE_SKEW: CSSProperties = { transform: 'skewX(-8deg)' }
 const ARCADE_TILE =
   'flex min-w-[6.5rem] flex-col justify-center rounded-lg px-4 py-2 leading-none'
 
-function SheetArcade({ payload, livePlano }: SheetProps) {
+function SheetArcade({ payload, livePlano, vista }: SheetProps) {
   const { rotulo } = payload
   return (
     <article
@@ -271,6 +348,7 @@ function SheetArcade({ payload, livePlano }: SheetProps) {
         <PlanoSlot
           payload={payload}
           livePlano={livePlano}
+          vista={vista}
           emptyClass="text-white/80"
         />
       </div>
