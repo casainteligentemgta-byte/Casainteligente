@@ -3,9 +3,12 @@ import assert from 'node:assert/strict'
 import type { DesignCamera, DesignStructure } from '../types'
 import { distMeters } from '../utils/geometryHelpers'
 import { catalogVisionDefaults } from '../catalog/cameras'
+import { alcanceUtilCamara } from './dimensionamiento'
 import {
+  FACE_ID_YELLOW_EXTRA_M,
   buildCoverageSectors,
   buildVisionSpectrum,
+  cameraVisionBandQuality,
   coverageBandPolygons,
   preferredVisionBand,
   visionBandForDistance,
@@ -45,7 +48,7 @@ describe('preferredVisionBand', () => {
 })
 
 describe('visionBandForDistance', () => {
-  it('todo el metraje de ficha es verde', () => {
+  it('sin quality, todo el metraje de ficha es verde', () => {
     assert.equal(visionBandForDistance(3, 10), 'green')
     assert.equal(visionBandForDistance(5.5, 10), 'green')
     assert.equal(visionBandForDistance(9, 10), 'green')
@@ -58,10 +61,19 @@ describe('visionBandForDistance', () => {
     assert.equal(visionBandForDistance(10, 50, 10), 'green')
     assert.equal(visionBandForDistance(15, 50, 10), 'red')
   })
+
+  it('H4: verde identifica, naranja 1 m más, rojo después', () => {
+    const q = { greenMaxM: 4.8, yellowExtraM: FACE_ID_YELLOW_EXTRA_M }
+    assert.equal(visionBandForDistance(4.8, 28, 28, q), 'green')
+    assert.equal(visionBandForDistance(5.3, 28, 28, q), 'yellow')
+    assert.equal(visionBandForDistance(5.8, 28, 28, q), 'yellow')
+    assert.equal(visionBandForDistance(6.5, 28, 28, q), 'red')
+    assert.equal(visionBandForDistance(20, 28, 28, q), 'red')
+  })
 })
 
 describe('visionBandRangesM', () => {
-  it('el verde es el metraje de ficha y no crece al estirar', () => {
+  it('sin quality, el verde es el metraje de ficha y no crece al estirar', () => {
     const a = visionBandRangesM(10, 10)
     const b = visionBandRangesM(50, 10)
     assert.equal(a.greenMaxM, 10)
@@ -72,17 +84,34 @@ describe('visionBandRangesM', () => {
     assert.equal(b.redMaxM, 50)
   })
 
-  it('Hik DS-2CD2143G2-I 25 m día pinta 25 m verdes', () => {
+  it('Hik DS-2CD2143G2-I sin quality pinta 25 m verdes (dispositivos de plano)', () => {
     const bands = visionBandRangesM(25, 25)
     assert.equal(bands.greenMaxM, 25)
     assert.equal(bands.redMaxM, 25)
+  })
+
+  it('H4 a 2.8 m: verde 4.8 m, naranja 5.8 m, rojo hasta el cono', () => {
+    const cam = testCam({
+      id: 'h4',
+      x: 0.5,
+      yawDeg: 0,
+      modelId: 'ezviz-h4',
+      mountHeightM: 2.8,
+      ...catalogVisionDefaults('ezviz-h4'),
+    })
+    assert.equal(alcanceUtilCamara(cam).lentes[0]!.identificarM, 4.8)
+    const q = cameraVisionBandQuality(cam)
+    const bands = visionBandRangesM(28, 28, q)
+    assert.equal(bands.greenMaxM, 4.8)
+    assert.equal(bands.yellowMaxM, 5.8)
+    assert.equal(bands.redMaxM, 28)
   })
 })
 
 describe('buildVisionSpectrum stretch', () => {
   it('con cono largo el verde no cubre decenas de metros', () => {
     const scale = { metersPerNormX: 100, metersPerNormY: 100, calibrated: true }
-    // hik-ds2cd2143: 25 m día → verde 25 m; 40 m estirados son rojo
+    // hik-ds2cd2143: identifica ~6.6 m a 3 m de altura; 40 m estirados son rojo
     const cells = buildVisionSpectrum(
       [testCam({ id: 'a', x: 0.1, yawDeg: 0, rangeM: 80 })],
       scale,
@@ -98,6 +127,33 @@ describe('buildVisionSpectrum stretch', () => {
     )
     assert.equal(near5m?.band, 'green')
     assert.equal(far40m?.band, 'red')
+  })
+
+  it('H4 pinta verde / naranja / rojo según identificar + 1 m', () => {
+    const scale = { metersPerNormX: 40, metersPerNormY: 40, calibrated: true }
+    const cells = buildVisionSpectrum(
+      [
+        testCam({
+          id: 'h4',
+          x: 0.1,
+          yawDeg: 0,
+          modelId: 'ezviz-h4',
+          mountHeightM: 2.8,
+          ...catalogVisionDefaults('ezviz-h4'),
+        }),
+      ],
+      scale,
+      'day',
+      [],
+      40,
+    )
+    const at = (xm: number) => {
+      const nx = 0.1 + xm / 40
+      return cells.find((c) => c.x <= nx && nx < c.x + c.w && c.y <= 0.5 && 0.5 < c.y + c.h)
+    }
+    assert.equal(at(2)?.band, 'green')
+    assert.equal(at(5.3)?.band, 'yellow')
+    assert.equal(at(12)?.band, 'red')
   })
 })
 
@@ -236,7 +292,34 @@ describe('buildCoverageSectors band polygons', () => {
     assert.ok((s.greenPolygon?.length ?? 0) >= 3)
     assert.ok((s.greenRadiusNorm ?? 0) > 0)
     assert.ok((s.yellowRadiusNorm ?? 0) <= s.radiusNorm + 1e-9)
-    assert.ok(Math.abs((s.greenRadiusNorm ?? 0) - (s.yellowRadiusNorm ?? 0)) < 1e-6)
+    assert.ok((s.yellowRadiusNorm ?? 0) > (s.greenRadiusNorm ?? 0) + 1e-6)
+  })
+
+  it('H4: verde identifica rostros, naranja 1 m más, rojo el resto del cono', () => {
+    const scale = { metersPerNormX: 40, metersPerNormY: 40, calibrated: true }
+    const cam = testCam({
+      id: 'h4',
+      x: 0.3,
+      yawDeg: 0,
+      modelId: 'ezviz-h4',
+      mountHeightM: 2.8,
+      tiltDeg: 0,
+      ...catalogVisionDefaults('ezviz-h4'),
+    })
+    const identificar = alcanceUtilCamara(cam).lentes[0]!.identificarM
+    assert.equal(identificar, 4.8)
+    const sectors = buildCoverageSectors([cam], scale, 'day', [])
+    assert.equal(sectors.length, 1)
+    const s = sectors[0]!
+    const avgM = (scale.metersPerNormX + scale.metersPerNormY) / 2
+    const greenM = (s.greenRadiusNorm ?? 0) * avgM
+    const yellowM = (s.yellowRadiusNorm ?? 0) * avgM
+    const redM = s.radiusNorm * avgM
+    assert.ok(Math.abs(greenM - 4.8) < 0.05, `verde ${greenM}`)
+    assert.ok(Math.abs(yellowM - 5.8) < 0.05, `naranja ${yellowM}`)
+    assert.ok(Math.abs(redM - 28) < 0.05, `rojo ${redM}`)
+    assert.ok((s.yellowPolygon?.length ?? 0) >= 3)
+    assert.ok((s.redPolygon?.length ?? 0) >= 3)
   })
 
   it('H9c Dual pinta semáforo en el gran angular y en la PTZ tele', () => {

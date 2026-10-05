@@ -107,6 +107,7 @@ import { VISION_SEMAFORO_HEX, VISION_SEMAFORO_LEGEND } from '@/lib/netvision/uti
 import {
   buildCoverageSectors,
   buildVisionSpectrum,
+  cameraVisionBandQuality,
   defaultScale,
   visionBandRangesM,
 } from '@/lib/netvision/services/coverageCalculator'
@@ -4682,7 +4683,11 @@ export default function NexusVisionArchitectClient() {
                           Espectro de visión · semáforo
                         </p>
                         {lenses.map((l) => {
-                          const lb = visionBandRangesM(l.rangeM, l.catalogRangeM)
+                          const lb = visionBandRangesM(
+                            l.rangeM,
+                            l.catalogRangeM,
+                            cameraVisionBandQuality(selectedCam, l.lensId),
+                          )
                           return (
                             <p
                               key={`bands-${l.lensId}`}
@@ -4698,18 +4703,18 @@ export default function NexusVisionArchitectClient() {
                                 Verde 0–
                                 {formatLength(lb.greenMaxM, project.unitSystem ?? 'metric')}
                                 {' '}
-                                (ficha)
+                                (identifica rostros)
                               </span>
                               {lb.yellowMaxM > lb.greenMaxM + 0.05 ? (
                                 <>
                                   {' · '}
                                   <span style={{ color: VISION_SEMAFORO_HEX.yellow }}>
-                                    naranja{' '}
+                                    naranja hasta{' '}
                                     {formatLength(lb.yellowMaxM, project.unitSystem ?? 'metric')}
                                   </span>
                                 </>
                               ) : null}
-                              {lb.redMaxM > lb.greenMaxM + 0.05 ? (
+                              {lb.redMaxM > lb.yellowMaxM + 0.05 ? (
                                 <>
                                   {' · '}
                                   <span style={{ color: VISION_SEMAFORO_HEX.red }}>
@@ -4729,7 +4734,8 @@ export default function NexusVisionArchitectClient() {
                             ? ` · en el piso ciega ${formatLength(ground.nearM, project.unitSystem ?? 'metric')} / llega ${formatLength(ground.farM, project.unitSystem ?? 'metric')}`
                             : ` · horizonte, llega ${formatLength(ground.farM, project.unitSystem ?? 'metric')}`}
                           . Ajústalo en la ficha de la cámara (arriba).
-                          Verde es el metraje de visualización de la ficha.
+                          Verde es hasta dónde identifica un rostro a esta altura.
+                          Naranja son 1 m más. Más allá es rojo.
                           Estirar el cono no agranda el verde: solo alarga el rojo.
                           Si se solapan, prevalece verde sobre naranja y naranja sobre rojo.
                         </p>

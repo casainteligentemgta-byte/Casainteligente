@@ -193,7 +193,7 @@ export type EffectiveLensVision = {
   fovRightDeg: number
   /** Alcance dibujado (cono / anillo). */
   rangeM: number
-  /** Alcance de ficha día/noche. El semáforo usa estos metros fijos. */
+  /** Alcance de ficha día/noche. El cono se dibuja con esto; el semáforo CCTV usa identificarM. */
   catalogRangeM: number
   yawDeg: number
 }

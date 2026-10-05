@@ -442,9 +442,9 @@ export type CoverageSector = {
   mode: 'day' | 'night'
   /** Polígono FOV recortado por muros opacos (incluye el centro). */
   polygon?: { x: number; y: number }[]
-  /** Radio del verde en coords 0–1 (metraje de visualización de ficha). */
+  /** Radio del verde en coords 0–1 (identificar rostros en CCTV; ficha en otros). */
   greenRadiusNorm?: number
-  /** Radio del amarillo en coords 0–1 (metros de ficha). */
+  /** Radio del naranja en coords 0–1 (identificar + 1 m en CCTV). */
   yellowRadiusNorm?: number
   /** Polígono de la banda verde (mismo recorte de muros que `polygon`). */
   greenPolygon?: { x: number; y: number }[]

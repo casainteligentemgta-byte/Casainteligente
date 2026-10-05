@@ -1,5 +1,6 @@
 import { effectiveCameraLenses } from '@/lib/netvision/catalog/cameras'
 import { getStructureMaterialOrDefault } from '@/lib/netvision/catalog/materials'
+import { alcanceUtilCamara } from '@/lib/netvision/services/dimensionamiento'
 import {
   buildFovPolygon,
   hasClearVision,
@@ -24,14 +25,57 @@ import {
 } from '@/lib/netvision/utils/geometryHelpers'
 
 /**
- * El metraje de visualización de la ficha (día/noche) es verde.
- * Naranja no recorta esa ficha: solo aparece si un día se define un tramo extra.
- * Estirar el cono más allá de la ficha pinta rojo.
+ * Dispositivos de plano (no CCTV): el metraje de ficha es verde.
+ * Naranja solo aparece si se pasa `yellowExtraM`. Estirar el cono pinta rojo.
  */
 export const VISION_BAND_FRAC = {
   greenMax: 1,
   yellowMax: 1,
 } as const
+
+/** En cámaras CCTV, naranja = 1 m más allá de identificar un rostro. */
+export const FACE_ID_YELLOW_EXTRA_M = 1
+
+export type VisionBandQuality = {
+  /** Límite verde en metros. Cámaras: `identificarM`. Sin valor: ficha. */
+  greenMaxM?: number
+  /** Metros naranja después del verde. Cámaras: 1. Resto: 0. */
+  yellowExtraM?: number
+}
+
+/** Semáforo CCTV: verde identifica rostros; naranja son 1 m más. */
+export function cameraVisionBandQuality(
+  cam: DesignCamera,
+  lensId?: string,
+): VisionBandQuality {
+  const alcance = alcanceUtilCamara(cam)
+  const lente =
+    (lensId ? alcance.lentes.find((x) => x.lensId === lensId) : undefined) ??
+    alcance.lentes[0]
+  return {
+    greenMaxM: Math.max(0, lente?.identificarM ?? 0),
+    yellowExtraM: FACE_ID_YELLOW_EXTRA_M,
+  }
+}
+
+function resolveBandQualityM(
+  catalogRangeM: number,
+  quality?: VisionBandQuality,
+): { greenQualityM: number; yellowQualityM: number } {
+  const catalog = Math.max(catalogRangeM, 0)
+  const greenQualityM =
+    typeof quality?.greenMaxM === 'number' && Number.isFinite(quality.greenMaxM)
+      ? Math.max(0, quality.greenMaxM)
+      : catalog * VISION_BAND_FRAC.greenMax
+  const yellowExtraM =
+    typeof quality?.yellowExtraM === 'number' && Number.isFinite(quality.yellowExtraM)
+      ? Math.max(0, quality.yellowExtraM)
+      : 0
+  return {
+    greenQualityM,
+    yellowQualityM: greenQualityM + yellowExtraM,
+  }
+}
 
 export function defaultScale(): ScaleCalibration {
   // Asume plano ~40 m de ancho si no hay calibración
@@ -43,18 +87,20 @@ export function defaultScale(): ScaleCalibration {
 }
 
 /**
- * Semáforo en metros de ficha (`catalogRangeM`), no del cono estirado.
- * Verde = metraje de visualización de la ficha. Estirar el anillo solo alarga el rojo.
+ * Semáforo en metros de calidad, no del cono estirado.
+ * Cámaras: verde = identificar rostros; naranja = +1 m; rojo = resto.
+ * Sin `quality`: verde = ficha (`catalogRangeM`). Estirar solo alarga el rojo.
  */
 export function visionBandForDistance(
   distanceM: number,
   drawnRangeM: number,
   catalogRangeM = drawnRangeM,
+  quality?: VisionBandQuality,
 ): VisionBand | null {
   if (drawnRangeM <= 0 || distanceM < 0 || distanceM > drawnRangeM + 1e-6) return null
-  const qualityM = Math.max(catalogRangeM, 1e-6)
-  if (distanceM <= qualityM * VISION_BAND_FRAC.greenMax) return 'green'
-  if (distanceM <= qualityM * VISION_BAND_FRAC.yellowMax) return 'yellow'
+  const { greenQualityM, yellowQualityM } = resolveBandQualityM(catalogRangeM, quality)
+  if (distanceM <= greenQualityM + 1e-6) return 'green'
+  if (distanceM <= yellowQualityM + 1e-6) return 'yellow'
   return 'red'
 }
 
@@ -76,21 +122,23 @@ function round1(n: number) {
 
 /**
  * Metros de cada banda.
- * Verde = ficha (`catalogRangeM`). El rojo llega al borde dibujado si se estira.
+ * Cámaras: verde = identificar; naranja = +1 m; rojo = borde dibujado.
+ * Sin `quality`: verde = ficha (`catalogRangeM`).
  */
 export function visionBandRangesM(
   drawnRangeM: number,
   catalogRangeM = drawnRangeM,
+  quality?: VisionBandQuality,
 ): {
   greenMaxM: number
   yellowMaxM: number
   redMaxM: number
 } {
-  const qualityM = Math.max(catalogRangeM, 0)
   const drawn = Math.max(drawnRangeM, 0)
+  const { greenQualityM, yellowQualityM } = resolveBandQualityM(catalogRangeM, quality)
   return {
-    greenMaxM: round1(Math.min(drawn, qualityM * VISION_BAND_FRAC.greenMax)),
-    yellowMaxM: round1(Math.min(drawn, qualityM * VISION_BAND_FRAC.yellowMax)),
+    greenMaxM: round1(Math.min(drawn, greenQualityM)),
+    yellowMaxM: round1(Math.min(drawn, yellowQualityM)),
     redMaxM: round1(drawn),
   }
 }
@@ -199,7 +247,11 @@ export function buildCoverageSectors(
         ground.innerRadiusNorm,
         iso,
       )
-      const bands = visionBandRangesM(ground.farM, lens.catalogRangeM)
+      const bands = visionBandRangesM(
+        ground.farM,
+        lens.catalogRangeM,
+        cameraVisionBandQuality(cam, lens.lensId),
+      )
       const greenRadiusNorm = metersToNormRadius(
         bands.greenMaxM,
         scale.metersPerNormX,
@@ -242,8 +294,7 @@ export function buildCoverageSectors(
 
 /**
  * Espectro de visión CCTV con semáforo de cobertura automática:
- * verde = metraje de visualización de la ficha,
- * rojo = más allá de la ficha (cono estirado).
+ * verde = identifica un rostro, naranja = 1 m más, rojo = resto del cono.
  * Las celdas solo cuentan si caen dentro del polígono FOV recortado por muros.
  */
 export function buildVisionSpectrum(
@@ -282,6 +333,7 @@ export function buildVisionSpectrum(
         cam,
         rangeM: ground.farM,
         catalogRangeM: lens.catalogRangeM,
+        quality: cameraVisionBandQuality(cam, lens.lensId),
         nearM: ground.nearM,
         radiusNorm: ground.radiusNorm,
         startAngleRad,
@@ -313,7 +365,7 @@ export function buildVisionSpectrum(
           scale.metersPerNormY,
         )
         if (d + 1e-6 < p.nearM) continue
-        const band = visionBandForDistance(d, p.rangeM, p.catalogRangeM)
+        const band = visionBandForDistance(d, p.rangeM, p.catalogRangeM, p.quality)
         if (!band) continue
         const strength = Math.max(0.15, 1 - d / Math.max(p.catalogRangeM, 1))
         if (
