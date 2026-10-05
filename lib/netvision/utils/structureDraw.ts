@@ -74,6 +74,26 @@ export function snapToStructureJointsAligned(
   return best
 }
 
+/**
+ * Trazo de calibración: si va casi horizontal o vertical, se clava a 90°
+ * (como las cotas del plano); si no, queda libre. Siempre imanta a esquinas
+ * de muro cercanas.
+ */
+export function snapCalibrationPoint(
+  from: { x: number; y: number } | null,
+  to: { x: number; y: number },
+  structures: { x1: number; y1: number; x2: number; y2: number }[],
+): { x: number; y: number } {
+  if (!from) return snapToStructureJoints(to, structures)
+  const dx = Math.abs(to.x - from.x)
+  const dy = Math.abs(to.y - from.y)
+  const ratio = Math.min(dx, dy) / Math.max(dx, dy, 1e-9)
+  if (ratio < 0.15) {
+    return snapToStructureJointsAligned(from, snapOrtho90(from, to), structures)
+  }
+  return snapToStructureJoints(to, structures)
+}
+
 export function structureLabelPrefix(materialId: string): string {
   if (materialId === 'door') return 'PUE'
   if (materialId === 'window') return 'VEN'

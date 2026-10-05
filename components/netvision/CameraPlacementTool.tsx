@@ -124,6 +124,14 @@ export type CameraPlacementToolProps = {
   showStructures?: boolean
   onAddAt: (normX: number, normY: number) => void
   onDraftPointerMove?: (normX: number, normY: number) => void
+  /** Primer extremo al empezar a arrastrar un trazo (calibrar). */
+  onDraftStrokeStart?: (normX: number, normY: number) => void
+  /** Segundo extremo al soltar el trazo arrastrado. */
+  onDraftStrokeEnd?: (normX: number, normY: number) => void
+  /** Mover un vértice del borrador (p. ej. extremos del segmento de calibración). */
+  onDraftPointMove?: (index: number, normX: number, normY: number) => void
+  /** Bloquea el pan de un dedo: el arrastre dibuja, no mueve el plano. */
+  lockPan?: boolean
   onFinishPlace?: () => void
   /** En placeMode, tocar cámara/nodo ancla el trazo a ese punto. */
   snapPlaceToDevices?: boolean
@@ -465,6 +473,10 @@ export default function CameraPlacementTool({
   showStructures = true,
   onAddAt,
   onDraftPointerMove,
+  onDraftStrokeStart,
+  onDraftStrokeEnd,
+  onDraftPointMove,
+  lockPan = false,
   onFinishPlace,
   snapPlaceToDevices = false,
   onMove,
@@ -492,6 +504,17 @@ export default function CameraPlacementTool({
   const localStageRef = useRef<Konva.Stage | null>(null)
   const onAddAtRef = useRef(onAddAt)
   onAddAtRef.current = onAddAt
+  const onDraftPointerMoveRef = useRef(onDraftPointerMove)
+  onDraftPointerMoveRef.current = onDraftPointerMove
+  const onDraftStrokeStartRef = useRef(onDraftStrokeStart)
+  onDraftStrokeStartRef.current = onDraftStrokeStart
+  const onDraftStrokeEndRef = useRef(onDraftStrokeEnd)
+  onDraftStrokeEndRef.current = onDraftStrokeEnd
+  const lockPanRef = useRef(lockPan)
+  lockPanRef.current = lockPan
+  const strokeActiveRef = useRef(false)
+  const strokeMovedRef = useRef(false)
+  const strokeStartRef = useRef<{ x: number; y: number } | null>(null)
   const hasDrawDraft =
     (draftPoints?.length ?? 0) > 0 || Boolean(draftPoint)
   const { width, height } = useContainerSize(containerRef)
@@ -734,13 +757,48 @@ export default function CameraPlacementTool({
   }
 
   const handleStageMouseMove = () => {
-    if (!placeMode || !onDraftPointerMove) return
-    const stage = localStageRef.current
-    if (!stage) return
-    const pos = stage.getRelativePointerPosition()
-    if (!pos) return
-    const n = toNorm(pos.x, pos.y)
-    onDraftPointerMove(n.x, n.y)
+    if (!placeMode) return
+    const n = pointerNorm()
+    if (!n) return
+    if (strokeActiveRef.current && strokeStartRef.current) {
+      const d = Math.hypot(n.x - strokeStartRef.current.x, n.y - strokeStartRef.current.y)
+      if (d >= 0.012 && !strokeMovedRef.current) {
+        strokeMovedRef.current = true
+        onDraftStrokeStartRef.current?.(
+          strokeStartRef.current.x,
+          strokeStartRef.current.y,
+        )
+      }
+    }
+    if (onDraftPointerMoveRef.current) onDraftPointerMoveRef.current(n.x, n.y)
+  }
+
+  const handleStrokeDown = (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
+    if (!placeMode || !onDraftStrokeStartRef.current) return
+    if (pinching) return
+    const native = e.evt as MouseEvent | TouchEvent
+    if ('touches' in native && native.touches.length > 1) return
+    const name = typeof e.target.name === 'function' ? e.target.name() : ''
+    if (name === 'calib-handle') return
+    const n = pointerNorm()
+    if (!n) return
+    strokeActiveRef.current = true
+    strokeMovedRef.current = false
+    strokeStartRef.current = n
+  }
+
+  const handleStrokeUp = () => {
+    if (!strokeActiveRef.current) return
+    const moved = strokeMovedRef.current
+    const start = strokeStartRef.current
+    strokeActiveRef.current = false
+    strokeMovedRef.current = false
+    strokeStartRef.current = null
+    if (!moved || !start) return
+    const n = pointerNorm() ?? start
+    onDraftStrokeEndRef.current?.(n.x, n.y)
+    suppressTapUntilRef.current = Date.now() + 450
+    lastPlaceAtRef.current = Date.now()
   }
 
   const setStage = (node: Konva.Stage | null) => {
@@ -748,8 +806,9 @@ export default function CameraPlacementTool({
     if (stageRef) stageRef.current = node
   }
 
-  // En iPad/tablet: un dedo siempre puede mover el plano; el tap corto sigue colocando.
-  const canPan = !pinching
+  // En iPad/tablet: un dedo mueve el plano salvo al calibrar (el arrastre es el trazo).
+  const canPan = !pinching && !lockPan
+  const stageDraggable = canPan && !(placeMode && hasDrawDraft)
 
   const inspect = (id: string) => {
     if (onToggleMulti) {
@@ -789,7 +848,7 @@ export default function CameraPlacementTool({
     if (stage) stage.draggable(false)
   }
   const resumeStageDrag = (stage: Konva.Stage | null) => {
-    if (stage) stage.draggable(canPan)
+    if (stage) stage.draggable(stageDraggable)
   }
 
   return (
@@ -831,7 +890,9 @@ export default function CameraPlacementTool({
           </div>
           <p className="rounded bg-slate-900/70 px-2 py-0.5 text-[10px] text-slate-400">
             {placeMode
-              ? 'Pellizca para zoom · toca para colocar · arrastra para mover'
+              ? lockPan
+                ? 'Arrastra el segmento · pellizca para zoom'
+                : 'Pellizca para zoom · toca para colocar · arrastra para mover'
               : 'Pellizca para zoom · un dedo para mover'}
           </p>
         </div>
@@ -844,7 +905,7 @@ export default function CameraPlacementTool({
         scaleY={zoom}
         x={stagePos.x}
         y={stagePos.y}
-        draggable={canPan && !(placeMode && hasDrawDraft)}
+        draggable={stageDraggable}
         dragDistance={placeMode ? 16 : 6}
         onDragEnd={(e) => {
           if (e.target !== e.target.getStage()) return
@@ -853,6 +914,10 @@ export default function CameraPlacementTool({
           setStagePos(next)
         }}
         onWheel={handleWheel}
+        onMouseDown={handleStrokeDown}
+        onTouchStart={handleStrokeDown}
+        onMouseUp={handleStrokeUp}
+        onTouchEnd={handleStrokeUp}
         onClick={handleStageClick}
         onTap={handleStageClick}
         onMouseMove={handleStageMouseMove}
@@ -1289,18 +1354,35 @@ export default function CameraPlacementTool({
                   listening={false}
                 />
               ) : null}
-              {(draftPoints ?? []).map((p, i) => (
-                <Circle
-                  key={`draft-pt-${i}`}
-                  x={offsetX + p.x * drawW}
-                  y={offsetY + p.y * drawH}
-                  radius={i === 0 ? 3 : 2.25}
-                  fill={draftColor}
-                  stroke="#fff"
-                  strokeWidth={1}
-                  listening={false}
-                />
-              ))}
+              {(draftPoints ?? []).map((p, i) => {
+                const editable =
+                  !!onDraftPointMove && (draftPoints?.length ?? 0) === 2
+                return (
+                  <Circle
+                    key={`draft-pt-${i}`}
+                    name={editable ? 'calib-handle' : undefined}
+                    x={offsetX + p.x * drawW}
+                    y={offsetY + p.y * drawH}
+                    radius={editable ? 7 : i === 0 ? 3 : 2.25}
+                    hitStrokeWidth={editable ? 22 : 0}
+                    fill={draftColor}
+                    stroke="#fff"
+                    strokeWidth={editable ? 2 : 1}
+                    listening={editable}
+                    draggable={editable}
+                    onDragStart={(e) => pauseStageDrag(e.target.getStage())}
+                    onDragMove={(e) => {
+                      const n = toNorm(e.target.x(), e.target.y())
+                      onDraftPointMove?.(i, n.x, n.y)
+                    }}
+                    onDragEnd={(e) => {
+                      const n = toNorm(e.target.x(), e.target.y())
+                      onDraftPointMove?.(i, n.x, n.y)
+                      resumeStageDrag(e.target.getStage())
+                    }}
+                  />
+                )
+              })}
               {draftCursor ? (
                 <Circle
                   x={offsetX + draftCursor.x * drawW}

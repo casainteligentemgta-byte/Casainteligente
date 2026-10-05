@@ -93,7 +93,7 @@ export const NETVISION_LAYER_HELP: LayerHelpItem[] = [
     id: 'calibrate',
     label: 'Calibrar',
     blurb:
-      'Marca los dos extremos de un segmento en el plano y escribe cuántos metros mide en la realidad (4,40 o 4.40). Si el PDF trae la cota, se sugiere sola; siempre puedes corregirla. Luego pulsa Aplicar escala.',
+      'Arrastra el segmento sobre una cota (o toca los dos extremos). El trazo se alinea en horizontal o vertical si vas casi derecho. Escribe cuántos metros mide (4,40 o 4.40). Si el PDF trae la cota, se sugiere sola. Luego pulsa Aplicar escala.',
   },
   {
     id: 'rotate',

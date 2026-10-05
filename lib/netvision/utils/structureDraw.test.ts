@@ -5,6 +5,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   advanceStructureDraw,
+  snapCalibrationPoint,
   snapOrtho90,
   snapToStructureJoints,
   snapToStructureJointsAligned,
@@ -52,6 +53,31 @@ describe('snapToStructureJointsAligned', () => {
     const snapped = snapOrtho90(from, { x: 0.39, y: 0.52 })
     const joined = snapToStructureJointsAligned(from, snapped, walls)
     assert.deepEqual(joined, { x: 0.4, y: 0.5 })
+  })
+})
+
+describe('snapCalibrationPoint', () => {
+  const walls = [
+    { x1: 0.1, y1: 0.2, x2: 0.6, y2: 0.2 },
+    { x1: 0.6, y1: 0.2, x2: 0.6, y2: 0.7 },
+  ]
+
+  it('el primer extremo imanta a una esquina de muro', () => {
+    assert.deepEqual(
+      snapCalibrationPoint(null, { x: 0.102, y: 0.203 }, walls),
+      { x: 0.1, y: 0.2 },
+    )
+  })
+
+  it('un trazo casi horizontal se clava a 90°', () => {
+    const b = snapCalibrationPoint({ x: 0.1, y: 0.2 }, { x: 0.55, y: 0.22 }, walls)
+    assert.equal(b.y, 0.2)
+    assert.ok(b.x > 0.5)
+  })
+
+  it('un trazo en diagonal se deja libre', () => {
+    const to = { x: 0.4, y: 0.5 }
+    assert.deepEqual(snapCalibrationPoint({ x: 0.1, y: 0.2 }, to, []), to)
   })
 })
 

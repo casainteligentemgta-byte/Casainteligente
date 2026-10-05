@@ -200,6 +200,7 @@ import type {
 } from '@/lib/netvision/types'
 import {
   advanceStructureDraw,
+  snapCalibrationPoint,
   snapOrtho90,
   snapToStructureJoints,
   snapToStructureJointsAligned,
@@ -420,6 +421,7 @@ export default function NexusVisionArchitectClient() {
   const [calibMetersTouched, setCalibMetersTouched] = useState(false)
   const [calibOk, setCalibOk] = useState<CalibrationOk | null>(null)
   const calibInputRef = useRef<HTMLInputElement | null>(null)
+  const calibPointsRef = useRef<{ x: number; y: number }[]>([])
   /** Proporción alto/ancho de la imagen del plano (null mientras no se conoce). */
   const [planoAspect, setPlanoAspect] = useState<number | null>(null)
   const [planoDims, setPlanoDims] = useState<PlanoDimension[]>([])
@@ -614,7 +616,7 @@ export default function NexusVisionArchitectClient() {
     setError(null)
     setCalibMetersTouched(false)
     setInfo(
-      'Calibrar: marca los dos extremos del segmento y escribe cuántos metros mide en el plano (ej. 4,40).',
+      'Calibrar: arrastra el segmento sobre una cota (o toca los dos extremos) y escribe cuántos metros mide (ej. 4,40).',
     )
   }
 
@@ -1713,15 +1715,87 @@ export default function NexusVisionArchitectClient() {
     clearCableDraft()
   }
 
+  calibPointsRef.current = calibPoints
+
   const onCalibPointerMove = (normX: number, normY: number) => {
     if (!calibrateMode) return
-    const cursor = { x: normX, y: normY }
-    setCalibCursor(cursor)
-    if (calibMetersTouched || calibPoints.length >= 2) return
-    const origin = calibPoints[0]
-    if (!origin) return
-    const hit = pickDimensionForSegment(origin, cursor, planoDims)
+    const origin = calibPoints[0] ?? null
+    const snapped = snapCalibrationPoint(
+      origin,
+      { x: normX, y: normY },
+      project.structures ?? [],
+    )
+    setCalibCursor(snapped)
+    if (calibMetersTouched || calibPoints.length >= 2 || !origin) return
+    const hit = pickDimensionForSegment(origin, snapped, planoDims)
     if (hit) setCalibMeters(hit.label)
+  }
+
+  const commitCalibSegment = (
+    a: { x: number; y: number },
+    b: { x: number; y: number },
+  ) => {
+    const segmentNorm = Math.hypot(a.x - b.x, a.y - b.y)
+    if (!(segmentNorm >= CALIB_MIN_SEGMENT_NORM)) {
+      calibPointsRef.current = [a]
+      setCalibPoints([a])
+      setCalibCursor(b)
+      setError(
+        'El trazo es demasiado corto. Arrastra un segmento más largo sobre la cota.',
+      )
+      return
+    }
+    const hit = pickDimensionForSegment(a, b, planoDims)
+    if (hit && !calibMetersTouched) setCalibMeters(hit.label)
+    calibPointsRef.current = [a, b]
+    setCalibPoints([a, b])
+    setCalibCursor(null)
+    setError(null)
+    setInfo(null)
+  }
+
+  const onCalibStrokeStart = (normX: number, normY: number) => {
+    const pt = snapCalibrationPoint(
+      null,
+      { x: normX, y: normY },
+      project.structures ?? [],
+    )
+    if (calibPointsRef.current.length >= 2) {
+      calibPointsRef.current = [pt]
+      setCalibPoints([pt])
+      setCalibCursor(pt)
+      return
+    }
+    if (calibPointsRef.current.length === 0) {
+      calibPointsRef.current = [pt]
+      setCalibPoints([pt])
+      setCalibCursor(pt)
+    }
+  }
+
+  const onCalibStrokeEnd = (normX: number, normY: number) => {
+    const a = calibPointsRef.current[0]
+    if (!a) return
+    const b = snapCalibrationPoint(a, { x: normX, y: normY }, project.structures ?? [])
+    commitCalibSegment(a, b)
+  }
+
+  const onCalibPointMove = (index: number, normX: number, normY: number) => {
+    const pts = calibPointsRef.current
+    if (pts.length < 2) return
+    const other = pts[index === 0 ? 1 : 0]!
+    const snapped = snapCalibrationPoint(
+      other,
+      { x: normX, y: normY },
+      project.structures ?? [],
+    )
+    const next =
+      index === 0 ? [snapped, other] : [other, snapped]
+    calibPointsRef.current = next
+    setCalibPoints(next)
+    setCalibCursor(null)
+    const hit = pickDimensionForSegment(next[0]!, next[1]!, planoDims)
+    if (hit && !calibMetersTouched) setCalibMeters(hit.label)
   }
 
   const onCablePointerMove = (normX: number, normY: number) => {
@@ -1817,28 +1891,18 @@ export default function NexusVisionArchitectClient() {
 
     if (calibrateMode) {
       if (calibPoints.length >= 2) return
-      const next = [...calibPoints, { x: normX, y: normY }]
+      const snapped = snapCalibrationPoint(
+        calibPoints[0] ?? null,
+        { x: normX, y: normY },
+        project.structures ?? [],
+      )
+      const next = [...calibPoints, snapped]
       if (next.length >= 2) {
-        const a = next[0]!
-        const b = next[1]!
-        const segmentNorm = Math.hypot(a.x - b.x, a.y - b.y)
-        if (!(segmentNorm >= CALIB_MIN_SEGMENT_NORM)) {
-          setCalibPoints([])
-          setCalibCursor(null)
-          setError(
-            'El trazo es demasiado corto. Marca los dos extremos de un segmento más largo.',
-          )
-          return
-        }
-        const hit = pickDimensionForSegment(a, b, planoDims)
-        if (hit && !calibMetersTouched) setCalibMeters(hit.label)
-        setCalibPoints(next)
-        setCalibCursor(null)
-        setError(null)
-        setInfo(null)
+        commitCalibSegment(next[0]!, next[1]!)
       } else {
+        calibPointsRef.current = next
         setCalibPoints(next)
-        setCalibCursor(null)
+        setCalibCursor(snapped)
       }
       return
     }
@@ -2425,11 +2489,11 @@ export default function NexusVisionArchitectClient() {
         ? '#fb923c'
         : '#22d3ee'
   const draftLabel =
-    calibrateMode && calibPoints.length >= 1
-      ? calibMeters.trim()
-        ? `${calibMeters.trim()} ${lengthUnitLabel(project.unitSystem ?? 'metric')}`
-        : '¿metros?'
-      : null
+    calibrateMode && calibPoints.length >= 1 && calibMeters.trim()
+      ? `${calibMeters.trim()} ${lengthUnitLabel(project.unitSystem ?? 'metric')}`
+      : calibrateMode && calibPoints.length >= 2
+        ? '¿metros?'
+        : null
 
   const chipClass = (active: boolean) =>
     `rounded-md px-2 py-1 text-[11px] font-semibold disabled:opacity-40 ${
@@ -3003,8 +3067,8 @@ export default function NexusVisionArchitectClient() {
               </label>
               <p className="text-[10px] text-[var(--nexus-text-muted)]">
                 {calibPoints.length < 2
-                  ? `Marca los dos extremos (${calibPoints.length}/2).`
-                  : 'Confirma el metraje y pulsa Aplicar.'}
+                  ? `Arrastra el segmento o toca los dos extremos (${calibPoints.length}/2).`
+                  : 'Ajusta los extremos si hace falta, confirma el metraje y pulsa Aplicar.'}
                 {planoDims.length > 0 ? (
                   <span className="text-lime-300/90">
                     {' '}
@@ -3615,6 +3679,14 @@ export default function NexusVisionArchitectClient() {
                     showUnderground={showUnderground || sideTab === 'sub'}
                     showStructures={showStructures}
                     onAddAt={onAddAt}
+                    lockPan={calibrateMode}
+                    onDraftStrokeStart={
+                      calibrateMode ? onCalibStrokeStart : undefined
+                    }
+                    onDraftStrokeEnd={calibrateMode ? onCalibStrokeEnd : undefined}
+                    onDraftPointMove={
+                      calibrateMode ? onCalibPointMove : undefined
+                    }
                     onDraftPointerMove={
                       drawCable
                         ? onCablePointerMove
@@ -3734,6 +3806,9 @@ export default function NexusVisionArchitectClient() {
                     >
                       <p className="text-[11px] font-semibold uppercase tracking-wide text-lime-200">
                         Escala del plano
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-white/55">
+                        Arrastra los puntos verdes para ajustar el tramo.
                       </p>
                       <label className="mt-2 flex flex-col gap-1 text-[12px] text-white/85">
                         Este tramo mide, en el plano
