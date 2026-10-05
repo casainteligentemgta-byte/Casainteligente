@@ -143,7 +143,8 @@
       "poeWatts": 5,
       "priceUsd": 45,
       "notes": "Lente 4 mm (75° H, 85° diagonal). Giro 340° / inclinación 55°. IR 10 m, interior. Alimentación 5 V / 1 A (máx. 5 W) y puerto de red RJ45. No trae PoE: para alimentarla por el cable de red lleva un adaptador PoE (splitter) de 5 V.",
-      "imageUrl": "https://mfs.ezvizlife.com/5db9f18e32b98f6d39a665167eb9c5a5.png"
+      "imageUrl": "https://mfs.ezvizlife.com/5db9f18e32b98f6d39a665167eb9c5a5.png",
+      "poeSplitterV": 5
     },
     {
       "id": "ezviz-c6cn",
@@ -158,7 +159,8 @@
       "poeWatts": 5,
       "priceUsd": 55,
       "notes": "Lente 4 mm (81° H, 94° diagonal). Giro 340° / inclinación 120°. IR 10 m, interior. Alimentación 5 V / 1 A (máx. 5 W) y puerto de red RJ45. No trae PoE: para alimentarla por el cable de red lleva un adaptador PoE (splitter) de 5 V.",
-      "imageUrl": "https://mfs.ezvizlife.com/4323ebda7ed8b3831617410bf17efac5.png"
+      "imageUrl": "https://mfs.ezvizlife.com/4323ebda7ed8b3831617410bf17efac5.png",
+      "poeSplitterV": 5
     },
     {
       "id": "ezviz-c8c",
@@ -173,7 +175,8 @@
       "poeWatts": 12,
       "priceUsd": 79,
       "notes": "Lente 4 mm (84° H, 100° diagonal). Giro 350° / inclinación 80°. IR 30 m (color hasta 20 m), exterior. Alimentación 12 V / 1 A (máx. 12 W) y puerto de red RJ45. No trae PoE: para alimentarla por el cable de red lleva un adaptador PoE (splitter) de 12 V.",
-      "imageUrl": "https://mfs.ezvizlife.com/086658ac61764184f84898c429ad04ca.png"
+      "imageUrl": "https://mfs.ezvizlife.com/086658ac61764184f84898c429ad04ca.png",
+      "poeSplitterV": 12
     },
     {
       "id": "ezviz-h3",
@@ -188,7 +191,8 @@
       "poeWatts": 8,
       "priceUsd": 69,
       "notes": "Ficha oficial de la H3 3K (2880 × 1620) con lente 2.8 mm: 96° H, 114° diagonal (con lente 4 mm: 80° H). IR 30 m y visión nocturna a color, IP67. Alimentación 12 V / 1 A (máx. 8 W) y puerto de red RJ45. No trae PoE: para alimentarla por el cable de red lleva un adaptador PoE (splitter) de 12 V.",
-      "imageUrl": "https://mfs.ezvizlife.com/6363a11141dfd145fa145aaf5ff49fe9.png"
+      "imageUrl": "https://mfs.ezvizlife.com/6363a11141dfd145fa145aaf5ff49fe9.png",
+      "poeSplitterV": 12
     },
     {
       "id": "ezviz-h4",
@@ -233,7 +237,8 @@
       "poeWatts": 12,
       "priceUsd": 89,
       "notes": "Ficha oficial de la H8c 2K (2304 × 1296) con lente 4 mm: 89° H, 104° diagonal (con lente 6 mm: 52° H). Giro 350° / inclinación 80°. IR 30 m y visión nocturna a color, exterior. Alimentación 12 V / 1 A (máx. 12 W) y puerto de red RJ45. No trae PoE: para alimentarla por el cable de red lleva un adaptador PoE (splitter) de 12 V.",
-      "imageUrl": "https://mfs.ezvizlife.com/cdd2e4092547fbfc0c574adb0fe4b9c4.png"
+      "imageUrl": "https://mfs.ezvizlife.com/cdd2e4092547fbfc0c574adb0fe4b9c4.png",
+      "poeSplitterV": 12
     },
     {
       "id": "ezviz-h9c",
@@ -264,7 +269,8 @@
       "poeWatts": 12,
       "priceUsd": 119,
       "notes": "Dos lentes de 2304 × 1296: gran angular fija 2.8 mm (108° H) y tele 6 mm motorizada (55° H, giro 350° / 80°): cada una mira a un lugar distinto. IR 30 m (color hasta 40 m), exterior. Alimentación 12 V / 1.5 A (máx. 12 W) y puerto de red RJ45. No trae PoE: para alimentarla por el cable de red lleva un adaptador PoE (splitter) de 12 V.",
-      "imageUrl": "https://mfs.ezvizlife.com/4a276a16e94c33f9c4b7a81bfc4bd9c2.png"
+      "imageUrl": "https://mfs.ezvizlife.com/4a276a16e94c33f9c4b7a81bfc4bd9c2.png",
+      "poeSplitterV": 12
     },
     {
       "id": "ezviz-bc1c",
@@ -309,7 +315,8 @@
       "poeWatts": 5,
       "priceUsd": 35,
       "notes": "Lente 4 mm (75° H, 85° diagonal). Giro 340° / inclinación 55°. IR 10 m, interior. Alimentación 5 V / 1 A (máx. 5 W) y puerto de red RJ45. No trae PoE: para alimentarla por el cable de red lleva un adaptador PoE (splitter) de 5 V.",
-      "imageUrl": "https://mfs.ezvizlife.com/b81712fcda5aa37d569a96cf3de4ca6d.png"
+      "imageUrl": "https://mfs.ezvizlife.com/b81712fcda5aa37d569a96cf3de4ca6d.png",
+      "poeSplitterV": 5
     },
     {
       "id": "ezviz-c3w-pro",
@@ -324,7 +331,8 @@
       "poeWatts": 6,
       "priceUsd": 75,
       "notes": "Lente 2.8 mm: 103° H, 119° diagonal (con lente 4 mm: 87° H). IR 30 m y visión nocturna a color, IP67. Alimentación 12 V / 1 A (máx. 6 W) y puerto de red RJ45. No trae PoE: para alimentarla por el cable de red lleva un adaptador PoE (splitter) de 12 V.",
-      "imageUrl": "https://mfs.ezvizlife.com/57644a31c987a29cea674409e7788f0c.png"
+      "imageUrl": "https://mfs.ezvizlife.com/57644a31c987a29cea674409e7788f0c.png",
+      "poeSplitterV": 12
     },
     {
       "id": "aqara-g5-pro-poe",

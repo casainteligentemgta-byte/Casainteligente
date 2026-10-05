@@ -25,6 +25,17 @@ export function getCameraModelOrDefault(id: string): CameraModel {
   return getCameraModel(id) ?? CAMERA_CATALOG[0]!
 }
 
+/** Voltaje del adaptador PoE (splitter) que lleva la cámara, o null si no lo necesita. */
+export function cameraPoeSplitterV(modelId: string): 5 | 12 | null {
+  const v = getCameraModel(modelId)?.poeSplitterV
+  return v === 5 || v === 12 ? v : null
+}
+
+/** Cuántas cámaras del plano llevan adaptador PoE (splitter). */
+export function contarSplittersPoe(cameras: readonly Pick<DesignCamera, 'modelId'>[]): number {
+  return cameras.filter((c) => cameraPoeSplitterV(c.modelId) !== null).length
+}
+
 export function camerasByBrand(brand: CameraBrand): CameraModel[] {
   return CAMERA_CATALOG.filter((m) => m.brand === brand)
 }

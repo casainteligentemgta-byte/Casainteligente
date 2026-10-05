@@ -29,6 +29,8 @@ import { normalizeCotaColor } from '@/lib/netvision/utils/nightPlanoPalette'
 import { buildPlanoRotulo } from '@/lib/netvision/utils/planoRotulo'
 import NetVisionPlanoRotulo from '@/components/netvision/NetVisionPlanoRotulo'
 import NetVisionCameraPhoto from '@/components/netvision/NetVisionCameraPhoto'
+import NetVisionSplitterSymbol from '@/components/netvision/NetVisionSplitterSymbol'
+import { contarSplittersPoe } from '@/lib/netvision/catalog/cameras'
 
 function loadClienteProject(id: string | null): NetVisionProject | null {
   if (id) {
@@ -112,6 +114,15 @@ function CameraFicha({
         {card.connectionLabel}
         {card.wired && card.poeWatts > 0 ? ` · ${card.poeWatts} W PoE` : ''}
       </p>
+      {card.poeSplitterV ? (
+        <p
+          data-nv-splitter={card.poeSplitterV}
+          className="mt-1 flex items-center gap-1.5 text-[11px] font-semibold text-[#ffc857]"
+        >
+          <NetVisionSplitterSymbol size={14} />
+          Adaptador PoE (splitter) de {card.poeSplitterV} V
+        </p>
+      ) : null}
       {card.wired ? (
         card.cables.length > 0 ? (
           <ul className="mt-1.5 space-y-1 text-[12px] text-[#a9e8c4]">
@@ -199,6 +210,7 @@ export default function NetVisionClienteView() {
   const visibleSectors = sectors.filter((s) => !hiddenLive.includes(s.cameraId))
   const allOn = hiddenLive.length === 0
   const cableTotal = totalClienteCableMeters(cards)
+  const splitters = contarSplittersPoe(cameras)
 
   const showAll = () => {
     setHiddenIds([])
@@ -256,6 +268,12 @@ export default function NetVisionClienteView() {
             {cableTotal > 0 ? (
               <span>{formatLength(cableTotal, project.unitSystem)} de cable PoE</span>
             ) : null}
+            {splitters > 0 ? (
+              <span className="inline-flex items-center gap-1.5">
+                <NetVisionSplitterSymbol size={12} />
+                {splitters} adaptador{splitters === 1 ? '' : 'es'} PoE
+              </span>
+            ) : null}
           </p>
         </div>
         <div className="flex flex-wrap gap-2 print:hidden">
@@ -294,6 +312,12 @@ export default function NetVisionClienteView() {
             {item.label}
           </span>
         ))}
+        {splitters > 0 ? (
+          <span data-nv-leyenda-splitter className="inline-flex items-center gap-1.5">
+            <NetVisionSplitterSymbol size={12} />
+            Adaptador PoE (splitter)
+          </span>
+        ) : null}
       </div>
 
       {cameras.length > 0 ? (
