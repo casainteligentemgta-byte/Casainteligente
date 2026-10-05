@@ -1,6 +1,9 @@
 'use client'
 
-import type { BomSummary, NetVisionCurrency } from '@/lib/netvision/types'
+import { useState } from 'react'
+import type { BomSummary, NetVisionCurrency, ZanjaModo } from '@/lib/netvision/types'
+import NetVisionPresupuestoModal from '@/components/netvision/NetVisionPresupuestoModal'
+import NetVisionZanjaModo from '@/components/netvision/NetVisionZanjaModo'
 import { Mono } from '@/components/nexus/Mono'
 import { Button } from '@/components/nexus/ui/button'
 import {
@@ -20,6 +23,13 @@ type Props = {
   currency: NetVisionCurrency
   distributorMarginPct: number
   onMarginChange: (pct: number) => void
+  /** Zanja: solo se cobra si se elige «cobrar». */
+  zanjaModo?: ZanjaModo
+  /** Metros de canalización subterránea del plano. */
+  zanjaMetros?: number
+  onZanjaModo?: (modo: ZanjaModo) => void
+  /** Cliente escrito en el proyecto (se propone al crear el presupuesto). */
+  projectClient?: string
 }
 
 export default function BOMGenerator({
@@ -30,7 +40,12 @@ export default function BOMGenerator({
   currency,
   distributorMarginPct,
   onMarginChange,
+  zanjaModo = 'no_cobrar',
+  zanjaMetros = 0,
+  onZanjaModo,
+  projectClient = '',
 }: Props) {
+  const [presupuestoAbierto, setPresupuestoAbierto] = useState(false)
   const sym = currencySymbol(currency)
   const { marginUsd, totalWithMarginUsd } = bomMarginTotal(bom, distributorMarginPct)
   const fileBase = (projectName || 'netvision')
@@ -85,6 +100,10 @@ export default function BOMGenerator({
           ))}
         </ul>
       )}
+
+      {zanjaMetros > 0 && onZanjaModo ? (
+        <NetVisionZanjaModo modo={zanjaModo} metros={zanjaMetros} onChange={onZanjaModo} />
+      ) : null}
 
       <label className="flex items-center justify-between gap-2 text-[11px] text-[var(--nexus-text-dim)]">
         Margen distribuidor
@@ -163,6 +182,26 @@ export default function BOMGenerator({
           Excel
         </Button>
       </div>
+
+      <div data-nv-crear-presupuesto>
+        <Button
+          type="button"
+          className="w-full"
+          disabled={bom.lines.length === 0}
+          onClick={() => setPresupuestoAbierto(true)}
+        >
+          Crear presupuesto en Ventas
+        </Button>
+      </div>
+
+      {presupuestoAbierto ? (
+        <NetVisionPresupuestoModal
+          bom={bom}
+          projectName={projectName}
+          projectClient={projectClient}
+          onClose={() => setPresupuestoAbierto(false)}
+        />
+      ) : null}
     </div>
   )
 }

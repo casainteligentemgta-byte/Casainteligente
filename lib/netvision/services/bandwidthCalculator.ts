@@ -1,5 +1,5 @@
 import equipment from '@/data/netvision/equipment.json'
-import { getCameraModelOrDefault } from '@/lib/netvision/catalog/cameras'
+import { cameraPoeSplitterV, getCameraModelOrDefault } from '@/lib/netvision/catalog/cameras'
 import { getNetworkModelOrDefault } from '@/lib/netvision/catalog/network'
 import { buildCableBomLines } from '@/lib/netvision/services/cableCalculator'
 import { buildConduitBomLines, type ConduitPlan } from '@/lib/netvision/services/conduitCalculator'
@@ -19,6 +19,7 @@ import type {
   DesignCamera,
   DesignInfraDevice,
   DesignNetworkNode,
+  ZanjaModo,
 } from '@/lib/netvision/types'
 
 export function totalBandwidthMbps(cameras: DesignCamera[]): number {
@@ -36,6 +37,17 @@ export function estimateStorageTb(totalMbps: number, retentionDays: number): num
   return bits / (8 * 1e12)
 }
 
+export type BomOpciones = {
+  /**
+   * Zanja de la canalización subterránea: solo entra a la lista con «cobrar».
+   * Sin valor = no se cobra.
+   */
+  zanjaModo?: ZanjaModo
+}
+
+/** Precio de referencia del adaptador PoE (splitter), como el resto de accesorios estimados. */
+export const SPLITTER_POE_USD: Record<5 | 12, number> = { 5: 5, 12: 6 }
+
 export function buildBom(
   cameras: DesignCamera[],
   retentionDays: number,
@@ -44,6 +56,7 @@ export function buildBom(
   conduitPlans: ConduitPlan[] = [],
   undergroundPlan?: UndergroundPlan | null,
   infraDevices: DesignInfraDevice[] = [],
+  opciones: BomOpciones = {},
 ): BomSummary {
   const lines: BomLine[] = []
   const byModel = new Map<string, { qty: number; unit: number; desc: string }>()
@@ -94,6 +107,24 @@ export function buildBom(
       totalUsd: v.qty * v.unit,
     })
   })
+
+  // Adaptadores PoE (splitter) de las cámaras que no traen PoE propio.
+  const splitters: Record<5 | 12, number> = { 5: 0, 12: 0 }
+  for (const cam of cameras) {
+    const v = cameraPoeSplitterV(cam.modelId)
+    if (v) splitters[v] += 1
+  }
+  for (const v of [12, 5] as const) {
+    if (splitters[v] === 0) continue
+    lines.push({
+      sku: `POE-SPLITTER-${v}V`,
+      category: 'poe',
+      description: `Adaptador PoE (splitter) de ${v} V`,
+      qty: splitters[v],
+      unitUsd: SPLITTER_POE_USD[v],
+      totalUsd: splitters[v] * SPLITTER_POE_USD[v],
+    })
+  }
 
   const hasPhysicalNvr = networkNodes.some((n) => n.kind === 'nvr')
   const nvrMeta = equipment.nvr
@@ -150,6 +181,7 @@ export function buildBom(
       d.kind === 'rack' && d.rackUnits ? ` ${d.rackUnits}U` : ''
     lines.push({
       sku: `${model.id}-${d.id.slice(-4)}`,
+      linkKey: model.id,
       category,
       description: `${model.brand} ${model.name}${size}`,
       qty: 1,
@@ -193,7 +225,20 @@ export function buildBom(
     lines.push(...buildConduitBomLines(conduitPlans))
   }
   if (undergroundPlan && undergroundPlan.runs.length > 0) {
-    lines.push(...buildUndergroundBomLines(undergroundPlan))
+    const zanjaModo = opciones.zanjaModo ?? 'no_cobrar'
+    if (zanjaModo === 'cobrar') {
+      lines.push(...buildUndergroundBomLines(undergroundPlan))
+    } else if (zanjaModo === 'otro_contratista') {
+      // Queda como nota sin monto: la hace y la cobra otro contratista.
+      lines.push({
+        sku: 'ZANJA-TERCERO',
+        category: 'conduit',
+        description: `Canalización subterránea (${undergroundPlan.totalPipeM} m): a cargo de otro contratista`,
+        qty: 1,
+        unitUsd: 0,
+        totalUsd: 0,
+      })
+    }
   }
 
   const subtotalByCategory: Record<string, number> = {}

@@ -92,7 +92,9 @@ import {
   unmountFromRacks,
 } from '@/lib/netvision/catalog/salaTecnica'
 import NetVisionSalaTecnica from '@/components/netvision/NetVisionSalaTecnica'
+import { subirPlanoNube } from '@/lib/netvision/planoNube'
 import NetVisionDimensionamiento from '@/components/netvision/NetVisionDimensionamiento'
+import NetVisionZanjaModo from '@/components/netvision/NetVisionZanjaModo'
 import {
   dimensionarGrabacion,
   dimensionarUps,
@@ -563,6 +565,9 @@ export default function NexusVisionArchitectClient() {
           // Silencioso si la tabla aún no existe; evita spamear UI
           if (r.error.includes('migración 274') || r.error.includes('42P01')) return
         }
+        // El plano grande no viaja en el JSON: se sube aparte y solo si cambió,
+        // para que abra en otro equipo y en el enlace del cliente.
+        if (r.ok) void subirPlanoNube(project)
       })
     }, 1800)
     return () => window.clearTimeout(t)
@@ -946,6 +951,7 @@ export default function NexusVisionArchitectClient() {
         conduitPlans,
         undergroundPlan,
         project.infraDevices ?? [],
+        { zanjaModo: project.zanjaModo },
       ),
     [
       project.cameras,
@@ -955,6 +961,7 @@ export default function NexusVisionArchitectClient() {
       conduitPlans,
       undergroundPlan,
       project.infraDevices,
+      project.zanjaModo,
     ],
   )
 
@@ -3108,6 +3115,10 @@ export default function NexusVisionArchitectClient() {
             onMarginChange={(pct) =>
               setProject((p) => ({ ...p, distributorMarginPct: pct }))
             }
+            zanjaModo={project.zanjaModo ?? 'no_cobrar'}
+            zanjaMetros={undergroundPlan.totalPipeM}
+            onZanjaModo={(zanjaModo) => setProject((p) => ({ ...p, zanjaModo }))}
+            projectClient={project.client ?? ''}
           />
         </NetVisionCollapsible>
       </div>
@@ -3850,6 +3861,12 @@ export default function NexusVisionArchitectClient() {
             />
           ) : sideTab === 'sub' ? (
             <div className="space-y-4">
+              <NetVisionZanjaModo
+                modo={project.zanjaModo ?? 'no_cobrar'}
+                metros={undergroundPlan.totalPipeM}
+                disabled={loading}
+                onChange={(zanjaModo) => setProject((p) => ({ ...p, zanjaModo }))}
+              />
               <UndergroundCanalizationTool
                 plan={undergroundPlan}
                 manualSegments={undergroundSegments}

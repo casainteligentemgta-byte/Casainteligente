@@ -18,6 +18,7 @@ import type {
   ScaleCalibration,
   StructureMaterialId,
   UnitSystem,
+  ZanjaModo,
 } from '@/lib/netvision/types'
 import { DRAWABLE_CABLE_TYPES } from '@/lib/netvision/services/cableCalculator'
 import { defaultScale } from '@/lib/netvision/services/coverageCalculator'
@@ -104,6 +105,7 @@ export function emptyProject(partial?: {
     scale: defaultScale(),
     retentionDays: 30,
     upsBackupMin: 30,
+    zanjaModo: 'no_cobrar',
     complianceProfileId: 'VE',
   }
 }
@@ -493,6 +495,7 @@ export function resetActiveDesign(current: NetVisionProject): NetVisionProject {
     complianceProfileId: current.complianceProfileId,
     retentionDays: current.retentionDays,
     upsBackupMin: current.upsBackupMin,
+    zanjaModo: current.zanjaModo,
     updatedAt: nowIso(),
   }
   saveProject(next)
@@ -574,8 +577,15 @@ function normalizeProject(
       typeof p.upsBackupMin === 'number' && Number.isFinite(p.upsBackupMin)
         ? Math.min(480, Math.max(5, Math.round(p.upsBackupMin)))
         : 30,
+    zanjaModo: normalizarZanjaModo(p.zanjaModo),
     complianceProfileId: p.complianceProfileId ?? 'VE',
   }
+}
+
+/** Zanja: solo «cobrar» la mete en el presupuesto; cualquier otro valor = no se cobra. */
+export function normalizarZanjaModo(v: unknown): ZanjaModo {
+  if (v === 'cobrar' || v === 'otro_contratista' || v === 'no_cobrar') return v
+  return 'no_cobrar'
 }
 
 function normalizeUnitSystem(v: unknown): UnitSystem {

@@ -11,6 +11,7 @@ import {
   cloudPushAll,
   type NetVisionCloudIndexEntry,
 } from '@/lib/netvision/cloud'
+import { descargarPlanoNube } from '@/lib/netvision/planoNube'
 import {
   createProject,
   deleteProject,
@@ -121,7 +122,12 @@ export default function NetVisionProjectsPanel({
         setCloudMsg(r.error || 'No se pudo descargar')
         return
       }
-      const merged = upsertLocalProject(r.project)
+      let merged = upsertLocalProject(r.project)
+      if (!merged.planoUrl) {
+        // El plano grande no viene en el proyecto: se baja aparte de la nube.
+        const plano = await descargarPlanoNube(merged.id)
+        if (plano) merged = upsertLocalProject({ ...merged, planoUrl: plano })
+      }
       const opened = openProject(merged.id) ?? merged
       onOpen(opened)
       refreshLocal()

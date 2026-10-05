@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { Printer, ArrowLeft, Link2, Check } from 'lucide-react'
+import { Printer, ArrowLeft, Link2, Check, Send, X } from 'lucide-react'
 import CameraPlacementTool from '@/components/netvision/CameraPlacementTool'
 import NetVisionCameraVisionToggles from '@/components/netvision/NetVisionCameraVisionToggles'
 import { VISION_SEMAFORO_LEGEND } from '@/lib/netvision/utils/visionSemaforoPalette'
@@ -18,6 +18,19 @@ import {
   withManualCableSegments,
 } from '@/lib/netvision/services/cableRoutingEngine'
 import { loadProject, peekLocalProject } from '@/lib/netvision/storage'
+import {
+  cloudCompartir,
+  cloudDejarDeCompartir,
+  cloudEstadoCompartir,
+  cloudProyectoCompartido,
+  cloudUpsertProject,
+} from '@/lib/netvision/cloud'
+import {
+  PARAM_COMPARTIDO,
+  esTokenCompartir,
+  urlCompartida,
+} from '@/lib/netvision/compartir'
+import { descargarPlanoFirmado, subirPlanoNube } from '@/lib/netvision/planoNube'
 import type { DesignCamera, NetVisionProject } from '@/lib/netvision/types'
 import {
   buildClienteCameraCard,
@@ -176,19 +189,86 @@ export default function NetVisionClienteView() {
   const [hiddenIds, setHiddenIds] = useState<string[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  /** Código del enlace (?c=): quien abre es el cliente, en modo solo lectura. */
+  const tokenRaw = search.get(PARAM_COMPARTIDO)
+  const tokenCompartido = esTokenCompartir(tokenRaw) ? tokenRaw : null
+  const esCompartido = tokenRaw != null
+  const [estadoCompartido, setEstadoCompartido] = useState<'cargando' | 'listo' | 'error'>(
+    esCompartido ? 'cargando' : 'listo',
+  )
+  const [errorCompartido, setErrorCompartido] = useState<string | null>(null)
+  /** Enlace ya creado para este proyecto (lado del instalador). */
+  const [shareUrl, setShareUrl] = useState<string | null>(null)
+  const [sharing, setSharing] = useState(false)
+  const [shareMsg, setShareMsg] = useState<string | null>(null)
 
   useEffect(() => {
-    const loaded = loadClienteProject(search.get('id'))
-    setProject(loaded)
     const cam = search.get('cam')
-    if (cam && loaded?.cameras.some((c) => c.id === cam)) {
-      setSelectedId(cam)
-      setHiddenIds(isolateHiddenCameraIds(loaded.cameras.map((c) => c.id), cam))
-    } else {
-      setSelectedId(null)
-      setHiddenIds([])
+    const enfocar = (loaded: NetVisionProject | null) => {
+      if (cam && loaded?.cameras.some((c) => c.id === cam)) {
+        setSelectedId(cam)
+        setHiddenIds(isolateHiddenCameraIds(loaded.cameras.map((c) => c.id), cam))
+      } else {
+        setSelectedId(null)
+        setHiddenIds([])
+      }
     }
-  }, [search])
+
+    if (!esCompartido) {
+      const loaded = loadClienteProject(search.get('id'))
+      setProject(loaded)
+      setEstadoCompartido('listo')
+      enfocar(loaded)
+      return
+    }
+
+    // Enlace del cliente: el proyecto viene de la nube, no de este navegador.
+    let cancelado = false
+    setProject(null)
+    if (!tokenCompartido) {
+      setEstadoCompartido('error')
+      setErrorCompartido('Enlace no válido.')
+      return
+    }
+    setEstadoCompartido('cargando')
+    setErrorCompartido(null)
+    void cloudProyectoCompartido(tokenCompartido).then(async (r) => {
+      if (cancelado) return
+      if (!r.ok || !r.project) {
+        setEstadoCompartido('error')
+        setErrorCompartido(r.error || 'No se pudo abrir el enlace.')
+        return
+      }
+      const loaded = r.project
+      setProject(loaded)
+      setEstadoCompartido('listo')
+      enfocar(loaded)
+      if (!loaded.planoUrl && r.planoSignedUrl) {
+        const plano = await descargarPlanoFirmado(r.planoSignedUrl)
+        if (!cancelado && plano) {
+          setProject((p) => (p && p.id === loaded.id ? { ...p, planoUrl: plano } : p))
+        }
+      }
+    })
+    return () => {
+      cancelado = true
+    }
+  }, [search, esCompartido, tokenCompartido])
+
+  // Lado del instalador: ¿este proyecto ya tiene enlace para el cliente?
+  const projectId = project?.id ?? null
+  useEffect(() => {
+    if (esCompartido || !projectId) return
+    let cancelado = false
+    setShareUrl(null)
+    void cloudEstadoCompartir(projectId).then((r) => {
+      if (cancelado || !r.ok || !r.token) return
+      setShareUrl(urlCompartida(window.location.origin, r.token))
+    })
+    return () => {
+      cancelado = true
+    }
+  }, [esCompartido, projectId])
 
   const cameras: DesignCamera[] = project?.cameras ?? []
   const cameraIds = useMemo(() => cameras.map((c) => c.id), [cameras])
@@ -236,18 +316,97 @@ export default function NetVisionClienteView() {
     setSelectedId(id)
   }
 
-  const copyLink = async () => {
-    if (!project) return
-    const url = new URL('/nexus/vision/cliente', window.location.origin)
-    url.searchParams.set('id', project.id)
-    if (selectedId) url.searchParams.set('cam', selectedId)
+  const copiarEnlace = async (url: string) => {
     try {
-      await navigator.clipboard.writeText(url.toString())
+      await navigator.clipboard.writeText(url)
       setCopied(true)
       window.setTimeout(() => setCopied(false), 1600)
+      return true
     } catch {
       setCopied(false)
+      return false
     }
+  }
+
+  /**
+   * Crea el enlace para el cliente: guarda el proyecto y el plano en la nube y
+   * pide el código. El enlace muestra siempre la última versión guardada.
+   */
+  const compartir = async () => {
+    if (!project || sharing) return
+    setSharing(true)
+    setShareMsg('Preparando el enlace…')
+    try {
+      const guardado = await cloudUpsertProject(project)
+      if (!guardado.authenticated) {
+        setShareMsg('Inicia sesión para compartir el proyecto con el cliente.')
+        return
+      }
+      if (!guardado.ok) {
+        setShareMsg(`No se pudo guardar en la nube: ${guardado.error ?? 'error desconocido'}`)
+        return
+      }
+      const plano = await subirPlanoNube(project, { forzar: true })
+      if (!plano.ok) {
+        setShareMsg(`No se pudo subir el plano: ${plano.error}`)
+        return
+      }
+      const r = await cloudCompartir(project.id)
+      if (!r.ok || !r.token) {
+        setShareMsg(`No se pudo crear el enlace: ${r.error ?? 'error desconocido'}`)
+        return
+      }
+      const url = urlCompartida(window.location.origin, r.token)
+      setShareUrl(url)
+      const copiado = await copiarEnlace(url)
+      setShareMsg(
+        copiado
+          ? 'Enlace copiado. El cliente verá siempre la última versión guardada.'
+          : 'Enlace listo. Cópialo o envíalo; el cliente verá siempre la última versión guardada.',
+      )
+    } finally {
+      setSharing(false)
+    }
+  }
+
+  const dejarDeCompartir = async () => {
+    if (!project || sharing) return
+    if (!window.confirm('El enlace que enviaste dejará de abrir. ¿Dejar de compartir?')) return
+    setSharing(true)
+    try {
+      const r = await cloudDejarDeCompartir(project.id)
+      if (r.ok) {
+        setShareUrl(null)
+        setShareMsg('El proyecto ya no está compartido.')
+      } else {
+        setShareMsg(`No se pudo anular el enlace: ${r.error ?? 'error desconocido'}`)
+      }
+    } finally {
+      setSharing(false)
+    }
+  }
+
+  const enviarEnlace = async () => {
+    if (!shareUrl || !project) return
+    try {
+      await navigator.share({ title: `Proyecto ${project.name}`, url: shareUrl })
+    } catch {
+      /* el usuario canceló o el navegador no lo permite */
+    }
+  }
+  const puedeEnviar = typeof navigator !== 'undefined' && typeof navigator.share === 'function'
+
+  if (esCompartido && estadoCompartido !== 'listo') {
+    return (
+      <div
+        data-nv-compartido-estado={estadoCompartido}
+        className="border border-[#2e7d54] bg-[#07110d] p-6 font-mono text-sm text-[#a9e8c4]"
+      >
+        {estadoCompartido === 'cargando'
+          ? 'Abriendo el proyecto…'
+          : errorCompartido || 'No se pudo abrir el enlace.'}
+      </div>
+    )
   }
 
   if (!project) {
@@ -262,7 +421,12 @@ export default function NetVisionClienteView() {
   }
 
   return (
-    <div className="nv-cliente nv-tac-scan flex h-[calc(100dvh-7.25rem)] min-h-[28rem] flex-col gap-2.5 overflow-hidden border border-[#2e7d54] bg-[#07110d] p-3 font-mono text-[#8cffb5] print:h-auto print:min-h-0 print:overflow-visible">
+    <div
+      data-nv-cliente-modo={esCompartido ? 'compartido' : 'instalador'}
+      className={`nv-cliente nv-tac-scan flex min-h-[28rem] flex-col gap-2.5 overflow-hidden border border-[#2e7d54] bg-[#07110d] p-3 font-mono text-[#8cffb5] print:h-auto print:min-h-0 print:overflow-visible ${
+        esCompartido ? 'h-[calc(100dvh-1.5rem)]' : 'h-[calc(100dvh-7.25rem)]'
+      }`}
+    >
       <header className="flex shrink-0 flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#5fbf8a]">
@@ -292,22 +456,27 @@ export default function NetVisionClienteView() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2 print:hidden">
-          <Link
-            href="/nexus/vision"
-            className="inline-flex min-h-11 items-center gap-1.5 border border-[#8cffb5] px-3.5 text-[11px] font-bold uppercase tracking-[0.12em] text-[#8cffb5] hover:bg-[#8cffb5]/10"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Editor
-          </Link>
-          <button
-            type="button"
-            data-nv-copiar-enlace
-            onClick={() => void copyLink()}
-            className="inline-flex min-h-11 items-center gap-1.5 border border-[#8cffb5] px-3.5 text-[11px] font-bold uppercase tracking-[0.12em] text-[#8cffb5] hover:bg-[#8cffb5]/10"
-          >
-            {copied ? <Check className="h-3.5 w-3.5" /> : <Link2 className="h-3.5 w-3.5" />}
-            {copied ? 'Enlace copiado' : 'Copiar enlace'}
-          </button>
+          {!esCompartido ? (
+            <>
+              <Link
+                href="/nexus/vision"
+                className="inline-flex min-h-11 items-center gap-1.5 border border-[#8cffb5] px-3.5 text-[11px] font-bold uppercase tracking-[0.12em] text-[#8cffb5] hover:bg-[#8cffb5]/10"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Editor
+              </Link>
+              <button
+                type="button"
+                data-nv-compartir
+                disabled={sharing}
+                onClick={() => void compartir()}
+                className="inline-flex min-h-11 items-center gap-1.5 border border-[#8cffb5] px-3.5 text-[11px] font-bold uppercase tracking-[0.12em] text-[#8cffb5] hover:bg-[#8cffb5]/10 disabled:opacity-50"
+              >
+                <Link2 className="h-3.5 w-3.5" />
+                {sharing ? 'Preparando…' : shareUrl ? 'Actualizar enlace' : 'Compartir con cliente'}
+              </button>
+            </>
+          ) : null}
           <button
             type="button"
             onClick={() => window.print()}
@@ -318,6 +487,64 @@ export default function NetVisionClienteView() {
           </button>
         </div>
       </header>
+
+      {!esCompartido && (shareUrl || shareMsg) ? (
+        <div
+          data-nv-compartir-panel
+          className="shrink-0 space-y-2 border border-[#2e7d54] bg-[#0b1a14] p-2.5 text-[11px] print:hidden"
+        >
+          {shareMsg ? (
+            <p data-nv-compartir-msg className="text-[#d6ffe5]">
+              {shareMsg}
+            </p>
+          ) : (
+            <p className="text-[#a9e8c4]">
+              Este proyecto está compartido. El cliente ve siempre la última versión guardada.
+            </p>
+          )}
+          {shareUrl ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                readOnly
+                data-nv-compartir-url
+                value={shareUrl}
+                aria-label="Enlace para el cliente"
+                onFocus={(e) => e.currentTarget.select()}
+                className="min-h-10 min-w-0 flex-1 basis-56 border border-[#2e7d54] bg-[#07110d] px-2 text-[11px] text-[#d6ffe5]"
+              />
+              <button
+                type="button"
+                data-nv-copiar-enlace
+                onClick={() => void copiarEnlace(shareUrl)}
+                className="inline-flex min-h-10 items-center gap-1.5 border border-[#8cffb5] px-3 font-bold uppercase tracking-[0.12em] text-[#8cffb5]"
+              >
+                {copied ? <Check className="h-3.5 w-3.5" /> : <Link2 className="h-3.5 w-3.5" />}
+                {copied ? 'Copiado' : 'Copiar'}
+              </button>
+              {puedeEnviar ? (
+                <button
+                  type="button"
+                  onClick={() => void enviarEnlace()}
+                  className="inline-flex min-h-10 items-center gap-1.5 bg-[#8cffb5] px-3 font-bold uppercase tracking-[0.12em] text-[#07110d]"
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  Enviar
+                </button>
+              ) : null}
+              <button
+                type="button"
+                data-nv-dejar-compartir
+                disabled={sharing}
+                onClick={() => void dejarDeCompartir()}
+                className="inline-flex min-h-10 items-center gap-1.5 border border-[#ffc857] px-3 font-bold uppercase tracking-[0.12em] text-[#ffc857] disabled:opacity-50"
+              >
+                <X className="h-3.5 w-3.5" />
+                Dejar de compartir
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[#a9e8c4] print:hidden">
         <span className="font-semibold uppercase tracking-[0.22em] text-[#5fbf8a]">Semáforo</span>
