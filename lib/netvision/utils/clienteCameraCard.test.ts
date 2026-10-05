@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CableRoute, CameraModel } from '@/lib/netvision/types'
+import { CAMERA_CATALOG } from '@/lib/netvision/catalog/cameras'
 import {
   buildClienteCameraCard,
   cameraCableMeters,
@@ -86,5 +87,27 @@ describe('clienteCameraCard', () => {
     assert.equal(card.formFactor, 'ptz')
     assert.equal(card.wired, true)
     assert.equal(card.poeWatts, 12)
+  })
+
+  it('todas las Ezviz llevan foto oficial y conservan su tipo de conexión', () => {
+    const esperado: Record<string, 'poe' | 'battery'> = {
+      'ezviz-c6n': 'poe',
+      'ezviz-c6cn': 'poe',
+      'ezviz-c8c': 'poe',
+      'ezviz-h3': 'poe',
+      'ezviz-h8c': 'poe',
+      'ezviz-h9c': 'poe',
+      'ezviz-ty2': 'poe',
+      'ezviz-c3w-pro': 'poe',
+      'ezviz-bc1c': 'battery',
+      'ezviz-eb8': 'battery',
+    }
+    const ezviz = CAMERA_CATALOG.filter((m) => m.brand === 'Ezviz')
+    assert.deepEqual(ezviz.map((m) => m.id).sort(), Object.keys(esperado).sort())
+    for (const m of ezviz) {
+      assert.match(m.imageUrl ?? '', /^https:\/\/mfs\.ezvizlife\.com\/[0-9a-f]{32}\.png$/, m.id)
+      assert.equal(inferCameraConnection(m), esperado[m.id], m.id)
+      assert.ok((m.notes ?? '').length > 0, m.id)
+    }
   })
 })
