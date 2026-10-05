@@ -3327,13 +3327,46 @@ export default function NexusVisionArchitectClient() {
         Selección múltiple
       </button>
       {calibrateMode ? (
-        <span className="shrink-0 text-[10px] font-semibold text-lime-300">
-          {calibPoints.length < 2
-            ? `Calibrando (${calibPoints.length}/2): marca el segmento`
-            : calibMeters.trim()
-              ? `Calibrando ${calibMeters.trim()} ${lengthUnitLabel(project.unitSystem ?? 'metric')}`
-              : 'Calibrando: escribe el metraje del tramo'}
-        </span>
+        <label
+          data-nv-calib-barra
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-lime-400/50 bg-lime-400/10 px-2 py-1 text-[11px] font-semibold text-lime-100"
+        >
+          <span className="hidden sm:inline">Este tramo mide</span>
+          <span className="sm:hidden">Tramo</span>
+          <input
+            data-nv-calib-metros-bar
+            inputMode="decimal"
+            autoComplete="off"
+            placeholder={calibrationInputPlaceholder(project.unitSystem ?? 'metric')}
+            value={calibMeters}
+            onChange={(e) => {
+              setCalibMeters(e.target.value)
+              setCalibMetersTouched(true)
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                applyCalibScale()
+              }
+            }}
+            className="h-7 w-20 rounded border border-lime-400/40 bg-black/50 px-1.5 text-sm font-bold text-white"
+          />
+          <span>{lengthUnitLabel(project.unitSystem ?? 'metric')}</span>
+          {calibPoints.length >= 2 ? (
+            <button
+              type="button"
+              data-nv-calib-aplicar-bar
+              onClick={applyCalibScale}
+              className="rounded bg-lime-400 px-2 py-0.5 text-[11px] font-bold text-black"
+            >
+              Aplicar
+            </button>
+          ) : (
+            <span className="font-medium text-lime-200/80">
+              ({calibPoints.length}/2)
+            </span>
+          )}
+        </label>
       ) : null}
     </>
   )

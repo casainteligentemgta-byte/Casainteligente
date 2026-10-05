@@ -150,7 +150,14 @@ export default function NetVisionBranchNav({
       ) : null}
       <div className="flex flex-nowrap items-center gap-2">
         <FoldButton id="archivo" label="Archivo" open={open} onToggle={toggle}>
-          <div className="flex flex-col gap-1.5">{archivo}</div>
+          <div
+            className="flex flex-col gap-1.5"
+            onClick={(e) => {
+              if ((e.target as HTMLElement).closest('button')) setOpen(null)
+            }}
+          >
+            {archivo}
+          </div>
         </FoldButton>
         <FoldButton
           id="especialidad"
