@@ -5,6 +5,7 @@ import {
   esTokenCompartir,
   proyectoParaCliente,
   rutaPlanoNube,
+  tienePlanoAparte,
 } from '@/lib/netvision/compartir'
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin'
 
@@ -55,8 +56,9 @@ export async function GET(_req: Request, { params }: RouteCtx) {
     const project = proyectoParaCliente(rowToProject(row))
 
     // El plano grande vive en Storage: se entrega con una URL firmada temporal.
+    // Solo si el proyecto dice tener plano: si se le quitó, no se entrega el viejo.
     let planoSignedUrl: string | null = null
-    if (!project.planoUrl) {
+    if (tienePlanoAparte(project)) {
       const firmado = await admin.client.storage
         .from(NETVISION_PLANOS_BUCKET)
         .createSignedUrl(rutaPlanoNube(row.user_id, row.id), PLANO_URL_SEGUNDOS)

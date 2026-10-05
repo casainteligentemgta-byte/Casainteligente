@@ -6,11 +6,15 @@ import Link from 'next/link'
 import { Check, Link2, Search, X } from 'lucide-react'
 import type { BomSummary } from '@/lib/netvision/types'
 import {
+  MARGEN_VENTAS_DEFECTO,
+  acotarMargen,
+  aplicarMargen,
   buscarProductos,
   construirPresupuesto,
   enlacesParaGuardar,
+  enlazarRenglon,
   notasPresupuesto,
-  precioVentaProducto,
+  precioConMargen,
   renglonesDesdeBom,
   sugerirProductos,
   type ProductoVenta,
@@ -28,6 +32,8 @@ type Props = {
   projectName: string
   /** Nombre de cliente escrito en el proyecto (para proponerlo). */
   projectClient?: string
+  /** Margen del proyecto en NetVision (%): es el que se propone. */
+  margenPct?: number
   onClose: () => void
 }
 
@@ -49,8 +55,11 @@ export default function NetVisionPresupuestoModal({
   bom,
   projectName,
   projectClient = '',
+  margenPct: margenInicial,
   onClose,
 }: Props) {
+  const [margen, setMargen] = useState(() => acotarMargen(margenInicial))
+  const [margenTexto, setMargenTexto] = useState(() => String(acotarMargen(margenInicial)))
   const [datos, setDatos] = useState<DatosPresupuesto | null>(null)
   const [renglones, setRenglones] = useState<RenglonPresupuesto[]>([])
   const [notas, setNotas] = useState<string[]>([])
@@ -67,7 +76,7 @@ export default function NetVisionPresupuestoModal({
     void cargarDatosPresupuesto().then((d) => {
       if (cancelado) return
       setDatos(d)
-      const r = renglonesDesdeBom(bom, d.enlaces, d.productos)
+      const r = renglonesDesdeBom(bom, d.enlaces, d.productos, margen)
       setRenglones(r.renglones)
       setNotas(r.notas)
       const buscado = projectClient.trim().toLowerCase()
@@ -94,8 +103,8 @@ export default function NetVisionPresupuestoModal({
   const productos = useMemo(() => datos?.productos ?? [], [datos])
   const porId = useMemo(() => new Map(productos.map((p) => [p.id, p])), [productos])
   const presupuesto = useMemo(
-    () => construirPresupuesto(renglones, productos),
-    [renglones, productos],
+    () => construirPresupuesto(renglones, productos, margen),
+    [renglones, productos, margen],
   )
   const clientesFiltrados = useMemo(() => {
     const q = buscaCliente.trim().toLowerCase()
@@ -112,10 +121,19 @@ export default function NetVisionPresupuestoModal({
   const cambiar = (clave: string, patch: Partial<RenglonPresupuesto>) =>
     setRenglones((lista) => lista.map((r) => (r.clave === clave ? { ...r, ...patch } : r)))
 
-  const enlazar = (clave: string, p: ProductoVenta) => {
-    cambiar(clave, { productId: p.id, precioUnit: precioVentaProducto(p) })
+  const enlazar = (clave: string, p: ProductoVenta | null) => {
+    setRenglones((lista) => lista.map((r) => (r.clave === clave ? enlazarRenglon(r, p, margen) : r)))
     setEnlazando(null)
     setBuscaProducto('')
+  }
+
+  const cambiarMargen = (texto: string) => {
+    setMargenTexto(texto)
+    const n = Number(texto)
+    if (texto.trim() === '' || !Number.isFinite(n) || n < 0 || n > 300) return
+    const nuevo = acotarMargen(n)
+    setMargen(nuevo)
+    setRenglones((lista) => aplicarMargen(lista, nuevo))
   }
 
   const incluidos = renglones.filter((r) => r.incluir && r.qty > 0)
@@ -280,8 +298,29 @@ export default function NetVisionPresupuestoModal({
                 </p>
                 <p className="text-[11px] text-[var(--nexus-text-dim)]">
                   Enlaza cada renglón con un producto tuyo; queda recordado para la próxima vez. Lo que
-                  no enlaces entra como renglón libre con precio de referencia.
+                  no enlaces entra como renglón libre: su costo es el precio de referencia y se le
+                  suma el margen.
                 </p>
+                <label className="flex flex-wrap items-center gap-2 rounded-lg border border-white/15 bg-black/25 px-3 py-2">
+                  <span className="font-semibold">Margen de ganancia</span>
+                  <input
+                    data-nv-presupuesto-margen
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    max={300}
+                    step="any"
+                    value={margenTexto}
+                    onChange={(e) => cambiarMargen(e.target.value)}
+                    onBlur={() => setMargenTexto(String(margen))}
+                    className={`${campo} w-20 text-right`}
+                  />
+                  <span>%</span>
+                  <span className="basis-full text-[11px] text-[var(--nexus-text-dim)]">
+                    Se suma al precio de cada renglón, igual que en Ventas (allí el valor habitual es{' '}
+                    {MARGEN_VENTAS_DEFECTO} %). Un precio que escribas a mano no se recalcula.
+                  </span>
+                </label>
                 <ul className="space-y-2">
                   {renglones.map((r) => {
                     const producto = r.productId != null ? porId.get(r.productId) : undefined
@@ -321,12 +360,16 @@ export default function NetVisionPresupuestoModal({
                             Cantidad
                             <input
                               type="number"
-                              inputMode="decimal"
+                              inputMode="numeric"
                               min={0}
-                              step="any"
+                              step={1}
                               value={r.qty}
                               disabled={!r.incluir}
-                              onChange={(e) => cambiar(r.clave, { qty: Math.max(0, Number(e.target.value) || 0) })}
+                              onChange={(e) =>
+                                cambiar(r.clave, {
+                                  qty: Math.max(0, Math.ceil((Number(e.target.value) || 0) - 1e-9)),
+                                })
+                              }
                               className={`${campo} mt-0.5 block w-24 text-right`}
                             />
                           </label>
@@ -340,7 +383,10 @@ export default function NetVisionPresupuestoModal({
                               value={r.precioUnit}
                               disabled={!r.incluir}
                               onChange={(e) =>
-                                cambiar(r.clave, { precioUnit: Math.max(0, Number(e.target.value) || 0) })
+                                cambiar(r.clave, {
+                                  precioUnit: Math.max(0, Number(e.target.value) || 0),
+                                  manual: true,
+                                })
                               }
                               className={`${campo} mt-0.5 block w-28 text-right`}
                             />
@@ -367,7 +413,7 @@ export default function NetVisionPresupuestoModal({
                             <button
                               type="button"
                               disabled={!r.incluir}
-                              onClick={() => cambiar(r.clave, { productId: null, precioUnit: r.refUsd })}
+                              onClick={() => enlazar(r.clave, null)}
                               className="min-h-9 rounded-md border border-white/15 px-2.5 font-semibold text-[var(--nexus-text-muted)] disabled:opacity-40"
                             >
                               Quitar enlace
@@ -392,7 +438,9 @@ export default function NetVisionPresupuestoModal({
                                 className="flex min-h-10 w-full items-center justify-between gap-2 rounded-md border border-white/10 bg-black/30 px-2.5 text-left hover:bg-white/5"
                               >
                                 <span className="min-w-0 truncate">{nombreProducto(p)}</span>
-                                <span className="shrink-0 font-semibold">${precioVentaProducto(p).toFixed(2)}</span>
+                                <span className="shrink-0 font-semibold">
+                                  ${precioConMargen(Number(p.precio ?? 0) || 0, margen).toFixed(2)}
+                                </span>
                               </button>
                             ))}
                             {(buscaProducto.trim() ? encontrados : sugeridos).length === 0 ? (
@@ -434,6 +482,10 @@ export default function NetVisionPresupuestoModal({
                 {libres > 0 ? ` (${libres} ${libres === 1 ? 'libre' : 'libres'})` : ''} · Subtotal{' '}
                 <span data-nv-presupuesto-subtotal className="font-bold text-white">
                   ${presupuesto.subtotal.toFixed(2)}
+                </span>
+                <span data-nv-presupuesto-ganancia className="block text-[11px]">
+                  Costo ${presupuesto.total_cost.toFixed(2)} · Ganancia $
+                  {presupuesto.total_profit.toFixed(2)} ({presupuesto.margin_pct.toFixed(1)} % de la venta)
                 </span>
               </p>
               <div className="flex gap-2">

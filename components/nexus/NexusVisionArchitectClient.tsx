@@ -164,10 +164,14 @@ import {
   profilesForCountry,
 } from '@/lib/netvision/services/complianceValidator'
 import { cloudUpsertProject } from '@/lib/netvision/cloud'
+import { bajarProyectoDeNube } from '@/lib/netvision/bajarDeNube'
+import { anotarBaseAproximada } from '@/lib/netvision/nubeBase'
+import type { ConflictoNube } from '@/lib/netvision/sincronizacion'
 import {
   duplicateProject,
   emptyProject,
   loadProject,
+  openProject,
   resetActiveDesign,
   saveProject,
 } from '@/lib/netvision/storage'
@@ -306,6 +310,21 @@ function rotateStructuresCwQuarters(
   })
 }
 
+/** Fecha y hora cortas para un aviso; '' si no es una fecha. */
+function fechaLegible(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleString('es-VE', { dateStyle: 'short', timeStyle: 'short' })
+}
+
+/** Otra moneda: la tasa anterior ya no sirve (una tasa en Bs no vale para euros). */
+function cambiarMoneda(p: NetVisionProject, currency: NetVisionProject['currency']): NetVisionProject {
+  if (p.currency === currency) return p
+  const next = { ...p, currency }
+  delete next.tasaCambio
+  return next
+}
+
 export default function NexusVisionArchitectClient() {
   const [project, setProject] = useState<NetVisionProject>(() => emptyProject())
   const [hydrated, setHydrated] = useState(false)
@@ -367,6 +386,12 @@ export default function NexusVisionArchitectClient() {
   const [exportingPdf, setExportingPdf] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
+  /** La nube tiene otra versión del proyecto: no se sube hasta que el usuario decida. */
+  const [conflictoNube, setConflictoNube] = useState<{
+    projectId: string
+    remoto: ConflictoNube
+  } | null>(null)
+  const [resolviendoConflicto, setResolviendoConflicto] = useState(false)
   const pdfBytesRef = useRef<Uint8Array | null>(null)
   const pdfRotateQuartersRef = useRef(0)
   const [canDetectPdfWalls, setCanDetectPdfWalls] = useState(false)
@@ -618,9 +643,15 @@ export default function NexusVisionArchitectClient() {
   /** Sync diferido a Supabase (si hay sesión). */
   useEffect(() => {
     if (!hydrated) return
+    // Con un conflicto pendiente no se sube nada: decide el usuario.
+    if (conflictoNube?.projectId === project.id) return
     const t = window.setTimeout(() => {
       void cloudUpsertProject(project).then((r) => {
         if (!r.authenticated) return
+        if (r.conflict) {
+          setConflictoNube({ projectId: project.id, remoto: r.conflict })
+          return
+        }
         if (!r.ok && r.error) {
           // Silencioso si la tabla aún no existe; evita spamear UI
           if (r.error.includes('migración 274') || r.error.includes('42P01')) return
@@ -631,7 +662,17 @@ export default function NexusVisionArchitectClient() {
       })
     }, 1800)
     return () => window.clearTimeout(t)
-  }, [project, hydrated])
+  }, [project, hydrated, conflictoNube])
+
+  // Al abrir un proyecto se anota de qué versión parte esta copia (si aún no
+  // se sabe), para no pisar la nube con una copia vieja de este equipo.
+  useEffect(() => {
+    if (!hydrated) return
+    anotarBaseAproximada(project.id, project.updatedAt)
+    setConflictoNube((c) => (c && c.projectId !== project.id ? null : c))
+    // Solo al cambiar de proyecto: la fecha es la que tenía al abrirlo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, project.id])
 
   useEffect(() => {
     if (!hydrated) return
@@ -2148,7 +2189,13 @@ export default function NexusVisionArchitectClient() {
       eq ? `${eq} equipos` : null,
     ].filter(Boolean)
     const summary = parts.length ? parts.join(' · ') : 'diseño vacío'
-    if (r.ok && r.authenticated) {
+    if (r.conflict) {
+      setConflictoNube({ projectId: saved.id, remoto: r.conflict })
+      setInfo(
+        `Guardado en este equipo («${saved.name}»: ${summary}). No se subió a la nube: allí hay otra versión.`,
+      )
+    } else if (r.ok && r.authenticated) {
+      void subirPlanoNube(saved)
       setInfo(`Proyecto guardado («${saved.name}»: ${summary}) · nube OK`)
     } else if (r.authenticated === false) {
       setInfo(`Proyecto guardado en este navegador («${saved.name}»: ${summary})`)
@@ -2157,6 +2204,41 @@ export default function NexusVisionArchitectClient() {
     }
     setError(null)
   }, [project])
+
+  /** Conflicto con la nube: se queda la copia de este equipo y se sube. */
+  const conservarCopiaLocal = async () => {
+    if (resolviendoConflicto) return
+    setResolviendoConflicto(true)
+    const r = await cloudUpsertProject(project, { forzar: true })
+    setResolviendoConflicto(false)
+    if (r.ok) {
+      setConflictoNube(null)
+      void subirPlanoNube(project)
+      setError(null)
+      setInfo('Se conservó la versión de este equipo y quedó guardada en la nube.')
+    } else {
+      setError(r.error || 'No se pudo subir a la nube. Revisa la conexión e inténtalo de nuevo.')
+    }
+  }
+
+  /** Conflicto con la nube: se abre la versión de la nube en este equipo. */
+  const usarCopiaNube = async () => {
+    if (resolviendoConflicto) return
+    setResolviendoConflicto(true)
+    const r = await bajarProyectoDeNube(project.id)
+    setResolviendoConflicto(false)
+    if (!r.ok) {
+      setError(`No se pudo abrir la versión de la nube: ${r.error}`)
+      return
+    }
+    setConflictoNube(null)
+    switchToProject(openProject(r.project.id) ?? r.project)
+    setInfo(
+      r.planoFalta
+        ? 'Se abrió la versión de la nube. No se pudo bajar su plano: vuelve a cargarlo.'
+        : 'Se abrió la versión de la nube. Con Deshacer vuelves a la que tenías en este equipo.',
+    )
+  }
 
   const saveProjectAsCopy = useCallback(() => {
     const suggested = `${project.name.trim() || 'Proyecto'} (copia)`
@@ -2643,7 +2725,7 @@ export default function NexusVisionArchitectClient() {
             key={c}
             type="button"
             className={chipClass((project.currency ?? 'USD') === c)}
-            onClick={() => setProject((p) => ({ ...p, currency: c }))}
+            onClick={() => setProject((p) => cambiarMoneda(p, c))}
           >
             {c}
           </button>
@@ -3184,6 +3266,14 @@ export default function NexusVisionArchitectClient() {
             }
             projectName={project.name}
             currency={project.currency ?? 'USD'}
+            tasaCambio={project.tasaCambio}
+            onTasaChange={(tasaCambio) =>
+              setProject((p) => {
+                const next = { ...p, tasaCambio }
+                if (tasaCambio === undefined) delete next.tasaCambio
+                return next
+              })
+            }
             distributorMarginPct={project.distributorMarginPct ?? 15}
             onMarginChange={(pct) =>
               setProject((p) => ({ ...p, distributorMarginPct: pct }))
@@ -3230,6 +3320,41 @@ export default function NexusVisionArchitectClient() {
         <p className="rounded-lg border border-[rgba(0,242,254,0.3)] bg-[rgba(0,242,254,0.08)] px-3 py-2 text-sm text-[var(--nexus-cyan)]">
           {info}
         </p>
+      ) : null}
+      {conflictoNube && conflictoNube.projectId === project.id ? (
+        <div
+          data-nv-conflicto-nube
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-400/50 bg-red-500/10 px-3 py-2 text-sm text-red-50"
+        >
+          <span className="min-w-0 flex-1 basis-64">
+            La nube tiene otra versión de este proyecto
+            {fechaLegible(conflictoNube.remoto.updatedAt)
+              ? ` (guardada el ${fechaLegible(conflictoNube.remoto.updatedAt)}, ${conflictoNube.remoto.cameras} ${conflictoNube.remoto.cameras === 1 ? 'cámara' : 'cámaras'})`
+              : ''}
+            . No se sobrescribió y lo que hagas aquí queda solo en este equipo hasta que elijas.
+          </span>
+          <span className="flex shrink-0 flex-wrap gap-2">
+            <button
+              type="button"
+              data-nv-conflicto-usar-nube
+              disabled={resolviendoConflicto}
+              onClick={() => void usarCopiaNube()}
+              className="min-h-10 rounded-lg bg-white px-3 text-[12px] font-bold text-black disabled:opacity-50"
+            >
+              Abrir la de la nube
+            </button>
+            <button
+              type="button"
+              data-nv-conflicto-conservar
+              disabled={resolviendoConflicto}
+              onClick={() => void conservarCopiaLocal()}
+              className="min-h-10 rounded-lg border border-white/40 px-3 text-[12px] font-bold text-white disabled:opacity-50"
+            >
+              Conservar la de este equipo
+            </button>
+          </span>
+        </div>
       ) : null}
       {project.planoUrl &&
       !calibrateMode &&
@@ -3952,7 +4077,13 @@ export default function NexusVisionArchitectClient() {
               distributorMarginPct={project.distributorMarginPct ?? 15}
               description={project.description ?? ''}
               client={project.client ?? ''}
-              onChange={(patch) => setProject((p) => ({ ...p, ...patch }))}
+              onChange={(patch) =>
+                setProject((p) =>
+                  patch.currency && patch.currency !== p.currency
+                    ? { ...cambiarMoneda(p, patch.currency), ...patch }
+                    : { ...p, ...patch },
+                )
+              }
             />
           ) : sideTab === 'sub' ? (
             <div className="space-y-4">

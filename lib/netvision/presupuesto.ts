@@ -27,12 +27,19 @@ export type RenglonPresupuesto = {
   clave: string
   descripcion: string
   qty: number
-  /** Precio de referencia de NetVision (USD). */
+  /** Precio de referencia de NetVision (USD): se toma como costo del renglón libre. */
   refUsd: number
   /** Producto de Ventas enlazado; null = renglón libre. */
   productId: number | null
-  /** Precio unitario que irá al presupuesto. */
+  /**
+   * Precio base antes del margen: el `precio` del producto enlazado o, en un
+   * renglón libre, la referencia de NetVision.
+   */
+  baseUsd: number
+  /** Precio unitario que irá al presupuesto (base + margen, o el que se escribió). */
   precioUnit: number
+  /** El precio lo escribió el usuario: el margen ya no lo recalcula. */
+  manual?: boolean
   incluir: boolean
 }
 
@@ -41,6 +48,38 @@ const redondear2 = (n: number) => Math.round(n * 100) / 100
 /** Clave con la que se recuerda el enlace renglón ↔ producto. */
 export function claveEnlace(linea: Pick<BomLine, 'sku' | 'linkKey'>): string {
   return (linea.linkKey ?? linea.sku).trim().toLowerCase()
+}
+
+/** Margen admitido (%), igual que el campo libre de /ventas. */
+export function acotarMargen(valor: unknown, defecto = MARGEN_VENTAS_DEFECTO): number {
+  const n = typeof valor === 'number' ? valor : Number(valor)
+  if (!Number.isFinite(n)) return defecto
+  return Math.min(300, Math.max(0, Math.round(n * 100) / 100))
+}
+
+/** Precio de venta = precio base + margen (la misma cuenta que hace /ventas). */
+export function precioConMargen(baseUsd: number, margenPct = MARGEN_VENTAS_DEFECTO): number {
+  const base = Number.isFinite(baseUsd) ? Math.max(0, baseUsd) : 0
+  return parseFloat((base * (1 + margenPct / 100)).toFixed(2))
+}
+
+/**
+ * /ventas solo maneja cantidades enteras (cada unidad puede llevar su serial).
+ * - Lo que se vende por metro (cable, tubería) se redondea hacia arriba: 138.2 m → 139 m.
+ * - Otra medida con decimales (m³ de excavación) va como 1 partida por su total.
+ */
+export function cantidadParaVentas(
+  linea: Pick<BomLine, 'sku' | 'category' | 'description' | 'qty' | 'unitUsd' | 'totalUsd'>,
+): { qty: number; unitUsd: number; descripcion: string } {
+  const porMetro = linea.sku.startsWith('CABLE-') || (linea.category === 'conduit' && !Number.isInteger(linea.qty))
+  const descripcion =
+    porMetro && !/metro|\bm\)/i.test(linea.description)
+      ? `${linea.description} (por metro)`
+      : linea.description
+  if (Number.isInteger(linea.qty)) return { qty: linea.qty, unitUsd: linea.unitUsd, descripcion }
+  if (porMetro) return { qty: Math.ceil(linea.qty - 1e-9), unitUsd: linea.unitUsd, descripcion }
+  const total = linea.totalUsd > 0 ? linea.totalUsd : redondear2(linea.qty * linea.unitUsd)
+  return { qty: 1, unitUsd: redondear2(total), descripcion }
 }
 
 /** Precio de venta de un producto con el margen de /ventas. */
@@ -57,6 +96,9 @@ export function precioVentaProducto(
  *   productos: van como notas.
  * - Equipos iguales se juntan en un renglón.
  * - Si el renglón ya tiene producto recordado, sale enlazado y con su precio.
+ * - Todos los precios llevan el margen: los libres sobre la referencia de
+ *   NetVision (su costo) y los enlazados sobre el precio del producto.
+ * - Las cantidades salen enteras (ver `cantidadParaVentas`).
  */
 export function renglonesDesdeBom(
   bom: Pick<BomSummary, 'lines'>,
@@ -66,7 +108,8 @@ export function renglonesDesdeBom(
 ): { renglones: RenglonPresupuesto[]; notas: string[] } {
   const porId = new Map(productos.map((p) => [p.id, p]))
   const notas: string[] = []
-  const porClave = new Map<string, RenglonPresupuesto>()
+  // 1) Se juntan los renglones iguales (mismos equipo y precio) con su cantidad real.
+  const juntas = new Map<string, BomLine>()
   for (const linea of bom.lines) {
     if (!(linea.qty > 0)) continue
     if (linea.sku === 'ZANJA-TERCERO' || (linea.unitUsd === 0 && linea.totalUsd === 0 && linea.category === 'conduit')) {
@@ -74,25 +117,59 @@ export function renglonesDesdeBom(
       continue
     }
     const clave = claveEnlace(linea)
-    const previo = porClave.get(clave)
-    if (previo && previo.refUsd === linea.unitUsd) {
-      previo.qty = redondear2(previo.qty + linea.qty)
+    const previa = juntas.get(clave)
+    if (previa && previa.unitUsd === linea.unitUsd) {
+      previa.qty = redondear2(previa.qty + linea.qty)
+      previa.totalUsd = redondear2(previa.totalUsd + linea.totalUsd)
       continue
     }
-    const enlazado = enlaces[clave]
-    const producto = typeof enlazado === 'number' ? porId.get(enlazado) : undefined
-    const renglon: RenglonPresupuesto = {
-      clave: previo ? `${clave}#${porClave.size}` : clave,
-      descripcion: linea.description,
-      qty: linea.qty,
-      refUsd: linea.unitUsd,
-      productId: producto ? producto.id : null,
-      precioUnit: producto ? precioVentaProducto(producto, margenPct) : redondear2(linea.unitUsd),
-      incluir: true,
-    }
-    porClave.set(renglon.clave, renglon)
+    juntas.set(previa ? `${clave}#${juntas.size}` : clave, { ...linea })
   }
-  return { renglones: Array.from(porClave.values()), notas }
+  // 2) Cada renglón pasa a cantidad entera y a precio base + margen.
+  const renglones: RenglonPresupuesto[] = []
+  Array.from(juntas.entries()).forEach(([clave, linea]) => {
+    const venta = cantidadParaVentas(linea)
+    const enlazado = enlaces[clave.split('#')[0]!]
+    const producto = typeof enlazado === 'number' ? porId.get(enlazado) : undefined
+    const baseUsd = redondear2(producto ? Number(producto.precio ?? 0) || 0 : venta.unitUsd)
+    renglones.push({
+      clave,
+      descripcion: venta.descripcion,
+      qty: venta.qty,
+      refUsd: redondear2(venta.unitUsd),
+      productId: producto ? producto.id : null,
+      baseUsd,
+      precioUnit: precioConMargen(baseUsd, margenPct),
+      incluir: true,
+    })
+  })
+  return { renglones, notas }
+}
+
+/** Cambia el margen: recalcula los precios que el usuario no escribió a mano. */
+export function aplicarMargen(
+  renglones: readonly RenglonPresupuesto[],
+  margenPct: number,
+): RenglonPresupuesto[] {
+  return renglones.map((r) =>
+    r.manual ? r : { ...r, precioUnit: precioConMargen(r.baseUsd, margenPct) },
+  )
+}
+
+/** Enlaza (o desenlaza, con `null`) un renglón y le pone su precio base + margen. */
+export function enlazarRenglon(
+  renglon: RenglonPresupuesto,
+  producto: Pick<ProductoVenta, 'id' | 'precio'> | null,
+  margenPct: number,
+): RenglonPresupuesto {
+  const baseUsd = redondear2(producto ? Number(producto.precio ?? 0) || 0 : renglon.refUsd)
+  return {
+    ...renglon,
+    productId: producto ? producto.id : null,
+    baseUsd,
+    precioUnit: precioConMargen(baseUsd, margenPct),
+    manual: false,
+  }
 }
 
 /** Palabras útiles para comparar un renglón con el nombre de un producto. */
@@ -172,11 +249,14 @@ export type PresupuestoVentas = {
  * Arma los ítems y totales del presupuesto.
  * - Renglón enlazado: lleva el producto de Ventas (sin su imagen) y su costo.
  * - Renglón libre: producto provisional con id negativo (no existe en el
- *   catálogo), para que /ventas lo muestre y deje editar el precio.
+ *   catálogo). Su costo es la referencia de NetVision y su precio base es el
+ *   que, con el margen, da el precio unitario: así el botón de margen de
+ *   /ventas lo recalcula igual que a un producto del catálogo.
  */
 export function construirPresupuesto(
   renglones: readonly RenglonPresupuesto[],
   productos: readonly ProductoVenta[],
+  margenPct = MARGEN_VENTAS_DEFECTO,
 ): PresupuestoVentas {
   const porId = new Map(productos.map((p) => [p.id, p]))
   const items: ItemPresupuestoVentas[] = []
@@ -185,13 +265,17 @@ export function construirPresupuesto(
     if (!r.incluir || !(r.qty > 0)) continue
     const producto = r.productId != null ? porId.get(r.productId) : undefined
     const precio = redondear2(Math.max(0, r.precioUnit))
+    // /ventas solo admite cantidades enteras.
+    const qty = Math.max(1, Math.ceil(r.qty - 1e-9))
+    // Precio base del renglón libre: el que con el margen da el precio unitario.
+    const base = r.manual ? redondear2(precio / (1 + margenPct / 100)) : redondear2(r.baseUsd)
     if (producto) {
       const { imagen: _imagen, ...sinImagen } = producto as ProductoVenta & { imagen?: unknown }
       void _imagen
       items.push({
         product_id: producto.id,
         product_data: sinImagen,
-        qty: r.qty,
+        qty,
         unit_price: precio,
         discount: 0,
         inventory_item_ids: [],
@@ -211,12 +295,12 @@ export function construirPresupuesto(
           descripcion: null,
           // Sin producto enlazado no se conoce el costo real: se usa la referencia.
           costo: redondear2(r.refUsd),
-          precio,
+          precio: base,
           utilidad: null,
           cantidad: null,
           image_url: null,
         },
-        qty: r.qty,
+        qty,
         unit_price: precio,
         discount: 0,
         inventory_item_ids: [],

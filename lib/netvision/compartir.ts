@@ -72,6 +72,35 @@ export function huellaPlano(planoUrl: string | null | undefined): string {
   return `${n}:${(h >>> 0).toString(36)}`
 }
 
+/**
+ * Al bajar un proyecto de la nube, ¿qué plano le corresponde?
+ * - 'remoto': viene dentro del proyecto.
+ * - 'ninguno': la nube dice que el proyecto no tiene plano.
+ * - 'local': el plano de este equipo es el mismo que el de la nube.
+ * - 'bajar': hay que traerlo de la nube (no hay plano aquí o es otro).
+ */
+export function planoTrasBajar(
+  remoto: Pick<NetVisionProject, 'planoUrl' | 'planoHuella'>,
+  planoLocal: string | null | undefined,
+): 'remoto' | 'ninguno' | 'local' | 'bajar' {
+  if (remoto.planoUrl) return 'remoto'
+  if (remoto.planoHuella === '') return 'ninguno'
+  // Copias anteriores a la huella: se conserva el plano local si lo hay.
+  if (remoto.planoHuella === undefined) return planoLocal ? 'local' : 'bajar'
+  return planoLocal && huellaPlano(planoLocal) === remoto.planoHuella ? 'local' : 'bajar'
+}
+
+/**
+ * ¿El proyecto de la nube tiene plano guardado aparte (en Storage)?
+ * Solo entonces se firma su URL: así no se entrega al cliente un plano viejo
+ * de un proyecto al que ya se le quitó.
+ */
+export function tienePlanoAparte(project: Pick<NetVisionProject, 'planoUrl' | 'planoHuella'>): boolean {
+  if (project.planoUrl) return false
+  // Sin huella (copia anterior a este control) se asume que puede tenerlo.
+  return project.planoHuella === undefined || project.planoHuella !== ''
+}
+
 /** Separa un data URL en tipo y bytes; null si no es un data URL base64. */
 export function partesDataUrl(dataUrl: string): { mime: string; base64: string } | null {
   const m = /^data:([^;,]+)(?:;[^,]*)?;base64,(.*)$/.exec(dataUrl)
