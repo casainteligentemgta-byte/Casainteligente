@@ -75,4 +75,16 @@ describe('clienteCameraCard', () => {
     assert.equal(wireless.cableMeters, 0)
     assert.equal(totalClienteCableMeters([wired, wireless]), wired.cableMeters)
   })
+
+  it('la H9c lleva la foto y los ángulos de la ficha oficial, y sigue cableada', () => {
+    const card = buildClienteCameraCard(
+      { id: 'c2', label: 'CAM-02', x: 0.2, y: 0.3, modelId: 'ezviz-h9c', yawDeg: 0, mountHeightM: 2.8 },
+      [],
+    )
+    assert.match(card.imageUrl ?? '', /^https:\/\//)
+    assert.equal(card.fovLabel, 'Dual 108°+55°')
+    assert.equal(card.formFactor, 'ptz')
+    assert.equal(card.wired, true)
+    assert.equal(card.poeWatts, 12)
+  })
 })

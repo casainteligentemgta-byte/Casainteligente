@@ -200,30 +200,31 @@
       "brand": "Ezviz",
       "name": "H9c Dual 2K",
       "formFactor": "ptz",
-      "fovDeg": 96,
+      "fovDeg": 108,
       "rangeDayM": 22,
       "rangeNightM": 18,
       "lenses": [
         {
           "id": "wide",
           "label": "Gran angular 2.8 mm (fija)",
-          "fovDeg": 96,
+          "fovDeg": 108,
           "rangeDayM": 22,
           "rangeNightM": 18
         },
         {
           "id": "tele",
           "label": "Tele 6 mm (PTZ 350°/80°)",
-          "fovDeg": 52,
+          "fovDeg": 55,
           "rangeDayM": 35,
           "rangeNightM": 30
         }
       ],
       "resolution": "2K Dual",
       "bitrateMbps": 6,
-      "poeWatts": 10,
+      "poeWatts": 12,
       "priceUsd": 119,
-      "notes": "Dos lentes: gran angular fija 2.8 mm (96° H) y tele 6 mm motorizada (52° H, giro 350° / 80°): cada una mira a un lugar distinto. IR 30 m, exterior."
+      "notes": "Dos lentes de 2304 × 1296: gran angular fija 2.8 mm (108° H) y tele 6 mm motorizada (55° H, giro 350° / 80°): cada una mira a un lugar distinto. IR 30 m (color hasta 40 m), exterior. Alimentación 12 V / 1.5 A (máx. 12 W) y puerto de red RJ45.",
+      "imageUrl": "https://mfs.ezvizlife.com/073776431d630895e1e9d72b079ae733.jpg"
     },
     {
       "id": "ezviz-bc1c",

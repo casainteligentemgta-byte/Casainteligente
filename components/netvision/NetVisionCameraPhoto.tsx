@@ -97,6 +97,7 @@ export default function NetVisionCameraPhoto({
             src={imageUrl ?? undefined}
             alt={alt}
             loading="lazy"
+            referrerPolicy="no-referrer"
             onError={() => setFailed(true)}
             className="h-full w-full object-contain p-1"
           />
@@ -133,6 +134,7 @@ export default function NetVisionCameraPhoto({
           <img
             src={imageUrl ?? undefined}
             alt={alt}
+            referrerPolicy="no-referrer"
             className="max-h-[78dvh] max-w-full bg-[#e9fff1] object-contain p-3"
           />
           <p className="font-mono text-[12px] font-semibold uppercase tracking-[0.2em] text-[#d6ffe5]">
