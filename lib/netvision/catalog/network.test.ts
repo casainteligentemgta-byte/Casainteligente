@@ -25,6 +25,15 @@ describe('catálogo de red · UniFi (ficha oficial ui.com)', () => {
     }
   })
 
+  it('el alcance de los AP es el radio equivalente a la cobertura oficial', () => {
+    // U6 Lite: 115 m² → √(115/π) ≈ 6,05 m · U6 Pro: 140 m² → √(140/π) ≈ 6,68 m
+    const lite = getNetworkModel('ap-u6-lite')
+    const pro = getNetworkModel('ap-u6-pro')
+    assert.ok(lite && pro)
+    assert.ok(Math.abs(Math.PI * lite.wifiRangeM ** 2 - 115) < 3)
+    assert.ok(Math.abs(Math.PI * pro.wifiRangeM ** 2 - 140) < 3)
+  })
+
   it('los equipos por defecto no cambian', () => {
     assert.equal(DEFAULT_SWITCH_ID, 'sw-poe-8')
     assert.equal(DEFAULT_AP_ID, 'ap-u6-lite')

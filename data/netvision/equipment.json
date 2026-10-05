@@ -582,7 +582,7 @@
       "poePorts": 0,
       "poeBudgetW": 0,
       "drawWatts": 12,
-      "wifiRangeM": 18,
+      "wifiRangeM": 6,
       "band": "dual",
       "ports": 1,
       "priceUsd": 99
@@ -595,7 +595,7 @@
       "poePorts": 0,
       "poeBudgetW": 0,
       "drawWatts": 13,
-      "wifiRangeM": 25,
+      "wifiRangeM": 6.7,
       "band": "dual",
       "ports": 1,
       "priceUsd": 159
