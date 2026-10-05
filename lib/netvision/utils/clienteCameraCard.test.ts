@@ -113,6 +113,19 @@ describe('clienteCameraCard', () => {
     }
   })
 
+  it('la H3 es la 3K y se presenta cableada con adaptador PoE', () => {
+    const card = buildClienteCameraCard(
+      { id: 'c3', label: 'CAM-03', x: 0.2, y: 0.3, modelId: 'ezviz-h3', yawDeg: 0, mountHeightM: 2.8 },
+      [route],
+    )
+    assert.equal(card.modelName, 'H3 3K Bullet')
+    assert.equal(card.resolution, '3K')
+    assert.equal(card.fovLabel, '96°')
+    assert.equal(card.connectionLabel, 'Cableada (PoE)')
+    assert.equal(card.poeWatts, 8)
+    assert.match(card.notes, /adaptador PoE \(splitter\) de 12 V/)
+  })
+
   it('la H4 existe en versión Wi-Fi y en versión PoE', () => {
     const cam = { id: 'c9', label: 'CAM-09', x: 0.2, y: 0.3, yawDeg: 0, mountHeightM: 2.8 }
     const wifiCard = buildClienteCameraCard({ ...cam, modelId: 'ezviz-h4' }, [route])
