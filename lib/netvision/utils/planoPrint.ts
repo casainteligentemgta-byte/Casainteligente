@@ -15,6 +15,18 @@ export type PlanoPrintPayload = {
   structureCount?: number
 }
 
+export function labelEquiposRed(n: number): string {
+  return n === 1 ? 'equipo de red' : 'equipos de red'
+}
+
+export function labelMuros(n: number): string {
+  return n === 1 ? 'muro' : 'muros'
+}
+
+export function capitalizeLabel(s: string): string {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s
+}
+
 export function buildPlanoPrintMeta(
   p: Pick<
     PlanoPrintPayload,
@@ -26,9 +38,11 @@ export function buildPlanoPrintMeta(
     p.cameraCount != null
       ? `${p.cameraCount} cámara${p.cameraCount === 1 ? '' : 's'}`
       : null,
-    p.networkCount != null ? `${p.networkCount} red` : null,
+    p.networkCount != null
+      ? `${p.networkCount} ${labelEquiposRed(p.networkCount)}`
+      : null,
     p.structureCount != null
-      ? `${p.structureCount} estructura${p.structureCount === 1 ? '' : 's'}`
+      ? `${p.structureCount} ${labelMuros(p.structureCount)}`
       : null,
   ].filter(Boolean)
   return parts.join(' · ')

@@ -29,10 +29,9 @@ export default function NetVisionPlanoRotulo({
           </p>
         </header>
         <div className="min-h-0 min-w-0 flex-1">{children}</div>
-        <footer className="pointer-events-none grid shrink-0 grid-cols-3 items-center gap-2 border-t border-[#2e7d54] px-6 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] sm:text-[11px]">
+        <footer className="pointer-events-none grid shrink-0 grid-cols-2 items-center gap-2 border-t border-[#2e7d54] px-6 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] sm:text-[11px]">
           <NetVisionCompanyMark company={rotulo.company} size={24} className="text-[#8cffb5]" />
-          <span className="truncate text-center text-[#8cffb5]">{rotulo.dateLabel}</span>
-          <span className="truncate text-right font-bold text-[#d6ffe5]">{rotulo.planType}</span>
+          <span className="truncate text-right text-[#8cffb5]">{rotulo.dateLabel}</span>
         </footer>
       </div>
     )
@@ -46,14 +45,13 @@ export default function NetVisionPlanoRotulo({
         </p>
       </header>
       <div className="min-h-0 min-w-0 flex-1">{children}</div>
-      <footer className="pointer-events-none grid shrink-0 grid-cols-3 items-center gap-2 border-t border-[rgba(0,242,254,0.28)] bg-[#071018] px-3 py-2 text-[10px] font-semibold uppercase tracking-wide sm:text-[11px]">
+      <footer className="pointer-events-none grid shrink-0 grid-cols-2 items-center gap-2 border-t border-[rgba(0,242,254,0.28)] bg-[#071018] px-3 py-2 text-[10px] font-semibold uppercase tracking-wide sm:text-[11px]">
         <NetVisionCompanyMark
           company={rotulo.company}
           size={26}
           className="text-white"
         />
-        <span className="truncate text-center text-white/80">{rotulo.dateLabel}</span>
-        <span className="truncate text-right text-[var(--nexus-cyan)]">{rotulo.planType}</span>
+        <span className="truncate text-right text-white/80">{rotulo.dateLabel}</span>
       </footer>
     </div>
   )

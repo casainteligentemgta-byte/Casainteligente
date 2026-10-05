@@ -79,12 +79,6 @@ const styles = StyleSheet.create({
     color: '#cbd5e1',
     textTransform: 'uppercase',
   },
-  footerType: {
-    fontSize: 10,
-    color: '#67e8f9',
-    fontWeight: 700,
-    textTransform: 'uppercase',
-  },
   imageWrap: {
     flexGrow: 1,
     borderWidth: 1,
@@ -111,9 +105,17 @@ function NetVisionPlanPdfDoc(props: NetVisionPlanPdfInput) {
       timeStyle: 'short',
     })
   const counts = [
-    props.cameraCount != null ? `${props.cameraCount} cámaras` : null,
-    props.networkCount != null ? `${props.networkCount} red` : null,
-    props.structureCount != null ? `${props.structureCount} estructuras` : null,
+    props.cameraCount != null
+      ? `${props.cameraCount} cámara${props.cameraCount === 1 ? '' : 's'}`
+      : null,
+    props.networkCount != null
+      ? `${props.networkCount} ${
+          props.networkCount === 1 ? 'equipo de red' : 'equipos de red'
+        }`
+      : null,
+    props.structureCount != null
+      ? `${props.structureCount} ${props.structureCount === 1 ? 'muro' : 'muros'}`
+      : null,
   ]
     .filter(Boolean)
     .join(' · ')
@@ -147,7 +149,6 @@ function NetVisionPlanPdfDoc(props: NetVisionPlanPdfInput) {
             </Text>
           </View>
           <Text style={styles.footerCell}>{when}</Text>
-          <Text style={styles.footerType}>{props.planType || 'CCTV'}</Text>
         </View>
       </Page>
     </Document>

@@ -2,7 +2,12 @@
 
 import type { CSSProperties, ReactNode } from 'react'
 import NetVisionCompanyMark from '@/components/netvision/NetVisionCompanyMark'
-import type { PlanoPrintPayload } from '@/lib/netvision/utils/planoPrint'
+import {
+  capitalizeLabel,
+  labelEquiposRed,
+  labelMuros,
+  type PlanoPrintPayload,
+} from '@/lib/netvision/utils/planoPrint'
 import {
   contadorDosDigitos,
   rotuloFechaDigitos,
@@ -67,9 +72,13 @@ function SheetTactico({ payload, livePlano }: SheetProps) {
       <div className="flex items-center justify-between gap-3 text-[10px] uppercase tracking-[0.22em] sm:text-[11px]">
         <span className="flex min-w-0 items-center gap-2">
           <span className="h-2 w-2 shrink-0 bg-[#8cffb5]" />
-          <span className="truncate">Plano // {rotulo.planType}</span>
+          <span className="truncate">Plano</span>
         </span>
-        <span className="truncate text-right">{rotulo.company}</span>
+        <NetVisionCompanyMark
+          company={rotulo.company}
+          size={22}
+          className="min-w-0 justify-end font-semibold tracking-[0.06em] text-[#d6ffe5]"
+        />
       </div>
 
       <div className="nv-print-plano relative mt-3 border border-[#2e7d54] bg-[#05080d]">
@@ -119,33 +128,28 @@ function SheetTactico({ payload, livePlano }: SheetProps) {
           <p className="flex flex-wrap gap-x-5 gap-y-1 text-[11px] tracking-[0.04em]">
             {payload.networkCount != null ? (
               <span>
-                <span className="text-[#5fbf8a]">RED:</span> {payload.networkCount}
+                <span className="text-[#5fbf8a]">
+                  {labelEquiposRed(payload.networkCount).toUpperCase()}:
+                </span>{' '}
+                {payload.networkCount}
               </span>
             ) : null}
             {payload.structureCount != null ? (
               <span>
-                <span className="text-[#5fbf8a]">ESTRUCTURAS:</span> {payload.structureCount}
+                <span className="text-[#5fbf8a]">
+                  {labelMuros(payload.structureCount).toUpperCase()}:
+                </span>{' '}
+                {payload.structureCount}
               </span>
             ) : null}
           </p>
         </section>
 
-        <section className="flex min-w-0 flex-col justify-between gap-2 border border-[#2e7d54] px-4 py-3 text-[11px]">
-          <p className="flex justify-between gap-3">
-            <span className="text-[#5fbf8a]">FECHA</span>
-            <span className="text-right text-[#d6ffe5]">
-              {rotuloFechaDigitos(rotulo.dateLabel) ?? rotulo.dateLabel}
-            </span>
+        <section className="flex min-w-0 flex-col justify-center gap-2 border border-[#2e7d54] px-4 py-3 text-[11px]">
+          <p className={TAC_LABEL}>Fecha</p>
+          <p className="text-right text-lg font-bold uppercase leading-none tracking-[0.08em] text-[#d6ffe5]">
+            {rotuloFechaDigitos(rotulo.dateLabel) ?? rotulo.dateLabel}
           </p>
-          <p className="flex justify-between gap-3">
-            <span className="text-[#5fbf8a]">TIPO</span>
-            <span className="text-right font-bold uppercase text-[#d6ffe5]">{rotulo.planType}</span>
-          </p>
-          <NetVisionCompanyMark
-            company={rotulo.company}
-            size={28}
-            className="font-semibold uppercase tracking-[0.06em] text-[#d6ffe5]"
-          />
         </section>
       </div>
     </article>
@@ -163,8 +167,18 @@ function SheetTiempoReal({ payload, livePlano }: SheetProps) {
   const fecha = rotuloFechaDigitos(rotulo.dateLabel)
   const contadores: Array<[string, number | undefined]> = [
     [plural(payload.cameraCount, 'Cámara', 'Cámaras'), payload.cameraCount],
-    ['Red', payload.networkCount],
-    ['Estruct.', payload.structureCount],
+    [
+      payload.networkCount == null
+        ? 'Red'
+        : capitalizeLabel(labelEquiposRed(payload.networkCount)),
+      payload.networkCount,
+    ],
+    [
+      payload.structureCount == null
+        ? 'Muros'
+        : capitalizeLabel(labelMuros(payload.structureCount)),
+      payload.structureCount,
+    ],
   ]
   return (
     <article
@@ -177,7 +191,12 @@ function SheetTiempoReal({ payload, livePlano }: SheetProps) {
 
       <div className="flex min-w-0 flex-col gap-2">
         <section className={TR_BOX}>
-          <p className={TR_LABEL}>Fecha</p>
+          <NetVisionCompanyMark
+            company={rotulo.company}
+            size={28}
+            className="text-base font-bold uppercase tracking-[0.1em] text-[#f2f2f2]"
+          />
+          <p className={`${TR_LABEL} mt-3`}>Fecha</p>
           <p
             className={`mt-1.5 font-mono font-bold leading-none text-[#ffb000] ${
               fecha ? 'text-[2rem] tracking-[0.04em]' : 'text-base uppercase'
@@ -189,7 +208,7 @@ function SheetTiempoReal({ payload, livePlano }: SheetProps) {
         </section>
 
         <section className={`${TR_BOX} flex flex-1 flex-col justify-between gap-4`}>
-          <p className={TR_LABEL}>Plano de {rotulo.planType}</p>
+          <p className={TR_LABEL}>Plano</p>
           <div>
             <h1 className="break-words text-[2.5rem] font-bold uppercase leading-[0.92]">
               {rotulo.projectName}
@@ -216,14 +235,6 @@ function SheetTiempoReal({ payload, livePlano }: SheetProps) {
               </p>
             </div>
           ))}
-        </section>
-
-        <section className={TR_BOX}>
-          <NetVisionCompanyMark
-            company={rotulo.company}
-            size={30}
-            className="text-base font-bold uppercase tracking-[0.1em] text-[#f2f2f2]"
-          />
         </section>
       </div>
     </article>
@@ -259,12 +270,11 @@ function SheetArcade({ payload, livePlano }: SheetProps) {
             </p>
           ) : null}
         </div>
-        <span
-          className="shrink-0 rounded-md bg-[#ffe81a] px-5 py-2 text-2xl font-extrabold uppercase leading-none text-[#101a4a] shadow-[0_5px_0_#b89b00]"
-          style={{ ...CONDENSED, ...ARCADE_SKEW }}
-        >
-          Plano {rotulo.planType}
-        </span>
+        <NetVisionCompanyMark
+          company={rotulo.company}
+          size={36}
+          className="shrink-0 self-start text-base font-bold uppercase tracking-[0.08em] text-white"
+        />
       </header>
 
       <div className="nv-print-plano relative mt-4 overflow-hidden rounded-2xl border-4 border-white bg-[#05080d] shadow-[0_8px_0_rgba(8,16,70,0.5)]">
@@ -293,7 +303,9 @@ function SheetArcade({ payload, livePlano }: SheetProps) {
             style={{ ...ARCADE_SKEW, background: 'linear-gradient(180deg, #22b8ff, #0a63d6)' }}
           >
             <span className="text-4xl font-extrabold">{payload.networkCount}</span>
-            <span className="mt-1 text-[12px] font-bold uppercase tracking-[0.12em]">Red</span>
+            <span className="mt-1 text-[12px] font-bold uppercase tracking-[0.12em]">
+              {labelEquiposRed(payload.networkCount)}
+            </span>
           </div>
         ) : null}
         {payload.structureCount != null ? (
@@ -303,7 +315,7 @@ function SheetArcade({ payload, livePlano }: SheetProps) {
           >
             <span className="text-4xl font-extrabold">{payload.structureCount}</span>
             <span className="mt-1 text-[12px] font-bold uppercase tracking-[0.12em]">
-              {plural(payload.structureCount, 'Estructura', 'Estructuras')}
+              {plural(payload.structureCount, 'Muro', 'Muros')}
             </span>
           </div>
         ) : null}
@@ -318,11 +330,6 @@ function SheetArcade({ payload, livePlano }: SheetProps) {
             {rotulo.dateLabel}
           </span>
         </div>
-        <NetVisionCompanyMark
-          company={rotulo.company}
-          size={36}
-          className="self-center text-base font-bold uppercase tracking-[0.08em] text-white"
-        />
       </div>
     </article>
   )

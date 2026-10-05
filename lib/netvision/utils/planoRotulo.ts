@@ -1,4 +1,4 @@
-/** Rótulo de plano: proyecto arriba; empresa, fecha y tipo abajo. */
+/** Rótulo de plano: proyecto arriba; logo + empresa a la izquierda y fecha a la derecha. */
 
 export const ROTULO_COMPANY = 'Casa Inteligente C.A.'
 export const ROTULO_LOGO_SRC = '/logo-casa-inteligente.png'
@@ -115,7 +115,7 @@ export async function composePlanoRotuloImage(
   ctx.fillStyle = muted
   ctx.font = `600 ${Math.round(band * 0.32)}px system-ui, sans-serif`
   const footerY = canvas.height - band / 2
-  const col = canvas.width / 3
+  const col = canvas.width / 2
   const logo = await loadLogoOptional()
   const logoSize = Math.round(band * 0.7)
   let companyX = pad
@@ -126,11 +126,8 @@ export async function composePlanoRotuloImage(
   }
   ctx.textAlign = 'left'
   ctx.fillText(rotulo.company, companyX, footerY, Math.max(24, col - (companyX - pad) - 4))
-  ctx.textAlign = 'center'
-  ctx.fillText(rotulo.dateLabel, canvas.width / 2, footerY, col)
   ctx.textAlign = 'right'
-  ctx.fillStyle = night ? '#67e8f9' : '#0e7490'
-  ctx.fillText(rotulo.planType, canvas.width - pad, footerY, col - pad)
+  ctx.fillText(rotulo.dateLabel, canvas.width - pad, footerY, col - pad)
 
   return canvas.toDataURL('image/jpeg', 0.92)
 }
