@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ArrowLeft, Printer } from 'lucide-react'
+import { ArrowLeft, Minus, Plus, Printer } from 'lucide-react'
 import CameraPlacementTool from '@/components/netvision/CameraPlacementTool'
 import NetVisionPlanoPrintSheet from '@/components/netvision/NetVisionPlanoPrintSheet'
 import { loadProject, peekLocalProject } from '@/lib/netvision/storage'
@@ -26,6 +26,14 @@ import {
   savePlanoPrintTema,
   type PlanoPrintTema,
 } from '@/lib/netvision/utils/planoPrintTema'
+import {
+  PLANO_ZOOM_MAX,
+  PLANO_ZOOM_MIN,
+  PLANO_ZOOM_PASO,
+  acotarDesplazamiento,
+  acotarZoom,
+  recortarCapturaPlano,
+} from '@/lib/netvision/utils/planoRecorte'
 import type { NetVisionProject } from '@/lib/netvision/types'
 
 function loadPrintProject(id: string | null): NetVisionProject | null {
@@ -74,6 +82,36 @@ export default function NetVisionPlanoPrintView() {
     savePlanoPrintTema(next)
   }
 
+  /** Captura sin el margen vacío del editor (null = no había margen que quitar). */
+  const [recorte, setRecorte] = useState<string | null>(null)
+  const [ajustar, setAjustar] = useState(true)
+  const [zoom, setZoom] = useState(1)
+  const [pan, setPan] = useState({ x: 0, y: 0 })
+
+  const captura = payload?.imageDataUrl ?? ''
+  useEffect(() => {
+    let vivo = true
+    setRecorte(null)
+    if (!captura.startsWith('data:image/')) return
+    void recortarCapturaPlano(captura).then((r) => {
+      if (vivo) setRecorte(r !== captura ? r : null)
+    })
+    return () => {
+      vivo = false
+    }
+  }, [captura])
+
+  const cambiarZoom = (delta: number) => {
+    const next = acotarZoom(zoom + delta)
+    setZoom(next)
+    setPan((prev) => acotarDesplazamiento(prev, next))
+  }
+  const restablecerPlano = () => {
+    setZoom(1)
+    setPan({ x: 0, y: 0 })
+    setAjustar(true)
+  }
+
   useEffect(() => {
     const id = search.get('id')
     const stored = loadPlanoPrintPayload(id)
@@ -114,6 +152,11 @@ export default function NetVisionPlanoPrintView() {
   }, [project])
 
   const hasImage = Boolean(payload?.imageDataUrl?.startsWith('data:image/'))
+  const sheetPayload = useMemo(
+    () => (payload && ajustar && recorte ? { ...payload, imageDataUrl: recorte } : payload),
+    [payload, ajustar, recorte],
+  )
+  const planoCambiado = zoom !== 1 || pan.x !== 0 || pan.y !== 0 || !ajustar
   const pageBg = PLANO_PRINT_TEMA_PAGE_BG[tema]
 
   const goBack = () => {
@@ -132,7 +175,7 @@ export default function NetVisionPlanoPrintView() {
     )
   }
 
-  if (!payload) {
+  if (!payload || !sheetPayload) {
     return (
       <div className="mx-auto max-w-lg p-6 text-sm text-slate-700">
         <p className="font-semibold text-slate-900">No hay un plano para imprimir.</p>
@@ -195,6 +238,76 @@ export default function NetVisionPlanoPrintView() {
             </button>
           ))}
         </div>
+        {hasImage ? (
+          <div
+            role="group"
+            aria-label="Tamaño del plano"
+            className="flex basis-full flex-wrap items-center gap-2"
+          >
+            <span className="text-[12px] font-semibold uppercase tracking-wide text-slate-600">
+              Tamaño del plano
+            </span>
+            <button
+              type="button"
+              title="Reducir el plano"
+              aria-label="Reducir el plano"
+              data-nv-plano-menos
+              disabled={zoom <= PLANO_ZOOM_MIN}
+              onClick={() => cambiarZoom(-PLANO_ZOOM_PASO)}
+              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-800 hover:bg-slate-50 disabled:opacity-40"
+            >
+              <Minus className="h-4 w-4" />
+            </button>
+            <span
+              data-nv-plano-zoom-label
+              className="min-w-[3.5rem] text-center text-sm font-semibold tabular-nums text-slate-800"
+            >
+              {Math.round(zoom * 100)}%
+            </span>
+            <button
+              type="button"
+              title="Agrandar el plano"
+              aria-label="Agrandar el plano"
+              data-nv-plano-mas
+              disabled={zoom >= PLANO_ZOOM_MAX}
+              onClick={() => cambiarZoom(PLANO_ZOOM_PASO)}
+              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-800 hover:bg-slate-50 disabled:opacity-40"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+            {recorte ? (
+              <button
+                type="button"
+                data-nv-plano-ajustar
+                aria-pressed={ajustar}
+                title="Quita el margen vacío alrededor del plano"
+                onClick={() => setAjustar((v) => !v)}
+                className={`inline-flex min-h-11 items-center rounded-lg border px-4 text-sm font-semibold ${
+                  ajustar
+                    ? 'border-slate-900 bg-slate-900 text-white'
+                    : 'border-slate-300 bg-white text-slate-800 hover:bg-slate-50'
+                }`}
+              >
+                Ajustar al plano
+              </button>
+            ) : null}
+            {planoCambiado ? (
+              <button
+                type="button"
+                data-nv-plano-restablecer
+                onClick={restablecerPlano}
+                className="inline-flex min-h-11 items-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 hover:bg-slate-50"
+              >
+                Restablecer
+              </button>
+            ) : null}
+            {zoom > 1 ? (
+              <span className="text-[12px] text-slate-500">
+                Arrastra el plano para encuadrarlo.
+              </span>
+            ) : null}
+          </div>
+        ) : null}
         <p className="basis-full text-[12px] text-slate-500">
           En iPad: pulsa Imprimir / PDF y elige Guardar en Archivos. Atrás vuelve al editor.
         </p>
@@ -204,7 +317,8 @@ export default function NetVisionPlanoPrintView() {
         <div className="overflow-hidden rounded-lg shadow-sm print:rounded-none print:shadow-none">
           <NetVisionPlanoPrintSheet
             tema={tema}
-            payload={payload}
+            payload={sheetPayload}
+            vista={{ zoom, pan, onPan: setPan }}
             livePlano={
               !hasImage && project?.planoUrl ? (
                 <CameraPlacementTool
@@ -256,19 +370,24 @@ export default function NetVisionPlanoPrintView() {
             transparent 3px
           );
         }
+        /* El plano ampliado se recorta contra su recuadro. */
+        .nv-print-clip { overflow: hidden; }
         /* En tablet/escritorio la hoja se ve con proporción A4 y el plano llena su recuadro. */
         @media (min-width: 640px) {
           .nv-print-sheet { aspect-ratio: 297 / 210; }
           .nv-print-plano { flex: 1 1 0%; min-height: 0; }
-          .nv-print-plano > img,
+          .nv-print-plano > .nv-print-clip,
           .nv-print-plano > .nv-print-live {
             position: absolute;
             inset: 1px;
             width: calc(100% - 2px);
             height: calc(100% - 2px);
-            max-height: none;
             min-height: 0;
-            object-fit: contain;
+          }
+          .nv-print-clip > img {
+            width: 100%;
+            height: 100%;
+            max-height: none;
           }
         }
         /* Hoja a sangre: la página toma el color del tema para que no queden bordes blancos. */
@@ -277,15 +396,18 @@ export default function NetVisionPlanoPrintView() {
           /* 209 mm: llena una A4 apaisada sin pasar a una segunda página. */
           .nv-print-sheet { aspect-ratio: auto; min-height: 209mm; }
           .nv-print-plano { flex: 1 1 0%; min-height: 0; }
-          .nv-print-plano > img,
+          .nv-print-plano > .nv-print-clip,
           .nv-print-plano > .nv-print-live {
             position: absolute;
             inset: 1px;
             width: calc(100% - 2px);
             height: calc(100% - 2px);
-            max-height: none;
             min-height: 0;
-            object-fit: contain;
+          }
+          .nv-print-clip > img {
+            width: 100%;
+            height: 100%;
+            max-height: none;
           }
           html, body {
             background: ${pageBg} !important;

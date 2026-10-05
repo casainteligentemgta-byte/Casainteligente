@@ -26,7 +26,7 @@ import type {
 } from '@/lib/netvision/types'
 import { planDeviceColor } from '@/lib/netvision/catalog/planDevices'
 import { INFRA_KIND_COLOR } from '@/lib/netvision/catalog/salaTecnica'
-import { effectiveCameraLenses } from '@/lib/netvision/catalog/cameras'
+import { cameraPoeSplitterV, effectiveCameraLenses } from '@/lib/netvision/catalog/cameras'
 import { getStructureMaterialOrDefault } from '@/lib/netvision/catalog/materials'
 import { degToRad } from '@/lib/netvision/utils/geometryHelpers'
 import { snapOrtho90 } from '@/lib/netvision/utils/structureDraw'
@@ -1550,6 +1550,8 @@ export default function CameraPlacementTool({
             const marker = camMarkerHex(cam.markerColor)
             const ring = camMarkerRing(marker)
             const pinR = selected ? 11 : 9
+            // Cámaras sin PoE propio: llevan adaptador (splitter) en el punto de instalación.
+            const llevaSplitter = cameraPoeSplitterV(cam.modelId) !== null
             return (
               <Fragment key={cam.id}>
               <Circle
@@ -1615,6 +1617,36 @@ export default function CameraPlacementTool({
                 fill={ring}
                 listening={false}
               />
+              {llevaSplitter ? (
+                <Group
+                  x={cx + pinR + 3}
+                  y={cy - pinR - 13}
+                  opacity={coverageOff ? 0.5 : 1}
+                  listening={false}
+                >
+                  <Rect
+                    width={13}
+                    height={13}
+                    cornerRadius={3}
+                    fill="#ffb000"
+                    stroke="#0f172a"
+                    strokeWidth={1.5}
+                  />
+                  <Line
+                    points={[2.5, 6.5, 6, 6.5, 10.5, 3.5]}
+                    stroke="#0f172a"
+                    strokeWidth={1.6}
+                    lineCap="round"
+                    lineJoin="round"
+                  />
+                  <Line
+                    points={[6, 6.5, 10.5, 9.5]}
+                    stroke="#0f172a"
+                    strokeWidth={1.6}
+                    lineCap="round"
+                  />
+                </Group>
+              ) : null}
               </Fragment>
             )
           })}

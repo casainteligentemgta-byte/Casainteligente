@@ -1,7 +1,11 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CableRoute, CameraModel } from '@/lib/netvision/types'
-import { CAMERA_CATALOG } from '@/lib/netvision/catalog/cameras'
+import {
+  CAMERA_CATALOG,
+  cameraPoeSplitterV,
+  contarSplittersPoe,
+} from '@/lib/netvision/catalog/cameras'
 import {
   buildClienteCameraCard,
   cameraCableMeters,
@@ -124,6 +128,26 @@ describe('clienteCameraCard', () => {
     assert.equal(card.connectionLabel, 'Cableada (PoE)')
     assert.equal(card.poeWatts, 8)
     assert.match(card.notes, /adaptador PoE \(splitter\) de 12 V/)
+    assert.equal(card.poeSplitterV, 12)
+  })
+
+  it('marca con splitter solo a las Ezviz de corriente sin PoE propio', () => {
+    const cam = (modelId: string) => ({ modelId })
+    assert.equal(cameraPoeSplitterV('ezviz-h9c'), 12)
+    assert.equal(cameraPoeSplitterV('ezviz-c6n'), 5)
+    // PoE nativo, Wi-Fi, batería u otras marcas: sin splitter.
+    for (const id of ['ezviz-h4-poe', 'ezviz-h4', 'ezviz-bc1c', 'ezviz-eb8', 'hik-ds2cd2143']) {
+      assert.equal(cameraPoeSplitterV(id), null, id)
+    }
+    assert.equal(
+      contarSplittersPoe([cam('ezviz-h3'), cam('ezviz-h3'), cam('ezviz-h4-poe'), cam('hik-ds2cd2143')]),
+      2,
+    )
+    const conSplitter = CAMERA_CATALOG.filter((m) => m.poeSplitterV).map((m) => m.id)
+    assert.equal(conSplitter.length, 8)
+    for (const m of CAMERA_CATALOG.filter((x) => x.poeSplitterV)) {
+      assert.match(m.notes ?? '', new RegExp(`splitter\\) de ${m.poeSplitterV} V`), m.id)
+    }
   })
 
   it('la H4 existe en versión Wi-Fi y en versión PoE', () => {
