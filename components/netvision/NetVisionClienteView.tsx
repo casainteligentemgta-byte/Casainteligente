@@ -127,7 +127,7 @@ function CameraFicha({
       ) : null}
       {compact ? (
         <p data-nv-alcance-resumen className="mt-2 text-[11px] leading-relaxed text-[#a9e8c4]">
-          {resumenAlcanceUtil(card.alcanceUtil)}
+          {resumenAlcanceUtil(card.alcanceUtil, unitSystem)}
         </p>
       ) : (
         <div className="mt-2">

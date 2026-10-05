@@ -1,5 +1,12 @@
 import equipment from '@/data/netvision/equipment.json'
-import type { CameraBrand, CameraModel, DesignCamera, LensVisionOverride } from '@/lib/netvision/types'
+import type {
+  CameraBrand,
+  CameraLensOption,
+  CameraModel,
+  ConexionCamara,
+  DesignCamera,
+  LensVisionOverride,
+} from '@/lib/netvision/types'
 import { clampFovHalf } from '@/lib/netvision/utils/geometryHelpers'
 
 export const CAMERA_CATALOG: CameraModel[] = equipment.cameras as CameraModel[]
@@ -25,15 +32,121 @@ export function getCameraModelOrDefault(id: string): CameraModel {
   return getCameraModel(id) ?? CAMERA_CATALOG[0]!
 }
 
-/** Voltaje del adaptador PoE (splitter) que lleva la cámara, o null si no lo necesita. */
+/** Voltaje del adaptador PoE (splitter) del MODELO, o null si no lo necesita. */
 export function cameraPoeSplitterV(modelId: string): 5 | 12 | null {
   const v = getCameraModel(modelId)?.poeSplitterV
   return v === 5 || v === 12 ? v : null
 }
 
+/**
+ * Formas de conectar un modelo; la primera es la de ficha. Si el catálogo no lo
+ * declara, se deduce del nombre y las notas (batería → Wi‑Fi → cable).
+ */
+export function conexionesModelo(model: CameraModel): ConexionCamara[] {
+  const declaradas = (model.conexiones ?? []).filter(
+    (c): c is ConexionCamara => c === 'cable' || c === 'wifi' || c === 'bateria',
+  )
+  if (declaradas.length > 0) return declaradas
+  const texto = `${model.id} ${model.name} ${model.notes ?? ''}`.toLowerCase()
+  if (/bater[ií]a|battery|\bbc1c\b|\beb8\b/.test(texto)) return ['bateria']
+  if (/wifi|wi-?fi|inalámbr/.test(texto)) return ['wifi']
+  return ['cable']
+}
+
+/**
+ * Conexión de una cámara del plano: la que eligió el instalador si el modelo la
+ * admite; si no, la de ficha.
+ */
+export function conexionCamara(
+  cam: Pick<DesignCamera, 'modelId' | 'conexion'>,
+): ConexionCamara {
+  const opciones = conexionesModelo(getCameraModelOrDefault(cam.modelId))
+  if (cam.conexion && opciones.includes(cam.conexion)) return cam.conexion
+  return opciones[0]!
+}
+
+/** ¿Va por cable de red? (lleva tendido, puerto PoE y, si aplica, adaptador). */
+export function esCamaraCableada(cam: Pick<DesignCamera, 'modelId' | 'conexion'>): boolean {
+  return conexionCamara(cam) === 'cable'
+}
+
+/** Solo las cámaras que van por cable de red. */
+export function camarasCableadas<T extends Pick<DesignCamera, 'modelId' | 'conexion'>>(
+  cameras: readonly T[],
+): T[] {
+  return cameras.filter(esCamaraCableada)
+}
+
+/**
+ * Adaptador PoE (splitter) de ESTA cámara: solo si va por cable y su modelo no
+ * trae PoE. Por Wi‑Fi se alimenta con su propia fuente y no lo lleva.
+ */
+export function splitterDeCamara(
+  cam: Pick<DesignCamera, 'modelId' | 'conexion'>,
+): 5 | 12 | null {
+  return esCamaraCableada(cam) ? cameraPoeSplitterV(cam.modelId) : null
+}
+
 /** Cuántas cámaras del plano llevan adaptador PoE (splitter). */
-export function contarSplittersPoe(cameras: readonly Pick<DesignCamera, 'modelId'>[]): number {
-  return cameras.filter((c) => cameraPoeSplitterV(c.modelId) !== null).length
+export function contarSplittersPoe(
+  cameras: readonly Pick<DesignCamera, 'modelId' | 'conexion'>[],
+): number {
+  return cameras.filter((c) => splitterDeCamara(c) !== null).length
+}
+
+/** Lentes fijas con las que se vende el modelo (vacío si solo hay una). */
+export function opcionesLente(model: CameraModel): CameraLensOption[] {
+  const ops = (model.lensOptions ?? []).filter(
+    (o) => o && o.focalMm > 0 && o.fovDeg > 0 && Number.isFinite(o.fovDeg),
+  )
+  return ops.length >= 2 ? ops : []
+}
+
+/** Lente de ficha del modelo: la que coincide con su ángulo de catálogo. */
+export function lenteDeFicha(model: CameraModel): CameraLensOption | null {
+  const ops = opcionesLente(model)
+  if (ops.length === 0) return null
+  return (
+    ops.find((o) => o.focalMm === model.focalMm) ??
+    ops.find((o) => o.fovDeg === model.fovDeg) ??
+    ops[0]!
+  )
+}
+
+/** Lente con la que está montada la cámara: la elegida o, si no, la de ficha. */
+export function lenteElegida(
+  model: CameraModel,
+  cam: Pick<DesignCamera, 'lensFocalMm'>,
+): CameraLensOption | null {
+  const ops = opcionesLente(model)
+  if (ops.length === 0) return null
+  return ops.find((o) => o.focalMm === cam.lensFocalMm) ?? lenteDeFicha(model)
+}
+
+/** ¿La cámara lleva una lente distinta a la de ficha? (otro código de compra). */
+export function lenteNoEstandar(cam: Pick<DesignCamera, 'modelId' | 'lensFocalMm'>): number | null {
+  const model = getCameraModel(cam.modelId)
+  if (!model) return null
+  const elegida = lenteElegida(model, cam)
+  const ficha = lenteDeFicha(model)
+  return elegida && ficha && elegida.focalMm !== ficha.focalMm ? elegida.focalMm : null
+}
+
+/**
+ * Parche para cambiar la lente de una cámara: el cono del plano toma el ángulo
+ * real de esa lente (se pierde el recorte manual, que ya no correspondería).
+ */
+export function parcheLente(modelId: string, focalMm: number): Partial<DesignCamera> {
+  const model = getCameraModelOrDefault(modelId)
+  const opcion = opcionesLente(model).find((o) => o.focalMm === focalMm)
+  if (!opcion) return {}
+  const halves = resolveFovHalves({}, opcion.fovDeg)
+  return {
+    lensFocalMm: opcion.focalMm,
+    fovDeg: halves.total,
+    fovLeftDeg: halves.left,
+    fovRightDeg: halves.right,
+  }
 }
 
 export function camerasByBrand(brand: CameraBrand): CameraModel[] {
@@ -168,7 +281,7 @@ export function effectiveCameraLenses(
   }
 
   const catalogRange = mode === 'night' ? model.rangeNightM : model.rangeDayM
-  const halves = resolveFovHalves(cam, model.fovDeg)
+  const halves = resolveFovHalves(cam, lenteElegida(model, cam)?.fovDeg ?? model.fovDeg)
   const rangeM =
     typeof cam.rangeM === 'number' && Number.isFinite(cam.rangeM)
       ? clampRange(cam.rangeM)
@@ -222,18 +335,22 @@ export function isDualCameraModel(modelId: string): boolean {
 export function catalogVisionDefaults(
   modelId: string,
   mode: 'day' | 'night' = 'day',
+  /** Lente a conservar (p. ej. al restaurar el cono); sin valor = lente de ficha. */
+  lensFocalMm?: number,
 ): {
   fovDeg: number
   fovLeftDeg: number
   fovRightDeg: number
   rangeM: number
   lensVision: DesignCamera['lensVision']
+  lensFocalMm: number | undefined
 } {
   const model = getCameraModelOrDefault(modelId)
+  const lente = lensFocalMm != null ? lenteElegida(model, { lensFocalMm }) : null
   const primaryFov =
     model.lenses && model.lenses.length >= 2
       ? model.lenses[0]!.fovDeg
-      : model.fovDeg
+      : (lente?.fovDeg ?? model.fovDeg)
   const halves = resolveFovHalves({}, primaryFov)
   const primaryRange =
     model.lenses && model.lenses.length >= 2
@@ -250,6 +367,8 @@ export function catalogVisionDefaults(
     rangeM: clampRange(primaryRange),
     // Al cambiar de modelo o restaurar, las lentes secundarias vuelven a seguir a la primaria.
     lensVision: undefined,
+    // Al cambiar de modelo vuelve la lente de ficha; al restaurar se conserva la elegida.
+    lensFocalMm: lente && lente.focalMm !== lenteDeFicha(model)?.focalMm ? lente.focalMm : undefined,
   }
 }
 

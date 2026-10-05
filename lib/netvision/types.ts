@@ -9,6 +9,9 @@ export type CameraBrand =
   | 'Ezviz'
   | 'Aqara'
 
+/** Cómo llega la señal (y la corriente) a una cámara. */
+export type ConexionCamara = 'cable' | 'wifi' | 'bateria'
+
 /** Lente adicional (cámaras Dual / multi-óptica). */
 export type CameraLens = {
   id: string
@@ -16,6 +19,22 @@ export type CameraLens = {
   fovDeg: number
   rangeDayM: number
   rangeNightM: number
+  /** Distancia focal de esta lente (mm). */
+  focalMm?: number
+  /** Ancho de imagen de esta lente en píxeles, si difiere del resto de la cámara. */
+  sensorWidthPx?: number
+}
+
+/**
+ * Lente fija con la que se vende el modelo (2.8 / 4 / 6 mm). Se elige al
+ * comprar: cambia el ángulo y la distancia a la que se identifica.
+ */
+export type CameraLensOption = {
+  focalMm: number
+  /** Ángulo horizontal real con esta lente (ficha del fabricante). */
+  fovDeg: number
+  /** Distancia de detección (25 px/m) publicada por el fabricante en su tabla DORI. */
+  doriDetectM?: number
 }
 
 export type CameraModel = {
@@ -28,6 +47,18 @@ export type CameraModel = {
   rangeNightM: number
   /** Si hay ≥2, el plano dibuja un espectro/cono por lente. */
   lenses?: CameraLens[]
+  /**
+   * Formas de conectarla, la primera es la de ficha:
+   * `cable` (cable de red, con PoE propio o adaptador), `wifi`, `bateria`.
+   * Sin valor se deduce del nombre y las notas del modelo.
+   */
+  conexiones?: ConexionCamara[]
+  /** Distancia focal de la lente de ficha (mm). */
+  focalMm?: number
+  /** Lentes fijas con las que se vende el modelo; la de ficha es la de `fovDeg`. */
+  lensOptions?: CameraLensOption[]
+  /** Ancho real de la imagen en píxeles (p. ej. 2688 en 4MP Hikvision). */
+  sensorWidthPx?: number
   resolution: string
   bitrateMbps: number
   poeWatts: number
@@ -50,6 +81,16 @@ export type CameraModel = {
 export type DesignCamera = {
   id: string
   label: string
+  /**
+   * Lente elegida (mm) cuando el modelo se vende con varias lentes fijas.
+   * Sin valor = la lente de ficha del modelo.
+   */
+  lensFocalMm?: number
+  /**
+   * Conexión elegida cuando el modelo admite cable de red y Wi‑Fi.
+   * Sin valor = la de ficha. Por Wi‑Fi no lleva cable, puerto PoE ni adaptador.
+   */
+  conexion?: 'cable' | 'wifi'
   /** 0–1 normalizado sobre el plano */
   x: number
   y: number
@@ -102,9 +143,14 @@ export type DesignCamera = {
 export type ScaleCalibration = {
   /** metros por unidad normalizada en X (ancho del plano = 1) */
   metersPerNormX: number
-  /** metros por unidad normalizada en Y */
+  /** metros por unidad normalizada en Y (alto del plano = 1) */
   metersPerNormY: number
   calibrated: boolean
+  /**
+   * Proporción alto/ancho de la imagen del plano con la que se fijó la escala.
+   * Sin valor = calibración antigua, que asumía un plano cuadrado.
+   */
+  aspect?: number
 }
 
 export type NetworkNodeKind = 'switch' | 'ap' | 'nvr' | 'injector'
@@ -479,6 +525,8 @@ export type CableRoute = {
   warn: boolean
   /** Cable de red de más de 100 m: necesita un switch intermedio. */
   overLimit?: boolean
+  /** Enlace entre equipos de red (switch → grabador u otro switch). */
+  uplink?: boolean
   warning: string | null
 }
 

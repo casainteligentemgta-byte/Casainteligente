@@ -3,11 +3,16 @@
  *  - Grabación: TB necesarios para los días pedidos y si el grabador y el disco alcanzan.
  *  - UPS: consumo total y capacidad recomendada para los minutos de respaldo pedidos.
  *  - Distancia útil por cámara: hasta dónde identifica un rostro, reconoce a una
- *    persona o solo detecta presencia, según resolución y ángulo (EN 62676-4).
+ *    persona o solo detecta presencia, según la óptica real de la lente
+ *    (EN 62676-4 / tabla DORI del fabricante) y la altura de montaje.
  *
  * Son estimaciones a partir de la ficha técnica; no sustituyen una prueba en sitio.
  */
-import { effectiveCameraLenses, getCameraModelOrDefault } from '@/lib/netvision/catalog/cameras'
+import {
+  camarasCableadas,
+  getCameraModelOrDefault,
+  lenteElegida,
+} from '@/lib/netvision/catalog/cameras'
 import { getNetworkModelOrDefault } from '@/lib/netvision/catalog/network'
 import {
   HDD_CAPACITIES_TB,
@@ -19,7 +24,9 @@ import type {
   DesignCamera,
   DesignInfraDevice,
   DesignNetworkNode,
+  UnitSystem,
 } from '@/lib/netvision/types'
+import { formatLength } from '@/lib/netvision/utils/units'
 
 export const DIAS_GRABACION_DEFECTO = 30
 export const DIAS_GRABACION_MAX = 365
@@ -103,8 +110,11 @@ export function dimensionarGrabacion(
   diasRaw: unknown,
 ): DimGrabacion {
   const dias = acotarDiasGrabacion(diasRaw)
-  const camaras = cameras.length
-  const mbps = redondear1(totalBandwidthMbps([...cameras]))
+  // Por Wi‑Fi o batería graban en su propia memoria o en la nube.
+  const grabadas = camarasCableadas(cameras)
+  const sinGrabador = cameras.length - grabadas.length
+  const camaras = grabadas.length
+  const mbps = redondear1(totalBandwidthMbps(grabadas))
   const tbExactoPorDia = estimateStorageTb(mbps, 1)
   const tbNecesarios = Math.ceil(estimateStorageTb(mbps, dias) * 10) / 10
 
@@ -130,8 +140,16 @@ export function dimensionarGrabacion(
         : `${lista.length} discos de ${lista[0]} TB`
 
   const avisos: AvisoDimension[] = []
+  if (sinGrabador > 0) {
+    avisos.push({
+      nivel: 'info',
+      texto: `${plural(sinGrabador, 'cámara va', 'cámaras van')} por Wi‑Fi o batería: ${sinGrabador === 1 ? 'graba' : 'graban'} en su memoria o en la nube y no se ${sinGrabador === 1 ? 'cuenta' : 'cuentan'} en el grabador ni en el UPS.`,
+    })
+  }
   if (camaras === 0) {
-    avisos.push({ nivel: 'info', texto: 'Coloca cámaras en el plano para calcular la grabación.' })
+    if (sinGrabador === 0) {
+      avisos.push({ nivel: 'info', texto: 'Coloca cámaras en el plano para calcular la grabación.' })
+    }
   } else {
     // Grabador y canales
     if (grabadoresNodos.length === 0) {
@@ -252,7 +270,11 @@ export function dimensionarUps(
   minutosRaw: unknown,
 ): DimUps {
   const minutos = acotarRespaldoMin(minutosRaw)
-  const wCamaras = cameras.reduce((s, c) => s + getCameraModelOrDefault(c.modelId).poeWatts, 0)
+  // Al UPS del rack solo le cargan las cámaras alimentadas por el cable de red.
+  const wCamaras = camarasCableadas(cameras).reduce(
+    (s, c) => s + getCameraModelOrDefault(c.modelId).poeWatts,
+    0,
+  )
   let wRed = 0
   let wGrabadores = 0
   for (const n of networkNodes) {
@@ -318,6 +340,26 @@ export function dimensionarUps(
 }
 
 // ───────────────────── Distancia útil por cámara ─────────────────────
+//
+// Qué se calcula: la distancia a la que la imagen todavía tiene los píxeles por
+// metro que pide la norma EN 62676-4 (tabla DORI de los fabricantes):
+//   identificar 250 px/m · reconocer 125 px/m · detectar 25 px/m.
+//
+// De qué depende: SOLO de la óptica — ancho de imagen en píxeles y ángulo
+// horizontal real de la lente. Recortar el cono en el plano NO cambia la lente,
+// así que no cambia estas distancias; lo que las cambia es elegir otra lente
+// (2.8 / 4 / 6 mm) u otro modelo.
+//
+// De dónde sale el número:
+//   1. Si el fabricante publica su tabla DORI para esa lente (Hikvision), se
+//      usa su distancia de detección y las demás salen en proporción.
+//   2. Si no (Ezviz, Aqara…), se calcula con la densidad angular de la lente:
+//        px por metro a la distancia d = ancho_px / (ángulo_en_radianes · d)
+//      Reproduce las tablas de Hikvision con un 5–15 % de margen a favor del
+//      cliente y no se dispara con lentes de 150–170° (timbres).
+//
+// Después se pasa al piso: la cámara está a cierta altura y el rostro a ~1,6 m,
+// así que la distancia sobre el suelo es menor que la distancia en línea recta.
 
 /** Píxeles por metro que exige la norma EN 62676-4 para cada tarea. */
 export const DENSIDAD_PX_POR_M = {
@@ -325,6 +367,11 @@ export const DENSIDAD_PX_POR_M = {
   reconocer: 125,
   detectar: 25,
 } as const
+
+/** Altura a la que se mide un rostro de pie (m). */
+export const ALTURA_ROSTRO_M = 1.6
+/** Por encima de este ángulo la cámara ve la coronilla más que la cara. */
+export const ANGULO_ROSTRO_MAX_DEG = 30
 
 /** Ancho de imagen en píxeles a partir del texto de resolución del catálogo. */
 export function pixelesHorizontales(resolucion: string): number {
@@ -342,8 +389,9 @@ export function pixelesHorizontales(resolucion: string): number {
 }
 
 /**
- * Distancia (m) a la que la imagen todavía tiene `pxPorM` píxeles por metro:
- * ancho de escena = 2 · d · tan(ángulo/2)  →  d = píxeles / (2 · pxPorM · tan(ángulo/2)).
+ * Distancia en línea recta (m) a la que la imagen aún tiene `pxPorM` píxeles
+ * por metro, con la densidad angular de la lente:
+ *   d = ancho_px / (pxPorM · ángulo_horizontal_en_radianes)
  */
 export function distanciaParaDensidad(
   pixelesAncho: number,
@@ -351,57 +399,155 @@ export function distanciaParaDensidad(
   pxPorM: number,
 ): number {
   if (!(pixelesAncho > 0) || !(pxPorM > 0) || !(fovDeg > 0)) return 0
-  const fov = Math.min(170, fovDeg)
-  const d = pixelesAncho / (2 * pxPorM * Math.tan((fov * Math.PI) / 360))
-  return redondear1(d)
+  const fovRad = (Math.min(360, fovDeg) * Math.PI) / 180
+  return pixelesAncho / (pxPorM * fovRad)
+}
+
+/**
+ * Distancia sobre el piso para una distancia en línea recta, con la cámara a
+ * `alturaM` y el objetivo (el rostro) a `ALTURA_ROSTRO_M`. 0 si no alcanza.
+ */
+export function distanciaEnPiso(rectaM: number, alturaM: number): number {
+  const desnivel = Math.max(0, alturaM - ALTURA_ROSTRO_M)
+  if (!(rectaM - desnivel > 1e-6)) return 0
+  return Math.sqrt(rectaM * rectaM - desnivel * desnivel)
 }
 
 export type AlcanceUtilLente = {
   lensId: string
   /** Nombre de la lente (solo relevante en cámaras de dos lentes). */
   etiqueta: string
+  /** Ángulo horizontal real de la lente (no el cono recortado en el plano). */
   fovDeg: number
+  focalMm: number | null
+  pixelesAncho: number
+  /** Distancias sobre el piso, de día, a la altura de montaje de la cámara. */
   identificarM: number
   reconocerM: number
   detectarM: number
+  /** Alcance de la luz propia de noche (infrarrojo o luz blanca). */
+  nocheM: number
+  /** `fabricante`: tabla DORI de la ficha. `calculo`: resolución y ángulo. */
+  fuente: 'fabricante' | 'calculo'
+  /** Ángulo con que se ve el rostro en el límite de identificación (0 = de frente). */
+  anguloRostroDeg: number
+  /** Advertencia de montaje (altura), o null. */
+  aviso: string | null
 }
 
 export type AlcanceUtilCamara = {
   resolucion: string
-  pixelesAncho: number
+  alturaM: number
   lentes: AlcanceUtilLente[]
-  /** Alcance de noche de la ficha (infrarrojo / luz propia). */
-  nocheM: number
 }
 
-/** Distancias útiles de una cámara del plano, con su ángulo actual (ajustado o de ficha). */
-export function alcanceUtilCamara(cam: DesignCamera): AlcanceUtilCamara {
-  const model = getCameraModelOrDefault(cam.modelId)
-  const pixelesAncho = pixelesHorizontales(model.resolution)
-  const lentes = effectiveCameraLenses(cam, 'day').map((l) => ({
-    lensId: l.lensId,
-    etiqueta: l.label,
-    fovDeg: Math.round(l.fovDeg),
-    identificarM: distanciaParaDensidad(pixelesAncho, l.fovDeg, DENSIDAD_PX_POR_M.identificar),
-    reconocerM: distanciaParaDensidad(pixelesAncho, l.fovDeg, DENSIDAD_PX_POR_M.reconocer),
-    // Detectar no pasa del alcance de día que da la ficha del fabricante.
-    detectarM: Math.min(
-      distanciaParaDensidad(pixelesAncho, l.fovDeg, DENSIDAD_PX_POR_M.detectar),
-      l.catalogRangeM,
-    ),
-  }))
-  return { resolucion: model.resolution, pixelesAncho, lentes, nocheM: model.rangeNightM }
+const redondearDist = (m: number) => Math.round(m * 10) / 10
+
+function alcanceDeLente(args: {
+  lensId: string
+  etiqueta: string
+  fovDeg: number
+  focalMm: number | null
+  pixelesAncho: number
+  doriDetectM?: number
+  nocheM: number
+  alturaM: number
+}): AlcanceUtilLente {
+  const detectarRecta =
+    typeof args.doriDetectM === 'number' && args.doriDetectM > 0
+      ? args.doriDetectM
+      : distanciaParaDensidad(args.pixelesAncho, args.fovDeg, DENSIDAD_PX_POR_M.detectar)
+  // Las tres distancias guardan la proporción de sus densidades (25 : 125 : 250).
+  const recta = (pxPorM: number) => (detectarRecta * DENSIDAD_PX_POR_M.detectar) / pxPorM
+  const identificarRecta = recta(DENSIDAD_PX_POR_M.identificar)
+  const identificarM = distanciaEnPiso(identificarRecta, args.alturaM)
+  const desnivel = Math.max(0, args.alturaM - ALTURA_ROSTRO_M)
+  const anguloRostroDeg =
+    identificarM > 0 ? Math.round((Math.atan2(desnivel, identificarM) * 180) / Math.PI) : 90
+
+  let aviso: string | null = null
+  if (identificarM === 0) {
+    aviso = `A ${redondearDist(args.alturaM)} m de altura no llega a identificar rostros: móntala más baja o usa una lente de más milímetros.`
+  } else if (anguloRostroDeg > ANGULO_ROSTRO_MAX_DEG) {
+    aviso = `A ${redondearDist(args.alturaM)} m de altura ve los rostros desde arriba (${anguloRostroDeg}°): identifica mejor montada más baja o con una lente de más milímetros.`
+  }
+
+  return {
+    lensId: args.lensId,
+    etiqueta: args.etiqueta,
+    fovDeg: Math.round(args.fovDeg),
+    focalMm: args.focalMm,
+    pixelesAncho: args.pixelesAncho,
+    identificarM: redondearDist(identificarM),
+    reconocerM: redondearDist(distanciaEnPiso(recta(DENSIDAD_PX_POR_M.reconocer), args.alturaM)),
+    detectarM: redondearDist(distanciaEnPiso(detectarRecta, args.alturaM)),
+    nocheM: args.nocheM,
+    fuente: typeof args.doriDetectM === 'number' && args.doriDetectM > 0 ? 'fabricante' : 'calculo',
+    anguloRostroDeg,
+    aviso,
+  }
 }
 
 /**
- * Resumen de una línea para la ficha del cliente. En cámaras de dos lentes usa
- * la que llega más lejos (la tele), que es con la que se identifica.
+ * Distancias útiles de una cámara del plano según su óptica real: la lente
+ * elegida (o la de ficha) y su altura de montaje. El recorte del cono en el
+ * plano no interviene.
  */
-export function resumenAlcanceUtil(alcance: AlcanceUtilCamara): string {
-  const l = alcance.lentes.reduce<AlcanceUtilLente | null>(
+export function alcanceUtilCamara(cam: DesignCamera): AlcanceUtilCamara {
+  const model = getCameraModelOrDefault(cam.modelId)
+  const anchoModelo = model.sensorWidthPx ?? pixelesHorizontales(model.resolution)
+  const alturaM =
+    typeof cam.mountHeightM === 'number' && cam.mountHeightM > 0 ? cam.mountHeightM : 2.8
+
+  const dobles = (model.lenses ?? []).filter((l) => l && l.fovDeg > 0)
+  let lentes: AlcanceUtilLente[]
+  if (dobles.length >= 2) {
+    lentes = dobles.map((l, i) =>
+      alcanceDeLente({
+        lensId: l.id || (i === 0 ? 'wide' : `lens-${i}`),
+        etiqueta: l.label || (i === 0 ? 'Gran angular' : 'Tele'),
+        fovDeg: l.fovDeg,
+        focalMm: l.focalMm ?? null,
+        pixelesAncho: l.sensorWidthPx ?? anchoModelo,
+        nocheM: l.rangeNightM,
+        alturaM,
+      }),
+    )
+  } else {
+    const lente = lenteElegida(model, cam)
+    lentes = [
+      alcanceDeLente({
+        lensId: 'main',
+        etiqueta: 'Óptica',
+        fovDeg: lente?.fovDeg ?? model.fovDeg,
+        focalMm: lente?.focalMm ?? model.focalMm ?? null,
+        pixelesAncho: anchoModelo,
+        doriDetectM: lente?.doriDetectM,
+        nocheM: model.rangeNightM,
+        alturaM,
+      }),
+    ]
+  }
+  return { resolucion: model.resolution, alturaM, lentes }
+}
+
+/** Lente con la que mejor se identifica (en cámaras de dos lentes, la tele). */
+export function lentePrincipalAlcance(alcance: AlcanceUtilCamara): AlcanceUtilLente | null {
+  return alcance.lentes.reduce<AlcanceUtilLente | null>(
     (mejor, x) => (!mejor || x.identificarM > mejor.identificarM ? x : mejor),
     null,
   )
+}
+
+/** Resumen de una línea para la ficha del cliente, en las unidades del proyecto. */
+export function resumenAlcanceUtil(
+  alcance: AlcanceUtilCamara,
+  unitSystem: UnitSystem = 'metric',
+): string {
+  const l = lentePrincipalAlcance(alcance)
   if (!l) return ''
-  return `Identifica rostros hasta ${l.identificarM} m · reconoce personas hasta ${l.reconocerM} m`
+  const dist = (m: number) => formatLength(m, unitSystem, 1)
+  const reconoce = `reconoce personas hasta ${dist(l.reconocerM)}`
+  if (!(l.identificarM > 0)) return `A esta altura no identifica rostros · ${reconoce}`
+  return `Identifica rostros hasta ${dist(l.identificarM)} · ${reconoce}`
 }

@@ -124,7 +124,7 @@ describe('clienteCameraCard', () => {
     )
     assert.equal(card.modelName, 'H3 3K Bullet')
     assert.equal(card.resolution, '3K')
-    assert.equal(card.fovLabel, '96°')
+    assert.equal(card.fovLabel, '96° · lente 2.8 mm')
     assert.equal(card.connectionLabel, 'Cableada (PoE)')
     assert.equal(card.poeWatts, 8)
     assert.match(card.notes, /adaptador PoE \(splitter\) de 12 V/)
@@ -154,7 +154,7 @@ describe('clienteCameraCard', () => {
     const cam = { id: 'c9', label: 'CAM-09', x: 0.2, y: 0.3, yawDeg: 0, mountHeightM: 2.8 }
     const wifiCard = buildClienteCameraCard({ ...cam, modelId: 'ezviz-h4' }, [route])
     assert.equal(wifiCard.formLabel, 'Domo')
-    assert.equal(wifiCard.fovLabel, '106°')
+    assert.equal(wifiCard.fovLabel, '106° · lente 2.8 mm')
     assert.equal(wifiCard.wired, false)
     assert.equal(wifiCard.cableMeters, 0)
     const poeCard = buildClienteCameraCard({ ...cam, modelId: 'ezviz-h4-poe' }, [])

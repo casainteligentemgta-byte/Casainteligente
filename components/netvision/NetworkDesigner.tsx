@@ -167,7 +167,7 @@ export default function NetworkDesigner({
                 <span className="font-semibold text-white">{a.cameraLabel}</span>
                 <span className="mt-0.5 block text-[var(--nexus-text-dim)]">
                   {a.nearestLabel ?? 'sin nodo'} · <Mono>{a.distanceM} m</Mono> · {a.cableType}
-                  {a.needsInjector ? ' · injector/fibra' : ''}
+                  {!a.nearestLabel ? ' · falta switch PoE' : a.needsInjector ? ' · más de 100 m: falta switch intermedio' : ''}
                 </span>
               </li>
             ))}

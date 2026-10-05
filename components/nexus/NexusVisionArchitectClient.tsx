@@ -61,6 +61,7 @@ import {
   catalogVisionDefaults,
   cameraPatchForLens,
   getCameraModelOrDefault,
+  lenteElegida,
 } from '@/lib/netvision/catalog/cameras'
 import {
   DEFAULT_AP_ID,
@@ -265,8 +266,10 @@ import {
   toggleHiddenCameraId,
 } from '@/lib/netvision/utils/cameraVisionVisibility'
 import {
+  ajustarEscalaSinCalibrar,
   calibrationToScale,
   computePlanCalibration,
+  estadoEscala,
   type CalibrationOk,
 } from '@/lib/netvision/utils/scaleCalibration'
 
@@ -389,6 +392,8 @@ export default function NexusVisionArchitectClient() {
   const [calibCursor, setCalibCursor] = useState<{ x: number; y: number } | null>(null)
   const [calibMeters, setCalibMeters] = useState('10')
   const [calibOk, setCalibOk] = useState<CalibrationOk | null>(null)
+  /** Proporción alto/ancho de la imagen del plano (null mientras no se conoce). */
+  const [planoAspect, setPlanoAspect] = useState<number | null>(null)
   const [planoDims, setPlanoDims] = useState<PlanoDimension[]>([])
   const [sideTab, setSideTab] = useState<NetVisionBranchId>('cctv')
   const [redFocusKind, setRedFocusKind] = useState<NetworkNodeKind>('switch')
@@ -525,6 +530,61 @@ export default function NexusVisionArchitectClient() {
     },
     [clearCableDraft],
   )
+
+  // Proporción real de la imagen del plano (alto/ancho).
+  useEffect(() => {
+    const url = project.planoUrl
+    if (!url) {
+      setPlanoAspect(null)
+      return
+    }
+    let cancelado = false
+    const img = new window.Image()
+    img.onload = () => {
+      if (!cancelado && img.naturalWidth > 0 && img.naturalHeight > 0) {
+        setPlanoAspect(img.naturalHeight / img.naturalWidth)
+      }
+    }
+    img.onerror = () => {
+      if (!cancelado) setPlanoAspect(null)
+    }
+    img.src = url
+    return () => {
+      cancelado = true
+    }
+  }, [project.planoUrl])
+
+  // Plano sin calibrar: el alto por defecto sigue la proporción de la imagen
+  // (antes se asumía cuadrado). No cuenta como un cambio que se pueda deshacer.
+  useEffect(() => {
+    if (!hydrated) return
+    const ajustada = ajustarEscalaSinCalibrar(project.scale, planoAspect)
+    if (!ajustada) return
+    setProject((p) => {
+      const otra = ajustarEscalaSinCalibrar(p.scale, planoAspect)
+      if (!otra) return p
+      undoApplyingRef.current = true
+      return { ...p, scale: otra }
+    })
+  }, [hydrated, project.scale, planoAspect])
+
+  const escalaEstado = estadoEscala(project.scale, planoAspect)
+
+  /** Entra en modo calibrar y cierra cualquier otro trazo a medias. */
+  const iniciarCalibracion = () => {
+    setCalibrateMode(true)
+    setCalibPoints([])
+    setCalibCursor(null)
+    setDrawStructureMaterial(null)
+    setStructureDraft(null)
+    setDrawUnderground(false)
+    setUndergroundDraft(null)
+    setDrawCable(false)
+    clearCableDraft()
+    setViewMode('plano')
+    setError(null)
+    setInfo('Calibrar: toca los dos extremos de una medida que conozcas y escribe cuánto mide.')
+  }
 
   const undoLast = useCallback(() => applyHistoryStep('undo'), [applyHistoryStep])
   const redoLast = useCallback(() => applyHistoryStep('redo'), [applyHistoryStep])
@@ -900,7 +960,7 @@ export default function NexusVisionArchitectClient() {
   )
 
   const validations = useMemo(() => {
-    const cov = analyzeRedundancy(project.cameras, sectors)
+    const cov = analyzeRedundancy(project.cameras, sectors, project.scale)
     const wifi = analyzeWifiCoverage(
       project.networkNodes,
       project.scale,
@@ -1640,6 +1700,8 @@ export default function NexusVisionArchitectClient() {
           a,
           b,
           meters,
+          // El plano casi nunca es cuadrado: sin esto el alto se mediría como el ancho.
+          aspect: planoAspect ?? undefined,
           source: hit ? 'cota' : 'manual',
           label: hit ? hit.label : calibMeters,
         })
@@ -1792,6 +1854,8 @@ export default function NexusVisionArchitectClient() {
         if ('fovLeftDeg' in patch && patch.fovLeftDeg === undefined) delete next.fovLeftDeg
         if ('fovRightDeg' in patch && patch.fovRightDeg === undefined) delete next.fovRightDeg
         if ('lensVision' in patch && patch.lensVision === undefined) delete next.lensVision
+        if ('lensFocalMm' in patch && patch.lensFocalMm === undefined) delete next.lensFocalMm
+        if ('conexion' in patch && patch.conexion === undefined) delete next.conexion
         if ('rangeM' in patch && patch.rangeM === undefined) delete next.rangeM
         if ('labelOffsetX' in patch && patch.labelOffsetX === undefined) {
           delete next.labelOffsetX
@@ -1928,6 +1992,15 @@ export default function NexusVisionArchitectClient() {
     setMultiIds([])
   }
 
+  // Al tomar otra herramienta (calibrar, pared, cable, canalización) se sale de la
+  // selección múltiple: así un toque no marca equipos mientras se dibuja.
+  useEffect(() => {
+    if (calibrateMode || drawStructureMaterial || drawUnderground || drawCable) {
+      setMultiMode(false)
+      setMultiIds([])
+    }
+  }, [calibrateMode, drawStructureMaterial, drawUnderground, drawCable])
+
   const entrarSeleccionMultiple = () => {
     setMultiMode(true)
     setMultiIds([])
@@ -1969,7 +2042,7 @@ export default function NexusVisionArchitectClient() {
   const cambiarModeloVarias = (modelId: string) => {
     if (!modelId || multiCamIds.length === 0) return
     const vision = catalogVisionDefaults(modelId, nightMode ? 'night' : 'day')
-    for (const id of multiCamIds) patchCamera(id, { modelId, ...vision })
+    for (const id of multiCamIds) patchCamera(id, { modelId, ...vision, conexion: undefined })
     setInfo(
       `Modelo cambiado en ${multiCamIds.length} ${multiCamIds.length === 1 ? 'cámara' : 'cámaras'}.`,
     )
@@ -3157,6 +3230,28 @@ export default function NexusVisionArchitectClient() {
         <p className="rounded-lg border border-[rgba(0,242,254,0.3)] bg-[rgba(0,242,254,0.08)] px-3 py-2 text-sm text-[var(--nexus-cyan)]">
           {info}
         </p>
+      ) : null}
+      {project.planoUrl &&
+      !calibrateMode &&
+      (escalaEstado === 'calibracion_antigua' ||
+        (escalaEstado === 'sin_calibrar' && project.cameras.length > 0)) ? (
+        <div
+          data-nv-escala-aviso={escalaEstado}
+          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-sm text-amber-100"
+        >
+          <span className="min-w-0 flex-1 basis-64">
+            {escalaEstado === 'calibracion_antigua'
+              ? 'Este plano no es cuadrado y se calibró con la versión anterior: las medidas a lo alto salen deformadas. Vuelve a calibrarlo para corregir metros de cable y alcances.'
+              : 'Plano sin calibrar: los metros son aproximados (se asumen 40 m de ancho). Calíbralo con una medida conocida.'}
+          </span>
+          <button
+            type="button"
+            onClick={iniciarCalibracion}
+            className="min-h-10 shrink-0 rounded-lg bg-amber-400 px-3 text-[12px] font-bold text-black"
+          >
+            Calibrar ahora
+          </button>
+        </div>
       ) : null}
 
       <div className="relative min-h-0 flex-1">
@@ -4385,11 +4480,13 @@ export default function NexusVisionArchitectClient() {
                             const vision = catalogVisionDefaults(
                               selectedCam.modelId,
                               nightMode ? 'night' : 'day',
+                              selectedCam.lensFocalMm,
                             )
                             updateSelectedCam(vision)
                           }}
                         >
-                          Restaurar FOV/alcance del modelo ({model.fovDeg}° /{' '}
+                          Restaurar FOV/alcance del modelo (
+                          {lenteElegida(model, selectedCam)?.fovDeg ?? model.fovDeg}° /{' '}
                           {nightMode ? model.rangeNightM : model.rangeDayM} m)
                         </button>
                         <p className="text-[10px] text-[var(--nexus-text-dim)]">

@@ -72,8 +72,8 @@ export class ComplianceValidator {
         results.push({
           level: 'ERROR',
           code: 'NEC-001',
-          message: `Cable ${cable.id} supera ${nec.maxPoEDistance}m PoE sin repetidor`,
-          solution: 'Cambiar a fibra o agregar repetidor/injector PoE midspan',
+          message: `Cable ${cable.id} supera ${nec.maxPoEDistance} m: necesita un switch intermedio`,
+          solution: 'Coloca un switch a mitad del recorrido para que cada tramo quede por debajo de 100 m',
           cameraId: cable.fromId,
           nodeId: cable.toId,
         })

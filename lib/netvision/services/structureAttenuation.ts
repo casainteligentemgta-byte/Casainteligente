@@ -2,6 +2,7 @@ import { getStructureMaterialOrDefault } from '@/lib/netvision/catalog/materials
 import type { DesignStructure } from '@/lib/netvision/types'
 import {
   polarToNorm,
+  type PlanIso,
   rayCrossings,
   type NormSeg,
 } from '@/lib/netvision/utils/geometryHelpers'
@@ -73,9 +74,10 @@ export function visionRangeAlongRay(
   angleRad: number,
   maxRadiusNorm: number,
   structures: DesignStructure[],
+  iso?: PlanIso,
 ): number {
   if (structures.length === 0 || maxRadiusNorm <= 0) return maxRadiusNorm
-  const end = polarToNorm(ox, oy, maxRadiusNorm, angleRad)
+  const end = polarToNorm(ox, oy, maxRadiusNorm, angleRad, iso)
   const { segs } = visionBlockingSegs(structures)
   if (segs.length === 0) return maxRadiusNorm
   const hits = rayCrossings(ox, oy, end.x, end.y, segs)
@@ -145,6 +147,8 @@ export function buildFovPolygon(
   structures: DesignStructure[],
   rays = 96,
   innerRadiusNorm = 0,
+  /** Proporción del plano: sin ella se asume cuadrado. */
+  iso?: PlanIso,
 ): { x: number; y: number }[] {
   let start = startAngleRad
   let end = endAngleRad
@@ -160,10 +164,10 @@ export function buildFovPolygon(
   const inners: { x: number; y: number }[] = []
   for (let i = 0; i <= rayCount; i++) {
     const ang = start + (span * i) / rayCount
-    const outerR = visionRangeAlongRay(cx, cy, ang, radiusNorm, structures)
-    outers.push(polarToNorm(cx, cy, outerR, ang))
+    const outerR = visionRangeAlongRay(cx, cy, ang, radiusNorm, structures, iso)
+    outers.push(polarToNorm(cx, cy, outerR, ang, iso))
     if (inner > 1e-6) {
-      inners.push(polarToNorm(cx, cy, Math.min(inner, outerR), ang))
+      inners.push(polarToNorm(cx, cy, Math.min(inner, outerR), ang, iso))
     }
   }
   if (inner <= 1e-6) {

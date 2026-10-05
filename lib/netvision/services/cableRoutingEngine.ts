@@ -209,6 +209,57 @@ function poeCapable(nodes: DesignNetworkNode[]) {
   return nodes.filter((n) => n.kind === 'switch' || n.kind === 'nvr' || n.kind === 'injector')
 }
 
+/**
+ * Enlaces de red entre equipos: cada switch (o inyector) necesita un cable
+ * hasta el grabador u otro switch. Sin esto, al poner un switch intermedio
+ * para acortar un tramo, su cable al grabador ni se dibujaba ni se cobraba.
+ *
+ * Se arma el árbol más corto partiendo del grabador (o del primer switch si no
+ * hay grabador): cada equipo se une al más cercano que ya esté conectado.
+ */
+export function planNetworkUplinks(
+  networkNodes: DesignNetworkNode[],
+  scale: ScaleCalibration,
+): { fromId: string; toId: string }[] {
+  const troncales = networkNodes.filter((n) => n.kind === 'switch' || n.kind === 'nvr')
+  const inyectores = networkNodes.filter((n) => n.kind === 'injector')
+  const enlaces: { fromId: string; toId: string }[] = []
+  if (troncales.length === 0) return enlaces
+  const dist = (a: DesignNetworkNode, b: DesignNetworkNode) =>
+    distMeters(a.x, a.y, b.x, b.y, scale.metersPerNormX, scale.metersPerNormY)
+
+  const raiz = troncales.find((n) => n.kind === 'nvr') ?? troncales[0]!
+  const conectados: DesignNetworkNode[] = [raiz]
+  const pendientes = troncales.filter((n) => n.id !== raiz.id)
+  while (pendientes.length > 0) {
+    let mejor: { i: number; hacia: DesignNetworkNode; d: number } | null = null
+    for (let i = 0; i < pendientes.length; i++) {
+      for (const c of conectados) {
+        const d = dist(pendientes[i]!, c)
+        if (!mejor || d < mejor.d) mejor = { i, hacia: c, d }
+      }
+    }
+    if (!mejor) break
+    const [nodo] = pendientes.splice(mejor.i, 1)
+    enlaces.push({ fromId: nodo!.id, toId: mejor.hacia.id })
+    conectados.push(nodo!)
+  }
+  // Un inyector va en línea: le llega la red desde el equipo troncal más cercano.
+  for (const inj of inyectores) {
+    let hacia: DesignNetworkNode | null = null
+    let dMin = Infinity
+    for (const t of troncales) {
+      const d = dist(inj, t)
+      if (d < dMin) {
+        dMin = d
+        hacia = t
+      }
+    }
+    if (hacia) enlaces.push({ fromId: inj.id, toId: hacia.id })
+  }
+  return enlaces
+}
+
 function buildOneRoute(
   fromId: string,
   toId: string,
@@ -233,8 +284,11 @@ function buildOneRoute(
   const orthoM = pathLengthM(points, scale)
   const routeM = Math.round(orthoM * ROUTE_SLACK * 10) / 10
   const type = recommendCableType(routeM)
-  const warning = cableWarning(routeM, type)
+  const aviso = cableWarning(routeM, type)
   const overLimit = exceedsNetworkCopperLimit(routeM, type)
+  // Los metros de una ruta automática ya llevan la holgura: se dice, para que no
+  // sorprenda que un tramo de 87 m en el plano avise.
+  const warning = aviso ? `${aviso} (incluye ${Math.round((ROUTE_SLACK - 1) * 100)} % de holgura)` : null
   return {
     id: makeCableRouteId(fromId, toId),
     fromId,
@@ -317,6 +371,27 @@ export function buildCableRoutes(
         overrides,
       ),
     )
+  }
+
+  // Cable de red entre equipos (switch → grabador u otro switch).
+  const yaHay = new Set(routes.map((r) => r.id))
+  for (const enlace of planNetworkUplinks(networkNodes, scale)) {
+    const desde = nodeById.get(enlace.fromId)
+    const hacia = nodeById.get(enlace.toId)
+    if (!desde || !hacia) continue
+    const ruta = buildOneRoute(
+      desde.id,
+      hacia.id,
+      desde.label,
+      hacia.label,
+      { x: desde.x, y: desde.y },
+      { x: hacia.x, y: hacia.y },
+      scale,
+      overrides,
+    )
+    if (yaHay.has(ruta.id)) continue
+    yaHay.add(ruta.id)
+    routes.push({ ...ruta, uplink: true })
   }
 
   return routes

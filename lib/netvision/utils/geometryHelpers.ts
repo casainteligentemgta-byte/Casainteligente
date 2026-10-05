@@ -76,16 +76,40 @@ export function clampFovHalf(deg: number): number {
   return Math.min(85, Math.max(10, deg))
 }
 
-/** Punto de muestra en polar (canvas: ángulo desde +X, horario). */
+/**
+ * Proporción del plano para la geometría polar.
+ *
+ * Las coordenadas del plano van de 0 a 1 en ancho y de 0 a 1 en alto, así que
+ * en un plano que no es cuadrado una unidad horizontal no mide lo mismo que una
+ * vertical. Un «radio normalizado» (metros ÷ promedio de metros por unidad) solo
+ * es un círculo real si cada eje se corrige con estos factores:
+ *   ex = metrosPorUnidadX / promedio,  ey = metrosPorUnidadY / promedio.
+ * En un plano cuadrado ambos valen 1.
+ */
+export type PlanIso = { ex: number; ey: number }
+
+export const PLAN_ISO_CUADRADO: PlanIso = { ex: 1, ey: 1 }
+
+export function planIso(metersPerNormX: number, metersPerNormY: number): PlanIso {
+  const avg = (metersPerNormX + metersPerNormY) / 2
+  if (!(avg > 0) || !(metersPerNormX > 0) || !(metersPerNormY > 0)) return PLAN_ISO_CUADRADO
+  return { ex: metersPerNormX / avg, ey: metersPerNormY / avg }
+}
+
+/**
+ * Punto de muestra en polar (canvas: ángulo desde +X, horario).
+ * Con `iso`, el ángulo y el radio son reales aunque el plano no sea cuadrado.
+ */
 export function polarToNorm(
   cx: number,
   cy: number,
   radiusNorm: number,
   angleRad: number,
+  iso: PlanIso = PLAN_ISO_CUADRADO,
 ): { x: number; y: number } {
   return {
-    x: cx + Math.cos(angleRad) * radiusNorm,
-    y: cy + Math.sin(angleRad) * radiusNorm,
+    x: cx + (Math.cos(angleRad) * radiusNorm) / iso.ex,
+    y: cy + (Math.sin(angleRad) * radiusNorm) / iso.ey,
   }
 }
 
@@ -97,9 +121,10 @@ export function pointInSector(
   radiusNorm: number,
   startAngleRad: number,
   endAngleRad: number,
+  iso: PlanIso = PLAN_ISO_CUADRADO,
 ): boolean {
-  const dx = px - cx
-  const dy = py - cy
+  const dx = (px - cx) * iso.ex
+  const dy = (py - cy) * iso.ey
   const r = Math.hypot(dx, dy)
   if (r > radiusNorm + 1e-9) return false
   let ang = Math.atan2(dy, dx)

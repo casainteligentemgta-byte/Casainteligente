@@ -6,6 +6,7 @@ import {
   NETVISION_HISTORY_MAX,
   cloneProjectSnapshot,
   emptyProjectHistory,
+  isSameDesign,
   popProjectHistory,
   pushProjectHistory,
   recordProjectChange,
@@ -143,6 +144,36 @@ describe('projectHistory · deshacer y rehacer', () => {
     assert.equal(h.projectId, 'p2')
     assert.equal(h.past.length, 0)
     assert.equal(undoProjectHistory(h, otro).restored, null)
+  })
+
+  it('guardar no gasta un paso ni borra lo que quedaba por rehacer', () => {
+    let h = emptyProjectHistory('p1')
+    h = recordProjectChange(h, v('v0'), v('v1'), 1000)
+    h = recordProjectChange(h, v('v1'), v('v2'), 1000 + PASO)
+    const u = undoProjectHistory(h, v('v2'))
+    assert.equal(u.history.future.length, 1)
+    // «Guardar» devuelve el mismo diseño con otra fecha.
+    const guardado = { ...JSON.parse(JSON.stringify(v('v1'))), updatedAt: '2030-01-01T00:00:00.000Z' }
+    assert.equal(isSameDesign(v('v1'), guardado), true)
+    const tras = recordProjectChange(u.history, v('v1'), guardado, 9000)
+    assert.equal(tras.past.length, 1)
+    assert.equal(tras.future.length, 1)
+    assert.equal(redoProjectHistory(tras, guardado).restored?.name, 'v2')
+    // Un cambio de verdad sí cuenta.
+    assert.equal(isSameDesign(v('v1'), v('v3')), false)
+    assert.equal(isSameDesign(base, { ...base, cameras: [{ id: 'c' } as never] }), false)
+  })
+
+  it('un arrastre que topa con el borde sigue siendo un solo paso', () => {
+    let h = emptyProjectHistory('p1')
+    h = recordProjectChange(h, v('v0'), v('borde'), 1000)
+    // Varios movimientos seguidos sin cambio real (la cámara ya está en el borde).
+    for (let t = 1100; t <= 1900; t += 100) {
+      h = recordProjectChange(h, v('borde'), { ...v('borde') }, t)
+    }
+    h = recordProjectChange(h, v('borde'), v('final'), 2000)
+    assert.equal(h.past.length, 1)
+    assert.equal(undoProjectHistory(h, v('final')).restored?.name, 'v0')
   })
 
   it('deshacer o rehacer sin pasos no cambia nada', () => {

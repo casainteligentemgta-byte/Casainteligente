@@ -19,6 +19,8 @@ import {
   metersToNormRadius,
   pointInPolygon,
   pointInSector,
+  planIso,
+  type PlanIso,
 } from '@/lib/netvision/utils/geometryHelpers'
 
 /**
@@ -108,6 +110,8 @@ export function coverageBandPolygons(opts: {
   yellowRadiusNorm: number
   redRadiusNorm?: number
   structures: DesignStructure[]
+  /** Proporción del plano (sin ella se asume cuadrado). */
+  iso?: PlanIso
 }): Pick<CoverageSector, 'greenPolygon' | 'yellowPolygon' | 'redPolygon'> {
   const inner = Math.max(0, opts.innerRadiusNorm)
   const greenR = Math.max(0, opts.greenRadiusNorm)
@@ -125,6 +129,7 @@ export function coverageBandPolygons(opts: {
           opts.structures,
           rays,
           hole,
+          opts.iso,
         )
       : undefined
   return {
@@ -171,6 +176,8 @@ export function buildCoverageSectors(
   mode: 'day' | 'night' = 'day',
   structures: DesignStructure[] = [],
 ): CoverageSector[] {
+  // En un plano que no es cuadrado, el cono se traza con su proporción real.
+  const iso = planIso(scale.metersPerNormX, scale.metersPerNormY)
   return cameras.flatMap((cam) => {
     const lenses = effectiveCameraLenses(cam, mode)
     return lenses.map((lens) => {
@@ -190,6 +197,7 @@ export function buildCoverageSectors(
         structures,
         96,
         ground.innerRadiusNorm,
+        iso,
       )
       const bands = visionBandRangesM(ground.farM, lens.catalogRangeM)
       const greenRadiusNorm = metersToNormRadius(
@@ -225,6 +233,7 @@ export function buildCoverageSectors(
           yellowRadiusNorm,
           redRadiusNorm: ground.radiusNorm,
           structures,
+          iso,
         }),
       }
     })
@@ -248,6 +257,7 @@ export function buildVisionSpectrum(
 
   const opaque = hasOpaqueWalls(structures)
   const resolvedGrid = opaque ? Math.max(grid, 56) : grid
+  const iso = planIso(scale.metersPerNormX, scale.metersPerNormY)
 
   const prepared = cameras.flatMap((cam) =>
     effectiveCameraLenses(cam, mode).map((lens) => {
@@ -266,6 +276,7 @@ export function buildVisionSpectrum(
         structures,
         96,
         ground.innerRadiusNorm,
+        iso,
       )
       return {
         cam,
@@ -333,6 +344,7 @@ export function estimateCoverageRatio(
   sectors: CoverageSector[],
   grid = 24,
   structures: DesignStructure[] = [],
+  iso?: PlanIso,
 ): { coveredRatio: number; uncoveredCells: number; totalCells: number } {
   if (sectors.length === 0) {
     return { coveredRatio: 0, uncoveredCells: grid * grid, totalCells: grid * grid }
@@ -357,6 +369,7 @@ export function estimateCoverageRatio(
             s.radiusNorm,
             s.startAngleRad,
             s.endAngleRad,
+            iso,
           )
         ) {
           return false

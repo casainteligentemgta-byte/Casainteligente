@@ -14,6 +14,7 @@ import type {
 import {
   fovSectorAngles,
   metersToNormRadius,
+  planIso,
 } from '@/lib/netvision/utils/geometryHelpers'
 
 const OMNI_EPS = 359
@@ -61,6 +62,7 @@ export function buildPlanDeviceSectors(
         structures,
         96,
         0,
+        planIso(scale.metersPerNormX, scale.metersPerNormY),
       )
       return {
         cameraId: dev.id,
@@ -85,6 +87,7 @@ export function buildPlanDeviceSectors(
           yellowRadiusNorm,
           redRadiusNorm: radiusNorm,
           structures,
+          iso: planIso(scale.metersPerNormX, scale.metersPerNormY),
         }),
       }
     })
@@ -127,6 +130,7 @@ export function buildApCoverageSectors(
         structures,
         96,
         0,
+        planIso(scale.metersPerNormX, scale.metersPerNormY),
       )
       return {
         cameraId: n.id,
@@ -151,6 +155,7 @@ export function buildApCoverageSectors(
           yellowRadiusNorm,
           redRadiusNorm: radiusNorm,
           structures,
+          iso: planIso(scale.metersPerNormX, scale.metersPerNormY),
         }),
       }
     })

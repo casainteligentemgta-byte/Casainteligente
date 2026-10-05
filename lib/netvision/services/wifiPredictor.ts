@@ -15,6 +15,7 @@ import type {
 import {
   distMeters,
   metersToNormRadius,
+  planIso,
 } from '@/lib/netvision/utils/geometryHelpers'
 
 export type WifiCoverageCircle = {
@@ -79,6 +80,8 @@ export function buildWifiCoverage(
               Math.PI * 2,
               structures,
               128,
+              0,
+              planIso(scale.metersPerNormX, scale.metersPerNormY),
             )
           : undefined
       return {

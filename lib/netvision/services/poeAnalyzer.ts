@@ -1,4 +1,4 @@
-import { getCameraModelOrDefault } from '@/lib/netvision/catalog/cameras'
+import { camarasCableadas, getCameraModelOrDefault } from '@/lib/netvision/catalog/cameras'
 import { getNetworkModelOrDefault } from '@/lib/netvision/catalog/network'
 import type {
   DesignCamera,
@@ -52,7 +52,8 @@ export function autoAssignCamerasToPoe(
   const assignment = new Map<string, string[]>()
   for (const n of capable) assignment.set(n.id, [])
 
-  for (const cam of cameras) {
+  // Las cámaras por Wi‑Fi o batería no ocupan puerto PoE.
+  for (const cam of camarasCableadas(cameras)) {
     let best: DesignNetworkNode | null = null
     let bestD = Infinity
     for (const n of capable) {
@@ -79,9 +80,11 @@ export function autoAssignCamerasToPoe(
 }
 
 export function analyzePoeBudget(
-  cameras: DesignCamera[],
+  todas: DesignCamera[],
   nodes: DesignNetworkNode[],
 ): { rows: PoeBudgetRow[]; validations: ValidationResult[] } {
+  // Solo las cámaras por cable de red consumen PoE.
+  const cameras = camarasCableadas(todas)
   const camById = new Map(cameras.map((c) => [c.id, c]))
   const rows: PoeBudgetRow[] = []
   const validations: ValidationResult[] = []
@@ -115,12 +118,16 @@ export function analyzePoeBudget(
   for (const n of capable) {
     const m = getNetworkModelOrDefault(n.modelId, n.kind)
     let usedW = 0
+    // Solo cuentan las cámaras que siguen en el plano y van por cable
+    // (una cámara borrada o pasada a Wi‑Fi ya no ocupa puerto).
+    let usedPorts = 0
     for (const cid of n.linkedCameraIds) {
       const cam = camById.get(cid)
-      if (cam) usedW += getCameraModelOrDefault(cam.modelId).poeWatts
+      if (!cam) continue
+      usedW += getCameraModelOrDefault(cam.modelId).poeWatts
+      usedPorts += 1
     }
     // APs alimentados desde este switch no están en linkedCameraIds; se estima aparte en BOM
-    const usedPorts = n.linkedCameraIds.length
     const ok = usedW <= m.poeBudgetW && usedPorts <= m.poePorts
     rows.push({
       nodeId: n.id,
@@ -161,7 +168,8 @@ export function adviseCameraLinks(
   scale: ScaleCalibration,
 ): CameraLinkAdvice[] {
   const capable = poeCapable(nodes)
-  return cameras.map((cam) => {
+  // Por Wi‑Fi o batería no hay tendido que aconsejar.
+  return camarasCableadas(cameras).map((cam) => {
     let nearest: DesignNetworkNode | null = null
     let bestD = Infinity
     for (const n of capable) {
