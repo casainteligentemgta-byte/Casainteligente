@@ -92,6 +92,11 @@ import {
   unmountFromRacks,
 } from '@/lib/netvision/catalog/salaTecnica'
 import NetVisionSalaTecnica from '@/components/netvision/NetVisionSalaTecnica'
+import NetVisionDimensionamiento from '@/components/netvision/NetVisionDimensionamiento'
+import {
+  dimensionarGrabacion,
+  dimensionarUps,
+} from '@/lib/netvision/services/dimensionamiento'
 import {
   defaultNetworkPlanSize,
 } from '@/lib/netvision/utils/networkNodeSize'
@@ -951,6 +956,28 @@ export default function NexusVisionArchitectClient() {
       undergroundPlan,
       project.infraDevices,
     ],
+  )
+
+  /** ¿Alcanzan el grabador, el disco y el UPS para lo que se pide? */
+  const dimGrabacion = useMemo(
+    () =>
+      dimensionarGrabacion(
+        project.cameras,
+        project.networkNodes,
+        project.infraDevices ?? [],
+        project.retentionDays,
+      ),
+    [project.cameras, project.networkNodes, project.infraDevices, project.retentionDays],
+  )
+  const dimUps = useMemo(
+    () =>
+      dimensionarUps(
+        project.cameras,
+        project.networkNodes,
+        project.infraDevices ?? [],
+        project.upsBackupMin,
+      ),
+    [project.cameras, project.networkNodes, project.infraDevices, project.upsBackupMin],
   )
 
   const linkLines = useMemo(() => {
@@ -3727,6 +3754,17 @@ export default function NexusVisionArchitectClient() {
                   setInspectorOpen(true)
                 }}
               />
+              <div className="mt-3">
+                <NetVisionDimensionamiento
+                  grabacion={dimGrabacion}
+                  ups={dimUps}
+                  disabled={loading}
+                  onDias={(dias) => setProject((p) => ({ ...p, retentionDays: dias }))}
+                  onMinutos={(minutos) =>
+                    setProject((p) => ({ ...p, upsBackupMin: minutos }))
+                  }
+                />
+              </div>
             </div>
           ) : null}
           {selectedUnderground ? (
