@@ -3334,7 +3334,7 @@ export default function NexusVisionArchitectClient() {
         <button
           type="button"
           disabled={!project.planoUrl || loading || project.cameras.length === 0}
-          title="Calcula cobertura automática: verde = metraje de ficha; rojo solo si se estira el cono"
+          title="Calcula cobertura automática: verde identifica rostros, naranja 1 m más, rojo el resto del cono"
           onClick={() => {
             setShowFov(true)
             setViewMode('plano')
