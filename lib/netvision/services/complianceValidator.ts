@@ -174,7 +174,7 @@ export class ComplianceValidator {
           level: 'ERROR',
           code: 'TIA-001',
           message: `Cable ${cable.id} supera ${tia.maxHorizontalDistance}m horizontal TIA/EIA 568`,
-          solution: 'Acortar tramo o usar fibra óptica',
+          solution: 'Colocar un switch intermedio para que ningún tramo pase de 100 m',
           cameraId: cable.fromId,
           nodeId: cable.toId,
         })

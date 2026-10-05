@@ -3,7 +3,11 @@ import {
   cableMaxM,
   cableTypeLabel,
   cableWarning,
+  exceedsNetworkCopperLimit,
+  intermediateSwitchesNeeded,
   isDataCableType,
+  isNetworkCopperType,
+  overLimitSwitchMessage,
   recommendCableType,
 } from '@/lib/netvision/services/cableCalculator'
 import { adviseCameraLinks } from '@/lib/netvision/services/poeAnalyzer'
@@ -230,6 +234,7 @@ function buildOneRoute(
   const routeM = Math.round(orthoM * ROUTE_SLACK * 10) / 10
   const type = recommendCableType(routeM)
   const warning = cableWarning(routeM, type)
+  const overLimit = exceedsNetworkCopperLimit(routeM, type)
   return {
     id: makeCableRouteId(fromId, toId),
     fromId,
@@ -241,7 +246,8 @@ function buildOneRoute(
     routeM,
     type,
     certified: true,
-    warn: !!warning || routeM > 100,
+    warn: !!warning || overLimit,
+    overLimit,
     warning,
   }
 }
@@ -356,6 +362,7 @@ export function cableSegmentToRoute(
     type: seg.type,
     certified: isDataCableType(seg.type),
     warn: !!warning || lengthM > cableMaxM(seg.type),
+    overLimit: exceedsNetworkCopperLimit(lengthM, seg.type),
     warning,
   }
 }
@@ -381,11 +388,19 @@ export function validateCableRoutes(routes: CableRoute[]): ValidationResult[] {
       results.push({
         level: 'ERROR',
         code: 'CAB-001',
-        message: `${r.fromLabel}→${r.toLabel}: ${r.routeM} m supera ${max} m (${cableTypeLabel(r.type)})`,
+        message: isNetworkCopperType(r.type)
+          ? `${r.fromLabel}→${r.toLabel}: ${overLimitSwitchMessage(r.routeM, max)}`
+          : `${r.fromLabel}→${r.toLabel}: ${r.routeM} m supera ${max} m (${cableTypeLabel(r.type)})`,
         solution:
           r.type === 'POWER_12V' || r.type === 'AUDIO'
             ? 'Acorta el tramo o usa calibre / amplificación adecuada'
-            : 'Usar fibra óptica o repetidor / injector midspan',
+            : isNetworkCopperType(r.type)
+              ? `Coloca ${
+                  intermediateSwitchesNeeded(r.routeM, max) > 1
+                    ? `${intermediateSwitchesNeeded(r.routeM, max)} switches intermedios`
+                    : 'un switch intermedio'
+                } en el recorrido para que ningún tramo pase de ${max} m`
+              : 'Acorta el tramo o usa un repetidor',
         cameraId:
           r.fromId.startsWith('cam') || r.fromLabel.startsWith('CAM')
             ? r.fromId
@@ -421,6 +436,29 @@ export function validateCableRoutes(routes: CableRoute[]): ValidationResult[] {
   })
 
   return results
+}
+
+/** Punto medio del recorrido (para rotular el tramo en el plano). */
+export function routeMidpoint(points: NormPoint[]): NormPoint | null {
+  if (points.length === 0) return null
+  if (points.length === 1) return { ...points[0]! }
+  let total = 0
+  for (let i = 1; i < points.length; i++) {
+    total += Math.hypot(points[i]!.x - points[i - 1]!.x, points[i]!.y - points[i - 1]!.y)
+  }
+  if (!(total > 0)) return { ...points[0]! }
+  let left = total / 2
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1]!
+    const b = points[i]!
+    const d = Math.hypot(b.x - a.x, b.y - a.y)
+    if (d >= left && d > 0) {
+      const t = left / d
+      return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }
+    }
+    left -= d
+  }
+  return { ...points[points.length - 1]! }
 }
 
 export function totalCableMeters(routes: CableRoute[]): number {

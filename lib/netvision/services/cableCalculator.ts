@@ -29,12 +29,42 @@ export function isDataCableType(type: CableType): boolean {
   return isNetworkCopperType(type) || type === 'FIBER' || type === 'COAX'
 }
 
-/** Cálculo de tipo de cable por distancia (Fase 2/4). */
+/** Límite de un tramo de cable de red (cobre) entre dos equipos activos. */
+export const NETWORK_COPPER_MAX_M = 100
+
+/**
+ * Tipo de cable para una ruta automática. Un tramo de más de 100 m sigue siendo
+ * cable de red: no se cambia a fibra, se avisa que necesita un switch intermedio.
+ */
 export function recommendCableType(lengthM: number): CableType {
-  if (lengthM > 100) return 'FIBER'
-  if (lengthM > 55) return 'CAT6'
-  if (lengthM > 30) return 'CAT6A'
+  if (lengthM > 30 && lengthM <= 55) return 'CAT6A'
   return 'CAT6'
+}
+
+/** ¿El tramo de cable de red pasa del límite y necesita un switch en el camino? */
+export function exceedsNetworkCopperLimit(lengthM: number, type?: CableType): boolean {
+  if (type && !isNetworkCopperType(type)) return false
+  return lengthM > (type ? cableMaxM(type) : NETWORK_COPPER_MAX_M)
+}
+
+/** Switches intermedios para que ningún tramo pase del límite (126 m → 1, 240 m → 2). */
+export function intermediateSwitchesNeeded(
+  lengthM: number,
+  maxM = NETWORK_COPPER_MAX_M,
+): number {
+  if (!(lengthM > maxM) || !(maxM > 0)) return 0
+  return Math.ceil(lengthM / maxM) - 1
+}
+
+function formatMeters(lengthM: number): string {
+  return String(Math.round(lengthM * 10) / 10)
+}
+
+/** Aviso para un tramo de cable de red que pasa de 100 m. */
+export function overLimitSwitchMessage(lengthM: number, maxM = NETWORK_COPPER_MAX_M): string {
+  const n = intermediateSwitchesNeeded(lengthM, maxM)
+  const need = n <= 1 ? 'necesita un switch intermedio' : `necesita ${n} switches intermedios`
+  return `Tramo de ${formatMeters(lengthM)} m: supera los ${maxM} m, ${need}`
 }
 
 export function cableMaxM(type: CableType): number {
@@ -62,13 +92,13 @@ export function cableWarning(lengthM: number, type?: CableType): string | null {
     if (type === 'AUDIO') {
       return `Supera ${max} m para sonido — usa balun / amplificador o acorta el tramo`
     }
-    return `Supera ${max} m para ${type ? cableTypeLabel(type) : 'cable'} — usar fibra o repetidor`
+    if (!type || isNetworkCopperType(type)) {
+      return overLimitSwitchMessage(lengthM, max)
+    }
+    return `Supera ${max} m para ${cableTypeLabel(type)} — acorta el tramo o usa un repetidor`
   }
-  if (lengthM > 90 && (type === 'CAT6' || type === 'CAT5E' || !type)) {
-    return 'Cerca del límite TIA 100 m — deja margen de servicio'
-  }
-  if (type === 'CAT6A' && lengthM > 55) {
-    return 'Cat6A >55 m: limitar a 1G o usar Cat6/fibra'
+  if (lengthM > 90 && (!type || isNetworkCopperType(type))) {
+    return 'Cerca del límite de 100 m — deja margen de servicio'
   }
   if (type === 'POWER_12V' && lengthM > 20) {
     return '12V >20 m: verifica calibre y caída de tensión'

@@ -10,13 +10,16 @@ import {
   Camera,
   ChevronDown,
   Copy,
+  CopyPlus,
   Download,
   FilePlus,
+  ListChecks,
   Presentation,
   RotateCcw,
   RotateCw,
   Save,
   Trash2,
+  Redo2,
   Undo2,
   Upload,
   Wrench,
@@ -230,14 +233,25 @@ import {
   type PlanoDimension,
 } from '@/lib/netvision/utils/extractPdfDimensions'
 import {
-  popProjectHistory,
-  pushProjectHistory,
+  emptyProjectHistory,
+  recordProjectChange,
+  redoProjectHistory,
+  undoProjectHistory,
+  type ProjectHistory,
 } from '@/lib/netvision/utils/projectHistory'
 import {
   clampGrosorMuro,
   normalizeCotaColor,
 } from '@/lib/netvision/utils/nightPlanoPalette'
 import { nextCamMarkerColor } from '@/lib/netvision/utils/cameraMarkerColor'
+import {
+  alternarSeleccion,
+  depurarSeleccion,
+  duplicarCamaras,
+  moverGrupo,
+  resumenSeleccion,
+  siguienteEtiquetaCamara,
+} from '@/lib/netvision/utils/seleccionMultiple'
 import {
   isolateHiddenCameraIds,
   pruneHiddenCameraIds,
@@ -391,8 +405,12 @@ export default function NexusVisionArchitectClient() {
   const stageRef = useRef<Konva.Stage | null>(null)
   const zoomControlsRef = useRef<NetVisionZoomControls | null>(null)
   const [zoomPercent, setZoomPercent] = useState(100)
+  /** Selección múltiple: tocar varios equipos para moverlos, duplicarlos o borrarlos juntos. */
+  const [multiMode, setMultiMode] = useState(false)
+  const [multiIdsRaw, setMultiIds] = useState<string[]>([])
   const [canUndo, setCanUndo] = useState(false)
-  const historyRef = useRef<NetVisionProject[]>([])
+  const [canRedo, setCanRedo] = useState(false)
+  const historyRef = useRef<ProjectHistory>(emptyProjectHistory())
   const lastProjectRef = useRef<NetVisionProject | null>(null)
   const undoApplyingRef = useRef(false)
 
@@ -459,36 +477,59 @@ export default function NexusVisionArchitectClient() {
     }
     const prev = lastProjectRef.current
     if (prev && prev !== project) {
-      historyRef.current = pushProjectHistory(historyRef.current, prev)
-      setCanUndo(historyRef.current.length > 0)
+      // Un arrastre cuenta como un paso; al cambiar de proyecto el historial se vacía.
+      historyRef.current = recordProjectChange(historyRef.current, prev, project, Date.now())
+      setCanUndo(historyRef.current.past.length > 0)
+      setCanRedo(historyRef.current.future.length > 0)
     }
     lastProjectRef.current = project
   }, [hydrated, project])
 
-  const undoLast = useCallback(() => {
-    const { rest, restored } = popProjectHistory(historyRef.current)
-    if (!restored) return
-    historyRef.current = rest
-    setCanUndo(rest.length > 0)
-    undoApplyingRef.current = true
-    setProject(restored)
-    setCalibrateMode(false)
-    setCalibPoints([])
-    setCalibCursor(null)
-    setDrawStructureMaterial(null)
-    setStructureDraft(null)
-    setStructureCursor(null)
-    setDrawUnderground(false)
-    setUndergroundDraft(null)
-    setDrawCable(false)
-    clearCableDraft()
-    setError(null)
-    setInfo('Se deshizo el último cambio.')
-  }, [clearCableDraft])
+  /** Aplica un paso del historial (deshacer o rehacer) y cierra los trazos a medias. */
+  const applyHistoryStep = useCallback(
+    (direction: 'undo' | 'redo') => {
+      const current = lastProjectRef.current
+      if (!current) return
+      const step =
+        direction === 'undo'
+          ? undoProjectHistory(historyRef.current, current)
+          : redoProjectHistory(historyRef.current, current)
+      const restored = step.restored
+      if (!restored) return
+      historyRef.current = step.history
+      setCanUndo(step.history.past.length > 0)
+      setCanRedo(step.history.future.length > 0)
+      undoApplyingRef.current = true
+      setProject(restored)
+      setCalibrateMode(false)
+      setCalibPoints([])
+      setCalibCursor(null)
+      setDrawStructureMaterial(null)
+      setStructureDraft(null)
+      setStructureCursor(null)
+      setDrawUnderground(false)
+      setUndergroundDraft(null)
+      setDrawCable(false)
+      clearCableDraft()
+      setError(null)
+      setInfo(
+        direction === 'undo' ? 'Se deshizo el último cambio.' : 'Se rehízo el cambio.',
+      )
+    },
+    [clearCableDraft],
+  )
+
+  const undoLast = useCallback(() => applyHistoryStep('undo'), [applyHistoryStep])
+  const redoLast = useCallback(() => applyHistoryStep('redo'), [applyHistoryStep])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey) || e.key !== 'z' || e.shiftKey) return
+      if (!(e.ctrlKey || e.metaKey)) return
+      const key = e.key.toLowerCase()
+      // Ctrl+Z deshace; Ctrl+Y o Ctrl+Mayús+Z rehace.
+      const isUndo = key === 'z' && !e.shiftKey
+      const isRedo = key === 'y' || (key === 'z' && e.shiftKey)
+      if (!isUndo && !isRedo) return
       const t = e.target as HTMLElement | null
       if (
         t &&
@@ -500,11 +541,12 @@ export default function NexusVisionArchitectClient() {
         return
       }
       e.preventDefault()
-      undoLast()
+      if (isRedo) redoLast()
+      else undoLast()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [undoLast])
+  }, [undoLast, redoLast])
 
   /** Sync diferido a Supabase (si hay sesión). */
   useEffect(() => {
@@ -1102,13 +1144,12 @@ export default function NexusVisionArchitectClient() {
 
   const addCameraAt = (normX: number, normY: number) => {
     if (!project.planoUrl) return
-    const n = project.cameras.length + 1
     const vision = catalogVisionDefaults(defaultModelId, nightMode ? 'night' : 'day')
     const pin: DesignCamera = {
       id: uid(),
       x: Math.round(normX * 1000) / 1000,
       y: Math.round(normY * 1000) / 1000,
-      label: `CAM-${String(n).padStart(2, '0')}`,
+      label: siguienteEtiquetaCamara(project.cameras.map((c) => c.label)),
       modelId: defaultModelId,
       yawDeg: 0,
       mountHeightM: DEFAULT_MOUNT_HEIGHT_M,
@@ -1668,6 +1709,11 @@ export default function NexusVisionArchitectClient() {
   const onMove = (id: string, normX: number, normY: number) => {
     const nx = Math.round(normX * 1000) / 1000
     const ny = Math.round(normY * 1000) / 1000
+    // Selección múltiple: arrastrar uno de los elegidos mueve todo el grupo.
+    if (multiMode && multiIds.length > 1 && multiIds.includes(id)) {
+      setProject((p) => moverGrupo(p, multiIds, id, { x: nx, y: ny }))
+      return
+    }
     setProject((p) => ({
       ...p,
       cameras: p.cameras.map((c) => (c.id === id ? { ...c, x: nx, y: ny } : c)),
@@ -1804,32 +1850,105 @@ export default function NexusVisionArchitectClient() {
     }))
   }
 
-  const quitar = (id: string) => {
+  /** Quita uno o varios elementos del plano en un solo paso (se puede deshacer). */
+  const quitarVarios = (ids: string[]) => {
+    if (ids.length === 0) return
+    const fuera = new Set(ids)
     setProject((p) => {
       const overrides = { ...(p.cableRouteOverrides ?? {}) }
       for (const key of Object.keys(overrides)) {
-        if (key.startsWith(`${id}__`) || key.endsWith(`__${id}`)) {
+        if (ids.some((id) => key.startsWith(`${id}__`) || key.endsWith(`__${id}`))) {
           delete overrides[key]
         }
       }
+      let infra = (p.infraDevices ?? []).filter((d) => !fuera.has(d.id))
+      for (const id of ids) infra = unmountFromRacks(infra, id)
       return {
         ...p,
-        cameras: p.cameras.filter((c) => c.id !== id),
-        networkNodes: p.networkNodes.filter((n) => n.id !== id),
-        planDevices: (p.planDevices ?? []).filter((d) => d.id !== id),
-        infraDevices: unmountFromRacks(
-          (p.infraDevices ?? []).filter((d) => d.id !== id),
-          id,
-        ),
-        structures: (p.structures ?? []).filter((s) => s.id !== id),
+        cameras: p.cameras.filter((c) => !fuera.has(c.id)),
+        networkNodes: p.networkNodes.filter((n) => !fuera.has(n.id)),
+        planDevices: (p.planDevices ?? []).filter((d) => !fuera.has(d.id)),
+        infraDevices: infra,
+        structures: (p.structures ?? []).filter((s) => !fuera.has(s.id)),
         undergroundSegments: (p.undergroundSegments ?? []).filter(
-          (s) => s.id !== id,
+          (s) => !fuera.has(s.id),
         ),
-        cableSegments: (p.cableSegments ?? []).filter((s) => s.id !== id),
+        cableSegments: (p.cableSegments ?? []).filter((s) => !fuera.has(s.id)),
         cableRouteOverrides: overrides,
       }
     })
-    if (selectedId === id) setSelectedId(null)
+    if (selectedId && fuera.has(selectedId)) setSelectedId(null)
+  }
+
+  const quitar = (id: string) => quitarVarios([id])
+
+  /** Equipos elegidos que siguen existiendo (p. ej. tras deshacer). */
+  const multiIds = useMemo(
+    () => depurarSeleccion(project, multiIdsRaw),
+    [project, multiIdsRaw],
+  )
+  const multiCamIds = multiIds.filter((id) => project.cameras.some((c) => c.id === id))
+
+  const salirSeleccionMultiple = () => {
+    setMultiMode(false)
+    setMultiIds([])
+  }
+
+  const entrarSeleccionMultiple = () => {
+    setMultiMode(true)
+    setMultiIds([])
+    setSelectedId(null)
+    setInspectorOpen(false)
+    setViewMode('plano')
+    setCalibrateMode(false)
+    setCalibPoints([])
+    setDrawStructureMaterial(null)
+    setStructureDraft(null)
+    setStructureCursor(null)
+    setDrawUnderground(false)
+    setUndergroundDraft(null)
+    setDrawCable(false)
+    clearCableDraft()
+    setError(null)
+    setInfo('Selección múltiple: toca los equipos que quieres elegir.')
+  }
+
+  /** Copia cámaras con su modelo y ajustes; las copias quedan elegidas para moverlas. */
+  const duplicarCamarasPorId = (ids: string[]) => {
+    const copias = duplicarCamaras(project.cameras, ids, uid)
+    if (copias.length === 0) return
+    setProject((p) => ({ ...p, cameras: [...p.cameras, ...copias] }))
+    setError(null)
+    if (multiMode) {
+      setMultiIds(copias.map((c) => c.id))
+      setInfo(
+        `${copias.length === 1 ? 'Cámara duplicada' : `${copias.length} cámaras duplicadas`}. Las copias quedaron elegidas: arrastra una para ubicarlas.`,
+      )
+    } else {
+      setSelectedId(copias[0]!.id)
+      setInspectorOpen(false)
+      setShowFov(true)
+      setInfo(`Cámara duplicada como ${copias[0]!.label}. Arrástrala a su lugar.`)
+    }
+  }
+
+  const cambiarModeloVarias = (modelId: string) => {
+    if (!modelId || multiCamIds.length === 0) return
+    const vision = catalogVisionDefaults(modelId, nightMode ? 'night' : 'day')
+    for (const id of multiCamIds) patchCamera(id, { modelId, ...vision })
+    setInfo(
+      `Modelo cambiado en ${multiCamIds.length} ${multiCamIds.length === 1 ? 'cámara' : 'cámaras'}.`,
+    )
+  }
+
+  const eliminarSeleccion = () => {
+    if (multiIds.length === 0) return
+    const ok = window.confirm(
+      `¿Eliminar ${resumenSeleccion(project, multiIds)}? Puedes recuperarlos con Deshacer.`,
+    )
+    if (!ok) return
+    quitarVarios(multiIds)
+    setMultiIds([])
   }
 
   const limpiarPlano = () => {
@@ -2879,6 +2998,34 @@ export default function NexusVisionArchitectClient() {
         <Undo2 className="h-3.5 w-3.5" />
         Deshacer
       </button>
+      <button
+        type="button"
+        disabled={!canRedo}
+        title="Rehacer el cambio deshecho (Ctrl+Y)"
+        aria-label="Rehacer"
+        data-nv-rehacer
+        onClick={redoLast}
+        className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-white/15 px-2.5 py-1 text-[11px] font-semibold text-[var(--nexus-text-muted)] hover:bg-white/5 hover:text-white disabled:opacity-40"
+      >
+        <Redo2 className="h-3.5 w-3.5" />
+        Rehacer
+      </button>
+      <button
+        type="button"
+        disabled={!project.planoUrl || loading}
+        title="Elegir varios equipos para moverlos, duplicarlos, cambiarles el modelo o eliminarlos"
+        aria-pressed={multiMode}
+        data-nv-multi
+        onClick={() => (multiMode ? salirSeleccionMultiple() : entrarSeleccionMultiple())}
+        className={`inline-flex shrink-0 items-center gap-1 rounded-lg border px-2.5 py-1 text-[11px] font-semibold disabled:opacity-40 ${
+          multiMode
+            ? 'border-cyan-300 bg-[var(--nexus-cyan)] text-black'
+            : 'border-white/15 text-[var(--nexus-text-muted)] hover:bg-white/5 hover:text-white'
+        }`}
+      >
+        <ListChecks className="h-3.5 w-3.5" />
+        Selección múltiple
+      </button>
       {calibrateMode ? (
         <span className="shrink-0 text-[10px] font-semibold text-lime-300">
           Calibrando {calibMeters} m ({calibPoints.length}/2)
@@ -3080,7 +3227,15 @@ export default function NexusVisionArchitectClient() {
                     metersPerNormY={project.scale.metersPerNormY}
                     nightMode={nightMode}
                     onInspect={() => setInspectorOpen(true)}
+                    multiSelectedIds={multiMode ? multiIds : undefined}
+                    onToggleMulti={
+                      multiMode
+                        ? (id) => setMultiIds((ids) => alternarSeleccion(ids, id))
+                        : undefined
+                    }
                     onSelect={(id) => {
+                      // En selección múltiple el toque elige equipos; no abre fichas.
+                      if (multiMode) return
                       setSelectedId(id)
                       if (id && project.cameras.some((c) => c.id === id)) {
                         setShowFov(true)
@@ -3299,21 +3454,107 @@ export default function NexusVisionArchitectClient() {
                       </div>
                     </div>
                   ) : null}
-                  {selectedId && !inspectorOpen ? (
-                    <button
-                      type="button"
-                      onClick={() => setInspectorOpen(true)}
-                      className="absolute right-3 top-14 z-20 rounded-full bg-[var(--nexus-cyan)] px-3.5 py-2 text-[11px] font-semibold text-black shadow-lg"
+                  {selectedId && !inspectorOpen && !multiMode ? (
+                    <div className="absolute right-3 top-14 z-20 flex flex-col items-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setInspectorOpen(true)}
+                        className="min-h-10 rounded-full bg-[var(--nexus-cyan)] px-3.5 py-2 text-[11px] font-semibold text-black shadow-lg"
+                      >
+                        Configurar{' '}
+                        {selectedCam?.label ||
+                          selectedNet?.label ||
+                          selectedPlanDevice?.label ||
+                          selectedStructure?.label ||
+                          selectedManualCable?.label ||
+                          selectedUnderground?.label ||
+                          'elemento'}
+                      </button>
+                      {selectedCam ? (
+                        <button
+                          type="button"
+                          data-nv-duplicar
+                          title="Crea otra cámara igual (mismo modelo y ajustes)"
+                          onClick={() => duplicarCamarasPorId([selectedCam.id])}
+                          className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-white/25 bg-[#071018]/95 px-3.5 py-2 text-[11px] font-semibold text-white shadow-lg"
+                        >
+                          <CopyPlus className="h-3.5 w-3.5" />
+                          Duplicar
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {multiMode ? (
+                    <div
+                      data-nv-multi-barra
+                      className="absolute inset-x-2 bottom-[6.5rem] z-20 flex flex-wrap items-center gap-2 rounded-xl border border-cyan-400/40 bg-[#071018]/95 p-2 text-[11px] text-white shadow-lg backdrop-blur-md"
                     >
-                      Configurar{' '}
-                      {selectedCam?.label ||
-                        selectedNet?.label ||
-                        selectedPlanDevice?.label ||
-                        selectedStructure?.label ||
-                        selectedManualCable?.label ||
-                        selectedUnderground?.label ||
-                        'elemento'}
-                    </button>
+                      <span className="min-w-0 flex-1 basis-40">
+                        <span className="font-semibold">
+                          {multiIds.length
+                            ? resumenSeleccion(project, multiIds)
+                            : 'Toca los equipos que quieres elegir'}
+                        </span>
+                        {multiIds.length > 1 ? (
+                          <span className="block text-[10px] text-[var(--nexus-text-dim)]">
+                            Arrastra uno para moverlos todos
+                          </span>
+                        ) : null}
+                      </span>
+                      <button
+                        type="button"
+                        disabled={project.cameras.length === 0}
+                        onClick={() => setMultiIds(project.cameras.map((c) => c.id))}
+                        className="min-h-10 rounded-lg border border-white/20 px-3 font-semibold disabled:opacity-40"
+                      >
+                        Todas las cámaras
+                      </button>
+                      {multiCamIds.length > 0 ? (
+                        <select
+                          value=""
+                          aria-label="Cambiar modelo de las cámaras elegidas"
+                          onChange={(e) => cambiarModeloVarias(e.target.value)}
+                          className="min-h-10 max-w-[11rem] rounded-lg border border-white/20 bg-black/50 px-2 font-semibold text-white"
+                        >
+                          <option value="">Cambiar modelo…</option>
+                          {cameraCatalogGrouped().map((g) => (
+                            <optgroup key={g.brand} label={g.brand}>
+                              {g.models.map((m) => (
+                                <option key={m.id} value={m.id}>
+                                  {cameraCatalogOptionLabel(m)}
+                                </option>
+                              ))}
+                            </optgroup>
+                          ))}
+                        </select>
+                      ) : null}
+                      {multiCamIds.length > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => duplicarCamarasPorId(multiCamIds)}
+                          className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-white/20 px-3 font-semibold"
+                        >
+                          <CopyPlus className="h-3.5 w-3.5" />
+                          Duplicar
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        disabled={multiIds.length === 0}
+                        onClick={eliminarSeleccion}
+                        className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-red-400/50 px-3 font-semibold text-red-200 disabled:opacity-40"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Eliminar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={salirSeleccionMultiple}
+                        className="min-h-10 rounded-lg bg-[var(--nexus-cyan)] px-3.5 font-semibold text-black"
+                      >
+                        Listo
+                      </button>
+                    </div>
                   ) : null}
                 </div>
               )}

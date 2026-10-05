@@ -71,7 +71,7 @@ export function marcasDelCatalogo(): string[] {
   const marcas = new Set<string>()
   for (const m of CAMERA_CATALOG) marcas.add(m.brand)
   for (const m of NETWORK_CATALOG) if (m.brand !== 'Generic') marcas.add(m.brand)
-  return [...marcas].sort((a, b) => a.localeCompare(b))
+  return Array.from(marcas).sort((a, b) => a.localeCompare(b))
 }
 
 /** Ficha de la empresa: todo el catálogo de NetVision en texto. */

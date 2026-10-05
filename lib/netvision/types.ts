@@ -459,6 +459,8 @@ export type CableRoute = {
   type: CableType
   certified: boolean
   warn: boolean
+  /** Cable de red de más de 100 m: necesita un switch intermedio. */
+  overLimit?: boolean
   warning: string | null
 }
 
