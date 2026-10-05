@@ -19,7 +19,7 @@ export default function NetVisionCompanyMark({
         alt=""
         width={size}
         height={size}
-        className="shrink-0 rounded-md object-cover"
+        className="shrink-0 rounded-md bg-white object-cover ring-1 ring-white/80"
         style={{ width: size, height: size }}
       />
       <span className="leading-tight">{company}</span>

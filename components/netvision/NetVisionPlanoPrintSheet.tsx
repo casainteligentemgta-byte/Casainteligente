@@ -76,7 +76,7 @@ function SheetTactico({ payload, livePlano }: SheetProps) {
         </span>
         <NetVisionCompanyMark
           company={rotulo.company}
-          size={22}
+          size={32}
           className="min-w-0 justify-end font-semibold tracking-[0.06em] text-[#d6ffe5]"
         />
       </div>
@@ -193,7 +193,7 @@ function SheetTiempoReal({ payload, livePlano }: SheetProps) {
         <section className={TR_BOX}>
           <NetVisionCompanyMark
             company={rotulo.company}
-            size={28}
+            size={32}
             className="text-base font-bold uppercase tracking-[0.1em] text-[#f2f2f2]"
           />
           <p className={`${TR_LABEL} mt-3`}>Fecha</p>
@@ -272,7 +272,7 @@ function SheetArcade({ payload, livePlano }: SheetProps) {
         </div>
         <NetVisionCompanyMark
           company={rotulo.company}
-          size={36}
+          size={40}
           className="shrink-0 self-start text-base font-bold uppercase tracking-[0.08em] text-white"
         />
       </header>
