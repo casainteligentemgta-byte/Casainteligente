@@ -6,7 +6,10 @@ import {
   capitalizeLabel,
   labelEquiposRed,
   labelMuros,
+  nombreArchivoPdf,
   planoPrintHref,
+  sugerirNombrePdfPlano,
+  tituloPdfDesdeNombre,
 } from './planoPrint'
 
 describe('planoPrint', () => {
@@ -29,6 +32,31 @@ describe('planoPrint', () => {
     assert.equal(labelMuros(1), 'muro')
     assert.equal(labelMuros(29), 'muros')
     assert.equal(capitalizeLabel('equipos de red'), 'Equipos de red')
+  })
+
+  it('sugiere el nombre del PDF con proyecto y plano', () => {
+    assert.equal(
+      sugerirNombrePdfPlano({
+        projectName: 'Santa Sofía',
+        planoNombre: 'baja 2.pdf',
+      }),
+      'Santa Sofía baja 2',
+    )
+    assert.equal(
+      sugerirNombrePdfPlano({
+        projectName: 'Santa sofía baja 2',
+        planoNombre: 'plano.pdf',
+      }),
+      'Santa sofía baja 2',
+    )
+    assert.equal(
+      nombreArchivoPdf('Santa sofía baja 2'),
+      'Santa sofía baja 2.pdf',
+    )
+    assert.equal(
+      tituloPdfDesdeNombre('Santa sofía baja 2.PDF'),
+      'Santa sofía baja 2',
+    )
   })
 
   it('abre la hoja de impresión con id y rama', () => {

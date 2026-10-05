@@ -15,6 +15,8 @@ import { normalizeCotaColor } from '@/lib/netvision/utils/nightPlanoPalette'
 import { buildPlanoRotulo } from '@/lib/netvision/utils/planoRotulo'
 import {
   loadPlanoPrintPayload,
+  sugerirNombrePdfPlano,
+  tituloPdfDesdeNombre,
   type PlanoPrintPayload,
 } from '@/lib/netvision/utils/planoPrint'
 import {
@@ -64,6 +66,7 @@ export default function NetVisionPlanoPrintView() {
   const [project, setProject] = useState<NetVisionProject | null>(null)
   const [ready, setReady] = useState(false)
   const [tema, setTema] = useState<PlanoPrintTema>(PLANO_PRINT_TEMA_DEFAULT)
+  const [pdfNombre, setPdfNombre] = useState('')
 
   useEffect(() => {
     setTema(loadPlanoPrintTema(search.get('tema')))
@@ -88,6 +91,26 @@ export default function NetVisionPlanoPrintView() {
     }
     setReady(true)
   }, [search])
+
+  useEffect(() => {
+    if (!payload) return
+    setPdfNombre((prev) => {
+      if (prev.trim()) return prev
+      return sugerirNombrePdfPlano({
+        projectName: payload.rotulo.projectName,
+        planoNombre: payload.planoNombre,
+      })
+    })
+  }, [payload])
+
+  useEffect(() => {
+    if (!pdfNombre.trim()) return
+    const prev = document.title
+    document.title = tituloPdfDesdeNombre(pdfNombre)
+    return () => {
+      document.title = prev
+    }
+  }, [pdfNombre])
 
   const sectors = useMemo(() => {
     if (!project) return []
@@ -162,6 +185,20 @@ export default function NetVisionPlanoPrintView() {
           <ArrowLeft className="h-4 w-4" />
           Atrás
         </button>
+        <label className="flex min-w-[14rem] flex-1 items-center gap-2">
+          <span className="shrink-0 text-[12px] font-semibold uppercase tracking-wide text-slate-600">
+            Nombre del PDF
+          </span>
+          <input
+            type="text"
+            value={pdfNombre}
+            onChange={(e) => setPdfNombre(e.target.value)}
+            placeholder="Santa sofía baja 2"
+            className="min-h-11 min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-900"
+            aria-label="Nombre del archivo PDF"
+          />
+          <span className="shrink-0 text-sm font-semibold text-slate-500">.pdf</span>
+        </label>
         <button
           type="button"
           onClick={() => window.print()}
@@ -196,7 +233,9 @@ export default function NetVisionPlanoPrintView() {
           ))}
         </div>
         <p className="basis-full text-[12px] text-slate-500">
-          En iPad: pulsa Imprimir / PDF y elige Guardar en Archivos. Atrás vuelve al editor.
+          El archivo se guarda con el nombre de arriba (por ejemplo Santa sofía
+          baja 2.pdf). En iPad: Imprimir / PDF → Guardar en Archivos. Atrás
+          vuelve al editor.
         </p>
       </div>
 

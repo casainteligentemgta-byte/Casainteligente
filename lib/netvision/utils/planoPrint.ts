@@ -27,6 +27,49 @@ export function capitalizeLabel(s: string): string {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : s
 }
 
+const EXT_PLANO = /\.(pdf|png|jpe?g|webp|gif|dwg|dxf|svg)$/i
+const NOMBRE_GENERICO =
+  /^(plano|image|img|foto|scan|documento|untitled|sin[-_\s]?nombre)([-_\s]?\d*)?$/i
+
+export function quitarExtensionPlano(nombre: string): string {
+  return nombre.trim().replace(EXT_PLANO, '').trim()
+}
+
+/** Título sugerido para el archivo: proyecto + nombre del plano, sin extensión. */
+export function sugerirNombrePdfPlano(opts: {
+  projectName?: string | null
+  planoNombre?: string | null
+}): string {
+  const proyecto = opts.projectName?.trim() || ''
+  const plano = quitarExtensionPlano(opts.planoNombre || '')
+  const planoUtil = plano && !NOMBRE_GENERICO.test(plano) ? plano : ''
+  if (proyecto && planoUtil) {
+    const p = proyecto.toLowerCase()
+    const l = planoUtil.toLowerCase()
+    if (l.includes(p) || p.includes(l)) {
+      return proyecto.length >= planoUtil.length ? proyecto : planoUtil
+    }
+    return `${proyecto} ${planoUtil}`
+  }
+  return proyecto || planoUtil || 'Plano'
+}
+
+/** Nombre de archivo .pdf. Conserva espacios y acentos (p. ej. «Santa sofía baja 2.pdf»). */
+export function nombreArchivoPdf(nombre: string): string {
+  const base = nombre
+    .trim()
+    .replace(/\.pdf$/i, '')
+    .replace(/[\\/:*?"<>|]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 120)
+  return `${base || 'Plano'}.pdf`
+}
+
+export function tituloPdfDesdeNombre(nombre: string): string {
+  return nombreArchivoPdf(nombre).replace(/\.pdf$/i, '')
+}
+
 export function buildPlanoPrintMeta(
   p: Pick<
     PlanoPrintPayload,
