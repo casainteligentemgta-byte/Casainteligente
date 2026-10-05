@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CableRoute, CameraModel } from '@/lib/netvision/types'
+import { CAMERA_CATALOG } from '@/lib/netvision/catalog/cameras'
 import {
   buildClienteCameraCard,
   cameraCableMeters,
@@ -74,5 +75,67 @@ describe('clienteCameraCard', () => {
     assert.equal(wireless.wired, false)
     assert.equal(wireless.cableMeters, 0)
     assert.equal(totalClienteCableMeters([wired, wireless]), wired.cableMeters)
+  })
+
+  it('la H9c lleva la foto y los ángulos de la ficha oficial, y sigue cableada', () => {
+    const card = buildClienteCameraCard(
+      { id: 'c2', label: 'CAM-02', x: 0.2, y: 0.3, modelId: 'ezviz-h9c', yawDeg: 0, mountHeightM: 2.8 },
+      [],
+    )
+    assert.match(card.imageUrl ?? '', /^https:\/\//)
+    assert.equal(card.fovLabel, 'Dual 108°+55°')
+    assert.equal(card.formFactor, 'ptz')
+    assert.equal(card.wired, true)
+    assert.equal(card.poeWatts, 12)
+  })
+
+  it('todas las Ezviz llevan foto oficial y conservan su tipo de conexión', () => {
+    const esperado: Record<string, 'poe' | 'battery' | 'wifi'> = {
+      'ezviz-c6n': 'poe',
+      'ezviz-c6cn': 'poe',
+      'ezviz-c8c': 'poe',
+      'ezviz-h3': 'poe',
+      'ezviz-h4': 'wifi',
+      'ezviz-h4-poe': 'poe',
+      'ezviz-h8c': 'poe',
+      'ezviz-h9c': 'poe',
+      'ezviz-ty2': 'poe',
+      'ezviz-c3w-pro': 'poe',
+      'ezviz-bc1c': 'battery',
+      'ezviz-eb8': 'battery',
+    }
+    const ezviz = CAMERA_CATALOG.filter((m) => m.brand === 'Ezviz')
+    assert.deepEqual(ezviz.map((m) => m.id).sort(), Object.keys(esperado).sort())
+    for (const m of ezviz) {
+      assert.match(m.imageUrl ?? '', /^https:\/\/mfs\.ezvizlife\.com\/[0-9a-f]{32}\.png$/, m.id)
+      assert.equal(inferCameraConnection(m), esperado[m.id], m.id)
+      assert.ok((m.notes ?? '').length > 0, m.id)
+    }
+  })
+
+  it('la H3 es la 3K y se presenta cableada con adaptador PoE', () => {
+    const card = buildClienteCameraCard(
+      { id: 'c3', label: 'CAM-03', x: 0.2, y: 0.3, modelId: 'ezviz-h3', yawDeg: 0, mountHeightM: 2.8 },
+      [route],
+    )
+    assert.equal(card.modelName, 'H3 3K Bullet')
+    assert.equal(card.resolution, '3K')
+    assert.equal(card.fovLabel, '96°')
+    assert.equal(card.connectionLabel, 'Cableada (PoE)')
+    assert.equal(card.poeWatts, 8)
+    assert.match(card.notes, /adaptador PoE \(splitter\) de 12 V/)
+  })
+
+  it('la H4 existe en versión Wi-Fi y en versión PoE', () => {
+    const cam = { id: 'c9', label: 'CAM-09', x: 0.2, y: 0.3, yawDeg: 0, mountHeightM: 2.8 }
+    const wifiCard = buildClienteCameraCard({ ...cam, modelId: 'ezviz-h4' }, [route])
+    assert.equal(wifiCard.formLabel, 'Domo')
+    assert.equal(wifiCard.fovLabel, '106°')
+    assert.equal(wifiCard.wired, false)
+    assert.equal(wifiCard.cableMeters, 0)
+    const poeCard = buildClienteCameraCard({ ...cam, modelId: 'ezviz-h4-poe' }, [])
+    assert.equal(poeCard.wired, true)
+    assert.equal(poeCard.connectionLabel, 'Cableada (PoE)')
+    assert.equal(poeCard.poeWatts, 8)
   })
 })
