@@ -2,6 +2,7 @@ import type { TelegramContexto } from '@/lib/telegram/estados';
 import type { ProyectoPickerModo } from '@/lib/telegram/proyectoPicker';
 import { mensajeModoFacturasActivado } from '@/lib/telegram/mensajesFactura';
 import { esComandoAgua, primerTokenComando } from '@/lib/telegram/parseComandoTelegram';
+import { preguntaDeComandoTecnico } from '@/lib/netvision/tecnicoContexto';
 import {
   MENSAJE_AYUDA_TELEGRAM,
   MENSAJE_COMANDO_RETIRADO_TELEGRAM,
@@ -42,6 +43,10 @@ export type ComandoTelegramResult = {
   comandoAgenda?: boolean;
   /** Borrar historial de agenda. */
   comandoLimpiarAgenda?: boolean;
+  /** Técnico de dispositivos (IA): /tecnico <pregunta>. */
+  comandoTecnico?: boolean;
+  /** Pregunta tras /tecnico (vacía → se envía la ayuda). */
+  tecnicoPregunta?: string;
 };
 
 export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
@@ -159,6 +164,10 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
         'Guarda o consulta cumpleaños, citas y recordatorios.\n' +
         'Recuerdo los últimos mensajes. Usa /limpiar_agenda para reiniciar.',
     };
+  }
+
+  if (cmd === '/tecnico' || cmd === '/técnico' || cmd === '/tecnicoia') {
+    return { handled: true, comandoTecnico: true, tecnicoPregunta: preguntaDeComandoTecnico(t) };
   }
 
   if (cmd === '/limpiar_agenda' || cmd === '/limpiar') {

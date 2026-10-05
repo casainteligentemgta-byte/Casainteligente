@@ -19,6 +19,7 @@ import {
   Trash2,
   Undo2,
   Upload,
+  Wrench,
 } from 'lucide-react'
 import { Button } from '@/components/nexus/ui/button'
 import { GlassCardMotion } from '@/components/nexus/GlassCard'
@@ -2530,6 +2531,12 @@ export default function NexusVisionArchitectClient() {
         <Link href="/nexus/vision/manual/usuario">
           <BookOpen className="mr-1.5 h-3.5 w-3.5" />
           Manual
+        </Link>
+      </Button>
+      <Button type="button" variant="glass" size="sm" className="w-full justify-start" asChild>
+        <Link href="/nexus/vision/tecnico">
+          <Wrench className="mr-1.5 h-3.5 w-3.5" />
+          Técnico IA
         </Link>
       </Button>
       {project.planoUrl && viewMode === 'plano' ? (
