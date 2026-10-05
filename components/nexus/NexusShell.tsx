@@ -112,14 +112,19 @@ function NexusShellInner({ children }: { children: React.ReactNode }) {
     if (isNetVision) setMenuOpen(false);
   }, [isNetVision]);
 
-  /** ¿Es la vista del cliente abierta con un enlace compartido (?c=)? */
-  const [isClienteCompartido, setIsClienteCompartido] = useState(false);
+  /**
+   * Vista del cliente abierta con un enlace compartido (?c=): va sin el marco
+   * interno de la empresa. `null` = aún no se sabe (primer pintado): en esa
+   * ruta el marco se oculta hasta saberlo, para que el cliente nunca lo vea.
+   */
+  const esRutaCliente = pathname === '/nexus/vision/cliente';
+  const [esEnlaceCliente, setEsEnlaceCliente] = useState<boolean | null>(null);
   useEffect(() => {
-    setIsClienteCompartido(
-      pathname === '/nexus/vision/cliente' &&
-        new URLSearchParams(window.location.search).has('c'),
+    setEsEnlaceCliente(
+      esRutaCliente && new URLSearchParams(window.location.search).has('c'),
     );
-  }, [pathname]);
+  }, [esRutaCliente, pathname]);
+  const sinMarco = esRutaCliente && esEnlaceCliente !== false;
 
   useEffect(() => {
     if (isDesktop || !menuOpen) return;
@@ -134,24 +139,25 @@ function NexusShellInner({ children }: { children: React.ReactNode }) {
     return <div className="min-h-screen bg-slate-200 text-slate-900">{children}</div>
   }
 
-  // Enlace del cliente: solo la presentación, sin el menú interno de la empresa.
-  if (isClienteCompartido) {
-    return (
-      <div data-nv-shell-cliente className="min-h-screen bg-[#07110d] p-2 text-white lg:p-3">
-        {children}
-      </div>
-    )
-  }
-
+  // Un solo árbol para las dos vistas: la página no se vuelve a montar cuando
+  // se sabe si es el enlace del cliente (solo aparece o no el marco).
   return (
-    <div className="flex min-h-screen bg-[var(--nexus-bg-base)] text-white">
+    <div
+      data-nv-shell-cliente={sinMarco ? '' : undefined}
+      className={cn(
+        'flex min-h-screen text-white',
+        sinMarco ? 'bg-[#07110d]' : 'bg-[var(--nexus-bg-base)]',
+      )}
+    >
       <div className="flex min-w-0 flex-1 flex-col">
-        <NexusShellHeader menuOpen={menuOpen} setMenuOpen={setMenuOpen} />
+        {sinMarco ? null : <NexusShellHeader menuOpen={menuOpen} setMenuOpen={setMenuOpen} />}
         <main className={cn('flex-1', isNetVision ? 'p-2 lg:p-3' : 'p-4 lg:p-8')}>
           {children}
         </main>
       </div>
 
+      {sinMarco ? null : (
+        <>
       {/* Desktop: sidebar a la derecha */}
       <div
         className={cn(
@@ -208,6 +214,8 @@ function NexusShellInner({ children }: { children: React.ReactNode }) {
           </ul>
         </div>
       </aside>
+        </>
+      )}
     </div>
   );
 }

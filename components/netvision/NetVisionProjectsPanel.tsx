@@ -6,19 +6,17 @@ import { Button } from '@/components/nexus/ui/button'
 import { Mono } from '@/components/nexus/Mono'
 import {
   cloudDeleteProject,
-  cloudGetProject,
   cloudListProjects,
   cloudPushAll,
   type NetVisionCloudIndexEntry,
 } from '@/lib/netvision/cloud'
-import { descargarPlanoNube } from '@/lib/netvision/planoNube'
+import { bajarProyectoDeNube } from '@/lib/netvision/bajarDeNube'
 import {
   createProject,
   deleteProject,
   listLocalProjects,
   listProjectIndex,
   openProject,
-  upsertLocalProject,
 } from '@/lib/netvision/storage'
 import type { NetVisionProject, NetVisionProjectIndexEntry } from '@/lib/netvision/types'
 
@@ -105,7 +103,11 @@ export default function NetVisionProjectsPanel({
         setCloudMsg(r.error || 'Error al subir')
         setCloudAuth(r.authenticated)
       } else {
-        setCloudMsg(`Subidos ${r.saved} proyecto(s) a Supabase`)
+        setCloudMsg(
+          r.conflictos.length > 0
+            ? `Subidos ${r.saved} proyecto(s). No se subieron ${r.conflictos.length} porque la nube tiene otra versión: ${r.conflictos.join(', ')}. Ábrelos para elegir con cuál quedarte.`
+            : `Subidos ${r.saved} proyecto(s) a la nube`,
+        )
         await refreshCloud()
       }
     } finally {
@@ -117,17 +119,12 @@ export default function NetVisionProjectsPanel({
     setSyncing(true)
     setCloudMsg(null)
     try {
-      const r = await cloudGetProject(id)
-      if (!r.ok || !r.project) {
-        setCloudMsg(r.error || 'No se pudo descargar')
+      const r = await bajarProyectoDeNube(id)
+      if (!r.ok) {
+        setCloudMsg(r.error)
         return
       }
-      let merged = upsertLocalProject(r.project)
-      if (!merged.planoUrl) {
-        // El plano grande no viene en el proyecto: se baja aparte de la nube.
-        const plano = await descargarPlanoNube(merged.id)
-        if (plano) merged = upsertLocalProject({ ...merged, planoUrl: plano })
-      }
+      const merged = r.project
       const opened = openProject(merged.id) ?? merged
       onOpen(opened)
       refreshLocal()

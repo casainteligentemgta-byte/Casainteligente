@@ -97,19 +97,39 @@ export async function POST(_req: Request, { params }: RouteCtx) {
       return NextResponse.json({ ok: true, authenticated: true, token: previo })
     }
 
+    // Solo se pone el código si aún no tiene: dos toques seguidos (o dos
+    // equipos a la vez) terminan con el mismo enlace, no con uno que se pierde.
     const token = tokenDesdeBytes(new Uint8Array(randomBytes(32)))
     const { error } = await supabase
       .from('netvision_projects')
       .update({ share_token: token, shared_at: new Date().toISOString() })
       .eq('user_id', user.id)
       .eq('id', id)
+      .is('share_token', null)
     if (error) {
       return NextResponse.json(
         { ok: false, authenticated: true, error: errorTabla(error.message) },
         { status: 500 },
       )
     }
-    return NextResponse.json({ ok: true, authenticated: true, token })
+    const final = await supabase
+      .from('netvision_projects')
+      .select('share_token')
+      .eq('user_id', user.id)
+      .eq('id', id)
+      .maybeSingle()
+    const guardado = (final.data?.share_token as string | null | undefined) ?? null
+    if (final.error || !guardado) {
+      return NextResponse.json(
+        {
+          ok: false,
+          authenticated: true,
+          error: final.error ? errorTabla(final.error.message) : 'No se pudo crear el enlace. Inténtalo de nuevo.',
+        },
+        { status: 500 },
+      )
+    }
+    return NextResponse.json({ ok: true, authenticated: true, token: guardado })
   } catch (e) {
     return NextResponse.json(
       { ok: false, authenticated: false, error: e instanceof Error ? e.message : 'Error de servidor' },

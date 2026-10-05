@@ -23,6 +23,14 @@ function huellaSubida(projectId: string): string {
   }
 }
 
+function olvidarHuella(projectId: string) {
+  try {
+    localStorage.removeItem(`${CLAVE_HUELLA}${projectId}`)
+  } catch {
+    /* nada que olvidar */
+  }
+}
+
 function recordarHuella(projectId: string, huella: string) {
   try {
     localStorage.setItem(`${CLAVE_HUELLA}${projectId}`, huella)
@@ -65,12 +73,16 @@ export type ResultadoPlanoNube =
 /**
  * Sube el plano del proyecto si cambió desde la última subida.
  * `forzar` lo sube siempre (al compartir, para garantizar que está arriba).
+ * Si al proyecto se le quitó el plano, borra el que este equipo había subido.
  */
 export async function subirPlanoNube(
   project: Pick<NetVisionProject, 'id' | 'planoUrl'>,
   opciones: { forzar?: boolean } = {},
 ): Promise<ResultadoPlanoNube> {
-  if (!project.planoUrl) return { ok: true, subido: false }
+  if (!project.planoUrl) {
+    if (huellaSubida(project.id)) await borrarPlanoNube(project.id)
+    return { ok: true, subido: false }
+  }
   const huella = huellaPlano(project.planoUrl)
   if (!opciones.forzar && huella && huellaSubida(project.id) === huella) {
     return { ok: true, subido: false }
@@ -99,6 +111,25 @@ export async function subirPlanoNube(
       autenticado: true,
       error: e instanceof Error ? e.message : 'No se pudo subir el plano.',
     }
+  }
+}
+
+/** Borra de la nube el plano del proyecto (se le quitó el plano o se eliminó). */
+export async function borrarPlanoNube(projectId: string): Promise<boolean> {
+  try {
+    const supabase = createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return false
+    const { error } = await supabase.storage
+      .from(NETVISION_PLANOS_BUCKET)
+      .remove([rutaPlanoNube(user.id, projectId)])
+    if (error) return false
+    olvidarHuella(projectId)
+    return true
+  } catch {
+    return false
   }
 }
 

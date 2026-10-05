@@ -1,5 +1,7 @@
 import type { NetVisionProject, NetVisionProjectIndexEntry } from '@/lib/netvision/types'
 import { projectForCloud } from '@/lib/netvision/storage'
+import { guardarBaseNube, leerBaseNube, olvidarBaseNube } from '@/lib/netvision/nubeBase'
+import type { BaseNube, ConflictoNube } from '@/lib/netvision/sincronizacion'
 
 export type NetVisionCloudIndexEntry = NetVisionProjectIndexEntry & {
   hasPlano: boolean
@@ -18,6 +20,11 @@ export type NetVisionCloudProjectResponse = {
   authenticated: boolean
   project?: NetVisionProject
   error?: string
+  /**
+   * La nube tiene otra versión del proyecto y no se sobrescribió: el usuario
+   * decide con cuál quedarse.
+   */
+  conflict?: ConflictoNube
 }
 
 /** `fetch` que no lanza: sin conexión devuelve una respuesta de error legible. */
@@ -62,23 +69,36 @@ export async function cloudGetProject(
     credentials: 'same-origin',
     cache: 'no-store',
   })
-  return parseJson<NetVisionCloudProjectResponse>(res)
+  const r = await parseJson<NetVisionCloudProjectResponse>(res)
+  // Lo que se baja pasa a ser la versión de la que parte este equipo.
+  if (r.ok && r.project) guardarBaseNube(id, r.project.updatedAt)
+  return r
 }
 
+/**
+ * Sube el proyecto. Envía la versión de la nube de la que partió esta copia:
+ * si la nube cambió desde otro equipo, no la pisa y devuelve `conflict`.
+ * `forzar`: el usuario eligió conservar la copia de este equipo.
+ */
 export async function cloudUpsertProject(
   project: NetVisionProject,
+  opciones: { forzar?: boolean } = {},
 ): Promise<NetVisionCloudProjectResponse> {
   const payload = projectForCloud(project)
+  // Sin base conocida, vale como aproximada la fecha de la propia copia.
+  const base: BaseNube = leerBaseNube(project.id) ?? { updatedAt: project.updatedAt, exacta: false }
   const res = await fetchSeguro(
     `/api/netvision/projects/${encodeURIComponent(project.id)}`,
     {
       method: 'PUT',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ project: payload }),
+      body: JSON.stringify({ project: payload, base, force: opciones.forzar === true }),
     },
   )
-  return parseJson<NetVisionCloudProjectResponse>(res)
+  const r = await parseJson<NetVisionCloudProjectResponse>(res)
+  if (r.ok && r.project) guardarBaseNube(project.id, r.project.updatedAt)
+  return r
 }
 
 export async function cloudDeleteProject(
@@ -88,32 +108,49 @@ export async function cloudDeleteProject(
     method: 'DELETE',
     credentials: 'same-origin',
   })
-  return parseJson(res)
+  const r = await parseJson<{ ok: boolean; authenticated: boolean; error?: string }>(res)
+  if (r.ok) olvidarBaseNube(id)
+  return r
 }
 
-/** Sube todos los proyectos locales a la nube. */
+/**
+ * Sube todos los proyectos locales a la nube. Los que la nube tiene en otra
+ * versión no se pisan: se devuelven en `conflictos` para resolverlos uno a uno.
+ */
 export async function cloudPushAll(
   projects: NetVisionProject[],
-): Promise<{ ok: boolean; authenticated: boolean; saved: number; error?: string }> {
+): Promise<{
+  ok: boolean
+  authenticated: boolean
+  saved: number
+  conflictos: string[]
+  error?: string
+}> {
   let saved = 0
   let authenticated = true
+  const conflictos: string[] = []
   for (const p of projects) {
     const r = await cloudUpsertProject(p)
     if (!r.authenticated) {
-      return { ok: false, authenticated: false, saved, error: 'Inicia sesión para sincronizar' }
+      return { ok: false, authenticated: false, saved, conflictos, error: 'Inicia sesión para sincronizar' }
+    }
+    if (r.conflict) {
+      conflictos.push(p.name)
+      continue
     }
     if (!r.ok) {
       return {
         ok: false,
         authenticated: true,
         saved,
+        conflictos,
         error: r.error || `Error al guardar ${p.name}`,
       }
     }
     saved += 1
     authenticated = r.authenticated
   }
-  return { ok: true, authenticated, saved }
+  return { ok: true, authenticated, saved, conflictos }
 }
 
 export type NetVisionCompartirResponse = {

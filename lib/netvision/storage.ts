@@ -20,6 +20,8 @@ import type {
   UnitSystem,
   ZanjaModo,
 } from '@/lib/netvision/types'
+import { huellaPlano } from '@/lib/netvision/compartir'
+import { normalizarTasa } from '@/lib/netvision/utils/moneda'
 import { DRAWABLE_CABLE_TYPES } from '@/lib/netvision/services/cableCalculator'
 import { defaultScale } from '@/lib/netvision/services/coverageCalculator'
 import { DEFAULT_CAMERA_MODEL_ID } from '@/lib/netvision/catalog/cameras'
@@ -279,18 +281,23 @@ export function listLocalProjects(): NetVisionProject[] {
 export function projectForCloud(project: NetVisionProject): NetVisionProject {
   const normalized = normalizeProject(project)
   const plano = normalized.planoUrl
+  // La huella dice si hay plano (y cuál) aunque el plano grande viaje aparte.
+  const conHuella = { ...normalized, planoHuella: huellaPlano(plano) }
   if (plano && plano.length > NETVISION_CLOUD_MAX_PLANO_CHARS) {
-    return { ...normalized, planoUrl: null }
+    return { ...conHuella, planoUrl: null }
   }
-  return normalized
+  return conHuella
 }
 
 /** Inserta o actualiza en biblioteca local (p. ej. al bajar de la nube). */
-export function upsertLocalProject(project: NetVisionProject): NetVisionProject {
+export function upsertLocalProject(
+  project: NetVisionProject,
+  opciones: { conservarPlanoLocal?: boolean } = {},
+): NetVisionProject {
   const next = normalizeProject(project)
   const lib = readLibrary()
   const prev = lib.projects[next.id]
-  if (prev?.planoUrl && !next.planoUrl) {
+  if (opciones.conservarPlanoLocal !== false && prev?.planoUrl && !next.planoUrl) {
     // Conserva plano local si la nube no trae imagen
     next.planoUrl = prev.planoUrl
   }
@@ -491,6 +498,7 @@ export function resetActiveDesign(current: NetVisionProject): NetVisionProject {
     client: current.client ?? '',
     unitSystem: current.unitSystem,
     currency: current.currency,
+    tasaCambio: current.tasaCambio,
     distributorMarginPct: current.distributorMarginPct,
     complianceProfileId: current.complianceProfileId,
     retentionDays: current.retentionDays,
@@ -545,9 +553,13 @@ function normalizeProject(
       typeof p.updatedAt === 'string' && p.updatedAt ? p.updatedAt : nowIso(),
     unitSystem,
     currency,
+    ...(currency !== 'USD' && normalizarTasa(p.tasaCambio) != null
+      ? { tasaCambio: normalizarTasa(p.tasaCambio)! }
+      : {}),
     distributorMarginPct: margin,
     planoUrl: p.planoUrl ?? null,
     planoNombre: p.planoNombre ?? '',
+    ...(typeof p.planoHuella === 'string' ? { planoHuella: p.planoHuella.slice(0, 64) } : {}),
     planoInvertido: Boolean(p.planoInvertido),
     planoCotaColor: normalizeCotaColor(p.planoCotaColor),
     planoGrosorMuro: clampGrosorMuro(p.planoGrosorMuro),

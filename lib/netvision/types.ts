@@ -358,10 +358,21 @@ export type NetVisionProject = {
   updatedAt: string
   unitSystem: UnitSystem
   currency: NetVisionCurrency
+  /**
+   * Tasa de cambio: unidades de la moneda elegida por 1 USD (p. ej. Bs por $).
+   * Los precios del catálogo están en dólares; sin tasa se muestran en dólares.
+   */
+  tasaCambio?: number
   /** Margen distribuidor sobre subtotal BOM (0–100). */
   distributorMarginPct: number
   planoUrl: string | null
   planoNombre: string
+  /**
+   * Huella del plano con que se subió esta copia a la nube ('' = sin plano).
+   * El plano grande no viaja dentro del proyecto: con esto la nube sabe si el
+   * proyecto tiene plano y si es el mismo.
+   */
+  planoHuella?: string
   /** Si true, el plano se muestra invertido (fondo negro, trazos blancos). */
   planoInvertido?: boolean
   /** Color de cotas/números en modo fondo negro. */

@@ -5,6 +5,13 @@ import type {
 } from '@/lib/netvision/types'
 import { getCameraModelOrDefault } from '@/lib/netvision/catalog/cameras'
 import { getNetworkModelOrDefault } from '@/lib/netvision/catalog/network'
+import {
+  convertirUsd,
+  etiquetaTasa,
+  monedaEfectiva,
+  normalizarTasa,
+  simboloMoneda,
+} from '@/lib/netvision/utils/moneda'
 
 export function bomMarginTotal(
   bom: BomSummary,
@@ -16,9 +23,7 @@ export function bomMarginTotal(
 }
 
 export function currencySymbol(currency: NetVisionCurrency): string {
-  if (currency === 'EUR') return '€'
-  if (currency === 'VES') return 'Bs'
-  return '$'
+  return simboloMoneda(currency)
 }
 
 export function projectToExportJson(project: NetVisionProject, bom: BomSummary) {
@@ -36,6 +41,7 @@ export function projectToExportJson(project: NetVisionProject, bom: BomSummary) 
     client: project.client,
     unitSystem: project.unitSystem,
     currency: project.currency,
+    tasaCambio: project.tasaCambio ?? null,
     distributorMarginPct: project.distributorMarginPct,
     marginUsd,
     totalWithMarginUsd,
@@ -88,21 +94,34 @@ export function downloadJson(filename: string, data: unknown) {
   triggerDownload(blob, filename)
 }
 
+/**
+ * Los precios van en dólares. Con otra moneda y su tasa se agrega la columna
+ * convertida; sin tasa el total se rotula en dólares (que es lo que es).
+ */
 export function bomToCsv(
   bom: BomSummary,
-  opts?: { marginPct?: number; currency?: NetVisionCurrency; projectName?: string },
+  opts?: {
+    marginPct?: number
+    currency?: NetVisionCurrency
+    tasa?: number | null
+    projectName?: string
+  },
 ): string {
   const marginPct = opts?.marginPct ?? 0
   const { marginUsd, totalWithMarginUsd } = bomMarginTotal(bom, marginPct)
-  const currency = opts?.currency ?? 'USD'
-  const header = 'sku,category,description,qty,unit_usd,total_usd'
+  const moneda = monedaEfectiva(opts?.currency ?? 'USD', opts?.tasa)
+  const tasa = normalizarTasa(opts?.tasa)
+  const convertida = moneda !== 'USD'
+  const conv = (usd: number) => (convertida ? `,${convertirUsd(usd, moneda, tasa).toFixed(2)}` : '')
+  const header = `sku,category,description,qty,unit_usd,total_usd${convertida ? `,total_${moneda.toLowerCase()}` : ''}`
   const rows = bom.lines.map(
     (l) =>
-      `${csvEscape(l.sku)},${csvEscape(l.category)},${csvEscape(l.description)},${l.qty},${l.unitUsd},${l.totalUsd}`,
+      `${csvEscape(l.sku)},${csvEscape(l.category)},${csvEscape(l.description)},${l.qty},${l.unitUsd},${l.totalUsd}${conv(l.totalUsd)}`,
   )
-  rows.push(`SUBTOTAL,,,, ,${bom.totalUsd}`)
-  rows.push(`MARGEN_${marginPct}pct,,,, ,${marginUsd.toFixed(2)}`)
-  rows.push(`TOTAL_${currency},,,, ,${totalWithMarginUsd.toFixed(2)}`)
+  rows.push(`SUBTOTAL,,,, ,${bom.totalUsd}${conv(bom.totalUsd)}`)
+  rows.push(`MARGEN_${marginPct}pct,,,, ,${marginUsd.toFixed(2)}${conv(marginUsd)}`)
+  rows.push(`TOTAL_USD,,,, ,${totalWithMarginUsd.toFixed(2)}${conv(totalWithMarginUsd)}`)
+  if (convertida) rows.push(`TASA_${moneda}_POR_USD,,,, ,${tasa}`)
   if (opts?.projectName) {
     return [`# ${opts.projectName}`, header, ...rows].join('\n')
   }
@@ -115,9 +134,15 @@ export function bomToExcelXml(
     projectName: string
     marginPct: number
     currency: NetVisionCurrency
+    tasa?: number | null
   },
 ): string {
   const { marginUsd, totalWithMarginUsd } = bomMarginTotal(bom, opts.marginPct)
+  const moneda = monedaEfectiva(opts.currency, opts.tasa)
+  const tasa = normalizarTasa(opts.tasa)
+  const convertida = moneda !== 'USD'
+  const conv = (usd: number) =>
+    convertida ? cell(Number(convertirUsd(usd, moneda, tasa).toFixed(2)), 'Number') : ''
   const esc = (s: string) =>
     s
       .replace(/&/g, '&amp;')
@@ -132,6 +157,7 @@ export function bomToExcelXml(
     return `<Cell><Data ss:Type="String">${esc(String(v))}</Data></Cell>`
   }
   const header = ['SKU', 'Categoría', 'Descripción', 'Cant.', 'Unit USD', 'Total USD']
+  if (convertida) header.push(`Total ${moneda}`)
   const bodyRows = bom.lines.map((l) =>
     [
       cell(l.sku),
@@ -140,12 +166,19 @@ export function bomToExcelXml(
       cell(l.qty, 'Number'),
       cell(l.unitUsd, 'Number'),
       cell(l.totalUsd, 'Number'),
+      conv(l.totalUsd),
     ].join(''),
   )
   bodyRows.push(
-    [cell(''), cell(''), cell('SUBTOTAL'), cell(''), cell(''), cell(bom.totalUsd, 'Number')].join(
-      '',
-    ),
+    [
+      cell(''),
+      cell(''),
+      cell('SUBTOTAL'),
+      cell(''),
+      cell(''),
+      cell(bom.totalUsd, 'Number'),
+      conv(bom.totalUsd),
+    ].join(''),
   )
   bodyRows.push(
     [
@@ -155,18 +188,25 @@ export function bomToExcelXml(
       cell(''),
       cell(''),
       cell(Number(marginUsd.toFixed(2)), 'Number'),
+      conv(marginUsd),
     ].join(''),
   )
   bodyRows.push(
     [
       cell(''),
       cell(''),
-      cell(`TOTAL ${opts.currency}`),
+      cell(convertida ? `TOTAL USD / TOTAL ${moneda}` : 'TOTAL USD'),
       cell(''),
       cell(''),
       cell(Number(totalWithMarginUsd.toFixed(2)), 'Number'),
+      conv(totalWithMarginUsd),
     ].join(''),
   )
+  if (convertida) {
+    bodyRows.push(
+      [cell(''), cell(''), cell(`Tasa: ${tasa} ${etiquetaTasa(moneda)}`)].join(''),
+    )
+  }
   const headerRow = `<Row>${header.map((h) => cell(h)).join('')}</Row>`
   const rowsXml = bodyRows.map((r) => `<Row>${r}</Row>`).join('')
   return `<?xml version="1.0"?>

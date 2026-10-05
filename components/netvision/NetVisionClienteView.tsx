@@ -197,6 +197,9 @@ export default function NetVisionClienteView() {
     esCompartido ? 'cargando' : 'listo',
   )
   const [errorCompartido, setErrorCompartido] = useState<string | null>(null)
+  /** Plano del enlace del cliente: se baja aparte y puede tardar unos segundos. */
+  const [planoEstado, setPlanoEstado] = useState<'no' | 'cargando' | 'error'>('no')
+  const [planoIntento, setPlanoIntento] = useState(0)
   /** Enlace ya creado para este proyecto (lado del instalador). */
   const [shareUrl, setShareUrl] = useState<string | null>(null)
   const [sharing, setSharing] = useState(false)
@@ -225,6 +228,7 @@ export default function NetVisionClienteView() {
     // Enlace del cliente: el proyecto viene de la nube, no de este navegador.
     let cancelado = false
     setProject(null)
+    setPlanoEstado('no')
     if (!tokenCompartido) {
       setEstadoCompartido('error')
       setErrorCompartido('Enlace no válido.')
@@ -244,16 +248,21 @@ export default function NetVisionClienteView() {
       setEstadoCompartido('listo')
       enfocar(loaded)
       if (!loaded.planoUrl && r.planoSignedUrl) {
+        setPlanoEstado('cargando')
         const plano = await descargarPlanoFirmado(r.planoSignedUrl)
-        if (!cancelado && plano) {
+        if (cancelado) return
+        if (plano) {
           setProject((p) => (p && p.id === loaded.id ? { ...p, planoUrl: plano } : p))
+          setPlanoEstado('no')
+        } else {
+          setPlanoEstado('error')
         }
       }
     })
     return () => {
       cancelado = true
     }
-  }, [search, esCompartido, tokenCompartido])
+  }, [search, esCompartido, tokenCompartido, planoIntento])
 
   // Lado del instalador: ¿este proyecto ya tiene enlace para el cliente?
   const projectId = project?.id ?? null
@@ -340,6 +349,12 @@ export default function NetVisionClienteView() {
       const guardado = await cloudUpsertProject(project)
       if (!guardado.authenticated) {
         setShareMsg('Inicia sesión para compartir el proyecto con el cliente.')
+        return
+      }
+      if (guardado.conflict) {
+        setShareMsg(
+          'La nube tiene otra versión de este proyecto. Ábrelo en el editor, elige con cuál te quedas y vuelve a compartir.',
+        )
         return
       }
       if (!guardado.ok) {
@@ -636,8 +651,32 @@ export default function NetVisionClienteView() {
               showZoomOverlay
             />
             </NetVisionPlanoRotulo>
+          ) : planoEstado === 'cargando' ? (
+            <p
+              data-nv-plano-estado="cargando"
+              className="border border-[#2e7d54] p-6 text-sm text-[#a9e8c4]"
+            >
+              Cargando el plano…
+            </p>
+          ) : planoEstado === 'error' ? (
+            <div
+              data-nv-plano-estado="error"
+              className="space-y-3 border border-[#2e7d54] p-6 text-sm text-[#a9e8c4]"
+            >
+              <p>No se pudo cargar el plano. Revisa tu conexión.</p>
+              <button
+                type="button"
+                onClick={() => setPlanoIntento((n) => n + 1)}
+                className="min-h-11 border border-[#8cffb5] px-4 font-semibold text-[#8cffb5]"
+              >
+                Reintentar
+              </button>
+            </div>
           ) : (
-            <p className="border border-[#2e7d54] p-6 text-sm text-[#a9e8c4]">
+            <p
+              data-nv-plano-estado="sin-plano"
+              className="border border-[#2e7d54] p-6 text-sm text-[#a9e8c4]"
+            >
               Este proyecto no tiene plano cargado.
             </p>
           )}
