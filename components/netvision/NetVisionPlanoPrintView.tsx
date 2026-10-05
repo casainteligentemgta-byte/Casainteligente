@@ -62,8 +62,7 @@ function payloadFromProject(
     }),
     planoNombre: project.planoNombre,
     cameraCount: project.cameras.length,
-    networkCount: project.networkNodes.length,
-    structureCount: (project.structures ?? []).length,
+    cameraLabels: project.cameras.map((c) => ({ id: c.id, label: c.label })),
   }
 }
 
@@ -175,9 +174,18 @@ export default function NetVisionPlanoPrintView() {
   }, [project])
 
   const hasImage = Boolean(payload?.imageDataUrl?.startsWith('data:image/'))
+  const cameraLabels = useMemo(() => {
+    if (payload?.cameraLabels?.length) return payload.cameraLabels
+    return (project?.cameras ?? []).map((c) => ({ id: c.id, label: c.label }))
+  }, [payload, project])
   const sheetPayload = useMemo(
-    () => (payload && ajustar && recorte ? { ...payload, imageDataUrl: recorte } : payload),
-    [payload, ajustar, recorte],
+    () =>
+      payload && ajustar && recorte
+        ? { ...payload, imageDataUrl: recorte, cameraLabels }
+        : payload
+          ? { ...payload, cameraLabels }
+          : payload,
+    [payload, ajustar, recorte, cameraLabels],
   )
   const planoCambiado = zoom !== 1 || pan.x !== 0 || pan.y !== 0 || !ajustar
   const pageBg = PLANO_PRINT_TEMA_PAGE_BG[tema]
@@ -385,6 +393,7 @@ export default function NetVisionPlanoPrintView() {
                   showCableRoutes
                   showStructures
                   readOnly
+                  showCameraLabels={false}
                   onAddAt={() => undefined}
                   onMove={() => undefined}
                   metersPerNormX={project.scale.metersPerNormX}

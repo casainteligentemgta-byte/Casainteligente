@@ -13,6 +13,8 @@ export type PlanoPrintPayload = {
   cameraCount?: number
   networkCount?: number
   structureCount?: number
+  /** Nombres fuera del dibujo (chips). El plano se captura sin etiquetas Konva. */
+  cameraLabels?: { id: string; label: string }[]
 }
 
 export function labelEquiposRed(n: number): string {
@@ -71,24 +73,10 @@ export function tituloPdfDesdeNombre(nombre: string): string {
 }
 
 export function buildPlanoPrintMeta(
-  p: Pick<
-    PlanoPrintPayload,
-    'planoNombre' | 'cameraCount' | 'networkCount' | 'structureCount'
-  >,
+  p: Pick<PlanoPrintPayload, 'cameraCount'>,
 ): string {
-  const parts = [
-    p.planoNombre?.trim() ? `Plano: ${p.planoNombre.trim()}` : null,
-    p.cameraCount != null
-      ? `${p.cameraCount} cámara${p.cameraCount === 1 ? '' : 's'}`
-      : null,
-    p.networkCount != null
-      ? `${p.networkCount} ${labelEquiposRed(p.networkCount)}`
-      : null,
-    p.structureCount != null
-      ? `${p.structureCount} ${labelMuros(p.structureCount)}`
-      : null,
-  ].filter(Boolean)
-  return parts.join(' · ')
+  if (p.cameraCount == null) return ''
+  return `${p.cameraCount} cámara${p.cameraCount === 1 ? '' : 's'}`
 }
 
 export function savePlanoPrintPayload(payload: PlanoPrintPayload): boolean {

@@ -13,17 +13,15 @@ import {
 } from './planoPrint'
 
 describe('planoPrint', () => {
-  it('arma la ficha del plano con cámaras y estructuras', () => {
-    const meta = buildPlanoPrintMeta({
-      planoNombre: 'Santa Fe planta baja',
-      cameraCount: 13,
-      networkCount: 0,
-      structureCount: 29,
-    })
-    assert.match(meta, /Santa Fe/)
-    assert.match(meta, /13 cámaras/)
-    assert.match(meta, /0 equipos de red/)
-    assert.match(meta, /29 muros/)
+  it('la ficha impresa solo cuenta cámaras', () => {
+    assert.equal(
+      buildPlanoPrintMeta({
+        cameraCount: 13,
+      }),
+      '13 cámaras',
+    )
+    assert.equal(buildPlanoPrintMeta({ cameraCount: 1 }), '1 cámara')
+    assert.equal(buildPlanoPrintMeta({}), '')
   })
 
   it('nombra equipos de red y muros en singular y plural', () => {

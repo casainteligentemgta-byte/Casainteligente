@@ -2,12 +2,7 @@
 
 import { useRef, type CSSProperties, type PointerEvent, type ReactNode } from 'react'
 import NetVisionCompanyMark from '@/components/netvision/NetVisionCompanyMark'
-import {
-  capitalizeLabel,
-  labelEquiposRed,
-  labelMuros,
-  type PlanoPrintPayload,
-} from '@/lib/netvision/utils/planoPrint'
+import type { PlanoPrintPayload } from '@/lib/netvision/utils/planoPrint'
 import { acotarDesplazamiento } from '@/lib/netvision/utils/planoRecorte'
 import {
   contadorDosDigitos,
@@ -130,6 +125,37 @@ function plural(n: number | undefined, uno: string, varios: string) {
   return n === 1 ? uno : varios
 }
 
+function PrintCameraChips({
+  cameras,
+  tema,
+}: {
+  cameras: { id: string; label: string }[]
+  tema: 'tactico' | 'arcade' | 'tiempo-real'
+}) {
+  if (cameras.length === 0) return null
+  const chip =
+    tema === 'tactico'
+      ? 'border border-[#4ade80] bg-[#0b1a14] text-[10px] font-bold tracking-[0.08em] text-[#d6ffe5]'
+      : tema === 'tiempo-real'
+        ? 'border-2 border-[#ffb000] bg-[#050505] text-[10px] font-bold uppercase tracking-[0.08em] text-[#ffb000]'
+        : 'border-2 border-white bg-[rgba(8,16,70,0.55)] text-[10px] font-bold uppercase tracking-[0.08em] text-white'
+  return (
+    <div
+      className="flex flex-wrap items-center gap-1"
+      data-nv-print-cam-names
+    >
+      {cameras.map((c) => (
+        <span
+          key={c.id}
+          className={`inline-flex h-[31px] items-center px-2 ${chip}`}
+        >
+          {c.label}
+        </span>
+      ))}
+    </div>
+  )
+}
+
 /* ── Táctico: negro verdoso, verde fósforo, marco tipo visor ───────────── */
 
 const TAC_BRACKET = 'pointer-events-none absolute z-10 h-5 w-5 border-[#8cffb5]'
@@ -165,17 +191,16 @@ function SheetTactico({ payload, livePlano, vista }: SheetProps) {
         />
       </div>
 
+      <div className="mt-2">
+        <PrintCameraChips cameras={payload.cameraLabels ?? []} tema="tactico" />
+      </div>
+
       <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_13.5rem] print:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_13.5rem]">
         <section className="flex min-w-0 flex-col justify-between gap-2 border border-[#2e7d54] px-4 py-3">
           <p className={TAC_LABEL}>Objetivo</p>
           <h1 className="break-words text-3xl font-bold uppercase leading-none tracking-[0.08em] text-[#d6ffe5] sm:text-4xl print:text-4xl">
             {rotulo.projectName}
           </h1>
-          {payload.planoNombre?.trim() ? (
-            <p className="truncate text-[11px] tracking-[0.04em]">
-              <span className="text-[#5fbf8a]">PLANO:</span> {payload.planoNombre.trim()}
-            </p>
-          ) : null}
         </section>
 
         <section className="flex min-w-0 flex-col justify-between gap-2 border border-[#2e7d54] px-4 py-3">
@@ -197,24 +222,6 @@ function SheetTactico({ payload, livePlano, vista }: SheetProps) {
               ) : null}
             </div>
           </div>
-          <p className="flex flex-wrap gap-x-5 gap-y-1 text-[11px] tracking-[0.04em]">
-            {payload.networkCount != null ? (
-              <span>
-                <span className="text-[#5fbf8a]">
-                  {labelEquiposRed(payload.networkCount).toUpperCase()}:
-                </span>{' '}
-                {payload.networkCount}
-              </span>
-            ) : null}
-            {payload.structureCount != null ? (
-              <span>
-                <span className="text-[#5fbf8a]">
-                  {labelMuros(payload.structureCount).toUpperCase()}:
-                </span>{' '}
-                {payload.structureCount}
-              </span>
-            ) : null}
-          </p>
         </section>
 
         <section className="flex min-w-0 flex-col justify-center gap-2 border border-[#2e7d54] px-4 py-3 text-[11px]">
@@ -239,18 +246,6 @@ function SheetTiempoReal({ payload, livePlano, vista }: SheetProps) {
   const fecha = rotuloFechaDigitos(rotulo.dateLabel)
   const contadores: Array<[string, number | undefined]> = [
     [plural(payload.cameraCount, 'Cámara', 'Cámaras'), payload.cameraCount],
-    [
-      payload.networkCount == null
-        ? 'Red'
-        : capitalizeLabel(labelEquiposRed(payload.networkCount)),
-      payload.networkCount,
-    ],
-    [
-      payload.structureCount == null
-        ? 'Muros'
-        : capitalizeLabel(labelMuros(payload.structureCount)),
-      payload.structureCount,
-    ],
   ]
   return (
     <article
@@ -290,15 +285,13 @@ function SheetTiempoReal({ payload, livePlano, vista }: SheetProps) {
             <h1 className="break-words text-[2.5rem] font-bold uppercase leading-[0.92]">
               {rotulo.projectName}
             </h1>
-            {payload.planoNombre?.trim() ? (
-              <p className="mt-2 break-words text-base text-[#c8c8c8]">
-                {payload.planoNombre.trim()}
-              </p>
-            ) : null}
+          </div>
+          <div className="mt-3">
+            <PrintCameraChips cameras={payload.cameraLabels ?? []} tema="tiempo-real" />
           </div>
         </section>
 
-        <section className={`${TR_BOX} grid grid-cols-3 gap-2`}>
+        <section className={`${TR_BOX} grid grid-cols-1 gap-2`}>
           {contadores.map(([label, n]) => (
             <div key={label} className="min-w-0">
               <p
@@ -341,11 +334,6 @@ function SheetArcade({ payload, livePlano, vista }: SheetProps) {
           >
             {rotulo.projectName}
           </h1>
-          {payload.planoNombre?.trim() ? (
-            <p className="mt-1.5 truncate text-sm font-bold uppercase tracking-[0.1em]">
-              {payload.planoNombre.trim()}
-            </p>
-          ) : null}
         </div>
         <NetVisionCompanyMark
           company={rotulo.company}
@@ -363,6 +351,10 @@ function SheetArcade({ payload, livePlano, vista }: SheetProps) {
         />
       </div>
 
+      <div className="mt-3 px-1">
+        <PrintCameraChips cameras={payload.cameraLabels ?? []} tema="arcade" />
+      </div>
+
       <div className="mt-5 flex flex-wrap items-stretch gap-3 px-2" style={CONDENSED}>
         {payload.cameraCount != null ? (
           <div
@@ -372,28 +364,6 @@ function SheetArcade({ payload, livePlano, vista }: SheetProps) {
             <span className="text-4xl font-extrabold">{payload.cameraCount}</span>
             <span className="mt-1 text-[12px] font-bold uppercase tracking-[0.12em]">
               {plural(payload.cameraCount, 'Cámara', 'Cámaras')}
-            </span>
-          </div>
-        ) : null}
-        {payload.networkCount != null ? (
-          <div
-            className={`${ARCADE_TILE} shadow-[0_5px_0_#06318a]`}
-            style={{ ...ARCADE_SKEW, background: 'linear-gradient(180deg, #22b8ff, #0a63d6)' }}
-          >
-            <span className="text-4xl font-extrabold">{payload.networkCount}</span>
-            <span className="mt-1 text-[12px] font-bold uppercase tracking-[0.12em]">
-              {labelEquiposRed(payload.networkCount)}
-            </span>
-          </div>
-        ) : null}
-        {payload.structureCount != null ? (
-          <div
-            className={`${ARCADE_TILE} shadow-[0_5px_0_#3e0c7a]`}
-            style={{ ...ARCADE_SKEW, background: 'linear-gradient(180deg, #c566ff, #7a1fd6)' }}
-          >
-            <span className="text-4xl font-extrabold">{payload.structureCount}</span>
-            <span className="mt-1 text-[12px] font-bold uppercase tracking-[0.12em]">
-              {plural(payload.structureCount, 'Muro', 'Muros')}
             </span>
           </div>
         ) : null}

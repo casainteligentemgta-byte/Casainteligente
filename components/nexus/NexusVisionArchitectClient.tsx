@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { createPortal } from 'react-dom'
 import dynamic from 'next/dynamic'
 import type Konva from 'konva'
@@ -346,6 +347,8 @@ export default function NexusVisionArchitectClient() {
   const [showCableRoutes, setShowCableRoutes] = useState(true)
   const [showUnderground, setShowUnderground] = useState(false)
   const [showStructures, setShowStructures] = useState(true)
+  /** Al exportar PDF se ocultan las etiquetas Konva: el plano llena el recuadro. */
+  const [hideLabelsForPrint, setHideLabelsForPrint] = useState(false)
   const [drawStructureMaterial, setDrawStructureMaterial] =
     useState<StructureMaterialId | null>(null)
   const [structureDraft, setStructureDraft] = useState<{ x: number; y: number } | null>(
@@ -2465,6 +2468,9 @@ export default function NexusVisionArchitectClient() {
         projectName: project.name,
         branch: sideTab,
       })
+      // Sin etiquetas Konva: el recorte abraza el plano y los nombres van en chips.
+      flushSync(() => setHideLabelsForPrint(true))
+      stage.batchDraw()
       // 2× para que el plano siga nítido cuando la hoja recorta el margen y lo agranda.
       const imageDataUrl = stage.toDataURL({
         pixelRatio: 2,
@@ -2479,11 +2485,11 @@ export default function NexusVisionArchitectClient() {
         rotulo,
         planoNombre: project.planoNombre,
         cameraCount: project.cameras.length,
-        networkCount: project.networkNodes.length,
-        structureCount: (project.structures ?? []).length,
+        cameraLabels: project.cameras.map((c) => ({ id: c.id, label: c.label })),
       })
       window.location.assign(planoPrintHref(project.id, sideTab))
     } catch (e) {
+      setHideLabelsForPrint(false)
       setError(e instanceof Error ? e.message : 'No se pudo exportar el PDF del plano.')
       setExportingPdf(false)
     }
@@ -3717,6 +3723,7 @@ export default function NexusVisionArchitectClient() {
                     metersPerNormX={project.scale.metersPerNormX}
                     metersPerNormY={project.scale.metersPerNormY}
                     nightMode={nightMode}
+                    showCameraLabels={!hideLabelsForPrint}
                     onInspect={() => setInspectorOpen(true)}
                     multiSelectedIds={multiMode ? multiIds : undefined}
                     onToggleMulti={

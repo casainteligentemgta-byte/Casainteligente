@@ -104,21 +104,10 @@ function NetVisionPlanPdfDoc(props: NetVisionPlanPdfInput) {
       dateStyle: 'medium',
       timeStyle: 'short',
     })
-  const counts = [
+  const counts =
     props.cameraCount != null
       ? `${props.cameraCount} cámara${props.cameraCount === 1 ? '' : 's'}`
-      : null,
-    props.networkCount != null
-      ? `${props.networkCount} ${
-          props.networkCount === 1 ? 'equipo de red' : 'equipos de red'
-        }`
-      : null,
-    props.structureCount != null
-      ? `${props.structureCount} ${props.structureCount === 1 ? 'muro' : 'muros'}`
-      : null,
-  ]
-    .filter(Boolean)
-    .join(' · ')
+      : ''
 
   return (
     <Document
@@ -129,12 +118,7 @@ function NetVisionPlanPdfDoc(props: NetVisionPlanPdfInput) {
       <Page size="A4" orientation="landscape" style={styles.page}>
         <View style={styles.header}>
           <Text style={styles.title}>{props.projectName || 'Proyecto sin nombre'}</Text>
-          {counts || props.planoNombre?.trim() ? (
-            <Text style={styles.meta}>
-              {props.planoNombre?.trim() ? `Plano: ${props.planoNombre.trim()}` : ''}
-              {counts ? `${props.planoNombre?.trim() ? ' · ' : ''}${counts}` : ''}
-            </Text>
-          ) : null}
+          {counts ? <Text style={styles.meta}>{counts}</Text> : null}
         </View>
         <View style={styles.imageWrap}>
           <Image src={props.imageDataUrl} style={styles.image} />
