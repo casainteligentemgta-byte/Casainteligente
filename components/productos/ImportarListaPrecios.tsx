@@ -225,6 +225,36 @@ function Grupo({
 
 type Resultado = { actualizados: number; creados: number; fotos: number; errores: string[] };
 
+/** Cuántos productos se guardan a la vez. */
+const EN_PARALELO = 4;
+
+/** Reparte una lista entre varios trabajadores que van tomando el siguiente. */
+async function enParalelo<T>(lista: T[], limite: number, tarea: (item: T) => Promise<void>): Promise<void> {
+    let siguiente = 0;
+    const trabajadores: Promise<void>[] = [];
+    const trabajar = async () => {
+        while (siguiente < lista.length) {
+            const item = lista[siguiente]!;
+            siguiente += 1;
+            await tarea(item);
+        }
+    };
+    for (let k = 0; k < Math.min(limite, lista.length); k++) trabajadores.push(trabajar());
+    await Promise.all(trabajadores);
+}
+
+type Cerrojo = { release: () => Promise<void> };
+
+/** Pide que la pantalla no se apague mientras se guarda (si el navegador lo permite). */
+async function pantallaEncendida(): Promise<Cerrojo | null> {
+    try {
+        const nav = navigator as unknown as { wakeLock?: { request: (tipo: string) => Promise<Cerrojo> } };
+        return nav.wakeLock ? await nav.wakeLock.request('screen') : null;
+    } catch {
+        return null;
+    }
+}
+
 export default function ImportarListaPrecios() {
     const supabase = useMemo(() => createClient(), []);
     const { nombres: categorias } = useCategoriasCatalogo();
@@ -262,7 +292,7 @@ export default function ImportarListaPrecios() {
     const [progreso, setProgreso] = useState<{ hechos: number; total: number } | null>(null);
     const [resultado, setResultado] = useState<Resultado | null>(null);
     const [confirmar, setConfirmar] = useState(false);
-    const fotosSubidas = useRef<Record<string, string>>({});
+    const fotosSubidas = useRef<Record<string, Promise<string>>>({});
 
     const cargarProductos = useCallback(async () => {
         setErrorProductos(null);
@@ -426,17 +456,24 @@ export default function ImportarListaPrecios() {
     const totalCambios = aActualizar.length + aCrear.length;
 
     const subirFoto = useCallback(
-        async (foto: string): Promise<string | null> => {
+        (foto: string): Promise<string | null> => {
             const ya = fotosSubidas.current[foto];
             if (ya) return ya;
             const entrada = entradas[foto];
-            if (!zip || !entrada) return null;
+            if (!zip || !entrada) return Promise.resolve(null);
             const tipo = tipoDeImagen(entrada.nombre);
-            const blob = await extraerDeZip(zip, entrada, tipo);
-            const { url, error } = await uploadProductImage(supabase, new File([blob], foto, { type: tipo }));
-            if (error || !url) throw new Error(error || 'No se pudo subir la foto.');
-            fotosSubidas.current[foto] = url;
-            return url;
+            // Se guarda la promesa: varios productos comparten foto y se guardan a la vez.
+            const subida = extraerDeZip(zip, entrada, tipo)
+                .then((blob) => uploadProductImage(supabase, new File([blob], foto, { type: tipo })))
+                .then(({ url, error }) => {
+                    if (error || !url) throw new Error(error || 'No se pudo subir la foto.');
+                    return url;
+                });
+            fotosSubidas.current[foto] = subida;
+            subida.catch(() => {
+                delete fotosSubidas.current[foto];
+            });
+            return subida;
         },
         [entradas, zip, supabase],
     );
@@ -450,57 +487,64 @@ export default function ImportarListaPrecios() {
         const fecha = fechaLista || hoyLocal();
         let hechos = 0;
         setProgreso({ hechos, total });
+        const avanzar = () => {
+            hechos += 1;
+            setProgreso({ hechos, total });
+        };
+        const cerrojo = await pantallaEncendida();
 
-        for (const c of aActualizar) {
-            const f = filaElegida(c);
-            if (f) {
-                const cambio = cambioParaProducto(c.producto, f, opciones, fecha, new Date().toISOString());
+        try {
+            await enParalelo<Coincidencia>(aActualizar, EN_PARALELO, async (c) => {
+                const f = filaElegida(c);
+                if (f) {
+                    const cambio = cambioParaProducto(c.producto, f, opciones, fecha, new Date().toISOString());
+                    let conFoto = false;
+                    if (llevaFotoNueva(c.producto, f)) {
+                        try {
+                            const url = await subirFoto(f.foto);
+                            if (url) {
+                                cambio.imagen = url;
+                                conFoto = true;
+                            }
+                        } catch (err) {
+                            res.errores.push(`${c.producto.nombre}: la foto no subió (${err instanceof Error ? err.message : 'error'}).`);
+                        }
+                    }
+                    const { data, error } = await supabase.from('products').update(cambio).eq('id', c.producto.id).select('id');
+                    if (error) res.errores.push(`${c.producto.nombre}: ${error.message}`);
+                    else if (!data || data.length === 0) res.errores.push(`${c.producto.nombre}: no se guardó. Revisa que tu sesión siga abierta.`);
+                    else {
+                        res.actualizados += 1;
+                        if (conFoto) res.fotos += 1;
+                    }
+                }
+                avanzar();
+            });
+
+            await enParalelo<FilaLista>(aCrear, EN_PARALELO, async (f) => {
+                const fila = productoNuevoDesdeFila(f, categoriaNuevo[f.n] ?? '', fecha, new Date().toISOString());
                 let conFoto = false;
-                if (llevaFotoNueva(c.producto, f)) {
+                if (llevaFotoNueva(null, f)) {
                     try {
                         const url = await subirFoto(f.foto);
                         if (url) {
-                            cambio.imagen = url;
+                            fila.imagen = url;
                             conFoto = true;
                         }
                     } catch (err) {
-                        res.errores.push(`${c.producto.nombre}: la foto no subió (${err instanceof Error ? err.message : 'error'}).`);
+                        res.errores.push(`${f.modelo}: la foto no subió (${err instanceof Error ? err.message : 'error'}).`);
                     }
                 }
-                const { data, error } = await supabase.from('products').update(cambio).eq('id', c.producto.id).select('id');
-                if (error) res.errores.push(`${c.producto.nombre}: ${error.message}`);
-                else if (!data || data.length === 0) res.errores.push(`${c.producto.nombre}: no se guardó. Revisa que tu sesión siga abierta.`);
+                const { error } = await supabase.from('products').insert([fila]);
+                if (error) res.errores.push(`${f.modelo}: ${error.message}`);
                 else {
-                    res.actualizados += 1;
+                    res.creados += 1;
                     if (conFoto) res.fotos += 1;
                 }
-            }
-            hechos += 1;
-            setProgreso({ hechos, total });
-        }
-
-        for (const f of aCrear) {
-            const fila = productoNuevoDesdeFila(f, categoriaNuevo[f.n] ?? '', fecha, new Date().toISOString());
-            let conFoto = false;
-            if (llevaFotoNueva(null, f)) {
-                try {
-                    const url = await subirFoto(f.foto);
-                    if (url) {
-                        fila.imagen = url;
-                        conFoto = true;
-                    }
-                } catch (err) {
-                    res.errores.push(`${f.modelo}: la foto no subió (${err instanceof Error ? err.message : 'error'}).`);
-                }
-            }
-            const { error } = await supabase.from('products').insert([fila]);
-            if (error) res.errores.push(`${f.modelo}: ${error.message}`);
-            else {
-                res.creados += 1;
-                if (conFoto) res.fotos += 1;
-            }
-            hechos += 1;
-            setProgreso({ hechos, total });
+                avanzar();
+            });
+        } finally {
+            if (cerrojo) void cerrojo.release().catch(() => undefined);
         }
 
         setProgreso(null);
@@ -892,10 +936,30 @@ export default function ImportarListaPrecios() {
                                 Solo disponibles
                             </label>
                         </div>
-                        <p data-ilp-nuevos-cuenta style={{ color: TENUE, fontSize: '12px', margin: '0 16px 8px' }}>
-                            {nuevosFiltrados.length.toLocaleString('es')} a la vista
-                            {aCrear.length > 0 ? ` · ${aCrear.length} marcado${aCrear.length === 1 ? '' : 's'} para agregar` : ''}
-                        </p>
+                        <div style={{ padding: '0 16px 10px', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                            <button
+                                type="button"
+                                data-ilp-marcar-nuevos
+                                style={botonSecundario}
+                                disabled={nuevosFiltrados.length === 0}
+                                onClick={() =>
+                                    setNuevosMarcados((prev) => {
+                                        const m = { ...prev };
+                                        for (const f of nuevosFiltrados) m[f.n] = true;
+                                        return m;
+                                    })
+                                }
+                            >
+                                Marcar los {nuevosFiltrados.length.toLocaleString('es')} a la vista
+                            </button>
+                            <button type="button" data-ilp-quitar-nuevos style={botonSecundario} onClick={() => setNuevosMarcados({})}>
+                                Quitar todos
+                            </button>
+                            <span data-ilp-nuevos-cuenta style={{ color: TENUE, fontSize: '12px' }}>
+                                {nuevosFiltrados.length.toLocaleString('es')} a la vista
+                                {aCrear.length > 0 ? ` · ${aCrear.length.toLocaleString('es')} marcado${aCrear.length === 1 ? '' : 's'} para agregar` : ''}
+                            </span>
+                        </div>
                         {nuevosFiltrados.slice(0, visibles).map((f) => (
                             <div
                                 key={f.n}
@@ -1016,6 +1080,11 @@ export default function ImportarListaPrecios() {
                         {progreso ? (
                             <span data-ilp-progreso>
                                 Guardando {progreso.hechos} de {progreso.total}…
+                                {progreso.total > 50 ? (
+                                    <span style={{ display: 'block', color: AMARILLO, fontSize: '12px' }}>
+                                        No cierres esta pantalla hasta que termine.
+                                    </span>
+                                ) : null}
                             </span>
                         ) : totalCambios === 0 ? (
                             <span style={{ color: TENUE }}>Nada marcado todavía.</span>
