@@ -18,11 +18,20 @@ import {
 } from '@/lib/rrhh/proyectoRrhhContexto';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
+import type { SupabaseClient } from '@supabase/supabase-js';
+
+function tryCreateBrowserClient(): SupabaseClient | null {
+  try {
+    return createClient();
+  } catch {
+    return null;
+  }
+}
 
 export default function NominaRrhhClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const supabase = useMemo(() => createClient(), []);
+  const supabase = useMemo(() => tryCreateBrowserClient(), []);
   const urlProyecto = (searchParams.get('proyecto_modulo') ?? searchParams.get('proyecto') ?? '').trim();
 
   const [proyectos, setProyectos] = useState<ProyectoModuloIntegral[]>([]);
@@ -33,6 +42,11 @@ export default function NominaRrhhClient() {
     let alive = true;
     void (async () => {
       setCargando(true);
+      if (!supabase) {
+        setProyectos([]);
+        setCargando(false);
+        return;
+      }
       const { proyectos: listaRaw } = await loadProyectosSmartRrhhHojasVida(supabase);
       if (!alive) return;
       // Orden alfabético: no empujar Flamboyant al tope (evita abrir nómina en la obra equivocada).

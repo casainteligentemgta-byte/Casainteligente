@@ -91,7 +91,13 @@ async function descargarPdf(payload: unknown, nombre: string) {
 }
 
 export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Props) {
-  const supabase = useMemo(() => createClient(), []);
+  const supabase = useMemo(() => {
+    try {
+      return createClient();
+    } catch {
+      return null;
+    }
+  }, []);
   const hoyIso = new Date().toISOString().slice(0, 10);
   const { tasa: tasaHoy } = useTasaBcvHoy(hoyIso);
 
@@ -111,7 +117,19 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
   const loadContratados = useCallback(async () => {
     setCargando(true);
     try {
-      const data = await fetchCuadroContratados(supabase, { proyectoModuloId });
+      const stub =
+        !supabase ||
+        /example\.supabase\.co|your-project-url/i.test(process.env.NEXT_PUBLIC_SUPABASE_URL || '');
+      if (stub) {
+        setFilas([]);
+        return;
+      }
+      const data = await Promise.race([
+        fetchCuadroContratados(supabase, { proyectoModuloId }),
+        new Promise<never>((_, rej) => {
+          window.setTimeout(() => rej(new Error('timeout-contratados')), 4000);
+        }),
+      ]);
       const next: FilaUi[] = [];
       for (const f of data as FilaNominaContratado[]) {
         const eid = uuidEmpleado(f.id);
@@ -130,7 +148,9 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
       }
       setFilas(next);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'No se cargaron contratados.');
+      if (!(e instanceof Error && e.message === 'timeout-contratados')) {
+        toast.error(e instanceof Error ? e.message : 'No se cargaron contratados.');
+      }
       setFilas([]);
     } finally {
       setCargando(false);
