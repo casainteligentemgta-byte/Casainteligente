@@ -63,7 +63,7 @@ type Props = {
   onSelect: (id: string | null) => void
 }
 
-function usarTamano(
+function useTamanoMarco(
   ref: React.RefObject<HTMLDivElement>,
   pausaRef: React.MutableRefObject<boolean>,
 ) {
@@ -90,7 +90,7 @@ function usarTamano(
 }
 
 /** Proporción de la imagen, dónde está el dibujo en la hoja y si ya es oscura. */
-function usarImagen(url: string) {
+function useImagenPlano(url: string) {
   const [info, setInfo] = useState<{ url: string; aspecto: number; tinta: TintaPlano } | null>(null)
   useEffect(() => {
     let cancelado = false
@@ -161,8 +161,8 @@ export default function NetVisionPlanoCliente({
 }: Props) {
   const marcoRef = useRef<HTMLDivElement>(null)
   const imprimiendoRef = useRef(false)
-  const { w: marcoW, h: marcoH } = usarTamano(marcoRef, imprimiendoRef)
-  const imagen = usarImagen(planoUrl)
+  const { w: marcoW, h: marcoH } = useTamanoMarco(marcoRef, imprimiendoRef)
+  const imagen = useImagenPlano(planoUrl)
   const mundo = useMemo(() => mundoDePlano(imagen?.aspecto ?? scale.aspect), [imagen, scale.aspect])
   const [vista, setVista] = useState<Vista>({ k: 1, x: 0, y: 0 })
   /** El usuario ya movió o amplió: no se vuelve a encuadrar solo. */
