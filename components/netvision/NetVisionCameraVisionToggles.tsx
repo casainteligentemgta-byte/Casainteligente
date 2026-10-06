@@ -34,11 +34,10 @@ export default function NetVisionCameraVisionToggles({
   const allOn = hiddenIds.length === 0
   const tac = variant === 'tactico'
   const rowH = tac ? 'h-7 min-h-7' : compact ? 'min-h-9' : 'min-h-8'
-  const labelPx = tac ? 'px-1' : compact ? 'px-2' : 'px-2'
-  const allPx = tac ? 'px-1.5' : 'px-2.5'
-  const eyeW = tac ? 'w-5 min-w-5' : 'min-w-9'
-  const type = tac ? 'text-[9px]' : 'text-[11px]'
-  const iconClass = tac ? 'h-2.5 w-2.5' : 'h-3.5 w-3.5'
+  const labelPx = tac ? 'px-1.5' : compact ? 'px-2' : 'px-2'
+  const allPx = tac ? 'px-2' : 'px-2.5'
+  const type = tac ? 'text-[10px]' : 'text-[11px]'
+  const iconClass = 'h-3.5 w-3.5'
 
   return (
     <div className={compact || tac ? 'min-w-0' : 'space-y-1.5'}>
@@ -77,14 +76,14 @@ export default function NetVisionCameraVisionToggles({
           return (
             <span
               key={cam.id}
-              className={`inline-flex items-center overflow-hidden border ${
+              className={`inline-flex items-center border ${
                 tac
-                  ? `min-w-0 flex-[1_1_2.35rem] ${
+                  ? `shrink-0 ${
                       on
                         ? 'border-[#4ade80] bg-[#0b1a14]'
                         : 'border-[#2e7d54] bg-[#07110d] opacity-60'
                     }`
-                  : `shrink-0 rounded-md ${
+                  : `shrink-0 overflow-hidden rounded-md ${
                       on
                         ? 'border-emerald-400/45 bg-emerald-500/15'
                         : 'border-white/15 bg-black/30 opacity-70'
@@ -102,27 +101,25 @@ export default function NetVisionCameraVisionToggles({
                   onSolo(cam.id)
                   onSelect?.(cam.id)
                 }}
-                className={`min-w-0 flex-1 truncate ${type} ${rowH} ${
+                className={`whitespace-nowrap ${type} ${rowH} ${
                   tac
-                    ? `${labelPx} text-center font-bold tracking-tight text-[#d6ffe5]`
-                    : `whitespace-nowrap ${labelPx} font-semibold text-white`
+                    ? `${labelPx} font-bold tracking-tight text-[#d6ffe5]`
+                    : `${labelPx} font-semibold text-white`
                 }`}
               >
                 {texto}
               </button>
+              {tac ? null : (
               <button
                 type="button"
                 title={on ? `Apagar visión de ${cam.label}` : `Encender visión de ${cam.label}`}
                 aria-pressed={on}
                 onClick={() => onToggle(cam.id)}
-                className={`flex shrink-0 items-center justify-center border-l ${rowH} ${eyeW} ${
-                  tac
-                    ? 'border-[#2e7d54] text-[#8cffb5] hover:bg-[#8cffb5]/10'
-                    : 'border-white/10 text-white/90 hover:bg-white/10'
-                }`}
+                className={`flex shrink-0 items-center justify-center border-l ${rowH} min-w-9 border-white/10 text-white/90 hover:bg-white/10`}
               >
                 {on ? <Eye className={iconClass} /> : <EyeOff className={iconClass} />}
               </button>
+              )}
             </span>
           )
         })}
