@@ -6,11 +6,11 @@ import { useSearchParams } from 'next/navigation'
 import { Printer, ArrowLeft, Link2, Check, Send, X } from 'lucide-react'
 import NetVisionPlanoCliente, {
   PLANO_CLIENTE_TONO,
+  SEMAFORO_CLIENTE_HEX,
   SEMAFORO_CLIENTE_OPACIDAD,
   type PaletaCobertura,
 } from '@/components/netvision/NetVisionPlanoCliente'
 import { FACE_ID_YELLOW_EXTRA_M } from '@/lib/netvision/services/coverageCalculator'
-import { VISION_SEMAFORO_HEX } from '@/lib/netvision/utils/visionSemaforoPalette'
 import NetVisionCameraVisionToggles from '@/components/netvision/NetVisionCameraVisionToggles'
 import {
   isolateHiddenCameraIds,
@@ -791,9 +791,9 @@ export default function NetVisionClienteView() {
         {/* En palabras del cliente: qué se ve en cada zona del cono. */}
         {(paleta === 'semaforo'
           ? [
-              { clave: 'cara', texto: 'Verde: se le ve la cara', color: VISION_SEMAFORO_HEX.green, opacidad: SEMAFORO_CLIENTE_OPACIDAD + 0.35 },
-              { clave: 'limite', texto: `Naranja: al límite (${FACE_ID_YELLOW_EXTRA_M} m más)`, color: VISION_SEMAFORO_HEX.yellow, opacidad: SEMAFORO_CLIENTE_OPACIDAD + 0.35 },
-              { clave: 'alguien', texto: 'Rojo: se nota que hay alguien', color: VISION_SEMAFORO_HEX.red, opacidad: SEMAFORO_CLIENTE_OPACIDAD + 0.35 },
+              { clave: 'cara', texto: 'Verde: se le ve la cara', color: SEMAFORO_CLIENTE_HEX.green, opacidad: SEMAFORO_CLIENTE_OPACIDAD + 0.35 },
+              { clave: 'limite', texto: `Naranja: al límite (${FACE_ID_YELLOW_EXTRA_M} m más)`, color: SEMAFORO_CLIENTE_HEX.yellow, opacidad: SEMAFORO_CLIENTE_OPACIDAD + 0.35 },
+              { clave: 'alguien', texto: 'Amarillo: se nota que hay alguien', color: SEMAFORO_CLIENTE_HEX.red, opacidad: SEMAFORO_CLIENTE_OPACIDAD + 0.35 },
             ]
           : [
               { clave: 'cara', texto: 'Se le ve la cara', color: PLANO_CLIENTE_TONO, opacidad: 0.75 },
