@@ -1,0 +1,2335 @@
+{
+  "fuente": "Acceso-Alarma septiembre 2026",
+  "moneda": "USD",
+  "nota": "Precio = costo de lista del distribuidor. No se aplicó margen de reventa.",
+  "omitidos": [
+    {
+      "modelo": "(lista Ezviz octubre 2026)",
+      "motivo": "El PDF Ezviz adjunto es el mismo ya cargado. No se duplica."
+    }
+  ],
+  "productos": [
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1801M",
+      "nombre": "Hikvision DS-K1801M Tarjeta mifare",
+      "categoria": "Domótica",
+      "costo": 15.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Tarjeta mifare"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1801E",
+      "nombre": "Hikvision DS-K1801E Tarjeta em 125khz",
+      "categoria": "Domótica",
+      "costo": 15.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Tarjeta em 125khz"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1802M",
+      "nombre": "Hikvision DS-K1802M Tarjeta mifare",
+      "categoria": "Domótica",
+      "costo": 16.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Tarjeta mifare"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1802E",
+      "nombre": "Hikvision DS-K1802E Tarjeta em 125khz",
+      "categoria": "Domótica",
+      "costo": 16.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Tarjeta em 125khz"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1104M",
+      "nombre": "Hikvision DS-K1104M Tarjeta mifare",
+      "categoria": "Domótica",
+      "costo": 50.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Tarjeta mifare"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1104MK",
+      "nombre": "Hikvision DS-K1104MK Tarjeta mifare + teclado (0 - 9, *, #",
+      "categoria": "Domótica",
+      "costo": 55.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Tarjeta mifare + teclado (0 - 9, *, #"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1105EMB",
+      "nombre": "Hikvision DS-K1105EMB Tarjeta m1 13.56mhz tarjeta em 125 khz sin teclado",
+      "categoria": "Domótica",
+      "costo": 39.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Tarjeta m1 13.56mhz tarjeta em 125 khz sin teclado"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1105EMKB",
+      "nombre": "Hikvision DS-K1105EMKB Tarjeta m1 13.56mhz tarjeta em 125 khz teclado",
+      "categoria": "Domótica",
+      "costo": 44.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Tarjeta m1 13.56mhz tarjeta em 125 khz teclado"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1105EMKB-QR",
+      "nombre": "Hikvision DS-K1105EMKB-QR Tarjeta m1 13.56mhz tarjeta em 125 khz teclado + qr",
+      "categoria": "Domótica",
+      "costo": 49.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Tarjeta m1 13.56mhz tarjeta em 125 khz teclado + qr"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1107AM",
+      "nombre": "Hikvision DS-K1107AM Tarjeta mifare",
+      "categoria": "Domótica",
+      "costo": 27.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Tarjeta mifare"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1107AE",
+      "nombre": "Hikvision DS-K1107AE Tarjeta em 125khz",
+      "categoria": "Domótica",
+      "costo": 27.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Tarjeta em 125khz"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1107E",
+      "nombre": "Hikvision DS-K1107E Tarjeta em 125khz",
+      "categoria": "Domótica",
+      "costo": 26.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Tarjeta em 125khz"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1108AM",
+      "nombre": "Hikvision DS-K1108AM Tarjeta mifare",
+      "categoria": "Domótica",
+      "costo": 29.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Tarjeta mifare"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1108AE",
+      "nombre": "Hikvision DS-K1108AE Tarjeta em 125khz",
+      "categoria": "Domótica",
+      "costo": 29.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Tarjeta em 125khz"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1108AMK",
+      "nombre": "Hikvision DS-K1108AMK Tarjeta mifare",
+      "categoria": "Domótica",
+      "costo": 34.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Tarjeta mifare"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1108AEK",
+      "nombre": "Hikvision DS-K1108AEK Tarjeta em 125khz",
+      "categoria": "Domótica",
+      "costo": 34.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Tarjeta em 125khz"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1109DKFB",
+      "nombre": "Hikvision DS-K1109DKFB Tarjeta desfire. felica y mifare + huella",
+      "categoria": "Domótica",
+      "costo": 74.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Tarjeta desfire. felica y mifare + huella"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1109DKB-QR",
+      "nombre": "Hikvision DS-K1109DKB-QR Tarjeta desfire. felica y mifare + codigo qr",
+      "categoria": "Domótica",
+      "costo": 74.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Tarjeta desfire. felica y mifare + codigo qr"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1109DKFB-QR",
+      "nombre": "Hikvision DS-K1109DKFB-QR Tarjeta desfire. felica y mifare + huella + qr",
+      "categoria": "Domótica",
+      "costo": 119.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Tarjeta desfire. felica y mifare + huella + qr"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1109EKFB",
+      "nombre": "Hikvision DS-K1109EKFB Tarjeta em + huella",
+      "categoria": "Domótica",
+      "costo": 74.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Tarjeta em + huella"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1201AEF",
+      "nombre": "Hikvision DS-K1201AEF Huella+tarjeta em",
+      "categoria": "Domótica",
+      "costo": 69.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Huella+tarjeta em"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1A8503MF",
+      "nombre": "Hikvision DS-K1A8503MF Huella +tarjeta mifare 56.50 disponible control de acceso lectora de",
+      "categoria": "Domótica",
+      "costo": 56.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Huella +tarjeta mifare 56.50 disponible control de acceso lectora de tarjetas interfaces: rs-485, wiegand (w26/w34), osdp indice de proteccion intemperie: ip65 (intemperie) alarma tamper buzzer incorporado para identificar estado de lectura función de actualización en línea lectora de tarjetas interfaces: rs-485, wiegand (w26/w34), osdp indice de proteccion intemperie: ip65 (intemperie) alarma anti-tamper buzzer incorporado para indicación de estatus configuracion de id: a través del dip switch "
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1A8503MF-B",
+      "nombre": "Hikvision DS-K1A8503MF-B Huella +tarjeta mifare bateria respaldo",
+      "categoria": "Domótica",
+      "costo": 61.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Huella +tarjeta mifare bateria respaldo"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1T8003MF",
+      "nombre": "Hikvision DS-K1T8003MF Huella +tarjeta mifare",
+      "categoria": "Domótica",
+      "costo": 60.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Huella +tarjeta mifare"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1T8003EF",
+      "nombre": "Hikvision DS-K1T8003EF Huella +tarjeta em",
+      "categoria": "Domótica",
+      "costo": 60.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Huella +tarjeta em"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1T804AMF",
+      "nombre": "Hikvision DS-K1T804AMF Huella +tarjeta mifare",
+      "categoria": "Domótica",
+      "costo": 95.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Huella +tarjeta mifare"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1T804AEF",
+      "nombre": "Hikvision DS-K1T804AEF Huella +tarjeta em",
+      "categoria": "Domótica",
+      "costo": 95.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Huella +tarjeta em"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1T805MBFWX",
+      "nombre": "Hikvision DS-K1T805MBFWX Huella +tarjeta mifare",
+      "categoria": "Domótica",
+      "costo": 108.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Huella +tarjeta mifare"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1T805EBWX",
+      "nombre": "Hikvision DS-K1T805EBWX Tarjeta em",
+      "categoria": "Domótica",
+      "costo": 93.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Tarjeta em"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1T805EBFWX",
+      "nombre": "Hikvision DS-K1T805EBFWX Huella + tarjeta em",
+      "categoria": "Domótica",
+      "costo": 108.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Huella + tarjeta em"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1T807MBFWX-E1",
+      "nombre": "Hikvision DS-K1T807MBFWX-E1 Huella +tarjeta mifare",
+      "categoria": "Domótica",
+      "costo": 85.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Huella +tarjeta mifare"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1T807EBFWX-E1",
+      "nombre": "Hikvision DS-K1T807EBFWX-E1 Huella + tarjeta em",
+      "categoria": "Domótica",
+      "costo": 85.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Huella + tarjeta em"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1T809MX",
+      "nombre": "Hikvision DS-K1T809MX Tarjeta mifare",
+      "categoria": "Domótica",
+      "costo": 35.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Tarjeta mifare"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1T809EX",
+      "nombre": "Hikvision DS-K1T809EX Tarjeta em",
+      "categoria": "Domótica",
+      "costo": 35.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Tarjeta em"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1T320MWX",
+      "nombre": "Hikvision DS-K1T320MWX Rostro +tarjeta mifare) 85.00 disponible terminal de huella dactilar",
+      "categoria": "Domótica",
+      "costo": 85.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Rostro +tarjeta mifare) 85.00 disponible terminal de huella dactilar intemperie ip65 / antivandalismo ik08 comunicación: tcp/ip, rs-485, salida wiegand (w26/w34) y entrada (wiegand 26/34), wi-fi entradas: boton de salida × 1, sensor puerta × 1, alarma × 2 salidas: rele (salida cerradura) × 1, salida de alarma × 1 lector de tarjeta mifare 13.56mhz (modelo ds-k1t805m) lector de tarjeta em 125khz (modelo ds-k1t805e) 3,000 huellas, 10,000 tarjetas, 100.000 eventos alimentacion 12vdc 1a terminal de a"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1T320EFX",
+      "nombre": "Hikvision DS-K1T320EFX Rostro + huella + tarjeta em",
+      "categoria": "Domótica",
+      "costo": 102.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Rostro + huella + tarjeta em"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1T320EFWX",
+      "nombre": "Hikvision DS-K1T320EFWX Rostro + huella + tarjeta em) wi-fi",
+      "categoria": "Domótica",
+      "costo": 107.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Rostro + huella + tarjeta em) wi-fi"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1T320MFWX-B",
+      "nombre": "Hikvision DS-K1T320MFWX-B Rostro + huella + tarjeta mifare) wi-fi",
+      "categoria": "Domótica",
+      "costo": 99.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Rostro + huella + tarjeta mifare) wi-fi"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1T320EFWX-B",
+      "nombre": "Hikvision DS-K1T320EFWX-B Rostro + huella + tarjeta em) wi-fi",
+      "categoria": "Domótica",
+      "costo": 99.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Rostro + huella + tarjeta em) wi-fi"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1T320EFWX-B/S",
+      "nombre": "Hikvision DS-K1T320EFWX-B/S Rostro + huella + tarjeta em) wi-fi",
+      "categoria": "Domótica",
+      "costo": 110.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Rostro + huella + tarjeta em) wi-fi"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1T321MFWX",
+      "nombre": "Hikvision DS-K1T321MFWX Rostro + huella + tarjeta mifare",
+      "categoria": "Domótica",
+      "costo": 90.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Rostro + huella + tarjeta mifare"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1T321EFWX",
+      "nombre": "Hikvision DS-K1T321EFWX Rostro + huella + tarjeta em",
+      "categoria": "Domótica",
+      "costo": 90.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Rostro + huella + tarjeta em"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1T321MFWX-B/S",
+      "nombre": "Hikvision DS-K1T321MFWX-B/S Rostro + huella + tarjeta mifare",
+      "categoria": "Domótica",
+      "costo": 100.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Rostro + huella + tarjeta mifare"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1T321EFWX-B/S",
+      "nombre": "Hikvision DS-K1T321EFWX-B/S Rostro + huella + tarjeta em",
+      "categoria": "Domótica",
+      "costo": 100.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Rostro + huella + tarjeta em"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1T323EBWX-QRE1",
+      "nombre": "Hikvision DS-K1T323EBWX-QRE1 Rostro + codigo qr + tarjeta em",
+      "categoria": "Domótica",
+      "costo": 129.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Rostro + codigo qr + tarjeta em"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1T323EBFWX-E1",
+      "nombre": "Hikvision DS-K1T323EBFWX-E1 Rostro + huella + tarjeta em) 130.00 disponible terminal de",
+      "categoria": "Domótica",
+      "costo": 130.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Rostro + huella + tarjeta em) 130.00 disponible terminal de reconocimiento facial + tarjeta + huella pantalla tactil lcd 2.4\", lente de 2mp multiples metodos autenticacion: rostro, tarjeta, huella, pin, etc soporta 500 rostros, 1,000 tarjetas, 100,000 eventos distancia de reconocimiento: 0.3 m a 1.5 m duracion reconocimiento facial: < 0.2 s/usuario interfaces: red tcp/ip × 1, usb × 1, cerradura eléctrica × 1, contacto puerta × 1, tamper × 1, boton de salida × 1 conexión wi-fi para las versiones "
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1A340WX",
+      "nombre": "Hikvision DS-K1A340WX Terminal de asistencia de reconocimiento facial pantalla tactil lcd",
+      "categoria": "Domótica",
+      "costo": 95.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Terminal de asistencia de reconocimiento facial pantalla tactil lcd 4.3\" distancia de reconocimiento: 0.3 m a 1.5 m camara: camara ip 2 mp doble lente con wdr registra 1.500 rostros y 300.000 eventos genera reportes automaticamente soporta protocolos isapi / isup 5.0 comunicación: ethernet 10/100mbps; wi-fi / usb"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1T341CMFW",
+      "nombre": "Hikvision DS-K1T341CMFW Rostro +tarjeta mifare + huella) wifi",
+      "categoria": "Domótica",
+      "costo": 198.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Rostro +tarjeta mifare + huella) wifi"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1T343MWX",
+      "nombre": "Hikvision DS-K1T343MWX Rostro +tarjeta mifare",
+      "categoria": "Domótica",
+      "costo": 120.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Rostro +tarjeta mifare"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1T343EWX",
+      "nombre": "Hikvision DS-K1T343EWX Rostro +tarjeta em",
+      "categoria": "Domótica",
+      "costo": 120.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Rostro +tarjeta em"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1T344MBWX-QRE1",
+      "nombre": "Hikvision DS-K1T344MBWX-QRE1 Rostro + tarjeta m1 + qr) terminal poe reconocimiento facial + huella +",
+      "categoria": "Insumos",
+      "costo": 132.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Rostro + tarjeta m1 + qr) terminal poe reconocimiento facial + huella + tarjeta pantalla tactil lcd 4.3\" distancia de reconocimiento: 0.3 m a 1.5 m camara: camara ip 2 mp doble lente con wdr comunicación: ethernet 10/100mbps; wi-fi, bluetooth modulo para escanear codigos qr soporta 3000 rostros, 3000 huellas y 3000 tarjetas interfaces: usb × 1, cerradura eléctrica × 1, contacto puerta × 1, tamper × 1, boton de salida × 1, rs-485 × 1, wiegand × 1, entrada de alarma × 2, salida de alarma × 1 alime"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KAS321",
+      "nombre": "Hikvision DS-KAS321 Rostro + huella + tarjeta mifare",
+      "categoria": "Domótica",
+      "costo": 149.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Rostro + huella + tarjeta mifare"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KAS321/EM",
+      "nombre": "Hikvision DS-KAS321/EM Rostro + huella + tarjeta em",
+      "categoria": "Domótica",
+      "costo": 149.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Rostro + huella + tarjeta em"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1T670MFWX",
+      "nombre": "Hikvision DS-K1T670MFWX Rostro + tarjeta + huella) terminal recomicimiento facial pantalla",
+      "categoria": "Domótica",
+      "costo": 335.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Rostro + tarjeta + huella) terminal recomicimiento facial pantalla tactil lcd 7\". intemperie: ip65 audio 2 vías (compatible con video porteros ip) distancia de reconocimiento: 0.3 m a 3 m lector de tarjetas m1 y huella dactilar capacidad: 6,000 rostros, 10,000 huellas, 50,000 tarjetas interfaces: red rj45 x 1, wi-fi x 1, rs-485 × 1, wiegand, usb2.0 × 2, salida alarma × 1, entrada alarma × 2, salida cerradura × 1, entrada contacto puerta × 1, boton de salida × 1, tamper × 1"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KAB673-FBQR",
+      "nombre": "Hikvision DS-KAB673-FBQR Modulo lector para terminal ds ‐ k1t673dwx lector de huellas, códigos",
+      "categoria": "Domótica",
+      "costo": 95.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Modulo lector para terminal ds ‐ k1t673dwx lector de huellas, códigos qr y bluetooth conexión usb dimensiones 110.5 mm × 23.7 mm × 47.7 mm"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K5604A-3XF/V",
+      "nombre": "Hikvision DS-K5604A-3XF/V ROSTRO + FIEBRE + MASCARILLA) INCLUYE PEDESTAL SERIE ULTRA TERMINAL",
+      "categoria": "Domótica",
+      "costo": 999.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "ROSTRO + FIEBRE + MASCARILLA) INCLUYE PEDESTAL SERIE ULTRA TERMINAL RECONOCIMIENTO FACIAL + MEDICION DE TEMPERATURA Y DETECCIÓN DE FIEBRE Y MASCARILLA Pantalla LCD touch 10.1\" (1024x600) Doble Camara de 2 mp,con luz complementaria (IR,WDR). Detección de temperatura corporal. Rango de detección de 30°C a 45°C Rango de precision 0.5°C. Comunicación IP (10/100/1000 Mbps) Distancia para reconocer rostro: 0.3 a 2 metros. Reconocimiento en 0.2 segundos Multiple autentificacion con temperatura Soporta "
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K1F820-F",
+      "nombre": "Hikvision DS-K1F820-F Enrolador de huellas plug and play usb sin uso de dirvers, usb 2.0",
+      "categoria": "Domótica",
+      "costo": 58.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Enrolador de huellas plug and play usb sin uso de dirvers, usb 2.0 trabaja con windows xp, 7 y 10 compatible con ivms4200 resolución 508 dpi de alta definción admite software cliente"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K2812",
+      "nombre": "Hikvision DS-K2812 Controlador de acceso ip 2 puertas (10.000 tarjetas) conexion con 1",
+      "categoria": "Domótica",
+      "costo": 120.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Controlador de acceso ip 2 puertas (10.000 tarjetas) conexion con 1 lector rs485 y 4 lectores wiegand interfaces: 1 puerto red rj45. 2 cerraduras, 2 botones de salida, 2 contactos de puerta, 5 entradas de alarma, 4 salidas de alarma, 1 tamper.50.000 eventos"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K2804",
+      "nombre": "Hikvision DS-K2804 Controlador de acceso ip 4 puertas (10.000 tarjetas) conexion con 8",
+      "categoria": "Domótica",
+      "costo": 135.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Controlador de acceso ip 4 puertas (10.000 tarjetas) conexion con 8 lectores de tarejta (wiegand) 4 sensor puerta, 4 boton salida, 4 entradas case, 4 rele puerta, 4 rele alarma"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K2602T",
+      "nombre": "Hikvision DS-K2602T Controlador de acceso ip 2 puertas (100.000 tarjetas) conexion con 4",
+      "categoria": "Domótica",
+      "costo": 220.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Controlador de acceso ip 2 puertas (100.000 tarjetas) conexion con 4 lectores de tarjeta (rs485) y 4 lectores de tarejta (wiegand) 4 entadas alarma, 2 magnetico puerta, 2 switch puerta, 4 entradas case, 1 tamper, 2 rele puerta, 2 rele alarma"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K2604T",
+      "nombre": "Hikvision DS-K2604T Controlador de acceso ip 4 puertas (100.000 tarjetas) conexion con 8",
+      "categoria": "Domótica",
+      "costo": 275.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Controlador de acceso ip 4 puertas (100.000 tarjetas) conexion con 8 lectores de tarjeta (rs485) y 4 lectores de tarejta (wiegand) 4 entadas alarma, 4 magnetico puerta, 4 switch puerta, 8 entradas case, 1 tamper, 4 rele puerta, 4 rele alarma"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K2622X",
+      "nombre": "Hikvision DS-K2622X Controlador de acceso ip 2 puertas administrable 4 lectores de huella o",
+      "categoria": "Domótica",
+      "costo": 220.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Controlador de acceso ip 2 puertas administrable 4 lectores de huella o tarjeta (rs-485 o wiegand) administrable por interfaz web o app hik-connect teams 100,000 tarjetas / 10,000 huellas / 100,000 usuarios 4 entadas alarma, 4 salidas alarma, 2 salidas de rele"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K2624X",
+      "nombre": "Hikvision DS-K2624X Controlador de acceso ip 4 puertas administrable 4 lectores de huella o",
+      "categoria": "Domótica",
+      "costo": 275.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Controlador de acceso ip 4 puertas administrable 4 lectores de huella o tarjeta (rs-485 o wiegand) administrable por interfaz web o app hik-connect teams 100,000 tarjetas / 10,000 huellas / 100,000 usuarios 8 entadas alarma, 4 salidas alarma, 4 salidas de rele"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K2702WX-E1",
+      "nombre": "Hikvision DS-K2702WX-E1 Controlador de acceso ip 2 puertas expandible a 126 intefaces: 1 red",
+      "categoria": "Domótica",
+      "costo": 365.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Controlador de acceso ip 2 puertas expandible a 126 intefaces: 1 red gigabit o wifi . 2 cerraduras, 2 botones de salida, 2 contactos puerta, 4 entradas alarma, 4 salidas alarma, 1 tamper, 4 wiegand 26/34, 1 usb, 1 poe, 1 interfaz incendio, 7 rs-485 (2 para lectoras, 4 para comunicación soportando 16 modulos de acceso ds- k2m002x cada una y 1 de respaldo). alimentacion poe"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K2704X",
+      "nombre": "Hikvision DS-K2704X Controlador de acceso ip 4 puertas expandible a 128 intefaces: 1 red",
+      "categoria": "Domótica",
+      "costo": 375.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Controlador de acceso ip 4 puertas expandible a 128 intefaces: 1 red gigabit. 4 cerraduras, 4 botones de salida, 4 contactos puerta, 8 entradas alarma, 4 salidas alarma, 1 tamper, 4 wiegand 26/34, 1 usb, 1 poe, 1 interfaz incendio, 7 rs-485 (2 para lectoras, 5 para comunicación soportando 16 modulos de acceso ds- k2m002x cada una y 1 de redundancia"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K2708X",
+      "nombre": "Hikvision DS-K2708X Controlador de acceso ip 8 puertas expandible a 128 intefaces: 1 red",
+      "categoria": "Domótica",
+      "costo": 560.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Controlador de acceso ip 8 puertas expandible a 128 intefaces: 1 red gigabit. 8 cerraduras, 8 botones de salida, 8 contactos puerta, 16 entradas alarma, 8 salidas alarma, 1 tamper, 8 wiegand 26/34, 1 usb, 1 poe, 1 interfaz incendio, 15 rs-485 (7 para lectoras, 8 para comunicación soportando 16 modulos de acceso ds- k2m002x cada una y 1 de redundancia"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K4E208",
+      "nombre": "Hikvision DS-K4E208 Cerradura hembrilla electrónica tamaño de la cerradura: 366 (l) x (w)",
+      "categoria": "Domótica",
+      "costo": 20.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cerradura hembrilla electrónica tamaño de la cerradura: 366 (l) x (w) 105x (h) 50 (mm) voltaje de entrada: 12 vcc corriente de trabajo: 3a temperatura de trabajo: -40+80 ℃ puerta adecuada: puerta de madera, puerta de metal desbloqueo: impulso eléctrico o llave mecánica"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K4E100",
+      "nombre": "Hikvision DS-K4E100 Cerradura inteligente de motor eléctrico cerradura eléctrica",
+      "categoria": "Domótica",
+      "costo": 55.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cerradura inteligente de motor eléctrico cerradura eléctrica inteligente universal, no es necesario distinguir dirección de puerta, los lados izquierdo y derecho, dentro como fuera de la puerta corriente de trabajo: cc 12v ± 10%. 350 ma dimensiones: 130mm × 100mm × 61,25mm (5,12\" × 3,94\" × 2,41\") material: acero inoxidable longitud de la lengüeta de bloqueo: 20 mm 35.00 disponible estatus control de acceso hikvision ds-k4h250s cerradura electromagnetica 280 kg (600 lb) alimentación 12vdc / 24vdc"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K4H258S",
+      "nombre": "Hikvision DS-K4H258S Cerradura electromagnetica 280 kg (600 lb) alimentacion 12vdc led verde",
+      "categoria": "Domótica",
+      "costo": 30.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cerradura electromagnetica 280 kg (600 lb) alimentacion 12vdc led verde indicador de estatus"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K4H255S",
+      "nombre": "Hikvision DS-K4H255S Cerradura electromagnetica 280 kg (600 lb) alimentacion 12vdc led verde",
+      "categoria": "Domótica",
+      "costo": 28.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cerradura electromagnetica 280 kg (600 lb) alimentacion 12vdc led verde indicador de estatus"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K4H250-LZ",
+      "nombre": "Hikvision DS-K4H250-LZ Bracket para puerta (cerradura ds-k4h250s) soporte en l 250×47×28.5mm",
+      "categoria": "Insumos",
+      "costo": 30.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Bracket para puerta (cerradura ds-k4h250s) soporte en l 250×47×28.5mm soporte en z 180×50×50mm"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K4H258-LZ",
+      "nombre": "Hikvision DS-K4H258-LZ Bracket para puerta (cerradura ds-k4h258s) soporte en l 238×30×47mm",
+      "categoria": "Insumos",
+      "costo": 15.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Bracket para puerta (cerradura ds-k4h258s) soporte en l 238×30×47mm soporte en z 185×44×100mm"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K4H255-LZ",
+      "nombre": "Hikvision DS-K4H255-LZ Bracket para puerta (cerradura ds-k4h255s) soporte en l 238×30×47mm",
+      "categoria": "Insumos",
+      "costo": 14.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Bracket para puerta (cerradura ds-k4h255s) soporte en l 238×30×47mm soporte en z 185×44×100mm"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K4H258D-LZ",
+      "nombre": "Hikvision DS-K4H258D-LZ Bracket de puerta para cerradura doble ds-k4h258d soporte en l",
+      "categoria": "Insumos",
+      "costo": 30.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Bracket de puerta para cerradura doble ds-k4h258d soporte en l 238×30×47mm soporte en z 185×44×100mm"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K4T100-U1",
+      "nombre": "Hikvision DS-K4T100-U1 Bracket en u para hembrilla electrica puerta de cristal sin marco",
+      "categoria": "Insumos",
+      "costo": 8.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Bracket en u para hembrilla electrica puerta de cristal sin marco. dimensiones 70×44×24.5mm distancia minima entre el marco y la puerta: 5mm"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K4T108-U1",
+      "nombre": "Hikvision DS-K4T108-U1 Bracket en u para hembrilla electrica puerta de cristal sin marco",
+      "categoria": "Insumos",
+      "costo": 8.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Bracket en u para hembrilla electrica puerta de cristal sin marco. dimensiones 70×44×24.5mm distancia minima entre el marco y la puerta: 5mm"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K7PEB/Red",
+      "nombre": "Hikvision DS-K7PEB/Red Boton emergencia rompa vidrio (rojo) contactos no / nc / com",
+      "categoria": "Domótica",
+      "costo": 20.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Boton emergencia rompa vidrio (rojo) contactos no / nc / com"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K7P01",
+      "nombre": "Hikvision DS-K7P01 Boton de salida metalico (push to exit) contactos no / nc / com",
+      "categoria": "Domótica",
+      "costo": 10.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Boton de salida metalico (push to exit) contactos no / nc / com"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K7P02",
+      "nombre": "Hikvision DS-K7P02 Boton de salida metalico (push to exit) contactos no / nc / com",
+      "categoria": "Domótica",
+      "costo": 10.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Boton de salida metalico (push to exit) contactos no / nc / com"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K7P05",
+      "nombre": "Hikvision DS-K7P05 Boton de salida y emergencia (push to exit) contactos no / nc / com",
+      "categoria": "Domótica",
+      "costo": 15.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Boton de salida y emergencia (push to exit) contactos no / nc / com acero inoxidable"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K7P06",
+      "nombre": "Hikvision DS-K7P06 Boton de salida y emergencia (push to exit) contactos no / nc / com",
+      "categoria": "Domótica",
+      "costo": 15.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Boton de salida y emergencia (push to exit) contactos no / nc / com acero inoxidable"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KEM125",
+      "nombre": "Hikvision DS-KEM125 Tarjeta de proximidad em frecuencia: 125k distancia: ≤15cm",
+      "categoria": "Domótica",
+      "costo": 1.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Tarjeta de proximidad em frecuencia: 125k distancia: ≤15cm"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "FM11RF08-M1",
+      "nombre": "Hikvision FM11RF08-M1 Tarjeta de proximidad mifare® frecuencia: 13.56mhz distancia: ≤10cm",
+      "categoria": "Domótica",
+      "costo": 1.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Tarjeta de proximidad mifare® frecuencia: 13.56mhz distancia: ≤10cm 1.50 disponible hikvision ic s50 tarjeta de proximidad mifare® frecuencia: 13.56mhz distancia: ≤10cm"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "S50+TK4100",
+      "nombre": "Hikvision S50+TK4100 Tarjeta de proximidad dual mifare® + em frecuencia: 125k y 13.56mhz",
+      "categoria": "Domótica",
+      "costo": 1.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Tarjeta de proximidad dual mifare® + em frecuencia: 125k y 13.56mhz distancia: ≤10cm"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K7M101-E0",
+      "nombre": "Hikvision DS-K7M101-E0 Tarjeta inteligente sin contacto em frecuencia: 125k distancia de",
+      "categoria": "Domótica",
+      "costo": 1.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Tarjeta inteligente sin contacto em frecuencia: 125k distancia de lectura de la tarjeta: 2.5 cm a 10 cm"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K2M061",
+      "nombre": "Hikvision DS-K2M061 Modulo de control de puerta segura comunicación rs-485 hacia biometrico",
+      "categoria": "Domótica",
+      "costo": 38.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Modulo de control de puerta segura comunicación rs-485 hacia biometrico soporta 1 entrada wiegand dip switch 4 canales para configurar numeros de id interfaz para cerradura y botón de salida"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K2210",
+      "nombre": "Hikvision DS-K2210 CONTROLADOR MAESTRO PARA ASCENSOR 128 PISOS Control de Acceso para los",
+      "categoria": "Domótica",
+      "costo": 270.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "CONTROLADOR MAESTRO PARA ASCENSOR 128 PISOS Control de Acceso para los pisos por huella, tarjeta o rostro 1 Botón de Pánico, 1 Botón de Incnedio, 1 Botón de Mantenimiento Funciones de Watchdog y Anti Vandalismo COMUNICACIÓN: TCP/IP, RS-485, Wiegand SALIDAS DE RELE: 5 20,000 TARJETAS Y 50,000 EVENTOS"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K2M0016A",
+      "nombre": "Hikvision DS-K2M0016A Distribuidor esclavo para controlador de ascensor comunicación: rs-485",
+      "categoria": "Domótica",
+      "costo": 350.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Distribuidor esclavo para controlador de ascensor comunicación: rs-485 con controlador maestro. dip switch para direccionamiento rs485. salidas de rele: 16 (para 16 pisos, 1 por piso) entradas de alarma: 2"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "WG-PRINT-58HW-USB",
+      "nombre": "Hikvision WG-PRINT-58HW-USB Impresora térmica de tickets para visitantes uso con terminal de",
+      "categoria": "Domótica",
+      "costo": 120.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Impresora térmica de tickets para visitantes uso con terminal de visitantes ds-k5032-d. el ancho del papel es 57 ± 0,5 mm (2,3” ± 0,02”). la resolución es de 203 ppp. rendimiento estable, impresión clara. material industrial para una mejor capacidad de ataque. está disponible la impresión continua durante mucho tiempo. la velocidad de impresión es de 90 mm/s. soporta interfaz usb"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-TRI900-1/A",
+      "nombre": "Hikvision DS-TRI900-1/A Lector de tarjetas uhf (tag) largo alcance compatible con epc c1",
+      "categoria": "Domótica",
+      "costo": 435.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Lector de tarjetas uhf (tag) largo alcance compatible con epc c1 gen2/iso 18000-6c. compatible con el modo de lectura intensiva de epc. lectura a larga distancia, potencia de salida de rf de hasta 33 dbm. admite una velocidad de lectura de datos de etiquetas de 640 kbps. admite comunicación ethernet y wiegand. configuración y parametrización flexibles para maximizar la lectura de etiquetas y un rendimiento óptimo. frecuencia de trabajo: 840~960mhz (opcional). antena polarizada circularmente de 9"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-TRD902-1/A",
+      "nombre": "Hikvision DS-TRD902-1/A Emisor / enrolador de tarjetas uhf cumple con el estándar de protocolo",
+      "categoria": "Domótica",
+      "costo": 2.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Emisor / enrolador de tarjetas uhf cumple con el estándar de protocolo epc c1 gen2/iso18000-6c. buen mecanismo anticolisión, múltiples etiquetas electrónicas al mismo tiempo. fuente de alimentación e indicación de estado de funcionamiento. 1 interfaz usb. frecuencia de funcionamiento: predeterminada 920,5 mhz ~ 924,5 mhz. potencia de transmisión: 10 dbm. antena polarizada circularmente de 3 dbi. distancia de lectura: ≤30 cm a impinj h47, según el tipo de etiqueta y la potencia de 295.00 disponib"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K3G200LX-R/Dm55",
+      "nombre": "Hikvision DS-K3G200LX-R/Dm55 TORNIQUETE TIPO TRIPODE Acero inoxidable SUS304 resistente. 2 Botones",
+      "categoria": "Domótica",
+      "costo": 735.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "TORNIQUETE TIPO TRIPODE Acero inoxidable SUS304 resistente. 2 Botones de Salida. 1 Entrada de Alarma de Incendio. Compatible con Controles de Acceso de otras marcas. Paso de más de 25 personas por minuto. Canal de 550mm de ancho, Voltaje 110~230VAC, Dimensiones: 426 mm ×268 mm × 982.5 mm. Soporta Terminal de Reconocimiento Facial (No incluida"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K3G200LX-R/Pg",
+      "nombre": "Hikvision DS-K3G200LX-R/Pg - Dm55 TORNIQUETE TIPO TRIPODE Acero inoxidable SUS304 resistente. 2",
+      "categoria": "Domótica",
+      "costo": 760.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "- Dm55 TORNIQUETE TIPO TRIPODE Acero inoxidable SUS304 resistente. 2 Botones de Salida. 1 Entrada de Alarma de Incendio. Compatible con Controles de Acceso de otras marcas. Paso de más de 25 personas por minuto. Canal de 550mm de ancho, Voltaje 110~230VAC, Dimensiones: 426 mm ×268 mm × 982.5 mm. Soporta Terminal de Reconocimiento Facial (No incluida"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K3G301LX-R/Dm55",
+      "nombre": "Hikvision DS-K3G301LX-R/Dm55 Torniquete tipo tripode bidireccional carril bidireccional",
+      "categoria": "Domótica",
+      "costo": 750.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Torniquete tipo tripode bidireccional carril bidireccional (entrada/salida) el led indica el estado de entrada/salida y paso. paso de la alarma de incendio configuraciones de duración de paso válida rendimiento: 25 a 60 personas por minuto interfaces: 2 botones de salida y 1 entrada de alarma fuente de alimentación: 100 a 240 vca; 50 a 60 hz dimensiones: 1200mm × 233mm × 1000mm (47.2\" × 9.2\" × 39.4\") ancho de carril: 550 mm compatible con cualquier sistema de contacto seco"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K3G301LX-R/Pg",
+      "nombre": "Hikvision DS-K3G301LX-R/Pg - dm55 torniquete tipo tripode bidireccional carril bidireccional",
+      "categoria": "Domótica",
+      "costo": 760.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "- dm55 torniquete tipo tripode bidireccional carril bidireccional (entrada/salida) el led indica el estado de entrada/salida y paso. paso de la alarma de incendio configuraciones de duración de paso válida rendimiento: 25 a 60 personas por minuto interfaces: 2 botones de salida y 1 entrada de alarma fuente de alimentación: 100 a 240 vca; 50 a 60 hz dimensiones: 1200mm × 233mm × 1000mm (47.2\" × 9.2\" × 39.4\") ancho de carril: 550 mm compatible con cualquier sistema de contacto seco incluye orifici"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K3B220LX-R/Pg",
+      "nombre": "Hikvision DS-K3B220LX-R/Pg - Dp65 Lado Derecho TORNIQUETE TIPO BARRERA (SWING BARRIER) DERECHA 4",
+      "categoria": "Domótica",
+      "costo": 1725.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "- Dp65 Lado Derecho TORNIQUETE TIPO BARRERA (SWING BARRIER) DERECHA 4 pares de detectores de luz IR: Validación de permisos y anti- tailgating, Luz LED que indica dirección de paso, Configuracipon de tiempo válido de paso, Apertura de emergencia en caso de incendio, Motor sin escobillas, 2 botones de salida, 1 entada de alarma, Paso de 20 a 60 personas/minuto, Canal de 650mm, Material acero inoxidable SUS304 y puertas de vídrio acrilico, Dimensiones: 1205mm (47.44'') × 146mm (5.75'') × 1000mm (3"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K3B220LX-M/Pg",
+      "nombre": "Hikvision DS-K3B220LX-M/Pg - Dp90 Centro TORNIQUETE TIPO BARRERA - MEDIO 4 pares de detectores de",
+      "categoria": "Domótica",
+      "costo": 990.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "- Dp90 Centro TORNIQUETE TIPO BARRERA - MEDIO 4 pares de detectores de luz IR: Validación de permisos y anti- tailgating, Luz LED que indica dirección de paso, Configuracipon de tiempo válido de paso, Apertura de emergencia en caso de incendio, Motor sin escobillas, 2 botones de salida, 1 entada de alarma, Paso de 20 a 60 personas/minuto, Canal de 900mm, Material acero inoxidable SUS304 y puertas de vídrio acrilico, Dimensiones: 1205mm (47.44'') × 146mm (5.75'') × 1000mm (39.37''). No incluye le"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K3B411BX-R/M",
+      "nombre": "Hikvision DS-K3B411BX-R/M - Dp65 Lado Derecho TORNIQUETE TIPO BARRERA ABATIBLE (SWING BARRIER) 6",
+      "categoria": "Domótica",
+      "costo": 1415.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "- Dp65 Lado Derecho TORNIQUETE TIPO BARRERA ABATIBLE (SWING BARRIER) 6 pares de detectores de luz infrarroja: Validación de permisos y prevención de acceso no autorizado. Un indicador LED muestra la dirección de paso. La barrera dejará de funcionar durante un tiempo si detecta una obstrucción al abrirse o cerrarse. Autodetección, autodiagnóstico y alarma automática. El sistema cancelará el permiso de paso si una persona no atraviesa el carril dentro del tiempo permitido. La puerta permanece abie"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K3B501SX-L/MPg",
+      "nombre": "Hikvision DS-K3B501SX-L/MPg - Dm65 Lado Izquierdo TORNIQUETE TIPO BARRERA ABATIBLE (SWING BARRIER)",
+      "categoria": "Domótica",
+      "costo": 1690.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "- Dm65 Lado Izquierdo TORNIQUETE TIPO BARRERA ABATIBLE (SWING BARRIER) 12 pares de detectores de luz IR: Validación de permisos y anti- tailgating, Luz LED que indica dirección de paso, Alarma audible y visual cuando detecte una obstrucción al abrir/cerrar la barrera. Autodetección, Autodiagnóstico y alarma automática. Configuración de la duración válida de adelantamiento. La puerta permanece abierta cuando se activa la alarma de incendio. La barrera está en estado libre cuando se apaga. Ancho d"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K3B501SX-M/MPg",
+      "nombre": "Hikvision DS-K3B501SX-M/MPg - Dm65 Centro TORNIQUETE TIPO BARRERA ABATIBLE (SWING BARRIER) 12 pares",
+      "categoria": "Domótica",
+      "costo": 1690.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "- Dm65 Centro TORNIQUETE TIPO BARRERA ABATIBLE (SWING BARRIER) 12 pares de detectores de luz IR: Validación de permisos y anti- tailgating, Luz LED que indica dirección de paso, Alarma audible y visual cuando detecte una obstrucción al abrir/cerrar la barrera. Autodetección, Autodiagnóstico y alarma automática. Configuración de la duración válida de adelantamiento. La puerta permanece abierta cuando se activa la alarma de incendio. La barrera está en estado libre cuando se apaga. Ancho del Canal"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K6B961TDQLX",
+      "nombre": "Hikvision DS-K6B961TDQLX - L/Dp90 Lado Izquierdo 5,999.00 DISPONIBLE TORNIQUETE INTELIGENTE",
+      "categoria": "Domótica",
+      "costo": 9499.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "- L/Dp90 Lado Izquierdo 5,999.00 DISPONIBLE TORNIQUETE INTELIGENTE ABATIBLE DE LA SERIE ULTRA Pantalla de 6,95 pulgadas y módulo de reconocimiento facial integrado. Compatible con configuración web para PC y dispositivos móviles, y autodiagnóstico para mantenimiento. Función de modo AP para teléfonos móviles (Android) para acceder más fácilmente con un simple toque a través de la etiqueta NFC. Conexión de incendios: Al activarse la señal de incendio, la barrera se abre automáticamente para evacu"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K6B961TEQLX",
+      "nombre": "Hikvision DS-K6B961TEQLX - R/Dp90 Lado Derecho",
+      "categoria": "Domótica",
+      "costo": 5999.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "- R/Dp90 Lado Derecho"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K6B961TDQLX-2",
+      "nombre": "Hikvision DS-K6B961TDQLX-2 - M/Dp90-65 Lado Centro 90 cm / 65 cm TORNIQUETE INTELIGENTE ABATIBLE",
+      "categoria": "Domótica",
+      "costo": 9499.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "- M/Dp90-65 Lado Centro 90 cm / 65 cm TORNIQUETE INTELIGENTE ABATIBLE DE LA SERIE ULTRA Pantalla de 6,95 pulgadas y módulo de reconocimiento facial integrado. Compatible con configuración web para PC y dispositivos móviles, y autodiagnóstico para mantenimiento. Función de modo AP para teléfonos móviles (Android) para acceder más fácilmente con un simple toque a través de la etiqueta NFC. Conexión de incendios: Al activarse la señal de incendio, la barrera se abre automáticamente para evacuación "
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-K7R83X",
+      "nombre": "Hikvision DS-K7R83X PANEL DE CONTROL REMOTO PARA TORNIQUETES Y BARRERAS Pantalla táctil IPS",
+      "categoria": "Domótica",
+      "costo": 275.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "PANEL DE CONTROL REMOTO PARA TORNIQUETES Y BARRERAS Pantalla táctil IPS de 7 pulgadas con resolución de 1024 × 600. Autodefine la función del botón de la llave. Úselo en mostradores de recepción o salas de seguridad, fácil de controlar a distancia. Económico en comparación con los llaveros tradicionales. Protocolo de comunicación: TCP/IP. Wi-Fi 802.11 b/g/n. Configuración mediante navegador web. Videoportero: No compatible. Alimentación: IEEE802.3af, PoE estándar / 12 VCC/1 A. Controle el estado"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "Q340-HK",
+      "nombre": "Hikvision Q340-HK Lector de código qr - especial para torniquetes y barreras lector de",
+      "categoria": "Domótica",
+      "costo": 150.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Lector de código qr - especial para torniquetes y barreras lector de proximidad rfid. intemperie ip67, comunicación wiegand."
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KAB-COVER",
+      "nombre": "Hikvision DS-KAB-COVER TAPA DE PLASTICO Tapa del orificio de instalación del reconocimiento",
+      "categoria": "Domótica",
+      "costo": 20.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "TAPA DE PLASTICO Tapa del orificio de instalación del reconocimiento facial del torniquete. Dimensiones: 115 mm × 115 mm × 18 mm (4.53\" × 4.53\" × 0.71\""
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KAB-601COVER",
+      "nombre": "Hikvision DS-KAB-601COVER TAPA DE ACERO INOXIDABLE Tapa del orificio de instalación del",
+      "categoria": "Domótica",
+      "costo": 45.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "TAPA DE ACERO INOXIDABLE Tapa del orificio de instalación del reconocimiento facial del torniquete. Dimensiones: 115 mm × 115 mm × 18 mm (4.53\" × 4.53\" × 0.71\""
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KAB6-ZU1",
+      "nombre": "Hikvision DS-KAB6-ZU1 SOPORTE PARA TERMINALES DE RECONOCIMIENTO FACIAL Disponible para",
+      "categoria": "Domótica",
+      "costo": 365.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "SOPORTE PARA TERMINALES DE RECONOCIMIENTO FACIAL Disponible para terminal de reconocimiento facial de cualquier marca que admite la instalación de cajas de conexiones en puertas rápidas y torniquetes. Diseño Estético. Compatible con Terminales Faciales y Térmicas. Dimensions 100 mm × 100 mm × 196 mm. Material: aleación de aluminio AL-6061. Uso en interior y exterior - NO DISPONIBLE ESTATUS CONTROL DE ACCESO HIKVISION DS-K3GL606WX-WB MOTOR DE PORTON CORREDIZO 600 KG Compatible con interfaces WIFI"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-TMG300-DR/A",
+      "nombre": "Hikvision DS-TMG300-DR/A Brazo iluminado de 3m BARRERA VEHICULAR CON BRAZO ILUMINADO DE 3 MTS",
+      "categoria": "Domótica",
+      "costo": 895.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Brazo iluminado de 3m BARRERA VEHICULAR CON BRAZO ILUMINADO DE 3 MTS Barrera Vehicular derecja. Brazo Iluminado Rojo/Verde de 3 mts Incluido. 3 Seg para Apertura. Cierre Automático con Tiempo Configurable. 2,500,000 MCBF. Compatible con Cualquier Control de Acceso. Motor brushless DC silencioso. Reapertura automática ante impacto vehicular. Compatible con sistemas múltiples anti-golpes. Apertura manual al perder energía. Cuenta con 2 controles. Reapertura en caso de golpe a vehiculo. Compatible "
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-TMG301-DR(2+2)",
+      "nombre": "Hikvision DS-TMG301-DR(2+2) Brazo articulado de 4m BARRERA VEHICULAR CON BRAZO ILUMINADO DE 3 MTS",
+      "categoria": "Domótica",
+      "costo": 750.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Brazo articulado de 4m BARRERA VEHICULAR CON BRAZO ILUMINADO DE 3 MTS Fácil instalación lateral con estructura compacta. Incorpora un pequeño motor de CC sin escobillas y bajo nivel de ruido para aumentar el par de salida y lograr un control inteligente y preciso. Admite múltiples modos anticaída, como infrarrojos, detectores de vehículos y radares. Velocidad de ascenso: de 3 a 6 s. Velocidad de descenso: de 3 a 6 s. Dirección de la brazo: izquierda/derecha. Tipo de pluma compatible: pluma plega"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-TMG001-5",
+      "nombre": "Hikvision DS-TMG001-5 3m octagonal) BRAZO RECTO DE REPUESTO PARA BARRERAS HIKVISION Reemplazo",
+      "categoria": "Insumos",
+      "costo": 175.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "3m octagonal) BRAZO RECTO DE REPUESTO PARA BARRERAS HIKVISION Reemplazo de brazo de barrera de 3 metros Brazo fabrciado en Aluminio No cuenta con Tornilleria Dimensiones: 3000 × 100 × 45 mm (118.1 × 3.9 × 1.8 inch) Peso: 3.07 kg (6.8 lb"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-TMG004-5",
+      "nombre": "Hikvision DS-TMG004-5 4m) BRAZO TIPO CERCA DE REPUESTO PARA BARRERAS HIKVISION Dimensiones",
+      "categoria": "Insumos",
+      "costo": 345.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "4m) BRAZO TIPO CERCA DE REPUESTO PARA BARRERAS HIKVISION Dimensiones del mástil: 4000 × 970 × 96 mm (157,5 × 38,2 × 3,8 pulgadas) Dimensiones del mástil (con embalaje): 4050 × 1020 × 130 mm (159,4 × 40,2 × 5,1 pulgadas) Material del mástil: Perfil de aluminio Peso del mástil (con embalaje): 9,6 kg (21,16 lb"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-TMT201-D",
+      "nombre": "Hikvision DS-TMT201-D ESTACIÓN DE TICKETS DE ENTRADA DE ESTACIONAMIENTO Pantalla LCD de alto",
+      "categoria": "Domótica",
+      "costo": 2450.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "ESTACIÓN DE TICKETS DE ENTRADA DE ESTACIONAMIENTO Pantalla LCD de alto brillo y temperatura de 10,1 pulgadas de ancho, texto de soporte, código bidimensional y otra visualización de información, imagen de soporte, reproducción en bucle de vídeo Lector de tarjetas IC integrado en el dispositivo, admite carga de tarjetas El dispositivo contiene 1 interfaz de salida de relé, que se puede utilizar para barrera de control remoto Admite la función de intercomunicación de voz en tiempo real, tecnología"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-TMG035",
+      "nombre": "Hikvision DS-TMG035 Anti Fall Radar",
+      "categoria": "Domótica",
+      "costo": 185.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Anti Fall Radar"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-TMG035-2",
+      "nombre": "Hikvision DS-TMG035-2 Trigger Radar",
+      "categoria": "Domótica",
+      "costo": 210.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Trigger Radar"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-TPE104",
+      "nombre": "Hikvision DS-TPE104 TERMINAL DE CONTROL DE GESTIÓN PARA ENTRADA Y SALIDA DE",
+      "categoria": "Domótica",
+      "costo": 1250.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "TERMINAL DE CONTROL DE GESTIÓN PARA ENTRADA Y SALIDA DE ESTACIONAMIENTOS Diseño sin ventilador, pero posee buen efecto de enfriamiento. Aluminio Negro. Temperatura de trabajo: 20 °C to 70 °C. Interfaz RS-232 estándar. 2 interfaces RS-485. 4 puertos USB 3.0. Sistema Operativo Windows. 5 Puertos Ethernet 10/100. 1 Puertos Ethernet 10/100/1000. Disco duro 2TB integrado de nivel de vigilancia de 3,5\", que admite almacenamiento de imágenes y vídeos de gran capacidad. Equipado con una interfaz de audi"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-TCG405-E",
+      "nombre": "Hikvision DS-TCG405-E Camara unidad de video de entrada inteligente con reconocimiento y",
+      "categoria": "Cámaras IP",
+      "costo": 675.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Camara unidad de video de entrada inteligente con reconocimiento y captura de placas vehículares anpr camara ip 4mp para utilizar con barreras vehiculares. lente varifocal motorizado 3.1-6mm, intemperie ip67 antivandlica ik10, leds de alto rendimiento (luz blanca e ir), soporta paso rapido de multiples vehículos, 12vdc o poe (802.3af), tarjeta tf hasta 128gb, reconoce placas sucias, salida de rele para barrera vehicular, lista blanca de hasta 30,000 vehículos 755.00 disponible sensor (radar) con"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KIS202T",
+      "nombre": "Hikvision DS-KIS202T Puerta DS-KB2411-IM Monitor DS-KH2220 KIT DE VIDEO PORTERO ANALÓGICO",
+      "categoria": "Domótica",
+      "costo": 105.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Puerta DS-KB2411-IM Monitor DS-KH2220 KIT DE VIDEO PORTERO ANALÓGICO MONITOR: Pantalla LCD a Color de 7\", Audio IN/OUT, Micrófono y Altavoz integrados, soporta 1 cámara analógica adicional ESTACIÓN DE PUERTA: Resolución 720×576 @25fps, Micrófono y Altavoz, 2m de IR, Audio IN/OUT, 1 Salida de Relé"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KIS203T",
+      "nombre": "Hikvision DS-KIS203T Puerta DS-KB2421-IM Monitor DS-KH2220 KIT DE VIDEO PORTERO ANALÓGICO",
+      "categoria": "Domótica",
+      "costo": 120.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Puerta DS-KB2421-IM Monitor DS-KH2220 KIT DE VIDEO PORTERO ANALÓGICO MONITOR: Pantalla LCD a Color de 7\", Audio IN/OUT, Micrófono y Altavoz integrados, soporta 1 cámara analógica adicional ESTACIÓN DE PUERTA: Resolución 720×576@25fps, Micrófono y Altavoz, 2m de IR, Audio IN/OUT, 1 Salida de Relé, Intemperie IP65"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KIS302-P",
+      "nombre": "Hikvision DS-KIS302-P Puerta DS-KB2421-IM Monitor DS-KH6320-WTE1 KIT DE VIDEO PORTERO HIBRIDO",
+      "categoria": "Domótica",
+      "costo": 145.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Puerta DS-KB2421-IM Monitor DS-KH6320-WTE1 KIT DE VIDEO PORTERO HIBRIDO (ANALOGICO / IP 4 HILOS) MONITOR: Pantalla LCD a Color de 7\" Tactil, Audio IN/OUT, Micrófono y Altavoz integrados, Conexión a Internet por Cable o WiFi y por 4 Hilos al Frente de Calle. Memoria SD. Entrada y Salida de Alarma ESTACIÓN DE PUERTA: Resolución 1920 x 1080, Micrófono y Altavoz, 2m de IR, Audio IN/OUT, 1 Salida de Relé, Intemperie, Interface 4 Hilos"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KIS103",
+      "nombre": "Hikvision DS-KIS103 Puerta DS-KB2421-IM Monitor DS-KH6320-WTE1 KIT DE VIDEO PORTERO",
+      "categoria": "Domótica",
+      "costo": 35.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Puerta DS-KB2421-IM Monitor DS-KH6320-WTE1 KIT DE VIDEO PORTERO ANALOGICO DE 2 HILOS Apertura de 2 Puertas. Diferentes Tonos y Volúmenes de Timbre. Protección IP55. Kit de audio analógico plug & play de 2 cables. Diseño de llamada con un solo toque para facilitar las llamadas. Carcasa de aleación de aluminio con protección contra la lluvia. Permite ajustar el volumen del timbre, cambiar y seleccionar el tono de llamada. Compatible con desbloqueo remoto."
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KH2220",
+      "nombre": "Hikvision DS-KH2220 MONITOR PARA VIDEO PORTERO ANALÓGICO Pantalla LCD a Color de 7\", 4",
+      "categoria": "Domótica",
+      "costo": 55.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "MONITOR PARA VIDEO PORTERO ANALÓGICO Pantalla LCD a Color de 7\", 4 Cables, permite comunicación es cascada, Audio IN/OUT, Micrófono y Altavoz integrados, soporta 1 cámara analógica adicional, 12V 5W. Compatible con DS-KB2421T-IM"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KIS212",
+      "nombre": "Hikvision DS-KIS212 Puerta DS-KB2412T-IM Monitor DS-KH2230T KIT DE VIDEO PORTERO 4 HILOS HD",
+      "categoria": "Domótica",
+      "costo": 105.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Puerta DS-KB2412T-IM Monitor DS-KH2230T KIT DE VIDEO PORTERO 4 HILOS HD MONITOR: Pantalla LCD a Color de 7\", Audio IN/OUT, Micrófono y Altavoz integrados, Ethernet, Wifi, 2 Alarma IN ESTACIÓN DE PUERTA: Resolución 1280x720 @60fps, Micrófono y Altavoz, 2m de IR, Audio IN/OUT, 1 Salida de Relé, Lector IC, contacto magnetico, 4 Entradas 1 Salida, Metal, Intemperie IP65"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KIS213",
+      "nombre": "Hikvision DS-KIS213 Puerta DS-KB2422T-IM Monitor DS-KH2230T KIT DE VIDEO PORTERO 4 HILOS HD",
+      "categoria": "Domótica",
+      "costo": 105.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Puerta DS-KB2422T-IM Monitor DS-KH2230T KIT DE VIDEO PORTERO 4 HILOS HD MONITOR: Pantalla LCD a Color de 7\", Audio IN/OUT, Micrófono y Altavoz integrados, Ethernet, Wifi, 2 Alarma IN ESTACIÓN DE PUERTA: Resolución 1280x720 @60fps, Micrófono y Altavoz, 2m de IR, Audio IN/OUT, 1 Salida de Relé, Lector IC, contacto magnetico, 4 Entradas 1 Salida, Metal, Intemperie IP65, IK08"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KIS213-P",
+      "nombre": "Hikvision DS-KIS213-P Puerta DS-KB2422T-IM Monitor DS-KH2230T KIT DE VIDEO PORTERO 4 HILOS HD",
+      "categoria": "Domótica",
+      "costo": 140.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Puerta DS-KB2422T-IM Monitor DS-KH2230T KIT DE VIDEO PORTERO 4 HILOS HD MONITOR: Pantalla LCD a Color de 7\", Audio IN/OUT, Micrófono y Altavoz integrados, Ethernet, Wifi, 2 Alarma IN ESTACIÓN DE PUERTA: Resolución 1280x720 @60fps, Micrófono y Altavoz, 2m de IR, Audio IN/OUT, 1 Salida de Relé, Lector IC, contacto magnetico, 4 Entradas 1 Salida, Metal, Intemperie IP65, IK08"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KIS312-P",
+      "nombre": "Hikvision DS-KIS312-P Puerta DS-KB2412T-IM Monitor DS-KH6352- WTDE6 KIT DE VIDEO PORTERO 4",
+      "categoria": "Domótica",
+      "costo": 135.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Puerta DS-KB2412T-IM Monitor DS-KH6352- WTDE6 KIT DE VIDEO PORTERO 4 HILOS HD MONITOR: Pantalla LCD tactil a Color de 7\", Audio IN/OUT, Micrófono y Altavoz integrados, Ethernet, Wifi, 2 Alarma IN, HIK-CONNECT ESTACIÓN DE PUERTA: Resolución 1280x720 @60fps, Micrófono y Altavoz, 2m de IR, Audio IN/OUT, 1 Salida de Relé, Lector IC, contacto magnetico, 4 Entradas 1 Salida, Metal, Intemperie IP65"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KIS313-P",
+      "nombre": "Hikvision DS-KIS313-P Puerta DS-KB2412T-IM Monitor DS-KH2230T KIT DE VIDEO PORTERO 4 HILOS HD",
+      "categoria": "Domótica",
+      "costo": 150.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Puerta DS-KB2412T-IM Monitor DS-KH2230T KIT DE VIDEO PORTERO 4 HILOS HD MONITOR: Pantalla LCD tactil a Color de 7\", Audio IN/OUT, Micrófono y Altavoz integrados, Ethernet, Wifi, 2 Alarma IN, HIK-CONNECT ESTACIÓN DE PUERTA: Resolución 1280x720 @60fps, Micrófono y Altavoz, 2m de IR, Audio IN/OUT, 1 Salida de Relé, Lector IC, contacto magnetico, 4 Entradas 1 Salida, Metal, Intemperie IP65, IK08"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KIS602",
+      "nombre": "Hikvision DS-KIS602 Puerta DS-KD8003-IME1 Monitor DS-KH6320-WTE1 Switch 4 Puertos PoE",
+      "categoria": "Domótica",
+      "costo": 235.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Puerta DS-KD8003-IME1 Monitor DS-KH6320-WTE1 Switch 4 Puertos PoE Tarjeta TF 16GB KIT DE VIDEO PORTERO IP 2MP + SWITCH + TARJETA 16GB MONITOR: Pantalla LCD Táctil a Color de 7\", 1024 × 600, Audio IN/OUT, Micrófono y Altavoz integrados, Ethernet, Wifi, 8 Alarma IN, 2 Salidas Relé, HIK-CONNECT ESTACIÓN DE PUERTA: Resolución HD 2MP, 96°, Micrófono y Altavoz, 2m de IR, Audio IN/OUT, 1 Salida de Relé, Lector IC, contacto magnetico, 4 Entradas 1 Salida, Metal, Intemperie IP65"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KIS604-P(B)",
+      "nombre": "Hikvision DS-KIS604-P(B) Puerta DS-KV8113-WME1 Monitor DS-KH6320-WTE1 KIT DE VIDEO PORTERO IP",
+      "categoria": "Domótica",
+      "costo": 200.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Puerta DS-KV8113-WME1 Monitor DS-KH6320-WTE1 KIT DE VIDEO PORTERO IP 2MP Wi-Fi MONITOR: Pantalla LCD a Color de 7\" Táctil 1024 × 600, Micrófono y Altavoz integrados, Ethernet, Wifi, Micro SD 32G, PoE estándar, 8 Alarma IN, 2 Salidas de Relé ESTACIÓN DE PUERTA: Resolución 1280x720 @25fps WDR, Micrófono y Altavoz, 3m de IR, Audio IN/OUT, 1 Salidas de Relé, WiFi, Protección IK08 e Intemperie IP65, PoE estándar"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KIS603-P(B)",
+      "nombre": "Hikvision DS-KIS603-P(B) Puerta DS-KV6113-WPE1 Monitor DS-KH6320-WTE1 PSU x 2 KIT DE VIDEO",
+      "categoria": "Domótica",
+      "costo": 200.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Puerta DS-KV6113-WPE1 Monitor DS-KH6320-WTE1 PSU x 2 KIT DE VIDEO PORTERO IP 2MP Wi-Fi MONITOR: Pantalla LCD a Color de 7\" Táctil 1024 × 600, Micrófono y Altavoz integrados, Ethernet, Wifi, Micro SD 32G, PoE estándar, 8 Alarma IN, 2 Salidas de Relé ESTACIÓN DE PUERTA: Resolución 1280x720 @25fps WDR, 3m de IR, Micrófono y Altavoz, Audio IN/OUT, 1 Salidas de Relé, 4 Alarma IN, WiFi, Intemperie IP65, PoE estándar, Detección Movimiento"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KIS606-P",
+      "nombre": "Hikvision DS-KIS606-P Puerta DS-KV6113-PE1(C) Monitor DS-KH6110-WE1 Base DS-KABV6113-RS 2",
+      "categoria": "Domótica",
+      "costo": 195.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Puerta DS-KV6113-PE1(C) Monitor DS-KH6110-WE1 Base DS-KABV6113-RS 2 fuentes de alimentación KIT DE VIDEO PORTERO IP 2MP MONITOR: Pantalla LCD a Color de 4.3\" 480 × 272, Micrófono y Altavoz integrados, Ethernet, Cableada RJ45 PoE Estandar, 4 entradas alarma ESTACIÓN DE PUERTA: Resolución IP 2MP, Micrófono y Altavoz, 1 Salidas de Relé, 4 entradas alarma, 1 tamper, 1 boton de salida, 1 RS- 485, Intemperie IP65, PoE estándar, Detección Movimiento"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KH6000-E1",
+      "nombre": "Hikvision DS-KH6000-E1 ESTACIÓN INTERIOR IP DE BAJO COSTO SIN PANTALLA Estación interior",
+      "categoria": "Domótica",
+      "costo": 45.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "ESTACIÓN INTERIOR IP DE BAJO COSTO SIN PANTALLA Estación interior económica sin pantalla. Fuente de alimentación PoE estándar sin adaptador de corriente adicional. Conveniente para que los usuarios personalicen funciones según sus propios hábitos de uso mediante 4 botones táctiles personalizados. Sin WiFi."
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KH6100-E1",
+      "nombre": "Hikvision DS-KH6100-E1 ESTACIÓN INTERIOR IP DE BAJO COSTO CON PANTALLA Pantalla no táctil de",
+      "categoria": "Domótica",
+      "costo": 60.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "ESTACIÓN INTERIOR IP DE BAJO COSTO CON PANTALLA Pantalla no táctil de 4,3\" resolución 480×272. Fuente de alimentación PoE estándar sin adaptador de corriente adicional. Visualiza vídeos en directo de estaciones de puerta y cámaras vinculadas. Conveniente para que los usuarios personalicen funciones según sus propios hábitos de uso mediante 4 botones táctiles personalizados"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KH6110-WE1",
+      "nombre": "Hikvision DS-KH6110-WE1 ESTACIÓN INTERIOR IP DE BAJO COSTO CON PANTALLA Pantalla táctil de 4,3\"",
+      "categoria": "Domótica",
+      "costo": 80.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "ESTACIÓN INTERIOR IP DE BAJO COSTO CON PANTALLA Pantalla táctil de 4,3\" resolución 480×272. Fuente de alimentación PoE estándar sin adaptador de corriente adicional. Visualiza vídeos en directo de estaciones de puerta y cámaras vinculadas. Conveniente para que los usuarios personalicen funciones según sus propios hábitos de uso mediante 4 botones táctiles personalizados"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KH6220-LE1",
+      "nombre": "Hikvision DS-KH6220-LE1 NO TOUCH) MONITOR PANTALLA 7\" Pantalla NO TOUCH de 7\" (botones",
+      "categoria": "Domótica",
+      "costo": 60.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "NO TOUCH) MONITOR PANTALLA 7\" Pantalla NO TOUCH de 7\" (botones físicos), 4 botones, Apertura remota y visualización en vivo, Resolución: 1024 x 600. Micrófono y Altavoz integrados, Ethernet TCP/IP, Micro SD 32G, PoE estándar, 8 Alarma IN, Fuente de Poder IEEE802.3af, standard PoE o 12 VDC/1 A"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KH6320-WTE1",
+      "nombre": "Hikvision DS-KH6320-WTE1 MONITOR PANTALLA TACTIL 7\" Micrófono y Altavoz integrados, Ethernet",
+      "categoria": "Domótica",
+      "costo": 110.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "MONITOR PANTALLA TACTIL 7\" Micrófono y Altavoz integrados, Ethernet TCP/IP, Wi-Fi 802.11 b/g/n, Memoria 128MB, interfaz RS-485, Micro SD 32G, PoE estándar, 8 Alarma IN, 2 Salidas de Relé, Fuente de Poder IEEE802.3af, standard PoE O 12 VDC/1 A"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KH6350-WTE1/White",
+      "nombre": "Hikvision DS-KH6350-WTE1/White Color Blanco MONITOR PANTALLA TACTIL 7\" Nueva interfaz de usuario V2.0:",
+      "categoria": "Domótica",
+      "costo": 110.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Color Blanco MONITOR PANTALLA TACTIL 7\" Nueva interfaz de usuario V2.0: diseño fácil de usar. Pantalla táctil colorida de 7\" resolución 1024 × 600. Micrófono y Altavoz integrados, Ethernet TCP/IP, Wi-Fi 802.11 b/g/n, Memoria 128MB, interfaz RS-485, Micro SD 32G, PoE estándar, 8 Alarma IN, 2 Salidas de Relé, Fuente de Poder IEEE802.3af, standard PoE O 12 VDC/1 A"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KH8350-WTE1",
+      "nombre": "Hikvision DS-KH8350-WTE1 MONITOR PANTALLA TACTIL 7\" Diseño ultra delgado (ganador de premiro",
+      "categoria": "Domótica",
+      "costo": 215.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "MONITOR PANTALLA TACTIL 7\" Diseño ultra delgado (ganador de premiro Reddot award 2017), Cristal templado premium, Aluminio grado aeroespacial, Boton de apertura rápida, Micrófono bidireccional y Altavoz integrados, Ethernet TCP/IP, Wi-Fi 802.11 b/g/n, Memoria 128MB, interfaz RS-485, Micro SD 32G, PoE estándar, 8 Alarma IN, 2 Salidas de Relé, Fuente de Poder IEEE802.3af, standard PoE O 12 VDC/1 A - NO DISPONIBLE ESTATUS CONTROL DE ACCESO HIKVISION DS-KH9310-WTE1 MONITOR PANTALLA TACTIL 7\" ESTACIÓ"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KM9503",
+      "nombre": "Hikvision DS-KM9503 ESTACIÓN PRINCIPAL IP ANDROID TACTIL DE 10 PULGADAS Pantalla táctil IPS",
+      "categoria": "Domótica",
+      "costo": 629.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "ESTACIÓN PRINCIPAL IP ANDROID TACTIL DE 10 PULGADAS Pantalla táctil IPS de 10,1 pulgadas con resolución 1280×800 Servidor privado SIP incorporado, acceso a hasta 10.000 dispositivos de videoportero. Se pueden agregar hasta 128 cámaras de red Admite más de 2 parlantes y micrófonos: se conecta a un auricular externo (3,5 mm), micrófono externo de cuello de ganso Muestra páginas de operación a través de HDMI Admite fuente de alimentación PoE estándar y 12 VCC Funciones de videoportero y control de "
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KB8113-IME1(B)",
+      "nombre": "Hikvision DS-KB8113-IME1(B) ESTACIÓN DE PUERTA IP - FRENTE DE CALLE ANTI-VANDALICO Cámara HD de 2",
+      "categoria": "Domótica",
+      "costo": 85.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "ESTACIÓN DE PUERTA IP - FRENTE DE CALLE ANTI-VANDALICO Cámara HD de 2 MP. Visión nocturna IR 3 metros. Nivel de protección: IP65/IK09 para exteriores. Comunicación bidireccional con supresión de eco. Micrófono y Altavoz integrados. Interfaz web y detección de movimiento. 1 Salida de Rele, 1 entrada de alarma, 1 interfaz de red TCP/IP. 1 botón"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KV6113-WPE1(C)",
+      "nombre": "Hikvision DS-KV6113-WPE1(C) ESTACIÓN DE PUERTA VILLA METALICO (PUNTO DE CALLE) Cámara IP 2MP con IR",
+      "categoria": "Domótica",
+      "costo": 99.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "ESTACIÓN DE PUERTA VILLA METALICO (PUNTO DE CALLE) Cámara IP 2MP con IR Material Plastico Intemperie IP65 Antivandalico IK08 Lector de Tarjeta MIFARE (Control de Acceso) Alimentación: 12 VDC / PoE Estandar Intefaz Ethernet TCP/IP, RTSP / RS-485 4 x Entrada Alarma, 1 x Boton Salida, 1 x Cerradura, 1 x Contacto"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KV8113-WME1(C)",
+      "nombre": "Hikvision DS-KV8113-WME1(C) ESTACIÓN DE PUERTA VILLA METALICO (PUNTO DE CALLE) Cámara IP 2MP con IR",
+      "categoria": "Domótica",
+      "costo": 120.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "ESTACIÓN DE PUERTA VILLA METALICO (PUNTO DE CALLE) Cámara IP 2MP con IR Metalico Intemperie IP65 Antivandalico IK08 Lector de Tarjeta MIFARE (Control de Acceso) Alimentación: 12 VDC / PoE Estandar Intefaz Ethernet TCP/IP, RTSP / RS-485 4 x Entrada Alarma, 2 x Boton Salida, 2 x Cerradura, 2 x Contacto"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KD9633-WBE6",
+      "nombre": "Hikvision DS-KD9633-WBE6 ESTACIÓN PUERTA FACIAL MULTI APARTAMENTOS Operación intuitiva para una",
+      "categoria": "Domótica",
+      "costo": 775.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "ESTACIÓN PUERTA FACIAL MULTI APARTAMENTOS Operación intuitiva para una mejor experiencia de usuario. Pantalla LCD Táctil 10,1\" 1280 × 880. Sistema Android incorporado. UI de pantalla táctil, WEB. Gran calidad de imagen incluso en la oscuridad. Cámara doble lente 2MP 3m IR. Múltiples autenticaciones inteligentes. Tarjeta, código PIN, bluetooth, código QR, huella digital y reconocimiento facial. Alto nivel de protección IK07. Intemperie IP65. 2 Microfonos Omnidireccionales. Interfaces: 2 RJ45 IP, "
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KDM9633-FKP",
+      "nombre": "Hikvision DS-KDM9633-FKP MODULO DE HUELLA Y TECLADO PARA ESTACIÓN DS-KD9633 Capacidad de 5000",
+      "categoria": "Domótica",
+      "costo": 104.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "MODULO DE HUELLA Y TECLADO PARA ESTACIÓN DS-KD9633 Capacidad de 5000 huellas dactilares de alta Compensación de retroiluminación detrás del teclado Alto nivel de protección Intemperie IP65 y Antivandalismo IK07 Fácil de usar y ampliar, Conexión USB"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KD-KK",
+      "nombre": "Hikvision DS-KD-KK MODULO DE BOTONES PARA VIDEOPORTERO MODULAR Etiquetas editables, 6",
+      "categoria": "Domótica",
+      "costo": 30.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "MODULO DE BOTONES PARA VIDEOPORTERO MODULAR Etiquetas editables, 6 Botones físicos para llamar a 6 monitores principales, Compatible con montaje empotrado o en superficie, Compensación de Luz de Fondo BLC, Configurable mediante IVMS4200, Intemperie IP65"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KD-KP",
+      "nombre": "Hikvision DS-KD-KP MODULO DE TECLADO PARA VIDEOPORTERO MODULAR Apertura de puerta mediante",
+      "categoria": "Domótica",
+      "costo": 80.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "MODULO DE TECLADO PARA VIDEOPORTERO MODULAR Apertura de puerta mediante contraseña, llamada a monitor, Compatible con montaje empotrado o en superficie, Configurable mediante iVMS4200, Intemperie IP65"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KD-M",
+      "nombre": "Hikvision DS-KD-M MODULO LECTOR TARJETA PARA VIDEOPORTERO MODULAR Lector de tarjeta",
+      "categoria": "Domótica",
+      "costo": 50.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "MODULO LECTOR TARJETA PARA VIDEOPORTERO MODULAR Lector de tarjeta Mifare, Frecuencia 13.56MHz, Soporta hasta 10,000 Tarjetas, Apertura de puerta mediante tarjeta, Compensación de Luz de Fondo BLC, Compatible con montaje empotrado o en superficie, Configurable mediante iVMS4200, Intemperie IP65"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KD-DIS",
+      "nombre": "Hikvision DS-KD-DIS MODULO PANTALLA PARA VIDEOPORTERO MODULAR Apertura de puerta mediante",
+      "categoria": "Domótica",
+      "costo": 70.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "MODULO PANTALLA PARA VIDEOPORTERO MODULAR Apertura de puerta mediante contraseña, llamada a monitor, Compatible con montaje empotrado o en superficie, Configurable mediante iVMS4200, Intemperie IP65"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KD-TDM",
+      "nombre": "Hikvision DS-KD-TDM MODULO PANTALLA TACTIL PARA VIDEOPORTERO MODULAR Soporta Control de",
+      "categoria": "Domótica",
+      "costo": 250.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "MODULO PANTALLA TACTIL PARA VIDEOPORTERO MODULAR Soporta Control de Acceso con Lector de tarjeta MIFARE, Pantalla de 4\", Intemperie IP65, Antivandalismo IK8, Visualización de número de marcación, código PIN y desbloqueo con Tarjeta, Visualización de lista de contactos y Publicidad, Permite almacenar y buscar listas de contactos, Opción en Español, Salida de audio tipo Buzzer"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KD9203-ME6",
+      "nombre": "Hikvision DS-KD9203-ME6 ESTACIÓN DE PUERTA METALICO (PUNTO DE CALLE) Cámara IP 2MP con IR",
+      "categoria": "Domótica",
+      "costo": 360.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "ESTACIÓN DE PUERTA METALICO (PUNTO DE CALLE) Cámara IP 2MP con IR, Angulo de Visión de 120 ° Pantalla LCD a color de 4.3\" Control de Acceso mediante Rostro, Tarjeta M1 o código pin Soporta 5.000 Rostros / 50.000 Tarjetas / 10.000 Usuarios Intefaz Ethernet TCP/IP, RTSP / RS-485 Metalico Intemperie IP65 Alimentación: 12 VDC 4 x Entrada Alarma, 1 x Boton Salida, 1 x Cerradura, 2 x Contacto 315.00 DISPONIBLE ESTATUS CONTROL DE ACCESO HIKVISION DS-KD9203-MFE6 ESTACIÓN DE PUERTA METALICO (PUNTO DE CAL"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KD-ACF1/Plastic",
+      "nombre": "Hikvision DS-KD-ACF1/Plastic EMPOTRAR) BASE 2 ESPACIOES PARA VIDEOPORTERO MODULAR Marco de",
+      "categoria": "Domótica",
+      "costo": 20.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "EMPOTRAR) BASE 2 ESPACIOES PARA VIDEOPORTERO MODULAR Marco de instalacion con caja para empotrar 1 módulos de frente de calle, Material plástico, Dimensiones: 237 x 134 × 56 mm."
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KD-ACF2/Plastic",
+      "nombre": "Hikvision DS-KD-ACF2/Plastic EMPOTRAR) BASE 2 ESPACIOES PARA VIDEOPORTERO MODULAR Marco de",
+      "categoria": "Domótica",
+      "costo": 27.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "EMPOTRAR) BASE 2 ESPACIOES PARA VIDEOPORTERO MODULAR Marco de instalacion con caja para empotrar 2 módulos de frente de calle, Material plástico, Dimensiones: 237 x 134 × 56 mm."
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KD-ACF3/Plastic",
+      "nombre": "Hikvision DS-KD-ACF3/Plastic EMPOTRAR) BASE 3 ESPACIOES PARA VIDEOPORTERO MODULAR Marco de",
+      "categoria": "Domótica",
+      "costo": 35.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "EMPOTRAR) BASE 3 ESPACIOES PARA VIDEOPORTERO MODULAR Marco de instalacion con caja para empotrar 3 módulos de frente de calle, Material plástico, Dimensiones: 338.8 x 134 × 56 mm."
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-QAZ1120G1-B/EU",
+      "nombre": "Hikvision DS-QAZ1120G1-B/EU ALTAVOZ DE GABINETE DE RED DE 20W Chips de doble núcleo de grado",
+      "categoria": "Domótica",
+      "costo": 70.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "ALTAVOZ DE GABINETE DE RED DE 20W Chips de doble núcleo de grado industrial de alta velocidad, almacenamiento dual NOR Flash+EMMC incorporado, admita copia de seguridad dual del sistema para garantizar un rendimiento estable Inicio seguro, mecanismo de bloqueo de inicio de sesión de usuario y solicitudes de complejidad de contraseña, admite trazabilidad de registros de auditoría de seguridad y mejora la seguridad de la red Gestión unificada por lotes de plataformas remotas a través de redes IP ("
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-QAE1A80G1-VB",
+      "nombre": "Hikvision DS-QAE1A80G1-VB AMPLIFICADOR IP DE 2 ZONAS DE 80W Tareas en tiempo real y programadas",
+      "categoria": "Domótica",
+      "costo": 195.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "AMPLIFICADOR IP DE 2 ZONAS DE 80W Tareas en tiempo real y programadas, reanudación de reproducción y gestión de bibliotecas de audio. Entrada y salida de alarma, programación de armado y enlace de audio. Admite síntesis de voz TTS y transmisión de texto, con opciones de audio dual macho y hembra estándar, fluidas y naturales. Admite múltiples tipos de entrada de audio: Bluetooth, memoria USB 2.0/3.0, micrófono y RCA, con un funcionamiento flexible y práctico. Control de volumen independiente par"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-QAE0206G1-V",
+      "nombre": "Hikvision DS-QAE0206G1-V ALTAVOZ DE TECHO ANALOGICO DE 6W Altavoz Montaje en Plafón. 6 Watts",
+      "categoria": "Domótica",
+      "costo": 15.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "ALTAVOZ DE TECHO ANALOGICO DE 6W Altavoz Montaje en Plafón. 6 Watts. 100 V. Rejilla de Metal. Color Blanco. Uso Interior. Entrada de audio 100V, potencia de salida de 60W Nivel máximo de sonido hasta 96dB. Instalación rápida, abrazadera de resorte de acero. Conectividad Bluetooth para transmisión inalámbrica. Reproductor MP3 integrado, control de micrófono independiente. Altavoz compatible con amplificador DS-QAE0A60G1-VB ideal para musica ambiental y mensajes de voz. Dimensiones: Ø 170 mm × 64 "
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-QAE0420G1-V",
+      "nombre": "Hikvision DS-QAE0420G1-V ALTAVOZ DE COLUMNA ANALOGICO Revestimiento adhesivo importado magnético",
+      "categoria": "Domótica",
+      "costo": 75.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "ALTAVOZ DE COLUMNA ANALOGICO Revestimiento adhesivo importado magnético aeroespacial, diseño de película sonora liviana, con alta Plásticos reforzados de ingeniería profesional con alta resistencia. Entrada de audio: extremo verde (bloque de terminales), entrada de voltaje constante: 100 V, COM. Protección de aprobación: IP66 Al usar soportes en L, el ángulo de la superficie de instalación se puede ajustar para una instalación conveniente Diseño integrado profesional, resistente al agua IP66, co"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-QAE0206G1E-V",
+      "nombre": "Hikvision DS-QAE0206G1E-V ALTAVOZ DE TECHO ANALOGICO Al adoptar un lavabo acústico de fibra de",
+      "categoria": "Domótica",
+      "costo": 170.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "ALTAVOZ DE TECHO ANALOGICO Al adoptar un lavabo acústico de fibra de papel compuesto, la calidad del sonido es clara y brillante. Con el diseño de una poderosa abrazadera de resorte de acero, la instalación es rápida y segura Soporte de instalación de montaje en techo con una apariencia simple Potencia nominal: 6 W. Sensibilidad: 91 dB ±3dB. Máx. Presión acústica: 98 dB. Respuesta de frecuencia: 90 Hz a 20 kHz Entrada de audio: voltaje nominal, 100 V Dimensiones: Ø170 ×64 mm(Ø6.69\" × 2.52\") / Pe"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-TDSB00-EKT",
+      "nombre": "Hikvision DS-TDSB00-EKT RADAR DE DETECCIÓN DE CAIDAS Sin divulgación de privacidad. Detección",
+      "categoria": "Domótica",
+      "costo": 190.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "RADAR DE DETECCIÓN DE CAIDAS Sin divulgación de privacidad. Detección de postura sin contacto. Alta precisión de detección y baja tasa de falsas alarmas. Detecta personas y no personas en la zona. Admite localizar el objetivo y transmitir la ubicación. Admite un rango de detección de 4 m x 5 m. Admite la transmisión de datos a la plataforma mediante protocolo OTAP. Admite conexión a Wi-Fi y red cableada IP RJ45. Admite la detección del cuerpo humano, la detección de caídas y el rastreo de objeti"
+    },
+    {
+      "marca": "Hikfire",
+      "modelo": "HF-S2",
+      "nombre": "Hikfire HF-S2 DETECTOR DE HUMO AUTONOMO (STAND-ALONE) Detector de Humo Óptico",
+      "categoria": "Domótica",
+      "costo": 15.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "DETECTOR DE HUMO AUTONOMO (STAND-ALONE) Detector de Humo Óptico Hikvision. Tecnología Avanzada de Detección de Incendios. Alarma Temprana y Fiabilidad Certificada. Soporta Salida de Alarma. Detector de humo (E/S). Interfaz de E/S compatible. 3 años de batería. ideal para detectar humo y fuego, y emite señales de alarma sonoras y visuales, siendo ampliamente utilizado en tiendas, residencias, hoteles y otros escenarios independientes. El detector es autónomo, no requiere un panel. Incorpora funci"
+    },
+    {
+      "marca": "Hikfire",
+      "modelo": "HF-GN110",
+      "nombre": "Hikfire HF-GN110 DETECTOR DE GAS NATURAL METANO CH4 (STAND-ALONE) Alarma Temprana",
+      "categoria": "Domótica",
+      "costo": 34.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "DETECTOR DE GAS NATURAL METANO CH4 (STAND-ALONE) Alarma Temprana. Salida para cierre de Válvula y/o activación de Ventilador. Protección IP30. Alarma de 70dB a 115dB a 1 metro de distancia. Alerta temprana para fuga de gas natural. Rango de medición hasta 25% LEL. Volumen de alarma de 70db a 115db. Salidas para válvula y ventilador. Certificación: GB 15322.2-2019."
+    },
+    {
+      "marca": "Hikfire",
+      "modelo": "HF-GP110",
+      "nombre": "Hikfire HF-GP110 DETECTOR DE GAS LP PROPANO C3H8 (STAND-ALONE) Alarma Temprana. Salida",
+      "categoria": "Domótica",
+      "costo": 36.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "DETECTOR DE GAS LP PROPANO C3H8 (STAND-ALONE) Alarma Temprana. Salida para cierre de Válvula y/o activación de Ventilador. Protección IP30. Alarma de 70dB a 115dB a 1 metro de distancia. Detección de gas C3H8 con alerta temprana. Alarma sonora 70dB~115dB a 1m. Rango de medición 0~25% LEL. Umbral de alarma al 10% LEL. Fuente de alimentación AC 220V"
+    },
+    {
+      "marca": "Hikfire",
+      "modelo": "HF-CAB1",
+      "nombre": "Hikfire HF-CAB1 TIMBRE DE ALARMA CONVENCIONAL Con una cubierta de aleación de aluminio",
+      "categoria": "Domótica",
+      "costo": 15.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "TIMBRE DE ALARMA CONVENCIONAL Con una cubierta de aleación de aluminio, es ligero, ofrece un alto volumen de sonido y es fácil de instalar. Bajo consumo, alta fiabilidad. Norma ejecutiva: GB 26851-2011 Nivel de presión sonora (dB SPL): 75 dB ~ 100 dB Entorno de funcionamiento: Interior Dimensiones del producto: φ 150 mm × H 55 mm Tipo de instalación: Montaje en pared"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PHA20-W2P",
+      "nombre": "Hikvision DS-PHA20-W2P Acceso a 2 camaras ip estandar 802.11b/g/n central de alarma hibrida de",
+      "categoria": "Domótica",
+      "costo": 75.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Acceso a 2 camaras ip estandar 802.11b/g/n central de alarma hibrida de 20 zonas (caja plastica) 4 particiones, 4 zonas en tarjeta, expandible a 16 zonas cableadas / inalambricas, 2 saildas en tarjeta, expandible a 18 salidas cableadas / inalambricas, interface: 1 ethernet rj45 10m/100m, comunicación lan, pstn, gprs y 3g/4g (con modulo), caja plastica, bateria litium, 1 sirena cableada, 2 sirenas inalambricas"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PHA32-P/LA",
+      "nombre": "Hikvision DS-PHA32-P/LA Central de alarma hibrida de 32 zonas (caja plastica) 32 entradas",
+      "categoria": "Domótica",
+      "costo": 79.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Central de alarma hibrida de 32 zonas (caja plastica) 32 entradas inalámbricas, 4 expansores de salida inalámbrica. múltiples métodos de comunicación: lan + wi-fi. 2 canales. verificación por video a bordo. compatible con el protocolo sia-contact id. zonas: 32. particiones: 16. usuarios: 30 operarios 1 instalador 1 admin. notificaciones: sms/gprs/3g/4g. herramienta programación: teclado web(ivms-4200/hik-proconnet"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PHA48-EP",
+      "nombre": "Hikvision DS-PHA48-EP Central de alarma hibrida 48 zonas (caja plastica) 8 zonas en tarjeta",
+      "categoria": "Domótica",
+      "costo": 89.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Central de alarma hibrida 48 zonas (caja plastica) 8 zonas en tarjeta, expandible a 48 zonas cableadas o inalambricas, 4 saildas en tarjeta, 1 salida para sirena cableada / expandible a 44 salidas cableadas / inalambricas, comunicación lan, pstn, gprs, 3g/4g, 2 canales para camaras ip, protocolos isapi, cloud p2p, isup, csv-ip, dc-09 / 2 switchs anti vandalismo"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PHA64-LP",
+      "nombre": "Hikvision DS-PHA64-LP Central de alarma hibrida 64zonas (caja plastica) 8 zonas en tarjeta",
+      "categoria": "Domótica",
+      "costo": 99.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Central de alarma hibrida 64zonas (caja plastica) 8 zonas en tarjeta, expandible a 64 zonas cableadas o inalambricas, 4 saildas en tarjeta, 1 salida para sirena cableada. expandible a 44 salidas cableadas. inalambricas, comunicación lan, wi-fi, pstn, gprs, 3g/4g, 2 canales para camaras ip, protocolos isapi, cloud p2p, isup, csv-ip, dc-09 / 2 switchs anti vandalismo"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PHA64-Kit-WB",
+      "nombre": "Hikvision DS-PHA64-Kit-WB Kit alarma ax pro hibrido 64 zonas contiene:- 1 central de alarma",
+      "categoria": "Domótica",
+      "costo": 124.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Kit alarma ax pro hibrido 64 zonas contiene:- 1 central de alarma ds-pha64-lp / 2 sensores de movimiento pir ds-pdp18-eg2 / 1 teclado lcd ds-pk1- lrt-hwb / 1 control remoto ds-pkf1-wb / 1 contacto magnético ds-pd1-mc-ws comunicación lan, wi-fi, pstn, gprs, 3g/4g, 2 canales para camaras ip, protocolos isapi, cloud p2p, isup, csv-ip, dc-09 / 2 switchs anti vandalismo - no disponible sistemas de alarmas estatus control de acceso hikvision ds-pha64-w4m acceso a 4 camaras ip estandar 802.11b/g/n cent"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PHA64-W4P2",
+      "nombre": "Hikvision DS-PHA64-W4P2 Central de alarma hibrida caja metálica 8 particiones, 8 zonas en",
+      "categoria": "Domótica",
+      "costo": 99.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Central de alarma hibrida caja metálica 8 particiones, 8 zonas en tarjeta, expandible a 64 zonas cableadas / inalambricas, 4 saildas en tarjeta, expandible a 60 salidas cableadas / inalambricas, interface ip rj45, comunicación lan, pstn, gprs y 3g/4g (con modulo), caja metalica permite incluir bateria, 1 sirena cableada, 2 sirenas inalambricas"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PA-Battery",
+      "nombre": "Hikvision DS-PA-Battery Batería de respaldo para panel de alarma hikvision 4520 mah. compatible",
+      "categoria": "Domótica",
+      "costo": 24.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Batería de respaldo para panel de alarma hikvision 4520 mah. compatible con paneles ax pro - ax hub - hibrido versión 1 (ds-pha64-w4p) y repetidor ax pro ds- pr1-wb. peso ligero de solo 80 gramos. dimensiones compactas: 59 x 69 x 8 mm. compatibilidad con series verificables en línea. optimizada para paneles de alarma hikvision"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PKG-H8L",
+      "nombre": "Hikvision DS-PKG-H8L 8 zonas",
+      "categoria": "Domótica",
+      "costo": 30.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "8 zonas"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PK-L",
+      "nombre": "Hikvision DS-PK-L Blanco) teclado cableado lcd (color blanco) pantalla lcd 80 x 25 mm",
+      "categoria": "Domótica",
+      "costo": 29.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Blanco) teclado cableado lcd (color blanco) pantalla lcd 80 x 25 mm. pantalla de 2 lineas muestra nombre de zona, estados y eventos en tiempo real en pantalla lcd"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PK-LRT",
+      "nombre": "Hikvision DS-PK-LRT Blanco) teclado cableado lcd (color blanco) pantalla lcd 80 x 25 mm",
+      "categoria": "Domótica",
+      "costo": 35.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Blanco) teclado cableado lcd (color blanco) pantalla lcd 80 x 25 mm. pantalla de 2 lineas armado y desarmado por tarjetas (tag) y/o llaveros (keyfob ds-19k00-y) muestra nombre de zona, estados y eventos en tiempo real en pantalla lcd"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PK1-LRT-HWB",
+      "nombre": "Hikvision DS-PK1-LRT-HWB Blanco) teclado cableado lcd (color blanco) pantalla lcd. soporta",
+      "categoria": "Domótica",
+      "costo": 50.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Blanco) teclado cableado lcd (color blanco) pantalla lcd. soporta alarma de 1 toque para armado sin contraseña. soporta 1 tecla para alarma de fuego, panico o medica. visualización de nombre de empresa, número de telefono, hora. posee en tarjeta 2 entradas y 1 salida de alarma. soporta 64 llaveros keyfob. 1 buzzer en tarjeta. sensor anti-vandalismo"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PMA-P",
+      "nombre": "Hikvision DS-PMA-P Modulo pstn para central hibrida comunicación series port/pstn, linea",
+      "categoria": "Domótica",
+      "costo": 12.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Modulo pstn para central hibrida comunicación series port/pstn, linea fija de telefono"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PM2-S(AU)",
+      "nombre": "Hikvision DS-PM2-S(AU) Modulo comunicación 3g/4g central ax hybrid pro comunicador 3g/4g",
+      "categoria": "Domótica",
+      "costo": 76.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Modulo comunicación 3g/4g central ax hybrid pro comunicador 3g/4g. micro sim. compatible con el panel hybrid pro hikvision ds-pha64-lp. soporte a múltiples operadores celulares. requiere una tarjeta micro sim. modo de comunicación dual-band umts/hsdpa/hspa+b1/b5"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PM-RSWR",
+      "nombre": "Hikvision DS-PM-RSWR 433mhz) expansor de 8 zonas inalambricas agrega sensores inalambricos a",
+      "categoria": "Domótica",
+      "costo": 30.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "433mhz) expansor de 8 zonas inalambricas agrega sensores inalambricos a alarma cableada soporta 8 entradas zonas inalambricas soporta 32 controles remotos y 2 sirenas inalambricas distancia: 400 metros indicador led dual rojo/verde conexión rs-485"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PM1-I8O2-H",
+      "nombre": "Hikvision DS-PM1-I8O2-H Expansor de 8 zonas cableadas soporta conexión 3eol (alarm ： 1kω ；",
+      "categoria": "Domótica",
+      "costo": 28.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Expansor de 8 zonas cableadas soporta conexión 3eol (alarm ： 1kω ； tamper ： 1kω ； fault ： 2.2kω). soporta detección de zona de alarma, anti-vandalismo, enmascaramiento, falla y corto. 1 salida de corriente para sensores cableados. soporta otros expansores en cascada. indicadores led para encendido y 1 para falla. carcasa plastica"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PM1-RT-HWB",
+      "nombre": "Hikvision DS-PM1-RT-HWB Expansor de 32 zonas inalambricas tri-x conexión bus speed-x permite",
+      "categoria": "Domótica",
+      "costo": 98.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Expansor de 32 zonas inalambricas tri-x conexión bus speed-x permite agregar sensores ax-pro compatible con paneles ax hybrido pro distancia de transmisión hasta 1300 metros fuente de poder: 9 a 28 vdc, 1a soporta hasta 4 sirenas internas y 8 sirenas externas - no disponible teclado cableado led armado, desarmado, despeje, bypass, etc incador de estatus en tiempo real de zonas protección tamper, protocolo rs-485, alimentación 12vdc, 12 teclas: 0 a 9, * y # estatus control de acceso hikvision ds-"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PM1-O4L-H",
+      "nombre": "Hikvision DS-PM1-O4L-H Rele de baja corriente de 4 vías cableado modulo de 4 reles 6-30v hasta",
+      "categoria": "Domótica",
+      "costo": 37.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Rele de baja corriente de 4 vías cableado modulo de 4 reles 6-30v hasta 5a 1 salida de potencia maximo 500ma funciones de automatización / domotica comunicación speed-x bus a prueba de vandalismo voltaje de operación 11-24 vcc / 1a"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PM1-O4H-H",
+      "nombre": "Hikvision DS-PM1-O4H-H Rele de potencia de 4 vías cableado modulo de 4 reles 100 v~240 v hasta",
+      "categoria": "Domótica",
+      "costo": 37.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Rele de potencia de 4 vías cableado modulo de 4 reles 100 v~240 v hasta 16a 1 puerto serial ttl funciones de automatización / domotica comunicación 2xspeed-x bus, 1 uplink para el control de panel de conexión y 1 downlink para otro expansor a prueba de vandalismo delantero y trasero"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PM-RSO4",
+      "nombre": "Hikvision DS-PM-RSO4 433mhz) expansor rs-485 con 4 salidas cableadas alta potencia voltaje",
+      "categoria": "Domótica",
+      "costo": 28.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "433mhz) expansor rs-485 con 4 salidas cableadas alta potencia voltaje de operacion: 12 v / 1 a 4 salidas de rele no/nc capacidad de los reles: 220vca / 10a"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PM-RSO8",
+      "nombre": "Hikvision DS-PM-RSO8 433mhz) expansor rs-485 con 8 salidas cableadas alta potencia voltaje",
+      "categoria": "Domótica",
+      "costo": 39.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "433mhz) expansor rs-485 con 8 salidas cableadas alta potencia voltaje de operacion: 12 v / 1 a 8 salidas de rele no/nc capacidad de los reles: 220vca / 10a"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PDP18-EG2(B)",
+      "nombre": "Hikvision DS-PDP18-EG2(B) Detector de movimiento antimascota cableado inmunidad antimascota: 15",
+      "categoria": "Domótica",
+      "costo": 7.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Detector de movimiento antimascota cableado inmunidad antimascota: 15 kg rango de detección: 18 m, angulo de detección 85.9° compensación digital de temperatura sensor infrarrojo de doble elemento"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PDD12P-EG2",
+      "nombre": "Hikvision DS-PDD12P-EG2 Detector de movimiento antimascota cableado tecnologia dual: pir y",
+      "categoria": "Domótica",
+      "costo": 18.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Detector de movimiento antimascota cableado tecnologia dual: pir y microondas inmunidad antimascota: 10 kg rango de detección: 12 m, angulo de detección 85.9° compensación digital de temperatura sensor infrarrojo de doble elemento"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PDD12-EG2",
+      "nombre": "Hikvision DS-PDD12-EG2 Detector de movimiento antimascota cableado tecnologia dual: pir y",
+      "categoria": "Domótica",
+      "costo": 21.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Detector de movimiento antimascota cableado tecnologia dual: pir y microondas inmunidad antimascota: 10 kg rango de detección: 12 m, angulo de detección 85.9° compensación digital de temperatura sensor infrarrojo de doble elemento"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PDPG12P-EG2",
+      "nombre": "Hikvision DS-PDPG12P-EG2 Detector cableado de movimiento + ruptura de cristal inmunidad",
+      "categoria": "Domótica",
+      "costo": 25.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Detector cableado de movimiento + ruptura de cristal inmunidad antimascota: 30 kg rango de detección: 18m / 90° rango de ruptura de cristal: 8m / 120° sensibilida ajustable voltaje ajustable 9-16 vdc"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PDPC12P-EG2",
+      "nombre": "Hikvision DS-PDPC12P-EG2 Detector pir cableado + camara integrada rango de detección pir: 12m /",
+      "categoria": "Domótica",
+      "costo": 65.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Detector pir cableado + camara integrada rango de detección pir: 12m / 85.9° inmunidad antimascota: 30 kg control inteligente de ambiente avanzado digital video: angulo 88°(h), 68°(v) / resolución 640*480 switch dia/noche: color / blanco y negro"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PDBG8-EG2",
+      "nombre": "Hikvision DS-PDBG8-EG2 Detector de ruptura de cristal cableado sensor microfono",
+      "categoria": "Domótica",
+      "costo": 15.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Detector de ruptura de cristal cableado sensor microfono omni-direccional de alta calidad configurable remotamente a través de la app rango de detección: 8m / angulo 120° sensibilidad: 2m;4m;6m;8m vidrio: grosor 2.4mm a 6.4mm tamaño: 0.3mx0.3m a 3mx3m"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PD1-BG9",
+      "nombre": "Hikvision DS-PD1-BG9 Detector de ruptura de cristal cableado voltaje de operación: 9 - 16",
+      "categoria": "Domótica",
+      "costo": 22.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Detector de ruptura de cristal cableado voltaje de operación: 9 - 16 vdc 25 ma de consumo rango de detección: sensibilidad alta 9 metros, sensibilidad baja 5 metros 2 indicadores led"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PDSK-P",
+      "nombre": "Hikvision DS-PDSK-P Detector sismico cableado rango de detección : hasta 5m (radio 2.5m)",
+      "categoria": "Domótica",
+      "costo": 12.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Detector sismico cableado rango de detección : hasta 5m (radio 2.5m) ajsute de sensibilidad para interior indicador led azul antivandalismo"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PD1-EB",
+      "nombre": "Hikvision DS-PD1-EB Boton de emergencia (panico) carcasa de abs retardante de llama modo de",
+      "categoria": "Domótica",
+      "costo": 2.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Boton de emergencia (panico) carcasa de abs retardante de llama modo de conexión: no/nc 49.5 mm × 53.5 mm × 32.5 mm"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PDSMK-4",
+      "nombre": "Hikvision DS-PDSMK-4",
+      "categoria": "Domótica",
+      "costo": 10.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": ""
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PDSMK-4BAR",
+      "nombre": "Hikvision DS-PDSMK-4BAR Reinicio automatico sirena interna",
+      "categoria": "Domótica",
+      "costo": 14.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Reinicio automatico sirena interna"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PI-T250",
+      "nombre": "Hikvision DS-PI-T250 250 metros",
+      "categoria": "Domótica",
+      "costo": 105.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "250 metros"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PD1-MC-WS",
+      "nombre": "Hikvision DS-PD1-MC-WS Contacto magnetico superficial plastico abs conexión: nc diseñado para",
+      "categoria": "Domótica",
+      "costo": 2.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Contacto magnetico superficial plastico abs conexión: nc diseñado para puertas o ventanas distancia apertura: 1.7 cm dimensiones: 63.5mm x 12.5mm x 15.7mm"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PD1-MC-MS",
+      "nombre": "Hikvision DS-PD1-MC-MS Contacto magnetico superficial metalico conexión: nc diseñado para",
+      "categoria": "Domótica",
+      "costo": 5.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Contacto magnetico superficial metalico conexión: nc diseñado para puertas o ventanas distancia apertura: 4 cm dimensiones: 50mm x 18mm x 10mm"
+    },
+    {
+      "marca": "Omegasat",
+      "modelo": "OM-SIRENE",
+      "nombre": "Omegasat OM-SIRENE Sirena diseño moderno color blanco 1 tono 115db 12vdc 180ma",
+      "categoria": "Domótica",
+      "costo": 4.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Sirena diseño moderno color blanco 1 tono 115db 12vdc 180ma"
+    },
+    {
+      "marca": "Omegasat",
+      "modelo": "OM-SIRENE-Black",
+      "nombre": "Omegasat OM-SIRENE-Black Sirena diseño moderno color negro 1 tono 115db 12vdc 180ma",
+      "categoria": "Domótica",
+      "costo": 4.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Sirena diseño moderno color negro 1 tono 115db 12vdc 180ma"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PS3001",
+      "nombre": "Hikvision DS-PS3001 Sirena cableada. ideal para cualquier panel de alarma (no importa la",
+      "categoria": "Domótica",
+      "costo": 13.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Sirena cableada. ideal para cualquier panel de alarma (no importa la marca). 30 watts. 120 db de sonido. protección ip65 (exterior"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PKA-WLM-433",
+      "nombre": "Hikvision DS-PKA-WLM-433 Negro",
+      "categoria": "Domótica",
+      "costo": 29.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Negro"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PKA-WLM-433-White",
+      "nombre": "Hikvision DS-PKA-WLM-433-White Blanco",
+      "categoria": "Domótica",
+      "costo": 29.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Blanco"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PD1-MC-WWS(H)",
+      "nombre": "Hikvision DS-PD1-MC-WWS(H) 433mhz) contacto magnetico inalambrico distancia inalambrica de",
+      "categoria": "Domótica",
+      "costo": 12.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "433mhz) contacto magnetico inalambrico distancia inalambrica de comunicación: 800 metros alarma tamper, alarma intrusión indicador led de 3 colores"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PD1-WL-W",
+      "nombre": "Hikvision DS-PD1-WL-W 433mhz) detector de fugas de agua inalambrico distancia soportada 300",
+      "categoria": "Domótica",
+      "costo": 24.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "433mhz) detector de fugas de agua inalambrico distancia soportada 300 metros (area abierta), los datos inalambricos estan protegidos por el cifrado aes-128, switch tamper, bateria 1 año (3v, cr2450"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-19K00-Y",
+      "nombre": "Hikvision DS-19K00-Y 433mhz) control remoto (keyfob inalambrico) 5 botones de operación",
+      "categoria": "Insumos",
+      "costo": 11.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "433mhz) control remoto (keyfob inalambrico) 5 botones de operación, distancia soportada 300 metros (area abierta), control tipo llavero, indicador led rojo/verde, bateria 210mah (3v, cr2032"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PA201P-Kit-16WB",
+      "nombre": "Hikvision DS-PA201P-Kit-16WB 433mhz) kit panel de alarma inalambrico ax home 16 zonas incluye: 1",
+      "categoria": "Domótica",
+      "costo": 110.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "433mhz) kit panel de alarma inalambrico ax home 16 zonas incluye: 1 central ds-pa201p-16wb / 1 sensor pir inalambrico ds- pd111-10f-wb / 1 contacto magnético inalambrico ds-pd121-wb / 1 control remoto keyfob inalambrico ds-pc120-wb conexión wi-fi 2.4ghz y lan a traves de modulo ds-pc201n incluye bateria de respaldo hasta 12 horas"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PC201N",
+      "nombre": "Hikvision DS-PC201N MODULO DE CONEXIÓN ETHERNET PARA PANELES AX HOME Compatible con panales",
+      "categoria": "Domótica",
+      "costo": 10.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "MODULO DE CONEXIÓN ETHERNET PARA PANELES AX HOME Compatible con panales AX HOME DS-PA201P-16WB y DS-PA201PS- 16WB/A-LA. Velocidad de transmisión hasta 10 Mbps. Operación confiable de -10 a 55°C. Ligero, solo 6.5 gramos. Dimensiones compactas de 55 x 13.45 x 24 mm"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PD201MC-WB",
+      "nombre": "Hikvision DS-PD201MC-WB 433mhz) contacto magnetico inlambrico ax home tecnologia inalambrica",
+      "categoria": "Domótica",
+      "costo": 20.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "433mhz) contacto magnetico inlambrico ax home tecnologia inalambrica confiable indicador led para alertas visibles voltaje 1.5 vcc con bateria aa espacio de apertura maximo de 25 mm rango rf de 1.2km 16.00 disponible teclado inalambrico led (color negro o blanco) diseño tactil completamente con luz led de fondo 6 teclas de funciones: fire alarm, away arming, stay arming, disarming, delete, and confirm números: 10 teclas, 0 a 9 3 indicadores de estatus: ecendido (verde),falla (naranja), y alarma "
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PD201PC10-WB",
+      "nombre": "Hikvision DS-PD201PC10-WB 433mhz) detector pir + camara inalambrico ax home 2 años de batería",
+      "categoria": "Domótica",
+      "costo": 46.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "433mhz) detector pir + camara inalambrico ax home 2 años de batería. inmunidad a mascotas 24kg. rango de detección de 10 mts. ángulo de 90° de cobertura. uso interior. rango de detección: 10 metros. 90°. altura de instalción 2 - 2.4 m. ajuste de sensibilidad: alta / automatica / baja"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PK201B-WB",
+      "nombre": "Hikvision DS-PK201B-WB 433mhz) teclado inalambrico para armar y desarmar ax home tecnologia",
+      "categoria": "Domótica",
+      "costo": 26.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "433mhz) teclado inalambrico para armar y desarmar ax home tecnologia inalambrica por radiofrecuencia permite operaciones de armado y desarmado operación a 1.5vcc con 4 baterias aa incluidas panel con botones mecanicos, indicadores led, buzzer peso ligero, compacto, portatil"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PKF201-WB",
+      "nombre": "Hikvision DS-PKF201-WB 433mhz) control remoto keyfob inalambrico ax home para armado y",
+      "categoria": "Domótica",
+      "costo": 12.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "433mhz) control remoto keyfob inalambrico ax home para armado y desarmado de forma remota botones configurables para personalización 1 bateria cr2032 (incluida) reemplazable tecnologia inalambrica por radiofrecuencia"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PS201-WB/Red",
+      "nombre": "Hikvision DS-PS201-WB/Red 433mhz) sirena inalambrica para interior ax home - luz roja volumen",
+      "categoria": "Domótica",
+      "costo": 26.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "433mhz) sirena inalambrica para interior ax home - luz roja volumen ajustable entre 80 y 95 db 4 tipos de alarma: fuego, panico, medico, intrusion duracioin de alarma ajustable 10 seg a 15 min funciona con 4 baterías aa, incluidas voltaje de operación: 1.5 vcc, -10 a 55°c"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PS201-WB/Blue",
+      "nombre": "Hikvision DS-PS201-WB/Blue 433mhz) sirena inalambrica para interior ax home - luz azul volumen",
+      "categoria": "Domótica",
+      "costo": 26.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "433mhz) sirena inalambrica para interior ax home - luz azul volumen ajustable entre 80 y 95 db 4 tipos de alarma: fuego, panico, medico, intrusion duracioin de alarma ajustable 10 seg a 15 min funciona con 4 baterías aa, incluidas voltaje de operación: 1.5 vcc, -10 a 55°c"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PWA48-E-WB",
+      "nombre": "Hikvision DS-PWA48-E-WB 433MHz) PANEL DE ALARMA INALÁMBRICO DE HIKVISION AX PRO Soporta 48",
+      "categoria": "Domótica",
+      "costo": 104.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "433MHz) PANEL DE ALARMA INALÁMBRICO DE HIKVISION AX PRO Soporta 48 Zonas. Wi-Fi y Ethernet. Incluye Batería de respaldo. Compatible con los Accesorios AX PRO Soporta hasta 48 zonas o salidas de alarma Visualización de video en cliente móvil y correo Indicación de voz para configuración y operación Configuración a través de web y software cliente Envío de notificaciones push de alarma"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PWA48-Kit-WB(LA)",
+      "nombre": "Hikvision DS-PWA48-Kit-WB(LA) 433mhz) kit panel de alarma ax pro 48 zonas hasta 800 metros incluye: 1",
+      "categoria": "Domótica",
+      "costo": 164.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "433mhz) kit panel de alarma ax pro 48 zonas hasta 800 metros incluye: 1 central hub ds-pwa48-l-wb / 1 sensor pir ds-pdp15p- eg2-wb / 1 contacto magnético ds-pdmc-eg2-wb / 1 control remoto ds-pkf1-wb multiples metodos de comunicación: lan + wi-fi + 3g/4g dual sim card"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PWA64-Kit-WB",
+      "nombre": "Hikvision DS-PWA64-Kit-WB 433mhz) kit panel de alarma ax pro 64 zonas hasta 800 metros incluye: 1",
+      "categoria": "Domótica",
+      "costo": 147.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "433mhz) kit panel de alarma ax pro 64 zonas hasta 800 metros incluye: 1 central hub ds-pwa64-l-wb / 1 sensor pir ds-pdp15p- eg2-wb / 1 contacto magnético ds-pdmc-eg2-wb / 1 control remoto ds-pkf1-wb multiples metodos de comunicación: lan + wi-fi"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PWA96-Kit-WB/4G",
+      "nombre": "Hikvision DS-PWA96-Kit-WB/4G 433mhz) kit panel de alarma ax pro 96 zonas hasta 800 metros incluye: 1",
+      "categoria": "Domótica",
+      "costo": 239.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "433mhz) kit panel de alarma ax pro 96 zonas hasta 800 metros incluye: 1 central hub ds-pwa96-m-wb / 1 sensor pir ds- pdp15p-eg2-wb / 1 contacto magnético ds-pdmc-eg2-wb / 1 control remoto ds-pkf1-wb multiples metodos de comunicación: lan + wi-fi + 3g/4g"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PK1-E-WB",
+      "nombre": "Hikvision DS-PK1-E-WB 433mhz) teclado inalambrico led configurable remotamento a través de la",
+      "categoria": "Domótica",
+      "costo": 27.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "433mhz) teclado inalambrico led configurable remotamento a través de la app operaciones de armado, desarmado, limpiar alarma panel con pantalla tactil teclas con luz led de fondo led para indicar la zona programada voltaje 1.5 vcd / 4 baterias aa (incluidas) activación de 1 toque para alarma de fuego, panico 55.00 disponible hikvision ds ‐ pk1 ‐ lt ‐ wb teclado inalambrico lcd tecnologia inalambrica bidireccional para ax pro pantalla lcd y leds para indicar el estado del sistema. configuración d"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PDC15-EG2-WB(B)",
+      "nombre": "Hikvision DS-PDC15-EG2-WB(B) 433mhz) detector pir inalambrico tipo cortina rango de detección: 15m /",
+      "categoria": "Domótica",
+      "costo": 35.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "433mhz) detector pir inalambrico tipo cortina rango de detección: 15m / 6.3° inmunidad antimascota: 30 kg control inteligente de ambiente avanzado digital 3 ajustes de sensibilidad"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PDD12P-EG2-WB",
+      "nombre": "Hikvision DS-PDD12P-EG2-WB 433mhz) detector inalambrico movimiento + ruptura de cristal inmunidad",
+      "categoria": "Domótica",
+      "costo": 62.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "433mhz) detector inalambrico movimiento + ruptura de cristal inmunidad antimascota: 30 kg rango de detección pir: 18m / 90° rango de ruptura de cristal: 8m / 120° sensibilida ajustable rango rf de 1km"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PDPC12P-EG2-WB",
+      "nombre": "Hikvision DS-PDPC12P-EG2-WB 433mhz) detector pir inalambrico + camara integrada rango de detección",
+      "categoria": "Domótica",
+      "costo": 80.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "433mhz) detector pir inalambrico + camara integrada rango de detección pir: 12m / 85.9° inmunidad antimascota: 30 kg control inteligente de ambiente avanzado digital video: angulo 88°(h), 68°(v) / resolución 640*480 switch dia/noche: color / blanco y negro"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PDPC12PF-EG2-WB",
+      "nombre": "Hikvision DS-PDPC12PF-EG2-WB 433mhz) detector pir inalambrico + camara integrada colorvu rango de",
+      "categoria": "Domótica",
+      "costo": 87.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "433mhz) detector pir inalambrico + camara integrada colorvu rango de detección pir: 12m / 85.9° inmunidad antimascota: 30 kg control inteligente de ambiente avanzado digital video: angulo 88°(h), 68°(v) / resolución 640*480 switch dia/noche: color luz blanca 12m"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PDCL12-EG2-WB",
+      "nombre": "Hikvision DS-PDCL12-EG2-WB 433mhz) detector inalambrico de movimiento 360° para techo infrarrojo",
+      "categoria": "Domótica",
+      "costo": 25.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "433mhz) detector inalambrico de movimiento 360° para techo infrarrojo pasivo con precesamiento digital rango de detección: 12m / 360° sensibilidad: automatica / baja altura de montaje: 2.4 - 4m rango rf de 1km"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PDP18-HM-WB",
+      "nombre": "Hikvision DS-PDP18-HM-WB 433mhz) detector inalambrico movimiento para exterior doble tecnologia",
+      "categoria": "Domótica",
+      "costo": 65.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "433mhz) detector inalambrico movimiento para exterior doble tecnologia am (pir / microondas) inmunidad antimascota: 24 kg rango de detección: 18 m angulo de detección ajustable 90° intemperie ip65 rango rf de 1km / tecnologia tri-x wireless"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PDMCS-EG2-WB",
+      "nombre": "Hikvision DS-PDMCS-EG2-WB 433mhz) contacto magnetico inlambrico configurable remotamente a través",
+      "categoria": "Domótica",
+      "costo": 16.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "433mhz) contacto magnetico inlambrico configurable remotamente a través de la app diseño delgado instalación discreta imperceptible distancia apertura 52mm max entrada de alarma nc / no / impulse count rango rf de 1km"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PDMC-EG2-WB",
+      "nombre": "Hikvision DS-PDMC-EG2-WB 433mhz) contacto magnetico inlambrico configurable remotamente a través",
+      "categoria": "Domótica",
+      "costo": 21.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "433mhz) contacto magnetico inlambrico configurable remotamente a través de la app diseño delgado instalación discreta imperceptible distancia apertura 43mm max entrada de alarma nc / no / impulse count rango rf de 1.2km"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PDMCX-E-WB",
+      "nombre": "Hikvision DS-PDMCX-E-WB 433mhz) contacto magnetico exterior inlambrico configurable remotamente",
+      "categoria": "Domótica",
+      "costo": 29.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "433mhz) contacto magnetico exterior inlambrico configurable remotamente a través de la app intemperie ip66, protección uv distancia apertura 76mm max entrada de alarma nc / no / impulse count rango rf de 1.6km - no disponible estatus control de acceso hikvision ds-pdbg8-eg2-wb (433mhz) detector de ruptura de cristal inalambrico sensor microfono omni-direccional de alta calidad configurable remotamente a través de la app rango de detección: 8m / angulo 120° sensibilidad: 2m;4m;6m;8m vidrio: groso"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PDMCK-EG2-WB",
+      "nombre": "Hikvision DS-PDMCK-EG2-WB 433mhz) contacto magnetico + vibración impacto - inlambrico contacto",
+      "categoria": "Domótica",
+      "costo": 27.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "433mhz) contacto magnetico + vibración impacto - inlambrico contacto magnetico combinado con detección de impacto, vibración, golpes e inclinación extensión de 2 zonas cableadas detección de impacto: high, normal, low detección de inclniación: hasta 25° distancia apertura 43mm max entrada de alarma nc / no / impulse count indicador led: verde(mc),naranja(tilt),rojo(shock),azul(alarm"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PDWL-E-WB",
+      "nombre": "Hikvision DS-PDWL-E-WB 433mhz) detector de fuga de agua inalambrico diseño a prueba de agua",
+      "categoria": "Domótica",
+      "costo": 34.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "433mhz) detector de fuga de agua inalambrico diseño a prueba de agua para multiples aplicaciones configurable remotamente a través de la app procesamiento digital antivandalismo indicador led rango rf de 1km"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PDSMK-S-WB",
+      "nombre": "Hikvision DS-PDSMK-S-WB 433mhz) detector de humo fotoelectrico inalambrico recamara de alta",
+      "categoria": "Domótica",
+      "costo": 39.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "433mhz) detector de humo fotoelectrico inalambrico recamara de alta calidad con sensor fotoelectrico configurable remotamente a través de la app vida util de bateria de 10 años certificación en 14604 buzzer ≥ 85db @ 3 m rango rf de 800m"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PD452SMK-WB",
+      "nombre": "Hikvision DS-PD452SMK-WB 433mhz) detector de humo, calor y monóxido de carbono (co) cámara de",
+      "categoria": "Domótica",
+      "costo": 66.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "433mhz) detector de humo, calor y monóxido de carbono (co) cámara de alta calidad con sensor fotoeléctrico alarma si se supera la dosis acumulada de monóxido de carbono: 50 ppm (0,005 %) o más: en 90 minutos; 100 ppm (0,01 %) o más: en 40 minutos; 300 ppm (0,03 %) o más: en un máximo de 3 minutos alarma de temperatura constante: >64 °c alarma de temperatura diferencial: t >10 °c/min color: negro"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PKF1-WB",
+      "nombre": "Hikvision DS-PKF1-WB 433mhz) control remoto (keyfob inalambrico) 4 botones de operación",
+      "categoria": "Domótica",
+      "costo": 22.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "433mhz) control remoto (keyfob inalambrico) 4 botones de operación, distancia soportada 500 metros (area abierta), plastico + goma, indicador led 3 colores, 1 bateria 210mah (3v, cr2032) incluida"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PDEB1-EG2-WB",
+      "nombre": "Hikvision DS-PDEB1-EG2-WB 433mhz) boton de panico/emergencia inalambrico configurable remotamente",
+      "categoria": "Domótica",
+      "costo": 16.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "433mhz) boton de panico/emergencia inalambrico configurable remotamente a través de la app 1 boton / indicador led antivandalismo rango rf de 800 metros"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PDEBP1-EG2-WB",
+      "nombre": "Hikvision DS-PDEBP1-EG2-WB 433mhz) boton de panico/emergencia inalambrico portatil configurable",
+      "categoria": "Domótica",
+      "costo": 16.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "433mhz) boton de panico/emergencia inalambrico portatil configurable remotamente a través de la app 1 boton / indicador led intemeprie ip66 rango rf de 800 metros"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PS1-I-WB/Red",
+      "nombre": "Hikvision DS-PS1-I-WB/Red 433mhz) sirena para interior inalambrica configurable remotamente a",
+      "categoria": "Domótica",
+      "costo": 38.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "433mhz) sirena para interior inalambrica configurable remotamente a través de la app buzzer: 110db alarma de incendio, de panico y de intrusión rango rf de 900 metros"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PS1-E-WB/Blue",
+      "nombre": "Hikvision DS-PS1-E-WB/Blue 433mhz) luz azul - no disponible sirena inalambrica con luz",
+      "categoria": "Domótica",
+      "costo": 25.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "433mhz) luz azul - no disponible sirena inalambrica con luz estroboscopica intemperie ip65 decibeles/sónido: 110db indicador led para el estatus voltaje: 4 baterias 3v cr123a (incluidas) / fuente 12vcd 3 años de vida util de la batería antivandalismo frontal y trasero configurable remotamente a través de la app estatus control de acceso hikvision ds-pm1-o1l-wb (433mhz) contactor inalambrico switch inalambrico para control de reles ideal para dispositivos de bajo voltaje leds indicadores para est"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PM1-O1H-WB",
+      "nombre": "Hikvision DS-PM1-O1H-WB 433mhz) contactor inalambrico switch inalambrico para control de reles",
+      "categoria": "Domótica",
+      "costo": 28.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "433mhz) contactor inalambrico switch inalambrico para control de reles ideal para dispositivos de alto voltaje leds indicadores para estatus salida de rele: 1, no/nc (ac 100~240v, max 13a ）"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PDB-IN",
+      "nombre": "Hikvision DS-PDB-IN - ceilingbracket base de sensor para instalación en techo dimensiones",
+      "categoria": "Insumos",
+      "costo": 1.25,
+      "estatus": "DISPONIBLE",
+      "descripcion": "- ceilingbracket base de sensor para instalación en techo dimensiones 41 x 46 x 32 mm plastico abs color blanco"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-KEB801X-C",
+      "nombre": "Hikvision DS-KEB801X-C ESTACION DE ALARMA DE PANICO DE EMERGENCIA CON VIDEO Llamada de",
+      "categoria": "Domótica",
+      "costo": 599.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "ESTACION DE ALARMA DE PANICO DE EMERGENCIA CON VIDEO Llamada de emergencia con un solo toque Imágenes de alta calidad con cámara integrada de 4 MP Seguridad en tiempo real mediante detección de sonido y voz Compatible con transmisión Compatible con dos puertos de red Ranura SD integrada compatible con tarjetas MicroSD/SDHC/SDXC de hasta 256 GB Compatible con sirena y expansión de audio 2 entradas de alarma / 2 salidas de alarma 1 sirena; el sonido se puede configurar por separado 1 lámpara; la l"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-1AC6APL1",
+      "nombre": "Hikvision DS-1AC6APL1 6 HILOS - NO DISPONIBLE CABLE CABLE DE ALARMA LSZH BLINDADO DE 4 / 6",
+      "categoria": "Insumos",
+      "costo": 177.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "6 HILOS - NO DISPONIBLE CABLE CABLE DE ALARMA LSZH BLINDADO DE 4 / 6 HILOS Ideal para edificios de oficinas de gran altura, hospitales, centros de entretenimiento, hoteles, pensiones y otros edificios. Se utiliza para el cableado de alarmas contra incendios, detectores de humo, comunicaciones de voz, alarmas antirrobo y circuitos de protección contra incendios. Conductor de cobre trenzado desnudo con menor resistencia, mejores propiedades eléctricas y mejor rendimiento de transmisión. Cubierta c"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-1AC2B4APL1",
+      "nombre": "Hikvision DS-1AC2B4APL1 2+4 hilos",
+      "categoria": "Insumos",
+      "costo": 220.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "2+4 hilos"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "ISD-SMG1118L",
+      "nombre": "Hikvision ISD-SMG1118L Arco detector de metal de 18 zonas precisión de detección: el metal",
+      "categoria": "Domótica",
+      "costo": 1590.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Arco detector de metal de 18 zonas precisión de detección: el metal ferromagnético del tamaño de una moneda (d: 25 mm) es detectable en el centro del detector. se pueden excluir productos como hebilla de cinturón. cobre, aluminio y zinc (metal no ferromagnético de más de 150 g), cuchillo restringido y pistola son detectables detecta todos los objetos metálicos a más de 2 cm del suelo detecta objetos metalicos lanzados a través de la puerta detecta múltiples metales en diferentes posiciones del c"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "ISD-SMG218L",
+      "nombre": "Hikvision ISD-SMG218L Arco detector de metal de 18 zonas arco detector de metales de 18 zonas",
+      "categoria": "Domótica",
+      "costo": 2095.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Arco detector de metal de 18 zonas arco detector de metales de 18 zonas con pantalla lcd de 7\" / conteo de personas y alarmas / ajuste de sensibilidad e interferencias / mejora anti- interferencia detección precisa de metales de 25 mm sensibilidad ajustable en 999 niveles pantalla lcd de 7\" con información en tiempo real 18 zonas de detección programables simultáneas diseño modular para fácil mantenimiento y transporte conteo de personas con sensores ir bilaterales configuración remota a través "
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "NP-SH100",
+      "nombre": "Hikvision NP-SH100 Detector de metales manual sensibilidad de detección ajsutable alta",
+      "categoria": "Domótica",
+      "costo": 50.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Detector de metales manual sensibilidad de detección ajsutable alta velocidad de detección con gran area de snoda alarma de batería baja. indicador led batería cargando 2 modos de alarma: vibración y audible/visual a prueba de caída (protección contra caídas de 1 m"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-TDSB0G-FK/60m",
+      "nombre": "Hikvision DS-TDSB0G-FK/60m RADAR PERIMETRAL DE 60 METROS DE DISTANCIA Obtención de la distancia",
+      "categoria": "Domótica",
+      "costo": 1275.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "RADAR PERIMETRAL DE 60 METROS DE DISTANCIA Obtención de la distancia, la velocidad y el ángulo del objeto. Localización de objetivos y seguimiento de rastros. Bloqueo de objetivos múltiples y vinculación de videos multidimensionales. Modos multiescena seleccionables modo experto, modo abierto, modo arbusto. Sensibilidad configurable. Se vuelven a verificar los análisis de videos locales y se capturan imágenes para filtrar las falsas alarmas, como el balanceo de árboles y mascotas. Detección de 3"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-TDSB0G-FK/120m",
+      "nombre": "Hikvision DS-TDSB0G-FK/120m RADAR PERIMETRAL DE 120 METROS DE DISTANCIA Obtención de la distancia",
+      "categoria": "Domótica",
+      "costo": 1850.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "RADAR PERIMETRAL DE 120 METROS DE DISTANCIA Obtención de la distancia, la velocidad y el ángulo del objeto. Localización de objetivos y seguimiento de rastros. Bloqueo de objetivos múltiples y vinculación de videos multidimensionales. Modos multiescena seleccionables modo experto, modo abierto, modo arbusto. Sensibilidad configurable. Se vuelven a verificar los análisis de videos locales y se capturan imágenes para filtrar las falsas alarmas, como el balanceo de árboles y mascotas. Detección de "
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-TDSB0G-FK/500m",
+      "nombre": "Hikvision DS-TDSB0G-FK/500m RADAR PERIMETRAL DE 500 METROS DE DISTANCIA Obtención de la distancia",
+      "categoria": "Domótica",
+      "costo": 12950.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "RADAR PERIMETRAL DE 500 METROS DE DISTANCIA Obtención de la distancia, la velocidad y el ángulo del objeto. Localización de objetivos y seguimiento de rastros. Bloqueo de objetivos múltiples y vinculación de videos multidimensionales. Modos multiescena seleccionables modo experto, modo abierto, modo arbusto. Sensibilidad configurable. Se vuelven a verificar los análisis de videos locales y se capturan imágenes para filtrar las falsas alarmas, como el balanceo de árboles y mascotas. Detección de "
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PRB-1110",
+      "nombre": "Hikvision DS-PRB-1110 SOPORTE DE PARED PARA RADAR Material: Metal. Dimensiones: 200 x 130 x",
+      "categoria": "Insumos",
+      "costo": 28.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "SOPORTE DE PARED PARA RADAR Material: Metal. Dimensiones: 200 x 130 x 115 mm. Peso: 800 gramos. Color: Blanco."
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PRB-1120",
+      "nombre": "Hikvision DS-PRB-1120 SOPORTE AUXILIAR DE RADAR PARA PTZ Material: Aleación de aluminio",
+      "categoria": "Insumos",
+      "costo": 17.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "SOPORTE AUXILIAR DE RADAR PARA PTZ Material: Aleación de aluminio. Dimensiones: 96 x 56 mm. Peso: 220 gramos. Color: Blanco."
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PRB-1200",
+      "nombre": "Hikvision DS-PRB-1200 SOPORTE DE POSTE PARA RADAR Material: Metal. Dimensiones: 120 x 130 x",
+      "categoria": "Insumos",
+      "costo": 47.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "SOPORTE DE POSTE PARA RADAR Material: Metal. Dimensiones: 120 x 130 x 85 mm. Peso: 1200 gramos. Color: Blanco."
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PRB-1310",
+      "nombre": "Hikvision DS-PRB-1310 SOPORTE DE PARED / POSTE PARA RADAR Material: Metal. Dimensiones: 200 x",
+      "categoria": "Insumos",
+      "costo": 65.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "SOPORTE DE PARED / POSTE PARA RADAR Material: Metal. Dimensiones: 200 x 130 x 70 mm. Peso: 2000 gramos. Color: Blanco"
+    },
+    {
+      "marca": "Hikvision",
+      "modelo": "DS-PRB-2200",
+      "nombre": "Hikvision DS-PRB-2200 SOPORTE DE POSTE PARA RADAR Y PTZ Material: Metal. Dimensiones: 200 x",
+      "categoria": "Insumos",
+      "costo": 70.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "SOPORTE DE POSTE PARA RADAR Y PTZ Material: Metal. Dimensiones: 200 x 130 x 160 mm. Peso: 2100 gramos. Color: Blanco"
+    },
+    {
+      "marca": "Ubiquiti",
+      "modelo": "UA-Reader",
+      "nombre": "Ubiquiti UA-Reader Lite UniFi Access Reader Lite Un conveniente escáner de acceso a la",
+      "categoria": "Network",
+      "costo": 120.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Lite UniFi Access Reader Lite Un conveniente escáner de acceso a la puerta compatible con el lector NFC y desbloqueo manual de la puerta. Instalación en interiores o bajo un voladizo de techo en el exterior. 1 entrada PoE alimentada por un concentrador de acceso Chip de seguridad que admite cifrado NFC avanzado Desbloqueo móvil con las aplicaciones móviles Access o UI Clasificación IP: IP54 Interfaz de red: 10/100 MbE / Método de alimentación: PoE Botón: 1 Restablecimiento de fábrica / LED: Blan"
+    },
+    {
+      "marca": "Ubiquiti",
+      "modelo": "UA-Hub",
+      "nombre": "Ubiquiti UA-Hub UniFi Access Hub Un mecanismo de puerta única que proporciona control",
+      "categoria": "Network",
+      "costo": 99.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "UniFi Access Hub Un mecanismo de puerta única que proporciona control completo de entrada y salida a través de lectores de acceso conectados. (2) Terminales de bloqueo (12 V y seco) (2) Terminales AUX para sirena externa y abridor de puerta automático (4) Entradas adicionales (sensores y botones) Conexión y alimentación mediante PoE++ Conéctese a dos lectores UniFi Access y una cámara UniFi Protect Interfaz de red (4) 1GbE Máx. consumo de energía 51W Terminales de entrada REX - request to exit R"
+    },
+    {
+      "marca": "Ubiquiti",
+      "modelo": "UA-G2-SK-Pro",
+      "nombre": "Ubiquiti UA-G2-SK-Pro Access G2 Starter Kit Pro Experiencia profesional para una puerta con",
+      "categoria": "Network",
+      "costo": 739.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Access G2 Starter Kit Pro Experiencia profesional para una puerta con dos lectores. (1) Hub de puerta (1) Lector G2 Pro (1) Lector G2 para salida de puerta o entrada para una puerta adicional (se requiere un segundo Hub) (2) Llaveros de bolsillo Interfaz de red: (5) 10/100/1000 Base-T Método de alimentación: PoE++ Entrada PoE: 50 V CC, 1 A Salida PoE: PoE passthrough, (4) PoE, 50 V CC, total 20 W Entrada digital: Solicitud de salida/solicitud de entrada/liberación remota/sensor de posición de pu"
+    },
+    {
+      "marca": "Ubiquiti",
+      "modelo": "UA-Intercom",
+      "nombre": "Ubiquiti UA-Intercom UniFi Intercom Terminal de intercomunicación para interior y exterior",
+      "categoria": "Domótica",
+      "costo": 492.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "UniFi Intercom Terminal de intercomunicación para interior y exterior para gestionar solicitudes de entrada a edificios residenciales y comerciales. Desbloqueo mediante tarjeta NFC, aplicación móvil UniFi Identity, código PIN o código QR Directorio y timbre para solicitar la entrada Se empareja con varios visores de intercomunicación UniFi para control de acceso remoto Se conecta a la serie UniFi Access Hub mediante PoE Resistente a la intemperie (exposición al aire libre de -30 a 60 °C) Materia"
+    },
+    {
+      "marca": "Ubiquiti",
+      "modelo": "UA-Intercom-Viewer",
+      "nombre": "Ubiquiti UA-Intercom-Viewer Display de intercom Pantalla que funciona con Intercom y G2 Reader Pro",
+      "categoria": "Domótica",
+      "costo": 492.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Display de intercom Pantalla que funciona con Intercom y G2 Reader Pro para detección de visitantes y control de acceso remoto. Recibe llamadas de timbre desde una o más ubicaciones Audio bidireccional Vista en vivo instantánea Pantalla táctil de 5\" Tecnología de pantalla táctil: Multitáctil capacitiva Conexión y alimentación mediante un conmutador PoE Interfaz de red: (1) puerto RJ45 de 10/100 Mbps Método de alimentación: PoE Micrófono: Sí Altavoz: Sí"
+    },
+    {
+      "marca": "Ubiquiti",
+      "modelo": "UVC-G4",
+      "nombre": "Ubiquiti UVC-G4 Doorbell Pro PoE Kit Your premium UniFi doorbell with integrated PoE",
+      "categoria": "Domótica",
+      "costo": 575.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Doorbell Pro PoE Kit Your premium UniFi doorbell with integrated PoE and included PoE chime for plug-and-play installation Intercomunicador UniFi premium con PoE integrado y timbre PoE incluido para instalación plug-and-play. HDR mejorado y rendimiento con poca luz Pantalla de bienvenida programable y cámara secundaria de detección de paquetes Detecciones de eventos de IA Conexión y alimentación mediante PoE Audio bidireccional integrado Incluye timbre PoE Resistente a la intemperie (cubierto al"
+    }
+  ]
+}
