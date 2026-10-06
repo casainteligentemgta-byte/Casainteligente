@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Wallet } from 'lucide-react';
 import CuadroNominaContratados from '@/components/nomina/CuadroNominaContratados';
+import NominaSemanalObra from '@/components/nomina/NominaSemanalObra';
 import {
   loadProyectosSmartRrhhHojasVida,
   type ProyectoModuloIntegral,
@@ -92,7 +93,7 @@ export default function NominaRrhhClient() {
               Nómina
             </h1>
             <p className="mt-1 text-sm text-zinc-500">
-              Solo el proyecto elegido (p. ej. Asfaltado). No mezcla obras hijas ni Flamboyant.
+              Contratados activos del proyecto y nómina semanal (recibo legal y de patio).
             </p>
           </div>
         </div>
@@ -119,20 +120,30 @@ export default function NominaRrhhClient() {
 
       {cargando ? (
         <p className="text-sm text-zinc-500">Cargando…</p>
-      ) : proyectoId ? (
-        <CuadroNominaContratados
-          key={proyectoId}
-          proyectoModuloId={proyectoId}
-          titulo={
-            obra?.nombre
-              ? `Contratados activos — ${obra.nombre}`
-              : 'Contratados activos'
-          }
-        />
       ) : (
-        <p className="rounded-xl border border-amber-500/25 bg-amber-950/20 px-4 py-3 text-sm text-amber-100/90">
-          No hay proyecto para mostrar nómina. Crea o selecciona una obra en RRHH.
-        </p>
+        <>
+          {proyectoId ? (
+            <CuadroNominaContratados
+              key={proyectoId}
+              proyectoModuloId={proyectoId}
+              titulo={
+                obra?.nombre
+                  ? `Contratados activos — ${obra.nombre}`
+                  : 'Contratados activos'
+              }
+            />
+          ) : (
+            <p className="rounded-xl border border-amber-500/25 bg-amber-950/20 px-4 py-3 text-sm text-amber-100/90">
+              No hay proyecto para mostrar contratados. Puedes probar el cálculo de recibos con el ejemplo de
+              abajo.
+            </p>
+          )}
+          <NominaSemanalObra
+            key={`semana-${proyectoId || 'demo'}`}
+            proyectoModuloId={proyectoId || '00000000-0000-4000-8000-000000000000'}
+            nombreObra={obra?.nombre ?? 'Obra de ejemplo'}
+          />
+        </>
       )}
     </div>
   );
