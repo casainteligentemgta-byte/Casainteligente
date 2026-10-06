@@ -1,0 +1,2386 @@
+{
+  "fuente": "Siemon agosto 2026",
+  "moneda": "USD",
+  "nota": "Precio = costo de lista del distribuidor. No se aplicó margen de reventa.",
+  "omitidos": [
+    {
+      "modelo": "ZM6A-S03-08B",
+      "motivo": "Sin precio numérico en el PDF (NO DISPONIBLE o guion)."
+    },
+    {
+      "modelo": "PC6A-S002MA02LS",
+      "motivo": "Sin precio numérico en el PDF (NO DISPONIBLE o guion)."
+    },
+    {
+      "modelo": "PC6A-S005MA02LS",
+      "motivo": "Sin precio numérico en el PDF (NO DISPONIBLE o guion)."
+    },
+    {
+      "modelo": "PC6A-S007MA02LS",
+      "motivo": "Sin precio numérico en el PDF (NO DISPONIBLE o guion)."
+    },
+    {
+      "modelo": "PC6A-S002MA04LS",
+      "motivo": "Sin precio numérico en el PDF (NO DISPONIBLE o guion)."
+    },
+    {
+      "modelo": "PC6A-S005MA04LS",
+      "motivo": "Sin precio numérico en el PDF (NO DISPONIBLE o guion)."
+    },
+    {
+      "modelo": "PC6A-S007MA04LS",
+      "motivo": "Sin precio numérico en el PDF (NO DISPONIBLE o guion)."
+    },
+    {
+      "modelo": "PC6A-S003MA06LS",
+      "motivo": "Sin precio numérico en el PDF (NO DISPONIBLE o guion)."
+    },
+    {
+      "modelo": "Z6AS-PF-48",
+      "motivo": "Sin precio numérico en el PDF (NO DISPONIBLE o guion)."
+    },
+    {
+      "modelo": "ZS-PNLA-U48E",
+      "motivo": "Sin precio numérico en el PDF (NO DISPONIBLE o guion)."
+    },
+    {
+      "modelo": "UP6-F1-24L-RS",
+      "motivo": "Sin precio numérico en el PDF (NO DISPONIBLE o guion)."
+    },
+    {
+      "modelo": "9C5M4-E2",
+      "motivo": "Sin precio numérico en el PDF (NO DISPONIBLE o guion)."
+    },
+    {
+      "modelo": "9C5M4-E2-06",
+      "motivo": "Sin precio numérico en el PDF (NO DISPONIBLE o guion)."
+    },
+    {
+      "modelo": "VP-T3",
+      "motivo": "Sin precio numérico en el PDF (NO DISPONIBLE o guion)."
+    },
+    {
+      "modelo": "UMAX-PD-H",
+      "motivo": "Sin precio numérico en el PDF (NO DISPONIBLE o guion)."
+    },
+    {
+      "modelo": "FJ2-LCLC5L-02AQ",
+      "motivo": "Sin precio numérico en el PDF (NO DISPONIBLE o guion)."
+    },
+    {
+      "modelo": "LBP-LCLC5V-03AH",
+      "motivo": "Sin precio numérico en el PDF (NO DISPONIBLE o guion)."
+    },
+    {
+      "modelo": "LBP-LCLC5V-05EH",
+      "motivo": "Sin precio numérico en el PDF (NO DISPONIBLE o guion)."
+    },
+    {
+      "modelo": "FP1B-LC5L-01AQ",
+      "motivo": "Sin precio numérico en el PDF (NO DISPONIBLE o guion)."
+    },
+    {
+      "modelo": "FP1B-LC5V-01AQ",
+      "motivo": "Sin precio numérico en el PDF (NO DISPONIBLE o guion)."
+    },
+    {
+      "modelo": "FP1B-LCUL-01",
+      "motivo": "Sin precio numérico en el PDF (NO DISPONIBLE o guion)."
+    },
+    {
+      "modelo": "9F5LB1-12D-Metro",
+      "motivo": "Sin precio numérico en el PDF (NO DISPONIBLE o guion)."
+    },
+    {
+      "modelo": "9F5VB3-12D-Metro",
+      "motivo": "Sin precio numérico en el PDF (NO DISPONIBLE o guion)."
+    },
+    {
+      "modelo": "FCP3-DWR",
+      "motivo": "Sin precio numérico en el PDF (NO DISPONIBLE o guion)."
+    },
+    {
+      "modelo": "TRAY-M-3",
+      "motivo": "Sin precio numérico en el PDF (NO DISPONIBLE o guion)."
+    }
+  ],
+  "productos": [
+    {
+      "marca": "Siemon",
+      "modelo": "9T7L4-E10",
+      "nombre": "Siemon 9T7L4-E10 Cable, Cobre, Categoria 7A , E10, 4 Pares, Sólido, Blindado S/FTP",
+      "categoria": "Network",
+      "costo": 375.0,
+      "estatus": "TRANSITO",
+      "descripcion": "Cable, Cobre, Categoria 7A , E10, 4 Pares, Sólido, Blindado S/FTP , LSOH-1/3-22 (Bajo humo, Cero Halógenos), Violeta , Inmune a la interferencia electromagnética, ruido eléctrico, electricidad estática y fuentes de radiofrecuencia, supera todos los requisitos de la norma ISO/IEC para la calidad de transmisión en Categoría 7A/Clase FA , Carrete, 305 Metros, 23 AWG, Class Dca-s1a,d1,a1"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "T2E2-02M-B06L",
+      "nombre": "Siemon T2E2-02M-B06L Cobre, Patch Cord, TERA 2-Pares, Conector Modular RJ45, Categoria 5e",
+      "categoria": "Network",
+      "costo": 16.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cobre, Patch Cord, TERA 2-Pares, Conector Modular RJ45, Categoria 5e, Blindado F/UTP, 10/100GBASET, Trenzado, LSOH-1, Marfil Cable, Bota Azul, 2 Metros, 26 AWG"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "T4A-S02M-B06L",
+      "nombre": "Siemon T4A-S02M-B06L Cobre, Patch Cord, TERA 4-Pares, Conector Modular RJ45, Categoria 6A",
+      "categoria": "Network",
+      "costo": 22.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cobre, Patch Cord, TERA 4-Pares, Conector Modular RJ45, Categoria 6A, 1/10G, S/FTP, T568B, Trenzado, CM/LSOH-1, Marfil Cable, Bota Azul, 2 Metros, 26 AWG"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "T4-03M-B01L",
+      "nombre": "Siemon T4-03M-B01L Cobre, Patch Cord, TERA 4-Pares, Conector Modular RJ45, Compatible con",
+      "categoria": "Network",
+      "costo": 36.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cobre, Patch Cord, TERA 4-Pares, Conector Modular RJ45, Compatible con categoría 7A, S/FTP, TERA a TERA, CM/LS0H, chaqueta blanca, bota Negra, 3 Metros, 26 AWG"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "T4-03M-B06L",
+      "nombre": "Siemon T4-03M-B06L Cobre, Patch Cord, TERA 4-Pares, Conector Modular RJ45, Compatible con",
+      "categoria": "Network",
+      "costo": 36.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cobre, Patch Cord, TERA 4-Pares, Conector Modular RJ45, Compatible con categoría 7A, S/FTP, TERA a TERA, CM/LS0H, chaqueta blanca, bota Azul, 3 Metros, 26 AWG"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "T7F-01-1",
+      "nombre": "Siemon T7F-01-1 Cobre, Outlet, TERA, Blindado, Categoria 7A/8, TERA, Plano, Negro, Sin",
+      "categoria": "Network",
+      "costo": 15.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cobre, Outlet, TERA, Blindado, Categoria 7A/8, TERA, Plano, Negro, Sin Herramientas, Terminación rápida y fácil, T568A/B, con Puerta Protectora contra polvo y contaminantes, 22-23 AWG"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "T7P4-B01-1",
+      "nombre": "Siemon T7P4-B01-1 Cobre, Plug, TERA, Blindado, Categoria 7A/8, TERA, 4 Pares, Bota Negro",
+      "categoria": "Network",
+      "costo": 12.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cobre, Plug, TERA, Blindado, Categoria 7A/8, TERA, 4 Pares, Bota Negro, Sin Herramientas, Terminación rápida y fácil, T568A/B, 22-23 AWG"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "T7P4-B01-2",
+      "nombre": "Siemon T7P4-B01-2 Cobre, Plug, TERA, Blindado, Categoria 7A/8, TERA, 4 Pares, Bota",
+      "categoria": "Network",
+      "costo": 12.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cobre, Plug, TERA, Blindado, Categoria 7A/8, TERA, 4 Pares, Bota Blanca, Sin Herramientas, Terminación rápida y fácil, T568A/B, 22-23 AWG"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "9A6L4-A5",
+      "nombre": "Siemon 9A6L4-A5 Cable, Cobre, Categoria 6A , A5, 4 Pares, Sólido, Blindado F/UTP",
+      "categoria": "Network",
+      "costo": 255.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cable, Cobre, Categoria 6A , A5, 4 Pares, Sólido, Blindado F/UTP , LSOH- 1/3-22 (Libre de Gases Toxicos), Violeta , Soporta Aplicaciones 10GBase- T , Excede los requermientos ANSI/TIA-568.2-D y ISO/IEC 11801 Class EA , Carrete, 305 Metros, 23 AWG, Class Dca-s2,d2,a1 , Frecuencia: 500MHz , Tensión máxima: 110N, Clasificación de temperatura: 0 a 60°C en instalación y -20 a 75°C en operación"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "9A6L4-A5-06",
+      "nombre": "Siemon 9A6L4-A5-06 Cable, Cobre, Categoria 6A , A5, 4 Pares, Sólido, Blindado F/UTP",
+      "categoria": "Network",
+      "costo": 255.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cable, Cobre, Categoria 6A , A5, 4 Pares, Sólido, Blindado F/UTP , LSOH- 1/3-22 (Libre de Gases Toxicos), Azul , Soporta Aplicaciones 10GBase-T , Excede los requermientos ANSI/TIA-568.2-D y ISO/IEC 11801 Class EA , Carrete, 305 Metros, 23 AWG, Class Dca-s2,d2,a1 , Frecuencia: 500MHz , Tensión máxima: 110N, Clasificación de temperatura: 0 a 60°C en instalación y -20 a 75°C en operación"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "9A6O4-A5-01AR1A",
+      "nombre": "Siemon 9A6O4-A5-01AR1A Exterior Negro Bobina de Cable Cat6A F/UTP Blindado lámina de aluminio",
+      "categoria": "Network",
+      "costo": 449.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Exterior Negro Bobina de Cable Cat6A F/UTP Blindado lámina de aluminio para protección contra ruido EMI o RFI . Planta Externa ( OSP ), Para Exterior con Gel para bloqueo de agua, Cat6A (23 AWG), Industrial para Climas Extremos , Enterrado Directo, Lash Aéreo, Tubería o Conductos Subterráneos. Color Negro, 305M. Temperatura de operación: 75ºC . Chaqueta de Polilefino (PE) con Protección contra Rayos UV . Separador de pares cruzados. Soporte de aplicaciones robustas como 10GBASE-T, PoE+ y HDBaseT"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "SP6A-S01-06B",
+      "nombre": "Siemon SP6A-S01-06B 01 Pies, 0.30 Metros",
+      "categoria": "Network",
+      "costo": 11.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "01 Pies, 0.30 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "SP6A-S02-06B",
+      "nombre": "Siemon SP6A-S02-06B 02 Pies, 0.61 Metros",
+      "categoria": "Network",
+      "costo": 11.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "02 Pies, 0.61 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "SP6A-S03-06B",
+      "nombre": "Siemon SP6A-S03-06B 03 Pies, 0.91 Metros",
+      "categoria": "Network",
+      "costo": 12.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "03 Pies, 0.91 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "SP6A-S05-06B",
+      "nombre": "Siemon SP6A-S05-06B 05 Pies, 1.52 Metros",
+      "categoria": "Network",
+      "costo": 12.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "05 Pies, 1.52 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "SP6A-S07-06B",
+      "nombre": "Siemon SP6A-S07-06B 07 Pies, 2.13 Metros",
+      "categoria": "Network",
+      "costo": 13.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "07 Pies, 2.13 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "SP6A-S10-06B",
+      "nombre": "Siemon SP6A-S10-06B 10 Pies, 3.05 Metros",
+      "categoria": "Network",
+      "costo": 15.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "10 Pies, 3.05 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "ZM6A-S01-04B",
+      "nombre": "Siemon ZM6A-S01-04B 01 Pies, 0.30 Metros",
+      "categoria": "Network",
+      "costo": 11.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "01 Pies, 0.30 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "ZM6A-S02-04B",
+      "nombre": "Siemon ZM6A-S02-04B 02 Pies, 0.61 Metros",
+      "categoria": "Network",
+      "costo": 11.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "02 Pies, 0.61 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "ZM6A-S03-04B",
+      "nombre": "Siemon ZM6A-S03-04B 03 Pies, 0.91 Metros",
+      "categoria": "Network",
+      "costo": 12.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "03 Pies, 0.91 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "ZM6A-S05-04B",
+      "nombre": "Siemon ZM6A-S05-04B 05 Pies, 1.52 Metros",
+      "categoria": "Network",
+      "costo": 12.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "05 Pies, 1.52 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "ZM6A-S07-04B",
+      "nombre": "Siemon ZM6A-S07-04B 07 Pies, 2.13 Metros",
+      "categoria": "Network",
+      "costo": 13.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "07 Pies, 2.13 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "ZM6A-S10-04B",
+      "nombre": "Siemon ZM6A-S10-04B 10 Pies, 3.05 Metros",
+      "categoria": "Network",
+      "costo": 15.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "10 Pies, 3.05 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "ZM6A-S01-06B",
+      "nombre": "Siemon ZM6A-S01-06B 01 Pies, 0.30 Metros",
+      "categoria": "Network",
+      "costo": 11.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "01 Pies, 0.30 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "ZM6A-S02-06B",
+      "nombre": "Siemon ZM6A-S02-06B 02 Pies, 0.61 Metros",
+      "categoria": "Network",
+      "costo": 11.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "02 Pies, 0.61 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "ZM6A-S03-06B",
+      "nombre": "Siemon ZM6A-S03-06B 03 Pies, 0.91 Metros",
+      "categoria": "Network",
+      "costo": 12.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "03 Pies, 0.91 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "ZM6A-S05-06B",
+      "nombre": "Siemon ZM6A-S05-06B 05 Pies, 1.52 Metros",
+      "categoria": "Network",
+      "costo": 12.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "05 Pies, 1.52 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "ZM6A-S07-06B",
+      "nombre": "Siemon ZM6A-S07-06B 07 Pies, 2.13 Metros",
+      "categoria": "Network",
+      "costo": 13.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "07 Pies, 2.13 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "ZM6A-S10-06B",
+      "nombre": "Siemon ZM6A-S10-06B 10 Pies, 3.05 Metros",
+      "categoria": "Network",
+      "costo": 15.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "10 Pies, 3.05 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "ZM6A-S01M-06B",
+      "nombre": "Siemon ZM6A-S01M-06B 1 Metro",
+      "categoria": "Network",
+      "costo": 12.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "1 Metro"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "ZM6A-S02M-06B",
+      "nombre": "Siemon ZM6A-S02M-06B 2 Metros",
+      "categoria": "Network",
+      "costo": 13.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "2 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "ZM6A-S10M-06B",
+      "nombre": "Siemon ZM6A-S10M-06B 10 Metros",
+      "categoria": "Network",
+      "costo": 27.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "10 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "ZM6A-S20M-06B",
+      "nombre": "Siemon ZM6A-S20M-06B 20 Metros",
+      "categoria": "Network",
+      "costo": 49.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "20 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "ZM6A-S05-08B",
+      "nombre": "Siemon ZM6A-S05-08B 05 Pies, 1.52 Metros",
+      "categoria": "Network",
+      "costo": 10.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "05 Pies, 1.52 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "ZM6A-S07-08B",
+      "nombre": "Siemon ZM6A-S07-08B 07 Pies, 2.13 Metros",
+      "categoria": "Network",
+      "costo": 10.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "07 Pies, 2.13 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "ZM6A-S10-08B",
+      "nombre": "Siemon ZM6A-S10-08B 10 Pies, 3.05 Metros",
+      "categoria": "Network",
+      "costo": 11.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "10 Pies, 3.05 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "PC6A-S001MA02LS",
+      "nombre": "Siemon PC6A-S001MA02LS 3.2 Pies, 1 Metro",
+      "categoria": "Network",
+      "costo": 7.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "3.2 Pies, 1 Metro"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "PC6A-S003MA02LS",
+      "nombre": "Siemon PC6A-S003MA02LS 9.8 Pies, 3 Metros",
+      "categoria": "Network",
+      "costo": 8.75,
+      "estatus": "DISPONIBLE",
+      "descripcion": "9.8 Pies, 3 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "PC6A-S001MA04LS",
+      "nombre": "Siemon PC6A-S001MA04LS 3.2 Pies, 1 Metro",
+      "categoria": "Network",
+      "costo": 7.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "3.2 Pies, 1 Metro"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "PC6A-S003MA04LS",
+      "nombre": "Siemon PC6A-S003MA04LS 9.8 Pies, 3 Metros",
+      "categoria": "Network",
+      "costo": 8.75,
+      "estatus": "DISPONIBLE",
+      "descripcion": "9.8 Pies, 3 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "PC6A-S001MA06LS",
+      "nombre": "Siemon PC6A-S001MA06LS 3.2 Pies, 1 Metro",
+      "categoria": "Network",
+      "costo": 7.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "3.2 Pies, 1 Metro"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "PC6A-S002MA06LS",
+      "nombre": "Siemon PC6A-S002MA06LS 6.5 Pies, 2 Metros",
+      "categoria": "Network",
+      "costo": 8.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "6.5 Pies, 2 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "PC6A-S005MA06LS",
+      "nombre": "Siemon PC6A-S005MA06LS 16.4 Pies, 5 Metros",
+      "categoria": "Network",
+      "costo": 12.25,
+      "estatus": "DISPONIBLE",
+      "descripcion": "16.4 Pies, 5 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "PC6A-S007MA06LS",
+      "nombre": "Siemon PC6A-S007MA06LS 23 Pies, 7 Metros",
+      "categoria": "Network",
+      "costo": 14.25,
+      "estatus": "DISPONIBLE",
+      "descripcion": "23 Pies, 7 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "KPNLS-F1-24-01S",
+      "nombre": "Siemon KPNLS-F1-24-01S Patch Panel UTP Keystone de 24 puertos Modular (vacío), Blindado",
+      "categoria": "Network",
+      "costo": 38.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Patch Panel UTP Keystone de 24 puertos Modular (vacío), Blindado, Plano, 1UR, compatible con Jacks Keystone UTP Z-MAX® y MAX®. Numeración frontal disponible. Material: Acero de peso ligero y acabado en color negro. Palancas de liberación para retirar Jacks"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "KPNLS-A1-24-01S",
+      "nombre": "Siemon KPNLS-A1-24-01S Patch Panel UTP Keystone de 24 puertos Modular (vacío), Blindado",
+      "categoria": "Network",
+      "costo": 55.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Patch Panel UTP Keystone de 24 puertos Modular (vacío), Blindado, Angulado, 1UR, compatible con Jacks Keystone UTP Z-MAX® y MAX®. Numeración frontal disponible. Material: Acero de peso ligero y acabado en color negro. Palancas de liberación para retirar Jacks"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "TM-PNLZ-24-01",
+      "nombre": "Siemon TM-PNLZ-24-01 Cobre, Patch Panel, TERA-MAX / Z-MAX, Vacio, Blindado, 24 Puertos",
+      "categoria": "Network",
+      "costo": 63.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cobre, Patch Panel, TERA-MAX / Z-MAX, Vacio, Blindado, 24 Puertos, Plano, 1U, Negro, Administrador de cables fijo, Numeración frontal para una fácil identificación, Montable directamente en Rack estándar de 19in, Conexión a tierra integrada"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "TM-PNLZA-24-01",
+      "nombre": "Siemon TM-PNLZA-24-01 Cobre, Patch Panel, TERA-MAX / Z-MAX, Vacio, Blindado, 24 Puertos",
+      "categoria": "Network",
+      "costo": 65.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cobre, Patch Panel, TERA-MAX / Z-MAX, Vacio, Blindado, 24 Puertos, Angulado, 1U, Negro, Administrador de cables fijo, Numeración frontal para una fácil identificación, Montable directamente en Rack estándar de 19in, Conexión a tierra integrada"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "Z6AS-PF-24",
+      "nombre": "Siemon Z6AS-PF-24 Cobre, Patch Panel, Z-MAX, Blindado, 24 Puertos, Plano, 1U, Negro",
+      "categoria": "Network",
+      "costo": 315.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cobre, Patch Panel, Z-MAX, Blindado, 24 Puertos, Plano, 1U, Negro, Administrador de cables fijo, Numeración frontal para una fácil identificación, Montable directamente en Rack estándar de 19in, Conexión a tierra integrada, Incluye Jacks, Categoria 6A"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "UP6A-F1-24K-RS",
+      "nombre": "Siemon UP6A-F1-24K-RS 24 Puertos, Plano, 1U",
+      "categoria": "Network",
+      "costo": 240.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "24 Puertos, Plano, 1U"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "UP6A-F2-48K-RS",
+      "nombre": "Siemon UP6A-F2-48K-RS 48 Puertos, Plano, 2U",
+      "categoria": "Network",
+      "costo": 425.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "48 Puertos, Plano, 2U"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "Z6A-S01B",
+      "nombre": "Siemon Z6A-S01B Cobre, Jack, Outlet, ZMAX, Blindado, Categoria 6A, RJ45, Hybrid",
+      "categoria": "Network",
+      "costo": 7.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cobre, Jack, Outlet, ZMAX, Blindado, Categoria 6A, RJ45, Hybrid, Montaje híbrido en Placa de Pared (Plano y Angulado), Negro, Sin Herramientas, T568A/B, Paquete Granel, La solución punta a punta blindada Z-MAX 6A de Siemon combina el mejor (y consistente) desempeño en su clase"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "Z6A-S02B",
+      "nombre": "Siemon Z6A-S02B Cobre, Jack, Outlet, ZMAX, Blindado, Categoria 6A, RJ45, Hybrid",
+      "categoria": "Network",
+      "costo": 7.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cobre, Jack, Outlet, ZMAX, Blindado, Categoria 6A, RJ45, Hybrid, Montaje híbrido en Placa de Pared (Plano y Angulado), Blanco, Sin Herramientas, T568A/B, Paquete Granel, La solución punta a punta blindada Z-MAX 6A de Siemon combina el mejor (y consistente) desempeño en su clase"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "Z6A-S06B",
+      "nombre": "Siemon Z6A-S06B Cobre, Jack, Outlet, ZMAX, Blindado, Categoria 6A, RJ45, Hybrid",
+      "categoria": "Network",
+      "costo": 7.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cobre, Jack, Outlet, ZMAX, Blindado, Categoria 6A, RJ45, Hybrid, Montaje híbrido en Placa de Pared (Plano y Angulado), Azul, Sin Herramientas, T568A/B, Paquete Granel, La solución punta a punta blindada Z-MAX 6A de Siemon combina el mejor (y consistente) desempeño en su clase"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "Z6A-S63",
+      "nombre": "Siemon Z6A-S63 Cobre, Jack, Outlet, ZMAX, Blindado, Categoria 6A, RJ45, Hybrid",
+      "categoria": "Network",
+      "costo": 8.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cobre, Jack, Outlet, ZMAX, Blindado, Categoria 6A, RJ45, Hybrid, Montaje híbrido en Placa de Pared (Plano y Angulado), Violeta, Sin Herramientas, T568A/B, Paquete Granel, La solución punta a punta blindada Z-MAX 6A de Siemon combina el mejor (y consistente) desempeño en su clase"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "Z6A-SK01B",
+      "nombre": "Siemon Z6A-SK01B Cobre, Jack, Outlet, Keystone, UltraMAX, Blindado, Categoria 6A, RJ45",
+      "categoria": "Network",
+      "costo": 7.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cobre, Jack, Outlet, Keystone, UltraMAX, Blindado, Categoria 6A, RJ45, Hybrid, Montaje híbrido en Placa de Pared (Plano y Angulado), Negro, Sin Herramientas, T568A/B, Paquete Granel, La solución punta a punta blindada Z-MAX 6A de Siemon combina el mejor (y consistente) desempeño en su clase"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "Z6A-SK02B",
+      "nombre": "Siemon Z6A-SK02B Cobre, Jack, Outlet, Keystone, UltraMAX, Blindado, Categoria 6A, RJ45",
+      "categoria": "Network",
+      "costo": 7.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cobre, Jack, Outlet, Keystone, UltraMAX, Blindado, Categoria 6A, RJ45, Hybrid, Montaje híbrido en Placa de Pared (Plano y Angulado), Blanco, Sin Herramientas, T568A/B, Paquete Granel, La solución punta a punta blindada Z-MAX 6A de Siemon combina el mejor (y consistente) desempeño en su clase"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "U6A-H01NB",
+      "nombre": "Siemon U6A-H01NB Jack UltraMAX Cat6A, UTP, Montaje híbrido en Faceplate (Plano y",
+      "categoria": "Network",
+      "costo": 6.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Jack UltraMAX Cat6A, UTP, Montaje híbrido en Faceplate (Plano y Angulado), Color Negro, Punch Down. T568A/B. Diseño de lazado lineal único que permite a los usuarios terminar sus conexiones desde cualquier lado y obtener una terminación rápida y consistente. Cumple con RoHS. Clasificación de Flamabilidad: UL 94 V-0. Paquete Granel"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "U6A-H02NB",
+      "nombre": "Siemon U6A-H02NB Jack UltraMAX Cat6A, UTP, Montaje híbrido en Faceplate (Plano y",
+      "categoria": "Network",
+      "costo": 6.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Jack UltraMAX Cat6A, UTP, Montaje híbrido en Faceplate (Plano y Angulado), Color Blanco, Punch Down. T568A/B. Diseño de lazado lineal único que permite a los usuarios terminar sus conexiones desde cualquier lado y obtener una terminación rápida y consistente. Cumple con RoHS. Clasificación de Flamabilidad: UL 94 V-0. Paquete Granel"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "U6A-H06NB",
+      "nombre": "Siemon U6A-H06NB Jack UltraMAX Cat6A, UTP, Montaje híbrido en Faceplate (Plano y",
+      "categoria": "Network",
+      "costo": 6.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Jack UltraMAX Cat6A, UTP, Montaje híbrido en Faceplate (Plano y Angulado), Color Azul, Punch Down. T568A/B. Diseño de lazado lineal único que permite a los usuarios terminar sus conexiones desde cualquier lado y obtener una terminación rápida y consistente. Cumple con RoHS. Clasificación de Flamabilidad: UL 94 V-0. Paquete Granel"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "ZP1-6AS-01B",
+      "nombre": "Siemon ZP1-6AS-01B Cobre, RJ45, Z-Plug, Blindado, 6A, Negro, Straight, Terminación en",
+      "categoria": "Network",
+      "costo": 11.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cobre, RJ45, Z-Plug, Blindado, 6A, Negro, Straight, Terminación en Campo, Compatible con Todas las Categorías, Con Clip Protector de Seguro y Bota, Los Plugs cumplen con UL 2043, Paquete Granel, ideales para Instalaciones de Cámaras IP Megapixel, Access Points, 10BASE-T, 100BASE-T, 1000BASE-T, 10GBASE-T, HDBase-T"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "9C6M4-E2-RXA",
+      "nombre": "Siemon 9C6M4-E2-RXA Color Gris",
+      "categoria": "Network",
+      "costo": 185.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Color Gris"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "9C6M4-E2-06-RXA",
+      "nombre": "Siemon 9C6M4-E2-06-RXA Color Azul",
+      "categoria": "Network",
+      "costo": 185.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Color Azul"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "9C6O4-E2-01-R1A",
+      "nombre": "Siemon 9C6O4-E2-01-R1A Exterior Negro Cable, Cobre, Categoria 6 , Exterior , E2, 4 Pares",
+      "categoria": "Network",
+      "costo": 255.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Exterior Negro Cable, Cobre, Categoria 6 , Exterior , E2, 4 Pares, Sólido, UTP, OSP (Outside Plant), Color Negro, Carreteex, Diseño de bobina tipo REELEX® para fácil jalado e instalación (sin nudos), 305 Metros, Conductor de cobre solido calibre 23 AWG de baja perdida , Class Eca, Alto desempeño , cumpliendo con los estándares TIA/EIA e ISO/IEC, Industrial para Climas Extremos , Enterrado Directo, Fuerte chaqueta de poliolefina, resistente a los rayos UV. Relleno de gel (no conductor) bloqueador"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "MC6-01-04B",
+      "nombre": "Siemon MC6-01-04B 01 Pies, 0.30 Metros",
+      "categoria": "Network",
+      "costo": 4.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "01 Pies, 0.30 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "MC6-02-04B",
+      "nombre": "Siemon MC6-02-04B 02 Pies, 0.61 Metros",
+      "categoria": "Network",
+      "costo": 4.75,
+      "estatus": "DISPONIBLE",
+      "descripcion": "02 Pies, 0.61 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "MC6-03-04B",
+      "nombre": "Siemon MC6-03-04B 03 Pies, 0.91 Metros",
+      "categoria": "Network",
+      "costo": 5.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "03 Pies, 0.91 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "MC6-05-04B",
+      "nombre": "Siemon MC6-05-04B 05 Pies, 1.52 Metros",
+      "categoria": "Network",
+      "costo": 5.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "05 Pies, 1.52 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "MC6-07-04B",
+      "nombre": "Siemon MC6-07-04B 07 Pies, 2.13 Metros",
+      "categoria": "Network",
+      "costo": 5.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "07 Pies, 2.13 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "MC6-10-04B",
+      "nombre": "Siemon MC6-10-04B 10 Pies, 3.05 Metros",
+      "categoria": "Network",
+      "costo": 6.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "10 Pies, 3.05 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "MC6-01-06B",
+      "nombre": "Siemon MC6-01-06B 01 Pies, 0.30 Metros",
+      "categoria": "Network",
+      "costo": 4.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "01 Pies, 0.30 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "MC6-02-06B",
+      "nombre": "Siemon MC6-02-06B 02 Pies, 0.61 Metros",
+      "categoria": "Network",
+      "costo": 4.75,
+      "estatus": "DISPONIBLE",
+      "descripcion": "02 Pies, 0.61 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "MC6-03-06B",
+      "nombre": "Siemon MC6-03-06B 03 Pies, 0.91 Metros",
+      "categoria": "Network",
+      "costo": 5.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "03 Pies, 0.91 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "MC6-05-06B",
+      "nombre": "Siemon MC6-05-06B 05 Pies, 1.52 Metros",
+      "categoria": "Network",
+      "costo": 5.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "05 Pies, 1.52 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "MC6-07-06B",
+      "nombre": "Siemon MC6-07-06B 07 Pies, 2.13 Metros",
+      "categoria": "Network",
+      "costo": 5.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "07 Pies, 2.13 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "MC6-10-06B",
+      "nombre": "Siemon MC6-10-06B 10 Pies, 3.05 Metros",
+      "categoria": "Network",
+      "costo": 6.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "10 Pies, 3.05 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "PC6-001M-A02LS",
+      "nombre": "Siemon PC6-001M-A02LS 3.2 Pies, 1 Metro",
+      "categoria": "Network",
+      "costo": 4.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "3.2 Pies, 1 Metro"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "PC6-002M-A02LS",
+      "nombre": "Siemon PC6-002M-A02LS 6.5 Pies, 2 Metros",
+      "categoria": "Network",
+      "costo": 5.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "6.5 Pies, 2 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "PC6-003M-A02LS",
+      "nombre": "Siemon PC6-003M-A02LS 9.8 Pies, 3 Metros",
+      "categoria": "Network",
+      "costo": 6.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "9.8 Pies, 3 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "PC6-001M-A06LS",
+      "nombre": "Siemon PC6-001M-A06LS 3.2 Pies, 1 Metro",
+      "categoria": "Network",
+      "costo": 4.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "3.2 Pies, 1 Metro"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "PC6-002M-A06LS",
+      "nombre": "Siemon PC6-002M-A06LS 6.5 Pies, 2 Metros",
+      "categoria": "Network",
+      "costo": 5.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "6.5 Pies, 2 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "PC6-003M-A06LS",
+      "nombre": "Siemon PC6-003M-A06LS 9.8 Pies, 3 Metros",
+      "categoria": "Network",
+      "costo": 6.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "9.8 Pies, 3 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "MC6-02-06-28B",
+      "nombre": "Siemon MC6-02-06-28B 02 Pies, 0.61 Metros",
+      "categoria": "Network",
+      "costo": 5.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "02 Pies, 0.61 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "MC6-03-06-28B",
+      "nombre": "Siemon MC6-03-06-28B 03 Pies, 0.91 Metros",
+      "categoria": "Network",
+      "costo": 5.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "03 Pies, 0.91 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "LKM1-002M-06DS",
+      "nombre": "Siemon LKM1-002M-06DS Lkm1 - 002m - 06ds 2 metros",
+      "categoria": "Network",
+      "costo": 8.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Lkm1 - 002m - 06ds 2 metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "LKM1-003M-06DS",
+      "nombre": "Siemon LKM1-003M-06DS Lkm1 - 003m - 06ds 3 metros",
+      "categoria": "Network",
+      "costo": 9.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Lkm1 - 003m - 06ds 3 metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "LKM1-005M-06DS",
+      "nombre": "Siemon LKM1-005M-06DS 5 Metros",
+      "categoria": "Network",
+      "costo": 11.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "5 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "LKM1-7.5M-06DS",
+      "nombre": "Siemon LKM1-7.5M-06DS 7.5 Metros",
+      "categoria": "Network",
+      "costo": 14.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "7.5 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "LK-KEY-CLR",
+      "nombre": "Siemon LK-KEY-CLR Llave para Patchcords Lockit de Siemon La llave LockIT está diseñada",
+      "categoria": "Network",
+      "costo": 8.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Llave para Patchcords Lockit de Siemon La llave LockIT está diseñada exclusivamente para desbloquear todos los patchcords LockIT de Siemon. La longitud extendida de la llave permite a los usuarios desbloquear fácilmente el conector en entornos de alta densidad."
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "LL-LC-05",
+      "nombre": "Siemon LL-LC-05 Cerradura LockIT LC para Jack Outlet, bolsa de 10, incluye 1 LockIT",
+      "categoria": "Network",
+      "costo": 9.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cerradura LockIT LC para Jack Outlet, bolsa de 10, incluye 1 LockIT Adapter Key. La cerradura LockIT para Jacks es un accesorio de red único que protege un Jack de la inserción patch cord u objeto extraño. Proporciona un alto nivel de seguridad física al evitar conexiones y desconexiones no autorizadas o accidentales dentro de un cableado."
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "UP6-F1-24K-RS",
+      "nombre": "Siemon UP6-F1-24K-RS 24 Puertos, Plano, 1U",
+      "categoria": "Network",
+      "costo": 160.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "24 Puertos, Plano, 1U"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "UP6-F2-48K-RS",
+      "nombre": "Siemon UP6-F2-48K-RS 48 Puertos, Plano, 2U",
+      "categoria": "Network",
+      "costo": 280.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "48 Puertos, Plano, 2U"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "UP6-F2-48L-RS",
+      "nombre": "Siemon UP6-F2-48L-RS 48 Puertos, Plano, 2U",
+      "categoria": "Network",
+      "costo": 250.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "48 Puertos, Plano, 2U"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "U6-H01NB",
+      "nombre": "Siemon U6-H01NB Cobre, Jack, Outlet, MAX, UTP, Categoria 6, RJ45, Estilo 110, Montaje",
+      "categoria": "Network",
+      "costo": 5.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cobre, Jack, Outlet, MAX, UTP, Categoria 6, RJ45, Estilo 110, Montaje Plano, Negro, Punch down, T568A/B, cableado de extremo a extremo de Siemon. Su diseño es ideal para aplicaciones de alta densidad, hasta 6 Jack's pueden ser utilizados en un solo Face Plate y 12 Jacks en un Face Plate doble. Paquete Granel"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "U6-H02NB",
+      "nombre": "Siemon U6-H02NB Cobre, Jack, Outlet, MAX, UTP, Categoria 6, RJ45, Estilo 110, Montaje",
+      "categoria": "Network",
+      "costo": 5.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cobre, Jack, Outlet, MAX, UTP, Categoria 6, RJ45, Estilo 110, Montaje Plano, Azul, Punch down, T568A/B, cableado de extremo a extremo de Siemon. Su diseño es ideal para aplicaciones de alta densidad, hasta 6 Jack's pueden ser utilizados en un solo Face Plate y 12 Jacks en un Face Plate doble. Paquete Granel"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "U6-H03NB",
+      "nombre": "Siemon U6-H03NB Cobre, Jack, Outlet, MAX, UTP, Categoria 6, RJ45, Estilo 110, Montaje",
+      "categoria": "Network",
+      "costo": 5.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cobre, Jack, Outlet, MAX, UTP, Categoria 6, RJ45, Estilo 110, Montaje Plano, Rojo, Punch down, T568A/B, cableado de extremo a extremo de Siemon. Su diseño es ideal para aplicaciones de alta densidad, hasta 6 Jack's pueden ser utilizados en un solo Face Plate y 12 Jacks en un Face Plate doble. Paquete Granel"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "U6-H06NB",
+      "nombre": "Siemon U6-H06NB Cobre, Jack, Outlet, MAX, UTP, Categoria 6, RJ45, Estilo 110, Montaje",
+      "categoria": "Network",
+      "costo": 5.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cobre, Jack, Outlet, MAX, UTP, Categoria 6, RJ45, Estilo 110, Montaje Plano, Azul, Punch down, T568A/B, cableado de extremo a extremo de Siemon. Su diseño es ideal para aplicaciones de alta densidad, hasta 6 Jack's pueden ser utilizados en un solo Face Plate y 12 Jacks en un Face Plate doble. Paquete Granel"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "U6-K01NB",
+      "nombre": "Siemon U6-K01NB Cobre, Jack, Outlet, KEYSTONE, UTP, Categoria 6, RJ45, Estilo 110",
+      "categoria": "Network",
+      "costo": 5.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cobre, Jack, Outlet, KEYSTONE, UTP, Categoria 6, RJ45, Estilo 110, Montaje Plano, Negro, Punch down, T568A/B, cableado de extremo a extremo de Siemon. Su diseño es ideal para aplicaciones de alta densidad, hasta 6 Jack's pueden ser utilizados en un solo Face Plate y 12 Jacks en un Face Plate doble. Paquete Granel"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "U6-K02NB",
+      "nombre": "Siemon U6-K02NB Cobre, Jack, Outlet, KEYSTONE, UTP, Categoria 6, RJ45, Estilo 110",
+      "categoria": "Network",
+      "costo": 5.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cobre, Jack, Outlet, KEYSTONE, UTP, Categoria 6, RJ45, Estilo 110, Montaje Plano, Azul, Punch down, T568A/B, cableado de extremo a extremo de Siemon. Su diseño es ideal para aplicaciones de alta densidad, hasta 6 Jack's pueden ser utilizados en un solo Face Plate y 12 Jacks en un Face Plate doble. Paquete Granel"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "U6-K06NB",
+      "nombre": "Siemon U6-K06NB Cobre, Jack, Outlet, KEYSTONE, UTP, Categoria 6, RJ45, Estilo 110",
+      "categoria": "Network",
+      "costo": 5.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cobre, Jack, Outlet, KEYSTONE, UTP, Categoria 6, RJ45, Estilo 110, Montaje Plano, Azul, Punch down, T568A/B, cableado de extremo a extremo de Siemon. Su diseño es ideal para aplicaciones de alta densidad, hasta 6 Jack's pueden ser utilizados en un solo Face Plate y 12 Jacks en un Face Plate doble. Paquete Granel"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "P6U-8-8",
+      "nombre": "Siemon P6U-8-8 50 piezas Cobre, RJ45, Categoría 6, Negro, 8 Posiciones, Para Cable UTP",
+      "categoria": "Network",
+      "costo": 39.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "50 piezas Cobre, RJ45, Categoría 6, Negro, 8 Posiciones, Para Cable UTP Calibre 23 a 26 AWG, Chapado en Oro de 50 micras, 8 Conductores, No incluye bota, Policarbonato, UL 94 V0, Certificación RoHS, Normas normas TIA- 968-A y IEC 60603-7, sin plomo, sin halógenos y sin PVC, Bolsa con 50 piezas"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "MC5-03-0202B",
+      "nombre": "Siemon MC5-03-0202B 03 Pies, 0.91 Metros",
+      "categoria": "Network",
+      "costo": 3.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "03 Pies, 0.91 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "MC5-05-0202B",
+      "nombre": "Siemon MC5-05-0202B 05 Pies, 1.52 Metros",
+      "categoria": "Network",
+      "costo": 3.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "05 Pies, 1.52 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "MC5-07-0202B",
+      "nombre": "Siemon MC5-07-0202B 07 Pies, 2.13 Metros",
+      "categoria": "Network",
+      "costo": 4.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "07 Pies, 2.13 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "MC5-10-0202B",
+      "nombre": "Siemon MC5-10-0202B 10 Pies, 3.05 Metros",
+      "categoria": "Network",
+      "costo": 4.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "10 Pies, 3.05 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "MC5-03-0404B",
+      "nombre": "Siemon MC5-03-0404B 03 Pies, 0.91 Metros",
+      "categoria": "Network",
+      "costo": 3.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "03 Pies, 0.91 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "MC5-05-0404B",
+      "nombre": "Siemon MC5-05-0404B 05 Pies, 1.52 Metros",
+      "categoria": "Network",
+      "costo": 3.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "05 Pies, 1.52 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "MC5-07-0404B",
+      "nombre": "Siemon MC5-07-0404B 07 Pies, 2.13 Metros",
+      "categoria": "Network",
+      "costo": 4.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "07 Pies, 2.13 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "MC5-10-0404B",
+      "nombre": "Siemon MC5-10-0404B 10 Pies, 3.05 Metros",
+      "categoria": "Network",
+      "costo": 4.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "10 Pies, 3.05 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "MC5-03-0606B",
+      "nombre": "Siemon MC5-03-0606B 03 Pies, 0.91 Metros",
+      "categoria": "Network",
+      "costo": 3.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "03 Pies, 0.91 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "MC5-05-0606B",
+      "nombre": "Siemon MC5-05-0606B 05 Pies, 1.52 Metros",
+      "categoria": "Network",
+      "costo": 3.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "05 Pies, 1.52 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "MC5-07-0606B",
+      "nombre": "Siemon MC5-07-0606B 07 Pies, 2.13 Metros",
+      "categoria": "Network",
+      "costo": 4.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "07 Pies, 2.13 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "MC5-10-0606B",
+      "nombre": "Siemon MC5-10-0606B 10 Pies, 3.05 Metros",
+      "categoria": "Network",
+      "costo": 4.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "10 Pies, 3.05 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "UP5-F1-24L-RS",
+      "nombre": "Siemon UP5-F1-24L-RS 24 Puertos, Plano, 1U Patch Panel UltraMAX. UTP (Sin blindaje)",
+      "categoria": "Network",
+      "costo": 85.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "24 Puertos, Plano, 1U Patch Panel UltraMAX. UTP (Sin blindaje), Precargado con Jacks Cat5e/Clase EA. Viene con los Jacks en la caja, para facilitar la terminación donde sea necesario. Cumple con: ANSI/TIA-568.2-D, ANSI/TIA 1096-A, ISO/IEC 11801-1 Ed. 1.0, IEC 60603-7-41, ETL Prueba de Canal, UL 1863. Incluye organizador de cables trasero para ayudar a liberar tensión del cable y se pueden desmontar si es necesario. La construcción de los paneles es de acero de alta calidad con un revestimiento r"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "HD5-24B",
+      "nombre": "Siemon HD5-24B Cobre, Patch Panel, HD, Precargado, UTP, Categoria 5e, 24 Puertos",
+      "categoria": "Network",
+      "costo": 85.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cobre, Patch Panel, HD, Precargado, UTP, Categoria 5e, 24 Puertos, Plano, 1U, Negro, sin Administrador de Cable, Paquete Granel"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "P-8-8",
+      "nombre": "Siemon P-8-8 1 pieza Cobre, RJ45, Categoría 5e, Negro, 8 Posiciones, Para Cable UTP",
+      "categoria": "Network",
+      "costo": 0.35,
+      "estatus": "DISPONIBLE",
+      "descripcion": "1 pieza Cobre, RJ45, Categoría 5e, Negro, 8 Posiciones, Para Cable UTP Calibre 22 a 26 AWG, Chapado en Oro de 50 micras, 8 Conductores, No incluye bota, Policarbonato, UL 94 V0, Certificación RoHS, Normas normas TIA-968-A y IEC 60603-7, sin plomo, sin halógenos y sin PVC"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "CLIP-03",
+      "nombre": "Siemon CLIP-03 25 piezas Clip de identificación para Patch Cord Siemon MC / ZM, Color",
+      "categoria": "Network",
+      "costo": 4.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "25 piezas Clip de identificación para Patch Cord Siemon MC / ZM, Color Rojo, Bolsa con 25 piezas"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "CLIP-05",
+      "nombre": "Siemon CLIP-05 25 piezas Clip de identificación para Patch Cord Siemon MC / ZM, Color",
+      "categoria": "Network",
+      "costo": 4.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "25 piezas Clip de identificación para Patch Cord Siemon MC / ZM, Color Amarillo, Bolsa con 25 piezas"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "CLIP-06",
+      "nombre": "Siemon CLIP-06 25 piezas Clip de identificación para Patch Cord Siemon MC / ZM, Color",
+      "categoria": "Network",
+      "costo": 4.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "25 piezas Clip de identificación para Patch Cord Siemon MC / ZM, Color Azul, Bolsa con 25 piezas"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "CLIP-07",
+      "nombre": "Siemon CLIP-07 25 piezas Clip de identificación para Patch Cord Siemon MC / ZM, Color",
+      "categoria": "Network",
+      "costo": 4.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "25 piezas Clip de identificación para Patch Cord Siemon MC / ZM, Color Verde, Bolsa con 25 piezas"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "CLIP-08",
+      "nombre": "Siemon CLIP-08 25 piezas Clip de identificación para Patch Cord Siemon MC / ZM, Color",
+      "categoria": "Network",
+      "costo": 4.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "25 piezas Clip de identificación para Patch Cord Siemon MC / ZM, Color Violeta, Bolsa con 25 piezas"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "Z-ICON-01B",
+      "nombre": "Siemon Z-ICON-01B 100 piezas Icono ID UltraMax para identificación de Jacks Color : Negro",
+      "categoria": "Network",
+      "costo": 42.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "100 piezas Icono ID UltraMax para identificación de Jacks Color : Negro Iconos rojos y azules con símbolos de voz y datos 1 icono blanco en blanco para designación de campo Paquete de 100 unidades"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "Z-ICON-02B",
+      "nombre": "Siemon Z-ICON-02B 100 piezas Icono ID UltraMax para identificación de Jacks Color :",
+      "categoria": "Network",
+      "costo": 42.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "100 piezas Icono ID UltraMax para identificación de Jacks Color : Blanco Iconos rojos y azules con símbolos de voz y datos 1 icono blanco en blanco para designación de campo Paquete de 100 unidades"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "Z-ICON-06B",
+      "nombre": "Siemon Z-ICON-06B 100 piezas Icono ID UltraMax para identificación de Jacks Color : Azul",
+      "categoria": "Network",
+      "costo": 42.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "100 piezas Icono ID UltraMax para identificación de Jacks Color : Azul Iconos rojos y azules con símbolos de voz y datos. 1 icono blanco en blanco para designación de campo Paquete de 100 unidades"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "CT4-BOX-02",
+      "nombre": "Siemon CT4-BOX-02 Caja de Montaje Superficial, Para Placas de Pared (Face Plates)",
+      "categoria": "Network",
+      "costo": 3.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Caja de Montaje Superficial, Para Placas de Pared (Face Plates) Universales, Color Blanco. Altura: 119.3mm (4.70 in.) Ancho: 74.8mm (2.95 in.) Profundidad: 40.6mm (1.60 in."
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "KFP-S-01-02-S",
+      "nombre": "Siemon KFP-S-01-02-S Faceplate, Placa de pared Keystone de 1 salida, color blanco, para",
+      "categoria": "Network",
+      "costo": 2.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Faceplate, Placa de pared Keystone de 1 salida, color blanco, para Jacks Keystone. Flexibilidad de instalación: Pestaña de montaje que permite la instalación del conector por la parte delantera o trasera de la placa. Alta densidad: Se pueden adaptar hasta 6 salidas en una sola placa de pared o 12 con doble placa de pared. Etiquetado: Cuenta con espacio para etiqueta de fácil instalación."
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "KFP-S-02-02-S",
+      "nombre": "Siemon KFP-S-02-02-S Faceplate, Placa de pared Keystone de 2 salidas, color blanco, para",
+      "categoria": "Network",
+      "costo": 2.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Faceplate, Placa de pared Keystone de 2 salidas, color blanco, para Jacks Keystone. Flexibilidad de instalación: Pestaña de montaje que permite la instalación del conector por la parte delantera o trasera de la placa. Alta densidad: Se pueden adaptar hasta 6 salidas en una sola placa de pared o 12 con doble placa de pared. Etiquetado: Cuenta con espacio para etiqueta de fácil instalación."
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "KFP-S-04-02-S",
+      "nombre": "Siemon KFP-S-04-02-S Faceplate, Placa de pared Keystone de 4 salidas, color blanco, para",
+      "categoria": "Network",
+      "costo": 2.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Faceplate, Placa de pared Keystone de 4 salidas, color blanco, para Jacks Keystone. Flexibilidad de instalación: Pestaña de montaje que permite la instalación del conector por la parte delantera o trasera de la placa. Alta densidad: Se pueden adaptar hasta 6 salidas en una sola placa de pared o 12 con doble placa de pared. Etiquetado: Cuenta con espacio para etiqueta de fácil instalación."
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "MX-FP-S-01-02B",
+      "nombre": "Siemon MX-FP-S-01-02B Faceplate, US, Placa de pared modular MAX, de 1 salida, color Blanco",
+      "categoria": "Network",
+      "costo": 2.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Faceplate, US, Placa de pared modular MAX, de 1 salida, color Blanco, Flexibilidad de instalación: Pestaña de montaje que permite la instalación del conector por la parte delantera o trasera de la placa. Etiquetado: Las placas de pared cuenta con espacio para etiqueta de fácil instalación, Paquete Granel"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "MX-FP-S-02-02B",
+      "nombre": "Siemon MX-FP-S-02-02B Faceplate, US, Placa de pared modular MAX, de 2 salidas, color Blanco",
+      "categoria": "Network",
+      "costo": 2.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Faceplate, US, Placa de pared modular MAX, de 2 salidas, color Blanco, Flexibilidad de instalación: Pestaña de montaje que permite la instalación del conector por la parte delantera o trasera de la placa. Etiquetado: Las placas de pared cuenta con espacio para etiqueta de fácil instalación, Paquete Granel"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "MX-FP-S-04-02B",
+      "nombre": "Siemon MX-FP-S-04-02B Faceplate, US, Placa de pared modular MAX, de 4 salidas, color Blanco",
+      "categoria": "Network",
+      "costo": 2.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Faceplate, US, Placa de pared modular MAX, de 4 salidas, color Blanco, Flexibilidad de instalación: Pestaña de montaje que permite la instalación del conector por la parte delantera o trasera de la placa. Etiquetado: Las placas de pared cuenta con espacio para etiqueta de fácil instalación, Paquete Granel"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "10GMX-FPS02-02B",
+      "nombre": "Siemon 10GMX-FPS02-02B Faceplate, Placa de Pared Modular 10G MAX de 2 Salidas, CMX, Color",
+      "categoria": "Network",
+      "costo": 2.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Faceplate, Placa de Pared Modular 10G MAX de 2 Salidas, CMX, Color Blanco, Paquete Granel. Opciones de densidad: Placas de pared individuales y dobles disponibles. Durabilidad: Resistente a rayos UV, plástico de alto impacto que evita la degradación del color y proporciona mayor durabilidad. Soporte de Etiquetas: Incluyen etiquetas de identificación de fácil liberación sin necesitad de herramienta"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "10GMX-FPS04-02B",
+      "nombre": "Siemon 10GMX-FPS04-02B Faceplate, Placa de Pared Modular 10G MAX de 4 Salidas, CMX, Color",
+      "categoria": "Network",
+      "costo": 2.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Faceplate, Placa de Pared Modular 10G MAX de 4 Salidas, CMX, Color Blanco, Paquete Granel. Opciones de densidad: Placas de pared individuales y dobles disponibles. Durabilidad: Resistente a rayos UV, plástico de alto impacto que evita la degradación del color y proporciona mayor durabilidad. Soporte de Etiquetas: Incluyen etiquetas de identificación de fácil liberación sin necesitad de herramienta"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "CT2-FP-02B",
+      "nombre": "Siemon CT2-FP-02B Faceplate, CT, US, 1 Acoplador, 1 Salida, CT, Blanco, Etiquetas de",
+      "categoria": "Network",
+      "costo": 2.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Faceplate, CT, US, 1 Acoplador, 1 Salida, CT, Blanco, Etiquetas de identificación que ocultan los tornillos del montaje, resistentes a Rayos UV, plástico de alto impacto que evita la degradación del color y proporciona una mayor durabilidad, Paquete Granel"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "CTE-MXA-01-02",
+      "nombre": "Siemon CTE-MXA-01-02 Adaptador para Placa de Pared CT, TERA-MAX, para ser montados en",
+      "categoria": "Network",
+      "costo": 1.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Adaptador para Placa de Pared CT, TERA-MAX, para ser montados en conjunto con la placa de pared, de una salida , Angulado, MX, color Blanco"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "CTE-MXA-02-02",
+      "nombre": "Siemon CTE-MXA-02-02 Adaptador para Placa de Pared CT, TERA-MAX, para ser montados en",
+      "categoria": "Network",
+      "costo": 1.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Adaptador para Placa de Pared CT, TERA-MAX, para ser montados en conjunto con la placa de pared, de dos salidas , Angulado, MX, color Blanco"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "Z-BL-01",
+      "nombre": "Siemon Z-BL-01 Panel Blank, Ciego, Z-PNL, Negro, Bolsa de 10 piezas",
+      "categoria": "Network",
+      "costo": 7.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Panel Blank, Ciego, Z-PNL, Negro, Bolsa de 10 piezas"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "MX-BL-02",
+      "nombre": "Siemon MX-BL-02 Inserto Ciego Para Placas de Pared MAX y 10G MAX, Color Blanco, MAX",
+      "categoria": "Network",
+      "costo": 4.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Inserto Ciego Para Placas de Pared MAX y 10G MAX, Color Blanco, MAX, Blanco, Bolsa de 10 piezas"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "DIN-PNL-04-01",
+      "nombre": "Siemon DIN-PNL-04-01 Cobre, Patch Panel, Ruggedized (Resistentes), UTP, 4 Salidas, Riel DIN",
+      "categoria": "Network",
+      "costo": 23.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cobre, Patch Panel, Ruggedized (Resistentes), UTP, 4 Salidas, Riel DIN, Negro, Salidas discretas"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "DIN-PNLS-04-01",
+      "nombre": "Siemon DIN-PNLS-04-01 Cobre, Panel de parcheo, Reforzado, Vacío, Apantallado, 4 aberturas",
+      "categoria": "Network",
+      "costo": 65.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cobre, Panel de parcheo, Reforzado, Vacío, Apantallado, 4 aberturas, Riel DIN, Negro, Aberturas discretas"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "MX-MMO-20",
+      "nombre": "Siemon MX-MMO-20 Bandeja de gestión de fibra opcional permite el aislamiento y el",
+      "categoria": "Network",
+      "costo": 33.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Bandeja de gestión de fibra opcional permite el aislamiento y el enrutamiento adecuado del cableado de fibra óptica. Conjunto de tomacorrientes para telecomunicaciones multiusuario, MUTOA, 18 aberturas, MX, marfil. Compatibilidad de la serie de tomacorrientes: UltraMAX (híbrido), Z-MAX (híbrido), TERA, MAX (plano y en ángulo). Esta caja de montaje en superficie multiusuario/multimedia de perfil bajo es insuperable en cuanto a características y flexibilidad, y es ideal para su uso como conjunto d"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "RS1-07-S",
+      "nombre": "Siemon RS1-07-S Rack de marco abierto de 2 postes. Incluye hardware de montaje del",
+      "categoria": "Network",
+      "costo": 330.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Rack de marco abierto de 2 postes. Incluye hardware de montaje del bastidor, (30) tornillos n.° 12-24 y (2) tuercas de conexión a tierra. Value Rack de Siemon proporciona una solución económica y duradera para montar y asegurar equipos TI en espacios de telecomunicaciones. Con unión y conexión a tierra integradas, marcas de espacio U visibles y compatibilidad con la gama completa de soluciones de gestión de cables de Siemon, Value Rack ahorra tiempo, mano de obra y espacio en una variedad de ins"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "RSQ1-07-S",
+      "nombre": "Siemon RSQ1-07-S Tornillo ajustable n° 12-24",
+      "categoria": "Network",
+      "costo": 925.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Tornillo ajustable n° 12-24"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "RSQ1-07C-S",
+      "nombre": "Siemon RSQ1-07C-S Tuerca de jaula ajustable",
+      "categoria": "Network",
+      "costo": 925.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Tuerca de jaula ajustable"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "V82A-2AB111-45F",
+      "nombre": "Siemon V82A-2AB111-45F Gabinete V800 45 unidades de rack de altura. Ancho: 800mm (31.5 in)",
+      "categoria": "Network",
+      "costo": 2750.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Gabinete V800 45 unidades de rack de altura. Ancho: 800mm (31.5 in). Profundidad: 1200mm (47.2 in.). 2 Paneles laterales, Puerta delantera: totalmente ventilada. Puerta trasera: Ventilación dividida. Tipo de Cerradura: Con llave. Sin ruedas. Color: Negro (RAL 9011). Empaquetado plano. Clasificación de carga: Estática: 1000 kg (2204,6 lbs.). Dinámico: 714 kg (1574,1 libras). Identificación del espacio U: Sí (de abajo hacia arriba). Cumplimiento de estándares: EIA/ECA-310-E, IP20. Solución de gabi"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "VCM1A-04D-1-45",
+      "nombre": "Siemon VCM1A-04D-1-45 Organizador de Cable Vertical Serie Value para Alta Densidad, Doble de",
+      "categoria": "Network",
+      "costo": 395.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Organizador de Cable Vertical Serie Value para Alta Densidad, Doble de 2 lados, dedos de 6\" (152.4mm), 45RU, Ancho de 4\" (101.6mm), Fabricado en Acero Laminado en Frio. Puertas con bisagras dobles con manjias de liberación por Resorte. Soporte de anclaje para asegurar el sistema al piso. Acoplamientos sin necesidad de herramientas. Super ligero, 100% termoplastico de alta resistencia."
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "VCM1A-06D-1-45",
+      "nombre": "Siemon VCM1A-06D-1-45 Organizador de Cable Vertical Serie Value para Alta Densidad, Doble de",
+      "categoria": "Network",
+      "costo": 450.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Organizador de Cable Vertical Serie Value para Alta Densidad, Doble de 2 lados, dedos de 6\" (152.4mm), 45RU, Ancho de 6\" (152.4mm), Fabricado en Acero Laminado en Frio. Puertas con bisagras dobles con manjias de liberación por Resorte. Soporte de anclaje para asegurar el sistema al piso. Acoplamientos sin necesidad de herramientas. Super ligero, 100% termoplastico de alta resistencia."
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "VCM1A-10D-1-45",
+      "nombre": "Siemon VCM1A-10D-1-45 Organizador de Cable Vertical Serie Value para Alta Densidad, Doble de",
+      "categoria": "Network",
+      "costo": 620.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Organizador de Cable Vertical Serie Value para Alta Densidad, Doble de 2 lados, dedos de 6\" (152.4mm), 45RU, Ancho de 10\" (254.0mm), Fabricado en Acero Laminado en Frio. Puertas con bisagras dobles con manjias de liberación por Resorte. Soporte de anclaje para asegurar el sistema al piso. Acoplamientos sin necesidad de herramientas. Super ligero, 100% termoplastico de alta resistencia."
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "VCM1A-04S-1-45",
+      "nombre": "Siemon VCM1A-04S-1-45 Organizador de Cable Vertical Serie Value para Alta Densidad, Sencillo",
+      "categoria": "Network",
+      "costo": 290.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Organizador de Cable Vertical Serie Value para Alta Densidad, Sencillo de un solo lado, dedos de 6\" (152.4mm), 45RU, Ancho de 4\" (101.6mm), Fabricado en Acero Laminado en Frio. Puertas con bisagras dobles con manjias de liberación por Resorte. Soporte de anclaje para asegurar el sistema al piso. Acoplamientos sin necesidad de herramientas. Super ligero, 100% termoplastico de alta resistencia."
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "VCM1A-06S-1-45",
+      "nombre": "Siemon VCM1A-06S-1-45 Organizador de Cable Vertical Serie Value para Alta Densidad, Sencillo",
+      "categoria": "Network",
+      "costo": 305.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Organizador de Cable Vertical Serie Value para Alta Densidad, Sencillo de un solo lado, dedos de 6\" (152.4mm), 45RU, Ancho de 6\" (152.4mm), Fabricado en Acero Laminado en Frio. Puertas con bisagras dobles con manjias de liberación por Resorte. Soporte de anclaje para asegurar el sistema al piso. Acoplamientos sin necesidad de herramientas. Super ligero, 100% termoplastico de alta resistencia."
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "VCM1A-10S-1-45",
+      "nombre": "Siemon VCM1A-10S-1-45 Organizador de Cable Vertical Serie Value para Alta Densidad, Sencillo",
+      "categoria": "Network",
+      "costo": 425.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Organizador de Cable Vertical Serie Value para Alta Densidad, Sencillo de un solo lado, dedos de 6\" (152.4mm), 45RU, Ancho de 10\" (254.0mm), Fabricado en Acero Laminado en Frio. Puertas con bisagras dobles con manjias de liberación por Resorte. Soporte de anclaje para asegurar el sistema al piso. Acoplamientos sin necesidad de herramientas. Super ligero, 100% termoplastico de alta resistencia."
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "V8A-VPC4-1-45",
+      "nombre": "Siemon V8A-VPC4-1-45 Dedos de 4\" (102 mm",
+      "categoria": "Network",
+      "costo": 178.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Dedos de 4\" (102 mm"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "V8A-VPC6-1-45",
+      "nombre": "Siemon V8A-VPC6-1-45 Dedos de 6\" (152mm",
+      "categoria": "Network",
+      "costo": 158.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Dedos de 6\" (152mm"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "VCM1A-SPD-1-45",
+      "nombre": "Siemon VCM1A-SPD-1-45 Organizador de cables, 7 pies, negro, cubierta de final de fila para",
+      "categoria": "Network",
+      "costo": 300.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Organizador de cables, 7 pies, negro, cubierta de final de fila para doble cara"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "VCM-S",
+      "nombre": "Siemon VCM-S Accesorio para organizadores verticales. Kit de panel lateral para",
+      "categoria": "Network",
+      "costo": 335.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Accesorio para organizadores verticales. Kit de panel lateral para organizadores de cables verticales de doble cara RouteIT™ de 177 mm x 457 mm (7 in x 18 in). Nota: El kit de panel lateral es un diseño de dos piezas compuesto por una pieza superior y una inferior e incluye hardware de montaje. Cubierta de final de fila, 7 pies x 18 pulgadas, color negro"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "VCM-6",
+      "nombre": "Siemon VCM-6 Organizador de Cable Vertical RouteIT, Sencillo de un solo lado, 45RU",
+      "categoria": "Network",
+      "costo": 610.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Organizador de Cable Vertical RouteIT, Sencillo de un solo lado, 45RU, Fabricado en Acero Laminado en Frío 16AWG, 6\" (152.4mm) de Ancho, Cableados de Alta Densidad, Puertas con doble bisagra para proteger y cubrir el cableado, Dedos reemplazables rápidamente si sufrieron algún daño. Operación de cierre de puerta para una apertura rápida, de fácil acceso y cierre de puerta en un solo punto. Color Negro"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "VCM-10",
+      "nombre": "Siemon VCM-10 Organizador de Cable Vertical RouteIT, Sencillo de un solo lado, 45RU",
+      "categoria": "Network",
+      "costo": 740.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Organizador de Cable Vertical RouteIT, Sencillo de un solo lado, 45RU, Fabricado en Acero Laminado en Frío 16AWG, 10\" (254 mm) de Ancho, Cableados de Alta Densidad, Puertas con doble bisagra para proteger y cubrir el cableado, Dedos reemplazables rápidamente si sufrieron algún daño. Operación de cierre de puerta para una apertura rápida, de fácil acceso y cierre de puerta en un solo punto. Color Negro"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "V-TRAY-150-1-45",
+      "nombre": "Siemon V-TRAY-150-1-45 Accesorio para Gabinetes series V600/V800 Bandeja Vertical Tray Ancho:",
+      "categoria": "Network",
+      "costo": 255.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Accesorio para Gabinetes series V600/V800 Bandeja Vertical Tray Ancho: 150mm Color Negro Altura 45U Facil montaje de PDU / Cable Juego de 2 piezas Estas bandejas se pueden montar fácilmente en cualquier ubicación a lo largo de los rieles de gabinete de adelante hacia atrás de los gabinetes V600 y V800 y cuentan con orificios para montaje de PDU, cortes en forma de T para la administración de cables con bridas y aberturas para tuercas enjauladas de 9,5 mm (0,375 pulg.) para montaje de accesorios "
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "VP-GRD",
+      "nombre": "Siemon VP-GRD Kit de puesta a tierra: incluye barra de tierra, cable de tierra",
+      "categoria": "Network",
+      "costo": 200.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Kit de puesta a tierra: incluye barra de tierra, cable de tierra, hardware de montaje y accesorios (capacidad para admitir todas las conexiones de puesta a tierra necesarias para un solo gabinete"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "VP-SPL",
+      "nombre": "Siemon VP-SPL Carrete de gestión de fibra de ¼ de vuelta (bolsa de 5) Se puede",
+      "categoria": "Network",
+      "costo": 17.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Carrete de gestión de fibra de ¼ de vuelta (bolsa de 5) Se puede instalar en el canal de parcheo vertical y en el administrador de cables vertical de final de fila"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "WM-143-5",
+      "nombre": "Siemon WM-143-5 Organizador de Cable Horizontal para montaje aéreo, 5 soportes S143",
+      "categoria": "Network",
+      "costo": 33.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Organizador de Cable Horizontal para montaje aéreo, 5 soportes S143, 1U, De un solo lado, Ancho 19 pulgadas, Color Negro"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "WM-144-5",
+      "nombre": "Siemon WM-144-5 Organizador de Cable Horizontal para montaje aéreo, 5 soportes S144",
+      "categoria": "Network",
+      "costo": 38.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Organizador de Cable Horizontal para montaje aéreo, 5 soportes S144, 2U, De un solo lado, Ancho 19 pulgadas, Color Negro"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "WM-145-5",
+      "nombre": "Siemon WM-145-5 Organizador de Cable Horizontal para montaje aéreo, 5 soportes S145",
+      "categoria": "Network",
+      "costo": 45.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Organizador de Cable Horizontal para montaje aéreo, 5 soportes S145, 2U, De un solo lado, Ancho 19 pulgadas, Color Negro"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "HCM-4-1U",
+      "nombre": "Siemon HCM-4-1U Organizador de Cable Horizontal RouteIT, Sencillo, 4\" de profundidad",
+      "categoria": "Network",
+      "costo": 38.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Organizador de Cable Horizontal RouteIT, Sencillo, 4\" de profundidad, Rackeable 19\", 1U, Cubierta Estandar, Cableados de Alta Densidad, Puertas con doble bisagra para proteger y cubrir el cableado. Color Negro"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "HCM-4-2U",
+      "nombre": "Siemon HCM-4-2U Organizador de Cable Horizontal RouteIT, Sencillo, 4\" de profundidad",
+      "categoria": "Network",
+      "costo": 57.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Organizador de Cable Horizontal RouteIT, Sencillo, 4\" de profundidad, Rackeable 19\", 2U, Cubierta Estandar, Cableados de Alta Densidad, Puertas con doble bisagra para proteger y cubrir el cableado. Color Negro"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "HCM-6-1U",
+      "nombre": "Siemon HCM-6-1U Organizador de Cable Horizontal RouteIT, Sencillo, 4\" de profundidad",
+      "categoria": "Network",
+      "costo": 48.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Organizador de Cable Horizontal RouteIT, Sencillo, 4\" de profundidad, Rackeable 19\", 1U, Cubierta Estandar, Cableados de Alta Densidad, Puertas con doble bisagra para proteger y cubrir el cableado. Color Negro"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "HCM-6-2U",
+      "nombre": "Siemon HCM-6-2U Organizador de Cable Horizontal RouteIT, Sencillo, 4\" de profundidad",
+      "categoria": "Network",
+      "costo": 75.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Organizador de Cable Horizontal RouteIT, Sencillo, 4\" de profundidad, Rackeable 19\", 2U, Cubierta Estandar, Cableados de Alta Densidad, Puertas con doble bisagra para proteger y cubrir el cableado. Color Negro"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "PNL-BLNK-1",
+      "nombre": "Siemon PNL-BLNK-1 Panel Ciego Horizontal para Rack estándar de 19\", 1UR, Color Negro con",
+      "categoria": "Network",
+      "costo": 20.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Panel Ciego Horizontal para Rack estándar de 19\", 1UR, Color Negro con el logo de SIEMON, Instalación fácil y rápida, mejora el rendimiento térmico al impedir el flujo de aire a través de espacios vacíos"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "PNL-BLNK-2",
+      "nombre": "Siemon PNL-BLNK-2 Panel Ciego Horizontal para Rack estándar de 19\", 2UR, Color Negro con",
+      "categoria": "Network",
+      "costo": 26.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Panel Ciego Horizontal para Rack estándar de 19\", 2UR, Color Negro con el logo de SIEMON, Instalación fácil y rápida, mejora el rendimiento térmico al impedir el flujo de aire a través de espacios vacíos"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "PNL-BLNKA-2",
+      "nombre": "Siemon PNL-BLNKA-2 Panel Ciego Horizontal Angulado para Rack estándar de 19\", 2UR, Color",
+      "categoria": "Network",
+      "costo": 50.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Panel Ciego Horizontal Angulado para Rack estándar de 19\", 2UR, Color Negro con el logo de SIEMON, Instalación fácil y rápida, mejora el rendimiento térmico al impedir el flujo de aire a través de espacios vacíos"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "VCM-25-12-01",
+      "nombre": "Siemon VCM-25-12-01 25 piezas Rollo de 25 cintos reusables de 12\" (305 mm) de largo, color",
+      "categoria": "Network",
+      "costo": 28.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "25 piezas Rollo de 25 cintos reusables de 12\" (305 mm) de largo, color negro. Los cintos para organización de cable son simples, pero extremadamente eficaces cuando se usan para agrupar cables. Pueden ser fácilmente aflojados y colocados nuevamente. Alternativa para las tirras o abrazaderas de plástico para la reducción de la diáfana exógena (Aliens Cosstalk) en instalaciones 10G."
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "MAX-TT",
+      "nombre": "Siemon MAX-TT Herramienta de Terminación TurboTool para conectores UTP MAX",
+      "categoria": "Network",
+      "costo": 6.75,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Herramienta de Terminación TurboTool para conectores UTP MAX, Compatible con Categoría 5e y 6 en todas sus versiones, Planos, Angulados y Tipo Keystone. Construcción duradera: Acero Laminado en Frió (CRS) de calibre 13. Proporciona retroalimentación audible y táctil que indica que el proceso de terminación esta completo. Proporciona visibilidad óptima. Cartuchos reemplazables por uso. Clip de retención 165.00 DISPONIBLE SIEMON CPT Herramienta para Preparación de Cable UTP, Par Trenzado, proporci"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "CPT-T",
+      "nombre": "Siemon CPT-T Herramienta para Preparación de Cable S/FTP, Incluye dado Guía para",
+      "categoria": "Network",
+      "costo": 67.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Herramienta para Preparación de Cable S/FTP, Incluye dado Guía para Conector TERA, CPT, TERA, Reduce significativamente el tiempo requerido para preparar el cable totalmente blindado (S/FTP). Incluye inserto con cuchilla, para despojar con precisión el forro del cable y el blindaje de aluminio de los 4 Pares sin dañar los conductores."
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "UMAX-PD",
+      "nombre": "Siemon UMAX-PD Herramienta de Impacto dinamica UltraMAX de 4 pares (Para un ponchado",
+      "categoria": "Network",
+      "costo": 215.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Herramienta de Impacto dinamica UltraMAX de 4 pares (Para un ponchado más rápido y eficiente). Diseño versátil e intuitivo, ideal para necesidades de terminación. Diseño innovador admite la terminación de los 4 pares en una sola acción suave. Mínimo 30,000 ciclos y ofrece 50 kg de fuerza a través del mecanismo de impacto, lo que permite a los usuarios recortar los 8 conductores al ras con un movimiento rápido y repetible que permite terminar conexiones críticas de alto rendimiento"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "UMAX-TT",
+      "nombre": "Siemon UMAX-TT UltraMAX TurboTool. Proporciona una entrada de cable flexible",
+      "categoria": "Network",
+      "costo": 140.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "UltraMAX TurboTool. Proporciona una entrada de cable flexible, permitiendo la terminación a ambos lados de la toma, adaptándose a múltiples direcciones de cableado y cumpliendo con el radio de curvatura. Construcción duradera. Diseño ergonómico. Reduce el tiempo de terminación en un 15 % en comparación con el proceso de perforación con una sola herramienta. Pestillo de seguridad integrado. Los exclusivos canales de encordado lineal de UltraMAX permiten a los usuarios terminar sus conexiones desd"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "UMAX-TT-D",
+      "nombre": "Siemon UMAX-TT-D Troquel de corte de repuesto UltraMAX TurboTool. Los usuarios pueden",
+      "categoria": "Network",
+      "costo": 20.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Troquel de corte de repuesto UltraMAX TurboTool. Los usuarios pueden reemplazar fácilmente la matriz de corte, lo que prolonga la vida útil de la herramienta y permite obtener acabados perfectos."
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "PG2",
+      "nombre": "Siemon PG2 Protector de palma con inserto UltraMAX. La protección de palma absorbe",
+      "categoria": "Network",
+      "costo": 22.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Protector de palma con inserto UltraMAX. La protección de palma absorbe el impacto de la terminación mientras asegura el conector para evitar movimiento, e incluye una correa de velcro elástica ajustable y un inserto removible, que se puede usar para sujetar los módulos UltraMAX mientras se termina en superficies planas."
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "PG2-U",
+      "nombre": "Siemon PG2-U Inserto UltraMAX sin protector de palma. La protección de palma absorbe",
+      "categoria": "Network",
+      "costo": 6.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Inserto UltraMAX sin protector de palma. La protección de palma absorbe el impacto de la terminación mientras asegura el conector para evitar movimiento, e incluye una correa de velcro elástica ajustable y un inserto removible, que se puede usar para sujetar los módulos UltraMAX mientras se termina en superficies planas."
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "Z-TOOL",
+      "nombre": "Siemon Z-TOOL Herramienta de Terminación para conectores Z-MAX. Esta herramienta",
+      "categoria": "Network",
+      "costo": 10.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Herramienta de Terminación para conectores Z-MAX. Esta herramienta fácil de usar de diseño ergonómico se utiliza para fijar el clip de retención y de conexión a tierra del cable, y para acoplar completamente el módulo en la parte posterior de la toma"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "Z-TOOL-ZP",
+      "nombre": "Siemon Z-TOOL-ZP Herramienta de terminación para conectores Z-PLUG de SIEMON, Color",
+      "categoria": "Network",
+      "costo": 7.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Herramienta de terminación para conectores Z-PLUG de SIEMON, Color Negro. La línea Z-PLUG de Siemon ofrece terminaciones en campo de conectores macho de alto rendimiento de manera rápida y flexible"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "FC1-LB-LC5-9AQ",
+      "nombre": "Siemon FC1-LB-LC5-9AQ Conector de Fibra Óptica pre-pulido LightBow LC Simplex, 900um",
+      "categoria": "Network",
+      "costo": 13.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Conector de Fibra Óptica pre-pulido LightBow LC Simplex, 900um Buffered, Multimodo 50/125 (OM3/OM4), re-terminable, Conector Aqua, Bota Blanca, Mechanical Splice"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "FC1-LC-SM-B02",
+      "nombre": "Siemon FC1-LC-SM-B02 Conector de Fibra Óptica LC Simplex, Para Instalación en Campo",
+      "categoria": "Network",
+      "costo": 7.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Conector de Fibra Óptica LC Simplex, Para Instalación en Campo, Monomodo, Fibra recubierta, Color Azul, LightSpeed, Monomodo, OS1/OS2, 8.3/125, LC, Simplex, Buffered, Bota Blanca, Azul Connector, Pulitura Epoxy"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "FT-LB-TOOL",
+      "nombre": "Siemon FT-LB-TOOL Herramienta de Terminación para conectores de Fibra Óptica LightBow",
+      "categoria": "Network",
+      "costo": 30.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Herramienta de Terminación para conectores de Fibra Óptica LightBow. Empalme mecánico de fácil terminación reduce drásticamente el tiempo de terminación en campo. Con compatibilidad universal para conectores LC y SC. Alineamiento óptimo: Los canales de alineación simplifican la inserción de fibra para evitar daños. Proceso robusto: Combina la activación de empalme y crimpado significativo"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "FT-MP-AT",
+      "nombre": "Siemon FT-MP-AT Herramienta de Activación para MTP Pro",
+      "categoria": "Network",
+      "costo": 325.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Herramienta de Activación para MTP Pro"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "FT-MP-PE-MM",
+      "nombre": "Siemon FT-MP-PE-MM Intercambiador de pines para MTP pro, Multimodo con Pines Elite",
+      "categoria": "Network",
+      "costo": 9.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Intercambiador de pines para MTP pro, Multimodo con Pines Elite"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "FJ1-SCASCAL-02",
+      "nombre": "Siemon FJ1-SCASCAL-02 Fibra, Jumper, Simplex, XGLO, Monomodo, SC APC, SC APC, OS1/OS2",
+      "categoria": "Network",
+      "costo": 21.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Fibra, Jumper, Simplex, XGLO, Monomodo, SC APC, SC APC, OS1/OS2, 8.3/125, Amarillo, OFNR, 02 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "FJ1-SCASCAL-03",
+      "nombre": "Siemon FJ1-SCASCAL-03 Fibra, Jumper, Simplex, XGLO, Monomodo, SC APC, SC APC, OS1/OS2",
+      "categoria": "Network",
+      "costo": 22.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Fibra, Jumper, Simplex, XGLO, Monomodo, SC APC, SC APC, OS1/OS2, 8.3/125, Amarillo, OFNR, 03 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "FJ1-SCASCAL-05",
+      "nombre": "Siemon FJ1-SCASCAL-05 Fibra, Jumper, Simplex, XGLO, Monomodo, SC APC, SC APC, OS1/OS2",
+      "categoria": "Network",
+      "costo": 23.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Fibra, Jumper, Simplex, XGLO, Monomodo, SC APC, SC APC, OS1/OS2, 8.3/125, Amarillo, OFNR, 05 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "FJ1-SCUSCUL-03",
+      "nombre": "Siemon FJ1-SCUSCUL-03 Fibra, Jumper, Simplex, XGLO, Monomodo, SC UPC, SC UPC, OS1/OS2",
+      "categoria": "Network",
+      "costo": 17.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Fibra, Jumper, Simplex, XGLO, Monomodo, SC UPC, SC UPC, OS1/OS2, 8.3/125, Amarillo, OFNR, 03 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "FJ1-SCUSCUL-05",
+      "nombre": "Siemon FJ1-SCUSCUL-05 Fibra, Jumper, Simplex, XGLO, Monomodo, SC UPC, SC UPC, OS1/OS2",
+      "categoria": "Network",
+      "costo": 18.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Fibra, Jumper, Simplex, XGLO, Monomodo, SC UPC, SC UPC, OS1/OS2, 8.3/125, Amarillo, OFNR, 05 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "FJ1-SCUSCAL-03",
+      "nombre": "Siemon FJ1-SCUSCAL-03 Fibra, Jumper, Simplex, XGLO, Monomodo, SC UPC, SC APC, OS1/OS2",
+      "categoria": "Network",
+      "costo": 21.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Fibra, Jumper, Simplex, XGLO, Monomodo, SC UPC, SC APC, OS1/OS2, 8.3/125, Amarillo, OFNR, 03 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "FJ1-SCUSCAL-05",
+      "nombre": "Siemon FJ1-SCUSCAL-05 Fibra, Jumper, Simplex, XGLO, Monomodo, SC UPC, SC APC, OS1/OS2",
+      "categoria": "Network",
+      "costo": 22.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Fibra, Jumper, Simplex, XGLO, Monomodo, SC UPC, SC APC, OS1/OS2, 8.3/125, Amarillo, OFNR, 05 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "J2-LCULCUL-02H",
+      "nombre": "Siemon J2-LCULCUL-02H Fibra, Jumper, Duplex, ValuLight, Monomodo, LC UPC, LC UPC, OS1/OS2",
+      "categoria": "Network",
+      "costo": 18.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Fibra, Jumper, Duplex, ValuLight, Monomodo, LC UPC, LC UPC, OS1/OS2, 8.3/125, Amarillo, LSOH-1, 02 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "J2-LCULCUL-03H",
+      "nombre": "Siemon J2-LCULCUL-03H Fibra, Jumper, Duplex, ValuLight, Monomodo, LC UPC, LC UPC, OS1/OS2",
+      "categoria": "Network",
+      "costo": 19.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Fibra, Jumper, Duplex, ValuLight, Monomodo, LC UPC, LC UPC, OS1/OS2, 8.3/125, Amarillo, LSOH-1, 03 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "J2-LCULCUL-05H",
+      "nombre": "Siemon J2-LCULCUL-05H Fibra, Jumper, Duplex, ValuLight, Monomodo, LC UPC, LC UPC, OS1/OS2",
+      "categoria": "Network",
+      "costo": 20.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Fibra, Jumper, Duplex, ValuLight, Monomodo, LC UPC, LC UPC, OS1/OS2, 8.3/125, Amarillo, LSOH-1, 05 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "FJ2-LCULCUL-02H",
+      "nombre": "Siemon FJ2-LCULCUL-02H Fibra, Jumper, Duplex, XGLO, Monomodo, LC UPC, LC UPC, OS1/OS2",
+      "categoria": "Network",
+      "costo": 30.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Fibra, Jumper, Duplex, XGLO, Monomodo, LC UPC, LC UPC, OS1/OS2, 8.3/125, Amarillo, LSOH-3C, 02 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "FJ2-LCULCUL-03H",
+      "nombre": "Siemon FJ2-LCULCUL-03H Fibra, Jumper, Duplex, XGLO, Monomodo, LC UPC, LC UPC, OS1/OS2",
+      "categoria": "Network",
+      "costo": 31.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Fibra, Jumper, Duplex, XGLO, Monomodo, LC UPC, LC UPC, OS1/OS2, 8.3/125, Amarillo, LSOH-3C, 03 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "FJ2-LCLC5V-01AH",
+      "nombre": "Siemon FJ2-LCLC5V-01AH Fibra, Jumper, Duplex, XGLO, Multimodo, LC, LC, OM4, 50/125, Color",
+      "categoria": "Network",
+      "costo": 26.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Fibra, Jumper, Duplex, XGLO, Multimodo, LC, LC, OM4, 50/125, Color Aqua, LSOH-3C, 01 Metro"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "FJ2-LCLC5V-02AH",
+      "nombre": "Siemon FJ2-LCLC5V-02AH Fibra, Jumper, Duplex, XGLO, Multimodo, LC, LC, OM4, 50/125, Color",
+      "categoria": "Network",
+      "costo": 28.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Fibra, Jumper, Duplex, XGLO, Multimodo, LC, LC, OM4, 50/125, Color Aqua, LSOH-3C, 02 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "FJ2-LCLC5V-03AH",
+      "nombre": "Siemon FJ2-LCLC5V-03AH Fibra, Jumper, Duplex, XGLO, Multimodo, LC, LC, OM4, 50/125, Color",
+      "categoria": "Network",
+      "costo": 30.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Fibra, Jumper, Duplex, XGLO, Multimodo, LC, LC, OM4, 50/125, Color Aqua, LSOH-3C, 03 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "FJ2-LCLC5V-02AQ",
+      "nombre": "Siemon FJ2-LCLC5V-02AQ Fibra, Jumper, Duplex, XGLO, Multimodo, LC, LC, OM4, 50/125, Color",
+      "categoria": "Network",
+      "costo": 25.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Fibra, Jumper, Duplex, XGLO, Multimodo, LC, LC, OM4, 50/125, Color Aqua, OFNR, 02 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "FJ2-LCLC5V-03AQ",
+      "nombre": "Siemon FJ2-LCLC5V-03AQ Fibra, Jumper, Duplex, XGLO, Multimodo, LC, LC, OM4, 50/125, Color",
+      "categoria": "Network",
+      "costo": 27.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Fibra, Jumper, Duplex, XGLO, Multimodo, LC, LC, OM4, 50/125, Color Aqua, OFNR, 03 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "FJ2-LCLC5V-05AQ",
+      "nombre": "Siemon FJ2-LCLC5V-05AQ Fibra, Jumper, Duplex, XGLO, Multimodo, LC, LC, OM4, 50/125, Color",
+      "categoria": "Network",
+      "costo": 33.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Fibra, Jumper, Duplex, XGLO, Multimodo, LC, LC, OM4, 50/125, Color Aqua, OFNR, 05 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "FJ2-LCLC5V-12AQ",
+      "nombre": "Siemon FJ2-LCLC5V-12AQ Fibra, Jumper, Duplex, XGLO, Multimodo, LC, LC, OM4, 50/125, Color",
+      "categoria": "Network",
+      "costo": 42.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Fibra, Jumper, Duplex, XGLO, Multimodo, LC, LC, OM4, 50/125, Color Aqua, OFNR, 12 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "LBP-LCLC5V-01AQ",
+      "nombre": "Siemon LBP-LCLC5V-01AQ 1 Metro",
+      "categoria": "Network",
+      "costo": 29.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "1 Metro"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "LBP-LCLC5V-02AQ",
+      "nombre": "Siemon LBP-LCLC5V-02AQ 2 Metros",
+      "categoria": "Network",
+      "costo": 30.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "2 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "LBP-LCLC5V-02EH",
+      "nombre": "Siemon LBP-LCLC5V-02EH 2 metros Fibra, Jumper, Conector Patentado BladePatch Duplex, Solución",
+      "categoria": "Network",
+      "costo": 25.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "2 metros Fibra, Jumper, Conector Patentado BladePatch Duplex, Solución única para entornos de conexión de fibra óptica de alta densidad. Cuenta con un revolucionario e innovador diseño de bota, push-pull, para controlar el broche del seguro, posibilitando el fácil acceso y remoción en zonas muy estrecha. XGLO, Multimodo, LC LC Duplex, RFP, OM4, 50/125, Color Aqua, LSOH-3C, 02 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "LBP-LCULCUL-03H",
+      "nombre": "Siemon LBP-LCULCUL-03H 3 metros Fibra, Jumper, Conector Patentado BladePatch Duplex, Solución",
+      "categoria": "Network",
+      "costo": 32.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "3 metros Fibra, Jumper, Conector Patentado BladePatch Duplex, Solución única para entornos de conexión de fibra óptica de alta densidad. Cuenta con un revolucionario e innovador diseño de bota, push-pull, para controlar el broche del seguro, posibilitando el fácil acceso y remoción en zonas muy estrecha. XGLO, Monomodo, LC UPC LC UPC Duplex, RFP, OS1/OS2, 8.3/125, Color Amarillo, LSOH-3C, 03 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "LBP-LCALCAL-01",
+      "nombre": "Siemon LBP-LCALCAL-01 1 Metro",
+      "categoria": "Network",
+      "costo": 40.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "1 Metro"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "LBP-LCALCAL-02",
+      "nombre": "Siemon LBP-LCALCAL-02 2 Metros",
+      "categoria": "Network",
+      "costo": 41.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "2 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "LBP-LCALCAL-03",
+      "nombre": "Siemon LBP-LCALCAL-03 3 Metros",
+      "categoria": "Network",
+      "costo": 43.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "3 Metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "FRP12ALFF-026MA",
+      "nombre": "Siemon FRP12ALFF-026MA 26 metros",
+      "categoria": "Network",
+      "costo": 265.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "26 metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "FRP12ALFF-034MA",
+      "nombre": "Siemon FRP12ALFF-034MA 34 metros",
+      "categoria": "Network",
+      "costo": 275.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "34 metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "FLP12VLFF-010MA",
+      "nombre": "Siemon FLP12VLFF-010MA 15 metros",
+      "categoria": "Network",
+      "costo": 249.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "15 metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "FLP12VLFF-015MA",
+      "nombre": "Siemon FLP12VLFF-015MA 15 metros",
+      "categoria": "Network",
+      "costo": 278.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "15 metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "FRP12VLFF-015MA",
+      "nombre": "Siemon FRP12VLFF-015MA 15 metros",
+      "categoria": "Network",
+      "costo": 220.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "15 metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "FRP12VLFF-018MA",
+      "nombre": "Siemon FRP12VLFF-018MA 18 metros",
+      "categoria": "Network",
+      "costo": 235.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "18 metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "FRP12VLFF-020MA",
+      "nombre": "Siemon FRP12VLFF-020MA 20 metros",
+      "categoria": "Network",
+      "costo": 245.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "20 metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "FRP12VLFF-024MA",
+      "nombre": "Siemon FRP12VLFF-024MA 24 metros",
+      "categoria": "Network",
+      "costo": 275.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "24 metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "FRP12VLFF-026MA",
+      "nombre": "Siemon FRP12VLFF-026MA 26 metros",
+      "categoria": "Network",
+      "costo": 285.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "26 metros"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "SFPH10GB2.0M01L",
+      "nombre": "Siemon SFPH10GB2.0M01L Cable de alta velocidad High Speed, DAC (conexión directa de cobre)",
+      "categoria": "Network",
+      "costo": 62.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cable de alta velocidad High Speed, DAC (conexión directa de cobre), Ethernet 10G NRZ, 30AWG, CR1 a CR1, SFP+ a SFP+, 30 AWG, 2 metros, chaqueta LSZH/CM, Color Negro, compatible con Cisco, IEEE- 802.3ba"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "SFPH10GB3.0M01L",
+      "nombre": "Siemon SFPH10GB3.0M01L Cable de alta velocidad High Speed, DAC (conexión directa de cobre)",
+      "categoria": "Network",
+      "costo": 65.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cable de alta velocidad High Speed, DAC (conexión directa de cobre), Ethernet 10G NRZ, 30AWG, CR1 a CR1, SFP+ a SFP+, 30 AWG, 3 metros, chaqueta LSZH/CM, Color Negro, compatible con Cisco, IEEE- 802.3ba"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "SFPH10GB3.0M03L",
+      "nombre": "Siemon SFPH10GB3.0M03L Cable de alta velocidad High Speed, DAC (conexión directa de cobre)",
+      "categoria": "Network",
+      "costo": 65.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cable de alta velocidad High Speed, DAC (conexión directa de cobre), Ethernet 10G NRZ, 30AWG, CR1 a CR1, SFP+ a SFP+, 30 AWG, 3 metros, chaqueta LSZH/CM, Color Rojo, compatible con Cisco, IEEE- 802.3ba"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "9F8LB1-12D-Metro",
+      "nombre": "Siemon 9F8LB1-12D-Metro Cable, 12 Fibras, XGLO, Monomodo, OS1/OS2, 8.3/125, Indoor (interior)",
+      "categoria": "Network",
+      "costo": 0.95,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cable, 12 Fibras, XGLO, Monomodo, OS1/OS2, 8.3/125, Indoor (interior), Tight Buffered, Non-Armored, OFNR, Amarillo, Internacional"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "9F8LE4-12D-Metro",
+      "nombre": "Siemon 9F8LE4-12D-Metro Cable, 12 Fibras, XGLO, Monomodo, OS1/OS2, 8.3/125, Outside Plant",
+      "categoria": "Network",
+      "costo": 1.4,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cable, 12 Fibras, XGLO, Monomodo, OS1/OS2, 8.3/125, Outside Plant (Exterior), Loose Tube, GEL, Armored, MDPE, Negro, Internacional"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "9F5LB1-6B-Metro",
+      "nombre": "Siemon 9F5LB1-6B-Metro Cable, 6 Fibras, XGLO, Multimodo, OM3, 50/125, Indoor (interior), Tight",
+      "categoria": "Network",
+      "costo": 1.75,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cable, 6 Fibras, XGLO, Multimodo, OM3, 50/125, Indoor (interior), Tight Buffered ideal para campus y backbones de edificios, Non-Armored, Riser OFNR, Aqua, Internacional"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "9F5VB3-6B-Metro",
+      "nombre": "Siemon 9F5VB3-6B-Metro Cable, 6 Fibras, XGLO, Multimodo, OM4, 50/125, Indoor (interior), Tight",
+      "categoria": "Network",
+      "costo": 2.75,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cable, 6 Fibras, XGLO, Multimodo, OM4, 50/125, Indoor (interior), Tight Buffered ideal para data centers, campus y backbones de edificios, Non- Armored, LSOH-3C, Aqua, Internacional"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "9GD5H006D-T501M",
+      "nombre": "Siemon 9GD5H006D-T501M Cable, 6 Fibras, XGLO, Multimodo, OM4, 50/125, Indoor (interior) /",
+      "categoria": "Network",
+      "costo": 3.1,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cable, 6 Fibras, XGLO, Multimodo, OM4, 50/125, Indoor (interior) / Outdoor (Exterior), Tight Buffered, DWB Core, Non-Armored, LSOH-3C, Negro, Internacional"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "9F5LE4-6B-Metro",
+      "nombre": "Siemon 9F5LE4-6B-Metro Cable, 6 Fibras, XGLO, Multimodo, OM3, 50/125, Outside Plant",
+      "categoria": "Network",
+      "costo": 2.75,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cable, 6 Fibras, XGLO, Multimodo, OM3, 50/125, Outside Plant (Exterior), Loose Tube, GEL, Armored, MDPE, Negro, Internacional"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "9F5LE4-12D-Metro",
+      "nombre": "Siemon 9F5LE4-12D-Metro Cable, 12 Fibras, XGLO, Multimodo, OM3, 50/125, Outside Plant",
+      "categoria": "Network",
+      "costo": 4.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cable, 12 Fibras, XGLO, Multimodo, OM3, 50/125, Outside Plant (Exterior), Loose Tube, GEL, Armored, MDPE, Negro, Internacional"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "9F5LE4-24B-Metro",
+      "nombre": "Siemon 9F5LE4-24B-Metro Cable, 24 Fibras, XGLO, Multimodo, OM3, 50/125, Outside Plant",
+      "categoria": "Network",
+      "costo": 7.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cable, 24 Fibras, XGLO, Multimodo, OM3, 50/125, Outside Plant (Exterior), Loose Tube, GEL, Armored, MDPE, Negro, Internacional"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "HT-40",
+      "nombre": "Siemon HT-40 Mangas de Protección, para Empalmes de Fibra Óptica, Encogimiento por",
+      "categoria": "Network",
+      "costo": 0.45,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Mangas de Protección, para Empalmes de Fibra Óptica, Encogimiento por Calor, de 40 mm"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "HT-60",
+      "nombre": "Siemon HT-60 Mangas de Protección, para Empalmes de Fibra Óptica, Encogimiento por",
+      "categoria": "Network",
+      "costo": 0.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Mangas de Protección, para Empalmes de Fibra Óptica, Encogimiento por Calor, de 60 mm"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "LVE-1U-MD-T01A",
+      "nombre": "Siemon LVE-1U-MD-T01A Distribuidor de Fibra Óptica de Alta Densidad LigthVerse *Plus* Para",
+      "categoria": "Network",
+      "costo": 245.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Distribuidor de Fibra Óptica de Alta Densidad LigthVerse *Plus* Para Rack de 19in, Acepta 4 Placas Plug and Play, Hasta 96 Fibras, 1 UR 72 Fibras por Unidad de Rack. El sistema Siemon LightVerse incluye una gama de paneles de conexión elegantes disponibles, adecuados para una amplia variedad de necesidades de aplicación. Cada LightVerse tiene la capacidad de admitir hasta 96 fibras (hasta 72 fibras para Plus) dentro de 1U de espacio en rack para todos los métodos de terminación. Ya sea pre-termi"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "LVE-1U-MD-P01A",
+      "nombre": "Siemon LVE-1U-MD-P01A Distribuidor de Fibra Óptica de Alta Densidad LigthVerse *Pro* Para",
+      "categoria": "Network",
+      "costo": 370.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Distribuidor de Fibra Óptica de Alta Densidad LigthVerse *Pro* Para Rack de 19in, Acepta 4 Placas Plug and Play, Hasta 96 Fibras, 1 UR. El sistema Siemon LightVerse incluye una gama de paneles de conexión elegantes disponibles, adecuados para una amplia variedad de necesidades de aplicación. Cada LightVerse tiene la capacidad de admitir hasta 96 fibras (hasta 72 fibras para Plus) dentro de 1U de espacio en rack para todos los métodos de terminación. Ya sea pre- terminado, terminado en campo o po"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "LVE-2U-MD-P01A",
+      "nombre": "Siemon LVE-2U-MD-P01A Distribuidor de Fibra Óptica de Alta Densidad LigthVerse *Pro* Para",
+      "categoria": "Network",
+      "costo": 525.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Distribuidor de Fibra Óptica de Alta Densidad LigthVerse *Pro* Para Rack de 19 Pulgadas (48.26 cm), Acepta 8 Placas Plug and Play, Hasta 192 Fibras, 2 UR. El sistema Siemon LightVerse incluye una gama de paneles de conexión elegantes disponibles, adecuados para una amplia variedad de necesidades de aplicación. Cada LightVerse tiene la capacidad de admitir hasta 96 fibras (hasta 72 fibras para Plus) dentro de 1U de espacio en rack para todos los métodos de terminación. Ya sea pre-terminado, termi"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "LVE-4U-MD-P01A",
+      "nombre": "Siemon LVE-4U-MD-P01A Distribuidor de Fibra Óptica de Alta Densidad LigthVerse *Pro* Para",
+      "categoria": "Network",
+      "costo": 589.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Distribuidor de Fibra Óptica de Alta Densidad LigthVerse *Pro* Para Rack de 48.26 cm (19 Pulgadas), Acepta 16 Placas Plug and Play, Hasta 384 Fibras, 4 UR. Cajón deslizante, Montaje modular, 16 aberturas para placas adaptadoras. Capacidad de 96 fibras por 1U de espacio. Bandeja deslizante blanca para mejor visibilidad. Cubierta superior removible, acceso fácil Administradores de cables frontales y clips traseros. Portaetiquetas integrado accesible con puerta cerrada. Opciones de acceso ampliadas"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "LV-RSM-KIT-A",
+      "nombre": "Siemon LV-RSM-KIT-A Kit de carretes de fibra para gestor de cables trasero. Parte del",
+      "categoria": "Network",
+      "costo": 26.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Kit de carretes de fibra para gestor de cables trasero. Parte del sistema de conectividad para LightVerse"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "LVPC-1UAS01A",
+      "nombre": "Siemon LVPC-1UAS01A Panel de fibra, Combo Lightverse, Montaje en rack, 1U, Acceso fijo",
+      "categoria": "Network",
+      "costo": 66.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Panel de fibra, Combo Lightverse, Montaje en rack, 1U, Acceso fijo, Vacío, 4 aberturas, Negro, Apantallado en ángulo, Sin gestor de cables. Instalación sin gestor de cables. Panel fijo para acceso permanente. Diseño acodado con blindaje. Color negro con blindaje electromagnético"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "TRAYHD-1-A",
+      "nombre": "Siemon TRAYHD-1-A Charola de empalme LightVerse para Fibra Óptica, 24 empalmes, Diseño",
+      "categoria": "Network",
+      "costo": 40.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Charola de empalme LightVerse para Fibra Óptica, 24 empalmes, Diseño apilable Material Traslúcido, visibilidad mejorada, permite trabajo con VFL 4 Charolas por Unidad de Rack Hasta 96 empalmes por 1U Ruteo Independiente de las fibras del cable y de los pigtails Compatible con Paneles de Fibra óptica LightVerse Core, Plus y Pro"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "LVA-BLANK-01A",
+      "nombre": "Siemon LVA-BLANK-01A Placa Ciega, Color Negro, Compatible con Distribuidores de Fibra óptica",
+      "categoria": "Network",
+      "costo": 2.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Placa Ciega, Color Negro, Compatible con Distribuidores de Fibra óptica LightVerse Core, Plus y Pro Compatible con Paneles de Fibra óptica LightVerse Core, Plus y Pro"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "LVA12-LCQ-BC-A",
+      "nombre": "Siemon LVA12-LCQ-BC-A Placa Acopladora Lightverse, 6 Conectores Dúplex LC/UPC \"Shuttered\"",
+      "categoria": "Network",
+      "costo": 45.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Placa Acopladora Lightverse, 6 Conectores Dúplex LC/UPC \"Shuttered\", Acepta Hasta 12 Fibras Multimodo OM3 Y OM4. Las placas adaptadoras LightVerse proporcionan conexiones de fibra de paso de alto rendimiento en un espacio compacto. El pestillo integrado permite una fácil instalación y extracción con una sola mano, lo que permite a los usuarios trabajar de manera eficiente incluso en los entornos más densos. Tipo de conector: LC. Recuento de fibras: 12"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "LVA24-LCQ-BC-A",
+      "nombre": "Siemon LVA24-LCQ-BC-A Placa Acopladora Lightverse, 12 Conectores Dúplex LC/UPC \"Shuttered\"",
+      "categoria": "Network",
+      "costo": 90.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Placa Acopladora Lightverse, 12 Conectores Dúplex LC/UPC \"Shuttered\", Acepta Hasta 24 Fibras Multimodo OM3 Y OM4. Las placas adaptadoras LightVerse proporcionan conexiones de fibra de paso de alto rendimiento en un espacio compacto. El pestillo integrado permite una fácil instalación y extracción con una sola mano, lo que permite a los usuarios trabajar de manera eficiente incluso en los entornos más densos. Tipo de conector: LC. Recuento de fibras: 24"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "LVA24-LCU-BC-A",
+      "nombre": "Siemon LVA24-LCU-BC-A Placa Acopladora LightVerse, 12 Conectores Dúplex LC/APC, Acepta hasta",
+      "categoria": "Network",
+      "costo": 110.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Placa Acopladora LightVerse, 12 Conectores Dúplex LC/APC, Acepta hasta 24 fibras Monomodo (No Shuttered). Las placas adaptadoras LightVerse proporcionan conexiones de fibra de paso de alto rendimiento en un espacio compacto. El pestillo integrado permite una fácil instalación y extracción con una sola mano, lo que permite a los usuarios trabajar de manera eficiente incluso en los entornos más densos. Tipo de conector: LC. Recuento de fibras: 24"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "LVCA-06-SA",
+      "nombre": "Siemon LVCA-06-SA Placa adaptadora combinada LightVerse Combo, blindada",
+      "categoria": "Network",
+      "costo": 9.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Placa adaptadora combinada LightVerse Combo, blindada"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "LVCA-BLNK-A",
+      "nombre": "Siemon LVCA-BLNK-A Placa adaptadora combinada LightVerse Combo, en blanco",
+      "categoria": "Network",
+      "costo": 7.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Placa adaptadora combinada LightVerse Combo, en blanco"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "LVM12TMLSV-BSCA",
+      "nombre": "Siemon LVM12TMLSV-BSCA Módulo Plug & Play de alta densidad LightVerse. Fibra, LightVerse",
+      "categoria": "Network",
+      "costo": 205.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Módulo Plug & Play de alta densidad LightVerse. Fibra, LightVerse, Módulo, Pérdida estándar, 12 fibras, Connector A LC Shutter color Aqua, Conector B MTP macho color Aqua, Carcasa negra, sistema XGLO, Multimodo, Polaridad C, OM4, 8.3/125, Base 12"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "LVM12TMLSU-BSCA",
+      "nombre": "Siemon LVM12TMLSU-BSCA Módulo Plug & Play de alta densidad LightVerse. Fibra, LightVerse",
+      "categoria": "Network",
+      "costo": 215.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Módulo Plug & Play de alta densidad LightVerse. Fibra, LightVerse, Módulo, Pérdida estándar, 12 fibras, Connector A LCU Shutter color Azul, Conector B MTP macho color Negro, Carcasa negra, sistema XGLO, Monomodo, Polaridad C, OS2, 8.3/125, Base 12"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "LVS24-LCPVRAB1A",
+      "nombre": "Siemon LVS24-LCPVRAB1A Cassette para Empalme (Fusión) LightVerse de fibra óptica de 24 puertos",
+      "categoria": "Network",
+      "costo": 375.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Cassette para Empalme (Fusión) LightVerse de fibra óptica de 24 puertos LC OM4, Adaptodres color Aqua, tipo Cassette de empalme, Cable Riser tipo Riser de 900 μm de 1 metro (3.28 Pies), carcasa negra. Capacidad de 96 empalmes por 1U con gabinetes LightVerse. Diseño de dos capas con bandeja de separación extraíble. Chip apilable para fusión masiva e individual. Material translúcido para fácil verificación y pruebas, correa de tracción integrada para una extracción trasera rápida"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "TRAY-3",
+      "nombre": "Siemon TRAY-3 Bandeja de Empalme para Fibra Óptica, Para 24 Empalmes por Fusión Con",
+      "categoria": "Network",
+      "costo": 31.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Bandeja de Empalme para Fibra Óptica, Para 24 Empalmes por Fusión Con Manga Protectora"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "RIC-F-BLNK-01",
+      "nombre": "Siemon RIC-F-BLNK-01 Placa adaptadora Quick-Pack, Ciega, Plana, RIC, Housing Color Negro",
+      "categoria": "Network",
+      "costo": 3.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Placa adaptadora Quick-Pack, Ciega, Plana, RIC, Housing Color Negro"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "RIC-F-LCQ12-01C",
+      "nombre": "Siemon RIC-F-LCQ12-01C Placa acopladora de Fibra Óptica Quick-Pack, Con 6 Conectores LC Duplex",
+      "categoria": "Network",
+      "costo": 41.0,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Placa acopladora de Fibra Óptica Quick-Pack, Con 6 Conectores LC Duplex (12 Fibras), RIC, Para Fibra Multimodo, Plano, Adaptador Aqua, Housing Negro, Manga Ceramica"
+    },
+    {
+      "marca": "Siemon",
+      "modelo": "RIC-F-LCU12-01C",
+      "nombre": "Siemon RIC-F-LCU12-01C Placa acopladora de Fibra Óptica Quick-Pack, Con 6 Conectores LC/UPC",
+      "categoria": "Network",
+      "costo": 52.5,
+      "estatus": "DISPONIBLE",
+      "descripcion": "Placa acopladora de Fibra Óptica Quick-Pack, Con 6 Conectores LC/UPC Duplex (12 Fibras), RIC, Para Fibra Monomodo, Adaptador Azul, Housing Negro, Manga Ceramica"
+    }
+  ]
+}
