@@ -28,3 +28,4 @@ The repo ships without an `.eslintrc.json`. Running `npm run lint` for the first
 - The `scripts/` directory contains a one-off CSV migration script, not setup scripts.
 - SQL files in `/workspace/sql/` and root are intended for the Supabase SQL Editor, not local execution.
 - Temporary debug files (`tmp_*.mjs`) at the root are development artifacts and not part of the application.
+- **This repository is public.** Never commit supplier price lists or cost prices (PDF, CSV, SQL, seeds, fixtures, screenshots). Pending task for the supplier list "CCTV Septiembre 2026": see `docs/CURSOR-LISTA-PRECIOS-PROVEEDOR.md`.
