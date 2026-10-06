@@ -33,9 +33,12 @@ import {
 import { descargarPlanoFirmado, subirPlanoNube } from '@/lib/netvision/planoNube'
 import type { DesignCamera, NetVisionProject } from '@/lib/netvision/types'
 import {
+  agruparFichasPorModelo,
   buildClienteCameraCard,
   totalClienteCableMeters,
+  valorComun,
   type ClienteCameraCard,
+  type GrupoFichas,
 } from '@/lib/netvision/utils/clienteCameraCard'
 import { formatLength } from '@/lib/netvision/utils/units'
 import { normalizeCotaColor } from '@/lib/netvision/utils/nightPlanoPalette'
@@ -183,6 +186,150 @@ function CameraFicha({
           Sin metros de cable: no requiere tendido PoE.
         </p>
       )}
+    </article>
+  )
+}
+
+/**
+ * Varias cámaras del mismo modelo: la información del modelo se dice una sola
+ * vez («CAM‑03, CAM‑04 y CAM‑05») y debajo va solo lo que cambia en cada una.
+ */
+function CameraFichaGrupo({
+  grupo,
+  unitSystem,
+  onVerCamara,
+}: {
+  grupo: GrupoFichas
+  unitSystem: NetVisionProject['unitSystem']
+  onVerCamara: (id: string) => void
+}) {
+  const { cards } = grupo
+  const modelo = cards[0]!
+  const conexion = valorComun(cards, (c) => c.connectionLabel)
+  const splitter = valorComun(cards, (c) => c.poeSplitterV ?? 0)
+  const montaje = valorComun(cards, (c) => `${c.mountHeightM}|${c.tiltDeg}`)
+  const alcance = valorComun(cards, (c) => resumenAlcanceUtil(c.alcanceUtil, unitSystem))
+  const todasCableadas = cards.every((c) => c.wired)
+  const metros = Math.round(cards.reduce((s, c) => s + (c.wired ? c.cableMeters : 0), 0) * 10) / 10
+  return (
+    <article
+      data-nv-ficha-grupo={cards.length}
+      className="nv-tac-scan border border-[#2e7d54] bg-[#0b1a14] p-3"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 pt-0.5">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#5fbf8a]">
+            {modelo.brand}
+          </p>
+          <h3 className="mt-0.5 text-xl font-bold uppercase leading-tight tracking-[0.06em] text-[#d6ffe5]">
+            {modelo.modelName}
+          </h3>
+          <p data-nv-ficha-grupo-camaras className="mt-1 text-[12px] font-semibold leading-snug text-[#8cffb5]">
+            {cards.length} cámaras: {grupo.etiquetas}
+          </p>
+        </div>
+        <NetVisionCameraPhoto
+          imageUrl={modelo.imageUrl}
+          formFactor={modelo.formFactor}
+          alt={`${modelo.brand} ${modelo.modelName}`}
+        />
+      </div>
+      <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px]">
+        <div>
+          <dt className="text-[#5fbf8a]">Forma</dt>
+          <dd className="font-semibold text-[#d6ffe5]">{modelo.formLabel}</dd>
+        </div>
+        <div>
+          <dt className="text-[#5fbf8a]">Resolución</dt>
+          <dd className="font-semibold text-[#d6ffe5]">{modelo.resolution}</dd>
+        </div>
+        <div>
+          <dt className="text-[#5fbf8a]">Ángulo</dt>
+          <dd className="font-semibold text-[#d6ffe5]">{modelo.fovLabel}</dd>
+        </div>
+        <div>
+          <dt className="text-[#5fbf8a]">Alcance</dt>
+          <dd className="font-semibold text-[#d6ffe5]">
+            {modelo.rangeDayM} m día / {modelo.rangeNightM} m noche
+          </dd>
+        </div>
+      </dl>
+      {modelo.notes ? (
+        <p className="mt-2 text-[11px] leading-relaxed text-[#a9e8c4]">{modelo.notes}</p>
+      ) : null}
+      {alcance ? (
+        <p data-nv-alcance-resumen className="mt-2 text-[11px] leading-relaxed text-[#a9e8c4]">
+          {alcance}
+        </p>
+      ) : null}
+      {conexion ? (
+        <p className="mt-2 text-[11px] font-bold text-[#8cffb5]">
+          {conexion}
+          {todasCableadas && modelo.poeWatts > 0 ? ` · ${modelo.poeWatts} W PoE cada una` : ''}
+        </p>
+      ) : null}
+      {splitter !== null && todasCableadas ? (
+        splitter ? (
+          <p
+            data-nv-splitter={splitter}
+            className="mt-1 flex items-center gap-1.5 text-[11px] font-semibold text-[#ffc857]"
+          >
+            <NetVisionSplitterSymbol size={14} />
+            Cada una lleva adaptador PoE (splitter) de {splitter} V
+          </p>
+        ) : (
+          <p data-nv-splitter="propio" className="mt-1 text-[11px] text-[#a9e8c4]">
+            PoE propio: no llevan adaptador.
+          </p>
+        )
+      ) : null}
+      <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#5fbf8a]">
+        Cada cámara · toca para verla en el plano
+      </p>
+      <ul className="mt-1 space-y-1">
+        {cards.map((c) => {
+          // Solo lo que cambia de una cámara a otra del mismo modelo.
+          const detalles: string[] = []
+          if (!conexion) detalles.push(c.connectionLabel)
+          if (splitter === null && c.wired) {
+            detalles.push(c.poeSplitterV ? `adaptador PoE de ${c.poeSplitterV} V` : 'PoE propio')
+          }
+          if (!montaje) detalles.push(`a ${formatLength(c.mountHeightM, unitSystem)} de altura`)
+          if (!alcance) detalles.push(resumenAlcanceUtil(c.alcanceUtil, unitSystem))
+          if (c.wired) {
+            if (c.cables.length > 0) {
+              for (const cable of c.cables) {
+                detalles.push(
+                  `${cable.typeLabel} → ${cable.toLabel}: ${formatLength(cable.meters, unitSystem)}`,
+                )
+              }
+            } else {
+              detalles.push('sin ruta de tendido en el plano')
+            }
+          }
+          return (
+            <li key={c.id}>
+              <button
+                type="button"
+                data-nv-ficha-camara={c.id}
+                onClick={() => onVerCamara(c.id)}
+                className="flex min-h-11 w-full items-baseline gap-2 border border-[#1f5a3c] bg-[#07110d] px-2.5 py-2 text-left hover:border-[#8cffb5]"
+              >
+                <span className="shrink-0 text-[12px] font-bold text-[#d6ffe5]">{c.label}</span>
+                <span className="min-w-0 text-[11px] leading-snug text-[#a9e8c4]">
+                  {detalles.join(' · ')}
+                </span>
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+      {metros > 0 ? (
+        <p className="mt-1.5 text-[11px] text-[#5fbf8a]">
+          Total tendido de las {cards.length}:{' '}
+          <span className="font-semibold text-[#d6ffe5]">{formatLength(metros, unitSystem)}</span>
+        </p>
+      ) : null}
     </article>
   )
 }
@@ -709,14 +856,24 @@ export default function NetVisionClienteView() {
             {selectedCard ? (
               <CameraFicha card={selectedCard} unitSystem={project.unitSystem} />
             ) : (
-              cards.map((card) => (
-                <CameraFicha
-                  key={card.id}
-                  card={card}
-                  unitSystem={project.unitSystem}
-                  compact
-                />
-              ))
+              // El mismo modelo se describe una sola vez, con sus cámaras debajo.
+              agruparFichasPorModelo(cards).map((grupo) =>
+                grupo.cards.length === 1 ? (
+                  <CameraFicha
+                    key={grupo.clave}
+                    card={grupo.cards[0]!}
+                    unitSystem={project.unitSystem}
+                    compact
+                  />
+                ) : (
+                  <CameraFichaGrupo
+                    key={grupo.clave}
+                    grupo={grupo}
+                    unitSystem={project.unitSystem}
+                    onVerCamara={showSolo}
+                  />
+                ),
+              )
             )}
           </div>
         </aside>
