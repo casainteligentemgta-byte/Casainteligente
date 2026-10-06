@@ -4,9 +4,10 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { Printer, ArrowLeft, Link2, Check, Send, X } from 'lucide-react'
-import CameraPlacementTool from '@/components/netvision/CameraPlacementTool'
+import NetVisionPlanoCliente, {
+  PLANO_CLIENTE_TONO,
+} from '@/components/netvision/NetVisionPlanoCliente'
 import NetVisionCameraVisionToggles from '@/components/netvision/NetVisionCameraVisionToggles'
-import { VISION_SEMAFORO_LEGEND } from '@/lib/netvision/utils/visionSemaforoPalette'
 import {
   isolateHiddenCameraIds,
   pruneHiddenCameraIds,
@@ -41,7 +42,6 @@ import {
   type GrupoFichas,
 } from '@/lib/netvision/utils/clienteCameraCard'
 import { formatLength } from '@/lib/netvision/utils/units'
-import { normalizeCotaColor } from '@/lib/netvision/utils/nightPlanoPalette'
 import { buildPlanoRotulo } from '@/lib/netvision/utils/planoRotulo'
 import NetVisionPlanoRotulo from '@/components/netvision/NetVisionPlanoRotulo'
 import NetVisionCameraPhoto from '@/components/netvision/NetVisionCameraPhoto'
@@ -339,6 +339,8 @@ export default function NetVisionClienteView() {
   const [project, setProject] = useState<NetVisionProject | null>(null)
   const [hiddenIds, setHiddenIds] = useState<string[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  /** El cableado estorba al cliente: se muestra solo si lo pide. */
+  const [verCables, setVerCables] = useState(false)
   const [copied, setCopied] = useState(false)
   /** Código del enlace (?c=): quien abre es el cliente, en modo solo lectura. */
   const tokenRaw = search.get(PARAM_COMPARTIDO)
@@ -462,7 +464,11 @@ export default function NetVisionClienteView() {
   )
 
   const selectedCard = cards.find((c) => c.id === selectedId) ?? null
-  const visibleSectors = sectors.filter((s) => !hiddenLive.includes(s.cameraId))
+  // «Ver solo esta»: las demás quedan apagadas por eso, no porque se quitaran una a una.
+  const viendoUnaSola =
+    selectedId != null &&
+    !hiddenLive.includes(selectedId) &&
+    hiddenLive.length === cameras.length - 1
   const allOn = hiddenLive.length === 0
   const cableTotal = totalClienteCableMeters(cards)
   const splitters = contarSplittersPoe(cameras)
@@ -725,19 +731,68 @@ export default function NetVisionClienteView() {
         </div>
       ) : null}
 
-      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[#a9e8c4] print:hidden">
-        <span className="font-semibold uppercase tracking-[0.22em] text-[#5fbf8a]">Semáforo</span>
-        {VISION_SEMAFORO_LEGEND.map((item) => (
-          <span key={item.band} className="inline-flex items-center gap-1.5">
-            <span className="h-2 w-2" style={{ backgroundColor: item.hex }} />
-            {item.label}
+      <div
+        data-nv-leyenda
+        className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-[#d6ffe5]"
+      >
+        {/* En palabras del cliente: qué se ve en cada zona del cono. */}
+        {[
+          { clave: 'cara', texto: 'Se le ve la cara', opacidad: 0.75 },
+          { clave: 'quien', texto: 'Se sabe quién es', opacidad: 0.42 },
+          { clave: 'alguien', texto: 'Se nota que hay alguien', opacidad: 0.18 },
+        ].map((z) => (
+          <span key={z.clave} data-nv-leyenda-zona={z.clave} className="inline-flex items-center gap-1.5">
+            <span
+              className="h-3.5 w-3.5 border"
+              style={{
+                backgroundColor: PLANO_CLIENTE_TONO,
+                opacity: z.opacidad,
+                borderColor: PLANO_CLIENTE_TONO,
+              }}
+            />
+            {z.texto}
           </span>
         ))}
+        <span className="inline-flex items-center gap-3 text-[#a9e8c4]">
+          <span className="inline-flex items-center gap-1.5">
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
+              <circle cx="8" cy="8" r="6" fill="none" stroke="#e6f2ec" strokeWidth="1.8" />
+            </svg>
+            Domo
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <svg width="18" height="16" viewBox="0 0 18 16" aria-hidden>
+              <rect x="2" y="3" width="14" height="10" rx="3" fill="none" stroke="#e6f2ec" strokeWidth="1.8" />
+            </svg>
+            Bala
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <svg width="18" height="16" viewBox="0 0 18 16" aria-hidden>
+              <polygon points="16,8 12.5,14 5.5,14 2,8 5.5,2 12.5,2" fill="none" stroke="#e6f2ec" strokeWidth="1.8" />
+            </svg>
+            PTZ (gira)
+          </span>
+        </span>
         {splitters > 0 ? (
-          <span data-nv-leyenda-splitter className="inline-flex items-center gap-1.5">
+          <span data-nv-leyenda-splitter className="inline-flex items-center gap-1.5 text-[#a9e8c4]">
             <NetVisionSplitterSymbol size={12} />
             Adaptador PoE (splitter)
           </span>
+        ) : null}
+        {cableRoutes.length > 0 ? (
+          <button
+            type="button"
+            data-nv-ver-cables
+            aria-pressed={verCables}
+            onClick={() => setVerCables((v) => !v)}
+            className={`ml-auto inline-flex min-h-11 items-center border px-3 text-[11px] font-bold uppercase tracking-[0.12em] print:hidden ${
+              verCables
+                ? 'border-[#f5c84b] bg-[#f5c84b] text-[#07110d]'
+                : 'border-[#2e7d54] text-[#d6ffe5] hover:border-[#8cffb5]'
+            }`}
+          >
+            {verCables ? 'Ocultar cableado' : 'Ver cableado'}
+          </button>
         ) : null}
       </div>
 
@@ -768,21 +823,13 @@ export default function NetVisionClienteView() {
                 branch: 'cctv',
               })}
             >
-            <CameraPlacementTool
-              backgroundUrl={project.planoUrl}
-              invertBackground={Boolean(project.planoInvertido)}
-              invertOptions={{
-                cotaColor: normalizeCotaColor(project.planoCotaColor),
-                grosorMuro: project.planoGrosorMuro,
-              }}
-              wallStrokeGrosor={project.planoGrosorMuro}
+            <NetVisionPlanoCliente
+              planoUrl={project.planoUrl}
               cameras={cameras}
               networkNodes={project.networkNodes}
               planDevices={project.planDevices}
               structures={project.structures}
-              sectors={visibleSectors}
-              wifiCircles={[]}
-              linkLines={[]}
+              sectors={sectors}
               cableRoutes={
                 allOn
                   ? cableRoutes
@@ -790,30 +837,19 @@ export default function NetVisionClienteView() {
                       (r) => !hiddenLive.includes(r.fromId) && !hiddenLive.includes(r.toId),
                     )
               }
+              scale={project.scale}
+              unitSystem={project.unitSystem}
               selectedId={selectedId}
-              placeMode={false}
-              showFov
-              visionOpacity={0.36}
-              coverageHiddenIds={hiddenLive}
-              showWifi={false}
-              showLinks={false}
-              showCableRoutes
-              showStructures
-              readOnly
-              showCameraLabels={false}
-              onAddAt={() => undefined}
-              onMove={() => undefined}
-              metersPerNormX={project.scale.metersPerNormX}
-              metersPerNormY={project.scale.metersPerNormY}
+              hiddenIds={hiddenLive}
+              atenuar={viendoUnaSola}
+              verCables={verCables}
               onSelect={(id) => {
                 if (!id) {
-                  setSelectedId(null)
                   showAll()
                   return
                 }
                 if (cameras.some((c) => c.id === id)) showSolo(id)
               }}
-              showZoomOverlay
             />
             </NetVisionPlanoRotulo>
           ) : planoEstado === 'cargando' ? (
