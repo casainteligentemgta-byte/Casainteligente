@@ -14,6 +14,7 @@
 --
 -- Si ya existe Ezviz con el mismo modelo: actualiza nombre, categoría,
 -- descripción, costo, precio y utilidad. No pisa foto, cantidad ni manual.
+-- No usa updated_at: esa columna no está en products de producción.
 -- =============================================================================
 
 begin;
@@ -122,8 +123,7 @@ set
   descripcion2 = 'Lista instalador Ezviz Octubre 2026 · ' || e.estatus,
   costo = e.costo,
   precio = e.costo,
-  utilidad = 0,
-  updated_at = now()
+  utilidad = 0
 from ezviz_oct2026 e
 where lower(btrim(p.modelo)) = lower(btrim(e.modelo))
   and (
