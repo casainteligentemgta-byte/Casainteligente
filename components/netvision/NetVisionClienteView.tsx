@@ -47,6 +47,7 @@ import {
 } from '@/lib/netvision/utils/clienteCameraCard'
 import { formatLength } from '@/lib/netvision/utils/units'
 import { buildPlanoRotulo } from '@/lib/netvision/utils/planoRotulo'
+import { sugerirNombrePdfPlano } from '@/lib/netvision/utils/planoPrint'
 import NetVisionPlanoRotulo from '@/components/netvision/NetVisionPlanoRotulo'
 import NetVisionCameraPhoto from '@/components/netvision/NetVisionCameraPhoto'
 import NetVisionAlcanceUtil from '@/components/netvision/NetVisionAlcanceUtil'
@@ -287,7 +288,7 @@ function CameraFichaGrupo({
           </p>
         )
       ) : null}
-      <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#5fbf8a]">
+      <p className="nv-no-print mt-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#5fbf8a] print:hidden">
         Cada cámara · toca para verla en el plano
       </p>
       <ul className="mt-1 space-y-1">
@@ -338,6 +339,38 @@ function CameraFichaGrupo({
   )
 }
 
+function ListaFichas({
+  cards,
+  unitSystem,
+  onVerCamara,
+}: {
+  cards: ClienteCameraCard[]
+  unitSystem: NetVisionProject['unitSystem']
+  onVerCamara: (id: string) => void
+}) {
+  return (
+    <>
+      {agruparFichasPorModelo(cards).map((grupo) =>
+        grupo.cards.length === 1 ? (
+          <CameraFicha
+            key={grupo.clave}
+            card={grupo.cards[0]!}
+            unitSystem={unitSystem}
+            compact
+          />
+        ) : (
+          <CameraFichaGrupo
+            key={grupo.clave}
+            grupo={grupo}
+            unitSystem={unitSystem}
+            onVerCamara={onVerCamara}
+          />
+        ),
+      )}
+    </>
+  )
+}
+
 /** Preferencia de cada visitante: no viaja con el proyecto. */
 const CLAVE_PALETA = 'nexus.netvision.cliente.paleta'
 
@@ -381,6 +414,8 @@ export default function NetVisionClienteView() {
   const [shareUrl, setShareUrl] = useState<string | null>(null)
   const [sharing, setSharing] = useState(false)
   const [shareMsg, setShareMsg] = useState<string | null>(null)
+  /** Reacomoda a hoja apaisada y luego abre el diálogo de imprimir / PDF. */
+  const [imprimiendo, setImprimiendo] = useState(false)
 
   useEffect(() => {
     const cam = search.get('cam')
@@ -595,6 +630,45 @@ export default function NetVisionClienteView() {
   }
   const puedeEnviar = typeof navigator !== 'undefined' && typeof navigator.share === 'function'
 
+  const imprimirPdf = () => {
+    if (imprimiendo) return
+    setImprimiendo(true)
+  }
+
+  useEffect(() => {
+    if (!imprimiendo) return
+    const prevTitle = document.title
+    const nombre = sugerirNombrePdfPlano({
+      projectName: project?.name,
+      planoNombre: project?.planoNombre,
+    })
+    document.title = nombre
+    document.documentElement.setAttribute('data-nv-print-cliente', '')
+    let cancelado = false
+    let listo = false
+    const fin = () => {
+      if (listo) return
+      listo = true
+      document.title = prevTitle
+      document.documentElement.removeAttribute('data-nv-print-cliente')
+      setImprimiendo(false)
+    }
+    const tPrint = window.setTimeout(() => {
+      if (cancelado) return
+      window.print()
+    }, 220)
+    const tFallback = window.setTimeout(fin, 12000)
+    window.addEventListener('afterprint', fin)
+    return () => {
+      cancelado = true
+      window.clearTimeout(tPrint)
+      window.clearTimeout(tFallback)
+      window.removeEventListener('afterprint', fin)
+      document.title = prevTitle
+      document.documentElement.removeAttribute('data-nv-print-cliente')
+    }
+  }, [imprimiendo, project?.name, project?.planoNombre])
+
   if (esCompartido && estadoCompartido !== 'listo') {
     return (
       <div
@@ -622,11 +696,15 @@ export default function NetVisionClienteView() {
   return (
     <div
       data-nv-cliente-modo={esCompartido ? 'compartido' : 'instalador'}
+      data-nv-imprimiendo={imprimiendo ? '' : undefined}
       className={`nv-cliente nv-tac-scan flex min-h-[28rem] flex-col gap-2.5 overflow-hidden border border-[#2e7d54] bg-[#07110d] p-3 font-mono text-[#8cffb5] print:h-auto print:min-h-0 print:overflow-visible ${
         esCompartido ? 'h-[calc(100dvh-1.5rem)]' : 'h-[calc(100dvh-7.25rem)]'
       }`}
     >
-      <header className="flex shrink-0 flex-wrap items-end justify-between gap-3">
+      <header
+        data-nv-print-encabezado
+        className="flex shrink-0 flex-wrap items-end justify-between gap-3"
+      >
         <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#5fbf8a]">
             Presentación cliente // NetVision
@@ -664,7 +742,7 @@ export default function NetVisionClienteView() {
             ) : null}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2 print:hidden">
+        <div className="nv-no-print flex flex-wrap gap-2 print:hidden">
           {!esCompartido ? (
             <>
               <Link
@@ -688,11 +766,13 @@ export default function NetVisionClienteView() {
           ) : null}
           <button
             type="button"
-            onClick={() => window.print()}
-            className="inline-flex min-h-11 items-center gap-1.5 bg-[#8cffb5] px-3.5 text-[11px] font-bold uppercase tracking-[0.12em] text-[#07110d] hover:bg-[#d6ffe5]"
+            data-nv-imprimir-pdf
+            disabled={imprimiendo}
+            onClick={imprimirPdf}
+            className="inline-flex min-h-11 items-center gap-1.5 bg-[#8cffb5] px-3.5 text-[11px] font-bold uppercase tracking-[0.12em] text-[#07110d] hover:bg-[#d6ffe5] disabled:opacity-60"
           >
             <Printer className="h-3.5 w-3.5" />
-            Imprimir / PDF
+            {imprimiendo ? 'Preparando…' : 'Imprimir / PDF'}
           </button>
         </div>
       </header>
@@ -700,7 +780,7 @@ export default function NetVisionClienteView() {
       {!esCompartido && (shareUrl || shareMsg) ? (
         <div
           data-nv-compartir-panel
-          className="shrink-0 space-y-2 border border-[#2e7d54] bg-[#0b1a14] p-2.5 text-[11px] print:hidden"
+          className="nv-no-print shrink-0 space-y-2 border border-[#2e7d54] bg-[#0b1a14] p-2.5 text-[11px] print:hidden"
         >
           {shareMsg ? (
             <p data-nv-compartir-msg className="text-[#d6ffe5]">
@@ -764,7 +844,7 @@ export default function NetVisionClienteView() {
           role="group"
           aria-label="Colores de la cobertura"
           data-nv-paleta={paleta}
-          className="inline-flex print:hidden"
+          className="nv-no-print inline-flex print:hidden"
         >
           {(
             [
@@ -841,7 +921,7 @@ export default function NetVisionClienteView() {
             data-nv-ver-cables
             aria-pressed={verCables}
             onClick={() => setVerCables((v) => !v)}
-            className={`ml-auto inline-flex min-h-11 items-center border px-3 text-[11px] font-bold uppercase tracking-[0.12em] print:hidden ${
+            className={`nv-no-print ml-auto inline-flex min-h-11 items-center border px-3 text-[11px] font-bold uppercase tracking-[0.12em] print:hidden ${
               verCables
                 ? 'border-[#f5c84b] bg-[#f5c84b] text-[#07110d]'
                 : 'border-[#2e7d54] text-[#d6ffe5] hover:border-[#8cffb5]'
@@ -853,7 +933,7 @@ export default function NetVisionClienteView() {
       </div>
 
       {cameras.length > 0 ? (
-        <div className="shrink-0 print:hidden" data-nv-cam-toggles>
+        <div className="nv-no-print shrink-0 print:hidden" data-nv-cam-toggles>
           <NetVisionCameraVisionToggles
             cameras={cameras}
             hiddenIds={hiddenLive}
@@ -866,11 +946,17 @@ export default function NetVisionClienteView() {
           />
         </div>
       ) : (
-        <p className="text-[12px] text-[#a9e8c4]">Este proyecto aún no tiene cámaras.</p>
+        <p className="nv-no-print text-[12px] text-[#a9e8c4] print:hidden">
+          Este proyecto aún no tiene cámaras.
+        </p>
       )}
 
-      <div className="grid min-h-0 flex-1 grid-rows-[minmax(200px,42dvh)_minmax(0,1fr)] gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(280px,340px)] lg:grid-rows-[minmax(0,1fr)]">
-        <div className="min-h-0 overflow-hidden bg-[#07110d] print:min-h-[360px]">
+      <div className="nv-cliente-grid grid min-h-0 flex-1 grid-rows-[minmax(200px,42dvh)_minmax(0,1fr)] gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(280px,340px)] lg:grid-rows-[minmax(0,1fr)]">
+        <div
+          className={`nv-print-plano-slot min-h-0 overflow-hidden bg-[#07110d]${
+            cards.length > 0 ? ' nv-print-plano-con-fichas' : ''
+          }`}
+        >
           {project.planoUrl ? (
             <NetVisionPlanoRotulo
               variant="tactico"
@@ -940,35 +1026,34 @@ export default function NetVisionClienteView() {
           )}
         </div>
 
-        <aside className="flex min-h-0 flex-col">
-          <p className="shrink-0 px-0.5 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#5fbf8a]">
+        <aside
+          className={`nv-print-fichas flex min-h-0 flex-col${
+            cards.length === 0 ? ' nv-no-print print:hidden' : ''
+          }`}
+        >
+          <p className="nv-no-print shrink-0 px-0.5 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#5fbf8a] print:hidden">
             {'// '}
             {selectedCard ? 'Ficha de la cámara' : 'Todas las cámaras'}
           </p>
-          <div className="nv-cliente-list min-h-0 flex-1 space-y-2.5 overflow-y-auto overscroll-y-contain pl-1 pr-1.5 pt-1 [scrollbar-color:#2e7d54_transparent] [scrollbar-width:thin]">
+          <p className="nv-solo-print mb-1.5 hidden shrink-0 px-0.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#5fbf8a] print:block">
+            {'// '}Cámaras a usar
+          </p>
+          <div
+            className={`nv-cliente-list min-h-0 flex-1 space-y-2.5 overflow-y-auto overscroll-y-contain pl-1 pr-1.5 pt-1 [scrollbar-color:#2e7d54_transparent] [scrollbar-width:thin] ${
+              selectedCard ? 'nv-no-print print:hidden' : ''
+            }`}
+          >
             {selectedCard ? (
               <CameraFicha card={selectedCard} unitSystem={project.unitSystem} />
             ) : (
-              // El mismo modelo se describe una sola vez, con sus cámaras debajo.
-              agruparFichasPorModelo(cards).map((grupo) =>
-                grupo.cards.length === 1 ? (
-                  <CameraFicha
-                    key={grupo.clave}
-                    card={grupo.cards[0]!}
-                    unitSystem={project.unitSystem}
-                    compact
-                  />
-                ) : (
-                  <CameraFichaGrupo
-                    key={grupo.clave}
-                    grupo={grupo}
-                    unitSystem={project.unitSystem}
-                    onVerCamara={showSolo}
-                  />
-                ),
-              )
+              <ListaFichas cards={cards} unitSystem={project.unitSystem} onVerCamara={showSolo} />
             )}
           </div>
+          {selectedCard ? (
+            <div className="nv-cliente-list nv-solo-print hidden space-y-2.5 print:block">
+              <ListaFichas cards={cards} unitSystem={project.unitSystem} onVerCamara={showSolo} />
+            </div>
+          ) : null}
         </aside>
       </div>
 
@@ -983,15 +1068,114 @@ export default function NetVisionClienteView() {
             transparent 3px
           );
         }
+        /* Antes de imprimir: misma composición que el PDF (hoja apaisada). */
+        html[data-nv-print-cliente] [data-nv-shell-chrome] {
+          display: none !important;
+        }
+        html[data-nv-print-cliente] main {
+          padding: 0 !important;
+        }
+        .nv-cliente[data-nv-imprimiendo] .nv-no-print {
+          display: none !important;
+        }
+        .nv-cliente[data-nv-imprimiendo] .nv-solo-print {
+          display: block !important;
+        }
+        .nv-cliente[data-nv-imprimiendo] {
+          display: flex !important;
+          flex-direction: column !important;
+          height: auto !important;
+          overflow: visible !important;
+          border: none !important;
+          padding: 7mm !important;
+        }
+        .nv-cliente[data-nv-imprimiendo] .nv-tac-scan {
+          background-image: none !important;
+        }
+        .nv-cliente[data-nv-imprimiendo] .nv-cliente-grid {
+          display: contents;
+        }
+        .nv-cliente[data-nv-imprimiendo] [data-nv-print-encabezado],
+        .nv-cliente[data-nv-imprimiendo] [data-nv-leyenda] {
+          break-after: avoid;
+          page-break-after: avoid;
+        }
+        .nv-cliente[data-nv-imprimiendo] .nv-print-plano-slot {
+          width: 100%;
+          height: 150mm;
+          min-height: 150mm;
+          overflow: hidden;
+        }
+        .nv-cliente[data-nv-imprimiendo] .nv-print-plano-slot .nv-plano-rotulo {
+          height: 100%;
+        }
+        .nv-cliente[data-nv-imprimiendo] .nv-print-fichas {
+          width: 48%;
+          max-width: 140mm;
+        }
+        @page {
+          size: A4 landscape;
+          margin: 0;
+        }
         @media print {
-          nav, [data-nv-copiar-enlace] { display: none !important; }
-          /* La hoja sale igual que en pantalla (fondo oscuro y verde). */
+          nav,
+          [data-nv-copiar-enlace],
+          [data-nv-shell-chrome] { display: none !important; }
+          main { padding: 0 !important; }
+          .nv-no-print { display: none !important; }
+          .nv-solo-print { display: block !important; }
+          html, body {
+            background: #07110d !important;
+          }
           .nv-cliente, .nv-cliente * {
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
           }
-          .nv-cliente { height: auto !important; overflow: visible !important; }
-          .nv-cliente-list { overflow: visible !important; height: auto !important; }
+          .nv-tac-scan {
+            background-image: none !important;
+          }
+          .nv-cliente {
+            display: flex !important;
+            flex-direction: column !important;
+            height: auto !important;
+            overflow: visible !important;
+            border: none !important;
+            background: #07110d !important;
+            padding: 7mm !important;
+          }
+          .nv-cliente-grid { display: contents !important; }
+          [data-nv-print-encabezado],
+          [data-nv-leyenda] {
+            break-after: avoid;
+            page-break-after: avoid;
+          }
+          .nv-print-plano-con-fichas {
+            break-after: page;
+            page-break-after: always;
+          }
+          .nv-print-plano-slot {
+            width: 100% !important;
+            height: 150mm !important;
+            min-height: 150mm !important;
+            max-height: 150mm !important;
+            overflow: hidden !important;
+          }
+          .nv-print-plano-slot .nv-plano-rotulo {
+            height: 100% !important;
+          }
+          .nv-print-fichas {
+            width: 48% !important;
+            max-width: 140mm !important;
+          }
+          .nv-cliente-list {
+            overflow: visible !important;
+            height: auto !important;
+          }
+          [data-nv-ficha],
+          [data-nv-ficha-grupo] {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
         }
       `}</style>
     </div>
