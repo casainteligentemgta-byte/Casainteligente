@@ -221,22 +221,29 @@ export default function NetVisionPlanoCliente({
     tocadoRef.current = false
   }, [planoUrl])
 
-  // Al imprimir, la página se reacomoda (otra anchura, la lista de cámaras se
-  // alarga). El marco conserva su proporción y todo lo de dentro va en
-  // porcentajes: el papel sale igual que lo que se está viendo, a escala.
+  // Al imprimir: si ya se preparó la hoja apaisada, se congela ese marco.
+  // Si el usuario usa Ctrl+P, se fuerza proporción horizontal (A4 landscape).
   useEffect(() => {
     const el = marcoRef.current
     if (!el) return
     const congelar = () => {
-      const r = el.getBoundingClientRect()
-      if (!(r.width > 0) || !(r.height > 0)) return
       imprimiendoRef.current = true
-      el.style.aspectRatio = `${r.width} / ${r.height}`
+      const apaisado = el.closest('[data-nv-imprimiendo]')
+      if (apaisado) {
+        const r = el.getBoundingClientRect()
+        if (!(r.width > 0) || !(r.height > 0)) return
+        el.style.aspectRatio = `${r.width} / ${r.height}`
+        el.style.height = 'auto'
+        return
+      }
+      el.style.width = '100%'
       el.style.height = 'auto'
+      el.style.aspectRatio = '297 / 148'
     }
     const soltar = () => {
       el.style.aspectRatio = ''
       el.style.height = ''
+      el.style.width = ''
       imprimiendoRef.current = false
     }
     window.addEventListener('beforeprint', congelar)
@@ -676,7 +683,7 @@ export default function NetVisionPlanoCliente({
 
       <div
         data-nv-plano-control
-        className="absolute right-2 top-2 flex items-center gap-1.5 print:hidden"
+        className="nv-no-print absolute right-2 top-2 flex items-center gap-1.5 print:hidden"
         style={{ cursor: 'default' }}
       >
         <button
