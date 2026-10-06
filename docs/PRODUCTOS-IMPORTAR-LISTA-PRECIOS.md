@@ -24,8 +24,8 @@ La lista la sube el dueño desde la pantalla, con su sesión. El archivo se lee 
    - **Hay que elegir:** el modelo se parece pero no es idéntico, o la lista lo trae con dos precios. No se tocan hasta que elija una opción.
    - **El proveedor no lo tiene:** el costo queda igual; solo se anota la disponibilidad.
    - **Sin cambio de costo:** se anota la disponibilidad.
-   - **No los tienes en tu catálogo:** sin marcar; con buscador, filtro por sección y «Solo disponibles». Se crean sin precio de venta.
-4. **Aplicar** pide confirmación, guarda uno por uno y muestra un resumen con lo que no se pudo.
+   - **No los tienes en tu catálogo:** sin marcar; con buscador, filtro por sección y «Solo disponibles». «Marcar los N a la vista» marca de una vez todo lo filtrado (toda la lista, si se quitan los filtros). Se crean sin precio de venta.
+4. **Aplicar** pide confirmación, guarda de cuatro en cuatro y muestra un resumen con lo que no se pudo. Con listas grandes tarda unos minutos y pide a la pantalla que no se apague; si se interrumpe, basta volver a subir la lista: lo ya guardado no se repite.
 
 ## Formato del CSV
 

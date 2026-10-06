@@ -66,6 +66,7 @@ function ProductAvatar({ product }: { product: Product }) {
                 <img
                     src={src}
                     alt=""
+                    loading="lazy"
                     onError={() => setImgFailed(true)}
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                 />
