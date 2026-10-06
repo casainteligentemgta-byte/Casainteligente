@@ -18,6 +18,7 @@ import type {
   DesignStructure,
   NetVisionProject,
   ScaleCalibration,
+  VisionBand,
 } from '@/lib/netvision/types'
 import {
   cajaDePuntos,
@@ -46,6 +47,17 @@ export type PaletaCobertura = 'tonos' | 'semaforo'
 
 /** Opacidad del semáforo: translúcido para que el plano se siga viendo. */
 export const SEMAFORO_CLIENTE_OPACIDAD = 0.3
+
+/**
+ * Semáforo que ve el cliente: verde, naranja y amarillo. Sin rojo: el cliente
+ * leería «ahí no se ve nada», y en esa zona la cámara sí ve (con menos detalle).
+ * Las claves son las bandas del editor; solo cambia el color de la más lejana.
+ */
+export const SEMAFORO_CLIENTE_HEX: Record<VisionBand, string> = {
+  green: VISION_SEMAFORO_HEX.green,
+  yellow: VISION_SEMAFORO_HEX.yellow,
+  red: '#FFD600',
+}
 const FONDO = '#0b1411'
 const TINTA = '#e6f2ec'
 const RADIO_PIN = 13
@@ -67,7 +79,7 @@ type Props = {
   /** Las apagadas lo están por ver una sola: se dejan tenues en vez de quitarlas. */
   atenuar: boolean
   verCables: boolean
-  /** 'tonos' (por defecto): gama de verde. 'semaforo': verde / naranja / rojo translúcido. */
+  /** 'tonos' (por defecto): gama de verde. 'semaforo': verde / naranja / amarillo translúcido. */
   paleta?: PaletaCobertura
   onSelect: (id: string | null) => void
 }
@@ -421,8 +433,8 @@ export default function NetVisionPlanoCliente({
         <g transform={`translate(${vista.x} ${vista.y}) scale(${vista.k})`}>
           {paleta === 'semaforo'
             ? (['fondo', 'elegida'] as const).map((capa) => {
-                // Mismo semáforo que el editor (verde / naranja / rojo). Dentro de la
-                // capa los colores son sólidos y el verde tapa al naranja y al rojo;
+                // Las bandas del semáforo del editor, en verde / naranja / amarillo. Dentro de la
+                // capa los colores son sólidos y el verde tapa al naranja y al amarillo;
                 // la transparencia se aplica a la capa entera: así dos conos que se
                 // cruzan no se oscurecen ni se ensucian, y el plano se ve debajo.
                 const lista = coberturas.filter((c) => (c.nivel === 'resaltada') === (capa === 'elegida'))
@@ -453,7 +465,7 @@ export default function NetVisionPlanoCliente({
                             key={`${banda}-${c.s.cameraId}-${c.s.lensId ?? 'main'}`}
                             data-nv-banda={banda}
                             points={pts}
-                            fill={VISION_SEMAFORO_HEX[banda]}
+                            fill={SEMAFORO_CLIENTE_HEX[banda]}
                           />
                         ) : null
                       }),
