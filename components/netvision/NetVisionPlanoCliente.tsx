@@ -36,9 +36,16 @@ import {
   type Vista,
 } from '@/lib/netvision/utils/planoCliente'
 import { formatLength } from '@/lib/netvision/utils/units'
+import { VISION_SEMAFORO_HEX } from '@/lib/netvision/utils/visionSemaforoPalette'
 
 /** Color único de la cobertura (más intenso = se ve mejor). */
 export const PLANO_CLIENTE_TONO = '#34d399'
+
+/** Cómo se colorea la cobertura: una sola gama de verde o el semáforo del editor. */
+export type PaletaCobertura = 'tonos' | 'semaforo'
+
+/** Opacidad del semáforo: translúcido para que el plano se siga viendo. */
+export const SEMAFORO_CLIENTE_OPACIDAD = 0.3
 const FONDO = '#0b1411'
 const TINTA = '#e6f2ec'
 const RADIO_PIN = 13
@@ -60,6 +67,8 @@ type Props = {
   /** Las apagadas lo están por ver una sola: se dejan tenues en vez de quitarlas. */
   atenuar: boolean
   verCables: boolean
+  /** 'tonos' (por defecto): gama de verde. 'semaforo': verde / naranja / rojo translúcido. */
+  paleta?: PaletaCobertura
   onSelect: (id: string | null) => void
 }
 
@@ -157,6 +166,7 @@ export default function NetVisionPlanoCliente({
   hiddenIds,
   atenuar,
   verCables,
+  paleta = 'tonos',
   onSelect,
 }: Props) {
   const marcoRef = useRef<HTMLDivElement>(null)
@@ -352,7 +362,8 @@ export default function NetVisionPlanoCliente({
         filas.push({ r, texto: formatLength(m, unitSystem) })
       }
       agrega(c.zonas.alcanceNorm, c.zonas.alcanceM)
-      agrega(c.zonas.reconocerNorm, c.zonas.reconocerM)
+      // «Reconocer» solo existe en la gama de verde; el semáforo no lo pinta.
+      if (paleta === 'tonos') agrega(c.zonas.reconocerNorm, c.zonas.reconocerM)
       agrega(c.zonas.identificarNorm, c.zonas.identificarM)
       return filas.map((f) => ({
         key: `${c.s.cameraId}-${c.s.lensId ?? 'main'}-${f.texto}`,
@@ -408,6 +419,50 @@ export default function NetVisionPlanoCliente({
         aria-label="Plano con la ubicación y el alcance de las cámaras"
       >
         <g transform={`translate(${vista.x} ${vista.y}) scale(${vista.k})`}>
+          {paleta === 'semaforo'
+            ? (['fondo', 'elegida'] as const).map((capa) => {
+                // Mismo semáforo que el editor (verde / naranja / rojo). Dentro de la
+                // capa los colores son sólidos y el verde tapa al naranja y al rojo;
+                // la transparencia se aplica a la capa entera: así dos conos que se
+                // cruzan no se oscurecen ni se ensucian, y el plano se ve debajo.
+                const lista = coberturas.filter((c) => (c.nivel === 'resaltada') === (capa === 'elegida'))
+                if (lista.length === 0) return null
+                const puntos = (poly?: { x: number; y: number }[]) =>
+                  poly?.length
+                    ? poly.map((q) => `${mx(q.x).toFixed(1)},${my(q.y).toFixed(1)}`).join(' ')
+                    : null
+                const opacidad =
+                  capa === 'elegida'
+                    ? SEMAFORO_CLIENTE_OPACIDAD + 0.14
+                    : hayAislada
+                      ? SEMAFORO_CLIENTE_OPACIDAD * 0.4
+                      : SEMAFORO_CLIENTE_OPACIDAD
+                return (
+                  <g key={capa} data-nv-semaforo={capa} opacity={opacidad}>
+                    {(['red', 'yellow', 'green'] as const).flatMap((banda) =>
+                      lista.map((c) => {
+                        const pts = puntos(
+                          banda === 'red'
+                            ? c.s.redPolygon
+                            : banda === 'yellow'
+                              ? c.s.yellowPolygon
+                              : c.s.greenPolygon,
+                        )
+                        return pts ? (
+                          <polygon
+                            key={`${banda}-${c.s.cameraId}-${c.s.lensId ?? 'main'}`}
+                            data-nv-banda={banda}
+                            points={pts}
+                            fill={VISION_SEMAFORO_HEX[banda]}
+                          />
+                        ) : null
+                      }),
+                    )}
+                  </g>
+                )
+              })
+            : null}
+
           {coberturas.map(({ s, nivel, i, zonas }) => {
             const clip = `${idBase}-${i}`
             const cx = mx(s.cx)
@@ -418,10 +473,35 @@ export default function NetVisionPlanoCliente({
             const cuna = cunaDeSector(cx, cy, s.radiusNorm * mundo.medio, s.startAngleRad, s.endAngleRad)
             const forma = (props: FormaProps) =>
               poligono ? <polygon points={poligono} {...props} /> : <path d={cuna} {...props} />
+            const borde = paleta === 'semaforo' ? '#f1f5f9' : '#a7f3d0'
+            const contorno =
+              nivel === 'resaltada'
+                ? forma({
+                    fill: 'none',
+                    stroke: borde,
+                    strokeWidth: 1.3,
+                    strokeDasharray: '5 4',
+                    vectorEffect: 'non-scaling-stroke',
+                  })
+                : null
+            if (paleta === 'semaforo') {
+              // Las bandas se pintan aparte (capas aplanadas, más abajo); aquí solo
+              // va el contorno de la cámara elegida.
+              return (
+                <g
+                  key={`${s.cameraId}-${s.lensId ?? 'main'}`}
+                  data-nv-cobertura={nivel}
+                  data-nv-cobertura-paleta="semaforo"
+                >
+                  {contorno}
+                </g>
+              )
+            }
             return (
               <g
                 key={`${s.cameraId}-${s.lensId ?? 'main'}`}
                 data-nv-cobertura={nivel}
+                data-nv-cobertura-paleta="tonos"
                 opacity={nivel === 'resaltada' ? 1 : nivel === 'normal' ? 0.78 : 0.26}
               >
                 <clipPath id={clip}>{forma({})}</clipPath>
@@ -436,15 +516,7 @@ export default function NetVisionPlanoCliente({
                     </g>
                   ) : null}
                 </g>
-                {nivel === 'resaltada'
-                  ? forma({
-                      fill: 'none',
-                      stroke: '#a7f3d0',
-                      strokeWidth: 1.3,
-                      strokeDasharray: '5 4',
-                      vectorEffect: 'non-scaling-stroke',
-                    })
-                  : null}
+                {contorno}
               </g>
             )
           })}
