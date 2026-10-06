@@ -1087,7 +1087,10 @@ export default function NetVisionClienteView() {
           height: auto !important;
           overflow: visible !important;
           border: none !important;
-          padding: 4mm !important;
+          padding: 7mm !important;
+        }
+        .nv-cliente[data-nv-imprimiendo] .nv-tac-scan {
+          background-image: none !important;
         }
         .nv-cliente[data-nv-imprimiendo] .nv-cliente-grid {
           display: contents;
@@ -1099,8 +1102,8 @@ export default function NetVisionClienteView() {
         }
         .nv-cliente[data-nv-imprimiendo] .nv-print-plano-slot {
           width: 100%;
-          height: 148mm;
-          min-height: 148mm;
+          height: 150mm;
+          min-height: 150mm;
           overflow: hidden;
         }
         .nv-cliente[data-nv-imprimiendo] .nv-print-plano-slot .nv-plano-rotulo {
@@ -1112,7 +1115,7 @@ export default function NetVisionClienteView() {
         }
         @page {
           size: A4 landscape;
-          margin: 7mm;
+          margin: 0;
         }
         @media print {
           nav,
@@ -1128,6 +1131,9 @@ export default function NetVisionClienteView() {
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
           }
+          .nv-tac-scan {
+            background-image: none !important;
+          }
           .nv-cliente {
             display: flex !important;
             flex-direction: column !important;
@@ -1135,7 +1141,7 @@ export default function NetVisionClienteView() {
             overflow: visible !important;
             border: none !important;
             background: #07110d !important;
-            padding: 4mm !important;
+            padding: 7mm !important;
           }
           .nv-cliente-grid { display: contents !important; }
           [data-nv-print-encabezado],
@@ -1149,9 +1155,9 @@ export default function NetVisionClienteView() {
           }
           .nv-print-plano-slot {
             width: 100% !important;
-            height: 148mm !important;
-            min-height: 148mm !important;
-            max-height: 148mm !important;
+            height: 150mm !important;
+            min-height: 150mm !important;
+            max-height: 150mm !important;
             overflow: hidden !important;
           }
           .nv-print-plano-slot .nv-plano-rotulo {

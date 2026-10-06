@@ -238,7 +238,7 @@ export default function NetVisionPlanoCliente({
       }
       el.style.width = '100%'
       el.style.height = 'auto'
-      el.style.aspectRatio = '297 / 148'
+      el.style.aspectRatio = '297 / 150'
     }
     const soltar = () => {
       el.style.aspectRatio = ''
