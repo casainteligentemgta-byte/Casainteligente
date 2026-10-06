@@ -6,7 +6,11 @@ import { useSearchParams } from 'next/navigation'
 import { Printer, ArrowLeft, Link2, Check, Send, X } from 'lucide-react'
 import NetVisionPlanoCliente, {
   PLANO_CLIENTE_TONO,
+  SEMAFORO_CLIENTE_OPACIDAD,
+  type PaletaCobertura,
 } from '@/components/netvision/NetVisionPlanoCliente'
+import { FACE_ID_YELLOW_EXTRA_M } from '@/lib/netvision/services/coverageCalculator'
+import { VISION_SEMAFORO_HEX } from '@/lib/netvision/utils/visionSemaforoPalette'
 import NetVisionCameraVisionToggles from '@/components/netvision/NetVisionCameraVisionToggles'
 import {
   isolateHiddenCameraIds,
@@ -334,6 +338,9 @@ function CameraFichaGrupo({
   )
 }
 
+/** Preferencia de cada visitante: no viaja con el proyecto. */
+const CLAVE_PALETA = 'nexus.netvision.cliente.paleta'
+
 export default function NetVisionClienteView() {
   const search = useSearchParams()
   const [project, setProject] = useState<NetVisionProject | null>(null)
@@ -341,6 +348,23 @@ export default function NetVisionClienteView() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   /** El cableado estorba al cliente: se muestra solo si lo pide. */
   const [verCables, setVerCables] = useState(false)
+  /** Cobertura en gama de verde o en semáforo; cada quien recuerda la suya. */
+  const [paleta, setPaleta] = useState<PaletaCobertura>('tonos')
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(CLAVE_PALETA) === 'semaforo') setPaleta('semaforo')
+    } catch {
+      /* sin almacenamiento: queda la gama de verde */
+    }
+  }, [])
+  const elegirPaleta = (p: PaletaCobertura) => {
+    setPaleta(p)
+    try {
+      localStorage.setItem(CLAVE_PALETA, p)
+    } catch {
+      /* no se recuerda, pero se aplica */
+    }
+  }
   const [copied, setCopied] = useState(false)
   /** Código del enlace (?c=): quien abre es el cliente, en modo solo lectura. */
   const tokenRaw = search.get(PARAM_COMPARTIDO)
@@ -735,20 +759,52 @@ export default function NetVisionClienteView() {
         data-nv-leyenda
         className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-[#d6ffe5]"
       >
+        {/* Interruptor: gama de verde o semáforo translúcido. */}
+        <span
+          role="group"
+          aria-label="Colores de la cobertura"
+          data-nv-paleta={paleta}
+          className="inline-flex print:hidden"
+        >
+          {(
+            [
+              { id: 'tonos', texto: 'Tonos de verde' },
+              { id: 'semaforo', texto: 'Semáforo' },
+            ] as const
+          ).map((op) => (
+            <button
+              key={op.id}
+              type="button"
+              data-nv-paleta-opcion={op.id}
+              aria-pressed={paleta === op.id}
+              onClick={() => elegirPaleta(op.id)}
+              className={`min-h-11 border px-3 text-[11px] font-bold uppercase tracking-[0.12em] ${
+                paleta === op.id
+                  ? 'border-[#8cffb5] bg-[#8cffb5] text-[#07110d]'
+                  : 'border-[#2e7d54] text-[#d6ffe5] hover:border-[#8cffb5]'
+              }`}
+            >
+              {op.texto}
+            </button>
+          ))}
+        </span>
         {/* En palabras del cliente: qué se ve en cada zona del cono. */}
-        {[
-          { clave: 'cara', texto: 'Se le ve la cara', opacidad: 0.75 },
-          { clave: 'quien', texto: 'Se sabe quién es', opacidad: 0.42 },
-          { clave: 'alguien', texto: 'Se nota que hay alguien', opacidad: 0.18 },
-        ].map((z) => (
+        {(paleta === 'semaforo'
+          ? [
+              { clave: 'cara', texto: 'Verde: se le ve la cara', color: VISION_SEMAFORO_HEX.green, opacidad: SEMAFORO_CLIENTE_OPACIDAD + 0.35 },
+              { clave: 'limite', texto: `Naranja: al límite (${FACE_ID_YELLOW_EXTRA_M} m más)`, color: VISION_SEMAFORO_HEX.yellow, opacidad: SEMAFORO_CLIENTE_OPACIDAD + 0.35 },
+              { clave: 'alguien', texto: 'Rojo: se nota que hay alguien', color: VISION_SEMAFORO_HEX.red, opacidad: SEMAFORO_CLIENTE_OPACIDAD + 0.35 },
+            ]
+          : [
+              { clave: 'cara', texto: 'Se le ve la cara', color: PLANO_CLIENTE_TONO, opacidad: 0.75 },
+              { clave: 'quien', texto: 'Se sabe quién es', color: PLANO_CLIENTE_TONO, opacidad: 0.42 },
+              { clave: 'alguien', texto: 'Se nota que hay alguien', color: PLANO_CLIENTE_TONO, opacidad: 0.18 },
+            ]
+        ).map((z) => (
           <span key={z.clave} data-nv-leyenda-zona={z.clave} className="inline-flex items-center gap-1.5">
             <span
               className="h-3.5 w-3.5 border"
-              style={{
-                backgroundColor: PLANO_CLIENTE_TONO,
-                opacity: z.opacidad,
-                borderColor: PLANO_CLIENTE_TONO,
-              }}
+              style={{ backgroundColor: z.color, opacity: z.opacidad, borderColor: z.color }}
             />
             {z.texto}
           </span>
@@ -843,6 +899,7 @@ export default function NetVisionClienteView() {
               hiddenIds={hiddenLive}
               atenuar={viendoUnaSola}
               verCables={verCables}
+              paleta={paleta}
               onSelect={(id) => {
                 if (!id) {
                   showAll()
