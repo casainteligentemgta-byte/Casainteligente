@@ -12,8 +12,9 @@ function uuidOk(s: string): boolean {
 function RegistroEntry() {
   const searchParams = useSearchParams();
   const need = (searchParams.get('need') ?? '').trim();
+  const sinEvaluacion = (searchParams.get('m') ?? '').trim();
   if (uuidOk(need)) {
-    return <RegistroPorNeedCliente needId={need} />;
+    return <RegistroPorNeedCliente needId={need} sinEvaluacion={sinEvaluacion || undefined} />;
   }
   return <RegistroLegacyPrjRole />;
 }

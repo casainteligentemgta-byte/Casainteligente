@@ -27,7 +27,10 @@ function NexusShellHeader({
   const rightPanel = useNexusRightPanelSlot()?.panel ?? null;
 
   return (
-    <header className="sticky top-0 z-40 border-b border-[rgba(255,255,255,0.08)] bg-[rgba(10,11,16,0.85)] px-4 py-3 backdrop-blur-[20px] lg:px-8">
+    <header
+      data-nv-shell-chrome
+      className="sticky top-0 z-40 border-b border-[rgba(255,255,255,0.08)] bg-[rgba(10,11,16,0.85)] px-4 py-3 backdrop-blur-[20px] print:hidden lg:px-8"
+    >
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
           <p
@@ -160,8 +163,9 @@ function NexusShellInner({ children }: { children: React.ReactNode }) {
         <>
       {/* Desktop: sidebar a la derecha */}
       <div
+        data-nv-shell-chrome
         className={cn(
-          'hidden shrink-0 overflow-hidden transition-[width] duration-200 ease-out lg:block',
+          'hidden shrink-0 overflow-hidden transition-[width] duration-200 ease-out print:hidden lg:block',
           menuOpen ? 'w-64' : 'w-0',
         )}
       >
@@ -180,8 +184,9 @@ function NexusShellInner({ children }: { children: React.ReactNode }) {
 
       {/* Drawer móvil: entra desde la derecha */}
       <aside
+        data-nv-shell-chrome
         className={cn(
-          'fixed inset-y-0 right-0 z-[51] w-[min(280px,88vw)] border-l border-[rgba(255,255,255,0.1)] bg-[#12141c]/95 backdrop-blur-[20px] transition-transform lg:hidden',
+          'fixed inset-y-0 right-0 z-[51] w-[min(280px,88vw)] border-l border-[rgba(255,255,255,0.1)] bg-[#12141c]/95 backdrop-blur-[20px] transition-transform print:hidden lg:hidden',
           menuOpen ? 'translate-x-0' : 'translate-x-full',
         )}
       >

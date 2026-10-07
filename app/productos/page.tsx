@@ -24,6 +24,15 @@ interface Product {
     ubicacion?: string | null;
     manual_instrucciones?: string | null;
     manual_documento_url?: string | null;
+    /** Lo que dice la última lista del proveedor importada. */
+    disponibilidad_proveedor?: string | null;
+}
+
+/** Aviso corto cuando el proveedor no lo tiene (o viene en camino). */
+function avisoProveedor(p: Product): { texto: string; color: string } | null {
+    if (p.disponibilidad_proveedor === 'no_disponible') return { texto: 'Proveedor: no disponible', color: '#FF6B60' };
+    if (p.disponibilidad_proveedor === 'en_transito') return { texto: 'Proveedor: en tránsito', color: '#FFD60A' };
+    return null;
 }
 
 const PAGE_SIZE = 500;
@@ -57,6 +66,7 @@ function ProductAvatar({ product }: { product: Product }) {
                 <img
                     src={src}
                     alt=""
+                    loading="lazy"
                     onError={() => setImgFailed(true)}
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                 />
@@ -91,6 +101,7 @@ function ProductRow({
     const cat = product.categoria ?? '';
     const colors = coloresCategoria(cat);
     const [confirmDel, setConfirmDel] = useState(false);
+    const aviso = avisoProveedor(product);
 
     const handleDelete = () => {
         if (confirmDel) { onDelete(product.id); }
@@ -136,6 +147,17 @@ function ProductRow({
                             {product.marca && (
                                 <span style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>
                                     {product.marca}
+                                </span>
+                            )}
+                            {aviso && (
+                                <span
+                                    data-producto-proveedor={product.disponibilidad_proveedor}
+                                    style={{
+                                        fontSize: '10px', fontWeight: 800, padding: '2px 8px', borderRadius: '6px',
+                                        background: `${aviso.color}22`, color: aviso.color,
+                                    }}
+                                >
+                                    {aviso.texto}
                                 </span>
                             )}
                         </div>
@@ -475,11 +497,22 @@ export default function ProductosPage() {
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     style={{
-                        width: '100%', marginBottom: '16px',
+                        width: '100%', marginBottom: '10px',
                         background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
                         borderRadius: '12px', padding: '12px 16px', color: 'white', outline: 'none'
                     }}
                 />
+
+                <Link
+                    href="/productos/importar-lista"
+                    data-productos-importar-lista
+                    style={{
+                        display: 'inline-block', marginBottom: '14px',
+                        color: '#FF9500', fontSize: '13px', fontWeight: 700, textDecoration: 'none',
+                    }}
+                >
+                    Importar lista de precios del proveedor →
+                </Link>
 
                 <div style={{ marginBottom: '12px' }}>
                     <div

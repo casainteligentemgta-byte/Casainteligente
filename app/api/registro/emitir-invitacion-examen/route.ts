@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { ensureCiExamenInviteForEmpleado } from '@/lib/talento/ensureCiExamenInviteForEmpleado';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
-import { avisarRegistroObreroTelegram } from '@/lib/rrhh/avisoRegistroObreroTelegram';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -100,11 +99,6 @@ export async function POST(req: Request) {
       { error: 'No se pudo determinar la URL pública (Origin o NEXT_PUBLIC_BASE_URL).' },
       { status: 503 },
     );
-  }
-
-  // Primera vez que se emite la invitación = el trabajador acaba de registrarse: aviso a RRHH por Telegram.
-  if (ensured.created) {
-    await avisarRegistroObreroTelegram(admin.client, empleadoId, base);
   }
 
   const exam_url = `${base}/talento/examen?token=${encodeURIComponent(token)}`;

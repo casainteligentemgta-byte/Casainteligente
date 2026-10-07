@@ -8,10 +8,13 @@ import {
   splitterDeCamara,
 } from '@/lib/netvision/catalog/cameras'
 import {
+  agruparFichasPorModelo,
   buildClienteCameraCard,
   cameraCableMeters,
   inferCameraConnection,
+  listaEnTexto,
   totalClienteCableMeters,
+  valorComun,
 } from './clienteCameraCard'
 
 const poe: CameraModel = {
@@ -179,3 +182,53 @@ describe('clienteCameraCard', () => {
     assert.equal(poeCard.poeSplitterV, null)
   })
 })
+
+describe('fichas del cliente · no repetir el mismo modelo', () => {
+  const cam = (n: number, modelId: string, extra: Record<string, unknown> = {}) =>
+    buildClienteCameraCard(
+      { id: `c${n}`, label: `CAM-0${n}`, x: 0.1 * n, y: 0.5, modelId, yawDeg: 0, mountHeightM: 3, ...extra },
+      [],
+    )
+
+  it('escribe la lista como se dice', () => {
+    assert.equal(listaEnTexto([]), '')
+    assert.equal(listaEnTexto(['CAM-03']), 'CAM-03')
+    assert.equal(listaEnTexto(['CAM-03', 'CAM-04']), 'CAM-03 y CAM-04')
+    assert.equal(listaEnTexto(['CAM-03', 'CAM-04', 'CAM-05']), 'CAM-03, CAM-04 y CAM-05')
+  })
+
+  it('junta las cámaras del mismo modelo y respeta el orden del plano', () => {
+    const cards = [cam(1, 'ezviz-h9c'), cam(2, 'ezviz-h4'), cam(3, 'ezviz-h9c'), cam(4, 'ezviz-h4'), cam(5, 'ezviz-h4'), cam(6, 'ezviz-c6n')]
+    const grupos = agruparFichasPorModelo(cards)
+    assert.deepEqual(
+      grupos.map((g) => [g.cards[0]!.modelName, g.etiquetas]),
+      [
+        [cards[0]!.modelName, 'CAM-01 y CAM-03'],
+        [cards[1]!.modelName, 'CAM-02, CAM-04 y CAM-05'],
+        [cards[5]!.modelName, 'CAM-06'],
+      ],
+    )
+    // Ninguna cámara se pierde ni se repite.
+    assert.equal(grupos.reduce((s, g) => s + g.cards.length, 0), cards.length)
+    assert.deepEqual(agruparFichasPorModelo([]), [])
+  })
+
+  it('con otra lente es otra referencia: va aparte', () => {
+    const grupos = agruparFichasPorModelo([
+      cam(1, 'ezviz-h3'),
+      cam(2, 'ezviz-h3', { lensFocalMm: 4 }),
+      cam(3, 'ezviz-h3'),
+    ])
+    assert.deepEqual(grupos.map((g) => g.etiquetas), ['CAM-01 y CAM-03', 'CAM-02'])
+  })
+
+  it('distingue lo que el grupo comparte de lo que cambia por cámara', () => {
+    const cards = [cam(1, 'ezviz-h3'), cam(2, 'ezviz-h3', { conexion: 'wifi' }), cam(3, 'ezviz-h3', { mountHeightM: 5 })]
+    assert.equal(valorComun(cards, (c) => c.resolution), cards[0]!.resolution)
+    assert.equal(valorComun(cards, (c) => c.connectionLabel), null)
+    assert.equal(valorComun(cards, (c) => c.mountHeightM), null)
+    assert.equal(valorComun(cards.slice(0, 1), (c) => c.mountHeightM), 3)
+    assert.equal(valorComun([], (c) => c.label), null)
+  })
+})
+

@@ -78,9 +78,12 @@ function parseOptionalNum(s: string): number | null {
 export default function RegistroPorNeedCliente({
   needId: needIdProp,
   captacionToken: captacionTokenProp,
+  sinEvaluacion: sinEvaluacionProp,
 }: {
   needId?: string;
   captacionToken?: string;
+  /** Código del enlace «sin evaluación» de la solicitud (lo valida el servidor). */
+  sinEvaluacion?: string;
 }) {
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
@@ -506,38 +509,52 @@ export default function RegistroPorNeedCliente({
         }
       }
 
+      // Cierre en servidor: un expediente por cédula, evaluación solo si el enlace la exige,
+      // entrada a la banca y aviso a RRHH.
+      let empleadoFinalId = String(ins.id);
+      let cedulaFinal = form.cedula.trim();
+      let conEvaluacion = false;
       try {
-        const inv = await fetch(apiUrl('/api/registro/emitir-invitacion-examen'), {
+        const fin = await fetch(apiUrl('/api/registro/finalizar'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ empleadoId: ins.id, cedula: form.cedula.trim() }),
+          body: JSON.stringify({
+            empleadoId: ins.id,
+            cedula: form.cedula.trim(),
+            sin: (sinEvaluacionProp ?? '').trim() || undefined,
+          }),
         });
-        const ij = (await inv.json().catch(() => ({}))) as {
-          exam_url?: string;
-          color_exam_url?: string;
-          post_hv_url?: string;
+        const fj = (await fin.json().catch(() => ({}))) as {
+          empleado_id?: string;
+          cedula?: string;
+          post_hv_url?: string | null;
+          evaluacion_requerida?: boolean;
           error?: string;
         };
-        const nextUrl = ij.post_hv_url || ij.color_exam_url || ij.exam_url;
-        if (inv.ok && nextUrl && typeof window !== 'undefined') {
-          window.sessionStorage.setItem(
-            `registro-examen-${ins.id}`,
-            JSON.stringify({
-              examUrl: nextUrl,
-              nombre: nombreCompleto || 'Postulante',
-              whatsapp: form.celular.trim(),
-              autoRedirect: true,
-            }),
-          );
-        } else if (!inv.ok && ij.error) {
-          toast.message(ij.error);
+        if (fin.ok) {
+          if (fj.empleado_id) empleadoFinalId = fj.empleado_id;
+          if (fj.cedula) cedulaFinal = fj.cedula;
+          conEvaluacion = Boolean(fj.evaluacion_requerida && fj.post_hv_url);
+          if (conEvaluacion && fj.post_hv_url && typeof window !== 'undefined') {
+            window.sessionStorage.setItem(
+              `registro-examen-${empleadoFinalId}`,
+              JSON.stringify({
+                examUrl: fj.post_hv_url,
+                nombre: nombreCompleto || 'Postulante',
+                whatsapp: form.celular.trim(),
+                autoRedirect: true,
+              }),
+            );
+          }
+        } else if (fj.error) {
+          toast.message(fj.error);
         }
       } catch {
         /* sin bloquear éxito de postulación */
       }
 
       router.push(
-        `/registro/exito?empleadoId=${encodeURIComponent(ins.id)}&cedula=${encodeURIComponent(form.cedula.trim())}`,
+        `/registro/exito?empleadoId=${encodeURIComponent(empleadoFinalId)}&cedula=${encodeURIComponent(cedulaFinal)}&ev=${conEvaluacion ? '1' : '0'}`,
       );
     } finally {
       setEnviando(false);
@@ -571,7 +588,7 @@ export default function RegistroPorNeedCliente({
       <div className="min-h-screen bg-[#0A0A0F] px-4 py-12 text-zinc-100">
         <div className="mx-auto max-w-md rounded-2xl border border-amber-500/30 bg-amber-950/20 p-6">
           <h1 className="text-lg font-bold text-white">Vacante cerrada</h1>
-          <p className="mt-2 text-sm text-amber-100/90">Esta necesidad ya no acepta postulaciones públicas.</p>
+          <p className="mt-2 text-sm text-amber-100/90">Las plazas de esta solicitud ya se cubrieron. Si la empresa te llamó, pídele un enlace nuevo.</p>
           <Link href="/" className="mt-6 inline-block text-sm font-semibold text-[#FF9500] hover:underline">
             Ir al inicio
           </Link>

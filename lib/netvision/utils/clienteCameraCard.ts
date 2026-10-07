@@ -133,3 +133,49 @@ export function totalClienteCableMeters(cards: ClienteCameraCard[]): number {
   const m = cards.filter((c) => c.wired).reduce((s, c) => s + c.cableMeters, 0)
   return Math.round(m * 10) / 10
 }
+
+/** «A», «A y B», «A, B y C». */
+export function listaEnTexto(items: readonly string[]): string {
+  const limpios = items.map((t) => t.trim()).filter(Boolean)
+  if (limpios.length <= 1) return limpios[0] ?? ''
+  return `${limpios.slice(0, -1).join(', ')} y ${limpios[limpios.length - 1]}`
+}
+
+/** Cámaras del mismo modelo (y misma lente): su ficha se muestra una sola vez. */
+export type GrupoFichas = {
+  clave: string
+  cards: ClienteCameraCard[]
+  /** «CAM‑03, CAM‑04 y CAM‑05». */
+  etiquetas: string
+}
+
+/**
+ * Junta las fichas del mismo modelo para no repetir la misma información por
+ * cada cámara: «CAM‑03, CAM‑04 y CAM‑05 son H4». Conserva el orden del plano
+ * (cada grupo va donde aparece su primera cámara). Con otra lente es otra
+ * referencia de compra, así que va en su propio grupo.
+ */
+export function agruparFichasPorModelo(cards: readonly ClienteCameraCard[]): GrupoFichas[] {
+  const grupos = new Map<string, ClienteCameraCard[]>()
+  for (const card of cards) {
+    const clave = `${card.brand}|${card.modelName}|${card.fovLabel}`
+    const lista = grupos.get(clave)
+    if (lista) lista.push(card)
+    else grupos.set(clave, [card])
+  }
+  return Array.from(grupos.entries()).map(([clave, lista]) => ({
+    clave,
+    cards: lista,
+    etiquetas: listaEnTexto(lista.map((c) => c.label)),
+  }))
+}
+
+/** Valor que comparten todas las fichas del grupo, o `null` si alguna difiere. */
+export function valorComun<T>(
+  cards: readonly ClienteCameraCard[],
+  leer: (card: ClienteCameraCard) => T,
+): T | null {
+  if (cards.length === 0) return null
+  const primero = leer(cards[0]!)
+  return cards.every((c) => leer(c) === primero) ? primero : null
+}

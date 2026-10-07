@@ -28,6 +28,8 @@ function RegistroExitoInner() {
   const sp = useSearchParams();
   const empleadoId = (sp.get('empleadoId') ?? '').trim();
   const cedula = (sp.get('cedula') ?? '').trim();
+  /** «0» = el enlace no pedía evaluación: el registro termina aquí. */
+  const sinEvaluacion = (sp.get('ev') ?? '').trim() === '0';
   const [payload, setPayload] = useState<ExamenPayload | null>(null);
   const [redirectSeg, setRedirectSeg] = useState<number | null>(null);
 
@@ -69,7 +71,9 @@ function RegistroExitoInner() {
         <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#FFD60A]/90">Casa Inteligente</p>
         <h1 className="mt-3 text-2xl font-bold text-white">¡Hoja de vida enviada!</h1>
         <p className="mt-4 text-sm leading-relaxed text-zinc-400">
-          Tus datos ya están en el expediente. Siguiente paso: evaluación (tipo de color y prueba de admisión).
+          {sinEvaluacion
+            ? 'Tus datos ya están en el expediente. La empresa te contactará para el siguiente paso.'
+            : 'Tus datos ya están en el expediente. Siguiente paso: evaluación (tipo de color y prueba de admisión).'}
         </p>
         {empleadoId && cedula ? (
           <a
