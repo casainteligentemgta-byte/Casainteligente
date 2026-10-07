@@ -27,3 +27,16 @@ export {
   type ConfigNominaTabuladorLike,
 } from '@/lib/nomina/ingresoSemanalDesdeConfigNomina';
 export { bonoUsdABs, tasaBcvVesPorUsdFromEnv } from '@/lib/nomina/tasaBcvVesPorUsd';
+export {
+  calcularSemanaObra,
+  type CalcularSemanaObraInput,
+  type ResultadoSemanaObra,
+} from '@/lib/nomina/calcularSemanaObra';
+export {
+  inferirClasePagoObra,
+  oficioReciboLegal,
+  diasPagadosClausula8,
+  SOBRE_AYUDANTE_USD,
+  SOBRE_CLASIFICADO_USD,
+  type ClasePagoObra,
+} from '@/lib/nomina/reglasPagoObra';

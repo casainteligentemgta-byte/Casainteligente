@@ -1,0 +1,141 @@
+/**
+ * Ejecutar: npx tsx --test lib/nomina/calcularSemanaObra.test.ts
+ */
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import { calcularSemanaObra } from './calcularSemanaObra';
+import {
+  diasPagadosClausula8,
+  inferirClasePagoObra,
+  oficioReciboLegal,
+  tocaAdelantoTrasSemana,
+  cestaSemanalUsdAnclada,
+  SOBRE_AYUDANTE_USD,
+  SOBRE_CLASIFICADO_USD,
+} from './reglasPagoObra';
+
+describe('diasPagadosClausula8', () => {
+  it('paga 2 descansos si hay 3 o más jornadas', () => {
+    assert.equal(diasPagadosClausula8(5), 7);
+    assert.equal(diasPagadosClausula8(3), 5);
+    assert.equal(diasPagadosClausula8(4), 6);
+  });
+  it('no paga descansos con menos de 3 jornadas', () => {
+    assert.equal(diasPagadosClausula8(2), 2);
+    assert.equal(diasPagadosClausula8(1), 1);
+    assert.equal(diasPagadosClausula8(0), 0);
+  });
+});
+
+describe('inferirClasePagoObra', () => {
+  it('marca ayudante por oficio o nombre', () => {
+    assert.equal(inferirClasePagoObra('2.1', null), 'ayudante');
+    assert.equal(inferirClasePagoObra('1.2', 'Vigilante'), 'ayudante');
+    assert.equal(inferirClasePagoObra(null, 'Ayudante de obra'), 'ayudante');
+  });
+  it('marca clasificado al resto', () => {
+    assert.equal(inferirClasePagoObra('5.3', 'CABILLERO DE 1ra.'), 'clasificado');
+    assert.equal(inferirClasePagoObra('9.1', null), 'clasificado');
+  });
+});
+
+describe('oficioReciboLegal', () => {
+  it('ayudante siempre es 2.1', () => {
+    const o = oficioReciboLegal('ayudante', '5.1', 'ALBAÑIL');
+    assert.equal(o.codigo, '2.1');
+    assert.equal(o.nivel, 2);
+  });
+  it('clasificado de 1ra usa el oficio real si es nivel 5+', () => {
+    const o = oficioReciboLegal('clasificado', '5.3', null);
+    assert.equal(o.codigo, '5.3');
+    assert.equal(o.nivel, 5);
+    assert.equal(o.diarioVes, 2771.26);
+  });
+  it('clasificado sin oficio cae en albañil de 1ra', () => {
+    const o = oficioReciboLegal('clasificado', null, null);
+    assert.equal(o.codigo, '5.1');
+    assert.equal(o.denominacion, 'ALBAÑIL DE 1ra.');
+  });
+});
+
+describe('tocaAdelantoTrasSemana', () => {
+  it('la cuarta semana trabajada dispara la quinta', () => {
+    assert.equal(tocaAdelantoTrasSemana(3, true), true);
+    assert.equal(tocaAdelantoTrasSemana(2, true), false);
+    assert.equal(tocaAdelantoTrasSemana(3, false), false);
+    assert.equal(tocaAdelantoTrasSemana(7, true), true);
+  });
+});
+
+describe('calcularSemanaObra', () => {
+  /** Tasa tipo homologación: la cesta en USD cabe dentro de 90 / 117. */
+  const ancla = 770;
+  const tasa = 770;
+
+  it('ayudante 5 días: sobre 90 con cesta adentro', () => {
+    const r = calcularSemanaObra({
+      clase: 'ayudante',
+      tipo: 'semanal',
+      diasLaborados: 5,
+      tasaBcvPago: tasa,
+      tasaAnclaCestaBcv: ancla,
+    });
+    assert.equal(r.diasPagados, 7);
+    assert.equal(r.sobreUsdPactado, SOBRE_AYUDANTE_USD);
+    assert.equal(r.oficio.codigo, '2.1');
+    assert.ok(r.cestaUsdAnclada > 0);
+    assert.ok(r.salarioBasicoVes > 0);
+    const suma = r.lineasLegal.reduce((a, l) => a + l.usd, 0);
+    assert.ok(Math.abs(suma - r.totalUsd) < 0.02);
+    assert.equal(r.totalUsd, SOBRE_AYUDANTE_USD);
+    assert.ok(r.lineasLegal.some((l) => l.codigo === 'CESTA' && !l.salarial));
+  });
+
+  it('clasificado 5 días: sobre 117 y oficio de 1ra', () => {
+    const r = calcularSemanaObra({
+      clase: 'clasificado',
+      tipo: 'semanal',
+      diasLaborados: 5,
+      tasaBcvPago: tasa,
+      tasaAnclaCestaBcv: ancla,
+      cargoCodigo: '5.1',
+    });
+    assert.equal(r.sobreUsdPactado, SOBRE_CLASIFICADO_USD);
+    assert.equal(r.totalUsd, SOBRE_CLASIFICADO_USD);
+    assert.equal(r.oficio.codigo, '5.1');
+    assert.match(r.oficio.denominacion, /1ra/i);
+  });
+
+  it('adelanto no duplica cesta y desglosa prestaciones', () => {
+    const r = calcularSemanaObra({
+      clase: 'ayudante',
+      tipo: 'adelanto_prestaciones',
+      diasLaborados: 5,
+      tasaBcvPago: tasa,
+      tasaAnclaCestaBcv: ancla,
+    });
+    assert.equal(r.cestaUsdAnclada, 0);
+    assert.equal(r.diasPagados, 0);
+    assert.equal(r.totalUsd, SOBRE_AYUDANTE_USD);
+    assert.ok(r.lineasLegal.some((l) => l.codigo === 'PREST'));
+    assert.ok(!r.lineasLegal.some((l) => l.codigo === 'CESTA'));
+  });
+
+  it('sin jornadas no hay básico ni descansos', () => {
+    const r = calcularSemanaObra({
+      clase: 'ayudante',
+      tipo: 'semanal',
+      diasLaborados: 0,
+      tasaBcvPago: tasa,
+      tasaAnclaCestaBcv: ancla,
+    });
+    assert.equal(r.diasPagados, 0);
+    assert.equal(r.salarioBasicoVes, 0);
+  });
+
+  it('cesta anclada baja si sube la tasa de homologación', () => {
+    const a = cestaSemanalUsdAnclada(100);
+    const b = cestaSemanalUsdAnclada(200);
+    assert.ok(a > b);
+  });
+});
