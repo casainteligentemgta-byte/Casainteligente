@@ -648,7 +648,7 @@ export default function NetVisionClienteView() {
         </div>
       ) : null}
 
-      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[#a9e8c4] print:hidden">
+      <div className={`flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[#a9e8c4] print:hidden ${vistaCliente === 'inversion' ? 'hidden' : ''}`}>
         <span className="font-semibold uppercase tracking-[0.22em] text-[#5fbf8a]">Semáforo</span>
         {VISION_SEMAFORO_LEGEND.map((item) => (
           <span key={item.band} className="inline-flex items-center gap-1.5">
@@ -691,7 +691,7 @@ export default function NetVisionClienteView() {
         </div>
       ) : null}
 
-      {cameras.length > 0 ? (
+      {cameras.length > 0 && vistaCliente !== 'inversion' ? (
         <div className="shrink-0 print:hidden" data-nv-cam-toggles>
           <NetVisionCameraVisionToggles
             cameras={cameras}
