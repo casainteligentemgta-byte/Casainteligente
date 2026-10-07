@@ -22,7 +22,20 @@ import { uploadTalentoPublicFile } from '@/lib/registro/uploadTalentoPublic';
 import { apiUrl } from '@/lib/http/apiUrl';
 import { createClient } from '@/lib/supabase/client';
 import { createClientConInvitacion } from '@/lib/supabase/clientInvitacion';
+import { edadDesdeFechaNacimiento } from '@/lib/configuracion/representanteCedula';
 import { CARGOS_OBREROS, cargoPorCodigo, tipoVacantePorNivel } from '@/lib/constants/cargosObreros';
+import {
+  ESTADOS_CIVILES_HV,
+  ESTADOS_VE_HV,
+  NACIONALIDADES_HV,
+  PAISES_NACIMIENTO_HV,
+  PREFIJOS_CELULAR_VE,
+  composeCedulaHv,
+  composeCelularVe,
+  parseCedulaHv,
+  parseCelularVe,
+  type LetraCedulaHv,
+} from '@/lib/registro/catalogosHojaVidaVe';
 
 import type { FirmaDigitalGuardado } from './components/FirmaDigital';
 
@@ -79,11 +92,14 @@ export default function RegistroPorNeedCliente({
   needId: needIdProp,
   captacionToken: captacionTokenProp,
   sinEvaluacion: sinEvaluacionProp,
+  previewObraNombre,
 }: {
   needId?: string;
   captacionToken?: string;
   /** Código del enlace «sin evaluación» de la solicitud (lo valida el servidor). */
   sinEvaluacion?: string;
+  /** Solo desarrollo: muestra el formulario con una obra de ejemplo. */
+  previewObraNombre?: string;
 }) {
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
@@ -122,6 +138,21 @@ export default function RegistroPorNeedCliente({
   }, [need, oficioElegido]);
 
   useEffect(() => {
+    if (previewObraNombre) {
+      setNeed({
+        id: 'preview',
+        title: null,
+        cargo_nombre: null,
+        cargo_codigo: null,
+        cargo_nivel: null,
+        tipo_vacante: null,
+        protocol_active: true,
+        proyecto_modulo_id: null,
+      });
+      setProyectoNombre(previewObraNombre);
+      setMetaPhase('ready');
+      return;
+    }
     if (!needId && !captacionToken) {
       setMetaPhase('error');
       setMetaError('Enlace de registro no válido.');
@@ -202,7 +233,7 @@ export default function RegistroPorNeedCliente({
     return () => {
       alive = false;
     };
-  }, [needId, captacionToken, supabase]);
+  }, [needId, captacionToken, supabase, previewObraNombre]);
 
   const setF = useCallback(<K extends keyof GacetaPostulacionFormState>(key: K, value: GacetaPostulacionFormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -213,8 +244,10 @@ export default function RegistroPorNeedCliente({
       if (sinOficioFijo && !oficioElegido) return 'Elige tu oficio.';
       if (!form.primerNombre.trim()) return 'Indica al menos el primer nombre.';
       if (!form.primerApellido.trim()) return 'Indica al menos el primer apellido.';
-      if (!form.cedula.trim()) return 'Indica la cédula.';
-      if (!form.celular.trim()) return 'Indica el celular.';
+      const ced = parseCedulaHv(form.cedula);
+      if (!ced.numero || ced.numero.length < 5) return 'Indica la cédula (V o E y el número).';
+      const cel = parseCelularVe(form.celular);
+      if (!cel.numero || cel.numero.length !== 7) return 'Indica el celular con prefijo venezolano y 7 dígitos.';
       if (!form.correo.trim()) return 'Indica el correo electrónico.';
       if (!form.direccion.trim()) return 'Indica la dirección / domicilio.';
       if (!form.fechaNacimiento.trim()) return 'Indica la fecha de nacimiento.';
@@ -601,21 +634,15 @@ export default function RegistroPorNeedCliente({
     <div className="min-h-screen bg-[#0A0A0F] pb-24 pt-8 text-zinc-100">
       <div className="mx-auto max-w-lg px-4">
         <header className="rounded-2xl border border-[#FF9500]/25 bg-gradient-to-br from-[#FF9500]/10 to-transparent p-5 shadow-lg shadow-black/40">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#FFD60A]/90">Casa Inteligente · Hoja de vida</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#FFD60A]/90">Hoja de vida</p>
           <h1 className="mt-2 text-xl font-bold leading-snug text-white">
             {sinOficioFijo ? 'Registro de personal de obra' : `Postulación para: ${cargoEtiqueta}`}
           </h1>
-          <p className="mt-2 text-xs leading-relaxed text-zinc-400">
-            Completa tu hoja de vida una sola vez. Al contratarte, los mismos datos alimentan la hoja de empleo; RRHH solo
-            rellena patrono, obra y lo que falte.
-          </p>
           {proyectoNombre ? (
             <p className="mt-2 text-sm text-zinc-300">
-              {sinOficioFijo ? 'Obra' : 'Proyecto'}: <span className="font-semibold text-white">{proyectoNombre}</span>
+              Obra: <span className="font-semibold text-white">{proyectoNombre}</span>
             </p>
-          ) : (
-            <p className="mt-2 text-xs text-zinc-500">Proyecto no vinculado o sin nombre en sistema.</p>
-          )}
+          ) : null}
         </header>
 
         <nav className="mt-6 flex gap-1 overflow-x-auto pb-1" aria-label="Pasos">
@@ -685,50 +712,186 @@ export default function RegistroPorNeedCliente({
                   />
                 </div>
               </div>
+              <div>
+                <label className={labelClass}>Cédula *</label>
+                <div className="mt-1 flex gap-2">
+                  <select
+                    className={`${inputClass} mt-0 w-[4.5rem] shrink-0`}
+                    value={parseCedulaHv(form.cedula).letra}
+                    onChange={(e) => {
+                      const letra = e.target.value as LetraCedulaHv;
+                      const { numero } = parseCedulaHv(form.cedula);
+                      setForm((prev) => ({
+                        ...prev,
+                        cedula: composeCedulaHv(letra, numero),
+                        nacionalidad:
+                          letra === 'V' && (!prev.nacionalidad || prev.nacionalidad === 'Venezolana')
+                            ? 'Venezolana'
+                            : prev.nacionalidad,
+                      }));
+                    }}
+                    aria-label="Tipo de cédula"
+                  >
+                    <option value="V" className="bg-zinc-900">
+                      V
+                    </option>
+                    <option value="E" className="bg-zinc-900">
+                      E
+                    </option>
+                  </select>
+                  <input
+                    className={`${inputClass} mt-0`}
+                    inputMode="numeric"
+                    value={parseCedulaHv(form.cedula).numero}
+                    onChange={(e) => {
+                      const { letra } = parseCedulaHv(form.cedula);
+                      setF('cedula', composeCedulaHv(letra, e.target.value));
+                    }}
+                    placeholder="Número"
+                    aria-label="Número de cédula"
+                  />
+                </div>
+              </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
-                  <label className={labelClass}>Cédula *</label>
-                  <input className={inputClass} value={form.cedula} onChange={(e) => setF('cedula', e.target.value)} />
-                </div>
-                <div>
-                  <label className={labelClass}>Edad (años)</label>
-                  <input className={inputClass} inputMode="numeric" value={form.edad} onChange={(e) => setF('edad', e.target.value)} />
-                </div>
-                <div>
-                  <label className={labelClass}>Estado civil</label>
-                  <input className={inputClass} value={form.estadoCivil} onChange={(e) => setF('estadoCivil', e.target.value)} />
-                </div>
-                <div>
-                  <label className={labelClass}>Lugar de nacimiento</label>
+                  <label className={labelClass}>Fecha de nacimiento *</label>
                   <input
+                    type="date"
                     className={inputClass}
-                    value={form.lugarNacimiento}
-                    onChange={(e) => setF('lugarNacimiento', e.target.value)}
+                    style={{ colorScheme: 'dark' }}
+                    value={form.fechaNacimiento}
+                    onChange={(e) => {
+                      const fecha = e.target.value;
+                      setForm((prev) => ({
+                        ...prev,
+                        fechaNacimiento: fecha,
+                        edad: edadDesdeFechaNacimiento(fecha),
+                      }));
+                    }}
                   />
                 </div>
                 <div>
-                  <label className={labelClass}>País de nacimiento</label>
-                  <input className={inputClass} value={form.paisNacimiento} onChange={(e) => setF('paisNacimiento', e.target.value)} />
+                  <label className={labelClass}>Edad (años)</label>
+                  <input
+                    className={`${inputClass} cursor-not-allowed text-zinc-300`}
+                    inputMode="numeric"
+                    value={form.edad}
+                    readOnly
+                    tabIndex={-1}
+                    aria-label="Edad calculada desde la fecha de nacimiento"
+                  />
                 </div>
-              </div>
-              <div>
-                <label className={labelClass}>Fecha de nacimiento *</label>
-                <input
-                  type="date"
-                  className={inputClass}
-                  style={{ colorScheme: 'dark' }}
-                  value={form.fechaNacimiento}
-                  onChange={(e) => setF('fechaNacimiento', e.target.value)}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Nacionalidad</label>
-                <input className={inputClass} value={form.nacionalidad} onChange={(e) => setF('nacionalidad', e.target.value)} />
+                <div>
+                  <label className={labelClass}>Estado civil</label>
+                  <select className={inputClass} value={form.estadoCivil} onChange={(e) => setF('estadoCivil', e.target.value)}>
+                    <option value="" className="bg-zinc-900">
+                      Elige…
+                    </option>
+                    {ESTADOS_CIVILES_HV.map((ec) => (
+                      <option key={ec} value={ec} className="bg-zinc-900">
+                        {ec}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelClass}>Nacionalidad</label>
+                  <select className={inputClass} value={form.nacionalidad} onChange={(e) => setF('nacionalidad', e.target.value)}>
+                    <option value="" className="bg-zinc-900">
+                      Elige…
+                    </option>
+                    {NACIONALIDADES_HV.map((n) => (
+                      <option key={n} value={n} className="bg-zinc-900">
+                        {n}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelClass}>País de nacimiento</label>
+                  <select
+                    className={inputClass}
+                    value={form.paisNacimiento}
+                    onChange={(e) => {
+                      const pais = e.target.value;
+                      setForm((prev) => ({
+                        ...prev,
+                        paisNacimiento: pais,
+                        lugarNacimiento:
+                          pais === 'Venezuela' &&
+                          ESTADOS_VE_HV.includes(prev.lugarNacimiento as (typeof ESTADOS_VE_HV)[number])
+                            ? prev.lugarNacimiento
+                            : pais === 'Venezuela'
+                              ? ''
+                              : prev.lugarNacimiento,
+                      }));
+                    }}
+                  >
+                    {PAISES_NACIMIENTO_HV.map((p) => (
+                      <option key={p} value={p} className="bg-zinc-900">
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelClass}>Lugar de nacimiento</label>
+                  {form.paisNacimiento === 'Venezuela' || !form.paisNacimiento ? (
+                    <select
+                      className={inputClass}
+                      value={form.lugarNacimiento}
+                      onChange={(e) => setF('lugarNacimiento', e.target.value)}
+                    >
+                      <option value="" className="bg-zinc-900">
+                        Elige el estado…
+                      </option>
+                      {ESTADOS_VE_HV.map((est) => (
+                        <option key={est} value={est} className="bg-zinc-900">
+                          {est}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      className={inputClass}
+                      value={form.lugarNacimiento}
+                      onChange={(e) => setF('lugarNacimiento', e.target.value)}
+                      placeholder="Ciudad o región"
+                    />
+                  )}
+                </div>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <label className={labelClass}>Celular *</label>
-                  <input className={inputClass} inputMode="tel" value={form.celular} onChange={(e) => setF('celular', e.target.value)} />
+                  <div className="mt-1 flex gap-2">
+                    <select
+                      className={`${inputClass} mt-0 w-[6.25rem] shrink-0`}
+                      value={parseCelularVe(form.celular).prefijo}
+                      onChange={(e) => {
+                        const { numero } = parseCelularVe(form.celular);
+                        setF('celular', composeCelularVe(e.target.value, numero));
+                      }}
+                      aria-label="Prefijo celular Venezuela"
+                    >
+                      {PREFIJOS_CELULAR_VE.map((p) => (
+                        <option key={p} value={p} className="bg-zinc-900">
+                          {p}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      className={`${inputClass} mt-0`}
+                      inputMode="numeric"
+                      value={parseCelularVe(form.celular).numero}
+                      onChange={(e) => {
+                        const { prefijo } = parseCelularVe(form.celular);
+                        setF('celular', composeCelularVe(prefijo, e.target.value));
+                      }}
+                      placeholder="1234567"
+                      aria-label="Número de celular"
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className={labelClass}>Correo *</label>
