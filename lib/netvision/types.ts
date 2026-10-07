@@ -410,7 +410,29 @@ export type NetVisionProject = {
    * «no enviado», el BOM lo actualiza al agregar o quitar equipos.
    */
   ventasBudgetId?: string
+  /**
+   * Oferta publicada en el enlace del cliente: copia congelada, sin costos
+   * ni id de Ventas. Solo se envía si el instalador marca «Incluir presupuesto».
+   */
+  clientePresupuesto?: ClientePresupuestoSnapshot
   complianceProfileId: string
+}
+
+/** Renglón que el cliente puede ver (precio de venta, nunca el costo). */
+export type ClientePresupuestoRenglon = {
+  descripcion: string
+  qty: number
+  unitUsd: number
+}
+
+/** Snapshot comercial del enlace. Los montos se guardan en USD. */
+export type ClientePresupuestoSnapshot = {
+  publicadoAt: string
+  moneda: NetVisionCurrency
+  tasaCambio?: number
+  renglones: ClientePresupuestoRenglon[]
+  subtotalUsd: number
+  nota?: string
 }
 
 /** Orientación / apertura / alcance propios de una lente secundaria. */

@@ -59,6 +59,7 @@ describe('enlace para el cliente', () => {
     assert.equal(c.distributorMarginPct, 0)
     assert.equal(c.zanjaModo, 'no_cobrar')
     assert.equal(c.ventasBudgetId, undefined)
+    assert.equal(c.clientePresupuesto, undefined)
     assert.equal(c.cameras, p.cameras)
     // El original no cambia.
     assert.equal(p.distributorMarginPct, 30)

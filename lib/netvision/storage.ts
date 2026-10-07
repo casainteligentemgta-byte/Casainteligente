@@ -11,6 +11,7 @@ import type {
   DesignUndergroundSegment,
   PlanDeviceKind,
   PlanDiscipline,
+  ClientePresupuestoSnapshot,
   NetVisionCurrency,
   NetVisionProject,
   NetVisionProjectIndexEntry,
@@ -20,6 +21,7 @@ import type {
   UnitSystem,
   ZanjaModo,
 } from '@/lib/netvision/types'
+import { sanitizarClientePresupuesto } from '@/lib/netvision/clientePresupuesto'
 import { huellaPlano } from '@/lib/netvision/compartir'
 import { normalizarTasa } from '@/lib/netvision/utils/moneda'
 import { DRAWABLE_CABLE_TYPES } from '@/lib/netvision/services/cableCalculator'
@@ -594,8 +596,16 @@ function normalizeProject(
     ...(typeof p.ventasBudgetId === 'string' && p.ventasBudgetId.trim()
       ? { ventasBudgetId: p.ventasBudgetId.trim().slice(0, 80) }
       : {}),
+    ...clientePresupuestoNormalizado(p.clientePresupuesto),
     complianceProfileId: p.complianceProfileId ?? 'VE',
   }
+}
+
+function clientePresupuestoNormalizado(
+  raw: unknown,
+): { clientePresupuesto: ClientePresupuestoSnapshot } | Record<string, never> {
+  const snap = sanitizarClientePresupuesto(raw)
+  return snap ? { clientePresupuesto: snap } : {}
 }
 
 /** Zanja: solo «cobrar» la mete en el presupuesto; cualquier otro valor = no se cobra. */

@@ -208,3 +208,43 @@ export async function actualizarBorradorPresupuesto(args: {
     return { ok: false, error: e instanceof Error ? e.message : 'No se pudo actualizar el presupuesto.' }
   }
 }
+
+export type OfertaVentas = {
+  items: unknown[]
+  subtotal: number
+  notas: string
+}
+
+/** Lee del borrador de Ventas solo lo necesario para la oferta del cliente. */
+export async function cargarOfertaVentas(id: string): Promise<
+  { ok: true; oferta: OfertaVentas } | { ok: false; error: string }
+> {
+  let supabase: ReturnType<typeof createClient>
+  try {
+    supabase = createClient()
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Supabase no está configurado.' }
+  }
+  try {
+    const { data, error } = await supabase
+      .from('budgets')
+      .select('items,subtotal,notes')
+      .eq('id', id)
+      .maybeSingle()
+    if (error) return { ok: false, error: error.message }
+    if (!data) return { ok: false, error: 'No se encontró el presupuesto en Ventas.' }
+    const items = Array.isArray((data as { items?: unknown }).items)
+      ? ((data as { items: unknown[] }).items)
+      : []
+    return {
+      ok: true,
+      oferta: {
+        items,
+        subtotal: Number((data as { subtotal?: unknown }).subtotal) || 0,
+        notas: typeof (data as { notes?: unknown }).notes === 'string' ? (data as { notes: string }).notes : '',
+      },
+    }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'No se pudo leer el presupuesto.' }
+  }
+}
