@@ -100,22 +100,31 @@ export default function CargarCatalogosDistribuidor2026() {
         setErrorProductos(null);
         const todos: ProductoExistenteCatalogo[] = [];
         let desde = 0;
-        while (desde < 20000) {
-            const { data, error } = await supabase
-                .from('products')
-                .select('id,marca,modelo')
-                .order('id')
-                .range(desde, desde + 999);
-            if (error) {
-                setErrorProductos(`No pude leer tus productos: ${error.message}`);
-                return;
+        try {
+            while (desde < 20000) {
+                const { data, error } = await supabase
+                    .from('products')
+                    .select('id,marca,modelo')
+                    .order('id')
+                    .range(desde, desde + 999)
+                    .abortSignal(AbortSignal.timeout(12000));
+                if (error) {
+                    setErrorProductos(
+                        'No pude leer tus productos. Entra con tu sesión en Productos y abre de nuevo esta página.',
+                    );
+                    return;
+                }
+                const lote = (data ?? []) as ProductoExistenteCatalogo[];
+                todos.push(...lote);
+                if (lote.length < 1000) break;
+                desde += 1000;
             }
-            const lote = (data ?? []) as ProductoExistenteCatalogo[];
-            todos.push(...lote);
-            if (lote.length < 1000) break;
-            desde += 1000;
+            setExistentes(todos);
+        } catch {
+            setErrorProductos(
+                'No pude leer tus productos. Entra con tu sesión en Productos y abre de nuevo esta página.',
+            );
         }
-        setExistentes(todos);
     }, [supabase]);
 
     useEffect(() => {
@@ -236,9 +245,7 @@ export default function CargarCatalogosDistribuidor2026() {
                 <p data-catalogo-error style={{ color: ROJO, fontSize: '13px', margin: 0 }}>
                     {errorProductos}
                 </p>
-            ) : null}
-
-            {plan ? (
+            ) : plan ? (
                 <div style={caja} data-catalogo-plan>
                     <p style={{ fontSize: '14px', fontWeight: 700, color: 'white', margin: 0 }}>
                         Crear {plan.crear.length} · actualizar {plan.actualizar.length}
