@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import { redirect } from 'next/navigation';
 import RrhhGestionPersonalClient from '@/components/rrhh/gestion-personal/RrhhGestionPersonalClient';
 
 export const metadata = {
@@ -21,6 +22,16 @@ export default function RrhhGestionPersonalPage({ searchParams }: PageProps) {
   const tabInitial = firstQueryValue(searchParams.tab);
   const proyectoModuloInitial = (firstQueryValue(searchParams.proyecto_modulo) ?? '').trim() || undefined;
   const proyectoObraInitial = (firstQueryValue(searchParams.proyecto) ?? '').trim() || undefined;
+
+  // La solicitud de personal vive en una sola pantalla. Aquí solo queda el cuadro
+  // «personal en obra» (?tab=obra); cualquier otra entrada va a la pantalla nueva.
+  if (tabInitial !== 'obra') {
+    redirect(
+      proyectoModuloInitial
+        ? `/rrhh/solicitud-personal?proyecto_modulo=${encodeURIComponent(proyectoModuloInitial)}`
+        : '/rrhh/solicitud-personal',
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#0a0a0f]">

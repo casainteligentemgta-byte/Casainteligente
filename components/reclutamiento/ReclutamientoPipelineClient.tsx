@@ -318,7 +318,7 @@ export default function ReclutamientoPipelineClient() {
               <Link href="/reclutamiento/requisicion">Requisición</Link>
             </Button>
             <Button type="button" variant="outline" size="sm" className="border-white/15 bg-white/5 text-xs" asChild>
-              <Link href="/rrhh/gestion-personal?solo=pendientes">Gestión laboral</Link>
+              <Link href="/rrhh/solicitud-personal">Solicitud de personal</Link>
             </Button>
             <Button
               type="button"

@@ -7,7 +7,6 @@ import {
   FileText,
   HardHat,
   ScrollText,
-  UserCog,
   UserRound,
   Users,
   Wallet,
@@ -15,7 +14,6 @@ import {
 import { hrefListaContratosExpress } from '@/lib/talento/hrefListaContratosExpress';
 import { leerProyectoRrhhContexto } from '@/lib/rrhh/proyectoRrhhContexto';
 import {
-  hrefGestionPersonalSolicitados,
   hrefRrhhHub,
   hrefSolicitudPersonalObrero,
 } from '@/lib/rrhh/hrefSolicitudPersonal';
@@ -41,10 +39,6 @@ export default function RrhhSubnavEnlaces({
   const hrefSolicitud = hrefSolicitudPersonalObrero({
     proyectoModuloId: mod,
   });
-  const hrefGestion = hrefGestionPersonalSolicitados({
-    proyectoModuloId: mod,
-    todosLosProyectos: !mod,
-  });
   const hrefEquipoRec = `${hrefRrhhHub({ proyectoModuloId: mod })}#equipo-recomendado`;
   const hrefExpress = hrefListaContratosExpress({ proyectoModuloId: mod });
   const hrefNomina = mod
@@ -64,25 +58,11 @@ export default function RrhhSubnavEnlaces({
         <span className="truncate">Solicitud de personal</span>
       </Link>
       <Link
-        href={hrefGestion}
-        className={`${rrhhSubnavBtnClass} border-violet-500/40 bg-violet-950/45 text-violet-100 hover:bg-violet-900/55`}
-      >
-        <UserCog className="h-3.5 w-3.5 shrink-0" aria-hidden />
-        <span className="truncate">Gestión laboral</span>
-      </Link>
-      <Link
         href={hrefEquipoRec}
         className={`${rrhhSubnavBtnClass} border-sky-500/40 bg-sky-950/45 text-sky-100 hover:bg-sky-900/55`}
       >
         <HardHat className="h-3.5 w-3.5 shrink-0" aria-hidden />
         <span className="truncate">Equipo recomendado</span>
-      </Link>
-      <Link
-        href="/rrhh/reclutamiento"
-        className={`${rrhhSubnavBtnClass} border-sky-500/40 bg-sky-950/45 text-sky-100 hover:bg-sky-900/55`}
-      >
-        <Users className="h-3.5 w-3.5 shrink-0" aria-hidden />
-        <span className="truncate">Reclutamiento</span>
       </Link>
       <Link
         href="/rrhh/trabajadores"

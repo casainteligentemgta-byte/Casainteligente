@@ -222,8 +222,8 @@ function RrhhHubInner() {
 
         <p className="text-xs text-zinc-600">
           Rutas legacy:{' '}
-          <Link href="/rrhh/gestion-personal" className="text-[#FF9500] hover:underline">
-            gestión personal
+          <Link href="/rrhh/solicitud-personal" className="text-[#FF9500] hover:underline">
+            solicitud de personal
           </Link>
           {' · '}
           <Link href="/rrhh/hojas-vida" className="text-[#FF9500] hover:underline">

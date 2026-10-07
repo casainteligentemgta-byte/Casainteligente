@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import { Briefcase } from 'lucide-react';
 import ListaEmpleosHojasVida from '@/app/rrhh/hojas-vida/components/ListaEmpleosHojasVida';
 import ModalNuevaVacante from '@/app/proyectos/modulo/[id]/components/ModalNuevaVacante';
 import RrhhSubnavEnlaces, { rrhhSubnavBtnClass } from '@/components/rrhh/RrhhSubnavEnlaces';
@@ -198,14 +197,6 @@ export default function RrhhHojasVidaClient() {
           accionesObra={
             puedeAccionesObra ? (
               <>
-                <button
-                  type="button"
-                  onClick={() => setVacanteOpen(true)}
-                  className={`${rrhhSubnavBtnClass} border-[#FF9500]/45 bg-gradient-to-r from-[#FFD60A]/15 to-[#FF9500]/15 text-[#FFD60A] hover:from-[#FFD60A]/25 hover:to-[#FF9500]/25`}
-                >
-                  <Briefcase className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                  <span className="truncate">Nueva vacante</span>
-                </button>
                 {obraSeleccionada ? (
                   <Link
                     href={`/proyectos/modulo/${encodeURIComponent(obraUnicaId)}`}
