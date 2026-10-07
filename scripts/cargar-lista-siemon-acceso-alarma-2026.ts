@@ -1,6 +1,6 @@
 /**
  * Carga Siemon agosto 2026 + Acceso-Alarma septiembre 2026 en public.products.
- * Preferible: pegar supabase/sql_editor_siemon_acceso_alarma_2026.sql en SQL Editor.
+ * Preferible en producción: Productos → Cargar catálogos 2026 (sin SQL Editor).
  *
  *   npx tsx scripts/cargar-lista-siemon-acceso-alarma-2026.ts
  */

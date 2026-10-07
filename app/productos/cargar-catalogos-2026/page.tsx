@@ -1,9 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import ImportarListaPrecios from '@/components/productos/ImportarListaPrecios';
+import CargarCatalogosDistribuidor2026 from '@/components/productos/CargarCatalogosDistribuidor2026';
 
-export default function ImportarListaPreciosPage() {
+export default function CargarCatalogos2026Page() {
     return (
         <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', paddingBottom: '120px' }}>
             <div
@@ -41,17 +41,14 @@ export default function ImportarListaPreciosPage() {
                 </Link>
                 <div style={{ flex: 1 }}>
                     <h1 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--label-primary)', lineHeight: 1 }}>
-                        Importar lista de precios
+                        Cargar catálogos 2026
                     </h1>
                     <p style={{ fontSize: '12px', color: 'var(--label-secondary)', marginTop: '2px' }}>
-                        Costos, disponibilidad y fotos del proveedor.{' '}
-                        <Link href="/productos/cargar-catalogos-2026" style={{ color: '#FF9500', fontWeight: 700 }}>
-                            Listas 2026 ya armadas
-                        </Link>
+                        Acceso-Alarma y Siemon. Un clic, sin SQL
                     </p>
                 </div>
             </div>
-            <ImportarListaPrecios />
+            <CargarCatalogosDistribuidor2026 />
         </div>
     );
 }
