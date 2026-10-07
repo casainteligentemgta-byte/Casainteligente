@@ -917,11 +917,11 @@ export default function NetVisionClienteView() {
             <p data-nv-compartir-msg className="text-[#d6ffe5]">
               {shareMsg}
             </p>
-          ) : (
+          ) : shareUrl ? (
             <p className="text-[#a9e8c4]">
               Este proyecto está compartido. El cliente ve siempre la última versión guardada.
             </p>
-          )}
+          ) : null}
           <p className="text-[10px] text-[#a9e8c4]">
             {project.ventasBudgetId
               ? incluirPresupuesto
