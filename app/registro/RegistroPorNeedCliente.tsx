@@ -847,6 +847,10 @@ export default function RegistroPorNeedCliente({
                   )}
                 </div>
               </div>
+              <div>
+                <label className={labelClass}>Dirección / domicilio *</label>
+                <textarea className={`${inputClass} resize-y`} rows={3} value={form.direccion} onChange={(e) => setF('direccion', e.target.value)} />
+              </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <label className={labelClass}>Celular *</label>
@@ -880,18 +884,25 @@ export default function RegistroPorNeedCliente({
                   </div>
                 </div>
                 <div>
-                  <label className={labelClass}>Correo *</label>
+                  <label className={labelClass}>Teléfono de habitación</label>
                   <input
-                    type="email"
                     className={inputClass}
-                    value={form.correo}
-                    onChange={(e) => setF('correo', e.target.value)}
+                    inputMode="tel"
+                    value={form.telHabitacion}
+                    onChange={(e) => setF('telHabitacion', e.target.value)}
+                    placeholder="0212-5551234"
+                    aria-label="Teléfono de habitación"
                   />
                 </div>
               </div>
               <div>
-                <label className={labelClass}>Dirección / domicilio *</label>
-                <textarea className={`${inputClass} resize-y`} rows={3} value={form.direccion} onChange={(e) => setF('direccion', e.target.value)} />
+                <label className={labelClass}>Correo *</label>
+                <input
+                  type="email"
+                  className={inputClass}
+                  value={form.correo}
+                  onChange={(e) => setF('correo', e.target.value)}
+                />
               </div>
               <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-300">
                 <input type="checkbox" checked={form.zurdo} onChange={(e) => setF('zurdo', e.target.checked)} className="rounded border-white/20" />

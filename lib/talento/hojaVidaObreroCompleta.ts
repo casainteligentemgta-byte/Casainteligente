@@ -343,6 +343,9 @@ export function hojaVidaDesdeRow(row: Record<string, unknown>): HojaVidaObreroCo
   if (!fromJson.datosPersonales.celular && str('telefono')) {
     fromJson.datosPersonales.celular = str('telefono');
   }
+  if (!fromJson.datosPersonales.telHabitacion && str('telefono_habitacion')) {
+    fromJson.datosPersonales.telHabitacion = str('telefono_habitacion');
+  }
   if (!fromJson.datosPersonales.fechaNacimiento && str('fecha_nacimiento')) {
     fromJson.datosPersonales.fechaNacimiento = str('fecha_nacimiento');
   }
