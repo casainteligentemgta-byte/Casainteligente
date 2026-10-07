@@ -704,9 +704,9 @@ export default function NetVisionClienteView() {
             onSelect={setSelectedId}
           />
         </div>
-      ) : (
+      ) : cameras.length === 0 ? (
         <p className="text-[12px] text-[#a9e8c4]">Este proyecto aún no tiene cámaras.</p>
-      )}
+      ) : null}
 
       {vistaCliente === 'inversion' && project.clientePresupuesto ? (
         <div className="min-h-0 flex-1 print:hidden">
