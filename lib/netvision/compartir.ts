@@ -3,6 +3,7 @@
  * abre en cualquier teléfono sin iniciar sesión, con un código secreto.
  * Funciones puras (sin red) para poder probarlas.
  */
+import { sanitizarClientePresupuesto } from '@/lib/netvision/clientePresupuesto'
 import type { NetVisionProject } from '@/lib/netvision/types'
 
 export const NETVISION_PLANOS_BUCKET = 'netvision-planos'
@@ -43,12 +44,17 @@ export function urlCompartida(origin: string, token: string, camaraId?: string |
  * internos del instalador (margen, descripción interna, decisiones de cobro).
  */
 export function proyectoParaCliente(project: NetVisionProject): NetVisionProject {
-  return {
+  const oferta = sanitizarClientePresupuesto(project.clientePresupuesto)
+  const next: NetVisionProject = {
     ...project,
     description: '',
     distributorMarginPct: 0,
     zanjaModo: 'no_cobrar',
+    ventasBudgetId: undefined,
+    clientePresupuesto: oferta,
   }
+  if (!oferta) delete next.clientePresupuesto
+  return next
 }
 
 /**

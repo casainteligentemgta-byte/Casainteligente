@@ -21,7 +21,8 @@ import {
   buildCableRoutes,
   withManualCableSegments,
 } from '@/lib/netvision/services/cableRoutingEngine'
-import { loadProject, peekLocalProject } from '@/lib/netvision/storage'
+import { hayOfertaCliente, snapshotDesdeItemsVentas } from '@/lib/netvision/clientePresupuesto'
+import { loadProject, peekLocalProject, saveProject } from '@/lib/netvision/storage'
 import {
   cloudCompartir,
   cloudDejarDeCompartir,
@@ -29,6 +30,8 @@ import {
   cloudProyectoCompartido,
   cloudUpsertProject,
 } from '@/lib/netvision/cloud'
+import { cargarOfertaVentas } from '@/lib/netvision/presupuestoCloud'
+import NetVisionClientePresupuesto from '@/components/netvision/NetVisionClientePresupuesto'
 import {
   PARAM_COMPARTIDO,
   esTokenCompartir,
@@ -412,9 +415,19 @@ export default function NetVisionClienteView() {
   /** Enlace ya creado para este proyecto (lado del instalador). */
   const [shareUrl, setShareUrl] = useState<string | null>(null)
   const [sharing, setSharing] = useState(false)
+  const [incluirPresupuesto, setIncluirPresupuesto] = useState(false)
+  const [vistaCliente, setVistaCliente] = useState<'plano' | 'inversion'>('plano')
   const [shareMsg, setShareMsg] = useState<string | null>(null)
   /** Reacomoda a hoja apaisada y luego abre el diálogo de imprimir / PDF. */
   const [imprimiendo, setImprimiendo] = useState(false)
+  const projectIdCargado = project?.id ?? null
+
+  useEffect(() => {
+    setIncluirPresupuesto(hayOfertaCliente(project))
+    setVistaCliente(hayOfertaCliente(project) && search.get('ver') === 'inversion' ? 'inversion' : 'plano')
+    // Solo al cambiar de proyecto: el check lo mueve el instalador.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectIdCargado])
 
   useEffect(() => {
     const cam = search.get('cam')
@@ -564,7 +577,39 @@ export default function NetVisionClienteView() {
     setSharing(true)
     setShareMsg('Preparando el enlace…')
     try {
-      const guardado = await cloudUpsertProject(project)
+      let aPublicar = project
+      if (incluirPresupuesto) {
+        if (!project.ventasBudgetId) {
+          setShareMsg('Crea primero el presupuesto en Ventas (inspector Presupuestos) para incluirlo en el enlace.')
+          return
+        }
+        setShareMsg('Preparando la oferta para el cliente…')
+        const leido = await cargarOfertaVentas(project.ventasBudgetId)
+        if (!leido.ok) {
+          setShareMsg(`No se pudo leer el presupuesto de Ventas: ${leido.error}`)
+          return
+        }
+        const snap = snapshotDesdeItemsVentas({
+          items: leido.oferta.items,
+          subtotal: leido.oferta.subtotal,
+          notas: leido.oferta.notas,
+          moneda: project.currency,
+          tasaCambio: project.tasaCambio,
+        })
+        if (!snap) {
+          setShareMsg('El presupuesto de Ventas no tiene renglones para mostrar al cliente.')
+          return
+        }
+        aPublicar = { ...project, clientePresupuesto: snap }
+      } else if (project.clientePresupuesto) {
+        const next = { ...project }
+        delete next.clientePresupuesto
+        aPublicar = next
+      }
+      saveProject(aPublicar)
+      setProject(aPublicar)
+
+      const guardado = await cloudUpsertProject(aPublicar)
       if (!guardado.authenticated) {
         setShareMsg('Inicia sesión para compartir el proyecto con el cliente.')
         return
@@ -592,10 +637,15 @@ export default function NetVisionClienteView() {
       const url = urlCompartida(window.location.origin, r.token)
       setShareUrl(url)
       const copiado = await copiarEnlace(url)
+      const conOferta = hayOfertaCliente(aPublicar)
       setShareMsg(
         copiado
-          ? 'Enlace copiado. El cliente verá siempre la última versión guardada.'
-          : 'Enlace listo. Cópialo o envíalo; el cliente verá siempre la última versión guardada.',
+          ? conOferta
+            ? 'Enlace copiado. El plano se actualiza al guardar; la oferta queda congelada hasta que vuelvas a compartir.'
+            : 'Enlace copiado. El cliente verá siempre la última versión guardada del plano (sin precios).'
+          : conOferta
+            ? 'Enlace listo. El plano se actualiza al guardar; la oferta queda congelada hasta que vuelvas a compartir.'
+            : 'Enlace listo. Cópialo o envíalo; el cliente verá el plano, sin precios.',
       )
     } finally {
       setSharing(false)
@@ -761,6 +811,19 @@ export default function NetVisionClienteView() {
                 <Link2 className="h-3.5 w-3.5" />
                 {sharing ? 'Preparando…' : shareUrl ? 'Actualizar enlace' : 'Compartir con cliente'}
               </button>
+              <label
+                data-nv-incluir-presupuesto
+                className="inline-flex min-h-11 max-w-[16rem] cursor-pointer items-center gap-2 border border-[#2e7d54] px-2.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#d6ffe5]"
+              >
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 shrink-0 accent-[#8cffb5]"
+                  checked={incluirPresupuesto}
+                  disabled={sharing || !project.ventasBudgetId}
+                  onChange={(e) => setIncluirPresupuesto(e.target.checked)}
+                />
+                Incluir presupuesto
+              </label>
             </>
           ) : null}
           <button
@@ -790,6 +853,13 @@ export default function NetVisionClienteView() {
               Este proyecto está compartido. El cliente ve siempre la última versión guardada.
             </p>
           )}
+          <p className="text-[10px] text-[#a9e8c4]">
+            {project.ventasBudgetId
+              ? incluirPresupuesto
+                ? 'El cliente verá una oferta congelada (precios de Ventas, sin costos). El plano sí se actualiza al guardar.'
+                : 'El enlace llevará solo el plano. Marca «Incluir presupuesto» para añadir la inversión.'
+              : 'Para incluir precios, crea el presupuesto en el inspector Presupuestos.'}
+          </p>
           {shareUrl ? (
             <div className="flex flex-wrap items-center gap-2">
               <input
@@ -836,7 +906,7 @@ export default function NetVisionClienteView() {
 
       <div
         data-nv-leyenda
-        className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-[#d6ffe5]"
+        className={`flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-[#d6ffe5] ${vistaCliente === 'inversion' ? 'hidden' : ''}`}
       >
         {/* Interruptor: gama de verde o semáforo translúcido. */}
         <span
@@ -931,7 +1001,34 @@ export default function NetVisionClienteView() {
         ) : null}
       </div>
 
-      {cameras.length > 0 ? (
+      {hayOfertaCliente(project) ? (
+        <div
+          data-nv-cliente-vistas
+          className="nv-no-print flex shrink-0 gap-0.5 rounded-lg border border-[#2e7d54] bg-[#0b1a14] p-0.5 print:hidden"
+        >
+          <button
+            type="button"
+            className={`min-h-9 flex-1 rounded-md px-3 text-[11px] font-bold uppercase tracking-[0.12em] ${
+              vistaCliente === 'plano' ? 'bg-[#8cffb5] text-[#07110d]' : 'text-[#8cffb5]'
+            }`}
+            onClick={() => setVistaCliente('plano')}
+          >
+            Plano
+          </button>
+          <button
+            type="button"
+            data-nv-tab-inversion
+            className={`min-h-9 flex-1 rounded-md px-3 text-[11px] font-bold uppercase tracking-[0.12em] ${
+              vistaCliente === 'inversion' ? 'bg-[#8cffb5] text-[#07110d]' : 'text-[#8cffb5]'
+            }`}
+            onClick={() => setVistaCliente('inversion')}
+          >
+            Inversión
+          </button>
+        </div>
+      ) : null}
+
+      {cameras.length > 0 && vistaCliente !== 'inversion' ? (
         <div className="nv-no-print w-full min-w-0 shrink-0 print:hidden" data-nv-cam-toggles>
           <NetVisionCameraVisionToggles
             cameras={cameras}
@@ -944,13 +1041,23 @@ export default function NetVisionClienteView() {
             onSelect={setSelectedId}
           />
         </div>
-      ) : (
+      ) : cameras.length === 0 ? (
         <p className="nv-no-print text-[12px] text-[#a9e8c4] print:hidden">
           Este proyecto aún no tiene cámaras.
         </p>
-      )}
+      ) : null}
 
-      <div className="nv-cliente-grid grid min-h-0 flex-1 grid-rows-[minmax(200px,42dvh)_minmax(0,1fr)] gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(280px,340px)] lg:grid-rows-[minmax(0,1fr)]">
+      {vistaCliente === 'inversion' && project.clientePresupuesto ? (
+        <div className="nv-no-print min-h-0 flex-1 print:hidden">
+          <NetVisionClientePresupuesto oferta={project.clientePresupuesto} />
+        </div>
+      ) : null}
+
+      <div
+        className={`nv-cliente-grid grid min-h-0 flex-1 grid-rows-[minmax(200px,42dvh)_minmax(0,1fr)] gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(280px,340px)] lg:grid-rows-[minmax(0,1fr)] ${
+          vistaCliente === 'inversion' ? 'hidden print:grid' : ''
+        }`}
+      >
         <div
           className={`nv-print-plano-slot min-h-0 overflow-hidden bg-[#07110d]${
             cards.length > 0 ? ' nv-print-plano-con-fichas' : ''
@@ -1055,6 +1162,12 @@ export default function NetVisionClienteView() {
           ) : null}
         </aside>
       </div>
+
+      {project.clientePresupuesto ? (
+        <div className="hidden print:block">
+          <NetVisionClientePresupuesto oferta={project.clientePresupuesto} />
+        </div>
+      ) : null}
 
       <style>{`
         /* Líneas de barrido sobre los paneles; el plano queda limpio. */

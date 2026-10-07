@@ -38,6 +38,7 @@ type Avance = {
   oficio: string;
   cargo_codigo: string | null;
   estado_proceso: string | null;
+  evaluado?: boolean;
   enlace: string | null;
 };
 
@@ -268,9 +269,9 @@ export default function CargaMasivaObrerosClient() {
   const resumen = useMemo(() => {
     const c = { total: avance.length, sinCv: 0, cv: 0, evaluados: 0 };
     for (const a of avance) {
-      if (a.estado_proceso === 'pendiente_cv' || a.estado_proceso === 'prospecto_invitado') c.sinCv++;
+      if (a.evaluado || a.estado_proceso === 'examen_completado') c.evaluados++;
+      else if (a.estado_proceso === 'pendiente_cv' || a.estado_proceso === 'prospecto_invitado') c.sinCv++;
       else if (a.estado_proceso === 'cv_completado' || a.estado_proceso === 'examen_iniciado') c.cv++;
-      else if (a.estado_proceso === 'examen_completado') c.evaluados++;
     }
     return c;
   }, [avance]);

@@ -21,21 +21,18 @@ export function hrefSolicitudPersonalObrero(opts?: HrefSolicitudPersonalOpts): s
   return q ? `/rrhh/solicitud-personal?${q}` : '/rrhh/solicitud-personal';
 }
 
-/** Cuadro de solicitados (oficios + plazas) filtrado por proyecto módulo o todos. */
+/**
+ * Antes llevaba al «cuadro de solicitados» de Gestión laboral. Las solicitudes viven ahora
+ * en una sola pantalla, así que apunta a ella (con la obra, cuando es una sola).
+ */
 export function hrefGestionPersonalSolicitados(opts?: {
   proyectoModuloId?: string | null;
   proyectoModuloIds?: string[];
   entidadId?: string | null;
   todosLosProyectos?: boolean;
 }): string {
-  const params = new URLSearchParams({ solo: 'pendientes' });
-  const mod = opts?.proyectoModuloId?.trim();
-  const ent = opts?.entidadId?.trim();
   const ids = (opts?.proyectoModuloIds ?? []).map((s) => s.trim()).filter(Boolean);
-  if (ent) params.set('entidad', ent);
-  else if (opts?.todosLosProyectos) params.set('todos', '1');
-  else if (ids.length > 1) params.set('proyecto_modulo_ids', ids.join(','));
-  else if (mod) params.set('proyecto_modulo', mod);
-  else if (ids.length === 1) params.set('proyecto_modulo', ids[0]!);
-  return `/rrhh/gestion-personal?${params}#cuadro-solicitados`;
+  const mod = opts?.proyectoModuloId?.trim() || (ids.length === 1 ? ids[0]! : '');
+  const variasObras = Boolean(opts?.entidadId?.trim()) || Boolean(opts?.todosLosProyectos) || ids.length > 1;
+  return hrefSolicitudPersonalObrero({ proyectoModuloId: variasObras ? null : mod });
 }

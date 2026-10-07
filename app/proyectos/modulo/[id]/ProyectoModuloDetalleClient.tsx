@@ -694,50 +694,24 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
             ) : null}
             {modoEdicion && proyecto && !tabCabeceraMinimaSinAcciones && !fichaModuloSinPestaña ? (
               <>
-                <button
-                  type="button"
-                  onClick={() => setVacanteModalOpen(true)}
+                <Link
+                  href={`/rrhh/solicitud-personal?proyecto_modulo=${encodeURIComponent(id)}`}
                   className="rounded-xl border border-[#FF9500]/45 bg-gradient-to-r from-[#FFD60A]/15 to-[#FF9500]/15 px-3 py-2 text-xs font-semibold text-[#FFD60A] hover:from-[#FFD60A]/25 hover:to-[#FF9500]/25"
                 >
-                  Nueva vacante
-                </button>
+                  Solicitud de personal
+                </Link>
                 <RrhhHubLink proyectoModuloId={id} />
-                <Link
-                  href="/rrhh/reclutamiento"
-                  className="rounded-xl border border-sky-500/40 bg-sky-500/15 px-3 py-2 text-xs font-semibold text-sky-200 hover:bg-sky-500/25"
-                >
-                  Reclutamiento
-                </Link>
-                <Link
-                  href={`/rrhh/gestion-personal?solo=pendientes&proyecto_modulo=${encodeURIComponent(id)}`}
-                  className="rounded-xl border border-violet-500/40 bg-violet-950/40 px-3 py-2 text-xs font-semibold text-violet-100 hover:bg-violet-900/55"
-                >
-                  Gestión laboral
-                </Link>
               </>
             ) : null}
             {!tabCabeceraMinimaSinAcciones && !modoEdicion && !fichaModuloSinPestaña ? (
               <>
-                <button
-                  type="button"
-                  onClick={() => setVacanteModalOpen(true)}
+                <Link
+                  href={`/rrhh/solicitud-personal?proyecto_modulo=${encodeURIComponent(id)}`}
                   className="rounded-xl border border-[#FF9500]/45 bg-gradient-to-r from-[#FFD60A]/15 to-[#FF9500]/15 px-3 py-2 text-xs font-semibold text-[#FFD60A] hover:from-[#FFD60A]/25 hover:to-[#FF9500]/25"
                 >
-                  Nueva vacante
-                </button>
+                  Solicitud de personal
+                </Link>
                 <RrhhHubLink proyectoModuloId={id} />
-                <Link
-                  href="/rrhh/reclutamiento"
-                  className="rounded-xl border border-sky-500/40 bg-sky-500/15 px-3 py-2 text-xs font-semibold text-sky-200 hover:bg-sky-500/25"
-                >
-                  Reclutamiento
-                </Link>
-                <Link
-                  href={`/rrhh/gestion-personal?solo=pendientes&proyecto_modulo=${encodeURIComponent(id)}`}
-                  className="rounded-xl border border-violet-500/40 bg-violet-950/40 px-3 py-2 text-xs font-semibold text-violet-100 hover:bg-violet-900/55"
-                >
-                  Gestión laboral
-                </Link>
               </>
             ) : null}
           </div>

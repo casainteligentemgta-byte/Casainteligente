@@ -8,6 +8,9 @@ import type { BomLine, BomSummary } from '@/lib/netvision/types'
 /** Margen que /ventas aplica por defecto sobre el precio del producto. */
 export const MARGEN_VENTAS_DEFECTO = 20
 
+/** Espera antes de reescribir el borrador de Ventas cuando cambia el plano. */
+export const PRESUPUESTO_VIVO_DEBOUNCE_MS = 1600
+
 /** Producto del catálogo de Ventas (tabla `products`), solo lo que se usa aquí. */
 export type ProductoVenta = {
   id: number
@@ -334,4 +337,43 @@ export function enlacesParaGuardar(
     out.set(r.clave.split('#')[0]!, r.productId)
   }
   return Array.from(out.entries()).map(([sku, product_id]) => ({ sku, product_id }))
+}
+
+/**
+ * Presupuesto de Ventas a partir del BOM actual: mismos renglones, enlaces
+ * recordados y margen que usa el modal al crear el borrador.
+ */
+export function presupuestoDesdeBom(
+  bom: Pick<BomSummary, 'lines'>,
+  nombreProyecto: string,
+  enlaces: Readonly<Record<string, number>> = {},
+  productos: readonly ProductoVenta[] = [],
+  margenPct = MARGEN_VENTAS_DEFECTO,
+): { presupuesto: PresupuestoVentas; notas: string; renglones: RenglonPresupuesto[] } {
+  const { renglones, notas } = renglonesDesdeBom(bom, enlaces, productos, margenPct)
+  return {
+    presupuesto: construirPresupuesto(renglones, productos, margenPct),
+    notas: notasPresupuesto(nombreProyecto, notas),
+    renglones,
+  }
+}
+
+/** Huella del listado: si no cambia, no se vuelve a escribir el borrador. */
+export function huellaPresupuesto(
+  bom: Pick<BomSummary, 'lines'>,
+  margenPct: number,
+  nombreProyecto: string,
+): string {
+  return JSON.stringify({
+    margen: acotarMargen(margenPct),
+    nombre: nombreProyecto.trim(),
+    lineas: bom.lines.map((l) => [
+      l.sku,
+      l.linkKey ?? '',
+      l.qty,
+      l.unitUsd,
+      l.totalUsd,
+      l.description,
+    ]),
+  })
 }

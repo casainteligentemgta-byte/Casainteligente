@@ -5,6 +5,7 @@ import { buildBom } from '@/lib/netvision/services/bandwidthCalculator'
 import type { UndergroundPlan } from '@/lib/netvision/services/canalizationCalculator'
 import {
   MARGEN_VENTAS_DEFECTO,
+  PRESUPUESTO_VIVO_DEBOUNCE_MS,
   acotarMargen,
   aplicarMargen,
   buscarProductos,
@@ -13,9 +14,11 @@ import {
   construirPresupuesto,
   enlacesParaGuardar,
   enlazarRenglon,
+  huellaPresupuesto,
   notasPresupuesto,
   precioConMargen,
   precioVentaProducto,
+  presupuestoDesdeBom,
   renglonesDesdeBom,
   sugerirProductos,
   type ProductoVenta,
@@ -252,6 +255,33 @@ describe('presupuesto desde NetVision', () => {
     )
     assert.equal(notasPresupuesto('  ', []), 'Generado desde NetVision: proyecto sin nombre.')
   })
+
+  it('presupuestoDesdeBom arma renglones, totales y notas de una sola vez', () => {
+    const armado = presupuestoDesdeBom(bom, 'Casa Pérez', { 'ezviz-h9c': 10 }, productos, 20)
+    const directo = construirPresupuesto(
+      renglonesDesdeBom(bom, { 'ezviz-h9c': 10 }, productos, 20).renglones,
+      productos,
+      20,
+    )
+    assert.equal(armado.presupuesto.subtotal, directo.subtotal)
+    assert.equal(armado.presupuesto.items.length, directo.items.length)
+    assert.equal(armado.renglones.length, 5)
+    assert.match(armado.notas, /Casa Pérez/)
+    assert.match(armado.notas, /otro contratista/)
+  })
+
+  it('la huella cambia solo si cambia el listado, el margen o el nombre', () => {
+    assert.equal(PRESUPUESTO_VIVO_DEBOUNCE_MS, 1600)
+    const a = huellaPresupuesto(bom, 20, 'Casa Pérez')
+    const igual = huellaPresupuesto({ lines: [...bom.lines] }, 20, 'Casa Pérez')
+    assert.equal(a, igual)
+    assert.notEqual(huellaPresupuesto(bom, 15, 'Casa Pérez'), a)
+    assert.notEqual(huellaPresupuesto(bom, 20, 'Otro'), a)
+    assert.notEqual(
+      huellaPresupuesto({ lines: [...bom.lines, linea('extra', 'Sensor', 1, 28)] }, 20, 'Casa Pérez'),
+      a,
+    )
+  })
 })
 
 describe('zanja: solo se cobra si se elige «Cobrar»', () => {
@@ -310,5 +340,39 @@ describe('zanja: solo se cobra si se elige «Cobrar»', () => {
     assert.ok(sp.totalUsd > 0)
     const sinSplitter = buildBom([{ ...cam(1), modelId: 'ezviz-h4-poe' }], 30)
     assert.ok(!sinSplitter.lines.some((l) => l.sku.startsWith('POE-SPLITTER')))
+  })
+
+  it('los dispositivos del plano (altavoz, sensor) entran como accesorios', () => {
+    const altavoz = {
+      id: 'd1',
+      label: 'ALT-01',
+      x: 0.2,
+      y: 0.2,
+      discipline: 'sonido' as const,
+      kind: 'speaker' as const,
+      modelId: 'snd-hik-dsqae',
+    }
+    const sensor = {
+      id: 'd2',
+      label: 'SEN-01',
+      x: 0.4,
+      y: 0.3,
+      discipline: 'domotica' as const,
+      kind: 'sensor' as const,
+      modelId: 'dom-aqara-pir',
+    }
+    const bom = buildBom([], 30, [], [], [], null, [], {
+      planDevices: [altavoz, { ...altavoz, id: 'd3', label: 'ALT-02' }, sensor],
+    })
+    const accesorios = bom.lines.filter((l) => l.category === 'accessory')
+    assert.equal(accesorios.length, 2)
+    const hik = accesorios.find((l) => l.sku === 'snd-hik-dsqae')!
+    assert.equal(hik.qty, 2)
+    assert.equal(hik.unitUsd, 85)
+    assert.match(hik.description, /Hikvision/)
+    const pir = accesorios.find((l) => l.sku === 'dom-aqara-pir')!
+    assert.equal(pir.qty, 1)
+    assert.equal(pir.unitUsd, 28)
+    assert.equal(bom.totalUsd, 85 * 2 + 28)
   })
 })

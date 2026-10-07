@@ -130,13 +130,32 @@ function HojaDeVidaMovilInner({ params }: Props) {
   const [tokenValidando, setTokenValidando] = useState(true);
   const [tokenInvalido, setTokenInvalido] = useState<string | null>(null);
   const [redirectSeg, setRedirectSeg] = useState<number | null>(null);
+  /**
+   * ¿Este enlace lleva evaluación? Solo si RRHH la pidió (hay invitación vigente).
+   * Mientras no se sabe, se asume que sí (comportamiento anterior).
+   */
+  const [evaluacionRequerida, setEvaluacionRequerida] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    void fetch(apiUrl(`/api/talento/examen/invitacion?token=${encodeURIComponent(params.token)}`), {
+      cache: 'no-store',
+    })
+      .then((res) => {
+        if (alive) setEvaluacionRequerida(res.ok);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [params.token]);
   /** Cargo fijado por la invitación / RRHH; no editable por el obrero. */
   const [cargoOficioFijo, setCargoOficioFijo] = useState('');
   /** Inscripción IVSS la define RRHH; el obrero no la responde. */
   const [inscripcionIvssFija, setInscripcionIvssFija] = useState<SiNo>('');
 
   useEffect(() => {
-    if (step !== 4) return;
+    if (step !== 4 || !evaluacionRequerida) return;
     setRedirectSeg(REDIRECT_EVAL_SEG);
     const tick = window.setInterval(() => {
       setRedirectSeg((prev) => {
@@ -150,7 +169,7 @@ function HojaDeVidaMovilInner({ params }: Props) {
       });
     }, 1000);
     return () => window.clearInterval(tick);
-  }, [step, params.token]);
+  }, [step, params.token, evaluacionRequerida]);
 
   useEffect(() => {
     let alive = true;
@@ -650,7 +669,9 @@ function HojaDeVidaMovilInner({ params }: Props) {
               </div>
               <h2 className="text-3xl font-bold text-white tracking-tight">¡Hoja de vida enviada!</h2>
               <p className="text-[var(--nexus-text-muted)] max-w-sm mx-auto">
-                Ya se generó tu hoja de vida. A continuación harás la evaluación.
+                {evaluacionRequerida
+                  ? 'Ya se generó tu hoja de vida. A continuación harás la evaluación.'
+                  : 'Ya se generó tu hoja de vida. La empresa te contactará para el siguiente paso.'}
               </p>
               
               <div className="flex flex-col gap-3 max-w-sm mx-auto">
@@ -664,6 +685,7 @@ function HojaDeVidaMovilInner({ params }: Props) {
                 </a>
               </div>
 
+              {evaluacionRequerida ? (
               <GlassCard glow className="text-left mt-8 !bg-[var(--ios-blue-light)]/20 border-[var(--ios-blue)]/30">
                 <p className="text-sm text-[var(--ios-teal)] font-bold flex items-center gap-2">
                   <span>⏱️</span> Siguiente: evaluación
@@ -675,6 +697,7 @@ function HojaDeVidaMovilInner({ params }: Props) {
                   Puedes empezar ya con el botón de abajo.
                 </p>
               </GlassCard>
+              ) : null}
             </motion.div>
           )}
         </AnimatePresence>
@@ -712,7 +735,7 @@ function HojaDeVidaMovilInner({ params }: Props) {
                 ? 'Finalizar Registro' 
                 : 'Siguiente'}
           </button>
-        ) : (
+        ) : evaluacionRequerida ? (
           <button
             type="button"
             onClick={() => {
@@ -722,6 +745,8 @@ function HojaDeVidaMovilInner({ params }: Props) {
           >
             Continuar a evaluación
           </button>
+        ) : (
+          <p className="text-center text-sm text-zinc-400">Registro completo. Ya puedes cerrar esta ventana.</p>
         )}
       </div>
     </div>
