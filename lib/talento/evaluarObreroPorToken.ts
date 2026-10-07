@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { avisarEvaluacionObreroTelegram } from '@/lib/rrhh/avisoEvaluacionObreroTelegram';
 import { preguntasAbcObreroParaCargo } from '@/lib/talento/exam';
 import { evaluarSemaforoObrero } from '@/lib/talento/evaluarSemaforoObrero';
 
@@ -125,6 +126,10 @@ export async function evaluarObreroPorToken(
     .update({ usado_at: ahora } as never)
     .eq('token', token)
     .eq('empleado_id', invR.empleado_id);
+
+  await avisarEvaluacionObreroTelegram(admin, invR.empleado_id, {
+    semaforo: resultado.semaforo,
+  });
 
   return {
     success: true,

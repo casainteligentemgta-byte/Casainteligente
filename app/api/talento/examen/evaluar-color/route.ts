@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { avisarEvaluacionObreroTelegram } from '@/lib/rrhh/avisoEvaluacionObreroTelegram';
+import { baseUrlPublica } from '@/lib/rrhh/solicitudPersonalServer';
 import {
   procesarEvaluacionObrero,
   validarRespuestasCompletasObrero,
@@ -104,6 +106,12 @@ export async function POST(req: Request) {
   if (upErr) {
     return NextResponse.json({ error: upErr.message }, { status: 500 });
   }
+
+  await avisarEvaluacionObreroTelegram(admin.client, invR.empleado_id, {
+    baseUrl: baseUrlPublica(req),
+    semaforo: semaforoRiesgo,
+    perfilColor: scores.perfil_color,
+  });
 
   return NextResponse.json({
     success: true,
