@@ -44,7 +44,8 @@ export default function NetVisionCameraVisionToggles({
       <div
         className={
           tac
-            ? 'flex w-full min-w-0 flex-wrap items-center gap-0.5'
+            ? // Tableta y escritorio: todas a la vista en filas. Teléfono: una fila que se desliza, para no quitarle alto al plano.
+              'flex w-full min-w-0 flex-nowrap items-center gap-0.5 overflow-x-auto overscroll-x-contain pb-0.5 [scrollbar-width:thin] sm:flex-wrap sm:overflow-visible sm:pb-0'
             : `flex flex-nowrap items-center gap-1.5 overflow-x-auto overscroll-x-contain pb-0.5 [scrollbar-width:thin]`
         }
       >
