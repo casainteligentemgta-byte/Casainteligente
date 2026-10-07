@@ -38,7 +38,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, ...r });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'No se pudo registrar el adelanto.';
-    const status = msg.includes('Migración 332') ? 503 : 400;
+    const status = msg.includes('Migración 333') ? 503 : 400;
     return NextResponse.json({ error: msg }, { status });
   }
 }

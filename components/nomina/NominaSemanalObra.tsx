@@ -221,10 +221,10 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
         item_ids?: Record<string, string>;
       };
       if (!res.ok) {
-        const mig = j.code === 'MIGRATION_332' || /migración 332/i.test(j.error ?? '');
+        const mig = j.code === 'MIGRATION_333' || /migración 333/i.test(j.error ?? '');
         if (mig) {
-          setAvisoMigracion(j.error ?? 'Migración 332 pendiente.');
-          if (guardar) toast.error('El preview sí se calcula; para guardar hay que aplicar la migración 332.');
+          setAvisoMigracion(j.error ?? 'Migración 333 pendiente.');
+          if (guardar) toast.error('El preview sí se calcula; para guardar hay que aplicar la migración 333.');
         }
         const list = j.previews ?? j.items ?? previewLocal();
         setPreviews(list);

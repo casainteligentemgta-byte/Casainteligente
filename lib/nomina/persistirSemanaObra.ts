@@ -6,7 +6,7 @@ import {
   semanaCuentaComoTrabajada,
   tocaAdelantoTrasSemana,
 } from '@/lib/nomina/reglasPagoObra';
-import { domingoDeSemanaIso, esMigracionNomina332Pendiente, lunesDeSemanaIso } from '@/lib/nomina/semanaIsoNomina';
+import { domingoDeSemanaIso, esMigracionNomina333Pendiente, lunesDeSemanaIso } from '@/lib/nomina/semanaIsoNomina';
 
 export type ItemEntradaNomina = {
   empleado_id: string;
@@ -27,8 +27,8 @@ export type PreviewItemNomina = {
 
 function errMigracion(e: { message?: string } | null): Error | null {
   if (!e?.message) return null;
-  if (esMigracionNomina332Pendiente(e.message)) {
-    return new Error('Migración 332 pendiente en Supabase (nómina semanal de obra).');
+  if (esMigracionNomina333Pendiente(e.message)) {
+    return new Error('Migración 333 pendiente en Supabase (nómina semanal de obra).');
   }
   return new Error(e.message);
 }
@@ -179,15 +179,40 @@ export async function guardarPeriodoNomina(
   if (ePer || !periodo) throw new Error(ePer?.message ?? 'No se pudo guardar el periodo.');
   const periodoId = String((periodo as { id: string }).id);
 
-  await db.from('ci_nomina_items').delete().eq('periodo_id', periodoId);
+  // Volver a guardar una semana no debe borrar lo ya firmado: los ítems se
+  // actualizan en su sitio (conservan su id y, con él, el adelanto registrado).
+  const { data: previos, error: ePrev } = await db.from('ci_nomina_items').select('id').eq('periodo_id', periodoId);
+  if (ePrev) throw errMigracion(ePrev) ?? new Error(ePrev.message);
 
   const filas: Record<string, unknown>[] = [];
   for (const p of previews) {
     filas.push(filaItem(periodoId, p.empleado_id, p.semanal));
     if (p.adelanto) filas.push(filaItem(periodoId, p.empleado_id, p.adelanto));
   }
-  const { data: saved, error: eIt } = await db.from('ci_nomina_items').insert(filas).select('id, empleado_id, tipo');
+  const { data: saved, error: eIt } = await db
+    .from('ci_nomina_items')
+    .upsert(filas, { onConflict: 'periodo_id,empleado_id,tipo' })
+    .select('id, empleado_id, tipo');
   if (eIt) throw errMigracion(eIt) ?? new Error(eIt.message);
+
+  // Lo que ya no está en la semana se quita, salvo los adelantos con solicitud registrada.
+  const vigentes: Record<string, true> = {};
+  for (const row of saved ?? []) vigentes[String((row as { id: string }).id)] = true;
+  const sobrantes = (previos ?? []).map((r) => String((r as { id: string }).id)).filter((id) => !vigentes[id]);
+  if (sobrantes.length > 0) {
+    const { data: conAdelanto, error: eAdel } = await db
+      .from('ci_prestaciones_adelantos')
+      .select('item_id')
+      .in('item_id', sobrantes);
+    if (eAdel) throw errMigracion(eAdel) ?? new Error(eAdel.message);
+    const protegidos: Record<string, true> = {};
+    for (const row of conAdelanto ?? []) protegidos[String((row as { item_id: string }).item_id)] = true;
+    const borrar = sobrantes.filter((id) => !protegidos[id]);
+    if (borrar.length > 0) {
+      const { error: eDel } = await db.from('ci_nomina_items').delete().in('id', borrar);
+      if (eDel) throw new Error(eDel.message);
+    }
+  }
 
   const itemIds: Record<string, string> = {};
   for (const row of saved ?? []) {

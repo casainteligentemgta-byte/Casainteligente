@@ -23,7 +23,7 @@ export function domingoDeSemanaIso(lunesIso: string): string {
   return dt.toISOString().slice(0, 10);
 }
 
-export function esMigracionNomina332Pendiente(message: string | undefined): boolean {
+export function esMigracionNomina333Pendiente(message: string | undefined): boolean {
   const m = (message ?? '').toLowerCase();
   if (!m) return false;
   return (

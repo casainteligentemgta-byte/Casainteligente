@@ -204,7 +204,11 @@ export async function fetchCuadroContratados(
     const selCargo =
       'id,nombres,primer_apellido,segundo_apellido,nombre_completo,cedula,documento,cargo_codigo,cargo_nombre';
     const selBare = 'id,nombres,primer_apellido,segundo_apellido,nombre_completo,cedula,documento';
-    let empsRes = await supabase.from('ci_empleados').select(selCargo).in('id', empleadoIds);
+    // Las dos consultas devuelven columnas distintas: se tipa solo lo que se usa.
+    let empsRes: { data: unknown[] | null; error: { message: string } | null } = await supabase
+      .from('ci_empleados')
+      .select(selCargo)
+      .in('id', empleadoIds);
     if (
       empsRes.error &&
       (esColumnaInexistente(empsRes.error.message, 'cargo_codigo') ||

@@ -13,7 +13,7 @@ import {
   type ClasePagoObra,
   FECHA_ANCLAJE_CESTA_ISO,
 } from '@/lib/nomina/reglasPagoObra';
-import { domingoDeSemanaIso, esMigracionNomina332Pendiente, lunesDeSemanaIso } from '@/lib/nomina/semanaIsoNomina';
+import { domingoDeSemanaIso, esMigracionNomina333Pendiente, lunesDeSemanaIso } from '@/lib/nomina/semanaIsoNomina';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -64,9 +64,9 @@ export async function GET(req: Request) {
     .eq('proyecto_id', proyectoId)
     .eq('semana_inicio', semana)
     .maybeSingle();
-  if (error && esMigracionNomina332Pendiente(error.message)) {
+  if (error && esMigracionNomina333Pendiente(error.message)) {
     return NextResponse.json(
-      { error: 'Migración 332 pendiente en Supabase (nómina semanal de obra).', code: 'MIGRATION_332' },
+      { error: 'Migración 333 pendiente en Supabase (nómina semanal de obra).', code: 'MIGRATION_333' },
       { status: 503 },
     );
   }
@@ -126,7 +126,7 @@ export async function POST(req: Request) {
           );
         } catch (e) {
           const msg = e instanceof Error ? e.message : '';
-          if (msg.includes('Migración 332')) {
+          if (msg.includes('Migración 333')) {
             previasPorEmpleado[it.empleado_id] = 0;
           } else throw e;
         }
@@ -165,9 +165,9 @@ export async function POST(req: Request) {
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'No se pudo calcular la semana.';
-    const status = msg.includes('Migración 332') ? 503 : 400;
+    const status = msg.includes('Migración 333') ? 503 : 400;
     return NextResponse.json(
-      { error: msg, code: status === 503 ? 'MIGRATION_332' : undefined },
+      { error: msg, code: status === 503 ? 'MIGRATION_333' : undefined },
       { status },
     );
   }
