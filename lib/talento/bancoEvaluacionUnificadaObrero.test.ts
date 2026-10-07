@@ -20,6 +20,19 @@ describe('bancoEvaluacionUnificadaObrero', () => {
     assert.equal(b.confiabilidad.length, 3);
     assert.equal(b.abc.length, 9);
     assert.equal(b.familia, 'electricidad');
+    assert.equal(b.track, 'clasificado');
+  });
+
+  it('track ayudante con bloque distinto y mismas 21 preguntas', () => {
+    const ayu = bancoEvaluacionUnificadaObrero({ cargo: 'AYUDANTE', codigoGoE: '2.1' });
+    const elec = bancoEvaluacionUnificadaObrero({ cargo: 'ELECTRICISTA DE 1ra.', codigoGoE: '5.5' });
+    assert.equal(ayu.total, 21);
+    assert.equal(ayu.track, 'ayudante');
+    assert.equal(ayu.familia, 'ayudante');
+    assert.equal(ayu.abc.length, 9);
+    assert.equal(ayu.etiquetaTrack, 'Ayudante');
+    assert.equal(elec.etiquetaTrack, 'Personal clasificado');
+    assert.notEqual(ayu.abc[6]?.pregunta, elec.abc[6]?.pregunta);
   });
 });
 

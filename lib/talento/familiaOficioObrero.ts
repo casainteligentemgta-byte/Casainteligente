@@ -1,9 +1,13 @@
 /**
  * Familias de oficio para adecuar el bloque ABC del obrero.
  * No es un cuestionario por cada código GOE: se agrupa por riesgos/tareas similares.
+ * Los ayudantes (y obrero de 1era. / apoyo de nivel 2) tienen banco propio.
  */
 
+import { cargoPorCodigo } from '@/lib/constants/cargosObreros';
+
 export const FAMILIAS_OFICIO_OBRERO = [
+  'ayudante',
   'general',
   'obra_civil',
   'electricidad',
@@ -13,6 +17,22 @@ export const FAMILIAS_OFICIO_OBRERO = [
   'vigilancia',
 ] as const;
 
+/** Track de la evaluación unificada: ayudante vs oficio clasificado (1ª / 2ª / maestro). */
+export type TrackEvaluacionObrero = 'ayudante' | 'clasificado';
+
+/** Códigos GOE de apoyo / no clasificados (no 1ª ni 2ª de oficio). */
+const CODIGOS_AYUDANTE = new Set([
+  '1.1', // OBRERO DE 1era.
+  '2.1', // AYUDANTE
+  '2.2', // AUXILIAR DE DEPOSITO
+  '2.5', // AYUDANTE DE OPERADORES
+  '2.6', // AYUDANTE DE MECANICO DIESEL
+  '2.7', // AYUDANTE DE TOPOGRAFO
+  '2.8', // RASTRILLERO
+  '2.9', // ESPESORISTA
+  '2.10', // PALERO ASFALTICO
+]);
+
 export type FamiliaOficioObrero = (typeof FAMILIAS_OFICIO_OBRERO)[number];
 
 export function esFamiliaOficioObrero(v: string): v is FamiliaOficioObrero {
@@ -21,6 +41,8 @@ export function esFamiliaOficioObrero(v: string): v is FamiliaOficioObrero {
 
 export function etiquetaFamiliaOficio(familia: FamiliaOficioObrero): string {
   switch (familia) {
+    case 'ayudante':
+      return 'Ayudante';
     case 'obra_civil':
       return 'Obra civil / acabados';
     case 'electricidad':
@@ -47,6 +69,51 @@ function norm(s: string): string {
     .trim();
 }
 
+export function codigoGoENormalizado(raw?: string | null): string {
+  return String(raw ?? '')
+    .trim()
+    .replace(',', '.')
+    .replace(/\s+/g, '');
+}
+
+export function etiquetaTrackEvaluacion(track: TrackEvaluacionObrero): string {
+  return track === 'ayudante' ? 'Ayudante' : 'Personal clasificado';
+}
+
+/**
+ * Ayudante / obrero de 1era. / apoyo de nivel 2. No aplica a vigilante.
+ */
+export function esAyudanteTabulador(opts: {
+  cargo?: string | null;
+  rolExamen?: string | null;
+  codigoGoE?: string | null;
+}): boolean {
+  const rol = (opts.rolExamen ?? '').trim().toLowerCase();
+  if (rol === 'vigilante') return false;
+
+  const cod = codigoGoENormalizado(opts.codigoGoE);
+  const cat = cargoPorCodigo(cod);
+  if (cat && CODIGOS_AYUDANTE.has(cat.codigo)) return true;
+  if (CODIGOS_AYUDANTE.has(cod)) return true;
+
+  const n = norm([opts.cargo, cat?.nombre, opts.codigoGoE].filter(Boolean).join(' '));
+  if (!n) return false;
+  if (n.includes('vigilante')) return false;
+  if (n.includes('ayudante')) return true;
+  if (n.includes('obrero de 1')) return true;
+  if (n.includes('auxiliar de deposito')) return true;
+  if (n.includes('rastriller') || n.includes('espesor') || n.includes('palero asfalt')) return true;
+  return false;
+}
+
+export function trackEvaluacionObrero(opts: {
+  cargo?: string | null;
+  rolExamen?: string | null;
+  codigoGoE?: string | null;
+}): TrackEvaluacionObrero {
+  return esAyudanteTabulador(opts) ? 'ayudante' : 'clasificado';
+}
+
 /**
  * Infiere familia desde `rol_buscado` / cargo / código GOE y, si aplica, `rol_examen`.
  */
@@ -57,8 +124,10 @@ export function familiaOficioDesdeCargo(opts: {
 }): FamiliaOficioObrero {
   const rol = (opts.rolExamen ?? '').trim().toLowerCase();
   if (rol === 'vigilante') return 'vigilancia';
+  if (esAyudanteTabulador(opts)) return 'ayudante';
 
-  const raw = [opts.cargo, opts.codigoGoE].filter(Boolean).join(' ');
+  const cat = cargoPorCodigo(codigoGoENormalizado(opts.codigoGoE));
+  const raw = [opts.cargo, cat?.nombre, opts.codigoGoE].filter(Boolean).join(' ');
   const n = norm(raw);
   if (!n) return 'general';
 
@@ -127,7 +196,6 @@ export function familiaOficioDesdeCargo(opts: {
     n.includes('graniter') ||
     n.includes('pintor') ||
     n.includes('impermeabil') ||
-    n.includes('ayudante') ||
     n.includes('obrero') ||
     n.includes('caporal') ||
     n.includes('ginchero') ||

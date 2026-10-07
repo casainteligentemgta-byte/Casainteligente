@@ -86,6 +86,49 @@ const GENERAL: BloqueFamiliaAbc = [
   ),
 ];
 
+const AYUDANTE: BloqueFamiliaAbc = [
+  q(
+    'obr_16',
+    'oficio',
+    'El encargado te dice una cosa y un compañero te dice otra. ¿Qué haces?',
+    'Confirmo con el encargado y hago eso.',
+    'Hago lo que me convenza.',
+    'Hago lo mío.',
+  ),
+  q(
+    'obr_17',
+    'oficio',
+    'Te mandan a cargar y te duele la espalda. ¿Qué haces?',
+    'Aviso y pido ayuda o cambio de tarea.',
+    'Sigo hasta que no pueda.',
+    'Me escondo.',
+  ),
+  q(
+    'obr_18',
+    'oficio',
+    'Te piden un trabajo y no entendiste bien. ¿Qué haces?',
+    'Pregunto otra vez hasta entender.',
+    'Hago a ojo.',
+    'Me quedo parado sin decir nada.',
+  ),
+  q(
+    'obr_19',
+    'oficio',
+    'El oficial se fue y queda trabajo a medio. ¿Qué haces?',
+    'Sigo como me dijeron y aviso si falta algo.',
+    'Me siento a esperar.',
+    'Me voy.',
+  ),
+  q(
+    'obr_20',
+    'oficio',
+    'Ves un hueco, un clavo o un cable en el paso. ¿Qué haces?',
+    'Aviso y no dejo que pasen.',
+    'Sigo: no es mi cargo.',
+    'Lo dejo así.',
+  ),
+];
+
 const OBRA_CIVIL: BloqueFamiliaAbc = [
   q(
     'obr_16',
@@ -345,6 +388,7 @@ const VIGILANCIA: BloqueFamiliaAbc = [
 ];
 
 const BLOQUES: Record<FamiliaOficioObrero, BloqueFamiliaAbc> = {
+  ayudante: AYUDANTE,
   general: GENERAL,
   obra_civil: OBRA_CIVIL,
   electricidad: ELECTRICIDAD,

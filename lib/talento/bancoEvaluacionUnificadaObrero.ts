@@ -16,7 +16,12 @@ import {
   armarPreguntasAbcObrero,
   type PreguntaAbcObrero,
 } from '@/lib/talento/preguntasAbcFamiliaObrero';
-import type { FamiliaOficioObrero } from '@/lib/talento/familiaOficioObrero';
+import {
+  trackEvaluacionObrero,
+  etiquetaTrackEvaluacion,
+  type FamiliaOficioObrero,
+  type TrackEvaluacionObrero,
+} from '@/lib/talento/familiaOficioObrero';
 
 /** Color: 6 situaciones bastan para perfil dominante. */
 export const DISC_UNIFICADA: PreguntaDiscObrero[] = PREGUNTAS_DISC_OBRERO.filter((q) =>
@@ -47,6 +52,8 @@ export type BancoEvaluacionUnificada = {
   abc: PreguntaAbcObrero[];
   familia: FamiliaOficioObrero;
   etiquetaFamilia: string;
+  track: TrackEvaluacionObrero;
+  etiquetaTrack: string;
   /** Total de pasos en UI (siempre 21). */
   total: number;
 };
@@ -56,6 +63,11 @@ export function bancoEvaluacionUnificadaObrero(opts?: {
   rolExamen?: string | null;
   codigoGoE?: string | null;
 }): BancoEvaluacionUnificada {
+  const track = trackEvaluacionObrero({
+    cargo: opts?.cargo,
+    rolExamen: opts?.rolExamen,
+    codigoGoE: opts?.codigoGoE,
+  });
   const armado = armarPreguntasAbcObrero({
     nucleo: ABC_NUCLEO_UNIFICADA,
     cargo: opts?.cargo,
@@ -75,6 +87,8 @@ export function bancoEvaluacionUnificadaObrero(opts?: {
     abc,
     familia: armado.familia,
     etiquetaFamilia: armado.etiquetaFamilia,
+    track,
+    etiquetaTrack: etiquetaTrackEvaluacion(track),
     total,
   };
 }

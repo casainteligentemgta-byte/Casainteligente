@@ -74,9 +74,11 @@ export default function FormularioEvaluacionUnificada({
         ? 'Preguntas de obra'
         : paso.tipo === 'conf'
           ? 'Honestidad'
-          : banco.etiquetaFamilia
-            ? `En la obra · ${banco.etiquetaFamilia}`
-            : 'En la obra';
+          : banco.track === 'ayudante'
+            ? 'En la obra · Ayudante'
+            : banco.etiquetaFamilia
+              ? `En la obra · ${banco.etiquetaFamilia}`
+              : 'En la obra';
 
   const pasoRespondido = (): boolean => {
     if (paso.tipo === 'disc') {
@@ -123,7 +125,9 @@ export default function FormularioEvaluacionUnificada({
       <header>
         <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-500">Evaluación</p>
         <p className="mt-1 text-sm text-zinc-400">Hola, {nombre}</p>
-        <p className="mt-1 text-[11px] text-zinc-600">{TOTAL_EVALUACION_UNIFICADA} preguntas</p>
+        <p className="mt-1 text-[11px] text-zinc-600">
+          {TOTAL_EVALUACION_UNIFICADA} preguntas · {banco.etiquetaTrack}
+        </p>
         <div className="mt-4 flex items-center justify-between text-xs text-zinc-500">
           <span>{seccionLabel}</span>
           <span>
