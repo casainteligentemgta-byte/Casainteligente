@@ -27,10 +27,10 @@ export function esMigracionNomina333Pendiente(message: string | undefined): bool
   const m = (message ?? '').toLowerCase();
   if (!m) return false;
   return (
-    (m.includes('ci_nomina_periodos') ||
-      m.includes('ci_nomina_items') ||
+    (m.includes('ci_nomina_obra_periodos') ||
+      m.includes('ci_nomina_obra_items') ||
       m.includes('ci_prestaciones_saldo') ||
-      m.includes('ci_prestaciones_adelantos')) &&
+      m.includes('ci_nomina_obra_adelantos')) &&
     (m.includes('does not exist') || m.includes('schema cache') || m.includes('could not find'))
   );
 }

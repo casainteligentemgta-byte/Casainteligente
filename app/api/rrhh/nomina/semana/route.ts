@@ -59,8 +59,8 @@ export async function GET(req: Request) {
   const db = admin.ok ? admin.client : await createClient();
 
   const { data, error } = await db
-    .from('ci_nomina_periodos')
-    .select('id, semana_inicio, semana_fin, tasa_bcv_pago, tasa_ancla_cesta_bcv, estado, ci_nomina_items(*)')
+    .from('ci_nomina_obra_periodos')
+    .select('id, semana_inicio, semana_fin, tasa_bcv_pago, tasa_ancla_cesta_bcv, estado, ci_nomina_obra_items(*)')
     .eq('proyecto_id', proyectoId)
     .eq('semana_inicio', semana)
     .maybeSingle();

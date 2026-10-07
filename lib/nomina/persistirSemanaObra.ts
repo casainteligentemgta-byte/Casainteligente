@@ -40,8 +40,8 @@ export async function contarSemanasTrabajadasPrevias(
   semanaInicio: string,
 ): Promise<number> {
   const { data, error } = await db
-    .from('ci_nomina_items')
-    .select('id, dias_laborados, tipo, periodo:ci_nomina_periodos!inner(proyecto_id, semana_inicio)')
+    .from('ci_nomina_obra_items')
+    .select('id, dias_laborados, tipo, periodo:ci_nomina_obra_periodos!inner(proyecto_id, semana_inicio)')
     .eq('empleado_id', empleadoId)
     .eq('tipo', 'semanal');
   const mig = errMigracion(error);
@@ -160,7 +160,7 @@ export async function guardarPeriodoNomina(
   });
 
   const { data: periodo, error: ePer } = await db
-    .from('ci_nomina_periodos')
+    .from('ci_nomina_obra_periodos')
     .upsert(
       {
         proyecto_id: args.proyectoId,
@@ -181,7 +181,7 @@ export async function guardarPeriodoNomina(
 
   // Volver a guardar una semana no debe borrar lo ya firmado: los ítems se
   // actualizan en su sitio (conservan su id y, con él, el adelanto registrado).
-  const { data: previos, error: ePrev } = await db.from('ci_nomina_items').select('id').eq('periodo_id', periodoId);
+  const { data: previos, error: ePrev } = await db.from('ci_nomina_obra_items').select('id').eq('periodo_id', periodoId);
   if (ePrev) throw errMigracion(ePrev) ?? new Error(ePrev.message);
 
   const filas: Record<string, unknown>[] = [];
@@ -190,7 +190,7 @@ export async function guardarPeriodoNomina(
     if (p.adelanto) filas.push(filaItem(periodoId, p.empleado_id, p.adelanto));
   }
   const { data: saved, error: eIt } = await db
-    .from('ci_nomina_items')
+    .from('ci_nomina_obra_items')
     .upsert(filas, { onConflict: 'periodo_id,empleado_id,tipo' })
     .select('id, empleado_id, tipo');
   if (eIt) throw errMigracion(eIt) ?? new Error(eIt.message);
@@ -201,7 +201,7 @@ export async function guardarPeriodoNomina(
   const sobrantes = (previos ?? []).map((r) => String((r as { id: string }).id)).filter((id) => !vigentes[id]);
   if (sobrantes.length > 0) {
     const { data: conAdelanto, error: eAdel } = await db
-      .from('ci_prestaciones_adelantos')
+      .from('ci_nomina_obra_adelantos')
       .select('item_id')
       .in('item_id', sobrantes);
     if (eAdel) throw errMigracion(eAdel) ?? new Error(eAdel.message);
@@ -209,7 +209,7 @@ export async function guardarPeriodoNomina(
     for (const row of conAdelanto ?? []) protegidos[String((row as { item_id: string }).item_id)] = true;
     const borrar = sobrantes.filter((id) => !protegidos[id]);
     if (borrar.length > 0) {
-      const { error: eDel } = await db.from('ci_nomina_items').delete().in('id', borrar);
+      const { error: eDel } = await db.from('ci_nomina_obra_items').delete().in('id', borrar);
       if (eDel) throw new Error(eDel.message);
     }
   }
@@ -234,7 +234,7 @@ export async function registrarAdelantoPrestaciones(
   },
 ): Promise<{ adelanto_id: string }> {
   const { data: item, error: eItem } = await db
-    .from('ci_nomina_items')
+    .from('ci_nomina_obra_items')
     .select('id, empleado_id, tipo, total_usd, total_ves, snapshot, periodo_id')
     .eq('id', args.itemId)
     .maybeSingle();
@@ -246,7 +246,7 @@ export async function registrarAdelantoPrestaciones(
   }
 
   const { data: per, error: ePer } = await db
-    .from('ci_nomina_periodos')
+    .from('ci_nomina_obra_periodos')
     .select('proyecto_id')
     .eq('id', (item as { periodo_id: string }).periodo_id)
     .maybeSingle();
@@ -258,14 +258,14 @@ export async function registrarAdelantoPrestaciones(
   const proyectoId = String((per as { proyecto_id: string }).proyecto_id);
 
   const { data: previo } = await db
-    .from('ci_prestaciones_adelantos')
+    .from('ci_nomina_obra_adelantos')
     .select('id')
     .eq('item_id', args.itemId)
     .maybeSingle();
   const yaRegistrado = Boolean(previo);
 
   const { data: adelanto, error: eAd } = await db
-    .from('ci_prestaciones_adelantos')
+    .from('ci_nomina_obra_adelantos')
     .upsert(
       {
         item_id: args.itemId,
