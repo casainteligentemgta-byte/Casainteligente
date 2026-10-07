@@ -932,7 +932,7 @@ export default function NetVisionClienteView() {
       </div>
 
       {cameras.length > 0 ? (
-        <div className="nv-no-print shrink-0 print:hidden" data-nv-cam-toggles>
+        <div className="nv-no-print w-full min-w-0 shrink-0 print:hidden" data-nv-cam-toggles>
           <NetVisionCameraVisionToggles
             cameras={cameras}
             hiddenIds={hiddenLive}

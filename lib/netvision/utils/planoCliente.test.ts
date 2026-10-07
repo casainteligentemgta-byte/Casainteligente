@@ -9,6 +9,7 @@ import {
   limitesDeZoom,
   mundoDePlano,
   numeroDePin,
+  etiquetaCamTactica,
   tintaDelPlano,
   unirCajas,
   zonasDeSector,
@@ -33,6 +34,14 @@ describe('plano del cliente · número del pin', () => {
     assert.equal(numeroDePin('cam 7', 0), '07')
     assert.equal(numeroDePin('Entrada', 4), '05')
     assert.equal(numeroDePin('  ', 0), '01')
+  })
+})
+
+describe('tira táctica · Cam 1 a Cam 16', () => {
+  it('escribe Cam 1 … Cam 16', () => {
+    assert.equal(etiquetaCamTactica('CAM-01', 0), 'Cam 1')
+    assert.equal(etiquetaCamTactica('CAM-16', 15), 'Cam 16')
+    assert.equal(etiquetaCamTactica('Entrada', 3), 'Cam 4')
   })
 })
 

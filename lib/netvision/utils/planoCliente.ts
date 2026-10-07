@@ -29,6 +29,13 @@ export function numeroDePin(label: string, indice: number): string {
   return String(n).padStart(2, '0')
 }
 
+/** Tira del cliente: «Cam 1» … «Cam 16». */
+export function etiquetaCamTactica(label: string, indice: number): string {
+  const m = /(\d{1,3})\s*$/.exec(label.trim())
+  const n = m ? Number(m[1]) : indice + 1
+  return `Cam ${n}`
+}
+
 export type ZonasSector = {
   /** Radios en coordenadas 0–1 del plano, ya recortados al cono dibujado. */
   identificarNorm: number
