@@ -2980,11 +2980,11 @@ export default function NexusVisionArchitectClient() {
         data-nv-vista-cliente
         onClick={() => {
           saveProject(project)
-          window.open(
+          const vista = window.open(
             `/nexus/vision/cliente?id=${encodeURIComponent(project.id)}`,
             '_blank',
-            'noopener,noreferrer',
           )
+          if (vista) vista.opener = null
         }}
         disabled={!project.planoUrl}
       >

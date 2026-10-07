@@ -38,7 +38,11 @@ import {
   urlCompartida,
 } from '@/lib/netvision/compartir'
 import { descargarPlanoFirmado, subirPlanoNube } from '@/lib/netvision/planoNube'
-import type { DesignCamera, NetVisionProject } from '@/lib/netvision/types'
+import type {
+  ClientePresupuestoSnapshot,
+  DesignCamera,
+  NetVisionProject,
+} from '@/lib/netvision/types'
 import {
   agruparFichasPorModelo,
   buildClienteCameraCard,
@@ -58,14 +62,43 @@ import NetVisionSplitterSymbol from '@/components/netvision/NetVisionSplitterSym
 import { contarSplittersPoe, esCamaraCableada } from '@/lib/netvision/catalog/cameras'
 
 function loadClienteProject(id: string | null): NetVisionProject | null {
-  if (id) {
-    return peekLocalProject(id) ?? loadProject()
-  }
   try {
-    return loadProject()
+    const activo = loadProject()
+    if (!id || activo.id === id) return activo
   } catch {
-    return null
+    /* se intenta la biblioteca */
   }
+  return id ? peekLocalProject(id) : null
+}
+
+const MSG_SIN_PRESUPUESTO_VENTAS =
+  'Crea primero el presupuesto en Ventas (inspector Presupuestos) para incluirlo.'
+
+async function snapshotOfertaVentas(
+  project: NetVisionProject,
+): Promise<{ ok: true; snap: ClientePresupuestoSnapshot } | { ok: false; error: string }> {
+  const id = project.ventasBudgetId?.trim()
+  if (!id) {
+    return { ok: false, error: MSG_SIN_PRESUPUESTO_VENTAS }
+  }
+  const leido = await cargarOfertaVentas(id)
+  if (!leido.ok) {
+    return { ok: false, error: `No se pudo leer el presupuesto de Ventas: ${leido.error}` }
+  }
+  const snap = snapshotDesdeItemsVentas({
+    items: leido.oferta.items,
+    subtotal: leido.oferta.subtotal,
+    notas: leido.oferta.notas,
+    moneda: project.currency,
+    tasaCambio: project.tasaCambio,
+  })
+  if (!snap) {
+    return {
+      ok: false,
+      error: 'El presupuesto de Ventas no tiene renglones para mostrar al cliente.',
+    }
+  }
+  return { ok: true, snap }
 }
 
 function CameraFicha({
@@ -418,6 +451,7 @@ export default function NetVisionClienteView() {
   const [incluirPresupuesto, setIncluirPresupuesto] = useState(false)
   const [vistaCliente, setVistaCliente] = useState<'plano' | 'inversion'>('plano')
   const [shareMsg, setShareMsg] = useState<string | null>(null)
+  const [cargandoOferta, setCargandoOferta] = useState(false)
   /** Reacomoda a hoja apaisada y luego abre el diálogo de imprimir / PDF. */
   const [imprimiendo, setImprimiendo] = useState(false)
   const projectIdCargado = project?.id ?? null
@@ -569,6 +603,46 @@ export default function NetVisionClienteView() {
   }
 
   /**
+   * Carga la oferta de Ventas y la muestra ya en esta vista. El check no puede
+   * quedar mudo: si falta el presupuesto, se dice por qué.
+   */
+  const alCambiarIncluirPresupuesto = async (checked: boolean) => {
+    if (!project || sharing || cargandoOferta) return
+    if (!checked) {
+      setIncluirPresupuesto(false)
+      setVistaCliente('plano')
+      setShareMsg(
+        'El enlace llevará solo el plano. Marca de nuevo «Incluir presupuesto» para añadir la inversión.',
+      )
+      return
+    }
+    if (hayOfertaCliente(project)) {
+      setIncluirPresupuesto(true)
+      setVistaCliente('inversion')
+    }
+    setCargandoOferta(true)
+    setShareMsg('Cargando el presupuesto de Ventas…')
+    try {
+      const leido = await snapshotOfertaVentas(project)
+      if (!leido.ok) {
+        if (!hayOfertaCliente(project)) setIncluirPresupuesto(false)
+        setShareMsg(leido.error)
+        return
+      }
+      const next = { ...project, clientePresupuesto: leido.snap }
+      saveProject(next)
+      setProject(next)
+      setIncluirPresupuesto(true)
+      setVistaCliente('inversion')
+      setShareMsg(
+        'Presupuesto incluido. Al compartir, el cliente verá esta oferta (precios de Ventas, sin costos).',
+      )
+    } finally {
+      setCargandoOferta(false)
+    }
+  }
+
+  /**
    * Crea el enlace para el cliente: guarda el proyecto y el plano en la nube y
    * pide el código. El enlace muestra siempre la última versión guardada.
    */
@@ -579,28 +653,13 @@ export default function NetVisionClienteView() {
     try {
       let aPublicar = project
       if (incluirPresupuesto) {
-        if (!project.ventasBudgetId) {
-          setShareMsg('Crea primero el presupuesto en Ventas (inspector Presupuestos) para incluirlo en el enlace.')
-          return
-        }
         setShareMsg('Preparando la oferta para el cliente…')
-        const leido = await cargarOfertaVentas(project.ventasBudgetId)
+        const leido = await snapshotOfertaVentas(project)
         if (!leido.ok) {
-          setShareMsg(`No se pudo leer el presupuesto de Ventas: ${leido.error}`)
+          setShareMsg(leido.error)
           return
         }
-        const snap = snapshotDesdeItemsVentas({
-          items: leido.oferta.items,
-          subtotal: leido.oferta.subtotal,
-          notas: leido.oferta.notas,
-          moneda: project.currency,
-          tasaCambio: project.tasaCambio,
-        })
-        if (!snap) {
-          setShareMsg('El presupuesto de Ventas no tiene renglones para mostrar al cliente.')
-          return
-        }
-        aPublicar = { ...project, clientePresupuesto: snap }
+        aPublicar = { ...project, clientePresupuesto: leido.snap }
       } else if (project.clientePresupuesto) {
         const next = { ...project }
         delete next.clientePresupuesto
@@ -813,16 +872,26 @@ export default function NetVisionClienteView() {
               </button>
               <label
                 data-nv-incluir-presupuesto
-                className="inline-flex min-h-11 max-w-[16rem] cursor-pointer items-center gap-2 border border-[#2e7d54] px-2.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#d6ffe5]"
+                data-nv-incluir-presupuesto-on={incluirPresupuesto ? '' : undefined}
+                title={
+                  project.ventasBudgetId
+                    ? 'Mostrar en esta vista la oferta de Ventas y enviarla al compartir'
+                    : MSG_SIN_PRESUPUESTO_VENTAS
+                }
+                className={`inline-flex min-h-11 max-w-[16rem] cursor-pointer items-center gap-2 border px-2.5 text-[10px] font-semibold uppercase tracking-[0.1em] ${
+                  incluirPresupuesto || cargandoOferta
+                    ? 'border-[#8cffb5] bg-[#8cffb5]/15 text-[#8cffb5]'
+                    : 'border-[#2e7d54] text-[#d6ffe5] hover:border-[#8cffb5]'
+                } ${sharing || cargandoOferta ? 'opacity-50' : ''}`}
               >
                 <input
                   type="checkbox"
                   className="h-4 w-4 shrink-0 accent-[#8cffb5]"
-                  checked={incluirPresupuesto}
-                  disabled={sharing || !project.ventasBudgetId}
-                  onChange={(e) => setIncluirPresupuesto(e.target.checked)}
+                  checked={incluirPresupuesto || cargandoOferta}
+                  disabled={sharing || cargandoOferta}
+                  onChange={(e) => void alCambiarIncluirPresupuesto(e.target.checked)}
                 />
-                Incluir presupuesto
+                {cargandoOferta ? 'Cargando…' : 'Incluir presupuesto'}
               </label>
             </>
           ) : null}
@@ -839,7 +908,7 @@ export default function NetVisionClienteView() {
         </div>
       </header>
 
-      {!esCompartido && (shareUrl || shareMsg) ? (
+      {!esCompartido && (shareUrl || shareMsg || !project.ventasBudgetId) ? (
         <div
           data-nv-compartir-panel
           className="nv-no-print shrink-0 space-y-2 border border-[#2e7d54] bg-[#0b1a14] p-2.5 text-[11px] print:hidden"
@@ -848,11 +917,11 @@ export default function NetVisionClienteView() {
             <p data-nv-compartir-msg className="text-[#d6ffe5]">
               {shareMsg}
             </p>
-          ) : (
+          ) : shareUrl ? (
             <p className="text-[#a9e8c4]">
               Este proyecto está compartido. El cliente ve siempre la última versión guardada.
             </p>
-          )}
+          ) : null}
           <p className="text-[10px] text-[#a9e8c4]">
             {project.ventasBudgetId
               ? incluirPresupuesto
@@ -1001,7 +1070,7 @@ export default function NetVisionClienteView() {
         ) : null}
       </div>
 
-      {hayOfertaCliente(project) ? (
+      {incluirPresupuesto && hayOfertaCliente(project) ? (
         <div
           data-nv-cliente-vistas
           className="nv-no-print flex shrink-0 gap-0.5 rounded-lg border border-[#2e7d54] bg-[#0b1a14] p-0.5 print:hidden"
@@ -1047,7 +1116,7 @@ export default function NetVisionClienteView() {
         </p>
       ) : null}
 
-      {vistaCliente === 'inversion' && project.clientePresupuesto ? (
+      {incluirPresupuesto && vistaCliente === 'inversion' && project.clientePresupuesto ? (
         <div className="nv-no-print min-h-0 flex-1 print:hidden">
           <NetVisionClientePresupuesto oferta={project.clientePresupuesto} />
         </div>
@@ -1163,7 +1232,7 @@ export default function NetVisionClienteView() {
         </aside>
       </div>
 
-      {project.clientePresupuesto ? (
+      {incluirPresupuesto && project.clientePresupuesto ? (
         <div className="hidden print:block">
           <NetVisionClientePresupuesto oferta={project.clientePresupuesto} />
         </div>
