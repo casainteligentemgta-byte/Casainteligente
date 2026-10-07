@@ -9,6 +9,8 @@ export type FilaNominaContratado = {
   cedula: string;
   bonoUsd: number;
   fechaIngreso: string | null;
+  cargoCodigo: string | null;
+  cargoNombre: string | null;
 };
 
 function sTrim(v: unknown): string {
@@ -193,19 +195,30 @@ export async function fetchCuadroContratados(
       apellidos: string;
       cedula: string;
       cedulaNorm: string;
+      cargoCodigo: string | null;
+      cargoNombre: string | null;
     }
   >();
 
   if (empleadoIds.length > 0) {
-    const { data: emps, error: eErr } = await supabase
+    const selCargo =
+      'id,nombres,primer_apellido,segundo_apellido,nombre_completo,cedula,documento,cargo_codigo,cargo_nombre';
+    const selBare = 'id,nombres,primer_apellido,segundo_apellido,nombre_completo,cedula,documento';
+    // Las dos consultas devuelven columnas distintas: se tipa solo lo que se usa.
+    let empsRes: { data: unknown[] | null; error: { message: string } | null } = await supabase
       .from('ci_empleados')
-      .select(
-        'id,nombres,primer_apellido,segundo_apellido,nombre_completo,cedula,documento',
-      )
+      .select(selCargo)
       .in('id', empleadoIds);
-    if (eErr) throw new Error(eErr.message);
+    if (
+      empsRes.error &&
+      (esColumnaInexistente(empsRes.error.message, 'cargo_codigo') ||
+        esColumnaInexistente(empsRes.error.message, 'cargo_nombre'))
+    ) {
+      empsRes = await supabase.from('ci_empleados').select(selBare).in('id', empleadoIds);
+    }
+    if (empsRes.error) throw new Error(empsRes.error.message);
 
-    for (const raw of emps ?? []) {
+    for (const raw of empsRes.data ?? []) {
       const id = sTrim((raw as { id?: unknown }).id);
       if (!id) continue;
       const cedula = sTrim((raw as { cedula?: unknown }).cedula ?? (raw as { documento?: unknown }).documento);
@@ -214,6 +227,8 @@ export async function fetchCuadroContratados(
         apellidos: apellidosDesdeEmpleado(raw as Parameters<typeof apellidosDesdeEmpleado>[0]),
         cedula: cedula || '—',
         cedulaNorm: cedulaNorm(cedula),
+        cargoCodigo: sTrim((raw as { cargo_codigo?: unknown }).cargo_codigo) || null,
+        cargoNombre: sTrim((raw as { cargo_nombre?: unknown }).cargo_nombre) || null,
       });
     }
   }
@@ -266,6 +281,8 @@ export async function fetchCuadroContratados(
       cedula: emp.cedula,
       bonoUsd: bonoPorEmpleado.get(eid) ?? 0,
       fechaIngreso: fechaIngresoPorEmpleado.get(eid) ?? null,
+      cargoCodigo: emp.cargoCodigo,
+      cargoNombre: emp.cargoNombre,
     });
   }
 
@@ -303,6 +320,8 @@ export async function fetchCuadroContratados(
       cedula: cedula || '—',
       bonoUsd: Number.isFinite(bono) ? Math.max(0, Math.round(bono * 100) / 100) : 0,
       fechaIngreso: created ? created.slice(0, 10) : null,
+      cargoCodigo: null,
+      cargoNombre: null,
     });
   }
 
