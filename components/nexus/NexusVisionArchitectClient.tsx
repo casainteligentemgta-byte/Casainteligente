@@ -1093,7 +1093,7 @@ export default function NexusVisionArchitectClient() {
         conduitPlans,
         undergroundPlan,
         project.infraDevices ?? [],
-        { zanjaModo: project.zanjaModo },
+        { zanjaModo: project.zanjaModo, planDevices: project.planDevices ?? [] },
       ),
     [
       project.cameras,
@@ -1104,6 +1104,7 @@ export default function NexusVisionArchitectClient() {
       undergroundPlan,
       project.infraDevices,
       project.zanjaModo,
+      project.planDevices,
     ],
   )
 
@@ -3513,6 +3514,14 @@ export default function NexusVisionArchitectClient() {
             zanjaMetros={undergroundPlan.totalPipeM}
             onZanjaModo={(zanjaModo) => setProject((p) => ({ ...p, zanjaModo }))}
             projectClient={project.client ?? ''}
+            ventasBudgetId={project.ventasBudgetId}
+            onVentasBudgetId={(id) =>
+              setProject((p) => {
+                const next = { ...p, ventasBudgetId: id }
+                if (!id) delete next.ventasBudgetId
+                return next
+              })
+            }
           />
         </NetVisionCollapsible>
       </div>

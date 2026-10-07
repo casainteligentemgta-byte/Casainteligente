@@ -17,6 +17,7 @@ import {
   getInfraModelOrDefault,
   hddPriceUsd,
 } from '@/lib/netvision/catalog/salaTecnica'
+import { getPlanDeviceModelOrDefault } from '@/lib/netvision/catalog/planDevices'
 import type {
   BomLine,
   BomSummary,
@@ -24,6 +25,7 @@ import type {
   DesignCamera,
   DesignInfraDevice,
   DesignNetworkNode,
+  DesignPlanDevice,
   ZanjaModo,
 } from '@/lib/netvision/types'
 
@@ -48,6 +50,8 @@ export type BomOpciones = {
    * Sin valor = no se cobra.
    */
   zanjaModo?: ZanjaModo
+  /** Altavoces, sensores, tableros y demás equipos del plano de especialidad. */
+  planDevices?: DesignPlanDevice[]
 }
 
 /** Precio de referencia del adaptador PoE (splitter), como el resto de accesorios estimados. */
@@ -85,6 +89,29 @@ export function buildBom(
     lines.push({
       sku,
       category: 'camera',
+      description: v.desc,
+      qty: v.qty,
+      unitUsd: v.unit,
+      totalUsd: v.qty * v.unit,
+    })
+  })
+
+  const planByModel = new Map<string, { qty: number; unit: number; desc: string }>()
+  for (const d of opciones.planDevices ?? []) {
+    const m = getPlanDeviceModelOrDefault(d.modelId, d.discipline)
+    const prev = planByModel.get(m.id)
+    if (prev) prev.qty += 1
+    else
+      planByModel.set(m.id, {
+        qty: 1,
+        unit: m.priceUsd,
+        desc: `${m.brand} ${m.name}`,
+      })
+  }
+  Array.from(planByModel.entries()).forEach(([sku, v]) => {
+    lines.push({
+      sku,
+      category: 'accessory',
       description: v.desc,
       qty: v.qty,
       unitUsd: v.unit,

@@ -405,6 +405,11 @@ export type NetVisionProject = {
    * Por defecto no se cobra; también puede ir a cargo de otro contratista.
    */
   zanjaModo?: ZanjaModo
+  /**
+   * Borrador de Ventas ligado a este diseño. Mientras el presupuesto siga
+   * «no enviado», el BOM lo actualiza al agregar o quitar equipos.
+   */
+  ventasBudgetId?: string
   complianceProfileId: string
 }
 

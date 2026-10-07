@@ -41,6 +41,7 @@ export function generateConfig(project: NetVisionProject) {
     conduitPlans,
     undergroundPlan,
     project.infraDevices ?? [],
+    { zanjaModo: project.zanjaModo, planDevices: project.planDevices ?? [] },
   )
   return {
     ...projectToExportJson(project, bom),

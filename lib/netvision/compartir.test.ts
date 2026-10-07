@@ -50,6 +50,7 @@ describe('enlace para el cliente', () => {
       description: 'Cliente regatea; dejar 30 % de margen',
       distributorMarginPct: 30,
       zanjaModo: 'cobrar' as const,
+      ventasBudgetId: 'bud-interno-1',
     }
     const c = proyectoParaCliente(p)
     assert.equal(c.name, 'Casa Pérez')
@@ -57,9 +58,17 @@ describe('enlace para el cliente', () => {
     assert.equal(c.description, '')
     assert.equal(c.distributorMarginPct, 0)
     assert.equal(c.zanjaModo, 'no_cobrar')
+    assert.equal(c.ventasBudgetId, undefined)
     assert.equal(c.cameras, p.cameras)
     // El original no cambia.
     assert.equal(p.distributorMarginPct, 30)
+    assert.equal(p.ventasBudgetId, 'bud-interno-1')
+  })
+
+  it('el id del presupuesto de Ventas se conserva al cargar el proyecto', () => {
+    const p = projectFromPartial({ id: 'p', name: 'X', ventasBudgetId: '  abc-123  ' })
+    assert.equal(p.ventasBudgetId, 'abc-123')
+    assert.equal(projectFromPartial({ id: 'p' }).ventasBudgetId, undefined)
   })
 
   it('la huella del plano cambia si cambia el plano', () => {

@@ -1,11 +1,23 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import type { BomSummary, NetVisionCurrency, ZanjaModo } from '@/lib/netvision/types'
 import NetVisionPresupuestoModal from '@/components/netvision/NetVisionPresupuestoModal'
 import NetVisionZanjaModo from '@/components/netvision/NetVisionZanjaModo'
 import { Mono } from '@/components/nexus/Mono'
 import { Button } from '@/components/nexus/ui/button'
+import {
+  PRESUPUESTO_VIVO_DEBOUNCE_MS,
+  enlacesParaGuardar,
+  huellaPresupuesto,
+  presupuestoDesdeBom,
+} from '@/lib/netvision/presupuesto'
+import {
+  actualizarBorradorPresupuesto,
+  cargarDatosPresupuesto,
+  consultarEstadoBorrador,
+} from '@/lib/netvision/presupuestoCloud'
 import {
   bomMarginTotal,
   bomToCsv,
@@ -39,6 +51,9 @@ type Props = {
   onZanjaModo?: (modo: ZanjaModo) => void
   /** Cliente escrito en el proyecto (se propone al crear el presupuesto). */
   projectClient?: string
+  /** Borrador de Ventas ligado a este diseño. */
+  ventasBudgetId?: string
+  onVentasBudgetId?: (id: string | undefined) => void
 }
 
 export default function BOMGenerator({
@@ -55,8 +70,16 @@ export default function BOMGenerator({
   zanjaMetros = 0,
   onZanjaModo,
   projectClient = '',
+  ventasBudgetId,
+  onVentasBudgetId,
 }: Props) {
   const [presupuestoAbierto, setPresupuestoAbierto] = useState(false)
+  const [syncEstado, setSyncEstado] = useState<'idle' | 'syncing' | 'ok' | 'cerrado' | 'error'>(
+    'idle',
+  )
+  const [syncError, setSyncError] = useState<string | null>(null)
+  const huellaRef = useRef('')
+  const cerradoRef = useRef(false)
   const { marginUsd, totalWithMarginUsd } = bomMarginTotal(bom, distributorMarginPct)
   // Los precios base están en dólares: se convierten solo si hay tasa.
   const monto = (usd: number, decimales = 2) => formatoMonto(usd, currency, tasaCambio, decimales)
@@ -67,6 +90,73 @@ export default function BOMGenerator({
   useEffect(() => {
     setTasaTexto(tasaCambio ? String(tasaCambio) : '')
   }, [tasaCambio, currency])
+
+  useEffect(() => {
+    if (ventasBudgetId) return
+    cerradoRef.current = false
+    setSyncEstado('idle')
+    setSyncError(null)
+    huellaRef.current = ''
+  }, [ventasBudgetId])
+
+  useEffect(() => {
+    if (!ventasBudgetId) return
+    let cancelado = false
+    void consultarEstadoBorrador(ventasBudgetId).then((res) => {
+      if (cancelado) return
+      if (res.ok && res.status && res.status !== 'no_enviado') {
+        cerradoRef.current = true
+        setSyncEstado('cerrado')
+      }
+    })
+    return () => {
+      cancelado = true
+    }
+  }, [ventasBudgetId])
+
+  useEffect(() => {
+    if (!ventasBudgetId || cerradoRef.current || bom.lines.length === 0) return
+    const huella = huellaPresupuesto(bom, distributorMarginPct, projectName)
+    if (huella === huellaRef.current) return
+    const t = window.setTimeout(() => {
+      if (cerradoRef.current) return
+      setSyncEstado('syncing')
+      setSyncError(null)
+      void (async () => {
+        const datos = await cargarDatosPresupuesto()
+        if (!datos.autenticado) {
+          setSyncEstado('error')
+          setSyncError(datos.error ?? 'Inicia sesión para actualizar el presupuesto en Ventas.')
+          return
+        }
+        const armado = presupuestoDesdeBom(
+          bom,
+          projectName,
+          datos.enlaces,
+          datos.productos,
+          distributorMarginPct,
+        )
+        const res = await actualizarBorradorPresupuesto({
+          id: ventasBudgetId,
+          presupuesto: armado.presupuesto,
+          notas: armado.notas,
+          enlaces: enlacesParaGuardar(armado.renglones),
+        })
+        if (res.ok) {
+          huellaRef.current = huella
+          setSyncEstado('ok')
+        } else if (res.cerrado) {
+          cerradoRef.current = true
+          setSyncEstado('cerrado')
+          setSyncError(res.error)
+        } else {
+          setSyncEstado('error')
+          setSyncError(res.error)
+        }
+      })()
+    }, PRESUPUESTO_VIVO_DEBOUNCE_MS)
+    return () => window.clearTimeout(t)
+  }, [ventasBudgetId, bom, distributorMarginPct, projectName])
 
   const usarTasaBcv = async () => {
     setTasaMsg('Consultando la tasa del BCV…')
@@ -127,7 +217,7 @@ export default function BOMGenerator({
       </div>
 
       {bom.lines.length === 0 ? (
-        <p className="text-xs text-[var(--nexus-text-dim)]">Coloca cámaras para generar el BOM.</p>
+        <p className="text-xs text-[var(--nexus-text-dim)]">Coloca equipos para generar el BOM.</p>
       ) : (
         <ul className="max-h-40 space-y-1 overflow-auto text-[11px]">
           {bom.lines.map((l) => (
@@ -278,15 +368,67 @@ export default function BOMGenerator({
         </Button>
       </div>
 
-      <div data-nv-crear-presupuesto>
-        <Button
-          type="button"
-          className="w-full"
-          disabled={bom.lines.length === 0}
-          onClick={() => setPresupuestoAbierto(true)}
-        >
-          Crear presupuesto en Ventas
-        </Button>
+      <div data-nv-crear-presupuesto className="space-y-2">
+        {ventasBudgetId ? (
+          <div
+            data-nv-presupuesto-vivo={syncEstado}
+            className="space-y-2 rounded-lg border border-white/15 bg-black/25 p-2.5 text-[11px]"
+          >
+            <p className="font-semibold text-white">Presupuesto ligado a este proyecto</p>
+            <p className="text-[var(--nexus-text-dim)]">
+              {syncEstado === 'cerrado'
+                ? 'Ya no es borrador: no se actualiza solo. Puedes crear otro si el diseño cambió.'
+                : 'Al agregar o quitar equipos se actualiza el borrador en Ventas, mientras no lo envíes.'}
+            </p>
+            {syncEstado === 'syncing' ? (
+              <p data-nv-presupuesto-sync className="text-[var(--nexus-cyan)]">
+                Actualizando el borrador…
+              </p>
+            ) : null}
+            {syncEstado === 'ok' ? (
+              <p data-nv-presupuesto-sync className="text-emerald-200">
+                Borrador al día con el plano.
+              </p>
+            ) : null}
+            {syncError && syncEstado !== 'cerrado' ? (
+              <p data-nv-presupuesto-sync-error className="text-amber-100">
+                {syncError}
+              </p>
+            ) : null}
+            <Link
+              href={`/ventas?id=${encodeURIComponent(ventasBudgetId)}`}
+              className="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-[var(--nexus-cyan)] px-4 text-[12px] font-semibold text-black"
+            >
+              Abrir en Ventas
+            </Link>
+            {syncEstado === 'cerrado' ? (
+              <Button
+                type="button"
+                variant="glass"
+                className="w-full"
+                disabled={bom.lines.length === 0}
+                onClick={() => setPresupuestoAbierto(true)}
+              >
+                Crear otro presupuesto
+              </Button>
+            ) : null}
+          </div>
+        ) : (
+          <>
+            <p className="text-[11px] text-[var(--nexus-text-dim)]">
+              El listado se arma solo al colocar equipos. El primer presupuesto en Ventas se crea
+              aquí; después el borrador se actualiza con el plano.
+            </p>
+            <Button
+              type="button"
+              className="w-full"
+              disabled={bom.lines.length === 0}
+              onClick={() => setPresupuestoAbierto(true)}
+            >
+              Crear presupuesto en Ventas
+            </Button>
+          </>
+        )}
       </div>
 
       {presupuestoAbierto ? (
@@ -296,6 +438,13 @@ export default function BOMGenerator({
           projectClient={projectClient}
           margenPct={distributorMarginPct}
           onClose={() => setPresupuestoAbierto(false)}
+          onCreado={(id) => {
+            cerradoRef.current = false
+            huellaRef.current = huellaPresupuesto(bom, distributorMarginPct, projectName)
+            setSyncEstado('ok')
+            setSyncError(null)
+            onVentasBudgetId?.(id)
+          }}
         />
       ) : null}
     </div>

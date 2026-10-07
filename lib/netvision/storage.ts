@@ -500,6 +500,7 @@ export function resetActiveDesign(current: NetVisionProject): NetVisionProject {
     currency: current.currency,
     tasaCambio: current.tasaCambio,
     distributorMarginPct: current.distributorMarginPct,
+    ventasBudgetId: current.ventasBudgetId,
     complianceProfileId: current.complianceProfileId,
     retentionDays: current.retentionDays,
     upsBackupMin: current.upsBackupMin,
@@ -590,6 +591,9 @@ function normalizeProject(
         ? Math.min(480, Math.max(5, Math.round(p.upsBackupMin)))
         : 30,
     zanjaModo: normalizarZanjaModo(p.zanjaModo),
+    ...(typeof p.ventasBudgetId === 'string' && p.ventasBudgetId.trim()
+      ? { ventasBudgetId: p.ventasBudgetId.trim().slice(0, 80) }
+      : {}),
     complianceProfileId: p.complianceProfileId ?? 'VE',
   }
 }

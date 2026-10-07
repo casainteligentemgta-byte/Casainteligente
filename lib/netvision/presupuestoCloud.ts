@@ -76,7 +76,23 @@ export async function cargarDatosPresupuesto(): Promise<DatosPresupuesto> {
 
 export type ResultadoBorrador =
   | { ok: true; id: string; enlacesGuardados: boolean }
-  | { ok: false; error: string }
+  | { ok: false; error: string; cerrado?: boolean }
+
+const ESTADO_BORRADOR = 'no_enviado'
+
+async function guardarEnlaces(
+  supabase: ReturnType<typeof createClient>,
+  enlaces: { sku: string; product_id: number }[],
+): Promise<boolean> {
+  if (enlaces.length === 0) return true
+  const res = await supabase
+    .from(TABLA_ENLACES)
+    .upsert(
+      enlaces.map((e) => ({ ...e, updated_at: new Date().toISOString() })),
+      { onConflict: 'sku' },
+    )
+  return !res.error
+}
 
 /** Crea el presupuesto como borrador («no enviado») y recuerda los enlaces. */
 export async function crearBorradorPresupuesto(args: {
@@ -106,7 +122,7 @@ export async function crearBorradorPresupuesto(args: {
           margin_pct: args.presupuesto.margin_pct,
           notes: args.notas,
           show_zelle: true,
-          status: 'no_enviado',
+          status: ESTADO_BORRADOR,
         },
       ])
       .select('id')
@@ -114,18 +130,81 @@ export async function crearBorradorPresupuesto(args: {
     if (error || !data) {
       return { ok: false, error: error?.message ?? 'No se pudo crear el presupuesto.' }
     }
-    let enlacesGuardados = true
-    if (args.enlaces.length > 0) {
-      const res = await supabase
-        .from(TABLA_ENLACES)
-        .upsert(
-          args.enlaces.map((e) => ({ ...e, updated_at: new Date().toISOString() })),
-          { onConflict: 'sku' },
-        )
-      enlacesGuardados = !res.error
-    }
+    const enlacesGuardados = await guardarEnlaces(supabase, args.enlaces)
     return { ok: true, id: String((data as { id: unknown }).id), enlacesGuardados }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'No se pudo crear el presupuesto.' }
+  }
+}
+
+export async function consultarEstadoBorrador(
+  id: string,
+): Promise<{ ok: true; status: string } | { ok: false; error: string }> {
+  let supabase: ReturnType<typeof createClient>
+  try {
+    supabase = createClient()
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Supabase no está configurado.' }
+  }
+  try {
+    const { data, error } = await supabase
+      .from('budgets')
+      .select('id,status')
+      .eq('id', id)
+      .maybeSingle()
+    if (error) return { ok: false, error: error.message }
+    if (!data) return { ok: false, error: 'El presupuesto ya no está en Ventas.' }
+    return { ok: true, status: String((data as { status?: unknown }).status ?? '') }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'No se pudo consultar el presupuesto.' }
+  }
+}
+
+/** Reescribe el borrador ligado al diseño. Si ya se envió, no lo toca. */
+export async function actualizarBorradorPresupuesto(args: {
+  id: string
+  presupuesto: PresupuestoVentas
+  notas: string
+  enlaces?: { sku: string; product_id: number }[]
+}): Promise<ResultadoBorrador> {
+  let supabase: ReturnType<typeof createClient>
+  try {
+    supabase = createClient()
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Supabase no está configurado.' }
+  }
+  try {
+    const { data: fila, error: errGet } = await supabase
+      .from('budgets')
+      .select('id,status')
+      .eq('id', args.id)
+      .maybeSingle()
+    if (errGet) return { ok: false, error: errGet.message }
+    if (!fila) return { ok: false, error: 'El presupuesto ya no está en Ventas.' }
+    const status = String((fila as { status?: unknown }).status ?? '')
+    if (status !== ESTADO_BORRADOR) {
+      return {
+        ok: false,
+        cerrado: true,
+        error: 'El presupuesto ya no es borrador; no se actualiza solo.',
+      }
+    }
+    const { error } = await supabase
+      .from('budgets')
+      .update({
+        items: args.presupuesto.items,
+        subtotal: args.presupuesto.subtotal,
+        total_cost: args.presupuesto.total_cost,
+        total_profit: args.presupuesto.total_profit,
+        margin_pct: args.presupuesto.margin_pct,
+        notes: args.notas,
+      })
+      .eq('id', args.id)
+      .eq('status', ESTADO_BORRADOR)
+    if (error) return { ok: false, error: error.message }
+    const enlacesGuardados = await guardarEnlaces(supabase, args.enlaces ?? [])
+    return { ok: true, id: args.id, enlacesGuardados }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'No se pudo actualizar el presupuesto.' }
   }
 }

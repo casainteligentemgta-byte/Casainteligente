@@ -35,6 +35,8 @@ type Props = {
   /** Margen del proyecto en NetVision (%): es el que se propone. */
   margenPct?: number
   onClose: () => void
+  /** Tras crear el borrador: el proyecto lo guarda para ir actualizándolo. */
+  onCreado?: (id: string) => void
 }
 
 const campo =
@@ -57,6 +59,7 @@ export default function NetVisionPresupuestoModal({
   projectClient = '',
   margenPct: margenInicial,
   onClose,
+  onCreado,
 }: Props) {
   const [margen, setMargen] = useState(() => acotarMargen(margenInicial))
   const [margenTexto, setMargenTexto] = useState(() => String(acotarMargen(margenInicial)))
@@ -150,8 +153,10 @@ export default function NetVisionPresupuestoModal({
       enlaces: enlacesParaGuardar(renglones),
     })
     setGuardando(false)
-    if (res.ok) setCreado({ id: res.id, enlacesGuardados: res.enlacesGuardados })
-    else setError(res.error)
+    if (res.ok) {
+      setCreado({ id: res.id, enlacesGuardados: res.enlacesGuardados })
+      onCreado?.(res.id)
+    } else setError(res.error)
   }
 
   // Fuera del panel: un ancestro con desenfoque rompería el «fixed» del diálogo.
@@ -208,8 +213,9 @@ export default function NetVisionPresupuestoModal({
               </p>
               <p className="text-emerald-50/80">
                 {presupuesto.items.length} {presupuesto.items.length === 1 ? 'renglón' : 'renglones'} ·
-                subtotal ${presupuesto.subtotal.toFixed(2)}. Revísalo y ajusta precios en Ventas antes
-                de enviarlo.
+                subtotal ${presupuesto.subtotal.toFixed(2)}. Queda ligado al proyecto: al agregar o
+                quitar equipos se actualiza solo, mientras no lo envíes. Revísalo en Ventas antes de
+                enviarlo.
               </p>
               {!creado.enlacesGuardados ? (
                 <p className="text-amber-100">

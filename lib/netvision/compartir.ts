@@ -48,6 +48,7 @@ export function proyectoParaCliente(project: NetVisionProject): NetVisionProject
     description: '',
     distributorMarginPct: 0,
     zanjaModo: 'no_cobrar',
+    ventasBudgetId: undefined,
   }
 }
 
