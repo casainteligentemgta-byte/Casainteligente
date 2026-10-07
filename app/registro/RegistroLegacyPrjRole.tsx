@@ -148,7 +148,7 @@ export default function RegistroLegacyPrjRole() {
   return (
     <div className="min-h-screen bg-[#0A0A0F] px-4 py-10 text-zinc-100">
       <div className="mx-auto max-w-lg">
-        <h1 className="text-xl font-bold text-white">Casa Inteligente — Postulación</h1>
+        <h1 className="text-xl font-bold text-white">Hoja de vida — Postulación</h1>
         <p className="mt-2 text-sm text-zinc-400">
           Proyecto vinculado. Elige la vacante que coincide con el cargo que te indicaron ({role}).
         </p>

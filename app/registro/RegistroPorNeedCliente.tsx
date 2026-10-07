@@ -96,14 +96,11 @@ export default function RegistroPorNeedCliente({
   needId: needIdProp,
   captacionToken: captacionTokenProp,
   sinEvaluacion: sinEvaluacionProp,
-  previewObraNombre,
 }: {
   needId?: string;
   captacionToken?: string;
   /** Código del enlace «sin evaluación» de la solicitud (lo valida el servidor). */
   sinEvaluacion?: string;
-  /** Solo desarrollo: muestra el formulario con una obra de ejemplo. */
-  previewObraNombre?: string;
 }) {
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
@@ -142,21 +139,6 @@ export default function RegistroPorNeedCliente({
   }, [need, oficioElegido]);
 
   useEffect(() => {
-    if (previewObraNombre) {
-      setNeed({
-        id: 'preview',
-        title: null,
-        cargo_nombre: null,
-        cargo_codigo: null,
-        cargo_nivel: null,
-        tipo_vacante: null,
-        protocol_active: true,
-        proyecto_modulo_id: null,
-      });
-      setProyectoNombre(previewObraNombre);
-      setMetaPhase('ready');
-      return;
-    }
     if (!needId && !captacionToken) {
       setMetaPhase('error');
       setMetaError('Enlace de registro no válido.');
@@ -237,7 +219,7 @@ export default function RegistroPorNeedCliente({
     return () => {
       alive = false;
     };
-  }, [needId, captacionToken, supabase, previewObraNombre]);
+  }, [needId, captacionToken, supabase]);
 
   const setF = useCallback(<K extends keyof GacetaPostulacionFormState>(key: K, value: GacetaPostulacionFormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -541,7 +523,7 @@ export default function RegistroPorNeedCliente({
         if (!resFirma.ok) {
           toast.error(bodyFirma.error ?? 'No se pudo almacenar la firma electrónica.', {
             description:
-              'Tu hoja de vida quedó registrada. Puedes descargar el PDF; la hoja de empleo se genera solo si te contratan.',
+              'Tu hoja de vida quedó registrada. La empresa revisará el expediente.',
           });
         }
       }

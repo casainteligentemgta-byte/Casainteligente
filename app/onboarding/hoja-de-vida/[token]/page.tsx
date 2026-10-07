@@ -174,7 +174,7 @@ export default function HojaVidaOnboarding() {
                 <div className="flex justify-between items-center mb-6">
                     <div>
                         <h2 className="text-2xl font-black text-white tracking-tight">Postulación: {candidate.cargo}</h2>
-                        <p className="text-blue-400 font-medium text-sm mt-0.5">Casa Inteligente • Formulario de Ingreso</p>
+                        <p className="text-blue-400 font-medium text-sm mt-0.5">Hoja de vida</p>
                     </div>
                     <div className="hidden md:flex gap-2">
                         {steps.map((s, i) => (
@@ -538,7 +538,7 @@ export default function HojaVidaOnboarding() {
 
             <footer className="max-w-4xl mx-auto mt-12 text-center">
                 <p className="text-gray-600 text-[10px] font-bold uppercase tracking-[0.3em]">
-                    Casa Inteligente • Soluciones Tecnológicas de Vanguardia
+                    Hoja de vida
                 </p>
             </footer>
         </div>

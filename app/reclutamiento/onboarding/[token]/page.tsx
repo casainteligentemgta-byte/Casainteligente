@@ -469,7 +469,7 @@ function HojaDeVidaMovilInner({ params }: Props) {
     <div className="min-h-screen app-root-bg flex flex-col font-sans pb-28 text-white">
       <header className="glass sticky top-0 z-50 px-6 py-5 border-b border-white/5 backdrop-blur-xl">
         <h1 className="text-xl font-bold tracking-tight text-white uppercase">
-          {(planillaPatrono?.entidadNombre ?? '').trim() || 'Casa Inteligente'}
+          {(planillaPatrono?.entidadNombre ?? '').trim() || 'Hoja de vida'}
         </h1>
         <div className="flex items-center gap-2 mt-1">
           <div className="h-1 flex-1 bg-white/10 rounded-full overflow-hidden">
@@ -670,20 +670,9 @@ function HojaDeVidaMovilInner({ params }: Props) {
               <h2 className="text-3xl font-bold text-white tracking-tight">¡Hoja de vida enviada!</h2>
               <p className="text-[var(--nexus-text-muted)] max-w-sm mx-auto">
                 {evaluacionRequerida
-                  ? 'Ya se generó tu hoja de vida. A continuación harás la evaluación.'
-                  : 'Ya se generó tu hoja de vida. La empresa te contactará para el siguiente paso.'}
+                  ? 'Tu hoja de vida quedó en el expediente. A continuación harás la evaluación.'
+                  : 'Tu hoja de vida quedó en el expediente. La empresa te contactará para el siguiente paso.'}
               </p>
-              
-              <div className="flex flex-col gap-3 max-w-sm mx-auto">
-                <a
-                  href={`/api/talento/hoja-vida/pdf?token=${encodeURIComponent(params.token)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="ios-btn-primary !bg-white/10 !text-white !shadow-none border border-white/10 hover:!bg-white/20"
-                >
-                  📄 Descargar PDF
-                </a>
-              </div>
 
               {evaluacionRequerida ? (
               <GlassCard glow className="text-left mt-8 !bg-[var(--ios-blue-light)]/20 border-[var(--ios-blue)]/30">
