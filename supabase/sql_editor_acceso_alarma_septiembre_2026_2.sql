@@ -1,10 +1,3 @@
--- =============================================================================
--- Acceso-Alarma septiembre 2026 · parte 2 de 3 (86 SKU de 258)
--- Correr DESPUÉS de las 3 partes de Siemon.
--- Copiar este archivo COMPLETO (GitHub Raw → Ctrl+A → Ctrl+C) → SQL Editor → Run.
--- Primero: DS-K2210  ·  Último: DS-PK-L
--- costo = lista USD; precio = costo; utilidad = 0. Sin updated_at.
--- =============================================================================
 begin;
 
 drop table if exists cat_acceso_2026;

@@ -1,14 +1,3 @@
--- =============================================================================
--- Catálogo Siemon agosto 2026
--- Archivo completo (78 KB). Preferible pegar las 3 partes más chicas:
---   sql_editor_siemon_agosto_2026_1.sql
---   sql_editor_siemon_agosto_2026_2.sql
---   sql_editor_siemon_agosto_2026_3.sql
--- NO pegar desde el chat: se corta a mitad de un SKU (error PC6-002).
--- costo = precio de lista USD; precio = costo; utilidad = 0
--- No usa updated_at. Idempotente por marca+modelo.
--- =============================================================================
-
 begin;
 
 drop table if exists cat_siemon_2026;

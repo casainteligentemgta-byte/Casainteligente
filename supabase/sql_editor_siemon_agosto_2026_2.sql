@@ -1,9 +1,3 @@
--- =============================================================================
--- Siemon agosto 2026 · parte 2 de 3 (85 SKU de 253)
--- Copiar este archivo COMPLETO (GitHub Raw → Ctrl+A → Ctrl+C) → SQL Editor → Run.
--- Primero: LKM1-003M-06DS  ·  Último: PNL-BLNKA-2
--- costo = lista USD; precio = costo; utilidad = 0. Sin updated_at.
--- =============================================================================
 begin;
 
 drop table if exists cat_siemon_2026;
