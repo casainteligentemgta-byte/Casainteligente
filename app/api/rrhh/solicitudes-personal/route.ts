@@ -167,7 +167,7 @@ export async function POST(req: Request) {
   const pedidas: Array<{ codigo: string; nombre: string; nivel: number; cantidad: number }> = [];
   for (const l of lineas) {
     const cargo = cargoPorCodigo(String(l.oficio ?? '').trim().replace(',', '.'));
-    const cantidad = Math.max(1, Math.min(500, Math.floor(Number(l.cantidad) || 0)));
+    const cantidad = Math.max(1, Math.min(9999, Math.floor(Number(l.cantidad) || 0)));
     if (!cargo) continue;
     const ya = pedidas.find((p) => p.codigo === cargo.codigo);
     if (ya) ya.cantidad += cantidad;
@@ -247,7 +247,7 @@ export async function PATCH(req: Request) {
   if (body.accion === 'cerrar') patch = { protocol_active: false, estado_vacante: 'cerrada' };
   if (body.accion === 'reabrir') patch = { protocol_active: true, estado_vacante: 'abierta' };
   if (body.accion === 'plazas') {
-    const plazas = Math.max(1, Math.min(500, Math.floor(Number(body.plazas) || 0)));
+    const plazas = Math.max(1, Math.min(9999, Math.floor(Number(body.plazas) || 0)));
     patch = { cantidad_requerida: plazas };
   }
   if (!patch) return NextResponse.json({ error: 'Acción no reconocida.' }, { status: 400 });

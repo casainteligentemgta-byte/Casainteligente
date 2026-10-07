@@ -26,12 +26,13 @@ type LineaPersonal = {
 const NIVELES_ORDEN = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 
 const selectOficioClass =
-  'ci-select-tabulador mt-1 w-full min-h-[44px] cursor-pointer rounded-xl border-2 border-zinc-300 bg-white px-3 py-2.5 text-sm font-medium text-zinc-900 outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-400/35 disabled:cursor-not-allowed disabled:opacity-50';
+  'ci-select-tabulador mt-1 w-full min-h-[48px] cursor-pointer rounded-xl border-2 border-zinc-300 bg-white px-3 py-2.5 text-base font-medium text-zinc-900 outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-400/35 disabled:cursor-not-allowed disabled:opacity-50';
 const selectProyectoClass =
   'ci-select-tabulador mt-1 w-full min-h-[44px] cursor-pointer rounded-xl border-2 border-violet-400/70 bg-white px-3 py-2.5 text-sm font-medium text-zinc-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-400/35 disabled:cursor-not-allowed disabled:opacity-50';
 const inputCantidadClass =
-  'mt-1 w-full min-h-[44px] rounded-xl border-2 border-zinc-500/80 bg-zinc-950 px-3 py-2.5 text-sm font-semibold text-zinc-50 outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-400/35';
+  'mt-1 w-full min-h-[48px] rounded-xl border-2 border-zinc-500/80 bg-zinc-950 px-1.5 py-2.5 text-center text-sm font-semibold tabular-nums text-zinc-50 outline-none [appearance:textfield] focus:border-sky-400 focus:ring-2 focus:ring-sky-400/35 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none';
 const sublabelClass = 'text-[10px] font-bold uppercase tracking-wide text-zinc-300';
+const CANTIDAD_MAX = 9999;
 
 let lineaSeq = 0;
 function nuevaLinea(): LineaPersonal {
@@ -146,7 +147,7 @@ export default function SolicitudPersonalObreroForm({
     for (const linea of lineas) {
       const cod = linea.cargoCodigo.trim();
       const cargo = cod ? cargoPorCodigo(cod) : undefined;
-      const q = Math.max(1, Math.min(500, Math.floor(Number(linea.cantidad) || 0)));
+      const q = Math.max(1, Math.min(CANTIDAD_MAX, Math.floor(Number(linea.cantidad) || 0)));
       if (!cod || !cargo) continue;
       filasValidas.push({ cod, nombre: cargo.nombre, q });
     }
@@ -207,25 +208,28 @@ export default function SolicitudPersonalObreroForm({
               key={linea.id}
               className="flex flex-row flex-wrap items-end gap-2 rounded-xl border border-white/10 bg-black/30 p-3"
             >
-              <div className="w-[4.5rem] shrink-0 sm:w-20">
+              <div className="w-[4.75rem] shrink-0">
                 <span className={sublabelClass}>Cant.</span>
                 <input
                   type="number"
                   min={1}
-                  max={500}
+                  max={CANTIDAD_MAX}
+                  maxLength={4}
+                  inputMode="numeric"
                   value={linea.cantidad}
                   onChange={(e) => {
-                    const v = e.target.value;
+                    const v = e.target.value.replace(/\D/g, '').slice(0, 4);
                     setLineas((prev) =>
                       prev.map((l) => (l.id === linea.id ? { ...l, cantidad: v } : l)),
                     );
                   }}
                   className={inputCantidadClass}
-                  aria-label="Cantidad de obreros"
+                  aria-label="Cantidad de obreros de este oficio"
+                  title="Cantidad (hasta 4 dígitos)"
                 />
               </div>
-              <div className="min-w-0 flex-1 basis-[12rem]">
-                <span className={sublabelClass}>Oficio</span>
+              <div className="min-w-0 flex-1">
+                <span className={sublabelClass}>Tipo de obrero según tabulador</span>
                 <select
                   value={linea.cargoCodigo}
                   onChange={(e) => {
