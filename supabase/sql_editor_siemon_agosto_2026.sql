@@ -9,8 +9,6 @@
 -- No usa updated_at. Idempotente por marca+modelo.
 -- =============================================================================
 
-rollback; -- limpia un Run anterior abortado (p.ej. pegado truncado)
-
 begin;
 
 drop table if exists cat_siemon_2026;

@@ -4,8 +4,6 @@
 -- Primero: VCM-25-12-01  ·  Último: RIC-F-LCU12-01C
 -- costo = lista USD; precio = costo; utilidad = 0. Sin updated_at.
 -- =============================================================================
-rollback;
-
 begin;
 
 drop table if exists cat_siemon_2026;

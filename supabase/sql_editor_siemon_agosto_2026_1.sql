@@ -4,8 +4,6 @@
 -- Primero: 9T7L4-E10  ·  Último: LKM1-002M-06DS
 -- costo = lista USD; precio = costo; utilidad = 0. Sin updated_at.
 -- =============================================================================
-rollback;
-
 begin;
 
 drop table if exists cat_siemon_2026;

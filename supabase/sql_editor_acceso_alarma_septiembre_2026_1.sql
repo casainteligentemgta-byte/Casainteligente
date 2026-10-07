@@ -5,8 +5,6 @@
 -- Primero: DS-K1801M  ·  Último: DS-K2M061
 -- costo = lista USD; precio = costo; utilidad = 0. Sin updated_at.
 -- =============================================================================
-rollback;
-
 begin;
 
 drop table if exists cat_acceso_2026;

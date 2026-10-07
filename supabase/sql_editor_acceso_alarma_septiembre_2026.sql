@@ -9,8 +9,6 @@
 -- No usa updated_at. Idempotente por marca+modelo.
 -- =============================================================================
 
-rollback; -- limpia un Run anterior abortado
-
 begin;
 
 drop table if exists cat_acceso_2026;
