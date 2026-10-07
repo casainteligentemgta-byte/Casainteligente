@@ -61,7 +61,7 @@ export default function RrhhSubnavEnlaces({
         className={`${rrhhSubnavBtnClass} border-violet-400/50 bg-violet-600/30 text-violet-50 hover:bg-violet-600/45`}
       >
         <ClipboardList className="h-3.5 w-3.5 shrink-0" aria-hidden />
-        <span className="truncate">Solicitud de personal obrero</span>
+        <span className="truncate">Solicitud de personal</span>
       </Link>
       <Link
         href={hrefGestion}

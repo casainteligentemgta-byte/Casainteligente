@@ -63,11 +63,11 @@ export async function avisarRegistroObreroTelegram(
       '👷 <b>Nuevo obrero registrado</b>',
       `<b>${esc(e.nombre_completo)}</b>`,
       `Cédula: ${esc(e.cedula)}`,
-      oficio ? `Oficio declarado: ${esc(oficio)}` : 'Oficio: sin declarar',
+      oficio ? `Oficio: ${esc(oficio)}` : 'Oficio: sin definir',
       obra ? `Obra: ${esc(obra)}` : '',
       tel ? `Teléfono: ${esc(tel)}` : '',
       registrados ? `Van ${registrados} en esta obra.` : '',
-      baseUrl ? `Revisar: ${baseUrl}/rrhh/carga-masiva` : '',
+      baseUrl ? `Revisar: ${baseUrl}/rrhh/solicitud-personal` : '',
     ].filter(Boolean);
 
     await sendTelegramMessage(chatId, lineas.join('\n'));

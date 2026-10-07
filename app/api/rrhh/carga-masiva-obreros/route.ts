@@ -193,7 +193,7 @@ export async function GET(req: Request) {
   const base = urlPublica(req);
   const { data, error } = await admin.client
     .from('ci_empleados')
-    .select('id,nombre_completo,cedula,telefono,cargo_codigo,cargo_nombre,estado_proceso,token_registro,created_at')
+    .select('id,nombre_completo,cedula,telefono,cargo_codigo,cargo_nombre,estado_proceso,estatus_evaluacion,token_registro,created_at')
     .eq('proyecto_modulo_id', proyectoId)
     .order('created_at', { ascending: false })
     .limit(500);
@@ -208,6 +208,7 @@ export async function GET(req: Request) {
       oficio: [String(r.cargo_codigo ?? '').replace('.', ','), r.cargo_nombre].filter(Boolean).join(' '),
       cargo_codigo: r.cargo_codigo ?? null,
       estado_proceso: r.estado_proceso,
+      evaluado: String(r.estatus_evaluacion ?? '').trim() === 'completado',
       enlace: r.token_registro && base ? `${base}/reclutamiento/onboarding/${r.token_registro}` : null,
     })),
   });
