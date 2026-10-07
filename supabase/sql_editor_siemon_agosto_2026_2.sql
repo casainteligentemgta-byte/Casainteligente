@@ -1,0 +1,156 @@
+-- =============================================================================
+-- Siemon agosto 2026 · parte 2 de 3 (85 SKU de 253)
+-- Copiar este archivo COMPLETO (GitHub Raw → Ctrl+A → Ctrl+C) → SQL Editor → Run.
+-- Primero: LKM1-003M-06DS  ·  Último: PNL-BLNKA-2
+-- costo = lista USD; precio = costo; utilidad = 0. Sin updated_at.
+-- =============================================================================
+rollback;
+
+begin;
+
+drop table if exists cat_siemon_2026;
+create temporary table cat_siemon_2026 (
+  marca text not null,
+  modelo text not null,
+  nombre text not null,
+  categoria text not null,
+  costo numeric(14,2) not null,
+  descripcion text,
+  estatus text not null,
+  primary key (marca, modelo)
+);
+
+insert into cat_siemon_2026 (marca, modelo, nombre, categoria, costo, descripcion, estatus)
+values
+  ('Siemon', 'LKM1-003M-06DS', 'Siemon LKM1-003M-06DS Lkm1 - 003m - 06ds 3 metros', 'Network', 9.50, 'Lkm1 - 003m - 06ds 3 metros', 'DISPONIBLE'),
+  ('Siemon', 'LKM1-005M-06DS', 'Siemon LKM1-005M-06DS 5 Metros', 'Network', 11.50, '5 Metros', 'DISPONIBLE'),
+  ('Siemon', 'LKM1-7.5M-06DS', 'Siemon LKM1-7.5M-06DS 7.5 Metros', 'Network', 14.00, '7.5 Metros', 'DISPONIBLE'),
+  ('Siemon', 'LK-KEY-CLR', 'Siemon LK-KEY-CLR Llave para Patchcords Lockit de Siemon La llave LockIT está diseñada', 'Network', 8.00, 'Llave para Patchcords Lockit de Siemon La llave LockIT está diseñada exclusivamente para desbloquear todos los patchcords LockIT de Siemon. La longitud extendida de la llave permite a los usuarios desbloquear fácilmente el conector en entornos de alta densidad.', 'DISPONIBLE'),
+  ('Siemon', 'LL-LC-05', 'Siemon LL-LC-05 Cerradura LockIT LC para Jack Outlet, bolsa de 10, incluye 1 LockIT', 'Network', 9.00, 'Cerradura LockIT LC para Jack Outlet, bolsa de 10, incluye 1 LockIT Adapter Key. La cerradura LockIT para Jacks es un accesorio de red único que protege un Jack de la inserción patch cord u objeto extraño. Proporciona un alto nivel de seguridad física al evitar conexiones y desconexiones no autorizadas o accidentales dentro de un cableado.', 'DISPONIBLE'),
+  ('Siemon', 'UP6-F1-24K-RS', 'Siemon UP6-F1-24K-RS 24 Puertos, Plano, 1U', 'Network', 160.00, '24 Puertos, Plano, 1U', 'DISPONIBLE'),
+  ('Siemon', 'UP6-F2-48K-RS', 'Siemon UP6-F2-48K-RS 48 Puertos, Plano, 2U', 'Network', 280.00, '48 Puertos, Plano, 2U', 'DISPONIBLE'),
+  ('Siemon', 'UP6-F2-48L-RS', 'Siemon UP6-F2-48L-RS 48 Puertos, Plano, 2U', 'Network', 250.00, '48 Puertos, Plano, 2U', 'DISPONIBLE'),
+  ('Siemon', 'U6-H01NB', 'Siemon U6-H01NB Cobre, Jack, Outlet, MAX, UTP, Categoria 6, RJ45, Estilo 110, Montaje', 'Network', 5.50, 'Cobre, Jack, Outlet, MAX, UTP, Categoria 6, RJ45, Estilo 110, Montaje Plano, Negro, Punch down, T568A/B, cableado de extremo a extremo de Siemon. Su diseño es ideal para aplicaciones de alta densidad, hasta 6 Jack''s pueden ser utilizados en un solo Face Plate y 12 Jacks en un Face Plate doble. Paquete Granel', 'DISPONIBLE'),
+  ('Siemon', 'U6-H02NB', 'Siemon U6-H02NB Cobre, Jack, Outlet, MAX, UTP, Categoria 6, RJ45, Estilo 110, Montaje', 'Network', 5.50, 'Cobre, Jack, Outlet, MAX, UTP, Categoria 6, RJ45, Estilo 110, Montaje Plano, Azul, Punch down, T568A/B, cableado de extremo a extremo de Siemon. Su diseño es ideal para aplicaciones de alta densidad, hasta 6 Jack''s pueden ser utilizados en un solo Face Plate y 12 Jacks en un Face Plate doble. Paquete Granel', 'DISPONIBLE'),
+  ('Siemon', 'U6-H03NB', 'Siemon U6-H03NB Cobre, Jack, Outlet, MAX, UTP, Categoria 6, RJ45, Estilo 110, Montaje', 'Network', 5.50, 'Cobre, Jack, Outlet, MAX, UTP, Categoria 6, RJ45, Estilo 110, Montaje Plano, Rojo, Punch down, T568A/B, cableado de extremo a extremo de Siemon. Su diseño es ideal para aplicaciones de alta densidad, hasta 6 Jack''s pueden ser utilizados en un solo Face Plate y 12 Jacks en un Face Plate doble. Paquete Granel', 'DISPONIBLE'),
+  ('Siemon', 'U6-H06NB', 'Siemon U6-H06NB Cobre, Jack, Outlet, MAX, UTP, Categoria 6, RJ45, Estilo 110, Montaje', 'Network', 5.50, 'Cobre, Jack, Outlet, MAX, UTP, Categoria 6, RJ45, Estilo 110, Montaje Plano, Azul, Punch down, T568A/B, cableado de extremo a extremo de Siemon. Su diseño es ideal para aplicaciones de alta densidad, hasta 6 Jack''s pueden ser utilizados en un solo Face Plate y 12 Jacks en un Face Plate doble. Paquete Granel', 'DISPONIBLE'),
+  ('Siemon', 'U6-K01NB', 'Siemon U6-K01NB Cobre, Jack, Outlet, KEYSTONE, UTP, Categoria 6, RJ45, Estilo 110', 'Network', 5.50, 'Cobre, Jack, Outlet, KEYSTONE, UTP, Categoria 6, RJ45, Estilo 110, Montaje Plano, Negro, Punch down, T568A/B, cableado de extremo a extremo de Siemon. Su diseño es ideal para aplicaciones de alta densidad, hasta 6 Jack''s pueden ser utilizados en un solo Face Plate y 12 Jacks en un Face Plate doble. Paquete Granel', 'DISPONIBLE'),
+  ('Siemon', 'U6-K02NB', 'Siemon U6-K02NB Cobre, Jack, Outlet, KEYSTONE, UTP, Categoria 6, RJ45, Estilo 110', 'Network', 5.50, 'Cobre, Jack, Outlet, KEYSTONE, UTP, Categoria 6, RJ45, Estilo 110, Montaje Plano, Azul, Punch down, T568A/B, cableado de extremo a extremo de Siemon. Su diseño es ideal para aplicaciones de alta densidad, hasta 6 Jack''s pueden ser utilizados en un solo Face Plate y 12 Jacks en un Face Plate doble. Paquete Granel', 'DISPONIBLE'),
+  ('Siemon', 'U6-K06NB', 'Siemon U6-K06NB Cobre, Jack, Outlet, KEYSTONE, UTP, Categoria 6, RJ45, Estilo 110', 'Network', 5.50, 'Cobre, Jack, Outlet, KEYSTONE, UTP, Categoria 6, RJ45, Estilo 110, Montaje Plano, Azul, Punch down, T568A/B, cableado de extremo a extremo de Siemon. Su diseño es ideal para aplicaciones de alta densidad, hasta 6 Jack''s pueden ser utilizados en un solo Face Plate y 12 Jacks en un Face Plate doble. Paquete Granel', 'DISPONIBLE'),
+  ('Siemon', 'P6U-8-8', 'Siemon P6U-8-8 50 piezas Cobre, RJ45, Categoría 6, Negro, 8 Posiciones, Para Cable UTP', 'Network', 39.00, '50 piezas Cobre, RJ45, Categoría 6, Negro, 8 Posiciones, Para Cable UTP Calibre 23 a 26 AWG, Chapado en Oro de 50 micras, 8 Conductores, No incluye bota, Policarbonato, UL 94 V0, Certificación RoHS, Normas normas TIA- 968-A y IEC 60603-7, sin plomo, sin halógenos y sin PVC, Bolsa con 50 piezas', 'DISPONIBLE'),
+  ('Siemon', 'MC5-03-0202B', 'Siemon MC5-03-0202B 03 Pies, 0.91 Metros', 'Network', 3.00, '03 Pies, 0.91 Metros', 'DISPONIBLE'),
+  ('Siemon', 'MC5-05-0202B', 'Siemon MC5-05-0202B 05 Pies, 1.52 Metros', 'Network', 3.50, '05 Pies, 1.52 Metros', 'DISPONIBLE'),
+  ('Siemon', 'MC5-07-0202B', 'Siemon MC5-07-0202B 07 Pies, 2.13 Metros', 'Network', 4.00, '07 Pies, 2.13 Metros', 'DISPONIBLE'),
+  ('Siemon', 'MC5-10-0202B', 'Siemon MC5-10-0202B 10 Pies, 3.05 Metros', 'Network', 4.50, '10 Pies, 3.05 Metros', 'DISPONIBLE'),
+  ('Siemon', 'MC5-03-0404B', 'Siemon MC5-03-0404B 03 Pies, 0.91 Metros', 'Network', 3.00, '03 Pies, 0.91 Metros', 'DISPONIBLE'),
+  ('Siemon', 'MC5-05-0404B', 'Siemon MC5-05-0404B 05 Pies, 1.52 Metros', 'Network', 3.50, '05 Pies, 1.52 Metros', 'DISPONIBLE'),
+  ('Siemon', 'MC5-07-0404B', 'Siemon MC5-07-0404B 07 Pies, 2.13 Metros', 'Network', 4.00, '07 Pies, 2.13 Metros', 'DISPONIBLE'),
+  ('Siemon', 'MC5-10-0404B', 'Siemon MC5-10-0404B 10 Pies, 3.05 Metros', 'Network', 4.50, '10 Pies, 3.05 Metros', 'DISPONIBLE'),
+  ('Siemon', 'MC5-03-0606B', 'Siemon MC5-03-0606B 03 Pies, 0.91 Metros', 'Network', 3.00, '03 Pies, 0.91 Metros', 'DISPONIBLE'),
+  ('Siemon', 'MC5-05-0606B', 'Siemon MC5-05-0606B 05 Pies, 1.52 Metros', 'Network', 3.50, '05 Pies, 1.52 Metros', 'DISPONIBLE'),
+  ('Siemon', 'MC5-07-0606B', 'Siemon MC5-07-0606B 07 Pies, 2.13 Metros', 'Network', 4.00, '07 Pies, 2.13 Metros', 'DISPONIBLE'),
+  ('Siemon', 'MC5-10-0606B', 'Siemon MC5-10-0606B 10 Pies, 3.05 Metros', 'Network', 4.50, '10 Pies, 3.05 Metros', 'DISPONIBLE'),
+  ('Siemon', 'UP5-F1-24L-RS', 'Siemon UP5-F1-24L-RS 24 Puertos, Plano, 1U Patch Panel UltraMAX. UTP (Sin blindaje)', 'Network', 85.00, '24 Puertos, Plano, 1U Patch Panel UltraMAX. UTP (Sin blindaje), Precargado con Jacks Cat5e/Clase EA. Viene con los Jacks en la caja, para facilitar la terminación donde sea necesario. Cumple con: ANSI/TIA-568.2-D, ANSI/TIA 1096-A, ISO/IEC 11801-1 Ed. 1.0, IEC 60603-7-41, ETL Prueba de Canal, UL 1863. Incluye organizador de cables trasero para ayudar a liberar tensión del cable y se pueden desmontar si es necesario. La construcción de los paneles es de acero de alta calidad con un revestimiento r', 'DISPONIBLE'),
+  ('Siemon', 'HD5-24B', 'Siemon HD5-24B Cobre, Patch Panel, HD, Precargado, UTP, Categoria 5e, 24 Puertos', 'Network', 85.00, 'Cobre, Patch Panel, HD, Precargado, UTP, Categoria 5e, 24 Puertos, Plano, 1U, Negro, sin Administrador de Cable, Paquete Granel', 'DISPONIBLE'),
+  ('Siemon', 'P-8-8', 'Siemon P-8-8 1 pieza Cobre, RJ45, Categoría 5e, Negro, 8 Posiciones, Para Cable UTP', 'Network', 0.35, '1 pieza Cobre, RJ45, Categoría 5e, Negro, 8 Posiciones, Para Cable UTP Calibre 22 a 26 AWG, Chapado en Oro de 50 micras, 8 Conductores, No incluye bota, Policarbonato, UL 94 V0, Certificación RoHS, Normas normas TIA-968-A y IEC 60603-7, sin plomo, sin halógenos y sin PVC', 'DISPONIBLE'),
+  ('Siemon', 'CLIP-03', 'Siemon CLIP-03 25 piezas Clip de identificación para Patch Cord Siemon MC / ZM, Color', 'Network', 4.00, '25 piezas Clip de identificación para Patch Cord Siemon MC / ZM, Color Rojo, Bolsa con 25 piezas', 'DISPONIBLE'),
+  ('Siemon', 'CLIP-05', 'Siemon CLIP-05 25 piezas Clip de identificación para Patch Cord Siemon MC / ZM, Color', 'Network', 4.00, '25 piezas Clip de identificación para Patch Cord Siemon MC / ZM, Color Amarillo, Bolsa con 25 piezas', 'DISPONIBLE'),
+  ('Siemon', 'CLIP-06', 'Siemon CLIP-06 25 piezas Clip de identificación para Patch Cord Siemon MC / ZM, Color', 'Network', 4.00, '25 piezas Clip de identificación para Patch Cord Siemon MC / ZM, Color Azul, Bolsa con 25 piezas', 'DISPONIBLE'),
+  ('Siemon', 'CLIP-07', 'Siemon CLIP-07 25 piezas Clip de identificación para Patch Cord Siemon MC / ZM, Color', 'Network', 4.00, '25 piezas Clip de identificación para Patch Cord Siemon MC / ZM, Color Verde, Bolsa con 25 piezas', 'DISPONIBLE'),
+  ('Siemon', 'CLIP-08', 'Siemon CLIP-08 25 piezas Clip de identificación para Patch Cord Siemon MC / ZM, Color', 'Network', 4.00, '25 piezas Clip de identificación para Patch Cord Siemon MC / ZM, Color Violeta, Bolsa con 25 piezas', 'DISPONIBLE'),
+  ('Siemon', 'Z-ICON-01B', 'Siemon Z-ICON-01B 100 piezas Icono ID UltraMax para identificación de Jacks Color : Negro', 'Network', 42.00, '100 piezas Icono ID UltraMax para identificación de Jacks Color : Negro Iconos rojos y azules con símbolos de voz y datos 1 icono blanco en blanco para designación de campo Paquete de 100 unidades', 'DISPONIBLE'),
+  ('Siemon', 'Z-ICON-02B', 'Siemon Z-ICON-02B 100 piezas Icono ID UltraMax para identificación de Jacks Color :', 'Network', 42.00, '100 piezas Icono ID UltraMax para identificación de Jacks Color : Blanco Iconos rojos y azules con símbolos de voz y datos 1 icono blanco en blanco para designación de campo Paquete de 100 unidades', 'DISPONIBLE'),
+  ('Siemon', 'Z-ICON-06B', 'Siemon Z-ICON-06B 100 piezas Icono ID UltraMax para identificación de Jacks Color : Azul', 'Network', 42.00, '100 piezas Icono ID UltraMax para identificación de Jacks Color : Azul Iconos rojos y azules con símbolos de voz y datos. 1 icono blanco en blanco para designación de campo Paquete de 100 unidades', 'DISPONIBLE'),
+  ('Siemon', 'CT4-BOX-02', 'Siemon CT4-BOX-02 Caja de Montaje Superficial, Para Placas de Pared (Face Plates)', 'Network', 3.50, 'Caja de Montaje Superficial, Para Placas de Pared (Face Plates) Universales, Color Blanco. Altura: 119.3mm (4.70 in.) Ancho: 74.8mm (2.95 in.) Profundidad: 40.6mm (1.60 in.', 'DISPONIBLE'),
+  ('Siemon', 'KFP-S-01-02-S', 'Siemon KFP-S-01-02-S Faceplate, Placa de pared Keystone de 1 salida, color blanco, para', 'Network', 2.00, 'Faceplate, Placa de pared Keystone de 1 salida, color blanco, para Jacks Keystone. Flexibilidad de instalación: Pestaña de montaje que permite la instalación del conector por la parte delantera o trasera de la placa. Alta densidad: Se pueden adaptar hasta 6 salidas en una sola placa de pared o 12 con doble placa de pared. Etiquetado: Cuenta con espacio para etiqueta de fácil instalación.', 'DISPONIBLE'),
+  ('Siemon', 'KFP-S-02-02-S', 'Siemon KFP-S-02-02-S Faceplate, Placa de pared Keystone de 2 salidas, color blanco, para', 'Network', 2.00, 'Faceplate, Placa de pared Keystone de 2 salidas, color blanco, para Jacks Keystone. Flexibilidad de instalación: Pestaña de montaje que permite la instalación del conector por la parte delantera o trasera de la placa. Alta densidad: Se pueden adaptar hasta 6 salidas en una sola placa de pared o 12 con doble placa de pared. Etiquetado: Cuenta con espacio para etiqueta de fácil instalación.', 'DISPONIBLE'),
+  ('Siemon', 'KFP-S-04-02-S', 'Siemon KFP-S-04-02-S Faceplate, Placa de pared Keystone de 4 salidas, color blanco, para', 'Network', 2.00, 'Faceplate, Placa de pared Keystone de 4 salidas, color blanco, para Jacks Keystone. Flexibilidad de instalación: Pestaña de montaje que permite la instalación del conector por la parte delantera o trasera de la placa. Alta densidad: Se pueden adaptar hasta 6 salidas en una sola placa de pared o 12 con doble placa de pared. Etiquetado: Cuenta con espacio para etiqueta de fácil instalación.', 'DISPONIBLE'),
+  ('Siemon', 'MX-FP-S-01-02B', 'Siemon MX-FP-S-01-02B Faceplate, US, Placa de pared modular MAX, de 1 salida, color Blanco', 'Network', 2.00, 'Faceplate, US, Placa de pared modular MAX, de 1 salida, color Blanco, Flexibilidad de instalación: Pestaña de montaje que permite la instalación del conector por la parte delantera o trasera de la placa. Etiquetado: Las placas de pared cuenta con espacio para etiqueta de fácil instalación, Paquete Granel', 'DISPONIBLE'),
+  ('Siemon', 'MX-FP-S-02-02B', 'Siemon MX-FP-S-02-02B Faceplate, US, Placa de pared modular MAX, de 2 salidas, color Blanco', 'Network', 2.00, 'Faceplate, US, Placa de pared modular MAX, de 2 salidas, color Blanco, Flexibilidad de instalación: Pestaña de montaje que permite la instalación del conector por la parte delantera o trasera de la placa. Etiquetado: Las placas de pared cuenta con espacio para etiqueta de fácil instalación, Paquete Granel', 'DISPONIBLE'),
+  ('Siemon', 'MX-FP-S-04-02B', 'Siemon MX-FP-S-04-02B Faceplate, US, Placa de pared modular MAX, de 4 salidas, color Blanco', 'Network', 2.00, 'Faceplate, US, Placa de pared modular MAX, de 4 salidas, color Blanco, Flexibilidad de instalación: Pestaña de montaje que permite la instalación del conector por la parte delantera o trasera de la placa. Etiquetado: Las placas de pared cuenta con espacio para etiqueta de fácil instalación, Paquete Granel', 'DISPONIBLE'),
+  ('Siemon', '10GMX-FPS02-02B', 'Siemon 10GMX-FPS02-02B Faceplate, Placa de Pared Modular 10G MAX de 2 Salidas, CMX, Color', 'Network', 2.50, 'Faceplate, Placa de Pared Modular 10G MAX de 2 Salidas, CMX, Color Blanco, Paquete Granel. Opciones de densidad: Placas de pared individuales y dobles disponibles. Durabilidad: Resistente a rayos UV, plástico de alto impacto que evita la degradación del color y proporciona mayor durabilidad. Soporte de Etiquetas: Incluyen etiquetas de identificación de fácil liberación sin necesitad de herramienta', 'DISPONIBLE'),
+  ('Siemon', '10GMX-FPS04-02B', 'Siemon 10GMX-FPS04-02B Faceplate, Placa de Pared Modular 10G MAX de 4 Salidas, CMX, Color', 'Network', 2.50, 'Faceplate, Placa de Pared Modular 10G MAX de 4 Salidas, CMX, Color Blanco, Paquete Granel. Opciones de densidad: Placas de pared individuales y dobles disponibles. Durabilidad: Resistente a rayos UV, plástico de alto impacto que evita la degradación del color y proporciona mayor durabilidad. Soporte de Etiquetas: Incluyen etiquetas de identificación de fácil liberación sin necesitad de herramienta', 'DISPONIBLE'),
+  ('Siemon', 'CT2-FP-02B', 'Siemon CT2-FP-02B Faceplate, CT, US, 1 Acoplador, 1 Salida, CT, Blanco, Etiquetas de', 'Network', 2.00, 'Faceplate, CT, US, 1 Acoplador, 1 Salida, CT, Blanco, Etiquetas de identificación que ocultan los tornillos del montaje, resistentes a Rayos UV, plástico de alto impacto que evita la degradación del color y proporciona una mayor durabilidad, Paquete Granel', 'DISPONIBLE'),
+  ('Siemon', 'CTE-MXA-01-02', 'Siemon CTE-MXA-01-02 Adaptador para Placa de Pared CT, TERA-MAX, para ser montados en', 'Network', 1.00, 'Adaptador para Placa de Pared CT, TERA-MAX, para ser montados en conjunto con la placa de pared, de una salida , Angulado, MX, color Blanco', 'DISPONIBLE'),
+  ('Siemon', 'CTE-MXA-02-02', 'Siemon CTE-MXA-02-02 Adaptador para Placa de Pared CT, TERA-MAX, para ser montados en', 'Network', 1.50, 'Adaptador para Placa de Pared CT, TERA-MAX, para ser montados en conjunto con la placa de pared, de dos salidas , Angulado, MX, color Blanco', 'DISPONIBLE'),
+  ('Siemon', 'Z-BL-01', 'Siemon Z-BL-01 Panel Blank, Ciego, Z-PNL, Negro, Bolsa de 10 piezas', 'Network', 7.50, 'Panel Blank, Ciego, Z-PNL, Negro, Bolsa de 10 piezas', 'DISPONIBLE'),
+  ('Siemon', 'MX-BL-02', 'Siemon MX-BL-02 Inserto Ciego Para Placas de Pared MAX y 10G MAX, Color Blanco, MAX', 'Network', 4.50, 'Inserto Ciego Para Placas de Pared MAX y 10G MAX, Color Blanco, MAX, Blanco, Bolsa de 10 piezas', 'DISPONIBLE'),
+  ('Siemon', 'DIN-PNL-04-01', 'Siemon DIN-PNL-04-01 Cobre, Patch Panel, Ruggedized (Resistentes), UTP, 4 Salidas, Riel DIN', 'Network', 23.00, 'Cobre, Patch Panel, Ruggedized (Resistentes), UTP, 4 Salidas, Riel DIN, Negro, Salidas discretas', 'DISPONIBLE'),
+  ('Siemon', 'DIN-PNLS-04-01', 'Siemon DIN-PNLS-04-01 Cobre, Panel de parcheo, Reforzado, Vacío, Apantallado, 4 aberturas', 'Network', 65.00, 'Cobre, Panel de parcheo, Reforzado, Vacío, Apantallado, 4 aberturas, Riel DIN, Negro, Aberturas discretas', 'DISPONIBLE'),
+  ('Siemon', 'MX-MMO-20', 'Siemon MX-MMO-20 Bandeja de gestión de fibra opcional permite el aislamiento y el', 'Network', 33.00, 'Bandeja de gestión de fibra opcional permite el aislamiento y el enrutamiento adecuado del cableado de fibra óptica. Conjunto de tomacorrientes para telecomunicaciones multiusuario, MUTOA, 18 aberturas, MX, marfil. Compatibilidad de la serie de tomacorrientes: UltraMAX (híbrido), Z-MAX (híbrido), TERA, MAX (plano y en ángulo). Esta caja de montaje en superficie multiusuario/multimedia de perfil bajo es insuperable en cuanto a características y flexibilidad, y es ideal para su uso como conjunto d', 'DISPONIBLE'),
+  ('Siemon', 'RS1-07-S', 'Siemon RS1-07-S Rack de marco abierto de 2 postes. Incluye hardware de montaje del', 'Network', 330.00, 'Rack de marco abierto de 2 postes. Incluye hardware de montaje del bastidor, (30) tornillos n.° 12-24 y (2) tuercas de conexión a tierra. Value Rack de Siemon proporciona una solución económica y duradera para montar y asegurar equipos TI en espacios de telecomunicaciones. Con unión y conexión a tierra integradas, marcas de espacio U visibles y compatibilidad con la gama completa de soluciones de gestión de cables de Siemon, Value Rack ahorra tiempo, mano de obra y espacio en una variedad de ins', 'DISPONIBLE'),
+  ('Siemon', 'RSQ1-07-S', 'Siemon RSQ1-07-S Tornillo ajustable n° 12-24', 'Network', 925.00, 'Tornillo ajustable n° 12-24', 'DISPONIBLE'),
+  ('Siemon', 'RSQ1-07C-S', 'Siemon RSQ1-07C-S Tuerca de jaula ajustable', 'Network', 925.00, 'Tuerca de jaula ajustable', 'DISPONIBLE'),
+  ('Siemon', 'V82A-2AB111-45F', 'Siemon V82A-2AB111-45F Gabinete V800 45 unidades de rack de altura. Ancho: 800mm (31.5 in)', 'Network', 2750.00, 'Gabinete V800 45 unidades de rack de altura. Ancho: 800mm (31.5 in). Profundidad: 1200mm (47.2 in.). 2 Paneles laterales, Puerta delantera: totalmente ventilada. Puerta trasera: Ventilación dividida. Tipo de Cerradura: Con llave. Sin ruedas. Color: Negro (RAL 9011). Empaquetado plano. Clasificación de carga: Estática: 1000 kg (2204,6 lbs.). Dinámico: 714 kg (1574,1 libras). Identificación del espacio U: Sí (de abajo hacia arriba). Cumplimiento de estándares: EIA/ECA-310-E, IP20. Solución de gabi', 'DISPONIBLE'),
+  ('Siemon', 'VCM1A-04D-1-45', 'Siemon VCM1A-04D-1-45 Organizador de Cable Vertical Serie Value para Alta Densidad, Doble de', 'Network', 395.00, 'Organizador de Cable Vertical Serie Value para Alta Densidad, Doble de 2 lados, dedos de 6" (152.4mm), 45RU, Ancho de 4" (101.6mm), Fabricado en Acero Laminado en Frio. Puertas con bisagras dobles con manjias de liberación por Resorte. Soporte de anclaje para asegurar el sistema al piso. Acoplamientos sin necesidad de herramientas. Super ligero, 100% termoplastico de alta resistencia.', 'DISPONIBLE'),
+  ('Siemon', 'VCM1A-06D-1-45', 'Siemon VCM1A-06D-1-45 Organizador de Cable Vertical Serie Value para Alta Densidad, Doble de', 'Network', 450.00, 'Organizador de Cable Vertical Serie Value para Alta Densidad, Doble de 2 lados, dedos de 6" (152.4mm), 45RU, Ancho de 6" (152.4mm), Fabricado en Acero Laminado en Frio. Puertas con bisagras dobles con manjias de liberación por Resorte. Soporte de anclaje para asegurar el sistema al piso. Acoplamientos sin necesidad de herramientas. Super ligero, 100% termoplastico de alta resistencia.', 'DISPONIBLE'),
+  ('Siemon', 'VCM1A-10D-1-45', 'Siemon VCM1A-10D-1-45 Organizador de Cable Vertical Serie Value para Alta Densidad, Doble de', 'Network', 620.00, 'Organizador de Cable Vertical Serie Value para Alta Densidad, Doble de 2 lados, dedos de 6" (152.4mm), 45RU, Ancho de 10" (254.0mm), Fabricado en Acero Laminado en Frio. Puertas con bisagras dobles con manjias de liberación por Resorte. Soporte de anclaje para asegurar el sistema al piso. Acoplamientos sin necesidad de herramientas. Super ligero, 100% termoplastico de alta resistencia.', 'DISPONIBLE'),
+  ('Siemon', 'VCM1A-04S-1-45', 'Siemon VCM1A-04S-1-45 Organizador de Cable Vertical Serie Value para Alta Densidad, Sencillo', 'Network', 290.00, 'Organizador de Cable Vertical Serie Value para Alta Densidad, Sencillo de un solo lado, dedos de 6" (152.4mm), 45RU, Ancho de 4" (101.6mm), Fabricado en Acero Laminado en Frio. Puertas con bisagras dobles con manjias de liberación por Resorte. Soporte de anclaje para asegurar el sistema al piso. Acoplamientos sin necesidad de herramientas. Super ligero, 100% termoplastico de alta resistencia.', 'DISPONIBLE'),
+  ('Siemon', 'VCM1A-06S-1-45', 'Siemon VCM1A-06S-1-45 Organizador de Cable Vertical Serie Value para Alta Densidad, Sencillo', 'Network', 305.00, 'Organizador de Cable Vertical Serie Value para Alta Densidad, Sencillo de un solo lado, dedos de 6" (152.4mm), 45RU, Ancho de 6" (152.4mm), Fabricado en Acero Laminado en Frio. Puertas con bisagras dobles con manjias de liberación por Resorte. Soporte de anclaje para asegurar el sistema al piso. Acoplamientos sin necesidad de herramientas. Super ligero, 100% termoplastico de alta resistencia.', 'DISPONIBLE'),
+  ('Siemon', 'VCM1A-10S-1-45', 'Siemon VCM1A-10S-1-45 Organizador de Cable Vertical Serie Value para Alta Densidad, Sencillo', 'Network', 425.00, 'Organizador de Cable Vertical Serie Value para Alta Densidad, Sencillo de un solo lado, dedos de 6" (152.4mm), 45RU, Ancho de 10" (254.0mm), Fabricado en Acero Laminado en Frio. Puertas con bisagras dobles con manjias de liberación por Resorte. Soporte de anclaje para asegurar el sistema al piso. Acoplamientos sin necesidad de herramientas. Super ligero, 100% termoplastico de alta resistencia.', 'DISPONIBLE'),
+  ('Siemon', 'V8A-VPC4-1-45', 'Siemon V8A-VPC4-1-45 Dedos de 4" (102 mm', 'Network', 178.00, 'Dedos de 4" (102 mm', 'DISPONIBLE'),
+  ('Siemon', 'V8A-VPC6-1-45', 'Siemon V8A-VPC6-1-45 Dedos de 6" (152mm', 'Network', 158.00, 'Dedos de 6" (152mm', 'DISPONIBLE'),
+  ('Siemon', 'VCM1A-SPD-1-45', 'Siemon VCM1A-SPD-1-45 Organizador de cables, 7 pies, negro, cubierta de final de fila para', 'Network', 300.00, 'Organizador de cables, 7 pies, negro, cubierta de final de fila para doble cara', 'DISPONIBLE'),
+  ('Siemon', 'VCM-S', 'Siemon VCM-S Accesorio para organizadores verticales. Kit de panel lateral para', 'Network', 335.00, 'Accesorio para organizadores verticales. Kit de panel lateral para organizadores de cables verticales de doble cara RouteIT™ de 177 mm x 457 mm (7 in x 18 in). Nota: El kit de panel lateral es un diseño de dos piezas compuesto por una pieza superior y una inferior e incluye hardware de montaje. Cubierta de final de fila, 7 pies x 18 pulgadas, color negro', 'DISPONIBLE'),
+  ('Siemon', 'VCM-6', 'Siemon VCM-6 Organizador de Cable Vertical RouteIT, Sencillo de un solo lado, 45RU', 'Network', 610.00, 'Organizador de Cable Vertical RouteIT, Sencillo de un solo lado, 45RU, Fabricado en Acero Laminado en Frío 16AWG, 6" (152.4mm) de Ancho, Cableados de Alta Densidad, Puertas con doble bisagra para proteger y cubrir el cableado, Dedos reemplazables rápidamente si sufrieron algún daño. Operación de cierre de puerta para una apertura rápida, de fácil acceso y cierre de puerta en un solo punto. Color Negro', 'DISPONIBLE'),
+  ('Siemon', 'VCM-10', 'Siemon VCM-10 Organizador de Cable Vertical RouteIT, Sencillo de un solo lado, 45RU', 'Network', 740.00, 'Organizador de Cable Vertical RouteIT, Sencillo de un solo lado, 45RU, Fabricado en Acero Laminado en Frío 16AWG, 10" (254 mm) de Ancho, Cableados de Alta Densidad, Puertas con doble bisagra para proteger y cubrir el cableado, Dedos reemplazables rápidamente si sufrieron algún daño. Operación de cierre de puerta para una apertura rápida, de fácil acceso y cierre de puerta en un solo punto. Color Negro', 'DISPONIBLE'),
+  ('Siemon', 'V-TRAY-150-1-45', 'Siemon V-TRAY-150-1-45 Accesorio para Gabinetes series V600/V800 Bandeja Vertical Tray Ancho:', 'Network', 255.00, 'Accesorio para Gabinetes series V600/V800 Bandeja Vertical Tray Ancho: 150mm Color Negro Altura 45U Facil montaje de PDU / Cable Juego de 2 piezas Estas bandejas se pueden montar fácilmente en cualquier ubicación a lo largo de los rieles de gabinete de adelante hacia atrás de los gabinetes V600 y V800 y cuentan con orificios para montaje de PDU, cortes en forma de T para la administración de cables con bridas y aberturas para tuercas enjauladas de 9,5 mm (0,375 pulg.) para montaje de accesorios ', 'DISPONIBLE'),
+  ('Siemon', 'VP-GRD', 'Siemon VP-GRD Kit de puesta a tierra: incluye barra de tierra, cable de tierra', 'Network', 200.00, 'Kit de puesta a tierra: incluye barra de tierra, cable de tierra, hardware de montaje y accesorios (capacidad para admitir todas las conexiones de puesta a tierra necesarias para un solo gabinete', 'DISPONIBLE'),
+  ('Siemon', 'VP-SPL', 'Siemon VP-SPL Carrete de gestión de fibra de ¼ de vuelta (bolsa de 5) Se puede', 'Network', 17.00, 'Carrete de gestión de fibra de ¼ de vuelta (bolsa de 5) Se puede instalar en el canal de parcheo vertical y en el administrador de cables vertical de final de fila', 'DISPONIBLE'),
+  ('Siemon', 'WM-143-5', 'Siemon WM-143-5 Organizador de Cable Horizontal para montaje aéreo, 5 soportes S143', 'Network', 33.00, 'Organizador de Cable Horizontal para montaje aéreo, 5 soportes S143, 1U, De un solo lado, Ancho 19 pulgadas, Color Negro', 'DISPONIBLE'),
+  ('Siemon', 'WM-144-5', 'Siemon WM-144-5 Organizador de Cable Horizontal para montaje aéreo, 5 soportes S144', 'Network', 38.00, 'Organizador de Cable Horizontal para montaje aéreo, 5 soportes S144, 2U, De un solo lado, Ancho 19 pulgadas, Color Negro', 'DISPONIBLE'),
+  ('Siemon', 'WM-145-5', 'Siemon WM-145-5 Organizador de Cable Horizontal para montaje aéreo, 5 soportes S145', 'Network', 45.00, 'Organizador de Cable Horizontal para montaje aéreo, 5 soportes S145, 2U, De un solo lado, Ancho 19 pulgadas, Color Negro', 'DISPONIBLE'),
+  ('Siemon', 'HCM-4-1U', 'Siemon HCM-4-1U Organizador de Cable Horizontal RouteIT, Sencillo, 4" de profundidad', 'Network', 38.00, 'Organizador de Cable Horizontal RouteIT, Sencillo, 4" de profundidad, Rackeable 19", 1U, Cubierta Estandar, Cableados de Alta Densidad, Puertas con doble bisagra para proteger y cubrir el cableado. Color Negro', 'DISPONIBLE'),
+  ('Siemon', 'HCM-4-2U', 'Siemon HCM-4-2U Organizador de Cable Horizontal RouteIT, Sencillo, 4" de profundidad', 'Network', 57.00, 'Organizador de Cable Horizontal RouteIT, Sencillo, 4" de profundidad, Rackeable 19", 2U, Cubierta Estandar, Cableados de Alta Densidad, Puertas con doble bisagra para proteger y cubrir el cableado. Color Negro', 'DISPONIBLE'),
+  ('Siemon', 'HCM-6-1U', 'Siemon HCM-6-1U Organizador de Cable Horizontal RouteIT, Sencillo, 4" de profundidad', 'Network', 48.00, 'Organizador de Cable Horizontal RouteIT, Sencillo, 4" de profundidad, Rackeable 19", 1U, Cubierta Estandar, Cableados de Alta Densidad, Puertas con doble bisagra para proteger y cubrir el cableado. Color Negro', 'DISPONIBLE'),
+  ('Siemon', 'HCM-6-2U', 'Siemon HCM-6-2U Organizador de Cable Horizontal RouteIT, Sencillo, 4" de profundidad', 'Network', 75.00, 'Organizador de Cable Horizontal RouteIT, Sencillo, 4" de profundidad, Rackeable 19", 2U, Cubierta Estandar, Cableados de Alta Densidad, Puertas con doble bisagra para proteger y cubrir el cableado. Color Negro', 'DISPONIBLE'),
+  ('Siemon', 'PNL-BLNK-1', 'Siemon PNL-BLNK-1 Panel Ciego Horizontal para Rack estándar de 19", 1UR, Color Negro con', 'Network', 20.00, 'Panel Ciego Horizontal para Rack estándar de 19", 1UR, Color Negro con el logo de SIEMON, Instalación fácil y rápida, mejora el rendimiento térmico al impedir el flujo de aire a través de espacios vacíos', 'DISPONIBLE'),
+  ('Siemon', 'PNL-BLNK-2', 'Siemon PNL-BLNK-2 Panel Ciego Horizontal para Rack estándar de 19", 2UR, Color Negro con', 'Network', 26.00, 'Panel Ciego Horizontal para Rack estándar de 19", 2UR, Color Negro con el logo de SIEMON, Instalación fácil y rápida, mejora el rendimiento térmico al impedir el flujo de aire a través de espacios vacíos', 'DISPONIBLE'),
+  ('Siemon', 'PNL-BLNKA-2', 'Siemon PNL-BLNKA-2 Panel Ciego Horizontal Angulado para Rack estándar de 19", 2UR, Color', 'Network', 50.00, 'Panel Ciego Horizontal Angulado para Rack estándar de 19", 2UR, Color Negro con el logo de SIEMON, Instalación fácil y rápida, mejora el rendimiento térmico al impedir el flujo de aire a través de espacios vacíos', 'DISPONIBLE');
+
+update public.products p
+set
+  nombre = e.nombre,
+  categoria = e.categoria,
+  marca = e.marca,
+  descripcion = e.descripcion,
+  descripcion2 = 'Lista distribuidor 2026 · ' || e.estatus,
+  costo = e.costo,
+  precio = e.costo,
+  utilidad = 0
+from cat_siemon_2026 e
+where lower(btrim(p.modelo)) = lower(btrim(e.modelo))
+  and (
+    p.marca is null
+    or btrim(p.marca) = ''
+    or lower(btrim(p.marca)) = lower(btrim(e.marca))
+  );
+
+insert into public.products (
+  nombre, categoria, marca, modelo, descripcion, descripcion2,
+  costo, precio, utilidad, cantidad
+)
+select
+  e.nombre, e.categoria, e.marca, e.modelo, e.descripcion,
+  'Lista distribuidor 2026 · ' || e.estatus,
+  e.costo, e.costo, 0, 0
+from cat_siemon_2026 e
+where not exists (
+  select 1
+  from public.products p
+  where lower(btrim(p.modelo)) = lower(btrim(e.modelo))
+    and (
+      p.marca is null
+      or btrim(p.marca) = ''
+      or lower(btrim(p.marca)) = lower(btrim(e.marca))
+    )
+);
+
+commit;
+
+select marca, count(*) as n
+from public.products
+where lower(btrim(coalesce(marca, ''))) in ('siemon')
+group by 1
+order by 1;
+

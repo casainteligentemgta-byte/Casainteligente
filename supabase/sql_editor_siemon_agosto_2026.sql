@@ -1,9 +1,10 @@
 -- =============================================================================
 -- Catálogo Siemon agosto 2026
+-- Archivo completo (78 KB). Preferible pegar las 3 partes más chicas:
+--   sql_editor_siemon_agosto_2026_1.sql
+--   sql_editor_siemon_agosto_2026_2.sql
+--   sql_editor_siemon_agosto_2026_3.sql
 -- NO pegar desde el chat: se corta a mitad de un SKU (error PC6-002).
--- Copiar este archivo COMPLETO (GitHub → Raw → Ctrl+A → Ctrl+C) → SQL Editor → Run.
--- Debe incluir el modelo PC6-002M-A02LS y terminar en RIC-F-LCU12-01C + commit;
--- 253 SKU. Correr este primero.
 -- costo = precio de lista USD; precio = costo; utilidad = 0
 -- No usa updated_at. Idempotente por marca+modelo.
 -- =============================================================================

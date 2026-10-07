@@ -1,7 +1,10 @@
 -- =============================================================================
 -- Catálogo Acceso-Alarma septiembre 2026 (Hikvision, Hikfire, Ubiquiti, Omegasat)
--- NO pegar desde el chat: se corta. Copiar este archivo COMPLETO (GitHub → Raw).
--- 258 SKU. Correr después del de Siemon.
+-- Archivo completo (107 KB). Preferible pegar las 3 partes más chicas:
+--   sql_editor_acceso_alarma_septiembre_2026_1.sql
+--   sql_editor_acceso_alarma_septiembre_2026_2.sql
+--   sql_editor_acceso_alarma_septiembre_2026_3.sql
+-- NO pegar desde el chat. Correr DESPUÉS de las 3 partes de Siemon.
 -- costo = precio de lista USD; precio = costo; utilidad = 0
 -- No usa updated_at. Idempotente por marca+modelo.
 -- =============================================================================
