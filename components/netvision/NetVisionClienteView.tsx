@@ -10,7 +10,6 @@ import NetVisionPlanoCliente, {
   SEMAFORO_CLIENTE_OPACIDAD,
   type PaletaCobertura,
 } from '@/components/netvision/NetVisionPlanoCliente'
-import { FACE_ID_YELLOW_EXTRA_M } from '@/lib/netvision/services/coverageCalculator'
 import NetVisionCameraVisionToggles from '@/components/netvision/NetVisionCameraVisionToggles'
 import {
   isolateHiddenCameraIds,
@@ -868,17 +867,17 @@ export default function NetVisionClienteView() {
             </button>
           ))}
         </span>
-        {/* En palabras del cliente: qué se ve en cada zona del cono. */}
+        {/* Semáforo: verde rostro, naranja cuerpo, amarillo movimiento. */}
         {(paleta === 'semaforo'
           ? [
-              { clave: 'cara', texto: 'Verde: se le ve la cara', color: SEMAFORO_CLIENTE_HEX.green, opacidad: SEMAFORO_CLIENTE_OPACIDAD + 0.35 },
-              { clave: 'limite', texto: `Naranja: al límite (${FACE_ID_YELLOW_EXTRA_M} m más)`, color: SEMAFORO_CLIENTE_HEX.yellow, opacidad: SEMAFORO_CLIENTE_OPACIDAD + 0.35 },
-              { clave: 'alguien', texto: 'Amarillo: se nota que hay alguien', color: SEMAFORO_CLIENTE_HEX.red, opacidad: SEMAFORO_CLIENTE_OPACIDAD + 0.35 },
+              { clave: 'cara', texto: 'Verde: detección de rostro', color: SEMAFORO_CLIENTE_HEX.green, opacidad: SEMAFORO_CLIENTE_OPACIDAD + 0.35 },
+              { clave: 'limite', texto: 'Naranja: detección de cuerpo', color: SEMAFORO_CLIENTE_HEX.yellow, opacidad: SEMAFORO_CLIENTE_OPACIDAD + 0.35 },
+              { clave: 'alguien', texto: 'Amarillo: detección de movimiento', color: SEMAFORO_CLIENTE_HEX.red, opacidad: SEMAFORO_CLIENTE_OPACIDAD + 0.35 },
             ]
           : [
-              { clave: 'cara', texto: 'Se le ve la cara', color: PLANO_CLIENTE_TONO, opacidad: 0.75 },
-              { clave: 'quien', texto: 'Se sabe quién es', color: PLANO_CLIENTE_TONO, opacidad: 0.42 },
-              { clave: 'alguien', texto: 'Se nota que hay alguien', color: PLANO_CLIENTE_TONO, opacidad: 0.18 },
+              { clave: 'cara', texto: 'Detección de rostro', color: PLANO_CLIENTE_TONO, opacidad: 0.75 },
+              { clave: 'quien', texto: 'Detección de cuerpo', color: PLANO_CLIENTE_TONO, opacidad: 0.42 },
+              { clave: 'alguien', texto: 'Detección de movimiento', color: PLANO_CLIENTE_TONO, opacidad: 0.18 },
             ]
         ).map((z) => (
           <span key={z.clave} data-nv-leyenda-zona={z.clave} className="inline-flex items-center gap-1.5">

@@ -2,8 +2,8 @@
 
 /**
  * Plano de la presentación al cliente: fondo oscuro, una sola gama de color
- * para la cobertura (tres zonas: se le ve la cara / se sabe quién es / se nota
- * que hay alguien), pines con número, forma según el tipo de cámara y cuña de
+ * para la cobertura (tres zonas: detección de rostro / de cuerpo / de
+ * movimiento), pines con número, forma según el tipo de cámara y cuña de
  * dirección. Solo lectura. Se dibuja con HTML + SVG (no Konva): imprime nítido
  * y se mueve con un dedo, pellizco o rueda.
  */

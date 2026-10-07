@@ -43,10 +43,10 @@ export type ZonasSector = {
 const redondear1 = (n: number) => Math.round(n * 10) / 10
 
 /**
- * Las tres zonas de una cámara para el cliente: hasta dónde se le ve la cara
- * (identificar), hasta dónde se sabe quién es (reconocer) y el resto del cono
- * (se nota que hay alguien). Las distancias salen de la óptica real de la
- * cámara; nunca pasan del cono dibujado en el plano.
+ * Las tres zonas de una cámara para el cliente: detección de rostro
+ * (identificar), de cuerpo (reconocer) y de movimiento (el resto del cono).
+ * Las distancias salen de la óptica real de la cámara; nunca pasan del cono
+ * dibujado en el plano.
  */
 export function zonasDeSector(
   sector: Pick<CoverageSector, 'radiusNorm' | 'lensId'>,
