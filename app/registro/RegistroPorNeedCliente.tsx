@@ -43,6 +43,10 @@ const FirmaDigital = dynamic(() => import('./components/FirmaDigital'), { ssr: f
 
 const inputClass =
   'mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 outline-none transition focus:border-[#FF9500] focus:ring-1 focus:ring-[#FF9500]/40';
+const inputFlexClass =
+  'min-w-0 flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 outline-none transition focus:border-[#FF9500] focus:ring-1 focus:ring-[#FF9500]/40';
+const inputCompactClass =
+  'shrink-0 rounded-xl border border-white/10 bg-white/5 px-2 py-2.5 text-sm text-white outline-none transition focus:border-[#FF9500] focus:ring-1 focus:ring-[#FF9500]/40';
 const labelClass = 'block text-[10px] font-bold uppercase tracking-wide text-zinc-500';
 
 const STEPS_CAPTACION = [
@@ -716,7 +720,7 @@ export default function RegistroPorNeedCliente({
                 <label className={labelClass}>Cédula *</label>
                 <div className="mt-1 flex gap-2">
                   <select
-                    className={`${inputClass} mt-0 w-[4.5rem] shrink-0`}
+                    className={`${inputCompactClass} w-[4.5rem]`}
                     value={parseCedulaHv(form.cedula).letra}
                     onChange={(e) => {
                       const letra = e.target.value as LetraCedulaHv;
@@ -740,7 +744,7 @@ export default function RegistroPorNeedCliente({
                     </option>
                   </select>
                   <input
-                    className={`${inputClass} mt-0`}
+                    className={inputFlexClass}
                     inputMode="numeric"
                     value={parseCedulaHv(form.cedula).numero}
                     onChange={(e) => {
@@ -866,7 +870,7 @@ export default function RegistroPorNeedCliente({
                   <label className={labelClass}>Celular *</label>
                   <div className="mt-1 flex gap-2">
                     <select
-                      className={`${inputClass} mt-0 w-[6.25rem] shrink-0`}
+                      className={`${inputCompactClass} w-[6.25rem]`}
                       value={parseCelularVe(form.celular).prefijo}
                       onChange={(e) => {
                         const { numero } = parseCelularVe(form.celular);
@@ -881,7 +885,7 @@ export default function RegistroPorNeedCliente({
                       ))}
                     </select>
                     <input
-                      className={`${inputClass} mt-0`}
+                      className={inputFlexClass}
                       inputMode="numeric"
                       value={parseCelularVe(form.celular).numero}
                       onChange={(e) => {
