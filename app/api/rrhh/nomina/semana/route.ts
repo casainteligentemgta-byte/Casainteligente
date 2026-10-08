@@ -6,6 +6,7 @@ import {
   contarSemanasTrabajadasPrevias,
   guardarPeriodoNomina,
   previewItemsNomina,
+  SEMANA_PAGADA_MSG,
   type ItemEntradaNomina,
 } from '@/lib/nomina/persistirSemanaObra';
 import {
@@ -167,6 +168,7 @@ export async function POST(req: Request) {
       tasaAnclaCestaBcv: tasaAncla,
       items,
       marcarPagado: body.marcar_pagado === true,
+      reabrir: body.reabrir === true,
     });
     return NextResponse.json({
       ok: true,
@@ -178,7 +180,7 @@ export async function POST(req: Request) {
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'No se pudo calcular la semana.';
-    const status = msg.includes('Migración 333') ? 503 : 400;
+    const status = msg.includes('Migración 333') ? 503 : msg === SEMANA_PAGADA_MSG ? 409 : 400;
     return NextResponse.json(
       { error: msg, code: status === 503 ? 'MIGRATION_333' : undefined },
       { status },

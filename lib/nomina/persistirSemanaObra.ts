@@ -22,6 +22,9 @@ export type ItemEntradaNomina = {
   mensual_usd?: number | null;
 };
 
+export const SEMANA_PAGADA_MSG =
+  'Esta semana ya está marcada como pagada. Para corregirla, confirme que desea volver a guardarla.';
+
 export type PreviewItemNomina = {
   empleado_id: string;
   semanas_trabajadas_previas: number;
@@ -145,6 +148,8 @@ export async function guardarPeriodoNomina(
     tasaAnclaCestaBcv: number;
     items: ItemEntradaNomina[];
     marcarPagado?: boolean;
+    /** Volver a guardar una semana ya marcada como pagada (lo confirma quien la edita). */
+    reabrir?: boolean;
   },
 ): Promise<{ periodo_id: string; previews: PreviewItemNomina[]; item_ids: Record<string, string> }> {
   const lunes = lunesDeSemanaIso(args.semanaInicio);
@@ -166,6 +171,18 @@ export async function guardarPeriodoNomina(
     tasaAnclaCestaBcv: args.tasaAnclaCestaBcv,
   });
 
+  const { data: existente, error: eExist } = await db
+    .from('ci_nomina_obra_periodos')
+    .select('id, estado')
+    .eq('proyecto_id', args.proyectoId)
+    .eq('semana_inicio', lunes)
+    .maybeSingle();
+  const migExist = errMigracion(eExist);
+  if (migExist) throw migExist;
+  if ((existente as { estado?: string } | null)?.estado === 'pagado' && !args.reabrir && !args.marcarPagado) {
+    throw new Error(SEMANA_PAGADA_MSG);
+  }
+
   const { data: periodo, error: ePer } = await db
     .from('ci_nomina_obra_periodos')
     .upsert(
@@ -175,7 +192,8 @@ export async function guardarPeriodoNomina(
         semana_fin: domingo,
         tasa_bcv_pago: args.tasaBcvPago,
         tasa_ancla_cesta_bcv: args.tasaAnclaCestaBcv,
-        estado: args.marcarPagado ? 'pagado' : 'abierto',
+        // Corregir una semana pagada no la reabre: sigue pagada.
+        estado: args.marcarPagado || (existente as { estado?: string } | null)?.estado === 'pagado' ? 'pagado' : 'abierto',
       },
       { onConflict: 'proyecto_id,semana_inicio' },
     )

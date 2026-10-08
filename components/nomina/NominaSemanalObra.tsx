@@ -45,6 +45,22 @@ type FilaUi = {
   contratoCargado?: boolean;
 };
 
+type ItemGuardado = {
+  id: string;
+  empleado_id: string;
+  tipo: string;
+  clase?: string | null;
+  dias_laborados?: number | null;
+  snapshot?: unknown;
+};
+
+type PeriodoGuardado = {
+  id: string;
+  estado?: string | null;
+  tasa_bcv_pago?: number | string | null;
+  ci_nomina_obra_items?: ItemGuardado[] | null;
+};
+
 type Props = {
   proyectoModuloId: string;
   nombreObra?: string | null;
@@ -115,6 +131,8 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
   const [itemIds, setItemIds] = useState<Record<string, string>>({});
   const [trabajando, setTrabajando] = useState(false);
   const [avisoMigracion, setAvisoMigracion] = useState<string | null>(null);
+  /** Semana ya guardada: se reabre con lo cargado (días, clase, tasa y recibos). */
+  const [guardada, setGuardada] = useState<{ estado: 'abierto' | 'pagado' } | null>(null);
 
   useEffect(() => {
     if (tasaHoy && !tasaBcv) setTasaBcv(String(tasaHoy));
@@ -158,7 +176,68 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
           contratoCargado: f.contratoCargado,
         });
       }
+
+      // Si la semana ya se guardó, se reabre tal como quedó.
+      let previosGuardados: PreviewItemNomina[] | null = null;
+      let idsGuardados: Record<string, string> = {};
+      let estadoGuardado: { estado: 'abierto' | 'pagado' } | null = null;
+      try {
+        const res = await fetch(
+          apiUrl(
+            `/api/rrhh/nomina/semana?proyecto_id=${encodeURIComponent(proyectoModuloId)}&semana=${encodeURIComponent(semana)}`,
+          ),
+          { credentials: 'include', cache: 'no-store' },
+        );
+        const j = (await res.json().catch(() => ({}))) as { periodo?: PeriodoGuardado | null };
+        const periodo = res.ok ? j.periodo ?? null : null;
+        if (periodo) {
+          const items = periodo.ci_nomina_obra_items ?? [];
+          estadoGuardado = { estado: periodo.estado === 'pagado' ? 'pagado' : 'abierto' };
+          const tasaGuardada = Number(periodo.tasa_bcv_pago);
+          if (Number.isFinite(tasaGuardada) && tasaGuardada > 0) setTasaBcv(String(tasaGuardada));
+          const porEmpleado: Record<string, { semanal?: ItemGuardado; adelanto?: ItemGuardado }> = {};
+          for (const it of items) {
+            const k = String(it.empleado_id);
+            porEmpleado[k] = porEmpleado[k] ?? {};
+            if (it.tipo === 'adelanto_prestaciones') porEmpleado[k].adelanto = it;
+            else porEmpleado[k].semanal = it;
+            idsGuardados[`${k}:${it.tipo}`] = String(it.id);
+          }
+          for (const f of next) {
+            const g = porEmpleado[f.empleadoId];
+            if (!g?.semanal) continue;
+            f.dias = Math.max(0, Math.min(5, Number(g.semanal.dias_laborados) || 0));
+            const claseGuardada = g.semanal.clase;
+            if (claseGuardada === 'ayudante' || claseGuardada === 'clasificado') f.clase = claseGuardada;
+            f.incluirAdelanto = Boolean(g.adelanto);
+          }
+          previosGuardados = next
+            .filter((f) => porEmpleado[f.empleadoId]?.semanal?.snapshot)
+            .map((f) => {
+              const g = porEmpleado[f.empleadoId]!;
+              return {
+                empleado_id: f.empleadoId,
+                semanas_trabajadas_previas: 0,
+                toca_adelanto: Boolean(g.adelanto),
+                semanal: g.semanal!.snapshot as ResultadoSemanaObra,
+                adelanto: (g.adelanto?.snapshot as ResultadoSemanaObra | undefined) ?? null,
+              };
+            });
+          const sinFila = Object.keys(porEmpleado).filter((id) => !next.some((f) => f.empleadoId === id));
+          if (sinFila.length > 0) {
+            toast.message(
+              `${sinFila.length} trabajador(es) de la semana guardada ya no aparecen como contratados en esta obra; sus recibos guardados se conservan.`,
+            );
+          }
+        }
+      } catch {
+        /* sin semana guardada: se arma desde cero */
+      }
+
       setFilas(next);
+      setGuardada(estadoGuardado);
+      setPreviews(previosGuardados && previosGuardados.length > 0 ? previosGuardados : null);
+      setItemIds(idsGuardados);
     } catch (e) {
       if (!(e instanceof Error && e.message === 'timeout-contratados')) {
         toast.error(e instanceof Error ? e.message : 'No se cargaron contratados.');
@@ -170,9 +249,10 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
   }, [proyectoModuloId, supabase, semana]);
 
   useEffect(() => {
-    void loadContratados();
     setPreviews(null);
     setItemIds({});
+    setGuardada(null);
+    void loadContratados();
   }, [loadContratados, semana]);
 
   const tasaNum = Number(String(tasaBcv).replace(',', '.'));
@@ -195,7 +275,12 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
     });
   }
 
-  async function calcular(guardar: boolean) {
+  async function calcular(guardar: boolean, marcarPagado = false) {
+    let reabrir = false;
+    if (guardar && guardada?.estado === 'pagado' && !marcarPagado) {
+      if (!window.confirm('Esta semana ya está marcada como pagada. ¿Volver a guardarla con estos datos?')) return;
+      reabrir = true;
+    }
     if (!Number.isFinite(tasaNum) || tasaNum <= 0) {
       toast.error('Indica la tasa BCV del viernes.');
       return;
@@ -217,6 +302,8 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
           tasa_bcv_pago: tasaNum,
           preview: !guardar,
           guardar,
+          marcar_pagado: guardar && marcarPagado,
+          reabrir,
           items: filas.map((f) => ({
             empleado_id: f.empleadoId,
             clase: f.clase,
@@ -236,26 +323,33 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
       };
       if (!res.ok) {
         const mig = j.code === 'MIGRATION_333' || /migración 333/i.test(j.error ?? '');
-        if (mig) {
-          setAvisoMigracion(j.error ?? 'Migración 333 pendiente.');
-          if (guardar) toast.error('El preview sí se calcula; para guardar hay que aplicar la migración 333.');
+        if (mig) setAvisoMigracion(j.error ?? 'Migración 333 pendiente.');
+        if (guardar) {
+          // Un guardado fallido nunca se presenta como hecho.
+          toast.error(j.error ?? 'No se pudo guardar la semana.');
+          return;
         }
-        const list = j.previews ?? j.items ?? previewLocal();
-        setPreviews(list);
-        toast.success('Cálculo listo. Revisa los dos recibos.');
+        setPreviews(j.previews ?? j.items ?? previewLocal());
+        toast.message('Cálculo hecho en este equipo (el servidor no respondió). Revise antes de guardar.');
         return;
       }
       const list = j.previews ?? j.items ?? null;
       setPreviews(list);
       if (j.item_ids) setItemIds(j.item_ids);
-      if (guardar) toast.success('Semana guardada.');
-      else if (list) toast.success('Cálculo listo. Revisa los dos recibos.');
+      if (guardar) {
+        setGuardada({ estado: marcarPagado || reabrir ? 'pagado' : 'abierto' });
+        toast.success(marcarPagado ? 'Semana guardada y marcada como pagada.' : 'Semana guardada.');
+      } else if (list) toast.success('Cálculo listo. Revisa los dos recibos.');
     } catch (e) {
-      try {
-        setPreviews(previewLocal());
-        toast.success('Cálculo listo (preview local). Revisa los dos recibos.');
-      } catch {
-        toast.error(e instanceof Error ? e.message : 'Error de red.');
+      if (guardar) {
+        toast.error(e instanceof Error ? `No se pudo guardar: ${e.message}` : 'No se pudo guardar la semana.');
+      } else {
+        try {
+          setPreviews(previewLocal());
+          toast.message('Cálculo hecho en este equipo (sin conexión con el servidor). Revise antes de guardar.');
+        } catch {
+          toast.error(e instanceof Error ? e.message : 'Error de red.');
+        }
       }
     } finally {
       setTrabajando(false);
@@ -364,8 +458,34 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
           <Button type="button" disabled={trabajando || cargando} onClick={() => void calcular(true)}>
             Guardar semana
           </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={trabajando || cargando || guardada?.estado === 'pagado'}
+            onClick={() => {
+              if (window.confirm('¿Guardar la semana y marcarla como pagada? Después solo se podrá cambiar confirmándolo.')) {
+                void calcular(true, true);
+              }
+            }}
+          >
+            Marcar pagada
+          </Button>
         </div>
       </div>
+
+      {guardada ? (
+        <p
+          className={`mt-3 rounded-lg border px-3 py-2 text-sm ${
+            guardada.estado === 'pagado'
+              ? 'border-emerald-500/30 bg-emerald-950/30 text-emerald-100'
+              : 'border-sky-500/30 bg-sky-950/30 text-sky-100'
+          }`}
+        >
+          {guardada.estado === 'pagado'
+            ? 'Semana guardada y pagada. Se muestra tal como quedó; para corregirla hay que confirmarlo al guardar.'
+            : 'Semana guardada (abierta). Se muestra lo que se guardó; puede corregir y volver a guardar.'}
+        </p>
+      ) : null}
 
       {avisoMigracion ? (
         <p className="mt-3 rounded-lg border border-amber-500/30 bg-amber-950/40 px-3 py-2 text-sm text-amber-100">
