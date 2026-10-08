@@ -12,21 +12,23 @@ export async function construirExpedienteRefPorEmpleado(
   const id = empleadoId.trim();
   if (!id) return '';
 
-  let { data, error } = await supabase
+  type EmpleadoExpRow = {
+    expediente_cedula?: string | null;
+    cedula?: string | null;
+    documento?: string | null;
+  };
+
+  let row: EmpleadoExpRow | null = null;
+  const first = await supabase
     .from('ci_empleados')
     .select('expediente_cedula,cedula,documento')
     .eq('id', id)
     .maybeSingle();
-  if (error && /expediente_cedula|42703|schema cache|column/i.test(error.message)) {
+  row = (first.data as EmpleadoExpRow | null) ?? null;
+  if (first.error && /expediente_cedula|42703|schema cache|column/i.test(first.error.message)) {
     const retry = await supabase.from('ci_empleados').select('cedula,documento').eq('id', id).maybeSingle();
-    data = retry.data;
+    row = (retry.data as EmpleadoExpRow | null) ?? null;
   }
-
-  const row = data as {
-    expediente_cedula?: string | null;
-    cedula?: string | null;
-    documento?: string | null;
-  } | null;
 
   const guardado = String(row?.expediente_cedula ?? '').trim();
   if (guardado) return guardado;
