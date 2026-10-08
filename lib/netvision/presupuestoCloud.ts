@@ -7,6 +7,10 @@ import type {
   PresupuestoVentas,
   ProductoVenta,
 } from '@/lib/netvision/presupuesto'
+import {
+  resolverPresupuestoVentas,
+  type ResumenPresupuestoVentas,
+} from '@/lib/netvision/elegirPresupuestoVentas'
 
 export type ClientePresupuesto = {
   id: string
@@ -252,56 +256,100 @@ export async function cargarOfertaVentas(id: string): Promise<
   }
 }
 
-/**
- * Busca un presupuesto de Ventas generado desde este diseño (nota de NetVision).
- * No toma un presupuesto cualquiera del mismo cliente: eso podría ser otro trabajo.
- */
-export async function buscarPresupuestoDelProyecto(args: {
-  nombreProyecto: string
-  nombreCliente?: string
-}): Promise<{ ok: true; id: string; oferta: OfertaVentas } | { ok: false }> {
+function resumenDesdeFila(raw: {
+  id?: unknown
+  items?: unknown
+  subtotal?: unknown
+  notes?: unknown
+  customer_name?: unknown
+  created_at?: unknown
+}): ResumenPresupuestoVentas | null {
+  if (raw.id == null) return null
+  const items = Array.isArray(raw.items) ? raw.items : []
+  return {
+    id: String(raw.id),
+    cliente: typeof raw.customer_name === 'string' ? raw.customer_name.trim() : '',
+    subtotal: Number(raw.subtotal) || 0,
+    notas: typeof raw.notes === 'string' ? raw.notes : '',
+    fecha: typeof raw.created_at === 'string' ? raw.created_at : '',
+    items,
+  }
+}
+
+/** Lista presupuestos de Ventas (los recientes, o los del cliente buscado). */
+export async function listarPresupuestosVentas(
+  consulta?: string,
+): Promise<
+  | { ok: true; autenticado: true; filas: ResumenPresupuestoVentas[] }
+  | { ok: false; autenticado: boolean; error?: string }
+> {
   let supabase: ReturnType<typeof createClient>
   try {
     supabase = createClient()
-  } catch {
-    return { ok: false }
+  } catch (e) {
+    return { ok: false, autenticado: false, error: e instanceof Error ? e.message : 'Supabase no está configurado.' }
   }
   try {
     const {
       data: { user },
     } = await supabase.auth.getUser()
-    if (!user) return { ok: false }
-    const { data, error } = await supabase
+    if (!user) return { ok: false, autenticado: false }
+    let q = supabase
       .from('budgets')
-      .select('id,items,subtotal,notes,customer_name')
+      .select('id,items,subtotal,notes,customer_name,created_at')
       .order('created_at', { ascending: false })
-      .limit(80)
-    if (error || !Array.isArray(data)) return { ok: false }
-    const nombre = args.nombreProyecto.trim().toLowerCase()
-    if (!nombre) return { ok: false }
-    const cliente = (args.nombreCliente ?? '').trim().toLowerCase()
-    const marca = `generado desde netvision: ${nombre}`
-    type Fila = {
-      id?: unknown
-      items?: unknown
-      subtotal?: unknown
-      notes?: unknown
-      customer_name?: unknown
-    }
-    const candidatos = (data as Fila[]).filter(
-      (f) => typeof f.notes === 'string' && f.notes.toLowerCase().includes(marca),
-    )
-    const fila =
-      (cliente
-        ? candidatos.find(
-            (f) => typeof f.customer_name === 'string' && f.customer_name.trim().toLowerCase() === cliente,
-          )
-        : undefined) ?? candidatos[0]
-    if (!fila || fila.id == null) return { ok: false }
-    const oferta = ofertaDesdeFila(fila)
-    if (oferta.items.length === 0) return { ok: false }
-    return { ok: true, id: String(fila.id), oferta }
-  } catch {
-    return { ok: false }
+      .limit(120)
+    const texto = consulta?.trim()
+    if (texto) q = q.ilike('customer_name', `%${texto}%`)
+    const { data, error } = await q
+    if (error) return { ok: false, autenticado: true, error: error.message }
+    const filas = (Array.isArray(data) ? data : [])
+      .map((f) => resumenDesdeFila(f as Parameters<typeof resumenDesdeFila>[0]))
+      .filter((f): f is ResumenPresupuestoVentas => f != null && f.items.length > 0)
+    return { ok: true, autenticado: true, filas }
+  } catch (e) {
+    return { ok: false, autenticado: true, error: e instanceof Error ? e.message : 'No se pudieron leer los presupuestos.' }
   }
+}
+
+/**
+ * Propone el presupuesto de Ventas de este diseño: el ligado por cliente
+ * (Indira, etc.) o la lista para elegir si hay varios.
+ */
+export async function proponerPresupuestoVentas(args: {
+  nombreProyecto: string
+  nombreCliente?: string
+  consulta?: string
+}): Promise<
+  | { ok: true; modo: 'unico'; fila: ResumenPresupuestoVentas; oferta: OfertaVentas }
+  | { ok: true; modo: 'varios'; filas: ResumenPresupuestoVentas[] }
+  | { ok: true; modo: 'ninguno'; filas: ResumenPresupuestoVentas[] }
+  | { ok: false; autenticado: boolean; error?: string }
+> {
+  const busqueda = args.consulta?.trim() || args.nombreCliente?.trim() || undefined
+  const listado = await listarPresupuestosVentas(busqueda)
+  if (!listado.ok) {
+    if (!listado.autenticado && args.consulta) {
+      return { ok: false, autenticado: false }
+    }
+    if (!listado.autenticado) return { ok: false, autenticado: false }
+    return listado
+  }
+  let filas = listado.filas
+  // Si se buscó por cliente y no salió nada, se traen los recientes para elegir.
+  if (filas.length === 0 && busqueda) {
+    const recientes = await listarPresupuestosVentas()
+    if (recientes.ok) filas = recientes.filas
+  }
+  const resuelto = resolverPresupuestoVentas(filas, {
+    nombreProyecto: args.nombreProyecto,
+    nombreCliente: args.nombreCliente,
+  })
+  if (resuelto.tipo === 'unico') {
+    return { ok: true, modo: 'unico', fila: resuelto.fila, oferta: ofertaDesdeFila(resuelto.fila) }
+  }
+  if (resuelto.tipo === 'varios') {
+    return { ok: true, modo: 'varios', filas: resuelto.filas }
+  }
+  return { ok: true, modo: 'ninguno', filas }
 }
