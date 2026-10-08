@@ -15,23 +15,27 @@ export async function expedienteRefContratoLaboralRegistro(
   supabase: SupabaseClient,
   contratoId: string,
 ): Promise<string> {
-  let { data: ctr, error: sel } = await supabase
+  type ContratoExpRow = {
+    id?: string;
+    empleado_id?: string | null;
+    expediente_cedula?: string | null;
+  };
+
+  let c: ContratoExpRow | null = null;
+  const first = await supabase
     .from('ci_contratos_empleado_obra')
     .select('id,empleado_id,expediente_cedula')
     .eq('id', contratoId)
     .maybeSingle();
-  if (sel && /expediente_cedula|42703|schema cache|column/i.test(sel.message)) {
+  c = (first.data as ContratoExpRow | null) ?? null;
+  if (first.error && /expediente_cedula|42703|schema cache|column/i.test(first.error.message)) {
     const retry = await supabase
       .from('ci_contratos_empleado_obra')
       .select('id,empleado_id')
       .eq('id', contratoId)
       .maybeSingle();
-    ctr = retry.data;
+    c = (retry.data as ContratoExpRow | null) ?? null;
   }
-
-  const c = ctr as
-    | { id: string; empleado_id?: string | null; expediente_cedula?: string | null }
-    | null;
   const guardado = String(c?.expediente_cedula ?? '').trim();
   if (guardado) return guardado;
   const empId = String(c?.empleado_id ?? '').trim();
