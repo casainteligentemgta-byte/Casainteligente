@@ -1,4 +1,4 @@
-/** Fragmento entre «desde el punto de encuentro» y «hasta el sitio…» en la cláusula SEXTA del contrato. */
+/** Fragmento entre «desde el punto de encuentro» y «hasta el sitio…» en la cláusula OCTAVA del contrato. */
 export const PUNTO_ENC_TRANSPORTE_CLAUSULA_SEXTA_DEFAULT =
   'en el sector Jorge Coll (Municipio Maneiro)';
 

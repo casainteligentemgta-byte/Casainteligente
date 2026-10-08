@@ -196,7 +196,7 @@ export type ParametrosContratoPdf = {
   arregloMensualUsd?: number | null;
   textoPuntoEncuentroTransporteSex?: string | null;
   compensacionCulminacionUsdPorMes?: number | null;
-  /** Ciudad domicilio procesal (cláusula DÉCIMA). Default Pampatar. */
+  /** Ciudad domicilio procesal (cláusula NOVENA). Default Pampatar. */
   domicilioProcesalCiudad?: string | null;
 };
 
@@ -431,7 +431,7 @@ function limpiarNombreRepresentanteLegal(n: string): string {
   return t;
 }
 
-/** Texto tras «establecido» en NOVENA (transporte). */
+/** Texto tras «establecido» en OCTAVA (transporte). */
 function fragmentoPuntoEncuentroTransporte(raw: string | null | undefined): string {
   const t0 = (raw ?? '').trim();
   if (!t0) return '_______________________________________________';
@@ -674,13 +674,8 @@ export function ContratoObreroPDF({
         {`, pagadero en Bolívares a la tasa oficial del BCV del día del pago. Ese derecho se destina al pago de las prestaciones sociales, las vacaciones, el bono vacacional, las utilidades y demás conceptos que le correspondan conforme a la LOTTT y a la Convención Colectiva. El pago de las semanas adicionales causadas se efectuará al terminar la relación de trabajo (cierre de obra o finiquito), y no durante su vigencia. Al finiquito se pagará también la fracción que corresponda a las semanas trabajadas que no completen un ciclo de cuatro (4). En esa oportunidad el pago se imputa en este orden: a) a la garantía de prestaciones sociales, conforme al artículo 142 de la LOTTT y a la Cláusula 50 de la Convención Colectiva; b) a las utilidades de la Cláusula 48; c) a las vacaciones y al bono vacacional de la Cláusula 47; y d) el remanente, como complemento voluntario del beneficio de alimentación, sin carácter salarial. Cada recibo discriminará los conceptos.`}
       </Text>
 
-      <Text style={[styles.paragraph, styles.paragraphIntro]}>
-        <Text style={styles.bold}>OCTAVA: ÉTICA Y CONFIDENCIALIDAD.</Text>
-        {` EL TRABAJADOR guardará reserva absoluta sobre la información técnica de la obra y se abstendrá de prácticas desleales.`}
-      </Text>
-
       <Text style={[styles.paragraph, styles.paragraphIntro, styles.clauseDense]}>
-        <Text style={styles.bold}>NOVENA: TRANSPORTE GRATUITO (BENEFICIO SOCIAL NO REMUNERATIVO).</Text>
+        <Text style={styles.bold}>OCTAVA: TRANSPORTE GRATUITO (BENEFICIO SOCIAL NO REMUNERATIVO).</Text>
         {` LA ENTIDAD DE TRABAJO brindará de manera gratuita un servicio de transporte diario, de ida y vuelta, desde el punto de encuentro establecido ${puntoEncTransporte} hasta el sitio de la obra. `}
         <Text style={styles.bold}>NATURALEZA JURÍDICA:</Text>
         {` conforme al artículo 105 de la LOTTT, este servicio es un beneficio social de carácter no remunerativo: no forma parte del salario, no es salario en especie y no se computará para prestaciones sociales, vacaciones, utilidades, bonos ni ningún otro concepto laboral. `}
@@ -689,7 +684,7 @@ export function ContratoObreroPDF({
       </Text>
 
       <Text style={[styles.paragraph, styles.paragraphIntro]}>
-        <Text style={styles.bold}>DÉCIMA: DOMICILIO PROCESAL.</Text>
+        <Text style={styles.bold}>NOVENA: DOMICILIO PROCESAL.</Text>
         {` Las partes eligen como domicilio especial la ciudad de `}
         <Text style={styles.bold}>{ciudadProcesal}</Text>
         {`, Estado Nueva Esparta, sin perjuicio de la competencia que la Ley Orgánica Procesal del Trabajo atribuye a los Tribunales del Trabajo. Se firman dos (2) ejemplares de un mismo tenor y a un solo efecto, en `}
