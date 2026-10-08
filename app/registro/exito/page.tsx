@@ -68,23 +68,13 @@ function RegistroExitoInner() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-[#0A0A0F] px-4 py-16 text-center">
       <div className="max-w-md rounded-2xl border border-[#FF9500]/30 bg-gradient-to-b from-[#FF9500]/10 to-transparent p-8 shadow-xl shadow-black/50">
-        <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#FFD60A]/90">Casa Inteligente</p>
+        <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#FFD60A]/90">Hoja de vida</p>
         <h1 className="mt-3 text-2xl font-bold text-white">¡Hoja de vida enviada!</h1>
         <p className="mt-4 text-sm leading-relaxed text-zinc-400">
           {sinEvaluacion
             ? 'Tus datos ya están en el expediente. La empresa te contactará para el siguiente paso.'
             : 'Tus datos ya están en el expediente. Siguiente paso: evaluación (tipo de color y prueba de admisión).'}
         </p>
-        {empleadoId && cedula ? (
-          <a
-            href={`/api/registro/planilla-empleo-pdf?empleadoId=${encodeURIComponent(empleadoId)}&cedula=${encodeURIComponent(cedula)}&tipo=hoja_vida`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-5 inline-flex rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-semibold text-[#FFD60A] hover:bg-white/10"
-          >
-            Descargar hoja de vida (PDF)
-          </a>
-        ) : null}
         {payload?.examUrl ? (
           <>
             <p className="mt-6 text-sm text-zinc-300">

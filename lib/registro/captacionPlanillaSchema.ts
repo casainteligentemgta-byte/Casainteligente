@@ -41,6 +41,7 @@ export const captacionFormJsonSchema = z.object({
   fechaNacimiento: z.string().min(1),
   nacionalidad: z.string(),
   celular: z.string().min(5),
+  telHabitacion: z.string().optional().default(''),
   correo: z.string().min(3).max(200),
   direccion: z.string().min(3),
   visaClase: z.string(),
@@ -109,6 +110,7 @@ export const captacionStep1Schema = captacionFormJsonSchema.pick({
   lugarNacimiento: true,
   fechaNacimiento: true,
   celular: true,
+  telHabitacion: true,
 });
 
 export const captacionStep2Schema = captacionFormJsonSchema.pick({

@@ -28,7 +28,7 @@ export function buildHojaVidaFromGacetaForm(
       fechaNacimiento: f.fechaNacimiento.trim(),
       nacionalidad: f.nacionalidad.trim(),
       celular: f.celular.trim(),
-      telHabitacion: '',
+      telHabitacion: f.telHabitacion.trim(),
       correoElectronico: f.correo.trim(),
       direccionDomicilio: f.direccion.trim(),
       inscripcionIvss: siNo(f.ivssInscrito),

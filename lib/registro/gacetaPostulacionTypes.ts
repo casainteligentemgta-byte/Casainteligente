@@ -38,6 +38,8 @@ export type GacetaPostulacionFormState = {
   fechaNacimiento: string;
   nacionalidad: string;
   celular: string;
+  /** Teléfono de habitación (planilla Anexo I). */
+  telHabitacion: string;
   correo: string;
   direccion: string;
   /** Clase de visa (si aplica). */
@@ -95,10 +97,11 @@ export function initialGacetaPostulacionForm(): GacetaPostulacionFormState {
     edad: '',
     estadoCivil: '',
     lugarNacimiento: '',
-    paisNacimiento: '',
+    paisNacimiento: 'Venezuela',
     fechaNacimiento: '',
-    nacionalidad: '',
+    nacionalidad: 'Venezolana',
     celular: '',
+    telHabitacion: '',
     correo: '',
     direccion: '',
     visaClase: '',

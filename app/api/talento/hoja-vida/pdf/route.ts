@@ -1,6 +1,7 @@
 import { createElement } from 'react';
 import { pdf } from '@react-pdf/renderer';
 import { NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
 import { hojaVidaDesdeRow, nombreCompletoDesde } from '@/lib/talento/hojaVidaObreroCompleta';
 import { firmaTrabajadorMetaDesdeRow, HojaDeVidaObreroLegalPdfDoc } from '@/lib/talento/hojaVidaPdfLegal';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
@@ -9,8 +10,20 @@ export const runtime = 'nodejs';
 
 /**
  * GET ?token= — PDF de hoja de vida (sin patrono, obra ni contratación) a partir de `ci_empleados.token_registro`.
+ * Solo sesión interna (RRHH). El obrero no descarga.
  */
 export async function GET(req: Request) {
+  const supabaseAuth = await createClient();
+  const {
+    data: { user },
+  } = await supabaseAuth.auth.getUser();
+  if (!user) {
+    return NextResponse.json(
+      { error: 'Inicia sesión. El obrero no puede descargar la hoja de vida.' },
+      { status: 401 },
+    );
+  }
+
   const { searchParams } = new URL(req.url);
   const token = (searchParams.get('token') ?? '').trim();
   if (!token) {

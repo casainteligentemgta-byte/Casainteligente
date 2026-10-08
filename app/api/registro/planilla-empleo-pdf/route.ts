@@ -1,6 +1,7 @@
 import { createElement } from 'react';
 import { pdf } from '@react-pdf/renderer';
 import { NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
 import { cedulaAuthCoincide, cedulaEfectivaDesdeEmpleado } from '@/lib/talento/cedulaAuth';
 import { firmaTrabajadorMetaDesdeRow, HojaDeVidaObreroLegalPdfDoc } from '@/lib/talento/hojaVidaPdfLegal';
 import { hojaVidaDesdeRow, nombreCompletoDesde } from '@/lib/talento/hojaVidaObreroCompleta';
@@ -13,9 +14,20 @@ export const runtime = 'nodejs';
  * GET ?empleadoId=&cedula=&tipo=
  * - tipo=hoja_empleo (defecto): HOJA DE EMPLEO — I trabajador, II patrono, III obra, IV contratación + resto.
  * - tipo=hoja_vida: solo trabajador y antecedentes personales (sin patrono/obra/contratación).
- * La cédula evita descarga arbitraria por UUID.
+ * Solo RRHH/sesión interna: el obrero no descarga su hoja de vida.
  */
 export async function GET(req: Request) {
+  const supabaseAuth = await createClient();
+  const {
+    data: { user },
+  } = await supabaseAuth.auth.getUser();
+  if (!user) {
+    return NextResponse.json(
+      { error: 'Inicia sesión. El obrero no puede descargar la hoja de vida.' },
+      { status: 401 },
+    );
+  }
+
   const { searchParams } = new URL(req.url);
   const empleadoId = (searchParams.get('empleadoId') ?? '').trim();
   const cedula = (searchParams.get('cedula') ?? '').trim().replace(/\uFEFF/g, '');
