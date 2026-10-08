@@ -51,7 +51,7 @@ function fmtFecha(iso: string) {
 function titulo(cara: MetaReciboNomina['cara']) {
   if (cara === 'legal') return 'RECIBO DE PAGO — CARA LEGAL';
   if (cara === 'patio') return 'RECIBO DE PAGO — CARA DE PATIO';
-  return 'SEMANA ADICIONAL POR MES — CLÁUSULA SÉPTIMA';
+  return 'SEMANA ADICIONAL — PAGO AL FINIQUITO (CLÁUSULA SÉPTIMA)';
 }
 
 export function ReciboNominaObraPdf({
@@ -85,7 +85,7 @@ export function ReciboNominaObraPdf({
           Clase de patio: {calc.clase === 'ayudante' ? 'Ayudante' : 'Clasificado / de 1ra'}
           {calc.tipo === 'semanal'
             ? ` · Días laborados: ${calc.diasLaborados} · Días pagados (Cl. 8): ${calc.diasPagados}`
-            : ` · Cl. SÉPTIMA: una semana adicional por mes (USD ${calc.totalUsd.toFixed(2)})`}
+            : ` · Cl. SÉPTIMA: semana adicional de monto fijo (USD ${calc.totalUsd.toFixed(2)}; pago al finiquito)`}
         </Text>
         <Text style={styles.meta}>
           Tasa BCV del pago: {calc.tasaBcvPago.toFixed(4)} Bs/USD
@@ -129,17 +129,14 @@ export function ReciboNominaObraPdf({
 
         {esAdelanto ? (
           <Text style={styles.nota}>
-            Semana adicional por mes prevista en la Cláusula SÉPTIMA: cada cuatro (4) semanas
-            trabajadas se genera el derecho a una (1) semana destinada a prestaciones sociales,
-            vacaciones, utilidades y demás conceptos. El monto equivale a una semana de la Cláusula
-            Sexta y, al sacar la cuenta, es mayor que las alícuotas del Tabulador. Se imputa:
-            anticipo de la garantía de prestaciones (Cl. 50), a solicitud escrita y hasta el 75%
-            (artículo 144 de la LOTTT); anticipo de utilidades (Cl. 48); y el remanente, complemento
-            voluntario del beneficio de alimentación. Las vacaciones se pagan al disfrutarlas o al
-            terminar la relación.{'\n\n'}
+            Semana adicional de monto fijo prevista en la Cláusula SÉPTIMA: el derecho nace cada
+            cuatro (4) semanas trabajadas y se paga al terminar la relación de trabajo (finiquito),
+            no en la nómina semanal. Se destina a prestaciones sociales, vacaciones, utilidades y
+            demás conceptos; al sacar la cuenta es mayor que las alícuotas del Tabulador. Al
+            finiquito se imputa a esos conceptos y el remanente, a complemento de alimentación.{'\n\n'}
             {meta.solicitudTexto?.trim()
               ? `Declaración: ${meta.solicitudTexto.trim()}`
-              : 'El trabajador declara haber solicitado por escrito que la porción de prestaciones sociales se impute como anticipo.'}
+              : 'Se paga al terminar la relación de trabajo (cierre de obra o finiquito).'}
           </Text>
         ) : null}
 

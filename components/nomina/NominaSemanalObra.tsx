@@ -11,7 +11,7 @@ import { previewItemsNomina, type PreviewItemNomina } from '@/lib/nomina/persist
 import {
   type ClasePagoObra,
   inferirClasePagoObra,
-  SOLICITUD_ANTICIPO_SEPTIMA_TEXTO,
+  SEMANA_ADICIONAL_FIJA_USD,
   TASA_ANCLA_CESTA_BCV,
 } from '@/lib/nomina/reglasPagoObra';
 import { domingoDeSemanaIso, lunesDeSemanaIso } from '@/lib/nomina/semanaIsoNomina';
@@ -388,38 +388,6 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
     }
   }
 
-  async function firmarAdelanto(fila: FilaUi) {
-    const itemId = itemIds[`${fila.empleadoId}:adelanto_prestaciones`];
-    if (!itemId) {
-      toast.error('Guarda la semana primero para registrar la solicitud.');
-      return;
-    }
-    setTrabajando(true);
-    try {
-      const res = await fetch(apiUrl('/api/rrhh/nomina/adelanto'), {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          item_id: itemId,
-          firmar: true,
-          firmante_nombre: `${fila.nombres} ${fila.apellidos}`.trim(),
-          solicitud_texto: SOLICITUD_ANTICIPO_SEPTIMA_TEXTO,
-        }),
-      });
-      const j = (await res.json()) as { error?: string };
-      if (!res.ok) {
-        toast.error(j.error || 'No se registró la solicitud.');
-        return;
-      }
-      toast.success('Solicitud firmada; la porción de prestaciones se descontó del saldo.');
-      const p = previewDe(fila.empleadoId);
-      if (p?.adelanto) await pdfDe(fila, 'adelanto', p.adelanto);
-    } finally {
-      setTrabajando(false);
-    }
-  }
-
   return (
     <section className="mt-6 rounded-2xl border border-emerald-500/20 bg-emerald-950/15 p-5">
       <div className="flex gap-3">
@@ -430,7 +398,7 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
           <h2 className="text-sm font-bold uppercase tracking-wide text-emerald-100">Nómina semanal</h2>
           <p className="mt-0.5 text-xs text-zinc-500">
             Cl. SEXTA: salario del oficio + cesta ticket + complemento de alimentación. Cl. SÉPTIMA:
-            cada 4 semanas, una semana adicional por mes para prestaciones, vacaciones y utilidades.
+            cada 4 semanas nace una semana adicional de USD {SEMANA_ADICIONAL_FIJA_USD}, que se paga al finiquito.
           </p>
         </div>
       </div>
@@ -664,48 +632,9 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
                             Patio
                           </Button>
                           {p.toca_adelanto ? (
-                            <>
-                              <label className="flex items-center gap-1 text-[11px] text-amber-200">
-                                <input
-                                  type="checkbox"
-                                  checked={f.incluirAdelanto}
-                                  onChange={(e) =>
-                                    setFilas((prev) =>
-                                      prev.map((x) =>
-                                        x.empleadoId === f.empleadoId
-                                          ? { ...x, incluirAdelanto: e.target.checked }
-                                          : x,
-                                      ),
-                                    )
-                                  }
-                                />
-                                Compensación 4 semanas
-                              </label>
-                              {p.adelanto ? (
-                                <>
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-7 px-2 text-[11px]"
-                                    onClick={() => void pdfDe(f, 'adelanto', p.adelanto!)}
-                                  >
-                                    PDF compensación
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    className="h-7 px-2 text-[11px]"
-                                    disabled={trabajando}
-                                    onClick={() => void firmarAdelanto(f)}
-                                  >
-                                    Firmar solicitud
-                                  </Button>
-                                </>
-                              ) : (
-                                <span className="text-[11px] text-zinc-500">Recalcular para incluirla</span>
-                              )}
-                            </>
+                            <span className="text-[11px] text-amber-200/90">
+                              Se causó 1 semana adicional (USD {SEMANA_ADICIONAL_FIJA_USD}). Se paga al finiquito.
+                            </span>
                           ) : null}
                         </div>
                       ) : (

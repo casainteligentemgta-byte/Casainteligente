@@ -8,6 +8,7 @@ import {
   TOPE_ANTICIPO_PRESTACIONES,
   COMPLEMENTO_ALIMENTACION_SEMANAL_USD,
   COMPLEMENTO_ALIMENTACION_RECIBO,
+  SEMANA_ADICIONAL_FIJA_USD,
   cestaSemanalUsdAnclada,
   diasPagadosClausula8,
   oficioReciboLegal,
@@ -115,9 +116,8 @@ export function calcularSemanaObra(input: CalcularSemanaObraInput): ResultadoSem
   let complementoUsd = 0;
   let totalUsd = 0;
   if (tipo === 'adelanto_prestaciones') {
-    /** Cl. SÉPTIMA: una semana de los conceptos de la SEXTA (7 días de SB + cesta + complemento). */
-    const salarioSemanaSextaUsd = vesAUsd(round2(oficio.diarioVes * 7), tasa);
-    totalUsd = round2(salarioSemanaSextaUsd + cestaSemanalRef + complementoSemanalUsd);
+    /** Cl. SÉPTIMA: monto fijo; el derecho nace cada 4 semanas y se paga al finiquito. */
+    totalUsd = SEMANA_ADICIONAL_FIJA_USD;
   } else {
     cestaUsd = cestaUsdAnclada;
     complementoUsd = complementoSemanalUsd;
@@ -171,8 +171,8 @@ export function calcularSemanaObra(input: CalcularSemanaObraInput): ResultadoSem
       salarial: false,
     });
   } else {
-    // Cl. SÉPTIMA: a) anticipo de prestaciones (hasta 75% de lo acreditado, art. 144 LOTTT);
-    // b) anticipo de utilidades (Cl. 48, la parte del ciclo); c) el resto, complemento de alimentación.
+    // Cl. SÉPTIMA (pago al finiquito): a) prestaciones (hasta 75% de lo acreditado);
+    // b) utilidades (Cl. 48, la parte del ciclo); c) el resto, complemento de alimentación.
     const diasAnticipoPrest = round2(diasGarantia * TOPE_ANTICIPO_PRESTACIONES);
     const prestVes = round2(Math.min(oficio.diarioVes * diasAnticipoPrest, totalVes));
     anticipoPrestacionesVes = prestVes;
@@ -209,7 +209,7 @@ export function calcularSemanaObra(input: CalcularSemanaObraInput): ResultadoSem
     }
     lineasPatio.push({
       codigo: 'ADELANTO',
-      concepto: `Semana adicional por mes (Cl. SÉPTIMA): prestaciones, vacaciones y utilidades — USD ${totalUsd.toFixed(2)}`,
+      concepto: `Semana adicional Cl. SÉPTIMA (monto fijo USD ${SEMANA_ADICIONAL_FIJA_USD}; pago al finiquito)`,
       usd: totalUsd,
       ves: totalVes,
       salarial: false,

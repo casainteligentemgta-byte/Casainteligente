@@ -6,7 +6,7 @@ import {
 import { fechaLargaRegistroMercantilContratoVe } from '@/lib/talento/registroMercantilCamposPdf';
 import { nacionalidadRepresentanteSegunGenero } from '@/lib/talento/nacionalidadRepresentanteSegunGenero';
 import { trabajadorFemeninoDesdeEstadoCivil } from '@/lib/talento/cedulaAuth';
-import { COMPLEMENTO_ALIMENTACION_SEMANAL_USD } from '@/lib/nomina/reglasPagoObra';
+import { COMPLEMENTO_ALIMENTACION_SEMANAL_USD, SEMANA_ADICIONAL_FIJA_USD } from '@/lib/nomina/reglasPagoObra';
 import {
   TABULADOR_HOMOLOGADO_2026_REFERENCIA,
   alimentacionSemanalUsdAnclada,
@@ -485,6 +485,7 @@ export function ContratoObreroPDF({
     salDiarioHomologado != null ? fmtBsVes(Math.round(salDiarioHomologado * 7 * 100) / 100) : '__________________';
   const cestaSemanalUsdTxt = `${fmtUsdNumeroPlano(alimentacionSemanalUsdAnclada())} USD`;
   const complementoAlimUsdTxt = `${fmtUsdNumeroPlano(COMPLEMENTO_ALIMENTACION_SEMANAL_USD)} USD`;
+  const semanaAdicionalUsdTxt = `${fmtUsdNumeroPlano(SEMANA_ADICIONAL_FIJA_USD)} USD`;
 
   const HORARIO_DETALLE_PDF_DEFAULT =
     'de lunes a jueves, de 7:00 a.m. a 12:00 m. y de 1:00 p.m. a 5:00 p.m., y los viernes de 7:00 a.m. a 11:00 a.m.';
@@ -662,7 +663,9 @@ export function ContratoObreroPDF({
 
       <Text style={[styles.paragraph, styles.paragraphIntro]}>
         <Text style={styles.bold}>SÉPTIMA: SEMANA ADICIONAL POR MES (PRESTACIONES, VACACIONES Y UTILIDADES).</Text>
-        {` Cada cuatro (4) semanas trabajadas se genera a favor de EL TRABAJADOR el derecho a una (1) semana adicional por mes, destinada al pago de las prestaciones sociales, las vacaciones, el bono vacacional, las utilidades y demás conceptos que le correspondan conforme a la LOTTT y a la Convención Colectiva. Al sacar la cuenta, este beneficio es mayor que el que resultaría de pagar únicamente las alícuotas legales y convencionales de esos conceptos calculadas sobre el salario del Tabulador. LA ENTIDAD DE TRABAJO pagará esa semana adicional en Bolívares a la tasa oficial del BCV del día del pago, por un monto equivalente a una (1) semana de los conceptos de la Cláusula Sexta (salario del oficio, Cesta Ticket y, cuando se otorgue, el complemento del beneficio de alimentación). El pago se imputa en este orden: a) como anticipo de la garantía de prestaciones sociales, a solicitud escrita de EL TRABAJADOR y hasta el setenta y cinco por ciento (75%) de lo acreditado, conforme al artículo 144 de la LOTTT; b) como anticipo de las utilidades de la Cláusula 48 de la Convención Colectiva, que se descontará de lo que corresponda por ese concepto; y c) el remanente, como complemento voluntario del beneficio de alimentación, sin carácter salarial. Las vacaciones y el bono vacacional se pagarán al disfrutarlas o, al terminar la relación, en forma fraccionada, conforme a la LOTTT y a la Cláusula 47 de la Convención Colectiva. Al cierre de obra o finiquito se pagará la fracción que corresponda a las semanas trabajadas que no completen un ciclo de cuatro (4). Cada recibo discriminará los conceptos.`}
+        {` Cada cuatro (4) semanas trabajadas se genera a favor de EL TRABAJADOR el derecho a una (1) semana adicional, de monto fijo equivalente a `}
+        <Text style={styles.bold}>{semanaAdicionalUsdTxt}</Text>
+        {`, pagadero en Bolívares a la tasa oficial del BCV del día del pago. Ese derecho se destina al pago de las prestaciones sociales, las vacaciones, el bono vacacional, las utilidades y demás conceptos que le correspondan conforme a la LOTTT y a la Convención Colectiva. Al sacar la cuenta, este beneficio es mayor que el que resultaría de pagar únicamente las alícuotas legales y convencionales de esos conceptos calculadas sobre el salario del Tabulador. El pago de las semanas adicionales causadas se efectuará al terminar la relación de trabajo (cierre de obra o finiquito), y no durante su vigencia. Al finiquito se pagará también la fracción que corresponda a las semanas trabajadas que no completen un ciclo de cuatro (4). En esa oportunidad el pago se imputa en este orden: a) a la garantía de prestaciones sociales, conforme al artículo 142 de la LOTTT y a la Cláusula 50 de la Convención Colectiva; b) a las utilidades de la Cláusula 48; c) a las vacaciones y al bono vacacional de la Cláusula 47; y d) el remanente, como complemento voluntario del beneficio de alimentación, sin carácter salarial. Cada recibo discriminará los conceptos.`}
       </Text>
 
       <Text style={[styles.paragraph, styles.paragraphIntro]}>

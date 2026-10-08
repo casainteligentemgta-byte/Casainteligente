@@ -9,10 +9,12 @@ import {
 } from '@/lib/nomina/tabuladorHomologado2026';
 
 /**
- * Arreglo de pago por defecto para la Cláusula SÉPTIMA (cada 4 semanas).
- * Cada contrato puede pactar otro monto (ver `lib/nomina/arregloPago.ts`).
+ * Cl. SÉPTIMA: semana adicional de monto fijo (USD). El derecho nace cada 4 semanas
+ * trabajadas y se paga al terminar la relación (finiquito), no en la nómina semanal.
  */
-export const SOBRE_AYUDANTE_USD = 90;
+export const SEMANA_ADICIONAL_FIJA_USD = 90;
+/** @deprecated Usar SEMANA_ADICIONAL_FIJA_USD. */
+export const SOBRE_AYUDANTE_USD = SEMANA_ADICIONAL_FIJA_USD;
 export const SOBRE_CLASIFICADO_USD = 115;
 
 /**
@@ -34,7 +36,7 @@ export const DIAS_JORNADA_SEMANA = 5;
 export const MIN_JORNADAS_PARA_DESCANSO = 3;
 export const DIAS_DESCANSO_SEMANA = 2;
 
-/** Cada 4 semanas trabajadas se paga una quinta (adelanto de prestaciones + conceptos CCT). */
+/** Cada 4 semanas trabajadas se causa una semana adicional (pago al finiquito). */
 export const SEMANAS_TRABAJADAS_PARA_ADELANTO = 4;
 /** Cl. 50: 6 días de salario básico por mes / ciclo de 4 semanas. */
 export const DIAS_GARANTIA_PRESTACIONES_POR_CICLO = 6;
@@ -49,7 +51,7 @@ export const CICLOS_CUATRO_SEMANAS_POR_ANIO = 13;
  * imputada a prestaciones sociales cuente como anticipo (art. 144 LOTTT exige la solicitud).
  */
 export const SOLICITUD_ANTICIPO_SEPTIMA_TEXTO =
-  'Solicito que la semana adicional de la Cláusula SÉPTIMA de mi contrato de trabajo, correspondiente a estas cuatro semanas trabajadas, se impute en la parte que corresponda como anticipo de mis prestaciones sociales, conforme al artículo 144 de la LOTTT.';
+  'Declaro que la semana adicional de la Cláusula SÉPTIMA de mi contrato, causada por cada cuatro semanas trabajadas, se pagará al terminar la relación de trabajo e imputará a prestaciones sociales, vacaciones, utilidades y demás conceptos, conforme a la LOTTT y a la Convención Colectiva.';
 
 export const CESTA_MENSUAL_VES_ACTA = ALIMENTACION_MENSUAL_VES_HOMOLOGADA_2026;
 export const FECHA_ANCLAJE_CESTA_ISO = FECHA_FIRMA_ACUERDO_2026;

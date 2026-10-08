@@ -7,7 +7,7 @@ import {
   nivelDesdeSalarioDiario2023,
   salarioDiarioHomologado,
 } from '@/lib/nomina/tabuladorHomologado2026';
-import { COMPLEMENTO_ALIMENTACION_SEMANAL_USD, SOBRE_AYUDANTE_USD } from '@/lib/nomina/reglasPagoObra';
+import { COMPLEMENTO_ALIMENTACION_SEMANAL_USD, SEMANA_ADICIONAL_FIJA_USD } from '@/lib/nomina/reglasPagoObra';
 import {
   dueñoPlaceholderContrato,
   valorPlantillaEfectivamenteVacio,
@@ -92,9 +92,13 @@ const ETIQUETAS: Record<string, { etiqueta: string; ayuda: string }> = {
     etiqueta: 'Complemento de alimentación semanal USD',
     ayuda: 'Cl. SEXTA c): 33 USD fijos, no salariales, iguales para todos los oficios.',
   },
+  CONTRATO_SEMANA_ADICIONAL_USD: {
+    etiqueta: 'Semana adicional (monto fijo USD)',
+    ayuda: 'Cl. SÉPTIMA: 90 USD fijos. El derecho nace cada 4 semanas y se paga al finiquito.',
+  },
   CONTRATO_ANTICIPO_CUATRO_SEMANAS_USD: {
     etiqueta: 'Semana adicional cada cuatro semanas',
-    ayuda: 'Cl. SÉPTIMA: una semana de los conceptos de la SEXTA (prestaciones, vacaciones y utilidades).',
+    ayuda: 'Reservado. La Cl. SÉPTIMA usa CONTRATO_SEMANA_ADICIONAL_USD (90 USD al finiquito).',
   },
   CONTRATO_INGRESO_SEMANAL_USD_TOTAL: { etiqueta: 'Ingreso semanal total USD', ayuda: 'Reservado; el PDF usa salario + cesta + complemento.' },
   CONTRATO_COMPENSACION_CULMINACION_USD: { etiqueta: 'Compensación por culminación USD/mes', ayuda: 'Canon mensual al cierre.' },
@@ -468,7 +472,8 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
     CONTRATO_ALIMENTACION_SEMANAL_VES: fmtVes(alimentacionSemanalVes()),
     CONTRATO_CESTA_TICKET_USD_SEMANAL: `${alimentacionSemanalUsdAnclada().toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`,
     CONTRATO_COMPLEMENTO_ALIMENTACION_USD: `${COMPLEMENTO_ALIMENTACION_SEMANAL_USD} USD`,
-    CONTRATO_ANTICIPO_CUATRO_SEMANAS_USD: `${SOBRE_AYUDANTE_USD} USD`,
+    CONTRATO_SEMANA_ADICIONAL_USD: `${SEMANA_ADICIONAL_FIJA_USD} USD`,
+    CONTRATO_ANTICIPO_CUATRO_SEMANAS_USD: `${SEMANA_ADICIONAL_FIJA_USD} USD`,
     CONTRATO_INGRESO_SEMANAL_USD_TOTAL: '__________ USD',
     CONTRATO_COMPENSACION_CULMINACION_USD: '100,00',
     CONTRATO_DOMICILIO_PROCESAL: domicilioProcesal,
