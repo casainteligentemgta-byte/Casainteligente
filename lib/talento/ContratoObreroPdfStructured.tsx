@@ -756,9 +756,7 @@ export function ContratoObreroPDF({
         {` (Bs.) por concepto de Salario Semanal según Tabulador, equivalente a dos (2) veces el salario de su oficio en el Tabulador de la Convención Colectiva, conforme al ${TABULADOR_HOMOLOGADO_2026_REFERENCIA}; `}
         {'\n'}
         b.- Cesta Ticket: el equivalente en Bolívares de <Text style={styles.bold}>{cestaSemanalUsdTxt}</Text>
-        {` semanales, a la tasa oficial del BCV del día del pago. Este monto resulta de convertir los Bs. `}
-        <Text style={styles.bold}>{alimMensualTxt}</Text>
-        {` mensuales fijados en dicho acuerdo a la tasa oficial del BCV de la fecha de su firma (Bs. ${fmtBsVes(TASA_BCV_FIRMA_ACUERDO_2026)} por USD), es decir, ${cestaMensualUsdTxt} mensuales. La indexación al dólar es un beneficio que otorga LA ENTIDAD DE TRABAJO. El Cesta Ticket no tiene carácter salarial, conforme al Decreto con Rango, Valor y Fuerza de Ley del Cestaticket Socialista; y`}
+        {` semanales, a la tasa oficial del BCV del día del pago; y`}
         {'\n'}
         c.- <Text style={styles.bold}>BONO ESPECIAL: (NO Salarial):</Text>
         {` De conformidad con el artículo 105 de la LOTTT, para elevar el Ingreso Semanal a un total equivalente a: `}
