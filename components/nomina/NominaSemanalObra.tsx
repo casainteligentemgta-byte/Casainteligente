@@ -1,5 +1,11 @@
 'use client';
 
+import {
+  esFinalidadAnticipo,
+  solicitudAnticipoConFinalidad,
+  type FinalidadAnticipo,
+} from '@/lib/nomina/finalidadAnticipo';
+import type { DatosSolicitudAnticipo } from '@/lib/nomina/SolicitudAnticipoPrestacionesPdf';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FileText, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
@@ -46,6 +52,8 @@ type FilaUi = {
   mensualUsd?: number | null;
   /** `false`: el contrato firmado aún no se cargó. */
   contratoCargado?: boolean;
+  /** Finalidad del anticipo de prestaciones (art. 144 LOTTT), elegida por el trabajador. */
+  finalidadAnticipo?: FinalidadAnticipo | null;
 };
 
 type ItemGuardado = {
@@ -89,6 +97,29 @@ function triggerBlobDownload(blob: Blob, nombre: string) {
   a.download = nombre;
   a.click();
   window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+}
+
+async function descargarSolicitudAnticipo(datos: DatosSolicitudAnticipo, nombre: string) {
+  try {
+    const res = await fetch(apiUrl('/api/rrhh/nomina/solicitud-anticipo'), {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(datos),
+    });
+    if (res.ok) {
+      triggerBlobDownload(await res.blob(), nombre);
+      return;
+    }
+  } catch {
+    /* preview local */
+  }
+  const { createElement } = await import('react');
+  const { pdf } = await import('@react-pdf/renderer');
+  const { SolicitudAnticipoPrestacionesPdf } = await import('@/lib/nomina/SolicitudAnticipoPrestacionesPdf');
+  const node = createElement(SolicitudAnticipoPrestacionesPdf, { datos });
+  const blob = await pdf(node as Parameters<typeof pdf>[0]).toBlob();
+  triggerBlobDownload(blob, nombre);
 }
 
 async function descargarPdf(payload: unknown, nombre: string) {
@@ -390,10 +421,35 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
     }
   }
 
+  async function formularioAnticipo(fila: FilaUi, calc: ResultadoSemanaObra) {
+    try {
+      await descargarSolicitudAnticipo(
+        {
+          empresa: 'Casa Inteligente',
+          obra: nombreObra ?? '',
+          trabajadorNombre: `${fila.nombres} ${fila.apellidos}`.trim(),
+          trabajadorCedula: fila.cedula,
+          fechaIso: domingoDeSemanaIso(semana),
+          garantiaCicloVes: calc.montoGarantiaPrestacionesVes,
+          anticipoVes: calc.anticipoPrestacionesVes,
+          tasaBcv: calc.tasaBcvPago,
+          finalidad: fila.finalidadAnticipo ?? null,
+        },
+        `solicitud-anticipo-${fila.cedula.replace(/\s/g, '')}.pdf`,
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'PDF no generado.');
+    }
+  }
+
   async function firmarAdelanto(fila: FilaUi) {
     const itemId = itemIds[`${fila.empleadoId}:adelanto_prestaciones`];
     if (!itemId) {
       toast.error('Guarda la semana primero para registrar la solicitud.');
+      return;
+    }
+    if (!fila.finalidadAnticipo) {
+      toast.error('Indica la finalidad del anticipo (art. 144 LOTTT) que marcó el trabajador en el formulario.');
       return;
     }
     setTrabajando(true);
@@ -406,7 +462,7 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
           item_id: itemId,
           firmar: true,
           firmante_nombre: `${fila.nombres} ${fila.apellidos}`.trim(),
-          solicitud_texto: SOLICITUD_ANTICIPO_SEPTIMA_TEXTO,
+          solicitud_texto: solicitudAnticipoConFinalidad(SOLICITUD_ANTICIPO_SEPTIMA_TEXTO, fila.finalidadAnticipo),
         }),
       });
       const j = (await res.json()) as { error?: string };
@@ -697,8 +753,39 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
                                   <Button
                                     type="button"
                                     size="sm"
+                                    variant="outline"
                                     className="h-7 px-2 text-[11px]"
-                                    disabled={trabajando}
+                                    title="Formulario del art. 144 LOTTT para imprimir, marcar la finalidad, firmar y poner la huella"
+                                    onClick={() => void formularioAnticipo(f, p.adelanto!)}
+                                  >
+                                    Formulario anticipo
+                                  </Button>
+                                  <select
+                                    className="h-7 rounded-md border border-white/15 bg-zinc-950 px-1 text-[11px] text-white"
+                                    value={f.finalidadAnticipo ?? ''}
+                                    title="Finalidad que marcó el trabajador (art. 144 LOTTT)"
+                                    onChange={(e) => {
+                                      const v = e.target.value;
+                                      setFilas((prev) =>
+                                        prev.map((x) =>
+                                          x.empleadoId === f.empleadoId
+                                            ? { ...x, finalidadAnticipo: esFinalidadAnticipo(v) ? v : null }
+                                            : x,
+                                        ),
+                                      );
+                                    }}
+                                  >
+                                    <option value="">Finalidad…</option>
+                                    <option value="vivienda">Vivienda</option>
+                                    <option value="hipoteca">Hipoteca</option>
+                                    <option value="educacion">Educación</option>
+                                    <option value="salud">Salud</option>
+                                  </select>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    className="h-7 px-2 text-[11px]"
+                                    disabled={trabajando || !f.finalidadAnticipo}
                                     onClick={() => void firmarAdelanto(f)}
                                   >
                                     Firmar solicitud
