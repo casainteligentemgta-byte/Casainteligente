@@ -7,9 +7,12 @@ import {
   TABULADOR_HOMOLOGADO_2026_REFERENCIA,
 } from '@/lib/nomina/tabuladorHomologado2026';
 
-/** Pago de patio acordado con el sindicato (cesta ticket incluida). */
+/**
+ * Arreglo de pago por defecto (cesta ticket incluida). Es el monto preestablecido:
+ * cada contrato puede pactar otro (ver `lib/nomina/arregloPago.ts`).
+ */
 export const SOBRE_AYUDANTE_USD = 90;
-export const SOBRE_CLASIFICADO_USD = 117;
+export const SOBRE_CLASIFICADO_USD = 115;
 
 /** Oficio del recibo legal: ayudante = 2.1; clasificado = de 1ra (nivel 5) salvo oficio de nivel mayor. */
 export const OFICIO_AYUDANTE_CODIGO = '2.1';

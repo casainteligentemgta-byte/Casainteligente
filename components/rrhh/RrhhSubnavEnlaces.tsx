@@ -87,11 +87,11 @@ export default function RrhhSubnavEnlaces({
       </Link>
       <Link
         href={hrefExpress}
-        title="Contrato de trabajo (obrero): ya contratados, nuevo y contratación masiva"
+        title="Contratos de trabajo: arreglo de pago, generar, imprimir y cargar el firmado"
         className={`${rrhhSubnavBtnClass} border-amber-500/40 bg-amber-950/45 text-amber-100 hover:bg-amber-900/55`}
       >
         <FileText className="h-3.5 w-3.5 shrink-0" aria-hidden />
-        <span className="truncate">Express</span>
+        <span className="truncate">Contratos</span>
       </Link>
       <Link
         href={hrefNomina}

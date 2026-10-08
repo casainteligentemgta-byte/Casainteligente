@@ -1,6 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { idsObrasHijasDesdeModuloIntegral } from '@/lib/proyectos/obraHijasDesdeModulo';
 import { normCedulaToken } from '@/lib/talento/cedulaAuth';
+import { esContratoExpressAdministracionDelegada } from '@/lib/talento/filtrarContratosExpressObrero';
+import { montoArregloValido } from '@/lib/nomina/arregloPago';
+
+/** Contratos del flujo anterior que cuentan como vigentes para la nómina. */
+const ESTADOS_CONTRATO_VIGENTE = ['firmado_activo', 'firmado_y_archivado'];
 
 export type FilaNominaContratado = {
   id: string;
@@ -11,6 +16,13 @@ export type FilaNominaContratado = {
   fechaIngreso: string | null;
   cargoCodigo: string | null;
   cargoNombre: string | null;
+  /** `false` si el contrato firmado aún no se cargó (alerta; no impide pagar). */
+  contratoCargado?: boolean;
+  /** Arreglo de pago pactado en el contrato (USD). `null`: monto por defecto del oficio. */
+  arregloSemanalUsd?: number | null;
+  arregloMensualUsd?: number | null;
+  /** Id del contrato de trabajo que lo trae a la nómina. */
+  contratoExpressId?: string | null;
 };
 
 function sTrim(v: unknown): string {
@@ -113,7 +125,7 @@ async function listarContratosFirmadosActivos(
   let q = supabase
     .from('ci_contratos_empleado_obra')
     .select(selectConObra)
-    .eq('estado_contrato', 'firmado_activo');
+    .in('estado_contrato', ESTADOS_CONTRATO_VIGENTE);
 
   if (projectIds?.length) {
     // obra_id o proyecto_id pueden apuntar al mismo módulo / obra hija.
@@ -138,7 +150,7 @@ async function listarContratosFirmadosActivos(
   let q2 = supabase
     .from('ci_contratos_empleado_obra')
     .select(selectSoloProyecto)
-    .eq('estado_contrato', 'firmado_activo');
+    .in('estado_contrato', ESTADOS_CONTRATO_VIGENTE);
   if (projectIds?.length) {
     q2 = q2.in('proyecto_id', projectIds);
   }
@@ -151,13 +163,54 @@ async function listarContratosFirmadosActivos(
     let q3 = supabase
       .from('ci_contratos_empleado_obra')
       .select('empleado_id,fecha_ingreso,obra_id,estado_contrato')
-      .eq('estado_contrato', 'firmado_activo');
+      .in('estado_contrato', ESTADOS_CONTRATO_VIGENTE);
     if (projectIds?.length) q3 = q3.in('obra_id', projectIds);
     const third = await q3;
     if (third.error) throw new Error(third.error.message);
     return (third.data ?? []) as ContratoActivoRow[];
   }
   return (second.data ?? []) as ContratoActivoRow[];
+}
+
+type ContratoTrabajoRow = {
+  id?: unknown;
+  obrero_nombre?: unknown;
+  obrero_cedula?: unknown;
+  bono_manual_usd?: unknown;
+  created_at?: unknown;
+  formalizado_empleado_id?: unknown;
+  proyecto_id?: unknown;
+  tipo_contrato?: unknown;
+  fecha_ingreso?: unknown;
+  pdf_firmado_storage_path?: unknown;
+  cargo_nombre_snapshot?: unknown;
+  arreglo_semanal_usd?: unknown;
+  arreglo_mensual_usd?: unknown;
+};
+
+/**
+ * Contratos de trabajo de obrero de la obra (los de administración delegada no son de personal).
+ * Compat: si faltan columnas recientes, se reintenta con la lista corta.
+ */
+async function listarContratosTrabajoObra(
+  supabase: SupabaseClient,
+  projectIds: string[] | null,
+): Promise<ContratoTrabajoRow[]> {
+  const selects = [
+    'id,obrero_nombre,obrero_cedula,bono_manual_usd,created_at,formalizado_empleado_id,proyecto_id,tipo_contrato,fecha_ingreso,pdf_firmado_storage_path,cargo_nombre_snapshot,arreglo_semanal_usd,arreglo_mensual_usd',
+    'id,obrero_nombre,obrero_cedula,bono_manual_usd,created_at,formalizado_empleado_id,proyecto_id,tipo_contrato,pdf_firmado_storage_path,cargo_nombre_snapshot',
+    'id,obrero_nombre,obrero_cedula,bono_manual_usd,created_at,formalizado_empleado_id,proyecto_id',
+  ];
+  for (const sel of selects) {
+    let q = supabase.from('ci_contratos_express').select(sel).order('created_at', { ascending: false });
+    if (projectIds?.length) q = q.in('proyecto_id', projectIds);
+    const res: { data: unknown[] | null; error: { message: string } | null } = await q;
+    if (res.error) continue;
+    return ((res.data ?? []) as ContratoTrabajoRow[]).filter(
+      (r) => !esContratoExpressAdministracionDelegada(r as Parameters<typeof esContratoExpressAdministracionDelegada>[0]),
+    );
+  }
+  return [];
 }
 
 export async function fetchCuadroContratados(
@@ -169,14 +222,23 @@ export async function fetchCuadroContratados(
   });
 
   const contratos = await listarContratosFirmadosActivos(supabase, projectIds);
+  const expressRows = await listarContratosTrabajoObra(supabase, projectIds);
 
-  const empleadoIds = Array.from(
+  /** Empleados con contrato del flujo anterior (firmado y archivado). */
+  const empleadoIdsContratoObra = Array.from(
     new Set(
       (contratos ?? [])
         .map((r) => sTrim((r as { empleado_id?: unknown }).empleado_id))
         .filter(Boolean),
     ),
   );
+  /** Contrato de trabajo vigente por empleado (el más reciente manda). */
+  const expressPorEmpleado = new Map<string, ContratoTrabajoRow>();
+  for (const r of expressRows) {
+    const eid = sTrim(r.formalizado_empleado_id);
+    if (eid && !expressPorEmpleado.has(eid)) expressPorEmpleado.set(eid, r);
+  }
+  const empleadoIds = Array.from(new Set([...empleadoIdsContratoObra, ...Array.from(expressPorEmpleado.keys())]));
 
   const fechaIngresoPorEmpleado = new Map<string, string>();
   for (const raw of contratos ?? []) {
@@ -274,32 +336,29 @@ export async function fetchCuadroContratados(
     const emp = empleadosMap.get(eid);
     if (!emp) continue;
     vistos.add(eid);
+    const ex = expressPorEmpleado.get(eid) ?? null;
+    const tieneContratoObra = empleadoIdsContratoObra.includes(eid);
+    const ingresoEx = ex ? sTrim(ex.fecha_ingreso).slice(0, 10) || sTrim(ex.created_at).slice(0, 10) : '';
     filas.push({
       id: eid,
       nombres: emp.nombres || '—',
       apellidos: emp.apellidos || '—',
       cedula: emp.cedula,
       bonoUsd: bonoPorEmpleado.get(eid) ?? 0,
-      fechaIngreso: fechaIngresoPorEmpleado.get(eid) ?? null,
+      fechaIngreso: fechaIngresoPorEmpleado.get(eid) ?? (ingresoEx || null),
       cargoCodigo: emp.cargoCodigo,
-      cargoNombre: emp.cargoNombre,
+      cargoNombre: emp.cargoNombre ?? (ex ? sTrim(ex.cargo_nombre_snapshot) || null : null),
+      // El contrato del flujo anterior solo llega aquí ya firmado y archivado.
+      contratoCargado: tieneContratoObra || Boolean(ex && sTrim(ex.pdf_firmado_storage_path)),
+      arregloSemanalUsd: ex ? montoArregloValido(ex.arreglo_semanal_usd) : null,
+      arregloMensualUsd: ex ? montoArregloValido(ex.arreglo_mensual_usd) : null,
+      contratoExpressId: ex ? sTrim(ex.id) || null : null,
     });
   }
 
-  let expressQuery = supabase
-    .from('ci_contratos_express')
-    .select(
-      'id,obrero_nombre,obrero_cedula,bono_manual_usd,created_at,formalizado_empleado_id,proyecto_id',
-    )
-    .is('formalizado_empleado_id', null)
-    .order('created_at', { ascending: false });
-
-  if (projectIds?.length) {
-    expressQuery = expressQuery.in('proyecto_id', projectIds);
-  }
-
-  const { data: expressRows } = await expressQuery;
-  for (const raw of expressRows ?? []) {
+  for (const raw of expressRows) {
+    // Con expediente del trabajador ya entró arriba, por su id de empleado.
+    if (sTrim(raw.formalizado_empleado_id)) continue;
     const exId = sTrim((raw as { id?: unknown }).id);
     const cedula = sTrim((raw as { obrero_cedula?: unknown }).obrero_cedula);
     const ck = cedulaNorm(cedula);
@@ -319,9 +378,13 @@ export async function fetchCuadroContratados(
       apellidos,
       cedula: cedula || '—',
       bonoUsd: Number.isFinite(bono) ? Math.max(0, Math.round(bono * 100) / 100) : 0,
-      fechaIngreso: created ? created.slice(0, 10) : null,
+      fechaIngreso: sTrim(raw.fecha_ingreso).slice(0, 10) || (created ? created.slice(0, 10) : null),
       cargoCodigo: null,
-      cargoNombre: null,
+      cargoNombre: sTrim(raw.cargo_nombre_snapshot) || null,
+      contratoCargado: Boolean(sTrim(raw.pdf_firmado_storage_path)),
+      arregloSemanalUsd: montoArregloValido(raw.arreglo_semanal_usd),
+      arregloMensualUsd: montoArregloValido(raw.arreglo_mensual_usd),
+      contratoExpressId: exId || null,
     });
   }
 

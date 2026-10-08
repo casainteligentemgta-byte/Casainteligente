@@ -4,6 +4,7 @@ import { generarContratoTrabajoObrero } from '@/lib/talento/generarContratoTraba
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import { createClient } from '@/lib/supabase/server';
 import { CEDULA_VE_NORMALIZADA_REGEX, normCedulaToken } from '@/lib/talento/cedulaAuth';
+import { ARREGLO_PAGO_MAX_USD } from '@/lib/nomina/arregloPago';
 
 export const runtime = 'nodejs';
 
@@ -21,6 +22,9 @@ const postBodySchema = z.object({
   obrero_direccion: z.string().max(500).optional().nullable(),
   /** Bono variable en USD; en bolívares se liquida al pagar con la tasa oficial del BCV del día (p. ej. viernes). */
   bono_manual_usd: z.coerce.number().nonnegative().default(0),
+  /** Arreglo de pago pactado (USD). Sin valor: el monto preestablecido del oficio. */
+  arreglo_semanal_usd: z.coerce.number().positive().max(ARREGLO_PAGO_MAX_USD).optional().nullable(),
+  arreglo_mensual_usd: z.coerce.number().positive().max(ARREGLO_PAGO_MAX_USD).optional().nullable(),
   /** Si se envía, sustituye a `ci_proyectos.entidad_id` como patrono del PDF (razón social, RM, domicilio). */
   entidad_patrono_id: z.string().uuid().optional().nullable(),
   fecha_ingreso: z
@@ -55,6 +59,13 @@ const postBodySchema = z.object({
  * y registra en `ci_contratos_express` (compat. «contratos-fast» / express).
  */
 export async function POST(req: Request) {
+  // Crea un contrato con la clave de servicio: solo personal con sesión.
+  const sesion = await createClient();
+  const {
+    data: { user },
+  } = await sesion.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'Inicia sesión.' }, { status: 401 });
+
   const admin = supabaseAdminForRoute();
   if (!admin.ok) return admin.response;
 
@@ -73,14 +84,7 @@ export async function POST(req: Request) {
     );
   }
 
-  let createdBy: string | null = null;
-  try {
-    const sb = await createClient();
-    const { data: u } = await sb.auth.getUser();
-    createdBy = u.user?.id ?? null;
-  } catch {
-    /* sin sesión */
-  }
+  const createdBy: string | null = user.id;
 
   const out = await generarContratoTrabajoObrero(admin.client, parsed.data, { createdBy });
   if (!out.ok) {

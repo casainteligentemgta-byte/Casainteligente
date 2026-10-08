@@ -91,7 +91,7 @@ describe('calcularSemanaObra', () => {
     assert.ok(r.lineasLegal.some((l) => l.codigo === 'CESTA' && !l.salarial));
   });
 
-  it('clasificado 5 días: sobre 117 y oficio de 1ra', () => {
+  it('clasificado 5 días: sobre por defecto y oficio de 1ra', () => {
     const r = calcularSemanaObra({
       clase: 'clasificado',
       tipo: 'semanal',
@@ -131,6 +131,48 @@ describe('calcularSemanaObra', () => {
     });
     assert.equal(r.diasPagados, 0);
     assert.equal(r.salarioBasicoVes, 0);
+  });
+
+  it('usa el monto pactado en el contrato en lugar del monto por defecto', () => {
+    const r = calcularSemanaObra({
+      clase: 'clasificado',
+      tipo: 'semanal',
+      diasLaborados: 5,
+      tasaBcvPago: tasa,
+      tasaAnclaCestaBcv: ancla,
+      cargoCodigo: '5.1',
+      sobreUsd: 130,
+    });
+    assert.equal(r.sobreUsdPactado, 130);
+    assert.equal(r.totalUsd, 130);
+    const suma = r.lineasLegal.reduce((a, l) => a + l.usd, 0);
+    assert.ok(Math.abs(suma - 130) < 0.02);
+  });
+
+  it('un monto pactado inválido cae al monto por defecto de la clase', () => {
+    for (const sobreUsd of [0, -5, Number.NaN, null]) {
+      const r = calcularSemanaObra({
+        clase: 'ayudante',
+        tipo: 'semanal',
+        diasLaborados: 5,
+        tasaBcvPago: tasa,
+        tasaAnclaCestaBcv: ancla,
+        sobreUsd,
+      });
+      assert.equal(r.sobreUsdPactado, SOBRE_AYUDANTE_USD);
+    }
+  });
+
+  it('la quinta semana paga el arreglo mensual pactado', () => {
+    const r = calcularSemanaObra({
+      clase: 'ayudante',
+      tipo: 'adelanto_prestaciones',
+      diasLaborados: 5,
+      tasaBcvPago: tasa,
+      tasaAnclaCestaBcv: ancla,
+      sobreUsd: 100,
+    });
+    assert.equal(r.totalUsd, 100);
   });
 
   it('cesta anclada baja si sube la tasa de homologación', () => {

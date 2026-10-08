@@ -5,6 +5,7 @@ import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import { listarCandidatosContratoMasiva } from '@/lib/talento/listarCandidatosContratoMasiva';
 import { payloadContratoDesdeCandidato } from '@/lib/talento/candidatosContratoMasiva';
 import { generarContratoTrabajoObrero } from '@/lib/talento/generarContratoTrabajoObrero';
+import { ARREGLO_PAGO_MAX_USD } from '@/lib/nomina/arregloPago';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -18,6 +19,17 @@ const bodySchema = z.object({
   horario_semanal_texto: z.string().max(2500).optional().nullable(),
   bono_manual_usd: z.coerce.number().nonnegative().optional().default(0),
   estado_civil_default: z.string().max(80).optional().nullable(),
+  /** Arreglo de pago por trabajador: { [empleado_id]: { semanal_usd, mensual_usd } }. */
+  arreglos: z
+    .record(
+      z.string().uuid(),
+      z.object({
+        semanal_usd: z.coerce.number().positive().max(ARREGLO_PAGO_MAX_USD).optional().nullable(),
+        mensual_usd: z.coerce.number().positive().max(ARREGLO_PAGO_MAX_USD).optional().nullable(),
+      }),
+    )
+    .optional()
+    .nullable(),
 });
 
 /**
@@ -98,6 +110,7 @@ export async function POST(req: Request) {
         horario: body.horario_semanal_texto,
         bonoUsd: body.bono_manual_usd,
         estadoCivilDefault: body.estado_civil_default,
+        arreglos: body.arreglos ?? null,
       },
       nominas,
     );

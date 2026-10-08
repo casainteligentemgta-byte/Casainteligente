@@ -11,6 +11,7 @@ import {
 import { empleadoTieneHojaVidaCargada } from '@/lib/rrhh/fetchEmpleadosHojasVida';
 import { empleadoTieneEvaluacionCompleta } from '@/lib/rrhh/evaluacionObrero';
 import { normCedulaToken } from '@/lib/talento/cedulaAuth';
+import { type ArregloPago, arregloPagoPorDefecto, resolverArregloPago } from '@/lib/nomina/arregloPago';
 
 export type NominaCargoOpt = {
   id: string;
@@ -35,7 +36,14 @@ export type CandidatoContratoMasiva = {
   yaContratado: boolean;
   /** HV + cédula + nombre y aún no tiene contrato express en la obra. */
   listo: boolean;
+  /** Arreglo de pago preestablecido según el oficio (90 ayudante / 115 clasificado); RRHH puede cambiarlo. */
+  arregloDefecto: ArregloPago;
+  /** Datos del trabajador que el contrato imprimiría con un valor genérico. */
+  faltantes: string[];
 };
+
+/** Arreglo pactado para un trabajador del lote (USD). */
+export type ArregloPagoEntrada = { semanal_usd?: unknown; mensual_usd?: unknown };
 
 export type DefaultsLoteContratoMasiva = {
   proyectoId: string;
@@ -45,6 +53,8 @@ export type DefaultsLoteContratoMasiva = {
   horario?: string | null;
   bonoUsd?: number;
   estadoCivilDefault?: string | null;
+  /** Arreglo de pago por trabajador (clave: id del empleado). Sin entrada: monto por defecto del oficio. */
+  arreglos?: Record<string, ArregloPagoEntrada | undefined> | null;
 };
 
 export type PayloadContratoDesdeCandidato = {
@@ -60,6 +70,8 @@ export type PayloadContratoDesdeCandidato = {
   jornada_trabajo: string;
   horario_semanal_texto: string | null;
   bono_manual_usd: number;
+  arreglo_semanal_usd: number;
+  arreglo_mensual_usd: number;
   formalizado_empleado_id: string;
 };
 
@@ -172,6 +184,10 @@ export function candidatoDesdeEmpleadoRow(
   });
   const listo =
     tieneHv && Boolean(cedula) && nombreCompleto.length >= 2 && !opts.yaContratado;
+  const faltantes: string[] = [];
+  if (!estadoCivil) faltantes.push('estado civil');
+  if (!direccion) faltantes.push('dirección de habitación');
+  if (!cargo && !cargoCodigo) faltantes.push('oficio');
 
   return {
     empleadoId: str(row.id),
@@ -189,6 +205,8 @@ export function candidatoDesdeEmpleadoRow(
     evaluacionLista,
     yaContratado: opts.yaContratado,
     listo,
+    arregloDefecto: arregloPagoPorDefecto(cargoCodigo, cargo),
+    faltantes,
   };
 }
 
@@ -215,6 +233,13 @@ export function payloadContratoDesdeCandidato(
         : 'Seleccione un cargo por defecto del tabulador',
     };
   }
+  const pactado = defaults.arreglos?.[c.empleadoId];
+  const arreglo = resolverArregloPago({
+    semanalUsd: pactado?.semanal_usd,
+    mensualUsd: pactado?.mensual_usd,
+    cargoCodigo: c.cargoCodigo,
+    cargoNombre: c.cargo,
+  });
   return {
     ok: true,
     payload: {
@@ -230,6 +255,8 @@ export function payloadContratoDesdeCandidato(
       jornada_trabajo: defaults.jornada,
       horario_semanal_texto: defaults.horario?.trim() || null,
       bono_manual_usd: defaults.bonoUsd ?? 0,
+      arreglo_semanal_usd: arreglo.semanalUsd,
+      arreglo_mensual_usd: arreglo.mensualUsd,
       formalizado_empleado_id: c.empleadoId,
     },
   };

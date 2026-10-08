@@ -82,7 +82,7 @@ export function ReciboNominaObraPdf({
           diario Bs. {calc.oficio.diarioVes.toFixed(2)}
         </Text>
         <Text style={styles.meta}>
-          Clase de patio: {calc.clase === 'ayudante' ? 'Ayudante (USD 90)' : 'Clasificado / de 1ra (USD 117)'}
+          Clase de patio: {calc.clase === 'ayudante' ? 'Ayudante' : 'Clasificado / de 1ra'} (USD {calc.sobreUsdPactado})
           {calc.tipo === 'semanal'
             ? ` · Días laborados: ${calc.diasLaborados} · Días pagados (Cl. 8): ${calc.diasPagados}`
             : ' · Quinta semana (cada 4 trabajadas)'}
@@ -119,7 +119,7 @@ export function ReciboNominaObraPdf({
 
         {meta.cara === 'patio' ? (
           <Text style={styles.nota}>
-            Cara de patio: sobre acordado con el sindicato (ayudante USD 90 / clasificado USD 117),
+            Cara de patio: monto pactado en el contrato de trabajo (USD {calc.sobreUsdPactado}),
             cesta ticket incluida y anclada al dólar. El pago se hace en bolívares al BCV del día.
             Un solo pago; esta cara y la legal describen el mismo dinero.
           </Text>

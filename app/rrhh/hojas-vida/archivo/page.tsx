@@ -20,9 +20,7 @@ import {
 } from '@/lib/rrhh/fetchEmpleadosHojasVida';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { ModalGenerarContrato } from '@/app/rrhh/hojas-vida/components/ModalGenerarContrato';
 import { ModalEditarOficioHojaEmpleo } from '@/app/rrhh/hojas-vida/components/ModalEditarOficioHojaEmpleo';
-import ExpedienteContratoChecklist from '@/components/rrhh/ExpedienteContratoChecklist';
 import InformeEvaluacionObreroModal from '@/components/rrhh/InformeEvaluacionObreroModal';
 import GeneradorHojaVida from '@/components/reclutamiento/GeneradorHojaVida';
 import {
@@ -39,6 +37,14 @@ import { ETIQUETA_DUEÑO_DATO_CONTRATO } from '@/lib/talento/datosObraContratoPm
 type EmpleadoRow = EmpleadoHojaVidaRow;
 
 const VOLVER_PATH = '/rrhh/hojas-vida/archivo';
+
+/** Pantalla única de contratos: arreglo de pago, generar, imprimir y cargar el firmado. */
+function hrefContratar(proyectoId?: string | null): string {
+  const pid = (proyectoId ?? '').trim();
+  return pid
+    ? `/rrhh/contrato-trabajo-obrero?proyecto=${encodeURIComponent(pid)}&vista=masiva`
+    : '/rrhh/contrato-trabajo-obrero?vista=masiva';
+}
 
 function docMostrado(row: EmpleadoRow): string {
   return (row.cedula ?? row.documento ?? '').trim() || '—';
@@ -64,12 +70,6 @@ export default function RrhhHojasVidaArchivoPage() {
   const [obsRow, setObsRow] = useState<EmpleadoRow | null>(null);
   const [informeOpen, setInformeOpen] = useState(false);
   const [informeRow, setInformeRow] = useState<EmpleadoRow | null>(null);
-  /** Resolución proyecto/vacante al abrir el modal de contrato (por fila). */
-  const [contratoModalPrepId, setContratoModalPrepId] = useState<string | null>(null);
-  const [contratoGenOpen, setContratoGenOpen] = useState(false);
-  const [contratoGenEmpleadoId, setContratoGenEmpleadoId] = useState<string | null>(null);
-  const [contratoGenNombre, setContratoGenNombre] = useState<string | null>(null);
-  const [contratoGenObraId, setContratoGenObraId] = useState<string | null>(null);
   const [validandoContratoId, setValidandoContratoId] = useState<string | null>(null);
   const [faltantesOpen, setFaltantesOpen] = useState(false);
   const [faltantesRow, setFaltantesRow] = useState<EmpleadoRow | null>(null);
@@ -79,7 +79,6 @@ export default function RrhhHojasVidaArchivoPage() {
   const [revalidandoFaltantes, setRevalidandoFaltantes] = useState(false);
   const [oficioOpen, setOficioOpen] = useState(false);
   const [oficioRow, setOficioRow] = useState<EmpleadoRow | null>(null);
-  const [contratoFlowRow, setContratoFlowRow] = useState<EmpleadoRow | null>(null);
   const [nuevaHvOpen, setNuevaHvOpen] = useState(false);
   const [limpiandoPlaceholders, setLimpiandoPlaceholders] = useState(false);
 
@@ -182,39 +181,6 @@ export default function RrhhHojasVidaArchivoPage() {
     setObsOpen(false);
     setObsRow(null);
   }, [obsDraft, obsRow, supabase]);
-
-  const prepararYAbrirModalContrato = useCallback(
-    async (r: EmpleadoRow) => {
-      setContratoModalPrepId(r.id);
-      try {
-        let oid = (r.proyecto_modulo_id ?? '').trim() || null;
-        const nid = (r.recruitment_need_id ?? '').trim();
-        if (!oid && nid) {
-          const { data, error } = await supabase
-            .from('recruitment_needs')
-            .select('proyecto_modulo_id,proyecto_id')
-            .eq('id', nid)
-            .maybeSingle();
-          if (!error && data) {
-            const d = data as { proyecto_modulo_id?: string | null; proyecto_id?: string | null };
-            oid = (d.proyecto_modulo_id ?? d.proyecto_id ?? '').trim() || null;
-          }
-        }
-        setContratoGenEmpleadoId(r.id);
-        setContratoGenNombre((r.nombre_completo ?? '').trim() || null);
-        setContratoGenObraId(oid);
-        setContratoGenOpen(true);
-      } finally {
-        setContratoModalPrepId(null);
-      }
-    },
-    [supabase],
-  );
-
-  const abrirModalGenerarContrato = useCallback(async () => {
-    if (!informeRow) return;
-    await prepararYAbrirModalContrato(informeRow);
-  }, [informeRow, prepararYAbrirModalContrato]);
 
   const borrarEmpleado = useCallback(
     async (r: EmpleadoRow) => {
@@ -555,14 +521,14 @@ export default function RrhhHojasVidaArchivoPage() {
                         <ScrollText className="h-3.5 w-3.5 opacity-90" />
                         {validandoContratoId === r.id ? '…' : 'Contrato'}
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => setContratoFlowRow(r)}
+                      <Link
+                        href={hrefContratar(r.proyecto_modulo_id)}
                         className="inline-flex items-center gap-1.5 rounded-lg border border-violet-500/35 bg-violet-950/35 px-3 py-2 text-xs font-semibold text-violet-100 transition hover:bg-violet-900/45"
+                        title="Fijar el arreglo de pago y generar el contrato"
                       >
                         <ScrollText className="h-3.5 w-3.5" />
-                        Flujo contrato
-                      </button>
+                        Contratar
+                      </Link>
                       <button
                         type="button"
                         onClick={() => abrirObservaciones(r)}
@@ -606,51 +572,16 @@ export default function RrhhHojasVidaArchivoPage() {
         }}
         footer={
           informeRow ? (
-            <button
-              type="button"
-              onClick={() => void abrirModalGenerarContrato()}
-              disabled={contratoModalPrepId !== null || informeRow.estado === 'aprobado'}
-              className="rounded-lg border border-emerald-400/40 bg-emerald-500/20 px-3 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/30 disabled:opacity-60"
+            <Link
+              href={hrefContratar(informeRow.proyecto_modulo_id)}
+              className="rounded-lg border border-emerald-400/40 bg-emerald-500/20 px-3 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/30"
             >
-              {informeRow.estado === 'aprobado'
-                ? 'Ya aprobado para contrato'
-                : contratoModalPrepId !== null
-                  ? 'Preparando…'
-                  : 'Aprobar para contrato'}
-            </button>
+              Contratar
+            </Link>
           ) : null
         }
       />
 
-      <ModalGenerarContrato
-        open={contratoGenOpen}
-        onOpenChange={(v) => {
-          setContratoGenOpen(v);
-          if (!v) {
-            setContratoGenEmpleadoId(null);
-            setContratoGenNombre(null);
-            setContratoGenObraId(null);
-          }
-        }}
-        supabase={supabase}
-        obreroId={contratoGenEmpleadoId}
-        obraId={contratoGenObraId}
-        nombreObrero={contratoGenNombre}
-        onExito={({ portalUrl: url }) => {
-          const eid = (contratoGenEmpleadoId ?? '').trim();
-          if (!eid) return;
-          setRows((prev) => prev.map((r) => (r.id === eid ? { ...r, estado: 'aprobado' } : r)));
-          setInformeRow((prev) => (prev?.id === eid ? { ...prev, estado: 'aprobado' } : prev));
-          setInformeOpen(false);
-          setInformeRow(null);
-          setContratoGenEmpleadoId(null);
-          setContratoGenNombre(null);
-          setContratoGenObraId(null);
-          if (url) {
-            window.open(url, '_blank', 'noopener,noreferrer');
-          }
-        }}
-      />
 
       {obsOpen && obsRow ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
@@ -807,27 +738,6 @@ export default function RrhhHojasVidaArchivoPage() {
                 Cerrar
               </button>
             </div>
-          </div>
-        </div>
-      ) : null}
-
-      {contratoFlowRow ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/75 p-4">
-          <div className="my-8 w-full max-w-xl">
-            <ExpedienteContratoChecklist
-              empleadoId={contratoFlowRow.id}
-              proyectoId={contratoFlowRow.proyecto_modulo_id}
-              nombreObrero={(contratoFlowRow.nombre_completo ?? '').trim() || 'Sin nombre'}
-              cedula={docMostrado(contratoFlowRow) === '—' ? '' : docMostrado(contratoFlowRow)}
-              onActualizado={() => void cargar()}
-            />
-            <button
-              type="button"
-              onClick={() => setContratoFlowRow(null)}
-              className="mt-3 w-full rounded-lg border border-white/15 py-2 text-xs font-semibold text-zinc-300 hover:bg-white/10"
-            >
-              Cerrar
-            </button>
           </div>
         </div>
       ) : null}

@@ -15,6 +15,10 @@ export type ItemEntradaNomina = {
   cargo_codigo?: string | null;
   cargo_nombre?: string | null;
   incluir_adelanto?: boolean;
+  /** Arreglo semanal pactado en el contrato (USD). Sin valor: monto por defecto de la clase. */
+  sobre_usd?: number | null;
+  /** Arreglo mensual pactado (quinta semana). Sin valor: igual al semanal. */
+  mensual_usd?: number | null;
 };
 
 export type PreviewItemNomina = {
@@ -79,6 +83,7 @@ export function previewItemsNomina(args: {
       tasaAnclaCestaBcv: args.tasaAnclaCestaBcv,
       cargoCodigo: it.cargo_codigo,
       cargoNombre: it.cargo_nombre,
+      sobreUsd: it.sobre_usd,
     });
     const adelanto =
       toca && it.incluir_adelanto !== false
@@ -90,6 +95,7 @@ export function previewItemsNomina(args: {
             tasaAnclaCestaBcv: args.tasaAnclaCestaBcv,
             cargoCodigo: it.cargo_codigo,
             cargoNombre: it.cargo_nombre,
+            sobreUsd: it.mensual_usd ?? it.sobre_usd,
           })
         : null;
     return {

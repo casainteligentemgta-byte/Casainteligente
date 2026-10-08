@@ -125,3 +125,66 @@ describe('payloadContratoDesdeCandidato', () => {
     assert.equal(out.payload.formalizado_empleado_id, 'emp-1');
   });
 });
+
+describe('arreglo de pago del candidato', () => {
+  const fila = (extra: Record<string, unknown>) =>
+    candidatoDesdeEmpleadoRow(
+      {
+        id: 'emp-9',
+        cedula: 'V-12345678',
+        estado_proceso: 'cv_completado',
+        hoja_vida_obrero: {
+          datosPersonales: {
+            primerNombre: 'Ana',
+            primerApellido: 'Rojas',
+            cedulaIdentidad: 'V-12345678',
+            estadoCivil: 'Soltera',
+            direccionDomicilio: 'Calle 1',
+          },
+        },
+        ...extra,
+      },
+      { yaContratado: false },
+    );
+
+  it('preestablece 90 para ayudante y 115 para clasificado', () => {
+    assert.deepEqual(fila({ cargo_nombre: 'AYUDANTE', cargo_codigo: '2.1' }).arregloDefecto, {
+      semanalUsd: 90,
+      mensualUsd: 90,
+    });
+    assert.deepEqual(fila({ cargo_nombre: 'ELECTRICISTA DE 1ra.', cargo_codigo: '5.5' }).arregloDefecto, {
+      semanalUsd: 115,
+      mensualUsd: 115,
+    });
+  });
+
+  it('el contrato lleva lo pactado; sin pacto, el monto por defecto', () => {
+    const c = fila({ cargo_nombre: 'AYUDANTE', cargo_codigo: '2.1' });
+    const base = { proyectoId: 'p1', fechaIngreso: '2026-10-12', jornada: 'DIURNA' };
+    const porDefecto = payloadContratoDesdeCandidato(c, base, nominas);
+    assert.ok(porDefecto.ok);
+    assert.equal(porDefecto.ok && porDefecto.payload.arreglo_semanal_usd, 90);
+    assert.equal(porDefecto.ok && porDefecto.payload.arreglo_mensual_usd, 90);
+
+    const pactado = payloadContratoDesdeCandidato(
+      c,
+      { ...base, arreglos: { 'emp-9': { semanal_usd: 100, mensual_usd: 70 } } },
+      nominas,
+    );
+    assert.equal(pactado.ok && pactado.payload.arreglo_semanal_usd, 100);
+    assert.equal(pactado.ok && pactado.payload.arreglo_mensual_usd, 70);
+  });
+
+  it('avisa de los datos del trabajador que saldrían genéricos', () => {
+    const c = candidatoDesdeEmpleadoRow(
+      {
+        id: 'emp-10',
+        cedula: 'V-12345678',
+        estado_proceso: 'cv_completado',
+        hoja_vida_obrero: { datosPersonales: { primerNombre: 'Luis', primerApellido: 'Mata', cedulaIdentidad: 'V-12345678' } },
+      },
+      { yaContratado: false },
+    );
+    assert.deepEqual(c.faltantes, ['estado civil', 'dirección de habitación', 'oficio']);
+  });
+});

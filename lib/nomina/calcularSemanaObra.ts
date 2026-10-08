@@ -18,6 +18,11 @@ export type CalcularSemanaObraInput = {
   tasaAnclaCestaBcv: number;
   cargoCodigo?: string | null;
   cargoNombre?: string | null;
+  /**
+   * Monto pactado en el contrato para este pago (semanal, o mensual si `tipo` es la quinta semana).
+   * Si falta o no es válido, se usa el monto por defecto de la clase.
+   */
+  sobreUsd?: number | null;
 };
 
 export type LineaRecibo = {
@@ -78,7 +83,8 @@ export function calcularSemanaObra(input: CalcularSemanaObraInput): ResultadoSem
   const oficio = oficioReciboLegal(clase, input.cargoCodigo, input.cargoNombre);
   const diasLaborados = Math.max(0, Math.min(5, Math.floor(Number(input.diasLaborados) || 0)));
   const diasPagados = tipo === 'adelanto_prestaciones' ? 0 : diasPagadosClausula8(diasLaborados);
-  const sobreUsd = sobreUsdDeClase(clase);
+  const pactado = Number(input.sobreUsd);
+  const sobreUsd = Number.isFinite(pactado) && pactado > 0 ? round2(pactado) : sobreUsdDeClase(clase);
 
   const salarioBasicoVes = round2(oficio.diarioVes * diasPagados);
   const salarioBasicoUsd = vesAUsd(salarioBasicoVes, tasa);

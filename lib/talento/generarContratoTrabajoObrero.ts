@@ -25,6 +25,7 @@ import {
 } from '@/lib/talento/cedulaAuth';
 import { resolverCodigoExpedienteContrato } from '@/lib/talento/codigoExpedienteContrato';
 import { esContratoExpressAdministracionDelegada } from '@/lib/talento/filtrarContratosExpressObrero';
+import { montoArregloValido, resolverArregloPago } from '@/lib/nomina/arregloPago';
 
 export type GenerarContratoTrabajoObreroInput = {
   proyecto_id: string;
@@ -35,6 +36,10 @@ export type GenerarContratoTrabajoObreroInput = {
   obrero_cedula: string;
   obrero_direccion?: string | null;
   bono_manual_usd?: number;
+  /** Arreglo de pago semanal pactado con el trabajador (USD como moneda de cuenta). */
+  arreglo_semanal_usd?: number | null;
+  /** Arreglo de pago mensual (cada cuatro semanas trabajadas). */
+  arreglo_mensual_usd?: number | null;
   entidad_patrono_id?: string | null;
   fecha_ingreso?: string | null;
   objeto_contrato?: string | null;
@@ -89,6 +94,23 @@ function validarInput(input: GenerarContratoTrabajoObreroInput): string | null {
   return null;
 }
 
+/** Oficio del tabulador elegido (para el arreglo de pago por defecto). */
+async function cargoDeConfigNomina(
+  admin: SupabaseClient,
+  configNominaId: string,
+): Promise<{ codigo: string | null; nombre: string | null }> {
+  let res: { data: unknown; error: { message?: string } | null } = await admin
+    .from('ci_config_nomina')
+    .select('cargo_nombre,cargo_codigo')
+    .eq('id', configNominaId)
+    .maybeSingle();
+  if (res.error) {
+    res = await admin.from('ci_config_nomina').select('cargo_nombre').eq('id', configNominaId).maybeSingle();
+  }
+  const row = (res.data ?? null) as { cargo_nombre?: string | null; cargo_codigo?: string | null } | null;
+  return { codigo: row?.cargo_codigo?.trim() || null, nombre: row?.cargo_nombre?.trim() || null };
+}
+
 /**
  * Genera PDF estructurado, sube a Storage y registra en `ci_contratos_express`.
  */
@@ -141,6 +163,23 @@ export async function generarContratoTrabajoObrero(
       (trabajadorFemeninoDesdeEstadoCivil(input.estado_civil) ? 'venezolana' : 'venezolano'));
   const estadoCivil = estadoCivilContratoObrero(input.estado_civil);
 
+  // Arreglo de pago: lo pactado; si no se indicó, el monto preestablecido del oficio.
+  // Un contrato con bono manual y sin arreglo conserva la fórmula anterior (tabulador + bono).
+  let arregloSemanalUsd = montoArregloValido(input.arreglo_semanal_usd);
+  let arregloMensualUsd = montoArregloValido(input.arreglo_mensual_usd);
+  if (arregloSemanalUsd == null && !((input.bono_manual_usd ?? 0) > 0)) {
+    const cargo = await cargoDeConfigNomina(admin, input.config_nomina_id.trim());
+    const porDefecto = resolverArregloPago({
+      mensualUsd: arregloMensualUsd,
+      cargoCodigo: cargo.codigo,
+      cargoNombre: cargo.nombre,
+    });
+    arregloSemanalUsd = porDefecto.semanalUsd;
+    arregloMensualUsd = porDefecto.mensualUsd;
+  } else if (arregloSemanalUsd != null && arregloMensualUsd == null) {
+    arregloMensualUsd = arregloSemanalUsd;
+  }
+
   const manual: ContratoExpressManualInput = {
     obreroNombre: obreroNombreCompleto,
     obreroCedula: cedula,
@@ -156,6 +195,8 @@ export async function generarContratoTrabajoObrero(
     obreroMunicipioResidencia: input.obrero_municipio_residencia?.trim() || null,
     obreroEstadoResidencia: input.obrero_estado_residencia?.trim() || null,
     bonoManualUsd: input.bono_manual_usd ?? 0,
+    arregloSemanalUsd,
+    arregloMensualUsd,
   };
 
   const loaded = await cargarPropsContratoObreroPdfExpress(
@@ -230,16 +271,37 @@ export async function generarContratoTrabajoObrero(
     horario_semanal_texto: horarioVal,
   };
 
+  const payloadCompleto = {
+    ...payloadBase,
+    expediente_codigo: expedienteLabel,
+    obrero_nombres: input.obrero_nombres?.trim() || null,
+    obrero_apellidos: input.obrero_apellidos?.trim() || null,
+    ...(formalizadoEmpleadoId ? { formalizado_empleado_id: formalizadoEmpleadoId, formalizado: true } : {}),
+  };
+  /**
+   * Lo pactado y los datos con que se imprimió el contrato se guardan con él: así la nómina
+   * lee el arreglo de pago y «Regenerar PDF» reproduce el mismo documento.
+   */
+  const datosPactados = {
+    arreglo_semanal_usd: arregloSemanalUsd,
+    arreglo_mensual_usd: arregloMensualUsd,
+    fecha_ingreso: fechaFirmaIso,
+    estado_civil: estadoCivil,
+    nacionalidad,
+    jornada_trabajo: input.jornada_trabajo?.trim() || null,
+    objeto_contrato: input.objeto_contrato?.trim() || null,
+    obrero_municipio_residencia: input.obrero_municipio_residencia?.trim() || null,
+    obrero_estado_residencia: input.obrero_estado_residencia?.trim() || null,
+  };
+
   const intentos: Record<string, unknown>[] = [
+    { ...payloadCompleto, ...datosPactados },
     {
-      ...payloadBase,
-      expediente_codigo: expedienteLabel,
-      obrero_nombres: input.obrero_nombres?.trim() || null,
-      obrero_apellidos: input.obrero_apellidos?.trim() || null,
-      ...(formalizadoEmpleadoId
-        ? { formalizado_empleado_id: formalizadoEmpleadoId, formalizado: true }
-        : {}),
+      ...payloadCompleto,
+      arreglo_semanal_usd: arregloSemanalUsd,
+      arreglo_mensual_usd: arregloMensualUsd,
     },
+    payloadCompleto,
     {
       ...payloadBase,
       expediente_codigo: expedienteLabel,
@@ -266,7 +328,9 @@ export async function generarContratoTrabajoObrero(
     if (!insErr) break;
     const msg = insErr.message ?? '';
     const columnaNueva =
-      /obrero_(nombres|apellidos)|expediente_codigo|formalizado/i.test(msg) &&
+      /obrero_(nombres|apellidos|municipio_residencia|estado_residencia)|expediente_codigo|formalizado|arreglo_(semanal|mensual)_usd|fecha_ingreso|estado_civil|nacionalidad|jornada_trabajo|objeto_contrato/i.test(
+        msg,
+      ) &&
       /schema cache|could not find|42703/i.test(msg);
     if (!columnaNueva) break;
     console.warn(

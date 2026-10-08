@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { BUCKET_CONTRATOS_OBREROS } from '@/lib/talento/contratoLaboralRegistroStorage';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
+import { createClient } from '@/lib/supabase/server';
 
 export const runtime = 'nodejs';
 
@@ -23,11 +24,49 @@ function looksLikePdf(buf: Buffer): boolean {
   return buf.length >= 5 && buf.subarray(0, 5).toString('ascii') === '%PDF-';
 }
 
+async function haySesion(): Promise<boolean> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return Boolean(user);
+}
+
+/**
+ * GET — enlace temporal para ver el contrato firmado que se cargó.
+ */
+export async function GET(_req: Request, context: { params: { id: string } }) {
+  if (!(await haySesion())) return NextResponse.json({ error: 'Inicia sesión.' }, { status: 401 });
+  const id = (context.params?.id ?? '').trim();
+  if (!id) return NextResponse.json({ error: 'id requerido' }, { status: 400 });
+
+  const admin = supabaseAdminForRoute();
+  if (!admin.ok) return admin.response;
+
+  const { data, error } = await admin.client
+    .from('ci_contratos_express')
+    .select('pdf_firmado_storage_path')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  const path = String((data as { pdf_firmado_storage_path?: string | null } | null)?.pdf_firmado_storage_path ?? '').trim();
+  if (!path) return NextResponse.json({ error: 'Este contrato aún no tiene el firmado cargado.' }, { status: 404 });
+
+  const { data: signed, error: signErr } = await admin.client.storage
+    .from(BUCKET_CONTRATOS_OBREROS)
+    .createSignedUrl(path, 60 * 30);
+  if (signErr || !signed?.signedUrl) {
+    return NextResponse.json({ error: signErr?.message ?? 'No se pudo abrir el archivo.' }, { status: 500 });
+  }
+  return NextResponse.json({ url: signed.signedUrl });
+}
+
 /**
  * POST — Sube PDF o imagen (escaneo) del contrato firmado por el obrero; guarda ruta en `ci_contratos_express`.
  * Cuerpo: `multipart/form-data` con campo `file`.
  */
 export async function POST(req: Request, context: { params: { id: string } }) {
+  if (!(await haySesion())) return NextResponse.json({ error: 'Inicia sesión.' }, { status: 401 });
   const id = (context.params?.id ?? '').trim();
   if (!id) {
     return NextResponse.json({ error: 'id requerido' }, { status: 400 });

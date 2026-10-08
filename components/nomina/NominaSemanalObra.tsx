@@ -37,6 +37,11 @@ type FilaUi = {
   clase: ClasePagoObra;
   dias: number;
   incluirAdelanto: boolean;
+  /** Arreglo pactado en el contrato (USD). Sin valor: monto por defecto de la clase. */
+  sobreUsd?: number | null;
+  mensualUsd?: number | null;
+  /** `false`: el contrato firmado aún no se cargó. */
+  contratoCargado?: boolean;
 };
 
 type Props = {
@@ -131,9 +136,12 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
         }),
       ]);
       const next: FilaUi[] = [];
+      const finSemana = domingoDeSemanaIso(semana);
       for (const f of data as FilaNominaContratado[]) {
         const eid = uuidEmpleado(f.id);
         if (!eid) continue;
+        // Entra a la nómina desde su fecha de ingreso.
+        if (f.fechaIngreso && f.fechaIngreso > finSemana) continue;
         next.push({
           empleadoId: eid,
           nombres: f.nombres,
@@ -144,6 +152,9 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
           clase: inferirClasePagoObra(f.cargoCodigo, f.cargoNombre),
           dias: 5,
           incluirAdelanto: true,
+          sobreUsd: f.arregloSemanalUsd ?? null,
+          mensualUsd: f.arregloMensualUsd ?? null,
+          contratoCargado: f.contratoCargado,
         });
       }
       setFilas(next);
@@ -155,7 +166,7 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
     } finally {
       setCargando(false);
     }
-  }, [proyectoModuloId, supabase]);
+  }, [proyectoModuloId, supabase, semana]);
 
   useEffect(() => {
     void loadContratados();
@@ -174,6 +185,8 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
         cargo_codigo: f.cargoCodigo,
         cargo_nombre: f.cargoNombre,
         incluir_adelanto: f.incluirAdelanto,
+        sobre_usd: f.sobreUsd,
+        mensual_usd: f.mensualUsd,
       })),
       previasPorEmpleado: {},
       tasaBcvPago: tasaNum,
@@ -318,8 +331,8 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
         <div>
           <h2 className="text-sm font-bold uppercase tracking-wide text-emerald-100">Nómina semanal</h2>
           <p className="mt-0.5 text-xs text-zinc-500">
-            Ayudante USD {SOBRE_AYUDANTE_USD} · Clasificado (de 1ra) USD {SOBRE_CLASIFICADO_USD} · cesta incluida ·
-            quinta semana cada 4 trabajadas (adelanto art. 144).
+            Se paga el arreglo pactado en cada contrato (por defecto: ayudante USD {SOBRE_AYUDANTE_USD} · clasificado
+            USD {SOBRE_CLASIFICADO_USD}), cesta incluida · pago mensual cada 4 semanas trabajadas.
           </p>
         </div>
       </div>
@@ -357,6 +370,13 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
       {avisoMigracion ? (
         <p className="mt-3 rounded-lg border border-amber-500/30 bg-amber-950/40 px-3 py-2 text-sm text-amber-100">
           {avisoMigracion} El cálculo en pantalla y los PDF de preview sí funcionan.
+        </p>
+      ) : null}
+
+      {!cargando && filas.some((f) => f.contratoCargado === false) ? (
+        <p className="mt-3 rounded-lg border border-amber-500/30 bg-amber-950/40 px-3 py-2 text-sm text-amber-100">
+          {filas.filter((f) => f.contratoCargado === false).length} trabajador(es) sin contrato firmado cargado. Puede
+          pagarles; cargue el contrato firmado en Contratos de trabajo.
         </p>
       ) : null}
 
@@ -421,6 +441,16 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
                         {f.nombres} {f.apellidos}
                       </div>
                       <div className="font-mono text-xs text-zinc-500">{f.cedula}</div>
+                      <div className="mt-0.5 text-[11px] text-zinc-400">
+                        {f.sobreUsd
+                          ? `Arreglo: USD ${f.sobreUsd} semanal · USD ${f.mensualUsd ?? f.sobreUsd} mensual`
+                          : 'Arreglo: monto por defecto'}
+                      </div>
+                      {f.contratoCargado === false ? (
+                        <span className="mt-1 inline-block rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-200">
+                          Contrato sin cargar
+                        </span>
+                      ) : null}
                     </TableCell>
                     <TableCell>
                       <select

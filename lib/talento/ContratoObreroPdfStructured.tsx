@@ -189,6 +189,13 @@ export type ParametrosContratoPdf = {
   ingresoSemanalConsolidadoUsdTexto?: string | null;
   /** Bono especial no salarial en USD (express u otros flujos); se suma al ingreso tabulador en cláusula SEXTA. */
   bonoManualUsd?: number | null;
+  /**
+   * Arreglo de pago semanal pactado (USD como moneda de cuenta). Si viene, es el total de la
+   * cláusula del complemento semanal y sustituye a «tabulador + bono manual».
+   */
+  arregloSemanalUsd?: number | null;
+  /** Arreglo de pago mensual (cada cuatro semanas trabajadas). Si viene, agrega su cláusula. */
+  arregloMensualUsd?: number | null;
   textoPuntoEncuentroTransporteSex?: string | null;
   compensacionCulminacionUsdPorMes?: number | null;
   /** Ciudad domicilio procesal (cláusula DÉCIMA). Default Pampatar. */
@@ -549,15 +556,38 @@ export function ContratoObreroPDF({
     parametros.bonoManualUsd != null && Number.isFinite(Number(parametros.bonoManualUsd))
       ? Math.max(0, Number(parametros.bonoManualUsd))
       : 0;
-  /** Total en cláusula SEXTA (BONO ESPECIAL): tabulador + bono manual en USD. */
+  const montoUsdPositivo = (v: number | null | undefined): number | null =>
+    v != null && Number.isFinite(Number(v)) && Number(v) > 0 ? Math.round(Number(v) * 100) / 100 : null;
+  const arregloSemanalUsdNum = montoUsdPositivo(parametros.arregloSemanalUsd);
+  const arregloMensualUsdNum = montoUsdPositivo(parametros.arregloMensualUsd);
+  /**
+   * Total semanal de la cláusula del complemento: el arreglo pactado con el trabajador;
+   * en contratos anteriores al arreglo, tabulador + bono manual en USD.
+   */
   const totalIngresoSemanalUsdNum =
-    ingresoSemanalBaseUsdNum != null || bonoManualUsdNum > 0
+    arregloSemanalUsdNum ??
+    (ingresoSemanalBaseUsdNum != null || bonoManualUsdNum > 0
       ? (ingresoSemanalBaseUsdNum ?? 0) + bonoManualUsdNum
-      : null;
+      : null);
   const totalIngresoSemanalUsdClausulaSexTxt =
-    ingresoSemanalBaseUsdNum != null || bonoManualUsdNum > 0
-      ? `${fmtUsdNumeroPlano((ingresoSemanalBaseUsdNum ?? 0) + bonoManualUsdNum)} USD`
-      : '__________ USD';
+    totalIngresoSemanalUsdNum != null ? `${fmtUsdNumeroPlano(totalIngresoSemanalUsdNum)} USD` : '__________ USD';
+  const hayComplementoSemanal = totalIngresoSemanalUsdNum != null && totalIngresoSemanalUsdNum > 0;
+  const hayPagoMensual = arregloMensualUsdNum != null;
+  /** Numeración de las cláusulas que siguen a la SÉPTIMA: dependen de cuáles cláusulas de pago aplican. */
+  const ORDINALES_DESDE_OCTAVA = [
+    'OCTAVA',
+    'NOVENA',
+    'DÉCIMA',
+    'DÉCIMA PRIMERA',
+    'DÉCIMA SEGUNDA',
+    'DÉCIMA TERCERA',
+    'DÉCIMA CUARTA',
+    'DÉCIMA QUINTA',
+  ];
+  const clausulasDePago = (hayComplementoSemanal ? 1 : 0) + (hayPagoMensual ? 1 : 0);
+  const ordinalPagoMensual = ORDINALES_DESDE_OCTAVA[hayComplementoSemanal ? 1 : 0];
+  /** Ordinal de la cláusula n.º `i` después de las de pago (0 = beneficios, 1 = seguridad…). */
+  const ordinalTras = (i: number) => ORDINALES_DESDE_OCTAVA[clausulasDePago + i];
 
   const HORARIO_DETALLE_PDF_DEFAULT =
     'Lunes a Jueves: De 7:00 a.m. a 5:00 p.m. (1 hora de descanso de 12:00 p.m. a 1:00 p.m., no imputable a la jornada). Viernes: De 7:00 a.m. a 11:00 a.m. (Jornada continua). ';
@@ -746,7 +776,7 @@ export function ContratoObreroPDF({
         {`. Este beneficio no tiene carácter salarial, conforme al Decreto con Rango, Valor y Fuerza de Ley del Cestaticket Socialista y a la Cláusula 20 de la Convención Colectiva. Cualquier bono que LA ENTIDAD DE TRABAJO pague se imputará a este beneficio hasta su monto concurrente, según lo previsto en dicho acuerdo.`}
       </Text>
 
-      {totalIngresoSemanalUsdNum != null && totalIngresoSemanalUsdNum > 0 ? (
+      {hayComplementoSemanal ? (
         <Text style={[styles.paragraph, styles.paragraphIntro]}>
           <Text style={styles.bold}>OCTAVA: COMPLEMENTO VOLUNTARIO DE ALIMENTACIÓN.</Text>
           {` Por mera liberalidad, LA ENTIDAD DE TRABAJO podrá pagar semanalmente un complemento equivalente a la diferencia entre la suma del salario semanal y la alimentación semanal, y el equivalente en bolívares de `}
@@ -755,39 +785,36 @@ export function ContratoObreroPDF({
         </Text>
       ) : null}
 
-      <Text style={[styles.paragraph, styles.paragraphIntro]}>
-        <Text style={styles.bold}>
-          {totalIngresoSemanalUsdNum != null && totalIngresoSemanalUsdNum > 0 ? 'NOVENA' : 'OCTAVA'}: BENEFICIOS LEGALES Y CONVENCIONALES.
+      {hayPagoMensual ? (
+        <Text style={[styles.paragraph, styles.paragraphIntro]}>
+          <Text style={styles.bold}>{ordinalPagoMensual}: PAGO MENSUAL DE CONCEPTOS CONVENCIONALES.</Text>
+          {` Por cada cuatro (4) semanas efectivamente trabajadas, LA ENTIDAD DE TRABAJO pagará a EL TRABAJADOR, junto con el pago de la semana en que se cumplan, el equivalente en bolívares de `}
+          <Text style={styles.bold}>{`${fmtUsdNumeroPlano(arregloMensualUsdNum ?? 0)} USD`}</Text>
+          {` a la tasa oficial del Banco Central de Venezuela del día del pago. Este pago se imputa, en este orden: a) al bono por asistencia puntual y perfecta de la Cláusula 41 de la Convención Colectiva, cuando EL TRABAJADOR lo haya causado en el período; b) a un anticipo a cuenta de las utilidades de la Cláusula 48, que se descontará de lo que corresponda por ese concepto en la oportunidad de su pago o al terminar la relación; y c) el remanente, a un complemento voluntario del beneficio de alimentación, sin carácter salarial, en los mismos términos de la Cláusula SÉPTIMA. El recibo de pago discriminará cada concepto. El dólar se usa solo como moneda de cuenta y el pago se hará siempre en bolívares. Este pago no constituye anticipo de prestaciones sociales ni de vacaciones, y no modifica la Convención Colectiva ni el acuerdo homologado.`}
         </Text>
+      ) : null}
+
+      <Text style={[styles.paragraph, styles.paragraphIntro]}>
+        <Text style={styles.bold}>{ordinalTras(0)}: BENEFICIOS LEGALES Y CONVENCIONALES.</Text>
         {` EL TRABAJADOR gozará de todos los derechos y beneficios previstos en la LOTTT y en la Convención Colectiva, incluidos: vacaciones y bono vacacional (Cláusula 47), utilidades (Cláusula 48), garantía de prestaciones sociales (artículo 142 de la LOTTT y Cláusula 50), bono por asistencia puntual y perfecta (Cláusula 41) y contribución para útiles escolares (Cláusula 23), cuando correspondan. Al terminar la relación, estos conceptos se pagarán completos o fraccionados según el tiempo de servicio. Los anticipos de prestaciones sociales solo procederán a solicitud escrita de EL TRABAJADOR, conforme al artículo 144 de la LOTTT.`}
       </Text>
 
       <Text style={[styles.paragraph, styles.paragraphIntro]}>
-        <Text style={styles.bold}>
-          {totalIngresoSemanalUsdNum != null && totalIngresoSemanalUsdNum > 0 ? 'DÉCIMA' : 'NOVENA'}: SEGURIDAD Y SALUD EN EL TRABAJO.
-        </Text>
+        <Text style={styles.bold}>{ordinalTras(1)}: SEGURIDAD Y SALUD EN EL TRABAJO.</Text>
         {` LA ENTIDAD DE TRABAJO inscribirá a EL TRABAJADOR en el Instituto Venezolano de los Seguros Sociales desde su ingreso (Cláusula 53), le notificará por escrito los riesgos de su puesto conforme a la LOPCYMAT y le entregará los equipos de protección personal. EL TRABAJADOR se obliga a usar esos equipos y el uniforme, a cumplir las normas de seguridad de la obra, a cuidar las herramientas y equipos asignados y a declarar por escrito el trayecto habitual entre su domicilio y la obra.`}
       </Text>
 
       <Text style={[styles.paragraph, styles.paragraphIntro, styles.clauseDense]}>
-        <Text style={styles.bold}>
-          {totalIngresoSemanalUsdNum != null && totalIngresoSemanalUsdNum > 0 ? 'DÉCIMA PRIMERA' : 'DÉCIMA'}: CONFIDENCIALIDAD Y CONDUCTA.
-        </Text>
+        <Text style={styles.bold}>{ordinalTras(2)}: CONFIDENCIALIDAD Y CONDUCTA.</Text>
         {` EL TRABAJADOR guardará reserva sobre la información técnica de la obra. Las faltas se regirán exclusivamente por las causas previstas en el artículo 79 de la LOTTT y por los procedimientos de ley. `}
         {'\n\n'}
-        <Text style={styles.bold}>
-          {totalIngresoSemanalUsdNum != null && totalIngresoSemanalUsdNum > 0 ? 'DÉCIMA SEGUNDA' : 'DÉCIMA PRIMERA'}: TRANSPORTE GRATUITO (BENEFICIO SOCIAL NO REMUNERATIVO).
-        </Text>
+        <Text style={styles.bold}>{ordinalTras(3)}: TRANSPORTE GRATUITO (BENEFICIO SOCIAL NO REMUNERATIVO).</Text>
         {` LA ENTIDAD DE TRABAJO brindará de manera gratuita un servicio de transporte diario, de ida y vuelta, desde el punto de encuentro establecido ${puntoEncTransporte} hasta el sitio donde se ejecute la obra determinada. Su uso es opcional para EL TRABAJADOR. Conforme al artículo 105 de la LOTTT, este servicio es un beneficio social de carácter no remunerativo y no forma parte del salario.`}
         {'\n\n'}
-        <Text style={styles.bold}>
-          {totalIngresoSemanalUsdNum != null && totalIngresoSemanalUsdNum > 0 ? 'DÉCIMA TERCERA' : 'DÉCIMA SEGUNDA'}: NORMAS APLICABLES.
-        </Text>
+        <Text style={styles.bold}>{ordinalTras(4)}: NORMAS APLICABLES.</Text>
         {` En lo no previsto, este contrato se rige por la LOTTT, su Reglamento y la Convención Colectiva. Cualquier estipulación que resulte contraria a derechos irrenunciables de EL TRABAJADOR se tendrá por no escrita, sin afectar la validez de las demás cláusulas, conforme al artículo 89 de la Constitución.`}
         {'\n\n'}
-        <Text style={styles.bold}>
-          {totalIngresoSemanalUsdNum != null && totalIngresoSemanalUsdNum > 0 ? 'DÉCIMA CUARTA' : 'DÉCIMA TERCERA'}: DOMICILIO PROCESAL.
-        </Text>
+        <Text style={styles.bold}>{ordinalTras(5)}: DOMICILIO PROCESAL.</Text>
         {` Las partes eligen como domicilio especial la ciudad de `}
         <Text style={styles.bold}>{ciudadProcesal}</Text>
         {`, Estado Nueva Esparta, sometiéndose a sus Tribunales del Trabajo. Se firman dos (2) ejemplares de un mismo tenor y a un solo efecto, uno para cada parte, en la ciudad de `}

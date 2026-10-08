@@ -33,6 +33,7 @@ import {
 } from '@/lib/talento/parseContratoTrabajoObreroTabla';
 import { nacionalidadDesdeCedula, trabajadorFemeninoDesdeEstadoCivil } from '@/lib/talento/cedulaAuth';
 import { normalizarListaContratosExpressObrero } from '@/lib/talento/filtrarContratosExpressObrero';
+import { montoArregloValido } from '@/lib/nomina/arregloPago';
 
 type Vista = 'lista' | 'nuevo' | 'masiva';
 
@@ -47,6 +48,11 @@ type ContratoRow = {
   cargo_nombre_snapshot?: string | null;
   formalizado_empleado_id?: string | null;
   tipo_contrato?: string | null;
+  fecha_ingreso?: string | null;
+  arreglo_semanal_usd?: number | null;
+  arreglo_mensual_usd?: number | null;
+  pdf_firmado_storage_path?: string | null;
+  pdf_firmado_subido_at?: string | null;
 };
 
 type ResultadoFila = {
@@ -152,9 +158,11 @@ export default function ContratoTrabajoObreroClient() {
   const [municipio, setMunicipio] = useState('');
   const [estadoRes, setEstadoRes] = useState('');
   const [estadoCivil, setEstadoCivil] = useState('');
-  const [bonoUsd, setBonoUsd] = useState('0');
-  const [bonoLoteUsd, setBonoLoteUsd] = useState('0');
+  /** Arreglo de pago del contrato individual; vacío = monto preestablecido del oficio. */
+  const [arregloSemanal, setArregloSemanal] = useState('');
+  const [arregloMensual, setArregloMensual] = useState('');
   const [guardandoUno, setGuardandoUno] = useState(false);
+  const [subiendoFirmado, setSubiendoFirmado] = useState<string | null>(null);
   const nacionalidadDesdeDoc =
     nacionalidadDesdeCedula(cedula, trabajadorFemeninoDesdeEstadoCivil(estadoCivil)) ??
     (cedula.trim() ? (trabajadorFemeninoDesdeEstadoCivil(estadoCivil) ? 'venezolana' : 'venezolano') : '—');
@@ -215,13 +223,22 @@ export default function ContratoTrabajoObreroClient() {
     setLoadingLista(true);
     setErrorLista(null);
     try {
-      const full = await supabase
+      const conArreglo = await supabase
         .from('ci_contratos_express')
         .select(
-          'id,created_at,obrero_nombre,obrero_cedula,cargo_nombre_snapshot,formalizado_empleado_id,tipo_contrato',
+          'id,created_at,obrero_nombre,obrero_cedula,cargo_nombre_snapshot,formalizado_empleado_id,tipo_contrato,fecha_ingreso,arreglo_semanal_usd,arreglo_mensual_usd,pdf_firmado_storage_path,pdf_firmado_subido_at',
         )
         .eq('proyecto_id', proyectoId.trim())
         .order('created_at', { ascending: false });
+      const full = conArreglo.error
+        ? await supabase
+            .from('ci_contratos_express')
+            .select(
+              'id,created_at,obrero_nombre,obrero_cedula,cargo_nombre_snapshot,formalizado_empleado_id,tipo_contrato',
+            )
+            .eq('proyecto_id', proyectoId.trim())
+            .order('created_at', { ascending: false })
+        : conArreglo;
 
       let data = full.data as ContratoRow[] | null;
       let error = full.error;
@@ -254,6 +271,56 @@ export default function ContratoTrabajoObreroClient() {
       setLoadingLista(false);
     }
   }, [proyectoId, supabase]);
+
+  /** Carga el contrato firmado (escaneo o foto) de una fila. */
+  const subirFirmado = useCallback(
+    async (contratoId: string, file: File | null) => {
+      if (!file) return;
+      setSubiendoFirmado(contratoId);
+      try {
+        const fd = new FormData();
+        fd.append('file', file);
+        const res = await fetch(apiUrl(`/api/talento/contratos-express/${encodeURIComponent(contratoId)}/pdf-firmado`), {
+          method: 'POST',
+          credentials: 'include',
+          body: fd,
+        });
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        if (!res.ok) {
+          toast.error(j.error ?? 'No se pudo cargar el contrato firmado');
+          return;
+        }
+        toast.success('Contrato firmado cargado');
+        void cargarContratos();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Error de red');
+      } finally {
+        setSubiendoFirmado(null);
+      }
+    },
+    [cargarContratos],
+  );
+
+  const verFirmado = useCallback(async (contratoId: string) => {
+    // Se abre la pestaña en el mismo gesto para que el navegador no la bloquee.
+    const ventana = window.open('', '_blank');
+    try {
+      const res = await fetch(apiUrl(`/api/talento/contratos-express/${encodeURIComponent(contratoId)}/pdf-firmado`), {
+        credentials: 'include',
+      });
+      const j = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+      if (!res.ok || !j.url) {
+        ventana?.close();
+        toast.error(j.error ?? 'No se pudo abrir el contrato firmado');
+        return;
+      }
+      if (ventana) ventana.location.href = j.url;
+      else window.location.href = j.url;
+    } catch (e) {
+      ventana?.close();
+      toast.error(e instanceof Error ? e.message : 'Error de red');
+    }
+  }, []);
 
   const regenerarTodosPdf = useCallback(async () => {
     if (!contratos.length || regenerandoTodos) return;
@@ -384,7 +451,9 @@ export default function ContratoTrabajoObreroClient() {
         fecha_ingreso: fechaIngreso,
         jornada_trabajo: jornada,
         horario_semanal_texto: horarioDefault.trim() || null,
-        bono_manual_usd: Number.parseFloat(bonoUsd.replace(',', '.')) || 0,
+        bono_manual_usd: 0,
+        arreglo_semanal_usd: montoArregloValido(arregloSemanal),
+        arreglo_mensual_usd: montoArregloValido(arregloMensual),
       });
       if (!out.ok) {
         toast.error(out.error ?? 'No se pudo generar');
@@ -398,7 +467,8 @@ export default function ContratoTrabajoObreroClient() {
       setMunicipio('');
       setEstadoRes('');
       setEstadoCivil('');
-      setBonoUsd('0');
+      setArregloSemanal('');
+      setArregloMensual('');
       setVista('lista');
       void cargarContratos();
       if (out.signed_url) window.open(out.signed_url, '_blank', 'noopener,noreferrer');
@@ -838,14 +908,16 @@ export default function ContratoTrabajoObreroClient() {
               </p>
             ) : (
               <div className="overflow-x-auto rounded-xl border border-amber-500/20 bg-black/25">
-                <table className="w-full min-w-[560px] text-left text-sm">
+                <table className="w-full min-w-[820px] text-left text-sm">
                   <thead>
                     <tr className="border-b border-amber-500/25 text-[10px] font-bold uppercase tracking-wide text-amber-200/90">
                       <th className="px-4 py-3">Fecha</th>
                       <th className="px-4 py-3">Obrero</th>
                       <th className="px-4 py-3">Cédula</th>
                       <th className="px-4 py-3">Cargo</th>
+                      <th className="px-4 py-3">Arreglo US$</th>
                       <th className="px-4 py-3 text-center">PDF</th>
+                      <th className="px-4 py-3">Firmado</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -855,7 +927,9 @@ export default function ContratoTrabajoObreroClient() {
                         className="border-b border-white/[0.06] last:border-0 hover:bg-white/[0.03]"
                       >
                         <td className="whitespace-nowrap px-4 py-2.5 text-zinc-500">
-                          {new Date(r.created_at).toLocaleDateString('es-VE')}
+                          {r.fecha_ingreso
+                            ? new Date(`${r.fecha_ingreso.slice(0, 10)}T12:00:00`).toLocaleDateString('es-VE')
+                            : new Date(r.created_at).toLocaleDateString('es-VE')}
                         </td>
                         <td className="px-4 py-2.5 font-medium text-zinc-100">{r.obrero_nombre}</td>
                         <td className="px-4 py-2.5 font-mono text-xs text-zinc-400">
@@ -864,19 +938,65 @@ export default function ContratoTrabajoObreroClient() {
                         <td className="px-4 py-2.5 text-xs text-zinc-400">
                           {r.cargo_nombre_snapshot ?? '—'}
                         </td>
+                        <td className="whitespace-nowrap px-4 py-2.5 text-xs tabular-nums text-zinc-300">
+                          {r.arreglo_semanal_usd != null
+                            ? `${Number(r.arreglo_semanal_usd)} sem. · ${Number(r.arreglo_mensual_usd ?? r.arreglo_semanal_usd)} mes`
+                            : '—'}
+                        </td>
                         <td className="px-4 py-2.5 text-center">
                           <AccionesContratoPdfFila
                             empleadoRowId={`ci-express-${r.id}`}
                             nombreObrero={r.obrero_nombre}
                           />
                         </td>
+                        <td className="px-4 py-2.5">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {r.pdf_firmado_storage_path ? (
+                              <button
+                                type="button"
+                                onClick={() => void verFirmado(r.id)}
+                                className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-200 hover:bg-emerald-500/20"
+                              >
+                                Cargado · ver
+                              </button>
+                            ) : (
+                              <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-200">
+                                Sin cargar
+                              </span>
+                            )}
+                            <label
+                              className={`cursor-pointer rounded-lg border border-white/15 bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-zinc-200 hover:bg-white/10 ${
+                                subiendoFirmado === r.id ? 'pointer-events-none opacity-50' : ''
+                              }`}
+                            >
+                              {subiendoFirmado === r.id
+                                ? 'Cargando…'
+                                : r.pdf_firmado_storage_path
+                                  ? 'Reemplazar'
+                                  : 'Cargar firmado'}
+                              <input
+                                type="file"
+                                accept="application/pdf,image/jpeg,image/png,image/webp"
+                                className="sr-only"
+                                onChange={(e) => {
+                                  const f = e.target.files?.[0] ?? null;
+                                  e.target.value = '';
+                                  void subirFirmado(r.id, f);
+                                }}
+                              />
+                            </label>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
                 <p className="border-t border-white/10 px-3 py-2 text-[11px] text-zinc-500">
-                  {contratos.length} contratado{contratos.length === 1 ? '' : 's'}. Icono PDF → Regenerar
-                  PDF (uno) o use «Regenerar PDFs» arriba (todos).
+                  {contratos.length} contratado{contratos.length === 1 ? '' : 's'}
+                  {contratos.some((c) => !c.pdf_firmado_storage_path)
+                    ? ` · ${contratos.filter((c) => !c.pdf_firmado_storage_path).length} sin contrato firmado cargado`
+                    : ''}
+                  . Icono PDF → imprimir; una vez firmado, cárguelo en «Firmado».
                 </p>
               </div>
             )}
@@ -921,13 +1041,26 @@ export default function ContratoTrabajoObreroClient() {
                 </label>
                 <label className="block space-y-1.5">
                   <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
-                    Bono USD
+                    Arreglo semanal US$
                   </span>
                   <input
                     className={inputClass}
-                    value={bonoUsd}
-                    onChange={(e) => setBonoUsd(e.target.value)}
+                    value={arregloSemanal}
+                    onChange={(e) => setArregloSemanal(e.target.value.replace(/[^\d.,]/g, '').slice(0, 8))}
                     inputMode="decimal"
+                    placeholder="Según el oficio: 90 ayudante · 115 clasificado"
+                  />
+                </label>
+                <label className="block space-y-1.5">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                    Arreglo mensual US$
+                  </span>
+                  <input
+                    className={inputClass}
+                    value={arregloMensual}
+                    onChange={(e) => setArregloMensual(e.target.value.replace(/[^\d.,]/g, '').slice(0, 8))}
+                    inputMode="decimal"
+                    placeholder="Igual al semanal si se deja vacío"
                   />
                 </label>
                 <label className="block space-y-1.5 sm:col-span-2">
@@ -1023,8 +1156,8 @@ export default function ContratoTrabajoObreroClient() {
                 <div>
                   <h2 className="text-sm font-bold text-white">Contratación masiva</h2>
                   <p className="mt-0.5 text-[11px] text-zinc-500">
-                    Confirme la obra y los datos del lote (fecha, jornada, bono). Marque a quienes ya
-                    llenaron el enlace. Excel queda como rescate.
+                    Confirme la obra y los datos del lote (fecha, jornada). Marque a quienes ya llenaron el
+                    enlace y revise el arreglo de pago de cada uno. Excel queda como rescate.
                   </p>
                 </div>
               </div>
@@ -1064,17 +1197,6 @@ export default function ContratoTrabajoObreroClient() {
             <DefaultsObraCargo omitObra />
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block space-y-1.5">
-                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
-                  Bono USD (lote)
-                </span>
-                <input
-                  className={inputClass}
-                  inputMode="decimal"
-                  value={bonoLoteUsd}
-                  onChange={(e) => setBonoLoteUsd(e.target.value)}
-                />
-              </label>
               <label className="block space-y-1.5 sm:col-span-2">
                 <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
                   Horario semanal por defecto (opcional)
@@ -1095,7 +1217,7 @@ export default function ContratoTrabajoObreroClient() {
               horarioDefault={horarioDefault}
               estadoCivilDefault={estadoCivilDefault}
               configNominaId={configNominaId}
-              bonoUsd={Number.parseFloat(bonoLoteUsd.replace(',', '.')) || 0}
+              bonoUsd={0}
               onGenerados={() => void cargarContratos()}
             />
 

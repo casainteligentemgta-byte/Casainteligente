@@ -14,6 +14,7 @@ import {
   FECHA_ANCLAJE_CESTA_ISO,
 } from '@/lib/nomina/reglasPagoObra';
 import { domingoDeSemanaIso, esMigracionNomina333Pendiente, lunesDeSemanaIso } from '@/lib/nomina/semanaIsoNomina';
+import { cargarArreglosPagoPorEmpleado } from '@/lib/nomina/arreglosPagoContrato';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -112,6 +113,18 @@ export async function POST(req: Request) {
 
   const admin = supabaseAdminForRoute();
   const db = admin.ok ? admin.client : await createClient();
+
+  // El monto de cada trabajador sale de su contrato, no de lo que envíe la pantalla.
+  const arreglos = await cargarArreglosPagoPorEmpleado(
+    db,
+    proyectoId,
+    items.map((it) => it.empleado_id),
+  );
+  for (const it of items) {
+    const pactado = arreglos[it.empleado_id];
+    it.sobre_usd = pactado?.semanalUsd ?? null;
+    it.mensual_usd = pactado?.mensualUsd ?? null;
+  }
 
   try {
     if (soloPreview) {

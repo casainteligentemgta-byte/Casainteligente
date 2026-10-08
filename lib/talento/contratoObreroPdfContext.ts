@@ -40,6 +40,7 @@ import {
   nivelGacetaDesdeSalarioBasicoDiarioVes,
 } from '@/lib/talento/ingresoSemanalUsdTabuladorConstruccion';
 import { resolverDomicilioProcesalContrato } from '@/lib/talento/datosObraContratoPm';
+import { arregloPagoPorDefecto, montoArregloValido } from '@/lib/nomina/arregloPago';
 
 /**
  * Patrono para contrato / planilla: nombre y domicilio desde `ci_entidades`
@@ -895,7 +896,12 @@ export async function cargarPropsContratoObreroPdfEstructurado(
     salario_basico_diario_ves: salarioDiarioNum,
   };
 
+  /** Vista previa: el arreglo preestablecido del oficio, igual que el contrato que se genera. */
+  const arregloPrevio = arregloPagoPorDefecto(codTab, cargoNom);
+
   const parametros: ContratoObreroPdfStructuredProps['parametros'] = {
+    arregloSemanalUsd: arregloPrevio.semanalUsd,
+    arregloMensualUsd: arregloPrevio.mensualUsd,
     tipoPlazo: f.contrato.tipo_contrato,
     fechaIngreso: strOpt(f.contrato.fecha_ingreso),
     duracionSemanasReferencial: strOpt(f.contrato.duracion_referencial_semanas),
@@ -949,6 +955,10 @@ export type ContratoExpressManualInput = {
   obreroEstadoResidencia?: string | null;
   /** Bono especial no salarial en USD (cláusula SEXTA del PDF). */
   bonoManualUsd?: number | null;
+  /** Arreglo de pago semanal pactado (USD); sustituye a «tabulador + bono» en el contrato. */
+  arregloSemanalUsd?: number | null;
+  /** Arreglo de pago mensual pactado (USD, cada cuatro semanas trabajadas). */
+  arregloMensualUsd?: number | null;
 };
 
 /**
@@ -1148,6 +1158,8 @@ export async function cargarPropsContratoObreroPdfExpress(
       manual.bonoManualUsd != null && Number.isFinite(Number(manual.bonoManualUsd))
         ? Math.max(0, Number(manual.bonoManualUsd))
         : 0,
+    arregloSemanalUsd: montoArregloValido(manual.arregloSemanalUsd),
+    arregloMensualUsd: montoArregloValido(manual.arregloMensualUsd),
     textoPuntoEncuentroTransporteSex: strOpt(o.punto_encuentro_transporte_contrato) ?? undefined,
     domicilioProcesalCiudad: resolverDomicilioProcesalContrato(o.domicilio_procesal_contrato),
   };

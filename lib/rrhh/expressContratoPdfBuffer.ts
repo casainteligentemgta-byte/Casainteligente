@@ -26,18 +26,45 @@ type ExpressRow = {
   bono_manual_usd?: number | null;
   pdf_storage_path?: string | null;
   expediente_codigo?: string | null;
+  fecha_ingreso?: string | null;
+  estado_civil?: string | null;
+  nacionalidad?: string | null;
+  jornada_trabajo?: string | null;
+  objeto_contrato?: string | null;
+  obrero_municipio_residencia?: string | null;
+  obrero_estado_residencia?: string | null;
+  arreglo_semanal_usd?: number | null;
+  arreglo_mensual_usd?: number | null;
 };
+
+function numONull(v: unknown): number | null {
+  if (v == null || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
 
 function manualDesdeExpressRow(row: ExpressRow): ContratoExpressManualInput {
   const cedula = String(row.obrero_cedula ?? '').trim();
-  const estadoCivil = estadoCivilContratoObrero(null);
+  // Se regenera con lo guardado al contratar (estado civil, fecha, jornada, arreglo de pago).
+  const estadoCivil = estadoCivilContratoObrero(row.estado_civil ?? null);
   const femenino = trabajadorFemeninoDesdeEstadoCivil(estadoCivil);
+  const fechaIngreso = String(row.fecha_ingreso ?? '').trim().slice(0, 10) || null;
   return {
+    fechaIngreso,
+    fechaFirmaContratoIso: fechaIngreso,
+    jornadaTrabajo: row.jornada_trabajo?.trim() || null,
+    objetoContrato: row.objeto_contrato?.trim() || null,
+    obreroMunicipioResidencia: row.obrero_municipio_residencia?.trim() || null,
+    obreroEstadoResidencia: row.obrero_estado_residencia?.trim() || null,
+    arregloSemanalUsd: numONull(row.arreglo_semanal_usd),
+    arregloMensualUsd: numONull(row.arreglo_mensual_usd),
     obreroNombre: String(row.obrero_nombre ?? '').trim(),
     obreroCedula: cedula,
     obreroDireccion: domicilioContratoObrero(row.obrero_direccion),
     horarioSemanalTexto: row.horario_semanal_texto?.trim() || null,
-    nacionalidad: nacionalidadDesdeCedula(cedula, femenino) ?? (femenino ? 'venezolana' : 'venezolano'),
+    nacionalidad:
+      nacionalidadDesdeCedula(cedula, femenino) ??
+      (row.nacionalidad?.trim() || (femenino ? 'venezolana' : 'venezolano')),
     estadoCivil,
     bonoManualUsd:
       row.bono_manual_usd != null && Number.isFinite(Number(row.bono_manual_usd))
@@ -59,7 +86,7 @@ export async function generarBufferContratoExpressPdf(
   const { data, error } = await supabase
     .from('ci_contratos_express')
     .select(
-      'id,proyecto_id,config_nomina_id,obrero_nombre,obrero_cedula,obrero_direccion,horario_semanal_texto,bono_manual_usd,pdf_storage_path,expediente_codigo',
+      'id,proyecto_id,config_nomina_id,obrero_nombre,obrero_cedula,obrero_direccion,horario_semanal_texto,bono_manual_usd,pdf_storage_path,expediente_codigo,fecha_ingreso,estado_civil,nacionalidad,jornada_trabajo,objeto_contrato,obrero_municipio_residencia,obrero_estado_residencia,arreglo_semanal_usd,arreglo_mensual_usd',
     )
     .eq('id', id)
     .maybeSingle();
