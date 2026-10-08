@@ -39,7 +39,7 @@ export async function uploadOnboardingCedulaPhoto(
   return uploadToSupabaseReclutamientoBucket(supabase, path, file);
 }
 
-/** Foto tipo carnet (perfil) en onboarding por token. */
+/** Foto de frente (cara y hombros) en onboarding por token. */
 export async function uploadOnboardingPerfilPhoto(
   file: File,
   token: string,

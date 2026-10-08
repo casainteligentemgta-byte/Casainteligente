@@ -19,6 +19,7 @@ import {
 } from '@/lib/registro/captacionPlanillaSchema';
 import { nombresLegadoDesdeGaceta } from '@/lib/registro/ciEmpleadosNombresLegado';
 import { uploadTalentoPublicFile } from '@/lib/registro/uploadTalentoPublic';
+import CampoFotoFrente from '@/components/registro/CampoFotoFrente';
 import { uuidV4 } from '@/lib/registro/uuidCompat';
 import { apiUrl } from '@/lib/http/apiUrl';
 import { createClient } from '@/lib/supabase/client';
@@ -238,7 +239,7 @@ export default function RegistroPorNeedCliente({
       if (!cel.numero || cel.numero.length !== 7) return 'Indica el celular con prefijo venezolano y 7 dígitos.';
       if (!form.direccion.trim()) return 'Indica la dirección / domicilio.';
       if (!form.fechaNacimiento.trim()) return 'Indica la fecha de nacimiento.';
-      if (!form.fotoPerfilFile) return 'Sube la foto de perfil (tipo carnet).';
+      if (!form.fotoPerfilFile) return 'Toma la foto de frente (cara en el óvalo).';
       if (!form.fotoCedulaFile) return 'Sube la foto de la cédula.';
     }
     if (i === 1) {
@@ -301,7 +302,7 @@ export default function RegistroPorNeedCliente({
           file: form.fotoPerfilFile,
         });
         if (up.error || !up.publicUrl) {
-          toast.error(up.error ?? 'No se pudo subir la foto de perfil.');
+          toast.error(up.error ?? 'No se pudo subir la foto de frente.');
           return;
         }
         fotoPerfil = up.publicUrl;
@@ -921,15 +922,11 @@ export default function RegistroPorNeedCliente({
                   />
                 </div>
               </div>
-              <div>
-                <label className={labelClass}>Foto de perfil (carnet) *</label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="mt-1 text-xs text-zinc-400 file:mr-3 file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-1.5 file:text-zinc-200"
-                  onChange={(e) => setF('fotoPerfilFile', e.target.files?.[0] ?? null)}
-                />
-              </div>
+              <CampoFotoFrente
+                labelClass={labelClass}
+                file={form.fotoPerfilFile}
+                onFile={(f) => setF('fotoPerfilFile', f)}
+              />
               <div>
                 <label className={labelClass}>Foto de cédula *</label>
                 <input
