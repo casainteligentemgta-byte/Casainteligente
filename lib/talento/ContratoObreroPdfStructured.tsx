@@ -192,7 +192,7 @@ export type ParametrosContratoPdf = {
   bonoManualUsd?: number | null;
   /** Reservado. El complemento semanal de la Cl. SEXTA es fijo (33 USD) y no usa el arreglo. */
   arregloSemanalUsd?: number | null;
-  /** Arreglo de pago mensual (cada cuatro semanas trabajadas). Si viene, agrega su cláusula. */
+  /** Reservado. La Cl. SÉPTIMA usa el monto fijo 90/115 USD; no se agrega cláusula extra. */
   arregloMensualUsd?: number | null;
   textoPuntoEncuentroTransporteSex?: string | null;
   compensacionCulminacionUsdPorMes?: number | null;

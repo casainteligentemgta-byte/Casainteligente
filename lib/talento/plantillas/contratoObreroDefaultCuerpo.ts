@@ -1,9 +1,20 @@
 /**
  * Plantilla del contrato individual de trabajo (obrero) — obra determinada, CCT construcción.
+ * Nueve cláusulas (PRIMERA–NOVENA). Sin ética/confidencialidad.
  * Se inserta en `ci_documento_plantillas` si no existe (ver `ensurePlantillaContratoObrero`).
  * La entidad patrono (razón social, RM, representante) se sustituye desde `ci_entidades` del proyecto.
  * Revise con asesoría legal antes de uso en firma.
  */
+
+/** Cuerpos anteriores a las nueve cláusulas vigentes (ética OCTAVA, domicilio DÉCIMA, etc.). */
+export function esCuerpoContratoObreroObsoleto(cuerpo: string | null | undefined): boolean {
+  const t = String(cuerpo ?? '').trim();
+  if (t.length <= 80) return true;
+  return /INGRESO INTEGRAL INDEXADO|BONO ESPECIAL|COMPENSACI[ÓO]N POR CULMINACI[ÓO]N|ÉTICA Y CONFIDENCIALIDAD|ÉTICA, CONFIDENCIALIDAD|DÉCIMA:\s*DOMICILIO PROCESAL/i.test(
+    t,
+  );
+}
+
 export const CONTRATO_OBRERO_HORARIO_CUARTA_DEFAULT =
   'de lunes a jueves, de 7:00 a.m. a 12:00 m. y de 1:00 p.m. a 5:00 p.m., y los viernes de 7:00 a.m. a 11:00 a.m.';
 
