@@ -45,7 +45,13 @@ const card = 'rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4 sm:p-5'
 const btn = 'inline-flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-black uppercase disabled:opacity-40';
 const btnGhost = `${btn} border border-white/10 text-zinc-300 hover:bg-white/[0.06]`;
 const input = 'w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2.5 text-sm text-white placeholder:text-zinc-600';
+/** Cantidad: solo 4 dígitos; el resto del renglón es el cargo del tabulador. */
+const inputCantidad =
+  'w-[4.75rem] shrink-0 rounded-xl border border-white/10 bg-black/40 px-1.5 py-2.5 text-center text-sm font-semibold tabular-nums text-white [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none';
+const inputOficioTabulador =
+  'min-h-[48px] min-w-0 flex-1 rounded-xl border border-white/10 bg-black/40 px-3 py-2.5 text-base font-medium text-white';
 const chip = 'inline-block rounded-lg border px-2 py-0.5 text-[10px] font-bold uppercase';
+const CANTIDAD_MAX = 9999;
 
 const NIVELES = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 
@@ -170,7 +176,12 @@ export default function SolicitudPersonalClient() {
   };
 
   const crearSolicitud = async () => {
-    const validas = lineas.filter((l) => l.oficio).map((l) => ({ oficio: l.oficio, cantidad: Number(l.cantidad) || 1 }));
+    const validas = lineas
+      .filter((l) => l.oficio)
+      .map((l) => ({
+        oficio: l.oficio,
+        cantidad: Math.max(1, Math.min(CANTIDAD_MAX, Math.floor(Number(l.cantidad) || 1))),
+      }));
     if (!obraId || !validas.length) {
       setError('Elige la obra y al menos un oficio.');
       return;
@@ -456,25 +467,31 @@ export default function SolicitudPersonalClient() {
             <h2 className="text-xs font-black uppercase tracking-wider text-[#FF9500]">Nueva solicitud</h2>
             <div className="mt-3 space-y-2">
               {lineas.map((l) => (
-                <div key={l.clave} className="flex items-center gap-2">
+                <div key={l.clave} className="flex items-stretch gap-2">
                   <input
                     type="number"
                     min={1}
-                    max={500}
+                    max={CANTIDAD_MAX}
+                    maxLength={4}
                     inputMode="numeric"
                     value={l.cantidad}
-                    onChange={(e) => setLineas((prev) => prev.map((x) => (x.clave === l.clave ? { ...x, cantidad: e.target.value } : x)))}
-                    className={`${input} w-20 shrink-0`}
-                    aria-label="Cantidad"
+                    onChange={(e) => {
+                      const crudo = e.target.value.replace(/\D/g, '').slice(0, 4);
+                      setLineas((prev) => prev.map((x) => (x.clave === l.clave ? { ...x, cantidad: crudo } : x)));
+                    }}
+                    className={inputCantidad}
+                    aria-label="Cantidad de obreros de este oficio"
+                    title="Cantidad (hasta 4 dígitos)"
                   />
                   <select
                     value={l.oficio}
                     onChange={(e) => setLineas((prev) => prev.map((x) => (x.clave === l.clave ? { ...x, oficio: e.target.value } : x)))}
-                    className={input}
-                    aria-label="Oficio"
+                    className={inputOficioTabulador}
+                    aria-label="Tipo de obrero según tabulador"
+                    title="Nombre del cargo según tabulador"
                   >
                     <option value="" className="bg-zinc-900">
-                      Elige el oficio…
+                      Tipo de obrero según tabulador…
                     </option>
                     <OpcionesOficio />
                   </select>
