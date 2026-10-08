@@ -85,14 +85,16 @@ export async function fetchTrabajadoresTodosProyectos(
     empleados = (empMin.data ?? []) as EmpleadoHojaVidaRow[];
   }
   const vinculos = await cargarVinculosContratacionProyecto(supabase);
-  for (const [wid, pids] of vinculos) {
-    const extras = new Set<string>();
-    for (const pid of pids) {
+  vinculos.forEach((pids) => {
+    const extras: string[] = [];
+    pids.forEach((pid) => {
       const padre = moduloPadreByObraId.get(pid);
-      if (padre) extras.add(padre);
-    }
-    for (const extra of extras) pids.add(extra);
-  }
+      if (padre) extras.push(padre);
+    });
+    extras.forEach((extra) => {
+      pids.add(extra);
+    });
+  });
 
   const trabajadores: TrabajadorPorProyectoRow[] = empleados
     .filter((e) => (vinculos.get(e.id)?.size ?? 0) > 0)
