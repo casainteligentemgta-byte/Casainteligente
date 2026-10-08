@@ -135,6 +135,10 @@ const ETIQUETAS: Record<string, { etiqueta: string; ayuda: string }> = {
   EMPLEADO_LUGAR_NACIMIENTO: { etiqueta: 'Lugar de nacimiento', ayuda: 'Planilla de empleo.' },
   EMPLEADO_CELULAR: { etiqueta: 'Teléfono celular', ayuda: 'Planilla de empleo.' },
   CONTRATO_CARGO_OFICIO: { etiqueta: 'Cargo u oficio del contrato', ayuda: 'RRHH al generar el contrato o tabulador.' },
+  CONTRATO_OFICIO_TABULADOR: {
+    etiqueta: 'Oficio del tabulador (código y denominación)',
+    ayuda: 'Código y nombre del oficio, p. ej. 2.1 AYUDANTE. RRHH al generar el contrato.',
+  },
   CONTRATO_LABORES_OFICIO: {
     etiqueta: 'Labores del oficio (gaceta)',
     ayuda: 'Solo si el cargo tiene ficha de labores en la referencia de gaceta.',
@@ -425,6 +429,12 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
     EMPLEADO_LUGAR_NACIMIENTO: lugarNac,
     EMPLEADO_CELULAR: celular,
     CONTRATO_CARGO_OFICIO: str(f.contrato.cargo_oficio_desempeño) || str(hv?.contratacion?.cargoUOficio),
+    CONTRATO_OFICIO_TABULADOR: (() => {
+      const cargo = (str(f.contrato.cargo_oficio_desempeño) || str(hv?.contratacion?.cargoUOficio)).toUpperCase();
+      const codigo = str(f.contrato.numero_oficio_tabulador).replace(',', '.');
+      if (codigo && cargo) return `${codigo} ${cargo}`;
+      return cargo || codigo;
+    })(),
     CONTRATO_LABORES_OFICIO: laboresContratoDesdeCargo({
       cargoCodigo: str(f.contrato.numero_oficio_tabulador),
       cargoNombre: str(f.contrato.cargo_oficio_desempeño) || str(hv?.contratacion?.cargoUOficio),

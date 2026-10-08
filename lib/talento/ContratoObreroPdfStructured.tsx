@@ -465,6 +465,8 @@ export function ContratoObreroPDF({
     const c = (empleado.cargo_nombre ?? '').trim();
     return c ? c.toUpperCase() : '______________________________';
   })();
+  const codigoOficioTxt = (empleado.cargo_codigo ?? '').trim().replace(',', '.');
+  const oficioTabuladorTxt = codigoOficioTxt ? `${codigoOficioTxt} ${oficioStr}` : oficioStr;
   const fechaCierreIso = parametros.fechaFirmaContratoIso ?? parametros.fechaIngreso;
   const { dia: diaFirma, mes: mesFirma, anio: anioFirma } = partesFechaCierreFirma(fechaCierreIso);
 
@@ -478,6 +480,7 @@ export function ContratoObreroPDF({
       configNomina.salario_basico_diario_ves ?? (tieneSbMen != null ? tieneSbMen / 30 : null),
     );
   const salDiarioHomologado = salarioDiarioHomologado(nivelOficio);
+  const salDiarioTxt = salDiarioHomologado != null ? fmtBsVes(salDiarioHomologado) : '__________________';
   const salSemanalTxt =
     salDiarioHomologado != null ? fmtBsVes(Math.round(salDiarioHomologado * 7 * 100) / 100) : '__________________';
   const cestaSemanalUsdTxt = `${fmtUsdNumeroPlano(alimentacionSemanalUsdAnclada())} USD`;
@@ -646,8 +649,12 @@ export function ContratoObreroPDF({
         <Text style={styles.bold}>SEXTA: SALARIO Y BENEFICIOS SOCIALES.</Text>
         {` EL TRABAJADOR devengará los siguientes conceptos pagaderos en Bolívares:`}
         {'\n'}
-        a.- Bs. <Text style={styles.bold}>{salSemanalTxt}</Text>
-        {` por concepto de Salario Semanal según Tabulador, equivalente al salario de su oficio en el Tabulador de la Convención Colectiva con el aumento del cien por ciento (100%), es decir, dos (2) veces dicho salario, conforme al ${TABULADOR_HOMOLOGADO_2026_REFERENCIA};`}
+        a.- Bs. <Text style={styles.bold}>{salDiarioTxt}</Text>
+        {` diarios por el oficio de `}
+        <Text style={styles.bold}>{oficioTabuladorTxt}</Text>
+        {` según el Tabulador de Oficios y Salarios Básicos de la Convención Colectiva, con el aumento del cien por ciento (100%), es decir, dos (2) veces dicho salario, equivalente a Bs. `}
+        <Text style={styles.bold}>{salSemanalTxt}</Text>
+        {` semanales, conforme al ${TABULADOR_HOMOLOGADO_2026_REFERENCIA};`}
         {'\n'}
         b.- Cesta Ticket: el equivalente en Bolívares de <Text style={styles.bold}>{cestaSemanalUsdTxt}</Text>
         {` semanales, a la tasa oficial del BCV del día del pago; y`}
