@@ -11,7 +11,7 @@ import { previewItemsNomina, type PreviewItemNomina } from '@/lib/nomina/persist
 import {
   type ClasePagoObra,
   inferirClasePagoObra,
-  SEMANA_ADICIONAL_FIJA_USD,
+  semanaAdicionalFijaUsd,
   TASA_ANCLA_CESTA_BCV,
 } from '@/lib/nomina/reglasPagoObra';
 import { domingoDeSemanaIso, lunesDeSemanaIso } from '@/lib/nomina/semanaIsoNomina';
@@ -398,7 +398,7 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
           <h2 className="text-sm font-bold uppercase tracking-wide text-emerald-100">Nómina semanal</h2>
           <p className="mt-0.5 text-xs text-zinc-500">
             Cl. SEXTA: salario del oficio + cesta ticket + complemento de alimentación. Cl. SÉPTIMA:
-            cada 4 semanas nace una semana adicional de USD {SEMANA_ADICIONAL_FIJA_USD}, que se paga al finiquito.
+            cada 4 semanas nace una semana adicional (90 USD ayudante / 115 USD clasificado), que se paga al finiquito.
           </p>
         </div>
       </div>
@@ -633,7 +633,7 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
                           </Button>
                           {p.toca_adelanto ? (
                             <span className="text-[11px] text-amber-200/90">
-                              Se causó 1 semana adicional (USD {SEMANA_ADICIONAL_FIJA_USD}). Se paga al finiquito.
+                              Se causó 1 semana adicional (USD {semanaAdicionalFijaUsd(f.clase)}). Se paga al finiquito.
                             </span>
                           ) : null}
                         </div>

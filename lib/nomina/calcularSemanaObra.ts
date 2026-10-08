@@ -8,11 +8,11 @@ import {
   TOPE_ANTICIPO_PRESTACIONES,
   COMPLEMENTO_ALIMENTACION_SEMANAL_USD,
   COMPLEMENTO_ALIMENTACION_RECIBO,
-  SEMANA_ADICIONAL_FIJA_USD,
   cestaSemanalUsdAnclada,
   diasPagadosClausula8,
   oficioReciboLegal,
   round2,
+  semanaAdicionalFijaUsd,
   sobreUsdDeClase,
 } from '@/lib/nomina/reglasPagoObra';
 
@@ -116,8 +116,8 @@ export function calcularSemanaObra(input: CalcularSemanaObraInput): ResultadoSem
   let complementoUsd = 0;
   let totalUsd = 0;
   if (tipo === 'adelanto_prestaciones') {
-    /** Cl. SÉPTIMA: monto fijo; el derecho nace cada 4 semanas y se paga al finiquito. */
-    totalUsd = SEMANA_ADICIONAL_FIJA_USD;
+    /** Cl. SÉPTIMA: 90 USD ayudante / 115 USD clasificado; nace cada 4 semanas y se paga al finiquito. */
+    totalUsd = semanaAdicionalFijaUsd(clase);
   } else {
     cestaUsd = cestaUsdAnclada;
     complementoUsd = complementoSemanalUsd;
@@ -209,7 +209,7 @@ export function calcularSemanaObra(input: CalcularSemanaObraInput): ResultadoSem
     }
     lineasPatio.push({
       codigo: 'ADELANTO',
-      concepto: `Semana adicional Cl. SÉPTIMA (monto fijo USD ${SEMANA_ADICIONAL_FIJA_USD}; pago al finiquito)`,
+      concepto: `Semana adicional Cl. SÉPTIMA (monto fijo USD ${semanaAdicionalFijaUsd(clase)}; pago al finiquito)`,
       usd: totalUsd,
       ves: totalVes,
       salarial: false,

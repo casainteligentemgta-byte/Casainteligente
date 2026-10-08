@@ -9,13 +9,13 @@ import {
 } from '@/lib/nomina/tabuladorHomologado2026';
 
 /**
- * Cl. SÉPTIMA: semana adicional de monto fijo (USD). El derecho nace cada 4 semanas
- * trabajadas y se paga al terminar la relación (finiquito), no en la nómina semanal.
+ * Cl. SÉPTIMA: semana adicional de monto fijo por clase (USD). El derecho nace cada 4
+ * semanas trabajadas y se paga al terminar la relación (finiquito), no en la nómina semanal.
  */
-export const SEMANA_ADICIONAL_FIJA_USD = 90;
-/** @deprecated Usar SEMANA_ADICIONAL_FIJA_USD. */
-export const SOBRE_AYUDANTE_USD = SEMANA_ADICIONAL_FIJA_USD;
+export const SOBRE_AYUDANTE_USD = 90;
 export const SOBRE_CLASIFICADO_USD = 115;
+/** @deprecated Preferir `semanaAdicionalFijaUsd(clase)`. */
+export const SEMANA_ADICIONAL_FIJA_USD = SOBRE_AYUDANTE_USD;
 
 /**
  * Cl. SEXTA c): complemento del beneficio de alimentación, USD por semana.
@@ -145,6 +145,11 @@ export function oficioReciboLegal(
 
 export function sobreUsdDeClase(clase: ClasePagoObra): number {
   return clase === 'ayudante' ? SOBRE_AYUDANTE_USD : SOBRE_CLASIFICADO_USD;
+}
+
+/** Cl. SÉPTIMA: 90 USD ayudante / 115 USD clasificado, por cada 4 semanas. */
+export function semanaAdicionalFijaUsd(clase: ClasePagoObra): number {
+  return sobreUsdDeClase(clase);
 }
 
 /**

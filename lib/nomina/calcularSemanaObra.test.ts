@@ -10,7 +10,8 @@ import {
   oficioReciboLegal,
   tocaAdelantoTrasSemana,
   cestaSemanalUsdAnclada,
-  SEMANA_ADICIONAL_FIJA_USD,
+  SOBRE_AYUDANTE_USD,
+  SOBRE_CLASIFICADO_USD,
   COMPLEMENTO_ALIMENTACION_SEMANAL_USD,
 } from './reglasPagoObra';
 
@@ -123,7 +124,7 @@ describe('calcularSemanaObra', () => {
     });
     assert.equal(r.cestaUsdAnclada, 0);
     assert.equal(r.diasPagados, 0);
-    assert.equal(r.totalUsd, SEMANA_ADICIONAL_FIJA_USD);
+    assert.equal(r.totalUsd, SOBRE_AYUDANTE_USD);
     assert.ok(r.lineasLegal.some((l) => l.codigo === 'PREST'));
     assert.ok(!r.lineasLegal.some((l) => l.codigo === 'CESTA'));
   });
@@ -171,8 +172,8 @@ describe('calcularSemanaObra', () => {
       tasaAnclaCestaBcv: ancla,
       sobreUsd: 100,
     });
-    assert.equal(conArreglo.totalUsd, SEMANA_ADICIONAL_FIJA_USD);
-    assert.equal(sinArreglo.totalUsd, SEMANA_ADICIONAL_FIJA_USD);
+    assert.equal(conArreglo.totalUsd, SOBRE_AYUDANTE_USD);
+    assert.equal(sinArreglo.totalUsd, SOBRE_AYUDANTE_USD);
   });
 
   it('con una falta sigue el complemento: salario de los días + cesta + 33 USD', () => {
@@ -228,7 +229,29 @@ describe('calcularSemanaObra', () => {
     assert.ok(r.lineasLegal.every((l) => !l.salarial));
     const suma = r.lineasLegal.reduce((a, l) => a + l.usd, 0);
     assert.ok(Math.abs(suma - r.totalUsd) < 0.03);
-    assert.equal(r.totalUsd, SEMANA_ADICIONAL_FIJA_USD);
+    assert.equal(r.totalUsd, SOBRE_CLASIFICADO_USD);
+  });
+
+  it('el clasificado causa 115 USD por cada 4 semanas y el ayudante 90 USD', () => {
+    const clas = calcularSemanaObra({
+      clase: 'clasificado',
+      tipo: 'adelanto_prestaciones',
+      diasLaborados: 5,
+      tasaBcvPago: tasa,
+      tasaAnclaCestaBcv: ancla,
+      cargoCodigo: '5.1',
+      sobreUsd: 200,
+    });
+    const ayu = calcularSemanaObra({
+      clase: 'ayudante',
+      tipo: 'adelanto_prestaciones',
+      diasLaborados: 5,
+      tasaBcvPago: tasa,
+      tasaAnclaCestaBcv: ancla,
+      sobreUsd: 50,
+    });
+    assert.equal(clas.totalUsd, SOBRE_CLASIFICADO_USD);
+    assert.equal(ayu.totalUsd, SOBRE_AYUDANTE_USD);
   });
 
   it('el complemento es potestativo: sin otorgarlo, salario y cesta aunque la semana esté completa', () => {
