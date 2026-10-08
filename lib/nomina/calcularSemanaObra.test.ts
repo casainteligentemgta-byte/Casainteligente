@@ -228,6 +228,22 @@ describe('calcularSemanaObra', () => {
     assert.ok(Math.abs(suma - 115) < 0.03);
   });
 
+  it('el bono especial es potestativo: sin otorgarlo, salario y cesta aunque la semana esté completa', () => {
+    const r = calcularSemanaObra({
+      clase: 'clasificado',
+      tipo: 'semanal',
+      diasLaborados: 5,
+      tasaBcvPago: tasa,
+      tasaAnclaCestaBcv: ancla,
+      cargoCodigo: '5.1',
+      sobreUsd: 115,
+      otorgarBono: false,
+    });
+    assert.equal(r.bonoOtorgado, false);
+    assert.ok(!r.lineasLegal.some((l) => l.codigo === 'COMP'));
+    assert.equal(r.totalUsd, Math.round((r.salarioBasicoUsd + cestaSemanalUsdAnclada(ancla)) * 100) / 100);
+  });
+
   it('cesta anclada baja si sube la tasa de homologación', () => {
     const a = cestaSemanalUsdAnclada(100);
     const b = cestaSemanalUsdAnclada(200);

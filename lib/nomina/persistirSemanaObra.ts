@@ -16,6 +16,8 @@ export type ItemEntradaNomina = {
   cargo_codigo?: string | null;
   cargo_nombre?: string | null;
   incluir_adelanto?: boolean;
+  /** Cl. SEXTA: el bono especial es potestativo; `false` = no se otorga esta semana. */
+  otorgar_bono?: boolean;
   /** Arreglo semanal pactado en el contrato (USD). Sin valor: monto por defecto de la clase. */
   sobre_usd?: number | null;
   /** Arreglo mensual pactado (quinta semana). Sin valor: igual al semanal. */
@@ -88,6 +90,7 @@ export function previewItemsNomina(args: {
       cargoCodigo: it.cargo_codigo,
       cargoNombre: it.cargo_nombre,
       sobreUsd: it.sobre_usd,
+      otorgarBono: it.otorgar_bono,
     });
     const adelanto =
       toca && it.incluir_adelanto !== false

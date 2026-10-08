@@ -39,6 +39,8 @@ type FilaUi = {
   clase: ClasePagoObra;
   dias: number;
   incluirAdelanto: boolean;
+  /** Cl. SEXTA: bono especial potestativo; `false` = no se otorga esta semana. */
+  otorgarBono?: boolean;
   /** Arreglo pactado en el contrato (USD). Sin valor: monto por defecto de la clase. */
   sobreUsd?: number | null;
   mensualUsd?: number | null;
@@ -211,6 +213,7 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
             const claseGuardada = g.semanal.clase;
             if (claseGuardada === 'ayudante' || claseGuardada === 'clasificado') f.clase = claseGuardada;
             f.incluirAdelanto = Boolean(g.adelanto);
+            f.otorgarBono = (g.semanal.snapshot as { bonoOtorgado?: boolean } | undefined)?.bonoOtorgado !== false || f.dias < 5;
           }
           previosGuardados = next
             .filter((f) => porEmpleado[f.empleadoId]?.semanal?.snapshot)
@@ -267,6 +270,7 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
         cargo_codigo: f.cargoCodigo,
         cargo_nombre: f.cargoNombre,
         incluir_adelanto: f.incluirAdelanto,
+        otorgar_bono: f.otorgarBono !== false,
         sobre_usd: f.sobreUsd,
         mensual_usd: f.mensualUsd,
       })),
@@ -312,6 +316,7 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
             cargo_codigo: f.cargoCodigo,
             cargo_nombre: f.cargoNombre,
             incluir_adelanto: f.incluirAdelanto,
+            otorgar_bono: f.otorgarBono !== false,
           })),
         }),
       });
@@ -609,6 +614,24 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
                         }
                         className="w-16 border-white/15 bg-zinc-950 text-white"
                       />
+                      <label
+                        className="mt-1.5 flex items-center gap-1.5 text-[11px] text-zinc-400"
+                        title="Cláusula SEXTA: el bono especial es potestativo de la entidad de trabajo"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={f.otorgarBono !== false}
+                          disabled={f.dias < 5}
+                          onChange={(e) =>
+                            setFilas((prev) =>
+                              prev.map((x) =>
+                                x.empleadoId === f.empleadoId ? { ...x, otorgarBono: e.target.checked } : x,
+                              ),
+                            )
+                          }
+                        />
+                        {f.dias < 5 ? 'Sin bono (faltas)' : 'Bono especial'}
+                      </label>
                     </TableCell>
                     <TableCell className="text-right font-mono text-xs text-zinc-300">
                       {p ? (

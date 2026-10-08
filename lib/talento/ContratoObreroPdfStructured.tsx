@@ -764,7 +764,7 @@ export function ContratoObreroPDF({
         {` De conformidad con el artículo 105 de la LOTTT, para elevar el Ingreso Semanal a un total equivalente a: `}
         <Text style={styles.bold}>{totalIngresoSemanalUsdClausulaSexTxt}</Text>
         {'. '}
-        {`El BONO ESPECIAL se causa solo en las semanas de asistencia completa: si EL TRABAJADOR falta injustificadamente a una o más jornadas de la semana, no se causará en esa semana, y se le pagarán el salario de los días laborados (con los descansos según la Cláusula 8 de la Convención Colectiva) y el Cesta Ticket. Todos los pagos se realizarán en Bolívares calculados a la tasa oficial del Banco Central de Venezuela (BCV) del día del pago.`}
+        {`El BONO ESPECIAL es una liberalidad de LA ENTIDAD DE TRABAJO, potestativa para ella: podrá otorgarlo o no en cada semana, sin que su pago en semanas anteriores genere derecho adquirido ni obligación de mantenerlo. En todo caso, solo podrá causarse en las semanas de asistencia completa: si EL TRABAJADOR falta injustificadamente a una o más jornadas de la semana, no se causará en esa semana, y se le pagarán el salario de los días laborados (con los descansos según la Cláusula 8 de la Convención Colectiva) y el Cesta Ticket. Todos los pagos se realizarán en Bolívares calculados a la tasa oficial del Banco Central de Venezuela (BCV) del día del pago.`}
       </Text>
 
       <Text style={[styles.paragraph, styles.paragraphIntro]}>

@@ -27,6 +27,8 @@ export type CalcularSemanaObraInput = {
    * Si falta o no es válido, se usa el monto por defecto de la clase.
    */
   sobreUsd?: number | null;
+  /** Cl. SEXTA: el bono especial es potestativo; `false` = la entidad no lo otorga esta semana. */
+  otorgarBono?: boolean;
 };
 
 export type LineaRecibo = {
@@ -56,6 +58,8 @@ export type ResultadoSemanaObra = {
   totalUsd: number;
   totalVes: number;
   aplicaPisoLegal: boolean;
+  /** Si la semana llevó bono especial (semana completa y otorgado por la entidad). */
+  bonoOtorgado: boolean;
   lineasLegal: LineaRecibo[];
   lineasPatio: LineaRecibo[];
   diasGarantiaPrestaciones: number;
@@ -104,13 +108,14 @@ export function calcularSemanaObra(input: CalcularSemanaObraInput): ResultadoSem
    * ticket completo, sin bono.
    */
   const semanaCompleta = diasLaborados >= DIAS_JORNADA_SEMANA;
+  const bonoOtorgado = tipo === 'semanal' && semanaCompleta && input.otorgarBono !== false;
   const totalUsd =
     tipo === 'adelanto_prestaciones'
       ? sobreUsd
-      : semanaCompleta
+      : bonoOtorgado
         ? round2(Math.max(sobreUsd, pisoLegalUsd))
         : pisoLegalUsd;
-  const aplicaPisoLegal = tipo === 'semanal' && semanaCompleta && totalUsd > sobreUsd + 0.001;
+  const aplicaPisoLegal = bonoOtorgado && totalUsd > sobreUsd + 0.001;
   const totalVes = usdAVes(totalUsd, tasa);
 
   let cestaUsd = 0;
@@ -158,9 +163,11 @@ export function calcularSemanaObra(input: CalcularSemanaObraInput): ResultadoSem
     }
     lineasPatio.push({
       codigo: 'SOBRE',
-      concepto: semanaCompleta
+      concepto: bonoOtorgado
         ? `Sobre de patio ${clase} — USD ${sobreUsd} (cesta incluida)`
-        : `Semana con ${DIAS_JORNADA_SEMANA - diasLaborados} falta(s): salario de los días y cesta ticket, sin bono especial (pactado USD ${sobreUsd})`,
+        : semanaCompleta
+          ? `Semana sin bono especial (no otorgado por la entidad de trabajo): salario y cesta ticket (pactado USD ${sobreUsd})`
+          : `Semana con ${DIAS_JORNADA_SEMANA - diasLaborados} falta(s): salario de los días y cesta ticket, sin bono especial (pactado USD ${sobreUsd})`,
       usd: totalUsd,
       ves: totalVes,
       salarial: false,
@@ -230,6 +237,7 @@ export function calcularSemanaObra(input: CalcularSemanaObraInput): ResultadoSem
     totalUsd,
     totalVes,
     aplicaPisoLegal,
+    bonoOtorgado,
     lineasLegal,
     lineasPatio,
     diasGarantiaPrestaciones: diasGarantia,

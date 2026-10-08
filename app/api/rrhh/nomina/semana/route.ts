@@ -43,6 +43,7 @@ function parseItems(raw: unknown): ItemEntradaNomina[] {
       cargo_codigo: o.cargo_codigo != null ? String(o.cargo_codigo) : null,
       cargo_nombre: o.cargo_nombre != null ? String(o.cargo_nombre) : null,
       incluir_adelanto: o.incluir_adelanto !== false,
+      otorgar_bono: o.otorgar_bono !== false,
     });
   }
   return out;
