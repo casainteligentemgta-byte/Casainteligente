@@ -9,7 +9,10 @@ import {
   type FuentesContratoObrero,
 } from '@/lib/talento/plantillaContratoObreroCompile';
 import { obtenerCuerpoPlantillaContratoObrero } from '@/lib/talento/plantillaContratoObreroRepo';
-import { CONTRATO_OBRERO_CUERPO_DEFAULT } from '@/lib/talento/plantillas/contratoObreroDefaultCuerpo';
+import {
+  CONTRATO_OBRERO_CUERPO_DEFAULT,
+  esCuerpoContratoObreroObsoleto,
+} from '@/lib/talento/plantillas/contratoObreroDefaultCuerpo';
 import type { ContratoObreroPdfStructuredProps } from '@/lib/talento/ContratoObreroPdfStructured';
 import type { RepresentanteMercantilCi } from '@/types/ci-entidad';
 import {
@@ -1216,7 +1219,9 @@ export async function compilarContratoObreroDesdeEmpleadoId(
 
   const cuerpoRaw = (pl as { cuerpo?: string } | null)?.cuerpo;
   const cuerpo =
-    typeof cuerpoRaw === 'string' && cuerpoRaw.trim().length > 80 ? cuerpoRaw.trim() : CONTRATO_OBRERO_CUERPO_DEFAULT;
+    typeof cuerpoRaw === 'string' && cuerpoRaw.trim().length > 80 && !esCuerpoContratoObreroObsoleto(cuerpoRaw)
+      ? cuerpoRaw.trim()
+      : CONTRATO_OBRERO_CUERPO_DEFAULT;
 
   const mapaBase = construirMapaVariablesContratoObrero(fu.fuentes);
   const mapa = aplicarOverridesMapaContrato(cuerpo, mapaBase, overrides ?? undefined);

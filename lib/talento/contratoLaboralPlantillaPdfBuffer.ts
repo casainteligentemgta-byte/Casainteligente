@@ -10,43 +10,34 @@ import {
 } from '@/lib/talento/plantillaContratoObreroCompile';
 import { obtenerCuerpoPlantillaContratoObrero } from '@/lib/talento/plantillaContratoObreroRepo';
 
-/** Referencia expediente AÑO-NNNN (misma lógica que la API de PDF registro). */
+/** Expediente = cédula del trabajador (obra + registro en entidad). */
 export async function expedienteRefContratoLaboralRegistro(
   supabase: SupabaseClient,
   contratoId: string,
 ): Promise<string> {
-  const nowYear = new Date().getFullYear();
-  const { data: ctr } = await supabase
+  let { data: ctr, error: sel } = await supabase
     .from('ci_contratos_empleado_obra')
-    .select('id,created_at,obra_id,proyecto_id')
+    .select('id,empleado_id,expediente_cedula')
     .eq('id', contratoId)
     .maybeSingle();
+  if (sel && /expediente_cedula|42703|schema cache|column/i.test(sel.message)) {
+    const retry = await supabase
+      .from('ci_contratos_empleado_obra')
+      .select('id,empleado_id')
+      .eq('id', contratoId)
+      .maybeSingle();
+    ctr = retry.data;
+  }
 
   const c = ctr as
-    | { id: string; created_at?: string | null; obra_id?: string | null; proyecto_id?: string | null }
+    | { id: string; empleado_id?: string | null; expediente_cedula?: string | null }
     | null;
-  if (!c) return `${nowYear}-0001`;
-
-  const sitioId = String(c.obra_id ?? c.proyecto_id ?? '').trim();
-  const createdAt = String(c.created_at ?? '').trim();
-  const year = createdAt ? new Date(createdAt).getFullYear() : nowYear;
-  if (!sitioId || !Number.isFinite(year)) return `${nowYear}-0001`;
-
-  const { data: rows } = await supabase
-    .from('ci_contratos_empleado_obra')
-    .select('id,created_at')
-    .or(`obra_id.eq.${sitioId},proyecto_id.eq.${sitioId}`);
-
-  const sameYear = ((rows ?? []) as Array<{ id?: string; created_at?: string | null }>)
-    .filter((r) => {
-      const d = new Date(String(r.created_at ?? ''));
-      return !Number.isNaN(d.getTime()) && d.getFullYear() === year;
-    })
-    .sort((a, b) => new Date(String(a.created_at ?? 0)).getTime() - new Date(String(b.created_at ?? 0)).getTime());
-
-  const idx = sameYear.findIndex((r) => String(r.id ?? '') === c.id);
-  const seq = String(idx >= 0 ? idx + 1 : sameYear.length || 1).padStart(4, '0');
-  return `${year}-${seq}`;
+  const guardado = String(c?.expediente_cedula ?? '').trim();
+  if (guardado) return guardado;
+  const empId = String(c?.empleado_id ?? '').trim();
+  if (!empId) return '';
+  const { construirExpedienteRefPorEmpleado } = await import('@/lib/talento/contratoExpedienteRef');
+  return construirExpedienteRefPorEmpleado(supabase, empId);
 }
 
 export type BuildContratoLaboralPlantillaPdfResult =

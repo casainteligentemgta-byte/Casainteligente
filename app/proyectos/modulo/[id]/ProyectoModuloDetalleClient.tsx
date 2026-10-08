@@ -80,11 +80,11 @@ type Proyecto = {
   entidad_id?: string | null;
   /** Horario por defecto en contratos PDF si el contrato no trae texto propio. */
   horario_semanal_obra_default?: string | null;
-  /** Parada del transporte gratuito (cláusula SEXTA del contrato laboral). */
+  /** Parada del transporte gratuito (cláusula OCTAVA del contrato laboral). */
   punto_encuentro_transporte_contrato?: string | null;
   /** Fase técnica / objeto de obra determinada (cláusula PRIMERA). PM una vez por obra. */
   fase_tecnica_contrato?: string | null;
-  /** Ciudad domicilio procesal (cláusula DÉCIMA). Default Pampatar. */
+  /** Ciudad domicilio procesal (cláusula NOVENA). Default Pampatar. */
   domicilio_procesal_contrato?: string | null;
   updated_at?: string;
 };
@@ -869,7 +869,7 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                       Domicilio procesal (ciudad)
                     </label>
                     <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-500">
-                      Cláusula DÉCIMA. Si lo dejas vacío, el PDF usa Pampatar.
+                      Cláusula NOVENA. Si lo dejas vacío, el PDF usa Pampatar.
                     </p>
                     <input
                       value={peDomicilioProcesalContrato}

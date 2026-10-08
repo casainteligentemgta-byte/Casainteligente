@@ -106,7 +106,7 @@ const ETIQUETAS: Record<string, { etiqueta: string; ayuda: string }> = {
   },
   CONTRATO_INGRESO_SEMANAL_USD_TOTAL: { etiqueta: 'Ingreso semanal total USD', ayuda: 'Reservado; el PDF usa salario + cesta + complemento.' },
   CONTRATO_COMPENSACION_CULMINACION_USD: { etiqueta: 'Compensación por culminación USD/mes', ayuda: 'Canon mensual al cierre.' },
-  CONTRATO_DOMICILIO_PROCESAL: { etiqueta: 'Domicilio procesal (ciudad)', ayuda: 'Ciudad de la cláusula DÉCIMA. Default Pampatar si la obra no lo define.' },
+  CONTRATO_DOMICILIO_PROCESAL: { etiqueta: 'Domicilio procesal (ciudad)', ayuda: 'Ciudad de la cláusula NOVENA. Default Pampatar si la obra no lo define.' },
   CONTRATO_DIA_FIRMA: { etiqueta: 'Día de firma', ayuda: 'Fecha de firma o ingreso.' },
   CONTRATO_MES_FIRMA: { etiqueta: 'Mes de firma', ayuda: 'Fecha de firma o ingreso.' },
   CONTRATO_ANIO_FIRMA: { etiqueta: 'Año de firma', ayuda: 'Fecha de firma o ingreso.' },
@@ -229,7 +229,7 @@ export type FuentesContratoObrero = {
     punto_encuentro_transporte_contrato?: string | null;
     /** `ci_proyectos.fase_tecnica_contrato` — PM una vez por obra */
     fase_tecnica_contrato?: string | null;
-    /** `ci_proyectos.domicilio_procesal_contrato` — ciudad cláusula DÉCIMA */
+    /** `ci_proyectos.domicilio_procesal_contrato` — ciudad cláusula NOVENA */
     domicilio_procesal_contrato?: string | null;
   };
   /** Valores por defecto patrono (env, planilla o `ci_entidades`). */
@@ -482,8 +482,8 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
     CONTRATO_ALIMENTACION_SEMANAL_VES: fmtVes(alimentacionSemanalVes()),
     CONTRATO_CESTA_TICKET_USD_SEMANAL: `${alimentacionSemanalUsdAnclada().toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`,
     CONTRATO_COMPLEMENTO_ALIMENTACION_USD: `${COMPLEMENTO_ALIMENTACION_SEMANAL_USD} USD`,
-    CONTRATO_SEMANA_ADICIONAL_USD: `${semanaAdicionalUsd} USD`,
-    CONTRATO_ANTICIPO_CUATRO_SEMANAS_USD: `${semanaAdicionalUsd} USD`,
+    CONTRATO_SEMANA_ADICIONAL_USD: `${semanaAdicionalUsd.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`,
+    CONTRATO_ANTICIPO_CUATRO_SEMANAS_USD: `${semanaAdicionalUsd.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`,
     CONTRATO_INGRESO_SEMANAL_USD_TOTAL: '__________ USD',
     CONTRATO_COMPENSACION_CULMINACION_USD: '100,00',
     CONTRATO_DOMICILIO_PROCESAL: domicilioProcesal,

@@ -103,7 +103,7 @@ export function evaluarChecklistObraContratoPm(input: DatosObraContratoPmInput):
     {
       id: 'domicilio_procesal',
       etiqueta: 'Domicilio procesal (ciudad)',
-      ayuda: 'Ciudad de la cláusula DÉCIMA. Si se omite, se usa Pampatar.',
+      ayuda: 'Ciudad de la cláusula NOVENA. Si se omite, se usa Pampatar.',
       valor: domicilioProcesal,
       // No bloquea: hay default Pampatar.
       completo: true,
