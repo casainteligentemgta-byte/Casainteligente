@@ -132,14 +132,14 @@ export default function CamaraFotoFrente({ open, onClose, onCapture }: Props) {
           </p>
         ) : null}
       </div>
-      <div className="flex items-center justify-between gap-3 bg-black px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3">
+      <div className="grid grid-cols-3 items-center bg-black px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3">
         <button
           type="button"
           onClick={() => {
             detener();
             onClose();
           }}
-          className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold text-zinc-200"
+          className="inline-flex items-center justify-self-start gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold text-zinc-200"
         >
           <X className="h-4 w-4" aria-hidden />
           Cancelar
@@ -148,12 +148,12 @@ export default function CamaraFotoFrente({ open, onClose, onCapture }: Props) {
           type="button"
           disabled={!listo || Boolean(error)}
           onClick={capturar}
-          className="inline-flex h-16 w-16 items-center justify-center rounded-full border-4 border-white bg-[#FF9500] text-black shadow-lg disabled:opacity-40"
+          className="inline-flex h-16 w-16 items-center justify-center justify-self-center rounded-full border-4 border-white bg-[#FF9500] text-black shadow-lg disabled:opacity-40"
           aria-label="Tomar foto"
         >
           <Camera className="h-7 w-7" aria-hidden />
         </button>
-        <span className="w-20" aria-hidden />
+        <span aria-hidden />
       </div>
     </div>
   );
