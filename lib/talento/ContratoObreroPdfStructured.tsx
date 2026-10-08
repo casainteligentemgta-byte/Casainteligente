@@ -571,23 +571,6 @@ export function ContratoObreroPDF({
       : null);
   const totalIngresoSemanalUsdClausulaSexTxt =
     totalIngresoSemanalUsdNum != null ? `${fmtUsdNumeroPlano(totalIngresoSemanalUsdNum)} USD` : '__________ USD';
-  const hayComplementoSemanal = totalIngresoSemanalUsdNum != null && totalIngresoSemanalUsdNum > 0;
-  const hayPagoMensual = arregloMensualUsdNum != null;
-  /** Numeración de las cláusulas que siguen a la SÉPTIMA: dependen de cuáles cláusulas de pago aplican. */
-  const ORDINALES_DESDE_OCTAVA = [
-    'OCTAVA',
-    'NOVENA',
-    'DÉCIMA',
-    'DÉCIMA PRIMERA',
-    'DÉCIMA SEGUNDA',
-    'DÉCIMA TERCERA',
-    'DÉCIMA CUARTA',
-    'DÉCIMA QUINTA',
-  ];
-  const clausulasDePago = (hayComplementoSemanal ? 1 : 0) + (hayPagoMensual ? 1 : 0);
-  const ordinalPagoMensual = ORDINALES_DESDE_OCTAVA[hayComplementoSemanal ? 1 : 0];
-  /** Ordinal de la cláusula n.º `i` después de las de pago (0 = beneficios, 1 = seguridad…). */
-  const ordinalTras = (i: number) => ORDINALES_DESDE_OCTAVA[clausulasDePago + i];
 
   const HORARIO_DETALLE_PDF_DEFAULT =
     'Lunes a Jueves: De 7:00 a.m. a 5:00 p.m. (1 hora de descanso de 12:00 p.m. a 1:00 p.m., no imputable a la jornada). Viernes: De 7:00 a.m. a 11:00 a.m. (Jornada continua). ';
@@ -637,7 +620,8 @@ export function ContratoObreroPDF({
     Number(parametros.compensacionCulminacionUsdPorMes) > 0
       ? Number(parametros.compensacionCulminacionUsdPorMes)
       : 100;
-  const compUsdMesTxt = fmtUsdNumeroPlano(compUsdMes);
+  /** SÉPTIMA: el monto por mes trabajado es el arreglo mensual pactado con el trabajador. */
+  const compUsdMesTxt = fmtUsdNumeroPlano(arregloMensualUsdNum ?? compUsdMes);
   const puntoEncTransporte = fragmentoPuntoEncuentroTransporte(parametros.textoPuntoEncuentroTransporteSex);
   const ciudadProcesal = ciudadDomicilioProcesal(parametros.domicilioProcesalCiudad);
   const fragDomCentroComercial = fragmentosDomicilioCentroComercial(domicilioComparecenciaPdf);
@@ -731,20 +715,21 @@ export function ContratoObreroPDF({
       </Text>
 
       <Text style={[styles.paragraph, styles.paragraphIntro]}>
-        <Text style={styles.bold}>SEGUNDA: TIEMPO DE PRUEBA.</Text>
-        {` Conforme a la Cláusula 10 de la Convención Colectiva, las partes acuerdan un tiempo de prueba de treinta (30) días continuos contados desde la fecha de ingreso. Transcurrido ese lapso, EL TRABAJADOR se tendrá como fijo durante la vigencia de la obra.`}
+        <Text style={styles.bold}>SEGUNDA: PERIODO DE PRUEBA.</Text>
+        {` Conforme al Art. 25 del Reglamento de la LOTTT, se acuerda un PERIODO DE PRUEBA DE NOVENTA (90) DÍAS. Durante este lapso, LA ENTIDAD DE TRABAJO apreciará los conocimientos y aptitudes de EL TRABAJADOR. Cualquiera de las partes podrá dar por extinguida la relación sin lugar a indemnización alguna.`}
       </Text>
 
       <Text style={[styles.paragraph, styles.paragraphIntro]}>
         <Text style={styles.bold}>TERCERA: DURACIÓN Y TERMINACIÓN.</Text>
-        {` La relación de trabajo durará el tiempo requerido para la ejecución de la fase técnica descrita en la Cláusula Primera. Concluida la fase, la relación terminará conforme al artículo 63 de la LOTTT y a la Cláusula 19 de la Convención Colectiva. LA ENTIDAD DE TRABAJO notificará la culminación por escrito, con la firma y la huella dactilar de EL TRABAJADOR, y en ese mismo acto le pagará todas las cantidades que le correspondan, conforme a la Cláusula 51. Si las partes acuerdan que EL TRABAJADOR preste servicios en otra fase u obra, celebrarán un nuevo contrato después de liquidado el presente.`}
+        {` La relación de trabajo está sujeta exclusivamente a la culminación física de la fase técnica descrita en la Cláusula Primera. El vínculo se extinguirá de pleno derecho y sin necesidad de preaviso (Art. 75 LOTTT) una vez firmada el Acta de Culminación en el Libro de Obra por el Supervisor. La terminación es independiente de la entrega formal del inmueble al propietario.`}
       </Text>
 
       <Text style={[styles.paragraph, styles.paragraphIntro]}>
-        <Text style={styles.bold}>CUARTA: JORNADA.</Text>
-        {` Conforme a la Cláusula 6 de la Convención Colectiva, la jornada ordinaria diurna será de cuarenta (40) horas semanales: `}
-        {horarioCuartaDetalle}
-        {` EL TRABAJADOR disfrutará del descanso dentro de la jornada previsto en el artículo 168 de la LOTTT. Los sábados y domingos son días de descanso remunerados en los términos de la Cláusula 8. Las horas extraordinarias solo procederán en los casos y con los recargos previstos en la ley y en la Convención Colectiva.`}
+        <Text style={styles.bold}>CUARTA: JORNADA, HORARIO Y RENDIMIENTO.</Text>
+        {` La jornada semanal será de cuarenta (40) horas de trabajo efectivo: `}
+        {horarioCuartaDetalle}{' '}
+        <Text style={styles.bold}>CONTROL:</Text>
+        {` EL TRABAJADOR debe firmar diariamente su registro de avance en el Libro de Obra. La inobservancia del horario en 4 oportunidades en un mes o la negativa a firmar el registro constituirá falta grave (Art. 102 literal "i" LOTTT).`}
       </Text>
     </>
   );
@@ -759,65 +744,48 @@ export function ContratoObreroPDF({
       </Text>
 
       <Text style={[styles.paragraph, styles.paragraphIntro]}>
-        <Text style={styles.bold}>SEXTA: SALARIO.</Text>
-        {` EL TRABAJADOR devengará un salario básico diario de `}
-        <Text style={styles.bold}>Bs. {salDiarioTxt}</Text>
-        {`, correspondiente a su oficio en el Tabulador de Oficios y Salarios vigente según el ${TABULADOR_HOMOLOGADO_2026_REFERENCIA}, para un salario semanal de `}
-        <Text style={styles.bold}>Bs. {salSemanalTxt}</Text>
-        {`, que incluye los dos (2) días de descanso semanal. El salario se ajustará de pleno derecho cuando se homologue una modificación del Tabulador o se decrete un salario mínimo superior. Se pagará semanalmente en bolívares, con recibo de pago que discrimine cada concepto, conforme al artículo 106 de la LOTTT y a las Cláusulas 45 y 46 de la Convención Colectiva.`}
+        <Text style={styles.bold}>SEXTA: INGRESO INTEGRAL INDEXADO.</Text>
+        {` EL TRABAJADOR devengará los siguientes conceptos pagaderos en Bolívares. `}
+        {'\n'}
+        a.- <Text style={styles.bold}>{salSemanalTxt}</Text>
+        {` (Bs.) por concepto de Salario Semanal según Tabulador, equivalente a dos (2) veces el salario de su oficio en el Tabulador de la Convención Colectiva, conforme al ${TABULADOR_HOMOLOGADO_2026_REFERENCIA}; `}
+        {'\n'}
+        b.- Cesta Ticket: <Text style={styles.bold}>{alimSemanalTxt}</Text>
+        {` (Bs.) semanales, en proporción de los `}
+        <Text style={styles.bold}>{alimMensualTxt}</Text>
+        {` (Bs.) mensuales fijados en dicho acuerdo; y`}
+        {'\n'}
+        c.- <Text style={styles.bold}>BONO ESPECIAL: (NO Salarial):</Text>
+        {` Según Art. 105 LOTTT y Sentencia 218 del TSJ, para elevar el Ingreso Semanal a un total equivalente a: `}
+        <Text style={styles.bold}>{totalIngresoSemanalUsdClausulaSexTxt}</Text>
+        {'. '}
+        {`Todos los pagos se realizarán en Bolívares calculados a la tasa oficial del Banco Central de Venezuela (BCV) del día del pago.`}
       </Text>
 
       <Text style={[styles.paragraph, styles.paragraphIntro]}>
-        <Text style={styles.bold}>SÉPTIMA: ALIMENTACIÓN.</Text>
-        {` LA ENTIDAD DE TRABAJO pagará a EL TRABAJADOR el beneficio de alimentación por un monto de `}
-        <Text style={styles.bold}>Bs. {alimMensualTxt}</Text>
-        {` mensuales, fijado en el acuerdo homologado antes citado, pagadero semanalmente en proporción de `}
-        <Text style={styles.bold}>Bs. {alimSemanalTxt}</Text>
-        {`. Este beneficio no tiene carácter salarial, conforme al Decreto con Rango, Valor y Fuerza de Ley del Cestaticket Socialista y a la Cláusula 20 de la Convención Colectiva. Cualquier bono que LA ENTIDAD DE TRABAJO pague se imputará a este beneficio hasta su monto concurrente, según lo previsto en dicho acuerdo.`}
-      </Text>
-
-      {hayComplementoSemanal ? (
-        <Text style={[styles.paragraph, styles.paragraphIntro]}>
-          <Text style={styles.bold}>OCTAVA: COMPLEMENTO VOLUNTARIO DE ALIMENTACIÓN.</Text>
-          {` Por mera liberalidad, LA ENTIDAD DE TRABAJO podrá pagar semanalmente un complemento equivalente a la diferencia entre la suma del salario semanal y la alimentación semanal, y el equivalente en bolívares de `}
-          <Text style={styles.bold}>{totalIngresoSemanalUsdClausulaSexTxt}</Text>
-          {` a la tasa oficial del Banco Central de Venezuela del día del pago. El dólar se usa solo como moneda de cuenta y el pago se hará siempre en bolívares. El complemento tiene la misma naturaleza no salarial del beneficio de alimentación, y no modifica la Convención Colectiva ni el acuerdo homologado ni crea un nuevo mínimo convencional.`}
-        </Text>
-      ) : null}
-
-      {hayPagoMensual ? (
-        <Text style={[styles.paragraph, styles.paragraphIntro]}>
-          <Text style={styles.bold}>{ordinalPagoMensual}: PAGO MENSUAL DE CONCEPTOS CONVENCIONALES.</Text>
-          {` Por cada cuatro (4) semanas efectivamente trabajadas, LA ENTIDAD DE TRABAJO pagará a EL TRABAJADOR, junto con el pago de la semana en que se cumplan, el equivalente en bolívares de `}
-          <Text style={styles.bold}>{`${fmtUsdNumeroPlano(arregloMensualUsdNum ?? 0)} USD`}</Text>
-          {` a la tasa oficial del Banco Central de Venezuela del día del pago. Este pago se imputa, en este orden: a) al bono por asistencia puntual y perfecta de la Cláusula 41 de la Convención Colectiva, cuando EL TRABAJADOR lo haya causado en el período; b) a un anticipo a cuenta de las utilidades de la Cláusula 48, que se descontará de lo que corresponda por ese concepto en la oportunidad de su pago o al terminar la relación; y c) el remanente, a un complemento voluntario del beneficio de alimentación, sin carácter salarial, en los mismos términos de la Cláusula SÉPTIMA. El recibo de pago discriminará cada concepto. El dólar se usa solo como moneda de cuenta y el pago se hará siempre en bolívares. Este pago no constituye anticipo de prestaciones sociales ni de vacaciones, y no modifica la Convención Colectiva ni el acuerdo homologado.`}
-        </Text>
-      ) : null}
-
-      <Text style={[styles.paragraph, styles.paragraphIntro]}>
-        <Text style={styles.bold}>{ordinalTras(0)}: BENEFICIOS LEGALES Y CONVENCIONALES.</Text>
-        {` EL TRABAJADOR gozará de todos los derechos y beneficios previstos en la LOTTT y en la Convención Colectiva, incluidos: vacaciones y bono vacacional (Cláusula 47), utilidades (Cláusula 48), garantía de prestaciones sociales (artículo 142 de la LOTTT y Cláusula 50), bono por asistencia puntual y perfecta (Cláusula 41) y contribución para útiles escolares (Cláusula 23), cuando correspondan. Al terminar la relación, estos conceptos se pagarán completos o fraccionados según el tiempo de servicio. Los anticipos de prestaciones sociales solo procederán a solicitud escrita de EL TRABAJADOR, conforme al artículo 144 de la LOTTT.`}
-      </Text>
-
-      <Text style={[styles.paragraph, styles.paragraphIntro]}>
-        <Text style={styles.bold}>{ordinalTras(1)}: SEGURIDAD Y SALUD EN EL TRABAJO.</Text>
-        {` LA ENTIDAD DE TRABAJO inscribirá a EL TRABAJADOR en el Instituto Venezolano de los Seguros Sociales desde su ingreso (Cláusula 53), le notificará por escrito los riesgos de su puesto conforme a la LOPCYMAT y le entregará los equipos de protección personal. EL TRABAJADOR se obliga a usar esos equipos y el uniforme, a cumplir las normas de seguridad de la obra, a cuidar las herramientas y equipos asignados y a declarar por escrito el trayecto habitual entre su domicilio y la obra.`}
+        <Text style={styles.bold}>SÉPTIMA: COMPENSACIÓN POR CULMINACIÓN.</Text>
+        {` `}
+        <Text style={styles.bold}>PARÁGRAFO ÚNICO:</Text>
+        {` Al cierre de obra o finiquito, se recibirá una compensación de: `}
+        <Text style={styles.bold}>{compUsdMesTxt}</Text>
+        {` USD (a tasa BCV) por cada mes trabajado o fracción. Este monto liquida de forma integral: prestaciones sociales, utilidades, vacaciones y cualquier otro beneficio derivado de este contrato especial y de la Convención Colectiva.`}
       </Text>
 
       <Text style={[styles.paragraph, styles.paragraphIntro, styles.clauseDense]}>
-        <Text style={styles.bold}>{ordinalTras(2)}: CONFIDENCIALIDAD Y CONDUCTA.</Text>
-        {` EL TRABAJADOR guardará reserva sobre la información técnica de la obra. Las faltas se regirán exclusivamente por las causas previstas en el artículo 79 de la LOTTT y por los procedimientos de ley. `}
+        <Text style={styles.bold}>OCTAVA: ÉTICA, CONFIDENCIALIDAD Y JURISDICCIÓN.</Text>
+        {` EL TRABAJADOR, guardará reserva absoluta sobre información técnica y se abstendrá de prácticas desleales. `}
         {'\n\n'}
-        <Text style={styles.bold}>{ordinalTras(3)}: TRANSPORTE GRATUITO (BENEFICIO SOCIAL NO REMUNERATIVO).</Text>
-        {` LA ENTIDAD DE TRABAJO brindará de manera gratuita un servicio de transporte diario, de ida y vuelta, desde el punto de encuentro establecido ${puntoEncTransporte} hasta el sitio donde se ejecute la obra determinada. Su uso es opcional para EL TRABAJADOR. Conforme al artículo 105 de la LOTTT, este servicio es un beneficio social de carácter no remunerativo y no forma parte del salario.`}
+        <Text style={styles.bold}>NOVENA (TRANSPORTE GRATUITO - BENEFICIO SOCIAL NO REMUNERATIVO).</Text>
+        {` Con el firme propósito de facilitar la asistencia, puntualidad y resguardar la seguridad de EL TRABAJADOR, LA ENTIDAD DE TRABAJO brindará de manera gratuita un servicio de transporte diario, de ida y vuelta, desde el punto de encuentro establecido ${puntoEncTransporte} hasta el sitio donde se ejecute la obra determinada. `}
+        <Text style={styles.bold}>NATURALEZA JURÍDICA:</Text>
+        {` De conformidad con lo establecido en el Artículo 105 de la LOTTT, las partes acuerdan expresamente que este servicio de transporte constituye un beneficio social de carácter no remunerativo. En consecuencia, ambas partes reconocen que: No forma parte del salario bajo ninguna circunstancia. No tiene carácter de salario en especie. No será considerado ni computado para el cálculo de prestaciones sociales, vacaciones, utilidades, bonos ni ningún otro pasivo o derecho laboral derivado de la relación de trabajo. `}
+        <Text style={styles.bold}>CONDICIONES:</Text>
+        {` El uso de este servicio es opcional para el trabajador y está sujeto al cumplimiento de las normas de conducta y seguridad dictadas por la empresa durante el trayecto.`}
         {'\n\n'}
-        <Text style={styles.bold}>{ordinalTras(4)}: NORMAS APLICABLES.</Text>
-        {` En lo no previsto, este contrato se rige por la LOTTT, su Reglamento y la Convención Colectiva. Cualquier estipulación que resulte contraria a derechos irrenunciables de EL TRABAJADOR se tendrá por no escrita, sin afectar la validez de las demás cláusulas, conforme al artículo 89 de la Constitución.`}
-        {'\n\n'}
-        <Text style={styles.bold}>{ordinalTras(5)}: DOMICILIO PROCESAL.</Text>
+        <Text style={styles.bold}>DECIMA (DOMICILIO PROCESAL).</Text>
         {` Las partes eligen como domicilio especial la ciudad de `}
         <Text style={styles.bold}>{ciudadProcesal}</Text>
-        {`, Estado Nueva Esparta, sometiéndose a sus Tribunales del Trabajo. Se firman dos (2) ejemplares de un mismo tenor y a un solo efecto, uno para cada parte, en la ciudad de `}
+        {`, Estado Nueva Esparta, sometiéndose a sus Tribunales del Trabajo. Se firman dos (2) ejemplares de un mismo tenor y a un solo efecto en la ciudad de `}
         <Text style={styles.bold}>{ciudadProcesal}</Text>
         {`, a los `}
         <Text style={styles.bold}>{diaFirma}</Text> días del mes de <Text style={styles.bold}>{mesFirma}</Text> del año{' '}
