@@ -45,6 +45,8 @@ export type GenerarContratoTrabajoObreroInput = {
   horario_semanal_texto?: string | null;
   obrero_municipio_residencia?: string | null;
   obrero_estado_residencia?: string | null;
+  /** Si el obrero ya tiene expediente (enlace HV), se enlaza el express. */
+  formalizado_empleado_id?: string | null;
 };
 
 export type GenerarContratoTrabajoObreroOk = {
@@ -211,6 +213,8 @@ export async function generarContratoTrabajoObrero(
       | string
       | null;
 
+  const formalizadoEmpleadoId = input.formalizado_empleado_id?.trim() || null;
+
   const payloadBase = {
     id: expressId,
     proyecto_id: input.proyecto_id.trim(),
@@ -232,6 +236,9 @@ export async function generarContratoTrabajoObrero(
       expediente_codigo: expedienteLabel,
       obrero_nombres: input.obrero_nombres?.trim() || null,
       obrero_apellidos: input.obrero_apellidos?.trim() || null,
+      ...(formalizadoEmpleadoId
+        ? { formalizado_empleado_id: formalizadoEmpleadoId, formalizado: true }
+        : {}),
     },
     {
       ...payloadBase,
@@ -259,7 +266,7 @@ export async function generarContratoTrabajoObrero(
     if (!insErr) break;
     const msg = insErr.message ?? '';
     const columnaNueva =
-      /obrero_(nombres|apellidos)|expediente_codigo/i.test(msg) &&
+      /obrero_(nombres|apellidos)|expediente_codigo|formalizado/i.test(msg) &&
       /schema cache|could not find|42703/i.test(msg);
     if (!columnaNueva) break;
     console.warn(

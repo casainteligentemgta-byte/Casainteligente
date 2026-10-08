@@ -20,6 +20,7 @@ import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import { apiUrl } from '@/lib/http/apiUrl';
 import AccionesContratoPdfFila from '@/components/rrhh/AccionesContratoPdfFila';
+import ContratacionMasivaCandidatos from '@/components/rrhh/ContratacionMasivaCandidatos';
 import {
   esUuidProyectoModulo,
   guardarProyectoRrhhContexto,
@@ -152,6 +153,7 @@ export default function ContratoTrabajoObreroClient() {
   const [estadoRes, setEstadoRes] = useState('');
   const [estadoCivil, setEstadoCivil] = useState('');
   const [bonoUsd, setBonoUsd] = useState('0');
+  const [bonoLoteUsd, setBonoLoteUsd] = useState('0');
   const [guardandoUno, setGuardandoUno] = useState(false);
   const nacionalidadDesdeDoc =
     nacionalidadDesdeCedula(cedula, trabajadorFemeninoDesdeEstadoCivil(estadoCivil)) ??
@@ -633,7 +635,7 @@ export default function ContratoTrabajoObreroClient() {
             onChange={(e) => setConfigNominaId(e.target.value)}
             disabled={loadingOpts}
           >
-            <option value="">Seleccione… (o columna Cargo del Excel)</option>
+            <option value="">Seleccione… (si el oficio del enlace no está en el tabulador)</option>
             {nominas.map((n) => (
               <option key={n.id} value={n.id}>
                 {n.cargo_nombre}
@@ -687,8 +689,7 @@ export default function ContratoTrabajoObreroClient() {
             <option value="Viuda" />
           </datalist>
           <p className="text-[10px] text-zinc-500">
-            Si el Excel no trae estado civil, se usa este valor. Nacionalidad: ciudadano → venezolano; ciudadana →
-            venezolana (V/E según cédula).
+            Solo si el obrero no lo trajo en la hoja de vida. Nacionalidad: V/E según cédula.
           </p>
         </label>
       </div>
@@ -712,8 +713,8 @@ export default function ContratoTrabajoObreroClient() {
           </h1>
           <p className="text-sm text-zinc-500">
             {proyectoNombre
-              ? `Contratados de «${proyectoNombre}». Nuevo contrato individual o contratación masiva con Excel.`
-              : 'Seleccione la obra para ver contratados, crear uno nuevo o cargar una plantilla Excel.'}
+              ? `Contratados de «${proyectoNombre}». Nuevo contrato individual o contratación masiva desde los enlaces.`
+              : 'Seleccione la obra para ver contratados, crear uno nuevo o contratar a quienes ya llenaron el enlace.'}
           </p>
         </header>
 
@@ -1022,19 +1023,11 @@ export default function ContratoTrabajoObreroClient() {
                 <div>
                   <h2 className="text-sm font-bold text-white">Contratación masiva</h2>
                   <p className="mt-0.5 text-[11px] text-zinc-500">
-                    Confirme la obra, descargue la plantilla, complete una fila por obrero y cárguela.
-                    Se generan los PDF en serie.
+                    Confirme la obra y los datos del lote (fecha, jornada, bono). Marque a quienes ya
+                    llenaron el enlace. Excel queda como rescate.
                   </p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={descargarPlantilla}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-white/10"
-              >
-                <Download className="h-3.5 w-3.5" aria-hidden />
-                Descargar plantilla
-              </button>
             </div>
 
             <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/30 p-4">
@@ -1068,36 +1061,64 @@ export default function ContratoTrabajoObreroClient() {
               </div>
             </div>
 
+            <DefaultsObraCargo omitObra />
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block space-y-1.5">
+                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                  Bono USD (lote)
+                </span>
+                <input
+                  className={inputClass}
+                  inputMode="decimal"
+                  value={bonoLoteUsd}
+                  onChange={(e) => setBonoLoteUsd(e.target.value)}
+                />
+              </label>
+              <label className="block space-y-1.5 sm:col-span-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                  Horario semanal por defecto (opcional)
+                </span>
+                <textarea
+                  className={`${inputClass} min-h-[3.5rem] resize-y`}
+                  value={horarioDefault}
+                  onChange={(e) => setHorarioDefault(e.target.value)}
+                  placeholder="Si la obra ya tiene horario, puede dejarlo vacío"
+                />
+              </label>
+            </div>
+
+            <ContratacionMasivaCandidatos
+              proyectoId={proyectoId}
+              fechaIngreso={fechaIngreso}
+              jornada={jornada}
+              horarioDefault={horarioDefault}
+              estadoCivilDefault={estadoCivilDefault}
+              configNominaId={configNominaId}
+              bonoUsd={Number.parseFloat(bonoLoteUsd.replace(',', '.')) || 0}
+              onGenerados={() => void cargarContratos()}
+            />
+
+            <details className="rounded-xl border border-white/10 bg-black/20 p-3">
+              <summary className="cursor-pointer text-xs font-semibold text-zinc-300">
+                Rescate: alguien llegó sin enlace (Excel / CSV)
+              </summary>
+              <div className="mt-3 space-y-3">
             <div className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-[11px] leading-relaxed text-zinc-400">
               <p className="font-semibold text-zinc-300">Formato Excel</p>
               <p className="mt-1">
                 <span className="text-emerald-300">Columnas:</span> Nombres, Apellidos, Cédula,
                 Cargo, Fecha de ingreso, Jornada, Bono, Estado civil.
               </p>
-              <p className="mt-1">
-                Lugar de trabajo, nombre de obra, fase técnica, punto de encuentro y domicilio procesal
-                salen de la <span className="text-zinc-200">obra seleccionada</span> (datos PM). Si falta
-                estado civil → Soltero; si falta domicilio/dirección → «de este domicilio». Nacionalidad:
-                ciudadano → venezolano; ciudadana → venezolana (V/E según cédula).
-              </p>
-              <p className="mt-1">
-                Si una fila no trae fecha, jornada o bono, se usan los valores por defecto de abajo.
-                También se aceptan plantillas antiguas (Nombre Completo / C.I.).
-              </p>
             </div>
-
-            <DefaultsObraCargo omitObra />
-
-            <label className="block space-y-1.5">
-              <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
-                Horario semanal por defecto (opcional)
-              </span>
-              <textarea
-                className={`${inputClass} min-h-[3.5rem] resize-y`}
-                value={horarioDefault}
-                onChange={(e) => setHorarioDefault(e.target.value)}
-              />
-            </label>
+            <button
+              type="button"
+              onClick={descargarPlantilla}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-white/10"
+            >
+              <Download className="h-3.5 w-3.5" aria-hidden />
+              Descargar plantilla
+            </button>
 
             <input
               ref={fileRef}
@@ -1237,6 +1258,8 @@ export default function ContratoTrabajoObreroClient() {
                 ))}
               </ul>
             ) : null}
+              </div>
+            </details>
           </section>
         ) : null}
       </div>
