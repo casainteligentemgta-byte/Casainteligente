@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { avisarEvaluacionObreroTelegram } from '@/lib/rrhh/avisoEvaluacionObreroTelegram';
+import { baseUrlPublica } from '@/lib/rrhh/solicitudPersonalServer';
 import { bancoEvaluacionUnificadaObrero } from '@/lib/talento/bancoEvaluacionUnificadaObrero';
 import {
   colorPredominanteDisc,
@@ -194,6 +196,12 @@ export async function POST(req: Request) {
     .update({ usado_at: ahora } as never)
     .eq('token', token)
     .eq('empleado_id', invR.empleado_id);
+
+  await avisarEvaluacionObreroTelegram(admin.client, invR.empleado_id, {
+    baseUrl: baseUrlPublica(req),
+    semaforo: abcResult.semaforo,
+    perfilColor: perfil_color,
+  });
 
   return NextResponse.json({
     success: true,
