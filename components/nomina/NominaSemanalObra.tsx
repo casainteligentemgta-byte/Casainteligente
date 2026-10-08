@@ -13,6 +13,7 @@ import {
   inferirClasePagoObra,
   SOBRE_AYUDANTE_USD,
   SOBRE_CLASIFICADO_USD,
+  SOLICITUD_ANTICIPO_SEPTIMA_TEXTO,
 } from '@/lib/nomina/reglasPagoObra';
 import { domingoDeSemanaIso, lunesDeSemanaIso } from '@/lib/nomina/semanaIsoNomina';
 import { useTasaBcvHoy } from '@/lib/contabilidad/useTasaBcvHoy';
@@ -292,7 +293,7 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
   async function firmarAdelanto(fila: FilaUi) {
     const itemId = itemIds[`${fila.empleadoId}:adelanto_prestaciones`];
     if (!itemId) {
-      toast.error('Guarda la semana primero para registrar el adelanto.');
+      toast.error('Guarda la semana primero para registrar la solicitud.');
       return;
     }
     setTrabajando(true);
@@ -305,16 +306,15 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
           item_id: itemId,
           firmar: true,
           firmante_nombre: `${fila.nombres} ${fila.apellidos}`.trim(),
-          solicitud_texto:
-            'Solicito adelanto de prestaciones sociales conforme al artículo 144 de la LOTTT, por la quinta semana pactada cada cuatro semanas trabajadas.',
+          solicitud_texto: SOLICITUD_ANTICIPO_SEPTIMA_TEXTO,
         }),
       });
       const j = (await res.json()) as { error?: string };
       if (!res.ok) {
-        toast.error(j.error || 'No se registró el adelanto.');
+        toast.error(j.error || 'No se registró la solicitud.');
         return;
       }
-      toast.success('Adelanto firmado y descontado del saldo.');
+      toast.success('Solicitud firmada; la porción de prestaciones se descontó del saldo.');
       const p = previewDe(fila.empleadoId);
       if (p?.adelanto) await pdfDe(fila, 'adelanto', p.adelanto);
     } finally {
@@ -332,7 +332,7 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
           <h2 className="text-sm font-bold uppercase tracking-wide text-emerald-100">Nómina semanal</h2>
           <p className="mt-0.5 text-xs text-zinc-500">
             Se paga el arreglo pactado en cada contrato (por defecto: ayudante USD {SOBRE_AYUDANTE_USD} · clasificado
-            USD {SOBRE_CLASIFICADO_USD}), cesta incluida · pago mensual cada 4 semanas trabajadas.
+            USD {SOBRE_CLASIFICADO_USD}), cesta incluida · compensación de la Cl. SÉPTIMA cada 4 semanas trabajadas.
           </p>
         </div>
       </div>
@@ -538,7 +538,7 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
                                     )
                                   }
                                 />
-                                5ª semana
+                                Compensación 4 semanas
                               </label>
                               {p.adelanto ? (
                                 <>
@@ -549,7 +549,7 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
                                     className="h-7 px-2 text-[11px]"
                                     onClick={() => void pdfDe(f, 'adelanto', p.adelanto!)}
                                   >
-                                    PDF adelanto
+                                    PDF compensación
                                   </Button>
                                   <Button
                                     type="button"
@@ -558,7 +558,7 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
                                     disabled={trabajando}
                                     onClick={() => void firmarAdelanto(f)}
                                   >
-                                    Firmar adelanto
+                                    Firmar solicitud
                                   </Button>
                                 </>
                               ) : (

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import { registrarAdelantoPrestaciones } from '@/lib/nomina/persistirSemanaObra';
+import { SOLICITUD_ANTICIPO_SEPTIMA_TEXTO } from '@/lib/nomina/reglasPagoObra';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -29,9 +30,7 @@ export async function POST(req: Request) {
   try {
     const r = await registrarAdelantoPrestaciones(db, {
       itemId,
-      solicitudTexto:
-        solicitud ||
-        'Solicito adelanto de prestaciones sociales conforme al artículo 144 de la LOTTT, correspondiente a la quinta semana pactada cada cuatro semanas trabajadas.',
+      solicitudTexto: solicitud || SOLICITUD_ANTICIPO_SEPTIMA_TEXTO,
       firmanteNombre: body.firmante_nombre != null ? String(body.firmante_nombre) : null,
       firmar: body.firmar !== false,
     });

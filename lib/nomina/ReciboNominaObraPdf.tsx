@@ -51,7 +51,7 @@ function fmtFecha(iso: string) {
 function titulo(cara: MetaReciboNomina['cara']) {
   if (cara === 'legal') return 'RECIBO DE PAGO — CARA LEGAL';
   if (cara === 'patio') return 'RECIBO DE PAGO — CARA DE PATIO';
-  return 'ADELANTO DE PRESTACIONES SOCIALES';
+  return 'COMPENSACIÓN CADA CUATRO SEMANAS — CLÁUSULA SÉPTIMA';
 }
 
 export function ReciboNominaObraPdf({
@@ -85,7 +85,7 @@ export function ReciboNominaObraPdf({
           Clase de patio: {calc.clase === 'ayudante' ? 'Ayudante' : 'Clasificado / de 1ra'} (USD {calc.sobreUsdPactado})
           {calc.tipo === 'semanal'
             ? ` · Días laborados: ${calc.diasLaborados} · Días pagados (Cl. 8): ${calc.diasPagados}`
-            : ' · Quinta semana (cada 4 trabajadas)'}
+            : ' · Compensación cada 4 semanas trabajadas (Cl. SÉPTIMA del contrato)'}
         </Text>
         <Text style={styles.meta}>
           Tasa BCV del pago: {calc.tasaBcvPago.toFixed(4)} Bs/USD
@@ -127,13 +127,16 @@ export function ReciboNominaObraPdf({
 
         {esAdelanto ? (
           <Text style={styles.nota}>
-            Solicitud de adelanto de prestaciones sociales conforme al artículo 144 de la LOTTT.
-            La cesta ticket no se duplica (ya se pagó dentro de las cuatro semanas). El saldo de
-            garantía (Cl. 50) se debita por la porción de prestaciones; el resto queda a cuenta de
-            beneficios convencionales.{'\n\n'}
+            Compensación prevista en la Cláusula SÉPTIMA del contrato de trabajo, que se paga cada
+            cuatro (4) semanas trabajadas y se imputa a prestaciones sociales, utilidades, vacaciones
+            y demás beneficios. La porción imputada a prestaciones sociales es un anticipo de la
+            garantía (Cl. 50) que el trabajador solicita por escrito conforme al artículo 144 de la
+            LOTTT; el resto queda a cuenta de utilidades, vacaciones y demás beneficios
+            convencionales. La cesta ticket no se duplica (ya se pagó dentro de las cuatro
+            semanas).{'\n\n'}
             {meta.solicitudTexto?.trim()
               ? `Declaración: ${meta.solicitudTexto.trim()}`
-              : 'El trabajador declara haber solicitado por escrito este adelanto.'}
+              : 'El trabajador declara haber solicitado por escrito que la porción de prestaciones sociales se impute como anticipo.'}
           </Text>
         ) : null}
 

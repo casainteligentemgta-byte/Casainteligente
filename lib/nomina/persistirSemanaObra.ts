@@ -3,6 +3,7 @@ import { calcularSemanaObra, type ResultadoSemanaObra } from '@/lib/nomina/calcu
 import {
   type ClasePagoObra,
   esClasePagoObra,
+  SOLICITUD_ANTICIPO_SEPTIMA_TEXTO,
   semanaCuentaComoTrabajada,
   tocaAdelantoTrasSemana,
 } from '@/lib/nomina/reglasPagoObra';
@@ -277,7 +278,7 @@ export async function registrarAdelantoPrestaciones(
         item_id: args.itemId,
         empleado_id: empleadoId,
         proyecto_id: proyectoId,
-        solicitud_texto: args.solicitudTexto.trim() || 'Solicito adelanto de prestaciones sociales (art. 144 LOTTT).',
+        solicitud_texto: args.solicitudTexto.trim() || SOLICITUD_ANTICIPO_SEPTIMA_TEXTO,
         firmante_nombre: args.firmanteNombre?.trim() || null,
         firmado_at: args.firmar ? new Date().toISOString() : null,
         monto_usd: (item as { total_usd: number }).total_usd,

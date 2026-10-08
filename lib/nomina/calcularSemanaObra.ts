@@ -151,7 +151,7 @@ export function calcularSemanaObra(input: CalcularSemanaObraInput): ResultadoSem
     const restoVes = usdAVes(restoUsd, tasa);
     lineasLegal.push({
       codigo: 'PREST',
-      concepto: `Adelanto de garantía de prestaciones (art. 144 LOTTT / Cl. 50: ${diasGarantia} días de SB)`,
+      concepto: `Compensación Cl. SÉPTIMA del contrato: a cuenta de prestaciones sociales (anticipo art. 144 LOTTT; ${diasGarantia} días de SB, Cl. 50)`,
       usd: prestUsd,
       ves: prestVes,
       salarial: true,
@@ -159,7 +159,7 @@ export function calcularSemanaObra(input: CalcularSemanaObraInput): ResultadoSem
     if (restoUsd > 0) {
       lineasLegal.push({
         codigo: 'CCT',
-        concepto: 'Resto de la quinta semana a cuenta de beneficios convencionales (vacaciones, utilidades y demás; sin cesta duplicada)',
+        concepto: 'Compensación Cl. SÉPTIMA del contrato: a cuenta de utilidades, vacaciones y demás beneficios convencionales',
         usd: restoUsd,
         ves: restoVes,
         salarial: false,
@@ -167,7 +167,7 @@ export function calcularSemanaObra(input: CalcularSemanaObraInput): ResultadoSem
     }
     lineasPatio.push({
       codigo: 'ADELANTO',
-      concepto: `Quinta semana (cada 4 trabajadas) — USD ${sobreUsd}`,
+      concepto: `Compensación cada 4 semanas trabajadas (Cl. SÉPTIMA del contrato) — USD ${sobreUsd}`,
       usd: totalUsd,
       ves: totalVes,
       salarial: false,

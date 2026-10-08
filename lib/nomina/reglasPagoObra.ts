@@ -30,6 +30,13 @@ export const SEMANAS_TRABAJADAS_PARA_ADELANTO = 4;
 /** Cl. 50: 6 días de salario básico por mes / ciclo de 4 semanas. */
 export const DIAS_GARANTIA_PRESTACIONES_POR_CICLO = 6;
 
+/**
+ * Solicitud escrita del trabajador para que la parte de la compensación de la Cláusula SÉPTIMA
+ * imputada a prestaciones sociales cuente como anticipo (art. 144 LOTTT exige la solicitud).
+ */
+export const SOLICITUD_ANTICIPO_SEPTIMA_TEXTO =
+  'Solicito que la compensación de la Cláusula SÉPTIMA de mi contrato de trabajo, correspondiente a estas cuatro semanas trabajadas, se impute en la parte que corresponda como anticipo de mis prestaciones sociales, conforme al artículo 144 de la LOTTT.';
+
 export const CESTA_MENSUAL_VES_ACTA = ALIMENTACION_MENSUAL_VES_HOMOLOGADA_2026;
 export const FECHA_ANCLAJE_CESTA_ISO = TABULADOR_HOMOLOGADO_2026_VIGENCIA;
 export const REFERENCIA_ACTA_HOMOLOGACION = TABULADOR_HOMOLOGADO_2026_REFERENCIA;
