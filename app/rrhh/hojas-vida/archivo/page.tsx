@@ -23,6 +23,7 @@ import { toast } from 'sonner';
 import { ModalGenerarContrato } from '@/app/rrhh/hojas-vida/components/ModalGenerarContrato';
 import { ModalEditarOficioHojaEmpleo } from '@/app/rrhh/hojas-vida/components/ModalEditarOficioHojaEmpleo';
 import ExpedienteContratoChecklist from '@/components/rrhh/ExpedienteContratoChecklist';
+import InformeEvaluacionObreroModal from '@/components/rrhh/InformeEvaluacionObreroModal';
 import GeneradorHojaVida from '@/components/reclutamiento/GeneradorHojaVida';
 import {
   Dialog,
@@ -597,124 +598,31 @@ export default function RrhhHojasVidaArchivoPage() {
         </ul>
       ) : null}
 
-      {informeOpen && informeRow ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
-          <div className="w-full max-w-2xl rounded-2xl border border-white/10 bg-gradient-to-br from-[#0F1117] via-[#101522] to-[#0A0A0F] p-5 shadow-2xl">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h2 className="text-base font-bold text-white">Informe de evaluación</h2>
-                <p className="mt-1 text-xs text-zinc-400">
-                  {(informeRow.nombre_completo ?? 'Sin nombre').trim() || 'Sin nombre'}
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2 text-[11px] font-bold">
-                <span
-                  className={`rounded-full border px-2.5 py-1 ${
-                    informeRow.semaforo === 'verde'
-                      ? 'border-emerald-400/40 bg-emerald-500/20 text-emerald-200'
-                      : informeRow.semaforo === 'amarillo'
-                        ? 'border-amber-400/40 bg-amber-500/20 text-amber-200'
-                        : informeRow.semaforo === 'rojo'
-                          ? 'border-rose-400/40 bg-rose-500/20 text-rose-200'
-                          : 'border-white/20 bg-white/5 text-zinc-300'
-                  }`}
-                >
-                  Semáforo {informeRow.semaforo ?? '—'}
-                </span>
-                <span className="rounded-full border border-sky-400/35 bg-sky-500/20 px-2.5 py-1 text-sky-200">
-                  DISC {informeRow.perfil_color ?? '—'}
-                </span>
-              </div>
-            </div>
-
-            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
-                <p className="text-[10px] uppercase tracking-wide text-zinc-500">Puntaje total</p>
-                <p className="mt-1 text-lg font-black text-white">
-                  {informeRow.puntaje_total != null ? informeRow.puntaje_total.toFixed(1) : '—'}
-                </p>
-              </div>
-              <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
-                <p className="text-[10px] uppercase tracking-wide text-zinc-500">Lógica</p>
-                <p className="mt-1 text-lg font-black text-cyan-200">
-                  {informeRow.puntaje_logica != null
-                    ? informeRow.puntaje_logica.toFixed(1)
-                    : informeRow.puntuacion_logica != null
-                      ? informeRow.puntuacion_logica.toFixed(1)
-                      : '—'}
-                </p>
-              </div>
-              <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
-                <p className="text-[10px] uppercase tracking-wide text-zinc-500">Personalidad</p>
-                <p className="mt-1 text-lg font-black text-fuchsia-200">
-                  {informeRow.puntaje_personalidad != null ? informeRow.puntaje_personalidad.toFixed(1) : '—'}
-                </p>
-              </div>
-              <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
-                <p className="text-[10px] uppercase tracking-wide text-zinc-500">Confiabilidad</p>
-                <p className="mt-1 text-lg font-black text-emerald-200">
-                  {informeRow.puntuacion_confiabilidad != null ? informeRow.puntuacion_confiabilidad.toFixed(1) : '—'}
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-4 grid grid-cols-1 gap-2 rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-zinc-300 sm:grid-cols-2">
-              <p>
-                Estado de contratación:{' '}
-                <span className={`font-semibold ${informeRow.estado === 'aprobado' ? 'text-emerald-300' : 'text-zinc-100'}`}>
-                  {informeRow.estado ?? '—'}
-                </span>
-              </p>
-              <p>
-                Estado: <span className="font-semibold text-zinc-100">{informeRow.status_evaluacion ?? '—'}</span>
-              </p>
-              <p>
-                Riesgo: <span className="font-semibold text-zinc-100">{informeRow.semaforo_riesgo ?? '—'}</span>
-              </p>
-              <p>
-                Integridad/riesgo:{' '}
-                <span className="font-semibold text-zinc-100">{informeRow.nivel_integridad_riesgo ?? '—'}</span>
-              </p>
-              <p>
-                Tiempo respuesta:{' '}
-                <span className="font-semibold text-zinc-100">
-                  {informeRow.tiempo_respuesta != null ? `${informeRow.tiempo_respuesta}s` : '—'}
-                </span>
-              </p>
-            </div>
-
-            <div className="mt-3 space-y-2 text-xs text-zinc-300">
-              <p>Motivo semáforo: {informeRow.motivo_semaforo ?? '—'}</p>
-              <p>Motivo riesgo: {informeRow.motivo_semaforo_riesgo ?? '—'}</p>
-              <p>Completado: {informeRow.examen_completado_at ? fechaCorta(informeRow.examen_completado_at) : '—'}</p>
-            </div>
-            <div className="mt-4 flex flex-wrap justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => void abrirModalGenerarContrato()}
-                disabled={contratoModalPrepId !== null || informeRow.estado === 'aprobado'}
-                className="rounded-lg border border-emerald-400/40 bg-emerald-500/20 px-3 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/30 disabled:opacity-60"
-              >
-                {informeRow.estado === 'aprobado'
-                  ? 'Ya aprobado para contrato'
-                  : contratoModalPrepId !== null
-                    ? 'Preparando…'
-                    : 'Aprobar para contrato'}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setInformeOpen(false);
-                  setInformeRow(null);
-                }}
-                className="rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-white/10"
-              >
-                Cerrar
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <InformeEvaluacionObreroModal
+        open={informeOpen && Boolean(informeRow)}
+        empleadoId={informeRow?.id ?? null}
+        nombre={informeRow?.nombre_completo}
+        onClose={() => {
+          setInformeOpen(false);
+          setInformeRow(null);
+        }}
+        footer={
+          informeRow ? (
+            <button
+              type="button"
+              onClick={() => void abrirModalGenerarContrato()}
+              disabled={contratoModalPrepId !== null || informeRow.estado === 'aprobado'}
+              className="rounded-lg border border-emerald-400/40 bg-emerald-500/20 px-3 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/30 disabled:opacity-60"
+            >
+              {informeRow.estado === 'aprobado'
+                ? 'Ya aprobado para contrato'
+                : contratoModalPrepId !== null
+                  ? 'Preparando…'
+                  : 'Aprobar para contrato'}
+            </button>
+          ) : null
+        }
+      />
 
       <ModalGenerarContrato
         open={contratoGenOpen}

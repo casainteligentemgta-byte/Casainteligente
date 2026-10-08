@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, RefreshCw, Search, Users } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  etiquetaEstadoArchivo,
   fetchTrabajadoresTodosProyectos,
   filtrarTrabajadoresPorProyecto,
   type ProyectoTrabajadorOpcion,
@@ -108,6 +107,13 @@ export default function TrabajadoresTodosProyectosClient() {
               <Users className="h-7 w-7 text-fuchsia-300" aria-hidden />
               Trabajadores por proyecto
             </h1>
+            <p className="mt-2 max-w-2xl text-sm text-zinc-400">
+              Solo personal ya contratado. Quien llenó el enlace y aún no tiene contrato está en la{' '}
+              <Link href="/rrhh/hojas-vida/archivo" className="text-sky-300 underline underline-offset-2 hover:text-sky-200">
+                banca de obreros
+              </Link>
+              .
+            </p>
           </div>
           <button
             type="button"
@@ -190,7 +196,7 @@ export default function TrabajadoresTodosProyectosClient() {
               <tbody>
                 {filtrados.map((r) => {
                   const nombre = (r.nombre_completo ?? '').trim() || 'Sin nombre';
-                  const estadoEtiqueta = etiquetaEstadoArchivo(r);
+                  const estadoEtiqueta = 'Contratado';
                   return (
                     <tr key={r.id} className="border-b border-white/5 hover:bg-white/[0.03]">
                       <td className="px-4 py-3 font-medium text-white">
