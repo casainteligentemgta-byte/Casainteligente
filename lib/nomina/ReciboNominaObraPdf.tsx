@@ -128,12 +128,11 @@ export function ReciboNominaObraPdf({
         {esAdelanto ? (
           <Text style={styles.nota}>
             Compensación prevista en la Cláusula SÉPTIMA del contrato de trabajo, que se paga cada
-            cuatro (4) semanas trabajadas y se imputa a prestaciones sociales, utilidades, vacaciones
-            y demás beneficios. La porción imputada a prestaciones sociales es un anticipo de la
-            garantía (Cl. 50) que el trabajador solicita por escrito conforme al artículo 144 de la
-            LOTTT; el resto queda a cuenta de utilidades, vacaciones y demás beneficios
-            convencionales. La cesta ticket no se duplica (ya se pagó dentro de las cuatro
-            semanas).{'\n\n'}
+            cuatro (4) semanas trabajadas y se imputa en este orden: anticipo de la garantía de
+            prestaciones sociales (Cl. 50), a solicitud escrita del trabajador y hasta el 75% de lo
+            acreditado (artículo 144 de la LOTTT); anticipo de utilidades (Cl. 48); y el remanente,
+            complemento voluntario del beneficio de alimentación, sin carácter salarial. Las
+            vacaciones no se anticipan.{'\n\n'}
             {meta.solicitudTexto?.trim()
               ? `Declaración: ${meta.solicitudTexto.trim()}`
               : 'El trabajador declara haber solicitado por escrito que la porción de prestaciones sociales se impute como anticipo.'}

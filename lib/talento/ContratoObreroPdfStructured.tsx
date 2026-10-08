@@ -698,7 +698,7 @@ export function ContratoObreroPDF({
     <>
       <Text style={[styles.paragraph, styles.paragraphIntro, styles.clauseDense]}>
         <Text style={styles.bold}>PRIMERA: OBJETO Y MODALIDAD.</Text>
-        {` Este contrato se celebra bajo la modalidad de OBRA DETERMINADA (Arts. 63, 75 y 77 literal "a" de la LOTTT), específicamente para la ejecución de la fase técnica de: `}
+        {` Este contrato se celebra bajo la modalidad de OBRA DETERMINADA (artículo 63 de la LOTTT y Cláusulas 18 y 19 de la Convención Colectiva), específicamente para la ejecución de la fase técnica de: `}
         <Text style={styles.bold}>{faseTecnicaTxt}</Text>
         {`, dentro de la obra denominada: `}
         <Text style={styles.bold}>{obraDenomTxt}</Text>
@@ -711,25 +711,25 @@ export function ContratoObreroPDF({
             <Text style={styles.bold}>{laboresOficioTxt}</Text>.
           </>
         ) : null}
-        {` EL TRABAJADOR se obliga a: 1.- Poner a disposición su capacidad normal de trabajo en forma exclusiva y en las labores anexas complementarias. 2.- Ejecutar las actividades inherentes al cargo, incluyendo recibir, procesar y pesar materia prima cuando sea requerido. 3.- Usar obligatoriamente el uniforme y equipos de protección (guantes, lentes, botas, etc.) según la LOPCYMAT. 4.- Mantener el orden del área asignada y el buen estado de maquinarias y herramientas. 5.- No prestar servicios a otros empleadores ni trabajar por cuenta propia en funciones inherentes al cargo.`}
+        {` EL TRABAJADOR se obliga a: 1.- Poner a disposición su capacidad normal de trabajo durante la jornada, en las labores convenidas y en las anexas o complementarias. 2.- Ejecutar las actividades inherentes al cargo, incluyendo recibir, procesar y pesar materia prima cuando sea requerido. 3.- Usar obligatoriamente el uniforme y equipos de protección (guantes, lentes, botas, etc.) según la LOPCYMAT. 4.- Mantener el orden del área asignada y el buen estado de maquinarias y herramientas. 5.- No realizar, por cuenta propia o ajena, actividades que compitan con las de LA ENTIDAD DE TRABAJO, ni utilizar en ellas sus equipos, materiales o información.`}
       </Text>
 
       <Text style={[styles.paragraph, styles.paragraphIntro]}>
         <Text style={styles.bold}>SEGUNDA: PERIODO DE PRUEBA.</Text>
-        {` Conforme a la Cláusula 10 de la Convención Colectiva y al Art. 25 del Reglamento de la LOTTT, se acuerda un PERIODO DE PRUEBA DE TREINTA (30) DÍAS. Durante este lapso, LA ENTIDAD DE TRABAJO apreciará los conocimientos y aptitudes de EL TRABAJADOR. Cualquiera de las partes podrá dar por extinguida la relación sin lugar a indemnización alguna.`}
+        {` Conforme a la Cláusula 10 de la Convención Colectiva, se acuerda un PERIODO DE PRUEBA DE TREINTA (30) DÍAS. Durante este lapso, LA ENTIDAD DE TRABAJO apreciará los conocimientos y aptitudes de EL TRABAJADOR. Cualquiera de las partes podrá dar por terminada la relación sin indemnización por despido, y LA ENTIDAD DE TRABAJO pagará los salarios y demás conceptos causados hasta esa fecha.`}
       </Text>
 
       <Text style={[styles.paragraph, styles.paragraphIntro]}>
         <Text style={styles.bold}>TERCERA: DURACIÓN Y TERMINACIÓN.</Text>
-        {` La relación de trabajo está sujeta exclusivamente a la culminación física de la fase técnica descrita en la Cláusula Primera. El vínculo se extinguirá de pleno derecho y sin necesidad de preaviso (Art. 75 LOTTT) una vez firmada el Acta de Culminación en el Libro de Obra por el Supervisor. La terminación es independiente de la entrega formal del inmueble al propietario.`}
+        {` La relación de trabajo está sujeta exclusivamente a la culminación física de la fase técnica descrita en la Cláusula Primera. El vínculo terminará con la conclusión de dicha fase, conforme al artículo 63 de la LOTTT y a la Cláusula 19 de la Convención Colectiva, lo que se hará constar en el Acta de Culminación asentada en el Libro de Obra por el Supervisor. La terminación es independiente de la entrega formal del inmueble al propietario. En esa oportunidad LA ENTIDAD DE TRABAJO pagará a EL TRABAJADOR las prestaciones sociales y demás conceptos que le correspondan, conforme al artículo 142 de la LOTTT y a la Cláusula 51 de la Convención Colectiva.`}
       </Text>
 
       <Text style={[styles.paragraph, styles.paragraphIntro]}>
         <Text style={styles.bold}>CUARTA: JORNADA, HORARIO Y RENDIMIENTO.</Text>
-        {` La jornada semanal será de cuarenta (40) horas de trabajo efectivo: `}
+        {` Conforme al artículo 173 de la LOTTT y a la Cláusula 6 de la Convención Colectiva, la jornada semanal será de cuarenta (40) horas de trabajo efectivo: `}
         {horarioCuartaDetalle}{' '}
         <Text style={styles.bold}>CONTROL:</Text>
-        {` EL TRABAJADOR debe firmar diariamente su registro de avance en el Libro de Obra. La inobservancia del horario en 4 oportunidades en un mes o la negativa a firmar el registro constituirá falta grave (Art. 102 literal "i" LOTTT).`}
+        {` EL TRABAJADOR debe firmar diariamente su registro de avance en el Libro de Obra. La inobservancia del horario en cuatro (4) oportunidades en un mes o la negativa a firmar el registro podrá constituir falta grave a las obligaciones que impone la relación de trabajo, conforme al artículo 79, literal "i", de la LOTTT.`}
       </Text>
     </>
   );
@@ -756,19 +756,17 @@ export function ContratoObreroPDF({
         {` (Bs.) mensuales fijados en dicho acuerdo; y`}
         {'\n'}
         c.- <Text style={styles.bold}>BONO ESPECIAL: (NO Salarial):</Text>
-        {` Según Art. 105 LOTTT y Sentencia 218 del TSJ, para elevar el Ingreso Semanal a un total equivalente a: `}
+        {` De conformidad con el artículo 105 de la LOTTT, para elevar el Ingreso Semanal a un total equivalente a: `}
         <Text style={styles.bold}>{totalIngresoSemanalUsdClausulaSexTxt}</Text>
         {'. '}
         {`El BONO ESPECIAL se causa solo en las semanas de asistencia completa: si EL TRABAJADOR falta injustificadamente a una o más jornadas de la semana, no se causará en esa semana, y se le pagarán el salario de los días laborados (con los descansos según la Cláusula 8 de la Convención Colectiva) y el Cesta Ticket. Todos los pagos se realizarán en Bolívares calculados a la tasa oficial del Banco Central de Venezuela (BCV) del día del pago.`}
       </Text>
 
       <Text style={[styles.paragraph, styles.paragraphIntro]}>
-        <Text style={styles.bold}>SÉPTIMA: COMPENSACIÓN POR CULMINACIÓN.</Text>
-        {` `}
-        <Text style={styles.bold}>PARÁGRAFO ÚNICO:</Text>
-        {` Cada cuatro (4) semanas trabajadas, se recibirá una compensación de: `}
+        <Text style={styles.bold}>SÉPTIMA: COMPENSACIÓN CADA CUATRO SEMANAS.</Text>
+        {` Cada cuatro (4) semanas trabajadas, LA ENTIDAD DE TRABAJO pagará a EL TRABAJADOR una compensación equivalente a: `}
         <Text style={styles.bold}>{compUsdMesTxt}</Text>
-        {` USD (a tasa BCV). Al cierre de obra o finiquito se pagará la fracción que corresponda a las semanas trabajadas que no completen un ciclo de cuatro (4). Este monto liquida de forma integral: prestaciones sociales, utilidades, vacaciones y cualquier otro beneficio derivado de este contrato especial y de la Convención Colectiva.`}
+        {` USD, en Bolívares a la tasa oficial del Banco Central de Venezuela (BCV) del día del pago, que se imputa en este orden: a) como anticipo de la garantía de prestaciones sociales, a solicitud escrita de EL TRABAJADOR y hasta el setenta y cinco por ciento (75%) de lo acreditado, conforme al artículo 144 de la LOTTT; b) como anticipo de las utilidades de la Cláusula 48 de la Convención Colectiva, que se descontará de lo que corresponda por ese concepto; y c) el remanente, como complemento voluntario del beneficio de alimentación, sin carácter salarial. Al cierre de obra o finiquito se pagará la fracción que corresponda a las semanas trabajadas que no completen un ciclo de cuatro (4). Cada recibo discriminará los conceptos. Las vacaciones y el bono vacacional se pagarán al disfrutarlas o, al terminar la relación, en forma fraccionada, conforme a la LOTTT y a la Cláusula 47 de la Convención Colectiva.`}
       </Text>
 
       <Text style={[styles.paragraph, styles.paragraphIntro, styles.clauseDense]}>
@@ -785,7 +783,7 @@ export function ContratoObreroPDF({
         <Text style={styles.bold}>DECIMA (DOMICILIO PROCESAL).</Text>
         {` Las partes eligen como domicilio especial la ciudad de `}
         <Text style={styles.bold}>{ciudadProcesal}</Text>
-        {`, Estado Nueva Esparta, sometiéndose a sus Tribunales del Trabajo. Se firman dos (2) ejemplares de un mismo tenor y a un solo efecto en la ciudad de `}
+        {`, Estado Nueva Esparta, sin perjuicio de la competencia que la Ley Orgánica Procesal del Trabajo atribuye a los Tribunales del Trabajo. Se firman dos (2) ejemplares de un mismo tenor y a un solo efecto en la ciudad de `}
         <Text style={styles.bold}>{ciudadProcesal}</Text>
         {`, a los `}
         <Text style={styles.bold}>{diaFirma}</Text> días del mes de <Text style={styles.bold}>{mesFirma}</Text> del año{' '}

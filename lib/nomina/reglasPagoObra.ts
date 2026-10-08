@@ -29,6 +29,11 @@ export const DIAS_DESCANSO_SEMANA = 2;
 export const SEMANAS_TRABAJADAS_PARA_ADELANTO = 4;
 /** Cl. 50: 6 días de salario básico por mes / ciclo de 4 semanas. */
 export const DIAS_GARANTIA_PRESTACIONES_POR_CICLO = 6;
+/** Art. 144 LOTTT: el anticipo de prestaciones no puede pasar del 75% de lo acreditado. */
+export const TOPE_ANTICIPO_PRESTACIONES = 0.75;
+/** Cl. 48: 100 días de utilidades al año; un ciclo de 4 semanas es 1/13 del año. */
+export const DIAS_UTILIDADES_ANUALES_CCT = 100;
+export const CICLOS_CUATRO_SEMANAS_POR_ANIO = 13;
 
 /**
  * Solicitud escrita del trabajador para que la parte de la compensación de la Cláusula SÉPTIMA

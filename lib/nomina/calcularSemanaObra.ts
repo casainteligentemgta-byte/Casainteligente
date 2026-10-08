@@ -3,6 +3,9 @@ import {
   type OficioReciboLegal,
   type TipoItemNomina,
   DIAS_GARANTIA_PRESTACIONES_POR_CICLO,
+  DIAS_UTILIDADES_ANUALES_CCT,
+  CICLOS_CUATRO_SEMANAS_POR_ANIO,
+  TOPE_ANTICIPO_PRESTACIONES,
   DIAS_JORNADA_SEMANA,
   cestaSemanalUsdAnclada,
   diasPagadosClausula8,
@@ -56,7 +59,10 @@ export type ResultadoSemanaObra = {
   lineasLegal: LineaRecibo[];
   lineasPatio: LineaRecibo[];
   diasGarantiaPrestaciones: number;
+  /** Garantía de prestaciones acreditada en el ciclo (Cl. 50). */
   montoGarantiaPrestacionesVes: number;
+  /** Parte de la compensación imputada como anticipo de prestaciones (máx. 75% de lo acreditado). */
+  anticipoPrestacionesVes: number;
 };
 
 function vesAUsd(ves: number, tasa: number): number {
@@ -121,6 +127,7 @@ export function calcularSemanaObra(input: CalcularSemanaObraInput): ResultadoSem
   const diasGarantia =
     tipo === 'adelanto_prestaciones' ? DIAS_GARANTIA_PRESTACIONES_POR_CICLO : 0;
   const montoGarantiaPrestacionesVes = round2(oficio.diarioVes * diasGarantia);
+  let anticipoPrestacionesVes = 0;
 
   const lineasLegal: LineaRecibo[] = [];
   const lineasPatio: LineaRecibo[] = [];
@@ -159,23 +166,39 @@ export function calcularSemanaObra(input: CalcularSemanaObraInput): ResultadoSem
       salarial: false,
     });
   } else {
-    const prestVes = Math.min(montoGarantiaPrestacionesVes, totalVes);
+    // Cl. SÉPTIMA: a) anticipo de prestaciones (hasta 75% de lo acreditado, art. 144 LOTTT);
+    // b) anticipo de utilidades (Cl. 48, la parte del ciclo); c) el resto, complemento de alimentación.
+    const diasAnticipoPrest = round2(diasGarantia * TOPE_ANTICIPO_PRESTACIONES);
+    const prestVes = round2(Math.min(oficio.diarioVes * diasAnticipoPrest, totalVes));
+    anticipoPrestacionesVes = prestVes;
     const prestUsd = vesAUsd(prestVes, tasa);
-    const restoUsd = round2(Math.max(0, totalUsd - prestUsd));
-    const restoVes = usdAVes(restoUsd, tasa);
+    const diasUtil = round2(DIAS_UTILIDADES_ANUALES_CCT / CICLOS_CUATRO_SEMANAS_POR_ANIO);
+    const utilVes = round2(Math.min(oficio.diarioVes * diasUtil, Math.max(0, totalVes - prestVes)));
+    const utilUsd = vesAUsd(utilVes, tasa);
+    const alimUsd = round2(Math.max(0, totalUsd - prestUsd - utilUsd));
+    const alimVes = usdAVes(alimUsd, tasa);
     lineasLegal.push({
       codigo: 'PREST',
-      concepto: `Compensación Cl. SÉPTIMA del contrato: a cuenta de prestaciones sociales (anticipo art. 144 LOTTT; ${diasGarantia} días de SB, Cl. 50)`,
+      concepto: `Compensación Cl. SÉPTIMA: anticipo de prestaciones sociales (art. 144 LOTTT; ${diasAnticipoPrest} días de SB, 75% de lo acreditado según Cl. 50)`,
       usd: prestUsd,
       ves: prestVes,
-      salarial: true,
+      salarial: false,
     });
-    if (restoUsd > 0) {
+    if (utilUsd > 0) {
       lineasLegal.push({
-        codigo: 'CCT',
-        concepto: 'Compensación Cl. SÉPTIMA del contrato: a cuenta de utilidades, vacaciones y demás beneficios convencionales',
-        usd: restoUsd,
-        ves: restoVes,
+        codigo: 'UTIL',
+        concepto: `Compensación Cl. SÉPTIMA: anticipo de utilidades (Cl. 48; ${diasUtil} días de SB)`,
+        usd: utilUsd,
+        ves: utilVes,
+        salarial: false,
+      });
+    }
+    if (alimUsd > 0) {
+      lineasLegal.push({
+        codigo: 'ALIM',
+        concepto: 'Compensación Cl. SÉPTIMA: complemento voluntario del beneficio de alimentación (no salarial)',
+        usd: alimUsd,
+        ves: alimVes,
         salarial: false,
       });
     }
@@ -211,5 +234,6 @@ export function calcularSemanaObra(input: CalcularSemanaObraInput): ResultadoSem
     lineasPatio,
     diasGarantiaPrestaciones: diasGarantia,
     montoGarantiaPrestacionesVes,
+    anticipoPrestacionesVes,
   };
 }

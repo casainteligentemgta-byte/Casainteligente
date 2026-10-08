@@ -208,6 +208,26 @@ describe('calcularSemanaObra', () => {
     assert.ok(r.lineasLegal.some((l) => l.codigo === 'COMP' && /bono especial/i.test(l.concepto)));
   });
 
+  it('la compensación de la SÉPTIMA se reparte: 75% de prestaciones, utilidades y el resto alimentación', () => {
+    const r = calcularSemanaObra({
+      clase: 'clasificado',
+      tipo: 'adelanto_prestaciones',
+      diasLaborados: 5,
+      tasaBcvPago: tasa,
+      tasaAnclaCestaBcv: ancla,
+      cargoCodigo: '5.1',
+      sobreUsd: 115,
+    });
+    const prest = r.lineasLegal.find((l) => l.codigo === 'PREST')!;
+    const util = r.lineasLegal.find((l) => l.codigo === 'UTIL')!;
+    const alim = r.lineasLegal.find((l) => l.codigo === 'ALIM')!;
+    assert.ok(prest && util && alim);
+    assert.ok(Math.abs(r.anticipoPrestacionesVes - r.montoGarantiaPrestacionesVes * 0.75) < 0.05);
+    assert.ok(r.lineasLegal.every((l) => !l.salarial));
+    const suma = r.lineasLegal.reduce((a, l) => a + l.usd, 0);
+    assert.ok(Math.abs(suma - 115) < 0.03);
+  });
+
   it('cesta anclada baja si sube la tasa de homologación', () => {
     const a = cestaSemanalUsdAnclada(100);
     const b = cestaSemanalUsdAnclada(200);

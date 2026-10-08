@@ -277,8 +277,11 @@ export async function registrarAdelantoPrestaciones(
     .maybeSingle();
   if (ePer || !per) throw new Error(ePer?.message ?? 'Periodo no encontrado.');
 
-  const snap = (item as { snapshot?: { montoGarantiaPrestacionesVes?: number } }).snapshot;
+  const snap = (item as { snapshot?: { montoGarantiaPrestacionesVes?: number; anticipoPrestacionesVes?: number } })
+    .snapshot;
   const garantia = Number(snap?.montoGarantiaPrestacionesVes ?? 0);
+  /** Lo que se anticipa (máx. 75%); recibos viejos sin el dato: la garantía completa. */
+  const anticipo = Number(snap?.anticipoPrestacionesVes ?? garantia);
   const empleadoId = String((item as { empleado_id: string }).empleado_id);
   const proyectoId = String((per as { proyecto_id: string }).proyecto_id);
 
@@ -317,7 +320,7 @@ export async function registrarAdelantoPrestaciones(
       .eq('proyecto_id', proyectoId)
       .maybeSingle();
     const acum = Number((saldo as { acumulado_ves?: number } | null)?.acumulado_ves ?? 0) + garantia;
-    const adel = Number((saldo as { adelantado_ves?: number } | null)?.adelantado_ves ?? 0) + garantia;
+    const adel = Number((saldo as { adelantado_ves?: number } | null)?.adelantado_ves ?? 0) + anticipo;
     await db.from('ci_prestaciones_saldo').upsert(
       {
         empleado_id: empleadoId,
