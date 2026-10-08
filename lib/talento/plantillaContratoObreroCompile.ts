@@ -93,8 +93,8 @@ const ETIQUETAS: Record<string, { etiqueta: string; ayuda: string }> = {
     ayuda: 'Cl. SEXTA c): 33 USD fijos, no salariales, iguales para todos los oficios.',
   },
   CONTRATO_ANTICIPO_CUATRO_SEMANAS_USD: {
-    etiqueta: 'Anticipo cada cuatro semanas USD',
-    ayuda: 'Cl. SÉPTIMA: 90 USD por defecto (arreglo mensual del contrato).',
+    etiqueta: 'Semana adicional cada cuatro semanas',
+    ayuda: 'Cl. SÉPTIMA: una semana de los conceptos de la SEXTA (prestaciones, vacaciones y utilidades).',
   },
   CONTRATO_INGRESO_SEMANAL_USD_TOTAL: { etiqueta: 'Ingreso semanal total USD', ayuda: 'Reservado; el PDF usa salario + cesta + complemento.' },
   CONTRATO_COMPENSACION_CULMINACION_USD: { etiqueta: 'Compensación por culminación USD/mes', ayuda: 'Canon mensual al cierre.' },

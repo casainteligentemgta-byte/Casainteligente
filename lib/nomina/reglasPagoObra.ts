@@ -49,7 +49,7 @@ export const CICLOS_CUATRO_SEMANAS_POR_ANIO = 13;
  * imputada a prestaciones sociales cuente como anticipo (art. 144 LOTTT exige la solicitud).
  */
 export const SOLICITUD_ANTICIPO_SEPTIMA_TEXTO =
-  'Solicito que la compensación de la Cláusula SÉPTIMA de mi contrato de trabajo, correspondiente a estas cuatro semanas trabajadas, se impute en la parte que corresponda como anticipo de mis prestaciones sociales, conforme al artículo 144 de la LOTTT.';
+  'Solicito que la semana adicional de la Cláusula SÉPTIMA de mi contrato de trabajo, correspondiente a estas cuatro semanas trabajadas, se impute en la parte que corresponda como anticipo de mis prestaciones sociales, conforme al artículo 144 de la LOTTT.';
 
 export const CESTA_MENSUAL_VES_ACTA = ALIMENTACION_MENSUAL_VES_HOMOLOGADA_2026;
 export const FECHA_ANCLAJE_CESTA_ISO = FECHA_FIRMA_ACUERDO_2026;

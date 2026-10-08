@@ -101,21 +101,26 @@ export function calcularSemanaObra(input: CalcularSemanaObraInput): ResultadoSem
   const salarioBasicoVes = round2(oficio.diarioVes * diasPagados);
   const salarioBasicoUsd = vesAUsd(salarioBasicoVes, tasa);
 
-  const cestaUsdAnclada = tipo === 'semanal' ? cestaSemanalUsdAnclada(ancla) : 0;
+  const cestaSemanalRef = cestaSemanalUsdAnclada(ancla);
+  const cestaUsdAnclada = tipo === 'semanal' ? cestaSemanalRef : 0;
   const pisoLegalUsd = round2(salarioBasicoUsd + cestaUsdAnclada);
   /**
    * Cláusula SEXTA c): el complemento del beneficio de alimentación no depende de la
    * asistencia ni del oficio. Es potestativo con carácter general (`otorgarBono`).
    */
-  const bonoOtorgado = tipo === 'semanal' && input.otorgarBono !== false;
+  const complementoOtorgado = input.otorgarBono !== false;
+  const complementoSemanalUsd = complementoOtorgado ? COMPLEMENTO_ALIMENTACION_SEMANAL_USD : 0;
+  const bonoOtorgado = tipo === 'semanal' && complementoOtorgado;
   let cestaUsd = 0;
   let complementoUsd = 0;
   let totalUsd = 0;
   if (tipo === 'adelanto_prestaciones') {
-    totalUsd = sobreUsd;
+    /** Cl. SÉPTIMA: una semana de los conceptos de la SEXTA (7 días de SB + cesta + complemento). */
+    const salarioSemanaSextaUsd = vesAUsd(round2(oficio.diarioVes * 7), tasa);
+    totalUsd = round2(salarioSemanaSextaUsd + cestaSemanalRef + complementoSemanalUsd);
   } else {
     cestaUsd = cestaUsdAnclada;
-    complementoUsd = bonoOtorgado ? COMPLEMENTO_ALIMENTACION_SEMANAL_USD : 0;
+    complementoUsd = complementoSemanalUsd;
     totalUsd = round2(salarioBasicoUsd + cestaUsd + complementoUsd);
   }
   const aplicaPisoLegal = false;
@@ -179,7 +184,7 @@ export function calcularSemanaObra(input: CalcularSemanaObraInput): ResultadoSem
     const alimVes = usdAVes(alimUsd, tasa);
     lineasLegal.push({
       codigo: 'PREST',
-      concepto: `Compensación Cl. SÉPTIMA: anticipo de prestaciones sociales (art. 144 LOTTT; ${diasAnticipoPrest} días de SB, 75% de lo acreditado según Cl. 50)`,
+      concepto: `Semana adicional Cl. SÉPTIMA: anticipo de prestaciones sociales (art. 144 LOTTT; ${diasAnticipoPrest} días de SB, 75% de lo acreditado según Cl. 50)`,
       usd: prestUsd,
       ves: prestVes,
       salarial: false,
@@ -187,7 +192,7 @@ export function calcularSemanaObra(input: CalcularSemanaObraInput): ResultadoSem
     if (utilUsd > 0) {
       lineasLegal.push({
         codigo: 'UTIL',
-        concepto: `Compensación Cl. SÉPTIMA: anticipo de utilidades (Cl. 48; ${diasUtil} días de SB)`,
+        concepto: `Semana adicional Cl. SÉPTIMA: anticipo de utilidades (Cl. 48; ${diasUtil} días de SB)`,
         usd: utilUsd,
         ves: utilVes,
         salarial: false,
@@ -196,7 +201,7 @@ export function calcularSemanaObra(input: CalcularSemanaObraInput): ResultadoSem
     if (alimUsd > 0) {
       lineasLegal.push({
         codigo: 'ALIM',
-        concepto: 'Compensación Cl. SÉPTIMA: complemento voluntario del beneficio de alimentación (no salarial)',
+        concepto: 'Semana adicional Cl. SÉPTIMA: complemento voluntario del beneficio de alimentación (no salarial)',
         usd: alimUsd,
         ves: alimVes,
         salarial: false,
@@ -204,7 +209,7 @@ export function calcularSemanaObra(input: CalcularSemanaObraInput): ResultadoSem
     }
     lineasPatio.push({
       codigo: 'ADELANTO',
-      concepto: `Compensación cada 4 semanas trabajadas (Cl. SÉPTIMA del contrato) — USD ${sobreUsd}`,
+      concepto: `Semana adicional por mes (Cl. SÉPTIMA): prestaciones, vacaciones y utilidades — USD ${totalUsd.toFixed(2)}`,
       usd: totalUsd,
       ves: totalVes,
       salarial: false,
@@ -219,7 +224,7 @@ export function calcularSemanaObra(input: CalcularSemanaObraInput): ResultadoSem
     diasPagados,
     tasaBcvPago: tasa,
     tasaAnclaCestaBcv: ancla,
-    sobreUsdPactado: sobreUsd,
+    sobreUsdPactado: tipo === 'adelanto_prestaciones' ? totalUsd : sobreUsd,
     salarioBasicoVes,
     salarioBasicoUsd,
     cestaUsdAnclada: cestaUsd,

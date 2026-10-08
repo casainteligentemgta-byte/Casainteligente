@@ -121,9 +121,13 @@ describe('calcularSemanaObra', () => {
       tasaBcvPago: tasa,
       tasaAnclaCestaBcv: ancla,
     });
+    const salSemana = Math.round((Math.round(r.oficio.diarioVes * 7 * 100) / 100 / tasa) * 100) / 100;
+    const semanaSexta =
+      Math.round((salSemana + cestaSemanalUsdAnclada(ancla) + COMPLEMENTO_ALIMENTACION_SEMANAL_USD) * 100) / 100;
     assert.equal(r.cestaUsdAnclada, 0);
     assert.equal(r.diasPagados, 0);
-    assert.equal(r.totalUsd, SOBRE_AYUDANTE_USD);
+    assert.equal(r.totalUsd, semanaSexta);
+    assert.ok(r.totalUsd > SOBRE_AYUDANTE_USD * 0.5);
     assert.ok(r.lineasLegal.some((l) => l.codigo === 'PREST'));
     assert.ok(!r.lineasLegal.some((l) => l.codigo === 'CESTA'));
   });
@@ -155,23 +159,15 @@ describe('calcularSemanaObra', () => {
     assert.ok(Math.abs(suma - r.totalUsd) < 0.02);
   });
 
-  it('un monto pactado inválido en la SÉPTIMA cae al monto por defecto de la clase', () => {
-    for (const sobreUsd of [0, -5, Number.NaN, null]) {
-      const r = calcularSemanaObra({
-        clase: 'ayudante',
-        tipo: 'adelanto_prestaciones',
-        diasLaborados: 5,
-        tasaBcvPago: tasa,
-        tasaAnclaCestaBcv: ancla,
-        sobreUsd,
-      });
-      assert.equal(r.sobreUsdPactado, SOBRE_AYUDANTE_USD);
-      assert.equal(r.totalUsd, SOBRE_AYUDANTE_USD);
-    }
-  });
-
-  it('la quinta semana paga el arreglo mensual pactado', () => {
-    const r = calcularSemanaObra({
+  it('la SÉPTIMA ignora el arreglo pactado y paga una semana de la SEXTA', () => {
+    const sinArreglo = calcularSemanaObra({
+      clase: 'ayudante',
+      tipo: 'adelanto_prestaciones',
+      diasLaborados: 5,
+      tasaBcvPago: tasa,
+      tasaAnclaCestaBcv: ancla,
+    });
+    const conArreglo = calcularSemanaObra({
       clase: 'ayudante',
       tipo: 'adelanto_prestaciones',
       diasLaborados: 5,
@@ -179,7 +175,12 @@ describe('calcularSemanaObra', () => {
       tasaAnclaCestaBcv: ancla,
       sobreUsd: 100,
     });
-    assert.equal(r.totalUsd, 100);
+    assert.equal(conArreglo.totalUsd, sinArreglo.totalUsd);
+    const salSemana =
+      Math.round((Math.round(sinArreglo.oficio.diarioVes * 7 * 100) / 100 / tasa) * 100) / 100;
+    const semanaSexta =
+      Math.round((salSemana + cestaSemanalUsdAnclada(ancla) + COMPLEMENTO_ALIMENTACION_SEMANAL_USD) * 100) / 100;
+    assert.equal(sinArreglo.totalUsd, semanaSexta);
   });
 
   it('con una falta sigue el complemento: salario de los días + cesta + 33 USD', () => {
@@ -234,7 +235,11 @@ describe('calcularSemanaObra', () => {
     assert.ok(Math.abs(r.anticipoPrestacionesVes - r.montoGarantiaPrestacionesVes * 0.75) < 0.05);
     assert.ok(r.lineasLegal.every((l) => !l.salarial));
     const suma = r.lineasLegal.reduce((a, l) => a + l.usd, 0);
-    assert.ok(Math.abs(suma - 115) < 0.03);
+    assert.ok(Math.abs(suma - r.totalUsd) < 0.03);
+    const salSemana = Math.round((Math.round(r.oficio.diarioVes * 7 * 100) / 100 / tasa) * 100) / 100;
+    const semanaSexta =
+      Math.round((salSemana + cestaSemanalUsdAnclada(ancla) + COMPLEMENTO_ALIMENTACION_SEMANAL_USD) * 100) / 100;
+    assert.equal(r.totalUsd, semanaSexta);
   });
 
   it('el complemento es potestativo: sin otorgarlo, salario y cesta aunque la semana esté completa', () => {

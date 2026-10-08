@@ -11,8 +11,6 @@ import { previewItemsNomina, type PreviewItemNomina } from '@/lib/nomina/persist
 import {
   type ClasePagoObra,
   inferirClasePagoObra,
-  SOBRE_AYUDANTE_USD,
-  SOBRE_CLASIFICADO_USD,
   SOLICITUD_ANTICIPO_SEPTIMA_TEXTO,
   TASA_ANCLA_CESTA_BCV,
 } from '@/lib/nomina/reglasPagoObra';
@@ -431,8 +429,8 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
         <div>
           <h2 className="text-sm font-bold uppercase tracking-wide text-emerald-100">Nómina semanal</h2>
           <p className="mt-0.5 text-xs text-zinc-500">
-            Se paga el arreglo pactado en cada contrato (por defecto: ayudante USD {SOBRE_AYUDANTE_USD} · clasificado
-            USD {SOBRE_CLASIFICADO_USD}), cesta incluida · compensación de la Cl. SÉPTIMA cada 4 semanas trabajadas.
+            Cl. SEXTA: salario del oficio + cesta ticket + complemento de alimentación. Cl. SÉPTIMA:
+            cada 4 semanas, una semana adicional por mes para prestaciones, vacaciones y utilidades.
           </p>
         </div>
       </div>
