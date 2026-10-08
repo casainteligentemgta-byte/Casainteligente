@@ -2,6 +2,7 @@
 
 import { useId, useRef, useState } from 'react';
 import { Camera, FileUp, Loader2 } from 'lucide-react';
+import CamaraFotoFrente from '@/components/registro/CamaraFotoFrente';
 import { compressImageForUpload } from '@/lib/reclutamiento/compressImageForUpload';
 
 export type DocumentUploadResult = {
@@ -18,6 +19,8 @@ type DocumentUploadProps = {
   uploadOnSelect?: (file: File) => Promise<{ publicUrl?: string } | void>;
   /** Muestra botón de cámara trasera en móvil (recomendado para cédula). */
   preferCamera?: boolean;
+  /** Cámara frontal con silueta de busto (foto de frente). */
+  siluetaBusto?: boolean;
   acceptFiles?: string;
 };
 
@@ -39,6 +42,7 @@ export default function DocumentUpload({
   currentFileName,
   uploadOnSelect,
   preferCamera = true,
+  siluetaBusto = false,
   acceptFiles = 'image/*,application/pdf',
 }: DocumentUploadProps) {
   const cameraInputId = useId();
@@ -47,6 +51,7 @@ export default function DocumentUpload({
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [lastName, setLastName] = useState<string | null>(currentFileName ?? null);
+  const [camaraBusto, setCamaraBusto] = useState(false);
 
   async function handleFile(raw: File | undefined) {
     if (!raw || uploading) return;
@@ -78,7 +83,11 @@ export default function DocumentUpload({
       {displayName ? (
         <p className="truncate text-xs text-amber-500">Archivo: {displayName}</p>
       ) : (
-        <p className="text-xs text-zinc-500">Toma una foto clara o elige un archivo (JPG, PNG o PDF).</p>
+        <p className="text-xs text-zinc-500">
+          {siluetaBusto
+            ? 'Abre la cámara y acerca el teléfono hasta llenar la silueta (cara y hombros).'
+            : 'Toma una foto clara o elige un archivo (JPG, PNG o PDF).'}
+        </p>
       )}
 
       <input
@@ -106,11 +115,11 @@ export default function DocumentUpload({
           <button
             type="button"
             disabled={uploading}
-            onClick={() => cameraRef.current?.click()}
+            onClick={() => (siluetaBusto ? setCamaraBusto(true) : cameraRef.current?.click())}
             className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-amber-500 px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-amber-400 disabled:opacity-50 min-w-[140px]"
           >
             {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
-            {uploading ? 'Subiendo…' : 'Tomar foto'}
+            {uploading ? 'Subiendo…' : siluetaBusto ? 'Abrir cámara' : 'Tomar foto'}
           </button>
         ) : null}
         <button
@@ -127,6 +136,13 @@ export default function DocumentUpload({
           Elegir archivo
         </button>
       </div>
+      {siluetaBusto ? (
+        <CamaraFotoFrente
+          open={camaraBusto}
+          onClose={() => setCamaraBusto(false)}
+          onCapture={(f) => void handleFile(f)}
+        />
+      ) : null}
     </div>
   );
 }

@@ -281,7 +281,7 @@ function HojaDeVidaMovilInner({ params }: Props) {
       const tieneCedula = Boolean(cedulaFoto || cedulaFotoUrl || legal.datosPersonales.fotoCedulaUrl.trim());
       const tienePerfil = Boolean(perfilFoto || perfilFotoUrl || legal.datosPersonales.fotoUrl.trim());
       if (!tieneCedula || !tienePerfil) {
-        setError('Adjunta foto de perfil (carnet) y foto de cédula para continuar.');
+        setError('Adjunta foto de frente y foto de cédula para continuar.');
         return;
       }
       setError(null);
@@ -499,7 +499,7 @@ function HojaDeVidaMovilInner({ params }: Props) {
               <div className="space-y-2">
                 <h2 className="text-3xl font-bold text-white tracking-tight">Identidad y fotos</h2>
                 <p className="text-[var(--nexus-text-muted)]">
-                  Cédula, foto tipo carnet y foto de tu cédula. Con eso se arma tu hoja de vida al enviar el formulario.
+                  Cédula, foto de frente y foto de tu cédula. Con eso se arma tu hoja de vida al enviar el formulario.
                 </p>
               </div>
 
@@ -518,9 +518,10 @@ function HojaDeVidaMovilInner({ params }: Props) {
                 </div>
                 <div>
                   <DocumentUpload
-                    label="Foto de perfil (tipo carnet) *"
+                    label="Foto de frente *"
                     currentFileName={perfilFoto?.name}
                     preferCamera
+                    siluetaBusto
                     uploadOnSelect={async (file) => {
                       const up = await uploadOnboardingPerfilPhoto(file, params.token, supabase);
                       if (up.error) throw new Error(up.error);
@@ -534,7 +535,7 @@ function HojaDeVidaMovilInner({ params }: Props) {
                     }}
                   />
                   {perfilFotoUrl && !perfilFoto ? (
-                    <p className="mt-1 text-[11px] text-emerald-400/90">Foto de perfil ya cargada.</p>
+                    <p className="mt-1 text-[11px] text-emerald-400/90">Foto de frente ya cargada.</p>
                   ) : null}
                 </div>
                 <div>
