@@ -41,7 +41,7 @@ export async function generarBufferContratoLaboralEmpleado(
       return {
         ok: true,
         buf,
-        filename: `contrato-obrero-estructurado-${id.slice(0, 8)}.pdf`,
+        filename: `contrato-obrero-${expedienteRef.replace(/[^A-Za-z0-9_-]+/g, '-') || id.slice(0, 8)}.pdf`,
       };
     }
 

@@ -14,6 +14,7 @@ import {
   subirPdfContratos,
 } from '@/lib/contratos/contratosStorage';
 import { ESTADO_CONTRATO, normalizarEstadoContrato } from '@/lib/contratos/rrhhContratoEstados';
+import { expedienteDesdeCedula, registrarExpedienteObraYEntidad } from '@/lib/talento/expedienteCedula';
 
 const TOKEN_TTL_DIAS = 30;
 
@@ -110,6 +111,7 @@ export async function generarContratoRrhh(
     documento?: string | null;
   };
   const cedula = (row.cedula ?? row.documento ?? 'sin_cedula').trim();
+  const expedienteCedula = expedienteDesdeCedula(cedula) || cedula;
 
   const pdfOut = await generarPdfEstructuradoEmpleado(admin, empleadoId);
   if ('error' in pdfOut) return { error: pdfOut.error, status: 500 };
@@ -142,25 +144,46 @@ export async function generarContratoRrhh(
     url_contrato_borrador: pathBorrador,
     laboral_pdf_generado_at: ahora,
     whatsapp_enviado_at: input.marcarWhatsappEnviado ? ahora : null,
+    expediente_cedula: expedienteCedula,
   };
 
   let contratoId: string;
   if (exist) {
     contratoId = (exist as { id: string }).id;
-    const { error: upErr } = await admin
+    let { error: upErr } = await admin
       .from('ci_contratos_empleado_obra')
       .update(patch as never)
       .eq('id', contratoId);
+    if (upErr && /expediente_cedula|42703|schema cache|column/i.test(upErr.message)) {
+      const { expediente_cedula: _e, ...sinExp } = patch;
+      void _e;
+      const retry = await admin.from('ci_contratos_empleado_obra').update(sinExp as never).eq('id', contratoId);
+      upErr = retry.error;
+    }
     if (upErr) return { error: upErr.message, status: 500 };
   } else {
-    const { data: ins, error: insErr } = await admin
+    let { data: ins, error: insErr } = await admin
       .from('ci_contratos_empleado_obra')
       .insert(patch as never)
       .select('id')
       .single();
+    if (insErr && /expediente_cedula|42703|schema cache|column/i.test(insErr.message)) {
+      const { expediente_cedula: _e, ...sinExp } = patch;
+      void _e;
+      const retry = await admin.from('ci_contratos_empleado_obra').insert(sinExp as never).select('id').single();
+      ins = retry.data;
+      insErr = retry.error;
+    }
     if (insErr || !ins) return { error: insErr?.message ?? 'No se creó el contrato', status: 500 };
     contratoId = (ins as { id: string }).id;
   }
+
+  await registrarExpedienteObraYEntidad(admin, {
+    empleadoId,
+    proyectoId,
+    cedula,
+    nombreCompleto: (row.nombre_completo ?? '').trim(),
+  });
 
   await persistLaboralPlantillaPdfIfMissing(admin, contratoId, pdfOut.buf);
   await admin.storage.from(BUCKET_CONTRATOS_OBREROS).upload(`laboral/${contratoId}/contrato-plantilla.pdf`, pdfOut.buf, {

@@ -131,6 +131,10 @@ export async function generarBufferContratoExpressPdf(
 
   let expedienteLabel = String(row.expediente_codigo ?? '').trim();
   if (!expedienteLabel) {
+    const { expedienteDesdeCedula } = await import('@/lib/talento/expedienteCedula');
+    expedienteLabel = expedienteDesdeCedula(row.obrero_cedula);
+  }
+  if (!expedienteLabel) {
     expedienteLabel = await resolverCodigoExpedienteContrato(supabase, {
       proyectoId,
       fecha: new Date(),
