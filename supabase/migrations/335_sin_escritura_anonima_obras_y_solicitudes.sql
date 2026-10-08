@@ -1,5 +1,5 @@
 -- Sin sesión solo se puede LEER obras y solicitudes de personal (lo que usa el enlace público).
--- Pendiente: ejecutar en el SQL Editor de Supabase (desde aquí la aplicación fue cancelada).
+-- Aplicada en producción el 2026-10-08 desde el SQL Editor.
 drop policy if exists recruitment_needs_insert_anon on public.recruitment_needs;
 drop policy if exists recruitment_needs_update_anon on public.recruitment_needs;
 drop policy if exists recruitment_needs_delete_anon on public.recruitment_needs;
