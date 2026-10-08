@@ -425,7 +425,7 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
               <TableRow className="border-white/10 hover:bg-transparent">
                 <TableHead className="text-zinc-400">Obrero</TableHead>
                 <TableHead className="text-zinc-400">Clase</TableHead>
-                <TableHead className="text-zinc-400">Días</TableHead>
+                <TableHead className="text-zinc-400" title="Días trabajados más faltas justificadas (reposo, permiso). Con menos de 5 se pierde el bono especial de la semana.">Días (trab. + justif.)</TableHead>
                 <TableHead className="text-right text-zinc-400">Legal</TableHead>
                 <TableHead className="text-right text-zinc-400">Patio</TableHead>
                 <TableHead className="text-zinc-400">Recibos</TableHead>

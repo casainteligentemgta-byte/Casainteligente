@@ -175,6 +175,39 @@ describe('calcularSemanaObra', () => {
     assert.equal(r.totalUsd, 100);
   });
 
+  it('con una falta pierde el bono especial: salario de los días + cesta completo', () => {
+    const r = calcularSemanaObra({
+      clase: 'clasificado',
+      tipo: 'semanal',
+      diasLaborados: 4,
+      tasaBcvPago: tasa,
+      tasaAnclaCestaBcv: ancla,
+      cargoCodigo: '5.1',
+      sobreUsd: 115,
+    });
+    assert.equal(r.diasPagados, 6);
+    assert.ok(!r.lineasLegal.some((l) => l.codigo === 'COMP'));
+    assert.equal(r.cestaUsdAnclada, cestaSemanalUsdAnclada(ancla));
+    const esperado = Math.round((r.salarioBasicoUsd + cestaSemanalUsdAnclada(ancla)) * 100) / 100;
+    assert.equal(r.totalUsd, esperado);
+    assert.ok(r.totalUsd < 115);
+    assert.equal(r.aplicaPisoLegal, false);
+  });
+
+  it('semana completa: cobra el arreglo pactado con el bono especial', () => {
+    const r = calcularSemanaObra({
+      clase: 'clasificado',
+      tipo: 'semanal',
+      diasLaborados: 5,
+      tasaBcvPago: tasa,
+      tasaAnclaCestaBcv: ancla,
+      cargoCodigo: '5.1',
+      sobreUsd: 115,
+    });
+    assert.equal(r.totalUsd, 115);
+    assert.ok(r.lineasLegal.some((l) => l.codigo === 'COMP' && /bono especial/i.test(l.concepto)));
+  });
+
   it('cesta anclada baja si sube la tasa de homologación', () => {
     const a = cestaSemanalUsdAnclada(100);
     const b = cestaSemanalUsdAnclada(200);

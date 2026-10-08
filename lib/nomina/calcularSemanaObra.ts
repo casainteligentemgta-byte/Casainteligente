@@ -3,6 +3,7 @@ import {
   type OficioReciboLegal,
   type TipoItemNomina,
   DIAS_GARANTIA_PRESTACIONES_POR_CICLO,
+  DIAS_JORNADA_SEMANA,
   cestaSemanalUsdAnclada,
   diasPagadosClausula8,
   oficioReciboLegal,
@@ -91,8 +92,19 @@ export function calcularSemanaObra(input: CalcularSemanaObraInput): ResultadoSem
 
   const cestaUsdAnclada = tipo === 'semanal' ? cestaSemanalUsdAnclada(ancla) : 0;
   const pisoLegalUsd = round2(salarioBasicoUsd + cestaUsdAnclada);
-  const totalUsd = tipo === 'adelanto_prestaciones' ? sobreUsd : round2(Math.max(sobreUsd, pisoLegalUsd));
-  const aplicaPisoLegal = tipo === 'semanal' && totalUsd > sobreUsd + 0.001;
+  /**
+   * Cláusula SEXTA del contrato: el bono especial se causa solo con la semana completa.
+   * Con una o más faltas se paga el salario de los días (Cl. 8 para los descansos) y el cesta
+   * ticket completo, sin bono.
+   */
+  const semanaCompleta = diasLaborados >= DIAS_JORNADA_SEMANA;
+  const totalUsd =
+    tipo === 'adelanto_prestaciones'
+      ? sobreUsd
+      : semanaCompleta
+        ? round2(Math.max(sobreUsd, pisoLegalUsd))
+        : pisoLegalUsd;
+  const aplicaPisoLegal = tipo === 'semanal' && semanaCompleta && totalUsd > sobreUsd + 0.001;
   const totalVes = usdAVes(totalUsd, tasa);
 
   let cestaUsd = 0;
@@ -131,7 +143,7 @@ export function calcularSemanaObra(input: CalcularSemanaObraInput): ResultadoSem
     if (complementoUsd > 0) {
       lineasLegal.push({
         codigo: 'COMP',
-        concepto: 'Complemento hasta el sobre pactado (inflación; cesta ya desglosada)',
+        concepto: 'Bono especial no salarial (Cl. SEXTA del contrato; semana de asistencia completa)',
         usd: complementoUsd,
         ves: complementoVes,
         salarial: false,
@@ -139,7 +151,9 @@ export function calcularSemanaObra(input: CalcularSemanaObraInput): ResultadoSem
     }
     lineasPatio.push({
       codigo: 'SOBRE',
-      concepto: `Sobre de patio ${clase} — USD ${sobreUsd} (cesta incluida)`,
+      concepto: semanaCompleta
+        ? `Sobre de patio ${clase} — USD ${sobreUsd} (cesta incluida)`
+        : `Semana con ${DIAS_JORNADA_SEMANA - diasLaborados} falta(s): salario de los días y cesta ticket, sin bono especial (pactado USD ${sobreUsd})`,
       usd: totalUsd,
       ves: totalVes,
       salarial: false,
