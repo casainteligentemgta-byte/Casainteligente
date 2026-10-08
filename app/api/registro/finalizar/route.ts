@@ -76,17 +76,21 @@ export async function POST(req: Request) {
   const base = baseUrlPublica(req);
 
   let evaluacionUrl: string | null = null;
-  if (!sinEvaluacion && !yaEvaluado && token && base) {
+  /** La evaluación se exige y no consta hecha: el trabajador NO entra a la banca todavía. */
+  let evaluacionPendiente = !sinEvaluacion && !yaEvaluado;
+  if (evaluacionPendiente && token) {
     const inv = await asegurarInvitacionEvaluacion(db, { empleadoId, token });
     if (!inv.ok) {
       console.warn('[registro finalizar] invitación evaluación:', inv.error);
-    } else if (!inv.hecha) {
+    } else if (inv.hecha) {
+      evaluacionPendiente = false;
+    } else if (base) {
       evaluacionUrl = `${base}/talento/evaluacion?token=${encodeURIComponent(token)}`;
     }
   }
 
-  // Sin evaluación pendiente: entra a la banca al completar la hoja de vida.
-  if (!evaluacionUrl) {
+  // Entra a la banca al completar la hoja de vida, salvo que deba (y aún no haya hecho) la evaluación.
+  if (!evaluacionPendiente) {
     const estado = (e.estado ?? '').trim();
     if (!estado || estado === 'evaluacion_pendiente') {
       const { error: upErr } = await db

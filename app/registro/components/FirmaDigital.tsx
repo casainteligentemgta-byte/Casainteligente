@@ -3,6 +3,7 @@
 import { useCallback, useRef } from 'react';
 import SignatureCanvas from 'react-signature-canvas';
 import { toast } from 'sonner';
+import { uuidV4 } from '@/lib/registro/uuidCompat';
 
 export type FirmaDigitalGuardado = {
   dataUrl: string;
@@ -31,7 +32,7 @@ export default function FirmaDigital({ value, onChange, disabled }: Props) {
       return;
     }
     const dataUrl = sig.toDataURL('image/png');
-    const eventId = crypto.randomUUID();
+    const eventId = uuidV4();
     const capturedAtIso = new Date().toISOString();
     onChange({ dataUrl, eventId, capturedAtIso });
     toast.success('Firma lista. Puedes enviar la postulación.');

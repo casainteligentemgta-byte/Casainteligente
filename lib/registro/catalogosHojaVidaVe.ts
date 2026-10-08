@@ -104,6 +104,19 @@ export function parseCelularVe(raw: string): { prefijo: string; numero: string }
   return { prefijo, numero: resto.slice(0, 7) };
 }
 
+/**
+ * Lo que el obrero escribe en la casilla del número. Si escribe o pega el número completo
+ * (04241234567, +58 424…), se separa el prefijo en lugar de cortar los 7 primeros dígitos.
+ */
+export function celularDesdeEntrada(prefijoActual: string, texto: string): string {
+  const d = String(texto ?? '').replace(/\D/g, '');
+  if (d.length >= 10) {
+    const p = parseCelularVe(d);
+    return composeCelularVe(p.prefijo, p.numero);
+  }
+  return composeCelularVe(prefijoActual, d);
+}
+
 export function composeCelularVe(prefijo: string, numero: string): string {
   const p = PREFIJOS_CELULAR_VE.includes(prefijo as (typeof PREFIJOS_CELULAR_VE)[number])
     ? prefijo

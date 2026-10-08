@@ -197,6 +197,39 @@ export const COLUMNAS_HOJA_VIDA_FORMULARIO = [
   'firma_electronica_at',
 ] as const;
 
+function sinAcentos(s: string): string {
+  return s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-zñ ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Primer apellido de una fila de `ci_empleados` (columna o hoja de vida); '' si no consta. */
+export function primerApellidoDeFila(row: Record<string, unknown>): string {
+  const col = typeof row.primer_apellido === 'string' ? row.primer_apellido : '';
+  const hv = row.hoja_vida_obrero as { datosPersonales?: { primerApellido?: unknown } } | null | undefined;
+  const deHv = typeof hv?.datosPersonales?.primerApellido === 'string' ? hv.datosPersonales.primerApellido : '';
+  return sinAcentos(col || deHv).split(' ')[0] ?? '';
+}
+
+/**
+ * ¿Es la misma persona? Con la misma cédula, coincide si el primer apellido es igual o si alguno
+ * de los dos no lo tiene cargado (expedientes creados por RRHH solo con nombre y cédula). Si no hay
+ * apellido en ninguna columna, se compara contra el nombre completo.
+ */
+export function mismaPersonaPorApellido(nuevo: Record<string, unknown>, previo: Record<string, unknown>): boolean {
+  const a = primerApellidoDeFila(nuevo);
+  const b = primerApellidoDeFila(previo);
+  if (a && b) return a === b;
+  const otroNombre = sinAcentos(String((a ? previo : nuevo).nombre_completo ?? ''));
+  const apellido = a || b;
+  if (!apellido || !otroNombre) return true;
+  return otroNombre.split(' ').includes(apellido);
+}
+
 /**
  * Un expediente por cédula: si la persona que acaba de registrarse ya tenía expediente,
  * los datos nuevos pasan al expediente anterior (conserva su historial) y el duplicado se borra.
@@ -224,6 +257,18 @@ export async function unificarExpedientePorCedula(
     (r) => digitosCedula(r.cedula ?? r.documento) === dig,
   );
   if (!previo) return { empleadoId: nuevoId, unificado: false };
+
+  // Misma cédula pero otro apellido: puede ser un dígito mal escrito. No se toca el
+  // expediente existente; quedan los dos y RRHH lo revisa.
+  const { data: previoFila } = await db
+    .from('ci_empleados')
+    .select('primer_apellido, nombre_completo, hoja_vida_obrero')
+    .eq('id', previo.id)
+    .maybeSingle();
+  if (!mismaPersonaPorApellido(n, (previoFila ?? {}) as Record<string, unknown>)) {
+    console.warn('[unificar expediente] cédula repetida con otro apellido; no se unifica', previo.id, nuevoId);
+    return { empleadoId: nuevoId, unificado: false };
+  }
 
   const patch: Record<string, unknown> = { estado_proceso: 'cv_completado' };
   for (const col of COLUMNAS_HOJA_VIDA_FORMULARIO) {

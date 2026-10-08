@@ -19,6 +19,7 @@ import {
 } from '@/lib/registro/captacionPlanillaSchema';
 import { nombresLegadoDesdeGaceta } from '@/lib/registro/ciEmpleadosNombresLegado';
 import { uploadTalentoPublicFile } from '@/lib/registro/uploadTalentoPublic';
+import { uuidV4 } from '@/lib/registro/uuidCompat';
 import { apiUrl } from '@/lib/http/apiUrl';
 import { createClient } from '@/lib/supabase/client';
 import { createClientConInvitacion } from '@/lib/supabase/clientInvitacion';
@@ -35,6 +36,7 @@ import {
   parseCedulaHv,
   parseCelularVe,
   type LetraCedulaHv,
+  celularDesdeEntrada,
 } from '@/lib/registro/catalogosHojaVidaVe';
 
 import type { FirmaDigitalGuardado } from './components/FirmaDigital';
@@ -231,10 +233,9 @@ export default function RegistroPorNeedCliente({
       if (!form.primerNombre.trim()) return 'Indica al menos el primer nombre.';
       if (!form.primerApellido.trim()) return 'Indica al menos el primer apellido.';
       const ced = parseCedulaHv(form.cedula);
-      if (!ced.numero || ced.numero.length < 5) return 'Indica la cédula (V o E y el número).';
+      if (!ced.numero || ced.numero.length < 6) return 'Indica la cédula (V o E y el número).';
       const cel = parseCelularVe(form.celular);
       if (!cel.numero || cel.numero.length !== 7) return 'Indica el celular con prefijo venezolano y 7 dígitos.';
-      if (!form.correo.trim()) return 'Indica el correo electrónico.';
       if (!form.direccion.trim()) return 'Indica la dirección / domicilio.';
       if (!form.fechaNacimiento.trim()) return 'Indica la fecha de nacimiento.';
       if (!form.fotoPerfilFile) return 'Sube la foto de perfil (tipo carnet).';
@@ -289,7 +290,7 @@ export default function RegistroPorNeedCliente({
     setEnviando(true);
     try {
       const needRowId = need.id;
-      const stagingId = crypto.randomUUID();
+      const stagingId = uuidV4();
       let fotoPerfil = '';
       let fotoCedula = '';
       if (form.fotoPerfilFile) {
@@ -411,7 +412,7 @@ export default function RegistroPorNeedCliente({
         { primerNombre: form.primerNombre, segundoNombre: form.segundoNombre },
         nombreCompleto || undefined,
       );
-      const tokenRegistro = globalThis.crypto.randomUUID();
+      const tokenRegistro = uuidV4();
 
       const insertPayload: Record<string, unknown> = {
         recruitment_need_id: needRowId,
@@ -423,7 +424,7 @@ export default function RegistroPorNeedCliente({
         nombre_completo: nombreCompleto || 'Postulante',
         nombres: nombresLegado,
         cargo: cargoEtiqueta,
-        email: form.correo.trim(),
+        email: form.correo.trim() || null,
         telefono: form.celular.trim(),
         documento: form.cedula.trim(),
         cedula: form.cedula.trim(),
@@ -491,21 +492,8 @@ export default function RegistroPorNeedCliente({
         return;
       }
 
-      const { data: cur } = await supabase
-        .from('recruitment_needs')
-        .select('conteo_postulaciones')
-        .eq('id', needRowId)
-        .maybeSingle();
-      const prev = (cur as { conteo_postulaciones?: number } | null)?.conteo_postulaciones ?? 0;
-      const { error: upNeed } = await supabase
-        .from('recruitment_needs')
-        .update({ conteo_postulaciones: prev + 1 })
-        .eq('id', needRowId);
-      if (upNeed) {
-        toast.message('Postulación guardada; no se pudo actualizar el contador de la vacante.', { description: upNeed.message });
-      } else {
-        toast.success('Postulación registrada.');
-      }
+      // El contador de la solicitud lo recalcula el servidor al finalizar (/api/registro/finalizar).
+      toast.success('Postulación registrada.');
 
       if (firma) {
         const resFirma = await fetch('/api/registro/subir-firma', {
@@ -876,7 +864,7 @@ export default function RegistroPorNeedCliente({
                       value={parseCelularVe(form.celular).numero}
                       onChange={(e) => {
                         const { prefijo } = parseCelularVe(form.celular);
-                        setF('celular', composeCelularVe(prefijo, e.target.value));
+                        setF('celular', celularDesdeEntrada(prefijo, e.target.value));
                       }}
                       placeholder="1234567"
                       aria-label="Número de celular"
@@ -896,7 +884,7 @@ export default function RegistroPorNeedCliente({
                 </div>
               </div>
               <div>
-                <label className={labelClass}>Correo *</label>
+                <label className={labelClass}>Correo (opcional)</label>
                 <input
                   type="email"
                   className={inputClass}
