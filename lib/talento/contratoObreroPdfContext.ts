@@ -953,9 +953,9 @@ export type ContratoExpressManualInput = {
   obreroMunicipioResidencia?: string | null;
   /** Comparecencia: estado de residencia del trabajador. */
   obreroEstadoResidencia?: string | null;
-  /** Bono especial no salarial en USD (cláusula SEXTA del PDF). */
+  /** Reservado: el PDF de la Cl. SEXTA usa el complemento fijo de alimentación, no este bono. */
   bonoManualUsd?: number | null;
-  /** Arreglo de pago semanal pactado (USD); sustituye a «tabulador + bono» en el contrato. */
+  /** Arreglo semanal histórico; la Cl. SEXTA ya no lo usa. El de la SÉPTIMA es `arregloMensualUsd`. */
   arregloSemanalUsd?: number | null;
   /** Arreglo de pago mensual pactado (USD, cada cuatro semanas trabajadas). */
   arregloMensualUsd?: number | null;

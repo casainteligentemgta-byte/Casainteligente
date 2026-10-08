@@ -23,14 +23,16 @@ const DESCRIPCION =
  * Si la plantilla aún lo trae, se reemplaza por el cuerpo vigente.
  */
 function esTextoAnterior2026(cuerpo: string | null | undefined): boolean {
-  return /COMPENSACI[ÓO]N POR CULMINACI[ÓO]N|PERIODO DE PRUEBA DE NOVENTA/i.test(String(cuerpo ?? ''));
+  return /COMPENSACI[ÓO]N POR CULMINACI[ÓO]N|PERIODO DE PRUEBA DE NOVENTA|INGRESO INTEGRAL INDEXADO|BONO ESPECIAL/i.test(
+    String(cuerpo ?? ''),
+  );
 }
 
 function esStubCorto(cuerpo: string | null | undefined): boolean {
   const t = String(cuerpo ?? '').trim();
   if (t.length < 800) return true;
   if (esTextoAnterior2026(t)) return true;
-  return !/TIEMPO DE PRUEBA|PERIODO DE PRUEBA|CONTRATO INDIVIDUAL DE TRABAJO (POR|PARA) (UNA )?OBRA DETERMINADA/i.test(t);
+  return !/TIEMPO DE PRUEBA|PER[IÍ]ODO DE PRUEBA|CONTRATO INDIVIDUAL DE TRABAJO (POR|PARA) (UNA )?OBRA DETERMINADA/i.test(t);
 }
 
 function payload() {

@@ -4,18 +4,12 @@ import {
   oficinaRegistroMercantilComparecencia,
 } from '@/lib/talento/textoInscripcionRegistroMercantilContrato';
 import { fechaLargaRegistroMercantilContratoVe } from '@/lib/talento/registroMercantilCamposPdf';
-import { CESTATICKET_SEMANAL_USD } from '@/lib/nomina/cestaticketLegalUsd';
-import { TASA_BCV_VES_POR_USD_TABULADOR_2023_06_20 } from '@/lib/nomina/tabuladorSalariosConstruccion2023';
 import { nacionalidadRepresentanteSegunGenero } from '@/lib/talento/nacionalidadRepresentanteSegunGenero';
 import { trabajadorFemeninoDesdeEstadoCivil } from '@/lib/talento/cedulaAuth';
-import { laboresContratoDesdeCargo } from '@/lib/talento/laboresOficioContrato';
+import { COMPLEMENTO_ALIMENTACION_SEMANAL_USD } from '@/lib/nomina/reglasPagoObra';
 import {
-  ALIMENTACION_MENSUAL_VES_HOMOLOGADA_2026,
   TABULADOR_HOMOLOGADO_2026_REFERENCIA,
-  TASA_BCV_FIRMA_ACUERDO_2026,
-  alimentacionMensualUsdAnclada,
   alimentacionSemanalUsdAnclada,
-  alimentacionSemanalVes,
   nivelDesdeCodigoOficio,
   nivelDesdeSalarioDiario2023,
   salarioDiarioHomologado,
@@ -190,12 +184,9 @@ export type ParametrosContratoPdf = {
   fechaFirmaContratoIso?: string | null;
   fechaAsambleaVoluntadIso?: string | null;
   ingresoSemanalConsolidadoUsdTexto?: string | null;
-  /** Bono especial no salarial en USD (express u otros flujos); se suma al ingreso tabulador en cláusula SEXTA. */
+  /** Reservado (contratos anteriores). La Cl. SEXTA ya no usa un bono para completar un ingreso semanal. */
   bonoManualUsd?: number | null;
-  /**
-   * Arreglo de pago semanal pactado (USD como moneda de cuenta). Si viene, es el total de la
-   * cláusula del complemento semanal y sustituye a «tabulador + bono manual».
-   */
+  /** Reservado. El complemento semanal de la Cl. SEXTA es fijo (33 USD) y no usa el arreglo. */
   arregloSemanalUsd?: number | null;
   /** Arreglo de pago mensual (cada cuatro semanas trabajadas). Si viene, agrega su cláusula. */
   arregloMensualUsd?: number | null;
@@ -394,8 +385,6 @@ function cedulaConGuion(raw: string | null | undefined): string {
   return f;
 }
 
-const PLACEHOLDER_LINEA = '_____________';
-
 function esLugarPrestacionPlaceholder(l: string): boolean {
   const t = l.trim().toLowerCase();
   if (!t) return true;
@@ -426,13 +415,6 @@ function fmtBsVes(n: number): string {
   return new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 }
 
-function rifPatronoDisplay(rif: string): string {
-  const t = (rif ?? '').trim().toUpperCase();
-  if (!t || t === '_____________') return '________________________';
-  if (/^J[-\s]/.test(t)) return t.replace(/\s+/g, '');
-  return `J-${t.replace(/^J/, '').replace(/^[-\s]+/, '')}`;
-}
-
 function fmtUsdNumeroPlano(n: number): string {
   return new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 }
@@ -457,44 +439,16 @@ function ciudadDomicilioProcesal(raw: string | null | undefined): string {
   return t || 'Pampatar';
 }
 
-/** Número USD positivo desde el texto de ingreso semanal tabulador (en-US, es-VE o plano). */
-function tryParseUsdNumberDesdeTextoIngresoParam(raw: string | null | undefined): number | null {
-  const t = (raw ?? '').trim();
-  if (!t) return null;
-  if (/_{2,}/.test(t) && !/\d/.test(t)) return null;
-  let s = t
-    .replace(/\s*usd\s*$/i, '')
-    .replace(/^\$\s*/, '')
-    .replace(/\$/g, '')
-    .trim();
-  if (!s) return null;
-  const lastComma = s.lastIndexOf(',');
-  const lastDot = s.lastIndexOf('.');
-  let norm = s;
-  if (lastComma >= 0 && lastDot >= 0) {
-    norm = lastComma > lastDot ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, '');
-  } else if (lastComma >= 0 && lastDot < 0) {
-    const parts = s.split(',');
-    norm =
-      parts.length === 2 && parts[1].length <= 2
-        ? `${parts[0].replace(/\./g, '')}.${parts[1]}`
-        : s.replace(/,/g, '');
-  } else {
-    norm = s.replace(/,/g, '');
-  }
-  const n = Number.parseFloat(norm);
-  return Number.isFinite(n) && n > 0 ? n : null;
-}
-
 export function ContratoObreroPDF({
   expedienteId,
-  esContratoExpress = false,
+  esContratoExpress: _esContratoExpress = false,
   empleado,
   entidad,
   configNomina,
   parametros,
   contrato,
 }: ContratoObreroPdfStructuredProps) {
+  void _esContratoExpress;
   const nombreLegalSociedad = str(
     razonSocialPatronoParaContratoPdf(entidad.nombre_legal, entidad.nombre),
     '________________________________________________',
@@ -511,15 +465,6 @@ export function ContratoObreroPDF({
     const c = (empleado.cargo_nombre ?? '').trim();
     return c ? c.toUpperCase() : '______________________________';
   })();
-  const laboresOficioTxt = laboresContratoDesdeCargo({
-    cargoCodigo: empleado.cargo_codigo,
-    cargoNombre: empleado.cargo_nombre,
-    funcionesOficiales: configNomina.funciones_oficiales ?? empleado.funciones_oficiales,
-    tareasEspecificas: empleado.tareas_especificas,
-  });
-  const fraseLaboresOficio = laboresOficioTxt
-    ? ` Las labores principales del oficio son: `
-    : '';
   const fechaCierreIso = parametros.fechaFirmaContratoIso ?? parametros.fechaIngreso;
   const { dia: diaFirma, mes: mesFirma, anio: anioFirma } = partesFechaCierreFirma(fechaCierreIso);
 
@@ -533,52 +478,16 @@ export function ContratoObreroPDF({
       configNomina.salario_basico_diario_ves ?? (tieneSbMen != null ? tieneSbMen / 30 : null),
     );
   const salDiarioHomologado = salarioDiarioHomologado(nivelOficio);
-  const salDiarioTxt = salDiarioHomologado != null ? fmtBsVes(salDiarioHomologado) : '__________________';
   const salSemanalTxt =
     salDiarioHomologado != null ? fmtBsVes(Math.round(salDiarioHomologado * 7 * 100) / 100) : '__________________';
-  const alimMensualTxt = fmtBsVes(ALIMENTACION_MENSUAL_VES_HOMOLOGADA_2026);
-  const alimSemanalTxt = fmtBsVes(alimentacionSemanalVes());
   const cestaSemanalUsdTxt = `${fmtUsdNumeroPlano(alimentacionSemanalUsdAnclada())} USD`;
-  const cestaMensualUsdTxt = `${fmtUsdNumeroPlano(alimentacionMensualUsdAnclada())} USD`;
-  const cestaMen = configNomina.cestaticket_mensual;
-  const cestaSemUsdNum =
-    !esContratoExpress &&
-    cestaMen != null &&
-    Number.isFinite(Number(cestaMen)) &&
-    Number(cestaMen) > 0 &&
-    TASA_BCV_VES_POR_USD_TABULADOR_2023_06_20 > 0
-      ? Number(cestaMen) / 4 / TASA_BCV_VES_POR_USD_TABULADOR_2023_06_20
-      : null;
-  const cestaUsdPlanoTxt = esContratoExpress
-    ? `${fmtUsdNumeroPlano(CESTATICKET_SEMANAL_USD)} USD`
-    : cestaSemUsdNum != null && Number.isFinite(cestaSemUsdNum)
-      ? `${fmtUsdNumeroPlano(Math.round(cestaSemUsdNum * 100) / 100)} USD`
-      : '10 USD';
-  const ingresoSemanalBaseUsdNum = tryParseUsdNumberDesdeTextoIngresoParam(
-    parametros.ingresoSemanalConsolidadoUsdTexto,
-  );
-  const bonoManualUsdNum =
-    parametros.bonoManualUsd != null && Number.isFinite(Number(parametros.bonoManualUsd))
-      ? Math.max(0, Number(parametros.bonoManualUsd))
-      : 0;
+  const complementoAlimUsdTxt = `${fmtUsdNumeroPlano(COMPLEMENTO_ALIMENTACION_SEMANAL_USD)} USD`;
   const montoUsdPositivo = (v: number | null | undefined): number | null =>
     v != null && Number.isFinite(Number(v)) && Number(v) > 0 ? Math.round(Number(v) * 100) / 100 : null;
-  const arregloSemanalUsdNum = montoUsdPositivo(parametros.arregloSemanalUsd);
   const arregloMensualUsdNum = montoUsdPositivo(parametros.arregloMensualUsd);
-  /**
-   * Total semanal de la cláusula del complemento: el arreglo pactado con el trabajador;
-   * en contratos anteriores al arreglo, tabulador + bono manual en USD.
-   */
-  const totalIngresoSemanalUsdNum =
-    arregloSemanalUsdNum ??
-    (ingresoSemanalBaseUsdNum != null || bonoManualUsdNum > 0
-      ? (ingresoSemanalBaseUsdNum ?? 0) + bonoManualUsdNum
-      : null);
-  const totalIngresoSemanalUsdClausulaSexTxt =
-    totalIngresoSemanalUsdNum != null ? `${fmtUsdNumeroPlano(totalIngresoSemanalUsdNum)} USD` : '__________ USD';
 
   const HORARIO_DETALLE_PDF_DEFAULT =
-    'Lunes a Jueves: De 7:00 a.m. a 5:00 p.m. (1 hora de descanso de 12:00 p.m. a 1:00 p.m., no imputable a la jornada). Viernes: De 7:00 a.m. a 11:00 a.m. (Jornada continua). ';
+    'de lunes a jueves, de 7:00 a.m. a 12:00 m. y de 1:00 p.m. a 5:00 p.m., y los viernes de 7:00 a.m. a 11:00 a.m.';
   const horarioCuartaDetalle = (parametros.horarioSemanal ?? '').trim() || HORARIO_DETALLE_PDF_DEFAULT;
 
   const rep = limpiarNombreRepresentanteLegal(
@@ -619,14 +528,8 @@ export function ContratoObreroPDF({
     trabFemenino,
   );
   const repCedulaLinea = str(repCedulaGuion, '_______________');
-  const compUsdMes =
-    parametros.compensacionCulminacionUsdPorMes != null &&
-    Number.isFinite(Number(parametros.compensacionCulminacionUsdPorMes)) &&
-    Number(parametros.compensacionCulminacionUsdPorMes) > 0
-      ? Number(parametros.compensacionCulminacionUsdPorMes)
-      : 100;
-  /** SÉPTIMA: el monto por mes trabajado es el arreglo mensual pactado con el trabajador. */
-  const compUsdMesTxt = fmtUsdNumeroPlano(arregloMensualUsdNum ?? compUsdMes);
+  /** SÉPTIMA: arreglo mensual pactado; si falta, 90 USD (mismo default de ayudante). */
+  const compUsdMesTxt = fmtUsdNumeroPlano(arregloMensualUsdNum ?? 90);
   const puntoEncTransporte = fragmentoPuntoEncuentroTransporte(parametros.textoPuntoEncuentroTransporteSex);
   const ciudadProcesal = ciudadDomicilioProcesal(parametros.domicilioProcesalCiudad);
   const fragDomCentroComercial = fragmentosDomicilioCentroComercial(domicilioComparecenciaPdf);
@@ -684,17 +587,15 @@ export function ContratoObreroPDF({
         representada en este acto por su <Text style={styles.bold}>{repCargoLinea}</Text>{' '}
         <Text style={styles.bold}>{repArticuloLinea}</Text> <Text style={styles.bold}>{rep}</Text>,{' '}
         <Text style={styles.bold}>{nacionalidadRep}</Text>, mayor de edad, hábil en derecho,{' '}
-        <Text style={styles.bold}>{estadoCivilRep}</Text>, de este domicilio, titular de la cédula de Identidad número{' '}
+        <Text style={styles.bold}>{estadoCivilRep}</Text>, de este domicilio, titular de la cédula de identidad N°{' '}
         <Text style={styles.bold}>{repCedulaLinea}</Text>, quien a los efectos de este contrato se denominará{' '}
-        <Text style={styles.bold}>LA ENTIDAD DE TRABAJO</Text>, por una parte y por la otra {articuloCiudadanoTrab}{' '}
-        <Text style={styles.bold}>{nombreTrabajador}</Text>, <Text style={styles.bold}>{estadoCivilTrab}</Text>, mayor de edad, hábil en
-        derecho, <Text style={styles.bold}>{nacionalidadTrab}</Text>, titular de la cédula de identidad número{' '}
-        <Text style={styles.bold}>{cedulaTrabGuion}</Text>, de este domicilio; quien en lo
-        sucesivo se denominará <Text style={styles.bold}>EL TRABAJADOR</Text>, se ha convenido en celebrar, como en efecto se celebra, el
-        presente Contrato de Trabajo para una Obra Determinada, conforme a lo establecido en el Artículo 63 de la Ley Orgánica de Trabajo de
-        los Trabajadores y Trabajadoras, y las cláusulas 18 y 19 de la vigente Convención Colectiva de Trabajo para la Rama de la Industria de
-        la Construcción, conexos, afines y similares de la República Bolivariana de Venezuela, el cual se regirá por las Cláusulas que se
-        estipulan a continuación:
+        <Text style={styles.bold}>LA ENTIDAD DE TRABAJO</Text>, por una parte; y por la otra, {articuloCiudadanoTrab}{' '}
+        <Text style={styles.bold}>{nombreTrabajador}</Text>, <Text style={styles.bold}>{nacionalidadTrab}</Text>, mayor de edad, hábil en
+        derecho, <Text style={styles.bold}>{estadoCivilTrab}</Text>, de este domicilio, titular de la cédula de identidad N°{' '}
+        <Text style={styles.bold}>{cedulaTrabGuion}</Text>, quien en lo
+        sucesivo se denominará <Text style={styles.bold}>EL TRABAJADOR</Text>, se ha convenido en celebrar el
+        presente Contrato de Trabajo para una Obra Determinada, conforme al artículo 63 de la LOTTT y a las Cláusulas 18 y 19 de la
+        Convención Colectiva de Trabajo para la Rama de la Industria de la Construcción, el cual se regirá por las cláusulas siguientes:
       </Text>
     </>
   );
@@ -703,30 +604,23 @@ export function ContratoObreroPDF({
     <>
       <Text style={[styles.paragraph, styles.paragraphIntro, styles.clauseDense]}>
         <Text style={styles.bold}>PRIMERA: OBJETO Y MODALIDAD.</Text>
-        {` Este contrato se celebra bajo la modalidad de OBRA DETERMINADA (artículo 63 de la LOTTT y Cláusulas 18 y 19 de la Convención Colectiva), específicamente para la ejecución de la fase técnica de: `}
+        {` Este contrato se celebra bajo la modalidad de OBRA DETERMINADA (artículo 63 de la LOTTT y Cláusulas 18 y 19 de la Convención Colectiva), para la ejecución de la fase técnica de: `}
         <Text style={styles.bold}>{faseTecnicaTxt}</Text>
         {`, dentro de la obra denominada: `}
         <Text style={styles.bold}>{obraDenomTxt}</Text>
-        {`. LA ENTIDAD DE TRABAJO tiene como objeto la explotación de actividades comerciales y de la industria de la construcción, y a tales efectos contrata a EL TRABAJADOR para que desempeñe el cargo de: `}
+        {`. LA ENTIDAD DE TRABAJO contrata a EL TRABAJADOR para desempeñar el cargo de `}
         <Text style={styles.bold}>{oficioStr}</Text>
-        {`, cargo establecido en el Tabulador de Oficios y Salarios Básicos de la Convención Colectiva vigente.`}
-        {laboresOficioTxt ? (
-          <>
-            {fraseLaboresOficio}
-            <Text style={styles.bold}>{laboresOficioTxt}</Text>.
-          </>
-        ) : null}
-        {` EL TRABAJADOR se obliga a: 1.- Poner a disposición su capacidad normal de trabajo durante la jornada, en las labores convenidas y en las anexas o complementarias. 2.- Ejecutar las actividades inherentes al cargo, incluyendo recibir, procesar y pesar materia prima cuando sea requerido. 3.- Usar obligatoriamente el uniforme y equipos de protección (guantes, lentes, botas, etc.) según la LOPCYMAT. 4.- Mantener el orden del área asignada y el buen estado de maquinarias y herramientas. 5.- No realizar, por cuenta propia o ajena, actividades que compitan con las de LA ENTIDAD DE TRABAJO, ni utilizar en ellas sus equipos, materiales o información.`}
+        {`, establecido en el Tabulador de Oficios y Salarios Básicos de la Convención Colectiva. EL TRABAJADOR se obliga a: 1. Poner a disposición su capacidad normal de trabajo durante la jornada, en las labores convenidas y en las anexas o complementarias. 2. Ejecutar las actividades inherentes al cargo. 3. Usar obligatoriamente el uniforme y los equipos de protección (guantes, lentes, botas, etc.) según la LOPCYMAT. 4. Mantener el orden del área asignada y el buen estado de maquinarias y herramientas. 5. No realizar, por cuenta propia o ajena, actividades que compitan con las de LA ENTIDAD DE TRABAJO, ni utilizar en ellas sus equipos, materiales o información.`}
       </Text>
 
       <Text style={[styles.paragraph, styles.paragraphIntro]}>
-        <Text style={styles.bold}>SEGUNDA: PERIODO DE PRUEBA.</Text>
-        {` Conforme a la Cláusula 10 de la Convención Colectiva, se acuerda un PERIODO DE PRUEBA DE TREINTA (30) DÍAS. Durante este lapso, LA ENTIDAD DE TRABAJO apreciará los conocimientos y aptitudes de EL TRABAJADOR. Cualquiera de las partes podrá dar por terminada la relación sin indemnización por despido, y LA ENTIDAD DE TRABAJO pagará los salarios y demás conceptos causados hasta esa fecha.`}
+        <Text style={styles.bold}>SEGUNDA: PERÍODO DE PRUEBA.</Text>
+        {` Conforme a la Cláusula 10 de la Convención Colectiva, se acuerda un PERÍODO DE PRUEBA DE TREINTA (30) DÍAS. Durante este lapso, LA ENTIDAD DE TRABAJO apreciará los conocimientos y aptitudes de EL TRABAJADOR. Cualquiera de las partes podrá dar por terminada la relación sin indemnización por despido, y LA ENTIDAD DE TRABAJO pagará los salarios y demás conceptos causados hasta esa fecha.`}
       </Text>
 
       <Text style={[styles.paragraph, styles.paragraphIntro]}>
         <Text style={styles.bold}>TERCERA: DURACIÓN Y TERMINACIÓN.</Text>
-        {` La relación de trabajo está sujeta exclusivamente a la culminación física de la fase técnica descrita en la Cláusula Primera. El vínculo terminará con la conclusión de dicha fase, conforme al artículo 63 de la LOTTT y a la Cláusula 19 de la Convención Colectiva, lo que se hará constar en el Acta de Culminación asentada en el Libro de Obra por el Supervisor. La terminación es independiente de la entrega formal del inmueble al propietario. En esa oportunidad LA ENTIDAD DE TRABAJO pagará a EL TRABAJADOR las prestaciones sociales y demás conceptos que le correspondan, conforme al artículo 142 de la LOTTT y a la Cláusula 51 de la Convención Colectiva.`}
+        {` La relación de trabajo está sujeta a la culminación física de la fase técnica descrita en la Cláusula Primera. El vínculo terminará con la conclusión de dicha fase, conforme al artículo 63 de la LOTTT y a la Cláusula 19 de la Convención Colectiva, lo que se hará constar en el Acta de Culminación asentada en el Libro de Obra por el Supervisor. La terminación es independiente de la entrega formal del inmueble al propietario. En esa oportunidad, LA ENTIDAD DE TRABAJO pagará a EL TRABAJADOR las prestaciones sociales y demás conceptos que le correspondan, conforme al artículo 142 de la LOTTT y a la Cláusula 51 de la Convención Colectiva.`}
       </Text>
 
       <Text style={[styles.paragraph, styles.paragraphIntro]}>
@@ -734,7 +628,7 @@ export function ContratoObreroPDF({
         {` Conforme al artículo 173 de la LOTTT y a la Cláusula 6 de la Convención Colectiva, la jornada semanal será de cuarenta (40) horas de trabajo efectivo: `}
         {horarioCuartaDetalle}{' '}
         <Text style={styles.bold}>CONTROL:</Text>
-        {` EL TRABAJADOR debe firmar diariamente su registro de avance en el Libro de Obra. La inobservancia del horario en cuatro (4) oportunidades en un mes o la negativa a firmar el registro podrá constituir falta grave a las obligaciones que impone la relación de trabajo, conforme al artículo 79, literal "i", de la LOTTT.`}
+        {` EL TRABAJADOR debe firmar diariamente su registro de avance en el Libro de Obra. La inobservancia del horario en cuatro (4) oportunidades en un mes, o la negativa a firmar el registro, podrá constituir falta grave a las obligaciones que impone la relación de trabajo, conforme al artículo 79, literal "i", de la LOTTT.`}
       </Text>
     </>
   );
@@ -749,44 +643,47 @@ export function ContratoObreroPDF({
       </Text>
 
       <Text style={[styles.paragraph, styles.paragraphIntro]}>
-        <Text style={styles.bold}>SEXTA: INGRESO INTEGRAL INDEXADO.</Text>
-        {` EL TRABAJADOR devengará los siguientes conceptos pagaderos en Bolívares. `}
+        <Text style={styles.bold}>SEXTA: SALARIO Y BENEFICIOS SOCIALES.</Text>
+        {` EL TRABAJADOR devengará los siguientes conceptos pagaderos en Bolívares:`}
         {'\n'}
-        a.- <Text style={styles.bold}>{salSemanalTxt}</Text>
-        {` (Bs.) por concepto de Salario Semanal según Tabulador, equivalente a dos (2) veces el salario de su oficio en el Tabulador de la Convención Colectiva, conforme al ${TABULADOR_HOMOLOGADO_2026_REFERENCIA}; `}
+        a.- Bs. <Text style={styles.bold}>{salSemanalTxt}</Text>
+        {` por concepto de Salario Semanal según Tabulador, equivalente al salario de su oficio en el Tabulador de la Convención Colectiva con el aumento del cien por ciento (100%), es decir, dos (2) veces dicho salario, conforme al ${TABULADOR_HOMOLOGADO_2026_REFERENCIA};`}
         {'\n'}
         b.- Cesta Ticket: el equivalente en Bolívares de <Text style={styles.bold}>{cestaSemanalUsdTxt}</Text>
         {` semanales, a la tasa oficial del BCV del día del pago; y`}
         {'\n'}
-        c.- <Text style={styles.bold}>BONO ESPECIAL: (NO Salarial):</Text>
-        {` De conformidad con el artículo 105 de la LOTTT, para elevar el Ingreso Semanal a un total equivalente a: `}
-        <Text style={styles.bold}>{totalIngresoSemanalUsdClausulaSexTxt}</Text>
-        {'. '}
-        {`El BONO ESPECIAL es una liberalidad de LA ENTIDAD DE TRABAJO, potestativa para ella: podrá otorgarlo o no en cada semana, sin que su pago en semanas anteriores genere derecho adquirido ni obligación de mantenerlo. En todo caso, solo podrá causarse en las semanas de asistencia completa: si EL TRABAJADOR falta injustificadamente a una o más jornadas de la semana, no se causará en esa semana, y se le pagarán el salario de los días laborados (con los descansos según la Cláusula 8 de la Convención Colectiva) y el Cesta Ticket. El BONO ESPECIAL absorbe los aumentos: por ser la diferencia necesaria para alcanzar el Ingreso Semanal total aquí indicado, todo aumento del salario o del Cesta Ticket, sea por decreto del Ejecutivo Nacional, por la Convención Colectiva, su tabulador o actas homologadas, o por decisión de LA ENTIDAD DE TRABAJO, se imputará a este BONO ESPECIAL y lo reducirá en la misma cantidad, sin que el Ingreso Semanal total varíe por ese hecho; si el aumento lo supera, se pagarán el salario y el Cesta Ticket aumentados y el BONO ESPECIAL no se causará. Todos los pagos se realizarán en Bolívares calculados a la tasa oficial del Banco Central de Venezuela (BCV) del día del pago.`}
+        c.- <Text style={styles.bold}>COMPLEMENTO DEL BENEFICIO DE ALIMENTACIÓN (beneficio social de carácter no remunerativo):</Text>
+        {` De conformidad con el numeral 2 del artículo 105 de la LOTTT, LA ENTIDAD DE TRABAJO otorgará a EL TRABAJADOR un complemento del Cesta Ticket por la cantidad fija de `}
+        <Text style={styles.bold}>{complementoAlimUsdTxt}</Text>
+        {` semanales, con la finalidad de coadyuvar a que él y su grupo familiar obtengan una alimentación adecuada frente a la pérdida del poder adquisitivo. Este complemento no es contraprestación del servicio; no depende del oficio, de la productividad ni de la asistencia; no forma parte del salario y no se computará para el cálculo de prestaciones sociales, vacaciones, bono vacacional, utilidades ni ningún otro concepto derivado de la relación de trabajo. Es un beneficio voluntario de LA ENTIDAD DE TRABAJO, que podrá suspenderlo o modificarlo con carácter general para todos sus trabajadores, sin que su pago en semanas anteriores genere derecho adquirido. Cuando el salario o el Cesta Ticket se modifiquen por decreto del Ejecutivo Nacional, por la Convención Colectiva o por actas homologadas, LA ENTIDAD DE TRABAJO podrá revisar, con carácter general, el monto de este complemento. Se pagará en partida separada, identificada en cada recibo como "Complemento del beneficio de alimentación". Todos los pagos se realizarán en Bolívares calculados a la tasa oficial del Banco Central de Venezuela (BCV) del día del pago.`}
       </Text>
 
       <Text style={[styles.paragraph, styles.paragraphIntro]}>
-        <Text style={styles.bold}>SÉPTIMA: COMPENSACIÓN CADA CUATRO SEMANAS.</Text>
-        {` Cada cuatro (4) semanas trabajadas, LA ENTIDAD DE TRABAJO pagará a EL TRABAJADOR una compensación equivalente a: `}
+        <Text style={styles.bold}>SÉPTIMA: ANTICIPOS Y COMPLEMENTO ALIMENTARIO CADA CUATRO SEMANAS.</Text>
+        {` Cada cuatro (4) semanas trabajadas, LA ENTIDAD DE TRABAJO pagará a EL TRABAJADOR una cantidad equivalente a `}
         <Text style={styles.bold}>{compUsdMesTxt}</Text>
-        {` USD, en Bolívares a la tasa oficial del Banco Central de Venezuela (BCV) del día del pago, que se imputa en este orden: a) como anticipo de la garantía de prestaciones sociales, a solicitud escrita de EL TRABAJADOR y hasta el setenta y cinco por ciento (75%) de lo acreditado, conforme al artículo 144 de la LOTTT; b) como anticipo de las utilidades de la Cláusula 48 de la Convención Colectiva, que se descontará de lo que corresponda por ese concepto; y c) el remanente, como complemento voluntario del beneficio de alimentación, sin carácter salarial. Al cierre de obra o finiquito se pagará la fracción que corresponda a las semanas trabajadas que no completen un ciclo de cuatro (4). Cada recibo discriminará los conceptos. Las vacaciones y el bono vacacional se pagarán al disfrutarlas o, al terminar la relación, en forma fraccionada, conforme a la LOTTT y a la Cláusula 47 de la Convención Colectiva.`}
+        {` USD, en Bolívares a la tasa oficial del BCV del día del pago, que se imputa en este orden: a) como anticipo de la garantía de prestaciones sociales, a solicitud escrita de EL TRABAJADOR y hasta el setenta y cinco por ciento (75%) de lo acreditado, conforme al artículo 144 de la LOTTT; b) como anticipo de las utilidades de la Cláusula 48 de la Convención Colectiva, que se descontará de lo que corresponda por ese concepto; y c) el remanente, como complemento voluntario del beneficio de alimentación, sin carácter salarial. Al cierre de obra o finiquito se pagará la fracción que corresponda a las semanas trabajadas que no completen un ciclo de cuatro (4). Cada recibo discriminará los conceptos. Las vacaciones y el bono vacacional se pagarán al disfrutarlas o, al terminar la relación, en forma fraccionada, conforme a la LOTTT y a la Cláusula 47 de la Convención Colectiva.`}
+      </Text>
+
+      <Text style={[styles.paragraph, styles.paragraphIntro]}>
+        <Text style={styles.bold}>OCTAVA: ÉTICA Y CONFIDENCIALIDAD.</Text>
+        {` EL TRABAJADOR guardará reserva absoluta sobre la información técnica de la obra y se abstendrá de prácticas desleales.`}
       </Text>
 
       <Text style={[styles.paragraph, styles.paragraphIntro, styles.clauseDense]}>
-        <Text style={styles.bold}>OCTAVA: ÉTICA, CONFIDENCIALIDAD Y JURISDICCIÓN.</Text>
-        {` EL TRABAJADOR, guardará reserva absoluta sobre información técnica y se abstendrá de prácticas desleales. `}
-        {'\n\n'}
-        <Text style={styles.bold}>NOVENA (TRANSPORTE GRATUITO - BENEFICIO SOCIAL NO REMUNERATIVO).</Text>
-        {` Con el firme propósito de facilitar la asistencia, puntualidad y resguardar la seguridad de EL TRABAJADOR, LA ENTIDAD DE TRABAJO brindará de manera gratuita un servicio de transporte diario, de ida y vuelta, desde el punto de encuentro establecido ${puntoEncTransporte} hasta el sitio donde se ejecute la obra determinada. `}
+        <Text style={styles.bold}>NOVENA: TRANSPORTE GRATUITO (BENEFICIO SOCIAL NO REMUNERATIVO).</Text>
+        {` LA ENTIDAD DE TRABAJO brindará de manera gratuita un servicio de transporte diario, de ida y vuelta, desde el punto de encuentro establecido ${puntoEncTransporte} hasta el sitio de la obra. `}
         <Text style={styles.bold}>NATURALEZA JURÍDICA:</Text>
-        {` De conformidad con lo establecido en el Artículo 105 de la LOTTT, las partes acuerdan expresamente que este servicio de transporte constituye un beneficio social de carácter no remunerativo. En consecuencia, ambas partes reconocen que: No forma parte del salario bajo ninguna circunstancia. No tiene carácter de salario en especie. No será considerado ni computado para el cálculo de prestaciones sociales, vacaciones, utilidades, bonos ni ningún otro pasivo o derecho laboral derivado de la relación de trabajo. `}
+        {` conforme al artículo 105 de la LOTTT, este servicio es un beneficio social de carácter no remunerativo: no forma parte del salario, no es salario en especie y no se computará para prestaciones sociales, vacaciones, utilidades, bonos ni ningún otro concepto laboral. `}
         <Text style={styles.bold}>CONDICIONES:</Text>
-        {` El uso de este servicio es opcional para el trabajador y está sujeto al cumplimiento de las normas de conducta y seguridad dictadas por la empresa durante el trayecto.`}
-        {'\n\n'}
-        <Text style={styles.bold}>DECIMA (DOMICILIO PROCESAL).</Text>
+        {` su uso es opcional para EL TRABAJADOR y está sujeto a las normas de conducta y seguridad dictadas por la empresa durante el trayecto.`}
+      </Text>
+
+      <Text style={[styles.paragraph, styles.paragraphIntro]}>
+        <Text style={styles.bold}>DÉCIMA: DOMICILIO PROCESAL.</Text>
         {` Las partes eligen como domicilio especial la ciudad de `}
         <Text style={styles.bold}>{ciudadProcesal}</Text>
-        {`, Estado Nueva Esparta, sin perjuicio de la competencia que la Ley Orgánica Procesal del Trabajo atribuye a los Tribunales del Trabajo. Se firman dos (2) ejemplares de un mismo tenor y a un solo efecto en la ciudad de `}
+        {`, Estado Nueva Esparta, sin perjuicio de la competencia que la Ley Orgánica Procesal del Trabajo atribuye a los Tribunales del Trabajo. Se firman dos (2) ejemplares de un mismo tenor y a un solo efecto, en `}
         <Text style={styles.bold}>{ciudadProcesal}</Text>
         {`, a los `}
         <Text style={styles.bold}>{diaFirma}</Text> días del mes de <Text style={styles.bold}>{mesFirma}</Text> del año{' '}
@@ -797,18 +694,16 @@ export function ContratoObreroPDF({
         <View style={styles.signatureBox}>
           <Text style={styles.signatureLabelBold}>POR LA ENTIDAD DE TRABAJO</Text>
           <View style={styles.signUnderline} />
-          <Text style={styles.signatureLabelBold}>REPRESENTANTE LEGAL</Text>
-          <Text style={styles.signatureLabelBold}>NOMBRE:</Text>
           <Text style={styles.signatureLine}>{rep}</Text>
           <Text style={styles.signatureLine}>C.I. {repCedulaGuion}</Text>
+          <Text style={styles.signatureLine}>{repCargoLinea}</Text>
         </View>
         <View style={styles.signatureBox}>
           <Text style={styles.signatureLabelBold}>POR EL TRABAJADOR</Text>
           <View style={styles.signUnderline} />
-          <Text style={styles.signatureLabelBold}>NOMBRE:</Text>
           <Text style={styles.signatureLine}>{nombreTrabajador}</Text>
           <Text style={styles.signatureLine}>C.I. {cedulaTrabGuion}</Text>
-          <Text style={[styles.signatureLine, { marginTop: 2 }]}>(Huella Dactilar)</Text>
+          <Text style={[styles.signatureLine, { marginTop: 2 }]}>(Huella dactilar)</Text>
         </View>
       </View>
     </>

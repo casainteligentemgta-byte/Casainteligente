@@ -9,11 +9,19 @@ import {
 } from '@/lib/nomina/tabuladorHomologado2026';
 
 /**
- * Arreglo de pago por defecto (cesta ticket incluida). Es el monto preestablecido:
- * cada contrato puede pactar otro (ver `lib/nomina/arregloPago.ts`).
+ * Arreglo de pago por defecto para la Cláusula SÉPTIMA (cada 4 semanas).
+ * Cada contrato puede pactar otro monto (ver `lib/nomina/arregloPago.ts`).
  */
 export const SOBRE_AYUDANTE_USD = 90;
 export const SOBRE_CLASIFICADO_USD = 115;
+
+/**
+ * Cl. SEXTA c): complemento del beneficio de alimentación, USD por semana.
+ * Cantidad fija, igual para todos los oficios; no depende de productividad ni asistencia.
+ */
+export const COMPLEMENTO_ALIMENTACION_SEMANAL_USD = 33;
+export const COMPLEMENTO_ALIMENTACION_RECIBO =
+  'Complemento del beneficio de alimentación';
 
 /** Oficio del recibo legal: ayudante = 2.1; clasificado = de 1ra (nivel 5) salvo oficio de nivel mayor. */
 export const OFICIO_AYUDANTE_CODIGO = '2.1';

@@ -1,12 +1,13 @@
 import type { HojaVidaObreroCompleta } from '@/lib/talento/hojaVidaObreroCompleta';
-import { CESTATICKET_SEMANAL_USD } from '@/lib/nomina/cestaticketLegalUsd';
 import {
   ALIMENTACION_MENSUAL_VES_HOMOLOGADA_2026,
+  alimentacionSemanalUsdAnclada,
   alimentacionSemanalVes,
   nivelDesdeCodigoOficio,
   nivelDesdeSalarioDiario2023,
   salarioDiarioHomologado,
 } from '@/lib/nomina/tabuladorHomologado2026';
+import { COMPLEMENTO_ALIMENTACION_SEMANAL_USD, SOBRE_AYUDANTE_USD } from '@/lib/nomina/reglasPagoObra';
 import {
   dueñoPlaceholderContrato,
   valorPlantillaEfectivamenteVacio,
@@ -83,8 +84,19 @@ const ETIQUETAS: Record<string, { etiqueta: string; ayuda: string }> = {
   CONTRATO_SALARIO_SEMANAL_VES: { etiqueta: 'Salario semanal en Bs.', ayuda: 'Salario diario del tabulador homologado × 7 (Cláusula 8).' },
   CONTRATO_ALIMENTACION_MENSUAL_VES: { etiqueta: 'Alimentación mensual en Bs.', ayuda: 'Monto del acuerdo homologado el 19/08/2026.' },
   CONTRATO_ALIMENTACION_SEMANAL_VES: { etiqueta: 'Alimentación semanal en Bs.', ayuda: 'Mensual × 12 ÷ 52.' },
-  CONTRATO_CESTA_TICKET_USD_SEMANAL: { etiqueta: 'Cesta ticket semanal USD', ayuda: 'Por defecto 10 USD.' },
-  CONTRATO_INGRESO_SEMANAL_USD_TOTAL: { etiqueta: 'Ingreso semanal total USD', ayuda: 'Tabulador + bono especial.' },
+  CONTRATO_CESTA_TICKET_USD_SEMANAL: {
+    etiqueta: 'Cesta ticket semanal USD',
+    ayuda: 'Anclado a la tasa BCV del acuerdo homologado (40,38 USD).',
+  },
+  CONTRATO_COMPLEMENTO_ALIMENTACION_USD: {
+    etiqueta: 'Complemento de alimentación semanal USD',
+    ayuda: 'Cl. SEXTA c): 33 USD fijos, no salariales, iguales para todos los oficios.',
+  },
+  CONTRATO_ANTICIPO_CUATRO_SEMANAS_USD: {
+    etiqueta: 'Anticipo cada cuatro semanas USD',
+    ayuda: 'Cl. SÉPTIMA: 90 USD por defecto (arreglo mensual del contrato).',
+  },
+  CONTRATO_INGRESO_SEMANAL_USD_TOTAL: { etiqueta: 'Ingreso semanal total USD', ayuda: 'Reservado; el PDF usa salario + cesta + complemento.' },
   CONTRATO_COMPENSACION_CULMINACION_USD: { etiqueta: 'Compensación por culminación USD/mes', ayuda: 'Canon mensual al cierre.' },
   CONTRATO_DOMICILIO_PROCESAL: { etiqueta: 'Domicilio procesal (ciudad)', ayuda: 'Ciudad de la cláusula DÉCIMA. Default Pampatar si la obra no lo define.' },
   CONTRATO_DIA_FIRMA: { etiqueta: 'Día de firma', ayuda: 'Fecha de firma o ingreso.' },
@@ -444,7 +456,9 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
     CONTRATO_SALARIO_SEMANAL_VES: salSemanalTxt,
     CONTRATO_ALIMENTACION_MENSUAL_VES: fmtVes(ALIMENTACION_MENSUAL_VES_HOMOLOGADA_2026),
     CONTRATO_ALIMENTACION_SEMANAL_VES: fmtVes(alimentacionSemanalVes()),
-    CONTRATO_CESTA_TICKET_USD_SEMANAL: `${CESTATICKET_SEMANAL_USD} USD`,
+    CONTRATO_CESTA_TICKET_USD_SEMANAL: `${alimentacionSemanalUsdAnclada().toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`,
+    CONTRATO_COMPLEMENTO_ALIMENTACION_USD: `${COMPLEMENTO_ALIMENTACION_SEMANAL_USD} USD`,
+    CONTRATO_ANTICIPO_CUATRO_SEMANAS_USD: `${SOBRE_AYUDANTE_USD} USD`,
     CONTRATO_INGRESO_SEMANAL_USD_TOTAL: '__________ USD',
     CONTRATO_COMPENSACION_CULMINACION_USD: '100,00',
     CONTRATO_DOMICILIO_PROCESAL: domicilioProcesal,

@@ -3,6 +3,11 @@ import { CONTRATO_OBRERO_CUERPO_DEFAULT } from '@/lib/talento/plantillas/contrat
 
 const CODIGO = 'contrato_obrero';
 
+function esCuerpoContratoObsoleto(cuerpo: string): boolean {
+  if (cuerpo.trim().length <= 80) return true;
+  return /INGRESO INTEGRAL INDEXADO|BONO ESPECIAL|COMPENSACI[ÓO]N POR CULMINACI[ÓO]N/i.test(cuerpo);
+}
+
 export async function obtenerCuerpoPlantillaContratoObrero(client: SupabaseClient): Promise<string> {
   const { data, error } = await client
     .from('ci_documento_plantillas')
@@ -13,7 +18,7 @@ export async function obtenerCuerpoPlantillaContratoObrero(client: SupabaseClien
 
   if (!error && data && typeof (data as { cuerpo?: string }).cuerpo === 'string') {
     const c = String((data as { cuerpo: string }).cuerpo).trim();
-    if (c.length > 80) return c;
+    if (c.length > 80 && !esCuerpoContratoObsoleto(c)) return c;
   }
 
   const ins = await client.from('ci_documento_plantillas').upsert(

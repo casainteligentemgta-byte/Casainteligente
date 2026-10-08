@@ -16,9 +16,9 @@ export type ItemEntradaNomina = {
   cargo_codigo?: string | null;
   cargo_nombre?: string | null;
   incluir_adelanto?: boolean;
-  /** Cl. SEXTA: el bono especial es potestativo; `false` = no se otorga esta semana. */
+  /** Cl. SEXTA c): el complemento de alimentación es potestativo; `false` = no se otorga esta semana. */
   otorgar_bono?: boolean;
-  /** Arreglo semanal pactado en el contrato (USD). Sin valor: monto por defecto de la clase. */
+  /** Arreglo semanal histórico; la Cl. SEXTA ya no usa un sobre semanal. */
   sobre_usd?: number | null;
   /** Arreglo mensual pactado (quinta semana). Sin valor: igual al semanal. */
   mensual_usd?: number | null;
