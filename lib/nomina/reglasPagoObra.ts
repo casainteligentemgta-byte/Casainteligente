@@ -3,7 +3,8 @@ import {
   ALIMENTACION_MENSUAL_VES_HOMOLOGADA_2026,
   alimentacionSemanalVes,
   salarioDiarioHomologado,
-  TABULADOR_HOMOLOGADO_2026_VIGENCIA,
+  FECHA_FIRMA_ACUERDO_2026,
+  TASA_BCV_FIRMA_ACUERDO_2026,
   TABULADOR_HOMOLOGADO_2026_REFERENCIA,
 } from '@/lib/nomina/tabuladorHomologado2026';
 
@@ -43,7 +44,9 @@ export const SOLICITUD_ANTICIPO_SEPTIMA_TEXTO =
   'Solicito que la compensación de la Cláusula SÉPTIMA de mi contrato de trabajo, correspondiente a estas cuatro semanas trabajadas, se impute en la parte que corresponda como anticipo de mis prestaciones sociales, conforme al artículo 144 de la LOTTT.';
 
 export const CESTA_MENSUAL_VES_ACTA = ALIMENTACION_MENSUAL_VES_HOMOLOGADA_2026;
-export const FECHA_ANCLAJE_CESTA_ISO = TABULADOR_HOMOLOGADO_2026_VIGENCIA;
+export const FECHA_ANCLAJE_CESTA_ISO = FECHA_FIRMA_ACUERDO_2026;
+/** Tasa fija de anclaje del cesta ticket (BCV del día de la firma del acuerdo). */
+export const TASA_ANCLA_CESTA_BCV = TASA_BCV_FIRMA_ACUERDO_2026;
 export const REFERENCIA_ACTA_HOMOLOGACION = TABULADOR_HOMOLOGADO_2026_REFERENCIA;
 
 export type ClasePagoObra = 'ayudante' | 'clasificado';

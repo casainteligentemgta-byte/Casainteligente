@@ -14,6 +14,7 @@ import {
   SOBRE_AYUDANTE_USD,
   SOBRE_CLASIFICADO_USD,
   SOLICITUD_ANTICIPO_SEPTIMA_TEXTO,
+  TASA_ANCLA_CESTA_BCV,
 } from '@/lib/nomina/reglasPagoObra';
 import { domingoDeSemanaIso, lunesDeSemanaIso } from '@/lib/nomina/semanaIsoNomina';
 import { useTasaBcvHoy } from '@/lib/contabilidad/useTasaBcvHoy';
@@ -271,7 +272,7 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
       })),
       previasPorEmpleado: {},
       tasaBcvPago: tasaNum,
-      tasaAnclaCestaBcv: tasaNum,
+      tasaAnclaCestaBcv: TASA_ANCLA_CESTA_BCV,
     });
   }
 

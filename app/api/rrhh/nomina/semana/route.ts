@@ -12,7 +12,7 @@ import {
 import {
   esClasePagoObra,
   type ClasePagoObra,
-  FECHA_ANCLAJE_CESTA_ISO,
+  TASA_ANCLA_CESTA_BCV,
 } from '@/lib/nomina/reglasPagoObra';
 import { domingoDeSemanaIso, esMigracionNomina333Pendiente, lunesDeSemanaIso } from '@/lib/nomina/semanaIsoNomina';
 import { cargarArreglosPagoPorEmpleado } from '@/lib/nomina/arreglosPagoContrato';
@@ -104,13 +104,8 @@ export async function POST(req: Request) {
     const r = await resolverTasaBcvVesPorUsd(new Date().toISOString().slice(0, 10));
     tasaBcv = r.tasa_bcv_ves_por_usd;
   }
-  let tasaAncla = Number(body.tasa_ancla_cesta_bcv);
-  if (!Number.isFinite(tasaAncla) || tasaAncla <= 0) {
-    const r = await resolverTasaBcvVesPorUsd(FECHA_ANCLAJE_CESTA_ISO);
-    // Si no hay BCV de la homologación, anclar a la tasa del pago (evita inflar la cesta).
-    tasaAncla = r.fuente === 'fallback' ? tasaBcv : r.tasa_bcv_ves_por_usd;
-    if (!Number.isFinite(tasaAncla) || tasaAncla <= 0) tasaAncla = tasaBcv;
-  }
+  // Cesta ticket fijado en dólares en el contrato: siempre la tasa BCV del día de la firma del acuerdo.
+  const tasaAncla = TASA_ANCLA_CESTA_BCV;
 
   const admin = supabaseAdminForRoute();
   const db = admin.ok ? admin.client : await createClient();

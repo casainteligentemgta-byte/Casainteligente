@@ -20,6 +20,25 @@ export const TABULADOR_HOMOLOGADO_2026_REFERENCIA =
 /** Beneficio de alimentación mensual (Bs.) fijado en el mismo acuerdo homologado. No salarial. */
 export const ALIMENTACION_MENSUAL_VES_HOMOLOGADA_2026 = 135188;
 
+/**
+ * Tasa oficial BCV (Bs. por USD) con fecha valor del día de la firma del acuerdo (17/08/2026).
+ * Con ella el cesta ticket se fija en dólares: Bs. 135.188 ÷ 772,5441 = 174,99 USD al mes
+ * (40,38 USD a la semana), y en cada pago se convierte a la tasa BCV de ese día.
+ * La indexación al dólar es un beneficio que otorga la entidad de trabajo por encima del acuerdo.
+ */
+export const TASA_BCV_FIRMA_ACUERDO_2026 = 772.5441;
+export const FECHA_FIRMA_ACUERDO_2026 = '2026-08-17';
+
+/** Cesta ticket mensual en USD, anclado a la tasa del día de la firma del acuerdo. */
+export function alimentacionMensualUsdAnclada(): number {
+  return Math.round((ALIMENTACION_MENSUAL_VES_HOMOLOGADA_2026 / TASA_BCV_FIRMA_ACUERDO_2026) * 100) / 100;
+}
+
+/** Cesta ticket semanal en USD (Bs. semanales del acuerdo ÷ tasa del día de la firma). */
+export function alimentacionSemanalUsdAnclada(): number {
+  return Math.round((alimentacionSemanalVes() / TASA_BCV_FIRMA_ACUERDO_2026) * 100) / 100;
+}
+
 /** Proporción semanal de la alimentación mensual: mensual × 12 ÷ 52. */
 export function alimentacionSemanalVes(mensual: number = ALIMENTACION_MENSUAL_VES_HOMOLOGADA_2026): number {
   return Math.round(((mensual * 12) / 52) * 100) / 100;

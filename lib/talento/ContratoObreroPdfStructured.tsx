@@ -12,6 +12,9 @@ import { laboresContratoDesdeCargo } from '@/lib/talento/laboresOficioContrato';
 import {
   ALIMENTACION_MENSUAL_VES_HOMOLOGADA_2026,
   TABULADOR_HOMOLOGADO_2026_REFERENCIA,
+  TASA_BCV_FIRMA_ACUERDO_2026,
+  alimentacionMensualUsdAnclada,
+  alimentacionSemanalUsdAnclada,
   alimentacionSemanalVes,
   nivelDesdeCodigoOficio,
   nivelDesdeSalarioDiario2023,
@@ -535,6 +538,8 @@ export function ContratoObreroPDF({
     salDiarioHomologado != null ? fmtBsVes(Math.round(salDiarioHomologado * 7 * 100) / 100) : '__________________';
   const alimMensualTxt = fmtBsVes(ALIMENTACION_MENSUAL_VES_HOMOLOGADA_2026);
   const alimSemanalTxt = fmtBsVes(alimentacionSemanalVes());
+  const cestaSemanalUsdTxt = `${fmtUsdNumeroPlano(alimentacionSemanalUsdAnclada())} USD`;
+  const cestaMensualUsdTxt = `${fmtUsdNumeroPlano(alimentacionMensualUsdAnclada())} USD`;
   const cestaMen = configNomina.cestaticket_mensual;
   const cestaSemUsdNum =
     !esContratoExpress &&
@@ -750,10 +755,10 @@ export function ContratoObreroPDF({
         a.- <Text style={styles.bold}>{salSemanalTxt}</Text>
         {` (Bs.) por concepto de Salario Semanal según Tabulador, equivalente a dos (2) veces el salario de su oficio en el Tabulador de la Convención Colectiva, conforme al ${TABULADOR_HOMOLOGADO_2026_REFERENCIA}; `}
         {'\n'}
-        b.- Cesta Ticket: <Text style={styles.bold}>{alimSemanalTxt}</Text>
-        {` (Bs.) semanales, en proporción de los `}
+        b.- Cesta Ticket: el equivalente en Bolívares de <Text style={styles.bold}>{cestaSemanalUsdTxt}</Text>
+        {` semanales, a la tasa oficial del BCV del día del pago. Este monto resulta de convertir los Bs. `}
         <Text style={styles.bold}>{alimMensualTxt}</Text>
-        {` (Bs.) mensuales fijados en dicho acuerdo; y`}
+        {` mensuales fijados en dicho acuerdo a la tasa oficial del BCV de la fecha de su firma (Bs. ${fmtBsVes(TASA_BCV_FIRMA_ACUERDO_2026)} por USD), es decir, ${cestaMensualUsdTxt} mensuales. La indexación al dólar es un beneficio que otorga LA ENTIDAD DE TRABAJO. El Cesta Ticket no tiene carácter salarial, conforme al Decreto con Rango, Valor y Fuerza de Ley del Cestaticket Socialista; y`}
         {'\n'}
         c.- <Text style={styles.bold}>BONO ESPECIAL: (NO Salarial):</Text>
         {` De conformidad con el artículo 105 de la LOTTT, para elevar el Ingreso Semanal a un total equivalente a: `}
