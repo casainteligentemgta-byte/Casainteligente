@@ -1,12 +1,16 @@
--- 338 · Cl. SÉPTIMA: monto fijo (90,00 o 115,00 USD según oficio) al finiquito.
--- Sin el paréntesis del oficio ni la frase «al sacar la cuenta».
+-- 338 · Cl. SÉPTIMA: quita el paréntesis del oficio y la frase «al sacar la cuenta».
+-- Sin $old$/$new$ (el SQL Editor las corta al pegar). Se puede repetir sin daño.
 
 update public.ci_legal_plantillas
 set
   cuerpo_markdown = replace(
-    cuerpo_markdown,
-    $old$SÉPTIMA: SEMANA ADICIONAL POR MES (PRESTACIONES, VACACIONES Y UTILIDADES). Cada cuatro (4) semanas trabajadas se genera a favor de EL TRABAJADOR el derecho a una (1) semana adicional, de monto fijo equivalente a {{CONTRATO_SEMANA_ADICIONAL_USD}} según el oficio (90,00 USD para ayudante y 115,00 USD para clasificado), pagadero en Bolívares a la tasa oficial del BCV del día del pago. Ese derecho se destina al pago de las prestaciones sociales, las vacaciones, el bono vacacional, las utilidades y demás conceptos que le correspondan conforme a la LOTTT y a la Convención Colectiva. Al sacar la cuenta, este beneficio es mayor que el que resultaría de pagar únicamente las alícuotas legales y convencionales de esos conceptos calculadas sobre el salario del Tabulador. El pago de las semanas adicionales causadas se efectuará al terminar la relación de trabajo (cierre de obra o finiquito), y no durante su vigencia. Al finiquito se pagará también la fracción que corresponda a las semanas trabajadas que no completen un ciclo de cuatro (4). En esa oportunidad el pago se imputa en este orden: a) a la garantía de prestaciones sociales, conforme al artículo 142 de la LOTTT y a la Cláusula 50 de la Convención Colectiva; b) a las utilidades de la Cláusula 48; c) a las vacaciones y al bono vacacional de la Cláusula 47; y d) el remanente, como complemento voluntario del beneficio de alimentación, sin carácter salarial. Cada recibo discriminará los conceptos.$old$,
-    $new$SÉPTIMA: SEMANA ADICIONAL POR MES (PRESTACIONES, VACACIONES Y UTILIDADES). Cada cuatro (4) semanas trabajadas se genera a favor de EL TRABAJADOR el derecho a una (1) semana adicional, de monto fijo equivalente a {{CONTRATO_SEMANA_ADICIONAL_USD}}, pagadero en Bolívares a la tasa oficial del BCV del día del pago. Ese derecho se destina al pago de las prestaciones sociales, las vacaciones, el bono vacacional, las utilidades y demás conceptos que le correspondan conforme a la LOTTT y a la Convención Colectiva. El pago de las semanas adicionales causadas se efectuará al terminar la relación de trabajo (cierre de obra o finiquito), y no durante su vigencia. Al finiquito se pagará también la fracción que corresponda a las semanas trabajadas que no completen un ciclo de cuatro (4). En esa oportunidad el pago se imputa en este orden: a) a la garantía de prestaciones sociales, conforme al artículo 142 de la LOTTT y a la Cláusula 50 de la Convención Colectiva; b) a las utilidades de la Cláusula 48; c) a las vacaciones y al bono vacacional de la Cláusula 47; y d) el remanente, como complemento voluntario del beneficio de alimentación, sin carácter salarial. Cada recibo discriminará los conceptos.$new$
+    replace(
+      cuerpo_markdown,
+      '{{CONTRATO_SEMANA_ADICIONAL_USD}} según el oficio (90,00 USD para ayudante y 115,00 USD para clasificado), pagadero',
+      '{{CONTRATO_SEMANA_ADICIONAL_USD}}, pagadero'
+    ),
+    'Al sacar la cuenta, este beneficio es mayor que el que resultaría de pagar únicamente las alícuotas legales y convencionales de esos conceptos calculadas sobre el salario del Tabulador. ',
+    ''
   ),
   updated_at = now()
 where codigo in ('contrato_individual_obra_determinada_ve', 'contrato_laboral_obra_ve');
@@ -14,9 +18,13 @@ where codigo in ('contrato_individual_obra_determinada_ve', 'contrato_laboral_ob
 update public.ci_documento_plantillas
 set
   cuerpo = replace(
-    cuerpo,
-    $old$SÉPTIMA: SEMANA ADICIONAL POR MES (PRESTACIONES, VACACIONES Y UTILIDADES). Cada cuatro (4) semanas trabajadas se genera a favor de EL TRABAJADOR el derecho a una (1) semana adicional, de monto fijo equivalente a {{CONTRATO_SEMANA_ADICIONAL_USD}} según el oficio (90,00 USD para ayudante y 115,00 USD para clasificado), pagadero en Bolívares a la tasa oficial del BCV del día del pago. Ese derecho se destina al pago de las prestaciones sociales, las vacaciones, el bono vacacional, las utilidades y demás conceptos que le correspondan conforme a la LOTTT y a la Convención Colectiva. Al sacar la cuenta, este beneficio es mayor que el que resultaría de pagar únicamente las alícuotas legales y convencionales de esos conceptos calculadas sobre el salario del Tabulador. El pago de las semanas adicionales causadas se efectuará al terminar la relación de trabajo (cierre de obra o finiquito), y no durante su vigencia. Al finiquito se pagará también la fracción que corresponda a las semanas trabajadas que no completen un ciclo de cuatro (4). En esa oportunidad el pago se imputa en este orden: a) a la garantía de prestaciones sociales, conforme al artículo 142 de la LOTTT y a la Cláusula 50 de la Convención Colectiva; b) a las utilidades de la Cláusula 48; c) a las vacaciones y al bono vacacional de la Cláusula 47; y d) el remanente, como complemento voluntario del beneficio de alimentación, sin carácter salarial. Cada recibo discriminará los conceptos.$old$,
-    $new$SÉPTIMA: SEMANA ADICIONAL POR MES (PRESTACIONES, VACACIONES Y UTILIDADES). Cada cuatro (4) semanas trabajadas se genera a favor de EL TRABAJADOR el derecho a una (1) semana adicional, de monto fijo equivalente a {{CONTRATO_SEMANA_ADICIONAL_USD}}, pagadero en Bolívares a la tasa oficial del BCV del día del pago. Ese derecho se destina al pago de las prestaciones sociales, las vacaciones, el bono vacacional, las utilidades y demás conceptos que le correspondan conforme a la LOTTT y a la Convención Colectiva. El pago de las semanas adicionales causadas se efectuará al terminar la relación de trabajo (cierre de obra o finiquito), y no durante su vigencia. Al finiquito se pagará también la fracción que corresponda a las semanas trabajadas que no completen un ciclo de cuatro (4). En esa oportunidad el pago se imputa en este orden: a) a la garantía de prestaciones sociales, conforme al artículo 142 de la LOTTT y a la Cláusula 50 de la Convención Colectiva; b) a las utilidades de la Cláusula 48; c) a las vacaciones y al bono vacacional de la Cláusula 47; y d) el remanente, como complemento voluntario del beneficio de alimentación, sin carácter salarial. Cada recibo discriminará los conceptos.$new$
+    replace(
+      cuerpo,
+      '{{CONTRATO_SEMANA_ADICIONAL_USD}} según el oficio (90,00 USD para ayudante y 115,00 USD para clasificado), pagadero',
+      '{{CONTRATO_SEMANA_ADICIONAL_USD}}, pagadero'
+    ),
+    'Al sacar la cuenta, este beneficio es mayor que el que resultaría de pagar únicamente las alícuotas legales y convencionales de esos conceptos calculadas sobre el salario del Tabulador. ',
+    ''
   ),
   updated_at = now()
 where codigo = 'contrato_obrero';
