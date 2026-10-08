@@ -4,10 +4,14 @@ export type HrefSolicitudPersonalOpts = {
 };
 
 /** RRHH unificado (menú inferior + obra): vacantes, cuadro, reclutamiento y nómina. */
-export function hrefRrhhHub(opts?: { proyectoModuloId?: string | null }): string {
+export function hrefRrhhHub(opts?: { proyectoModuloId?: string | null; vista?: string | null }): string {
+  const params = new URLSearchParams();
   const mod = opts?.proyectoModuloId?.trim();
-  if (mod) return `/rrhh/hojas-vida?proyecto_modulo=${encodeURIComponent(mod)}`;
-  return '/rrhh/hojas-vida';
+  const vista = opts?.vista?.trim();
+  if (mod) params.set('proyecto_modulo', mod);
+  if (vista) params.set('vista', vista);
+  const q = params.toString();
+  return q ? `/rrhh/hojas-vida?${q}` : '/rrhh/hojas-vida';
 }
 
 /** Formulario de solicitud de personal obrero (oficio + cantidad, tabulador GOE). */
