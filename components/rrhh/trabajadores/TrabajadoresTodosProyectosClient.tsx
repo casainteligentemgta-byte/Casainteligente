@@ -175,7 +175,8 @@ export default function TrabajadoresTodosProyectosClient() {
 
       {!loading && !error && filtrados.length === 0 ? (
         <p className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-8 text-center text-sm text-zinc-500">
-          No hay trabajadores con los filtros actuales.
+          No hay personal contratado con estos filtros. Los que solo llenaron el enlace están en la
+          banca de obreros.
         </p>
       ) : null}
 
