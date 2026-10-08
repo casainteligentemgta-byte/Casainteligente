@@ -766,9 +766,9 @@ export function ContratoObreroPDF({
         <Text style={styles.bold}>SÉPTIMA: COMPENSACIÓN POR CULMINACIÓN.</Text>
         {` `}
         <Text style={styles.bold}>PARÁGRAFO ÚNICO:</Text>
-        {` Al cierre de obra o finiquito, se recibirá una compensación de: `}
+        {` Cada cuatro (4) semanas trabajadas, se recibirá una compensación de: `}
         <Text style={styles.bold}>{compUsdMesTxt}</Text>
-        {` USD (a tasa BCV) por cada mes trabajado o fracción. Este monto liquida de forma integral: prestaciones sociales, utilidades, vacaciones y cualquier otro beneficio derivado de este contrato especial y de la Convención Colectiva.`}
+        {` USD (a tasa BCV). Al cierre de obra o finiquito se pagará la fracción que corresponda a las semanas trabajadas que no completen un ciclo de cuatro (4). Este monto liquida de forma integral: prestaciones sociales, utilidades, vacaciones y cualquier otro beneficio derivado de este contrato especial y de la Convención Colectiva.`}
       </Text>
 
       <Text style={[styles.paragraph, styles.paragraphIntro, styles.clauseDense]}>
