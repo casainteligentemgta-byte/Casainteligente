@@ -27,7 +27,7 @@ export type CalcularSemanaObraInput = {
    * Si falta o no es válido, se usa el monto por defecto de la clase.
    */
   sobreUsd?: number | null;
-  /** Cl. SEXTA: el bono especial es potestativo; `false` = la entidad no lo otorga esta semana. */
+  /** Cl. SEXTA c): el complemento de alimentación es potestativo; `false` = la entidad no lo otorga esta semana. */
   otorgarBono?: boolean;
 };
 
@@ -58,7 +58,7 @@ export type ResultadoSemanaObra = {
   totalUsd: number;
   totalVes: number;
   aplicaPisoLegal: boolean;
-  /** Si la semana llevó bono especial (semana completa y otorgado por la entidad). */
+  /** Si la semana llevó el complemento de alimentación (otorgado por la entidad; no depende de la asistencia). */
   bonoOtorgado: boolean;
   lineasLegal: LineaRecibo[];
   lineasPatio: LineaRecibo[];
@@ -103,28 +103,25 @@ export function calcularSemanaObra(input: CalcularSemanaObraInput): ResultadoSem
   const cestaUsdAnclada = tipo === 'semanal' ? cestaSemanalUsdAnclada(ancla) : 0;
   const pisoLegalUsd = round2(salarioBasicoUsd + cestaUsdAnclada);
   /**
-   * Cláusula SEXTA del contrato: el bono especial se causa solo con la semana completa.
-   * Con una o más faltas se paga el salario de los días (Cl. 8 para los descansos) y el cesta
-   * ticket completo, sin bono.
+   * Cláusula SEXTA c) del contrato: complemento del beneficio de alimentación (art. 105 num. 2
+   * LOTTT; criterio de la SCS N° 523 del 13/11/2025). Es la diferencia entre el ingreso semanal
+   * pactado y lo que cobraría una semana completa (salario de 7 días + cesta ticket). No depende
+   * de la asistencia: las faltas solo descuentan el salario de los días (Cl. 8 de la Convención);
+   * el complemento queda igual. Es potestativo: `otorgarBono === false` lo suprime esa semana.
    */
   const semanaCompleta = diasLaborados >= DIAS_JORNADA_SEMANA;
-  const bonoOtorgado = tipo === 'semanal' && semanaCompleta && input.otorgarBono !== false;
+  const salarioSemanaCompletaUsd = vesAUsd(
+    round2(oficio.diarioVes * diasPagadosClausula8(DIAS_JORNADA_SEMANA)),
+    tasa,
+  );
+  const complementoSemanalUsd = round2(Math.max(0, sobreUsd - salarioSemanaCompletaUsd - cestaUsdAnclada));
+  const bonoOtorgado = tipo === 'semanal' && input.otorgarBono !== false;
+  const complementoUsd = bonoOtorgado ? complementoSemanalUsd : 0;
   const totalUsd =
-    tipo === 'adelanto_prestaciones'
-      ? sobreUsd
-      : bonoOtorgado
-        ? round2(Math.max(sobreUsd, pisoLegalUsd))
-        : pisoLegalUsd;
-  const aplicaPisoLegal = bonoOtorgado && totalUsd > sobreUsd + 0.001;
+    tipo === 'adelanto_prestaciones' ? sobreUsd : round2(pisoLegalUsd + complementoUsd);
+  const aplicaPisoLegal = bonoOtorgado && semanaCompleta && pisoLegalUsd > sobreUsd + 0.001;
   const totalVes = usdAVes(totalUsd, tasa);
-
-  let cestaUsd = 0;
-  let complementoUsd = 0;
-  if (tipo === 'semanal') {
-    const restoTrasBasico = round2(Math.max(0, totalUsd - salarioBasicoUsd));
-    cestaUsd = round2(Math.min(cestaUsdAnclada, restoTrasBasico));
-    complementoUsd = round2(Math.max(0, totalUsd - salarioBasicoUsd - cestaUsd));
-  }
+  const cestaUsd = cestaUsdAnclada;
 
   const cestaVesDelDia = usdAVes(cestaUsd, tasa);
   const complementoVes = usdAVes(complementoUsd, tasa);
@@ -155,7 +152,7 @@ export function calcularSemanaObra(input: CalcularSemanaObraInput): ResultadoSem
     if (complementoUsd > 0) {
       lineasLegal.push({
         codigo: 'COMP',
-        concepto: 'Bono especial no salarial (Cl. SEXTA del contrato; semana de asistencia completa)',
+        concepto: 'Complemento del beneficio de alimentación (Cl. SEXTA c del contrato; art. 105 num. 2 LOTTT; no salarial)',
         usd: complementoUsd,
         ves: complementoVes,
         salarial: false,
@@ -163,11 +160,11 @@ export function calcularSemanaObra(input: CalcularSemanaObraInput): ResultadoSem
     }
     lineasPatio.push({
       codigo: 'SOBRE',
-      concepto: bonoOtorgado
-        ? `Sobre de patio ${clase} — USD ${sobreUsd} (cesta incluida)`
+      concepto: !bonoOtorgado
+        ? `Semana sin complemento de alimentación (no otorgado por la entidad de trabajo): salario y cesta ticket (pactado USD ${sobreUsd})`
         : semanaCompleta
-          ? `Semana sin bono especial (no otorgado por la entidad de trabajo): salario y cesta ticket (pactado USD ${sobreUsd})`
-          : `Semana con ${DIAS_JORNADA_SEMANA - diasLaborados} falta(s): salario de los días y cesta ticket, sin bono especial (pactado USD ${sobreUsd})`,
+          ? `Sobre de patio ${clase} — USD ${sobreUsd} (cesta incluida)`
+          : `Semana con ${DIAS_JORNADA_SEMANA - diasLaborados} falta(s): se descuenta el salario de los días (Cl. 8); cesta y complemento completos (pactado USD ${sobreUsd})`,
       usd: totalUsd,
       ves: totalVes,
       salarial: false,

@@ -190,7 +190,7 @@ export type ParametrosContratoPdf = {
   fechaFirmaContratoIso?: string | null;
   fechaAsambleaVoluntadIso?: string | null;
   ingresoSemanalConsolidadoUsdTexto?: string | null;
-  /** Bono especial no salarial en USD (express u otros flujos); se suma al ingreso tabulador en cláusula SEXTA. */
+  /** Complemento de alimentación no salarial en USD (Cl. SEXTA c); se suma al ingreso tabulador. */
   bonoManualUsd?: number | null;
   /**
    * Arreglo de pago semanal pactado (USD como moneda de cuenta). Si viene, es el total de la
@@ -753,16 +753,16 @@ export function ContratoObreroPDF({
         {` EL TRABAJADOR devengará los siguientes conceptos pagaderos en Bolívares. `}
         {'\n'}
         a.- <Text style={styles.bold}>{salSemanalTxt}</Text>
-        {` (Bs.) por concepto de Salario Semanal según Tabulador, equivalente a dos (2) veces el salario de su oficio en el Tabulador de la Convención Colectiva, conforme al ${TABULADOR_HOMOLOGADO_2026_REFERENCIA}; `}
+        {` (Bs.) por concepto de Salario Semanal según Tabulador, equivalente al salario de su oficio en el Tabulador de la Convención Colectiva con el aumento del cien por ciento (100%), es decir, dos (2) veces dicho salario, conforme al ${TABULADOR_HOMOLOGADO_2026_REFERENCIA}; `}
         {'\n'}
         b.- Cesta Ticket: el equivalente en Bolívares de <Text style={styles.bold}>{cestaSemanalUsdTxt}</Text>
         {` semanales, a la tasa oficial del BCV del día del pago; y`}
         {'\n'}
-        c.- <Text style={styles.bold}>BONO ESPECIAL: (NO Salarial):</Text>
-        {` De conformidad con el artículo 105 de la LOTTT, para elevar el Ingreso Semanal a un total equivalente a: `}
+        c.- <Text style={styles.bold}>COMPLEMENTO DEL BENEFICIO DE ALIMENTACIÓN (beneficio social de carácter no remunerativo):</Text>
+        {` De conformidad con el numeral 2 del artículo 105 de la LOTTT, LA ENTIDAD DE TRABAJO otorgará a EL TRABAJADOR un complemento del Cesta Ticket, con la finalidad de coadyuvar a que él y su grupo familiar obtengan una alimentación adecuada frente a la pérdida del poder adquisitivo, por la cantidad necesaria para que la suma de los literales a), b) y c), en una semana completa, alcance un Ingreso Semanal total equivalente a: `}
         <Text style={styles.bold}>{totalIngresoSemanalUsdClausulaSexTxt}</Text>
         {'. '}
-        {`El BONO ESPECIAL es una liberalidad de LA ENTIDAD DE TRABAJO, potestativa para ella: podrá otorgarlo o no en cada semana, sin que su pago en semanas anteriores genere derecho adquirido ni obligación de mantenerlo. En todo caso, solo podrá causarse en las semanas de asistencia completa: si EL TRABAJADOR falta injustificadamente a una o más jornadas de la semana, no se causará en esa semana, y se le pagarán el salario de los días laborados (con los descansos según la Cláusula 8 de la Convención Colectiva) y el Cesta Ticket. El BONO ESPECIAL absorbe los aumentos: por ser la diferencia necesaria para alcanzar el Ingreso Semanal total aquí indicado, todo aumento del salario o del Cesta Ticket, sea por decreto del Ejecutivo Nacional, por la Convención Colectiva, su tabulador o actas homologadas, o por decisión de LA ENTIDAD DE TRABAJO, se imputará a este BONO ESPECIAL y lo reducirá en la misma cantidad, sin que el Ingreso Semanal total varíe por ese hecho; si el aumento lo supera, se pagarán el salario y el Cesta Ticket aumentados y el BONO ESPECIAL no se causará. Todos los pagos se realizarán en Bolívares calculados a la tasa oficial del Banco Central de Venezuela (BCV) del día del pago.`}
+        {`Este complemento no es contraprestación del servicio, no forma parte del salario y no se computará para el cálculo de prestaciones sociales, vacaciones, bono vacacional, utilidades ni ningún otro concepto derivado de la relación de trabajo. Es un beneficio voluntario de LA ENTIDAD DE TRABAJO, que podrá otorgarlo o no en cada semana, sin que su pago en semanas anteriores genere derecho adquirido. No depende de la asistencia: las inasistencias injustificadas solo darán lugar al descuento del salario de los días no laborados, conforme a la Cláusula 8 de la Convención Colectiva. Por ser la diferencia necesaria para alcanzar el Ingreso Semanal total aquí indicado, todo aumento del salario o del Cesta Ticket, sea por decreto del Ejecutivo Nacional, por la Convención Colectiva, su tabulador o actas homologadas, o por decisión de LA ENTIDAD DE TRABAJO, se imputará a este complemento y lo reducirá en la misma cantidad, sin que el Ingreso Semanal total varíe por ese hecho; si el aumento lo supera, se pagarán el salario y el Cesta Ticket aumentados y este complemento no se causará. Se pagará en partida separada, identificada en cada recibo como "Complemento del beneficio de alimentación". Todos los pagos se realizarán en Bolívares calculados a la tasa oficial del Banco Central de Venezuela (BCV) del día del pago.`}
       </Text>
 
       <Text style={[styles.paragraph, styles.paragraphIntro]}>

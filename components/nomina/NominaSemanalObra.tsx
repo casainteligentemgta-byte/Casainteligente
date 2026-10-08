@@ -39,7 +39,7 @@ type FilaUi = {
   clase: ClasePagoObra;
   dias: number;
   incluirAdelanto: boolean;
-  /** Cl. SEXTA: bono especial potestativo; `false` = no se otorga esta semana. */
+  /** Cl. SEXTA c): complemento de alimentación potestativo; `false` = no se otorga esta semana. */
   otorgarBono?: boolean;
   /** Arreglo pactado en el contrato (USD). Sin valor: monto por defecto de la clase. */
   sobreUsd?: number | null;
@@ -213,7 +213,7 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
             const claseGuardada = g.semanal.clase;
             if (claseGuardada === 'ayudante' || claseGuardada === 'clasificado') f.clase = claseGuardada;
             f.incluirAdelanto = Boolean(g.adelanto);
-            f.otorgarBono = (g.semanal.snapshot as { bonoOtorgado?: boolean } | undefined)?.bonoOtorgado !== false || f.dias < 5;
+            f.otorgarBono = (g.semanal.snapshot as { bonoOtorgado?: boolean } | undefined)?.bonoOtorgado !== false;
           }
           previosGuardados = next
             .filter((f) => porEmpleado[f.empleadoId]?.semanal?.snapshot)
@@ -551,7 +551,7 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
               <TableRow className="border-white/10 hover:bg-transparent">
                 <TableHead className="text-zinc-400">Obrero</TableHead>
                 <TableHead className="text-zinc-400">Clase</TableHead>
-                <TableHead className="text-zinc-400" title="Días trabajados más faltas justificadas (reposo, permiso). Con menos de 5 se pierde el bono especial de la semana.">Días (trab. + justif.)</TableHead>
+                <TableHead className="text-zinc-400" title="Días trabajados más faltas justificadas (reposo, permiso). Cada falta injustificada descuenta el salario del día (Cl. 8); el complemento de alimentación no cambia.">Días (trab. + justif.)</TableHead>
                 <TableHead className="text-right text-zinc-400">Legal</TableHead>
                 <TableHead className="text-right text-zinc-400">Patio</TableHead>
                 <TableHead className="text-zinc-400">Recibos</TableHead>
@@ -616,12 +616,11 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
                       />
                       <label
                         className="mt-1.5 flex items-center gap-1.5 text-[11px] text-zinc-400"
-                        title="Cláusula SEXTA: el bono especial es potestativo de la entidad de trabajo"
+                        title="Cláusula SEXTA c): el complemento de alimentación es potestativo de la entidad de trabajo"
                       >
                         <input
                           type="checkbox"
                           checked={f.otorgarBono !== false}
-                          disabled={f.dias < 5}
                           onChange={(e) =>
                             setFilas((prev) =>
                               prev.map((x) =>
@@ -630,7 +629,7 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
                             )
                           }
                         />
-                        {f.dias < 5 ? 'Sin bono (faltas)' : 'Bono especial'}
+                        Complemento alim.
                       </label>
                     </TableCell>
                     <TableCell className="text-right font-mono text-xs text-zinc-300">

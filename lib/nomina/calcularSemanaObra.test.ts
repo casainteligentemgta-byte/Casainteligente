@@ -175,22 +175,24 @@ describe('calcularSemanaObra', () => {
     assert.equal(r.totalUsd, 100);
   });
 
-  it('con una falta pierde el bono especial: salario de los días + cesta completo', () => {
-    const r = calcularSemanaObra({
-      clase: 'clasificado',
-      tipo: 'semanal',
-      diasLaborados: 4,
+  it('con una falta se descuenta solo el salario del día; cesta y complemento completos', () => {
+    const base = {
+      clase: 'clasificado' as const,
+      tipo: 'semanal' as const,
       tasaBcvPago: tasa,
       tasaAnclaCestaBcv: ancla,
       cargoCodigo: '5.1',
       sobreUsd: 115,
-    });
+    };
+    const completa = calcularSemanaObra({ ...base, diasLaborados: 5 });
+    const r = calcularSemanaObra({ ...base, diasLaborados: 4 });
     assert.equal(r.diasPagados, 6);
-    assert.ok(!r.lineasLegal.some((l) => l.codigo === 'COMP'));
+    assert.equal(r.bonoOtorgado, true);
     assert.equal(r.cestaUsdAnclada, cestaSemanalUsdAnclada(ancla));
-    const esperado = Math.round((r.salarioBasicoUsd + cestaSemanalUsdAnclada(ancla)) * 100) / 100;
-    assert.equal(r.totalUsd, esperado);
-    assert.ok(r.totalUsd < 115);
+    assert.equal(r.complementoUsd, completa.complementoUsd);
+    assert.ok(r.complementoUsd > 0);
+    const diaUsd = Math.round(((r.oficio.diarioVes) / tasa) * 100) / 100;
+    assert.ok(Math.abs(completa.totalUsd - r.totalUsd - diaUsd) < 0.03);
     assert.equal(r.aplicaPisoLegal, false);
   });
 
@@ -205,7 +207,7 @@ describe('calcularSemanaObra', () => {
       sobreUsd: 115,
     });
     assert.equal(r.totalUsd, 115);
-    assert.ok(r.lineasLegal.some((l) => l.codigo === 'COMP' && /bono especial/i.test(l.concepto)));
+    assert.ok(r.lineasLegal.some((l) => l.codigo === 'COMP' && /complemento del beneficio de alimentación/i.test(l.concepto)));
   });
 
   it('la compensación de la SÉPTIMA se reparte: 75% de prestaciones, utilidades y el resto alimentación', () => {
@@ -228,7 +230,7 @@ describe('calcularSemanaObra', () => {
     assert.ok(Math.abs(suma - 115) < 0.03);
   });
 
-  it('el bono especial es potestativo: sin otorgarlo, salario y cesta aunque la semana esté completa', () => {
+  it('el complemento es potestativo: sin otorgarlo, salario y cesta aunque la semana esté completa', () => {
     const r = calcularSemanaObra({
       clase: 'clasificado',
       tipo: 'semanal',
