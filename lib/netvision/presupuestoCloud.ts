@@ -215,6 +215,19 @@ export type OfertaVentas = {
   notas: string
 }
 
+function ofertaDesdeFila(data: {
+  items?: unknown
+  subtotal?: unknown
+  notes?: unknown
+}): OfertaVentas {
+  const items = Array.isArray(data.items) ? data.items : []
+  return {
+    items,
+    subtotal: Number(data.subtotal) || 0,
+    notas: typeof data.notes === 'string' ? data.notes : '',
+  }
+}
+
 /** Lee del borrador de Ventas solo lo necesario para la oferta del cliente. */
 export async function cargarOfertaVentas(id: string): Promise<
   { ok: true; oferta: OfertaVentas } | { ok: false; error: string }
@@ -233,18 +246,62 @@ export async function cargarOfertaVentas(id: string): Promise<
       .maybeSingle()
     if (error) return { ok: false, error: error.message }
     if (!data) return { ok: false, error: 'No se encontró el presupuesto en Ventas.' }
-    const items = Array.isArray((data as { items?: unknown }).items)
-      ? ((data as { items: unknown[] }).items)
-      : []
-    return {
-      ok: true,
-      oferta: {
-        items,
-        subtotal: Number((data as { subtotal?: unknown }).subtotal) || 0,
-        notas: typeof (data as { notes?: unknown }).notes === 'string' ? (data as { notes: string }).notes : '',
-      },
-    }
+    return { ok: true, oferta: ofertaDesdeFila(data as { items?: unknown; subtotal?: unknown; notes?: unknown }) }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'No se pudo leer el presupuesto.' }
+  }
+}
+
+/**
+ * Busca un presupuesto de Ventas generado desde este diseño (nota de NetVision).
+ * No toma un presupuesto cualquiera del mismo cliente: eso podría ser otro trabajo.
+ */
+export async function buscarPresupuestoDelProyecto(args: {
+  nombreProyecto: string
+  nombreCliente?: string
+}): Promise<{ ok: true; id: string; oferta: OfertaVentas } | { ok: false }> {
+  let supabase: ReturnType<typeof createClient>
+  try {
+    supabase = createClient()
+  } catch {
+    return { ok: false }
+  }
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return { ok: false }
+    const { data, error } = await supabase
+      .from('budgets')
+      .select('id,items,subtotal,notes,customer_name')
+      .order('created_at', { ascending: false })
+      .limit(80)
+    if (error || !Array.isArray(data)) return { ok: false }
+    const nombre = args.nombreProyecto.trim().toLowerCase()
+    if (!nombre) return { ok: false }
+    const cliente = (args.nombreCliente ?? '').trim().toLowerCase()
+    const marca = `generado desde netvision: ${nombre}`
+    type Fila = {
+      id?: unknown
+      items?: unknown
+      subtotal?: unknown
+      notes?: unknown
+      customer_name?: unknown
+    }
+    const candidatos = (data as Fila[]).filter(
+      (f) => typeof f.notes === 'string' && f.notes.toLowerCase().includes(marca),
+    )
+    const fila =
+      (cliente
+        ? candidatos.find(
+            (f) => typeof f.customer_name === 'string' && f.customer_name.trim().toLowerCase() === cliente,
+          )
+        : undefined) ?? candidatos[0]
+    if (!fila || fila.id == null) return { ok: false }
+    const oferta = ofertaDesdeFila(fila)
+    if (oferta.items.length === 0) return { ok: false }
+    return { ok: true, id: String(fila.id), oferta }
+  } catch {
+    return { ok: false }
   }
 }

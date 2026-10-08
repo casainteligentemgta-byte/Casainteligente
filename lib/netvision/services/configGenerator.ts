@@ -1,4 +1,4 @@
-import type { NetVisionProject } from '@/lib/netvision/types'
+import type { BomSummary, NetVisionProject } from '@/lib/netvision/types'
 import { projectToExportJson } from '@/lib/netvision/utils/exporters'
 import { buildBom } from '@/lib/netvision/services/bandwidthCalculator'
 import {
@@ -11,8 +11,7 @@ import {
   withManualUndergroundSegments,
 } from '@/lib/netvision/services/canalizationCalculator'
 
-/** Genera payload de configuración exportable (JSON). */
-export function generateConfig(project: NetVisionProject) {
+function materialesDelProyecto(project: NetVisionProject) {
   const cableRoutes = withManualCableSegments(
     buildCableRoutes(
       project.cameras,
@@ -43,6 +42,20 @@ export function generateConfig(project: NetVisionProject) {
     project.infraDevices ?? [],
     { zanjaModo: project.zanjaModo, planDevices: project.planDevices ?? [] },
   )
+  return { bom, cableRoutes, conduitPlans, undergroundPlan }
+}
+
+/**
+ * Lista de materiales del diseño: la misma que usa el inspector Presupuestos.
+ * Sirve para armar la oferta del cliente cuando aún no hay presupuesto en Ventas.
+ */
+export function bomDelProyecto(project: NetVisionProject): BomSummary {
+  return materialesDelProyecto(project).bom
+}
+
+/** Genera payload de configuración exportable (JSON). */
+export function generateConfig(project: NetVisionProject) {
+  const { bom, cableRoutes, conduitPlans, undergroundPlan } = materialesDelProyecto(project)
   return {
     ...projectToExportJson(project, bom),
     cableRoutes,

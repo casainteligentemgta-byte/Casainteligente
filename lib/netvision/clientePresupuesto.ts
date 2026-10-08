@@ -4,10 +4,13 @@
  */
 import { lineaPresupuestoTitulo } from '@/lib/presupuesto/presentacion'
 import type {
+  BomSummary,
   ClientePresupuestoRenglon,
   ClientePresupuestoSnapshot,
   NetVisionCurrency,
+  NetVisionProject,
 } from '@/lib/netvision/types'
+import { presupuestoDesdeBom } from '@/lib/netvision/presupuesto'
 import { monedaEfectiva, normalizarTasa } from '@/lib/netvision/utils/moneda'
 
 const MAX_RENGLONES = 80
@@ -33,6 +36,13 @@ function montoUsd(v: unknown): number {
   return redondear2(n)
 }
 
+function textoCampo(...cands: unknown[]): string {
+  for (const c of cands) {
+    if (typeof c === 'string' && c.trim()) return c
+  }
+  return ''
+}
+
 /** Notas que sí puede leer el cliente (sin el pie interno de NetVision). */
 export function notaParaCliente(notas: string | null | undefined): string | undefined {
   if (!notas) return undefined
@@ -51,18 +61,20 @@ function renglonDesdeItemVentas(item: unknown): ClientePresupuestoRenglon | null
   const pd =
     r.product_data && typeof r.product_data === 'object'
       ? (r.product_data as Record<string, unknown>)
-      : {}
-  const qty = cantidad(r.qty)
+      : r.product && typeof r.product === 'object'
+        ? (r.product as Record<string, unknown>)
+        : {}
+  const qty = cantidad(r.qty ?? r.quantity ?? r.cantidad)
   if (qty <= 0) return null
   const descripcion = lineaPresupuestoTitulo(
-    typeof pd.nombre === 'string' ? pd.nombre : typeof r.descripcion === 'string' ? r.descripcion : '',
+    textoCampo(pd.nombre, pd.name, r.descripcion, r.description, r.nombre, r.name),
     '',
   ).slice(0, MAX_DESC)
   if (!descripcion) return null
   return {
     descripcion,
     qty,
-    unitUsd: montoUsd(r.unit_price),
+    unitUsd: montoUsd(r.unit_price ?? r.unitPrice ?? r.precio ?? r.precioUnit ?? pd.precio),
   }
 }
 
@@ -132,3 +144,28 @@ export function hayOfertaCliente(
 ): boolean {
   return (project?.clientePresupuesto?.renglones.length ?? 0) > 0
 }
+
+/**
+ * Oferta a partir de la lista de materiales del plano (precios de venta =
+ * referencia de NetVision + margen del proyecto). Sin costos.
+ */
+export function snapshotDesdeBom(
+  project: Pick<NetVisionProject, 'name' | 'currency' | 'tasaCambio' | 'distributorMarginPct'>,
+  bom: Pick<BomSummary, 'lines'>,
+): ClientePresupuestoSnapshot | null {
+  const armado = presupuestoDesdeBom(
+    bom,
+    project.name,
+    {},
+    [],
+    project.distributorMarginPct,
+  )
+  return snapshotDesdeItemsVentas({
+    items: armado.presupuesto.items,
+    subtotal: armado.presupuesto.subtotal,
+    notas: armado.notas,
+    moneda: project.currency,
+    tasaCambio: project.tasaCambio,
+  })
+}
+

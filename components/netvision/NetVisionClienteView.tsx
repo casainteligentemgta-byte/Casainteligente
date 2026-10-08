@@ -21,7 +21,12 @@ import {
   buildCableRoutes,
   withManualCableSegments,
 } from '@/lib/netvision/services/cableRoutingEngine'
-import { hayOfertaCliente, snapshotDesdeItemsVentas } from '@/lib/netvision/clientePresupuesto'
+import {
+  hayOfertaCliente,
+  snapshotDesdeBom,
+  snapshotDesdeItemsVentas,
+} from '@/lib/netvision/clientePresupuesto'
+import { bomDelProyecto } from '@/lib/netvision/services/configGenerator'
 import { loadProject, peekLocalProject, saveProject } from '@/lib/netvision/storage'
 import {
   cloudCompartir,
@@ -30,7 +35,10 @@ import {
   cloudProyectoCompartido,
   cloudUpsertProject,
 } from '@/lib/netvision/cloud'
-import { cargarOfertaVentas } from '@/lib/netvision/presupuestoCloud'
+import {
+  buscarPresupuestoDelProyecto,
+  cargarOfertaVentas,
+} from '@/lib/netvision/presupuestoCloud'
 import NetVisionClientePresupuesto from '@/components/netvision/NetVisionClientePresupuesto'
 import {
   PARAM_COMPARTIDO,
@@ -71,34 +79,84 @@ function loadClienteProject(id: string | null): NetVisionProject | null {
   return id ? peekLocalProject(id) : null
 }
 
-const MSG_SIN_PRESUPUESTO_VENTAS =
-  'Crea primero el presupuesto en Ventas (inspector Presupuestos) para incluirlo.'
+const MSG_SIN_PRESUPUESTO =
+  'Este proyecto aún no tiene equipos en el plano para armar una inversión.'
 
-async function snapshotOfertaVentas(
+function snapDeOferta(
   project: NetVisionProject,
-): Promise<{ ok: true; snap: ClientePresupuestoSnapshot } | { ok: false; error: string }> {
-  const id = project.ventasBudgetId?.trim()
-  if (!id) {
-    return { ok: false, error: MSG_SIN_PRESUPUESTO_VENTAS }
-  }
-  const leido = await cargarOfertaVentas(id)
-  if (!leido.ok) {
-    return { ok: false, error: `No se pudo leer el presupuesto de Ventas: ${leido.error}` }
-  }
-  const snap = snapshotDesdeItemsVentas({
-    items: leido.oferta.items,
-    subtotal: leido.oferta.subtotal,
-    notas: leido.oferta.notas,
+  oferta: { items: unknown[]; subtotal: number; notas: string },
+): ClientePresupuestoSnapshot | null {
+  return snapshotDesdeItemsVentas({
+    items: oferta.items,
+    subtotal: oferta.subtotal,
+    notas: oferta.notas,
     moneda: project.currency,
     tasaCambio: project.tasaCambio,
   })
-  if (!snap) {
-    return {
-      ok: false,
-      error: 'El presupuesto de Ventas no tiene renglones para mostrar al cliente.',
+}
+
+/**
+ * Toma el id de Ventas que el editor pudo haber guardado después de abrir
+ * esta pestaña (sessionStorage de la vista cliente se queda viejo).
+ */
+function proyectoConPresupuestoLigado(project: NetVisionProject): NetVisionProject {
+  if (project.ventasBudgetId?.trim()) return project
+  try {
+    const deBiblioteca = peekLocalProject(project.id)
+    const id = deBiblioteca?.ventasBudgetId?.trim()
+    if (id) return { ...project, ventasBudgetId: id }
+  } catch {
+    /* se sigue con el de esta pestaña */
+  }
+  return project
+}
+
+async function snapshotOfertaCliente(project: NetVisionProject): Promise<
+  | {
+      ok: true
+      snap: ClientePresupuestoSnapshot
+      origen: 'ventas' | 'plano'
+      ventasBudgetId?: string
+    }
+  | { ok: false; error: string }
+> {
+  const fresco = proyectoConPresupuestoLigado(project)
+
+  const desdeVentas = async (id: string) => {
+    const leido = await cargarOfertaVentas(id)
+    if (!leido.ok) return null
+    const snap = snapDeOferta(fresco, leido.oferta)
+    if (!snap) return null
+    return { ok: true as const, snap, origen: 'ventas' as const }
+  }
+
+  const ligado = fresco.ventasBudgetId?.trim()
+  if (ligado) {
+    const deLigado = await desdeVentas(ligado)
+    if (deLigado) return deLigado
+  }
+
+  const hallado = await buscarPresupuestoDelProyecto({
+    nombreProyecto: fresco.name,
+    nombreCliente: fresco.client,
+  })
+  if (hallado.ok) {
+    const snap = snapDeOferta(fresco, hallado.oferta)
+    if (snap) {
+      return { ok: true, snap, origen: 'ventas', ventasBudgetId: hallado.id }
     }
   }
-  return { ok: true, snap }
+
+  const dePlano = snapshotDesdeBom(fresco, bomDelProyecto(fresco))
+  if (dePlano) return { ok: true, snap: dePlano, origen: 'plano' }
+
+  if (ligado) {
+    return {
+      ok: false,
+      error: 'No se pudo leer el presupuesto de Ventas y el plano no tiene renglones para mostrar.',
+    }
+  }
+  return { ok: false, error: MSG_SIN_PRESUPUESTO }
 }
 
 function CameraFicha({
@@ -603,8 +661,8 @@ export default function NetVisionClienteView() {
   }
 
   /**
-   * Carga la oferta de Ventas y la muestra ya en esta vista. El check no puede
-   * quedar mudo: si falta el presupuesto, se dice por qué.
+   * Arma la oferta y la muestra ya en esta vista: Ventas si está ligado o
+   * aparece uno de este proyecto; si no, el listado del plano con margen.
    */
   const alCambiarIncluirPresupuesto = async (checked: boolean) => {
     if (!project || sharing || cargandoOferta) return
@@ -621,21 +679,24 @@ export default function NetVisionClienteView() {
       setVistaCliente('inversion')
     }
     setCargandoOferta(true)
-    setShareMsg('Cargando el presupuesto de Ventas…')
+    setShareMsg('Cargando el presupuesto…')
     try {
-      const leido = await snapshotOfertaVentas(project)
+      const leido = await snapshotOfertaCliente(project)
       if (!leido.ok) {
         if (!hayOfertaCliente(project)) setIncluirPresupuesto(false)
         setShareMsg(leido.error)
         return
       }
-      const next = { ...project, clientePresupuesto: leido.snap }
+      const next: NetVisionProject = { ...project, clientePresupuesto: leido.snap }
+      if (leido.ventasBudgetId) next.ventasBudgetId = leido.ventasBudgetId
       saveProject(next)
       setProject(next)
       setIncluirPresupuesto(true)
       setVistaCliente('inversion')
       setShareMsg(
-        'Presupuesto incluido. Al compartir, el cliente verá esta oferta (precios de Ventas, sin costos).',
+        leido.origen === 'ventas'
+          ? 'Presupuesto incluido. Al compartir, el cliente verá esta oferta (precios de Ventas, sin costos).'
+          : 'Presupuesto incluido desde el plano (con el margen del proyecto). Al compartir, el cliente verá esta inversión.',
       )
     } finally {
       setCargandoOferta(false)
@@ -654,12 +715,13 @@ export default function NetVisionClienteView() {
       let aPublicar = project
       if (incluirPresupuesto) {
         setShareMsg('Preparando la oferta para el cliente…')
-        const leido = await snapshotOfertaVentas(project)
+        const leido = await snapshotOfertaCliente(project)
         if (!leido.ok) {
           setShareMsg(leido.error)
           return
         }
         aPublicar = { ...project, clientePresupuesto: leido.snap }
+        if (leido.ventasBudgetId) aPublicar.ventasBudgetId = leido.ventasBudgetId
       } else if (project.clientePresupuesto) {
         const next = { ...project }
         delete next.clientePresupuesto
@@ -876,7 +938,7 @@ export default function NetVisionClienteView() {
                 title={
                   project.ventasBudgetId
                     ? 'Mostrar en esta vista la oferta de Ventas y enviarla al compartir'
-                    : MSG_SIN_PRESUPUESTO_VENTAS
+                    : 'Mostrar la inversión del plano (o la de Ventas si ya existe) y enviarla al compartir'
                 }
                 className={`inline-flex min-h-11 max-w-[16rem] cursor-pointer items-center gap-2 border px-2.5 text-[10px] font-semibold uppercase tracking-[0.1em] ${
                   incluirPresupuesto || cargandoOferta
@@ -908,7 +970,7 @@ export default function NetVisionClienteView() {
         </div>
       </header>
 
-      {!esCompartido && (shareUrl || shareMsg || !project.ventasBudgetId) ? (
+      {!esCompartido && (shareUrl || shareMsg) ? (
         <div
           data-nv-compartir-panel
           className="nv-no-print shrink-0 space-y-2 border border-[#2e7d54] bg-[#0b1a14] p-2.5 text-[11px] print:hidden"
@@ -923,11 +985,11 @@ export default function NetVisionClienteView() {
             </p>
           ) : null}
           <p className="text-[10px] text-[#a9e8c4]">
-            {project.ventasBudgetId
-              ? incluirPresupuesto
+            {incluirPresupuesto
+              ? project.ventasBudgetId
                 ? 'El cliente verá una oferta congelada (precios de Ventas, sin costos). El plano sí se actualiza al guardar.'
-                : 'El enlace llevará solo el plano. Marca «Incluir presupuesto» para añadir la inversión.'
-              : 'Para incluir precios, crea el presupuesto en el inspector Presupuestos.'}
+                : 'El cliente verá la inversión del plano (con margen). Si hay presupuesto en Ventas, se usa ese.'
+              : 'El enlace llevará solo el plano. Marca «Incluir presupuesto» para añadir la inversión.'}
           </p>
           {shareUrl ? (
             <div className="flex flex-wrap items-center gap-2">
