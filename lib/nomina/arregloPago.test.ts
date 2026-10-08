@@ -51,7 +51,7 @@ describe('resolverArregloPago', () => {
 });
 
 describe('previewItemsNomina con arreglo pactado', () => {
-  it('la semana usa el semanal y la quinta semana el mensual', () => {
+  it('cada 4 semanas se causa la SÉPTIMA pero no se paga en la nómina semanal', () => {
     const [p] = previewItemsNomina({
       items: [
         { empleado_id: 'e1', clase: 'clasificado', dias_laborados: 5, cargo_codigo: '5.1', sobre_usd: 120, mensual_usd: 60 },
@@ -60,17 +60,18 @@ describe('previewItemsNomina con arreglo pactado', () => {
       tasaBcvPago: 770,
       tasaAnclaCestaBcv: 770,
     });
-    assert.equal(p!.semanal.totalUsd, 120);
     assert.equal(p!.toca_adelanto, true);
-    assert.equal(p!.adelanto?.totalUsd, 60);
+    assert.equal(p!.adelanto, null);
+    assert.ok((p!.semanal.totalUsd ?? 0) > 0);
   });
-  it('sin mensual pactado, la quinta semana paga lo mismo que la semana', () => {
+  it('sin completar el ciclo de 4 semanas no se causa la SÉPTIMA', () => {
     const [p] = previewItemsNomina({
       items: [{ empleado_id: 'e1', clase: 'ayudante', dias_laborados: 5, sobre_usd: 95 }],
-      previasPorEmpleado: { e1: 3 },
+      previasPorEmpleado: { e1: 2 },
       tasaBcvPago: 770,
       tasaAnclaCestaBcv: 770,
     });
-    assert.equal(p!.adelanto?.totalUsd, 95);
+    assert.equal(p!.toca_adelanto, false);
+    assert.equal(p!.adelanto, null);
   });
 });

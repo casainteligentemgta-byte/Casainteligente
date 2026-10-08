@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { guardarPeriodoNomina, registrarAdelantoPrestaciones } from './persistirSemanaObra'
+import { guardarPeriodoNomina } from './persistirSemanaObra'
 
 type Fila = Record<string, unknown>
 
@@ -46,7 +46,6 @@ function baseFalsa() {
       if (op === 'delete') {
         const quitar = filas.filter(pasa)
         tablas[nombre] = filas.filter((f) => !pasa(f))
-        // Como en la base real: borrar un ítem se lleva su adelanto (on delete cascade).
         if (nombre === 'ci_nomina_obra_items') {
           const ids = quitar.map((f) => f.id)
           tablas.ci_nomina_obra_adelantos = tablas.ci_nomina_obra_adelantos!.filter((a) => ids.indexOf(a.item_id) < 0)
@@ -83,42 +82,36 @@ const obrero = (id: string) => ({ empleado_id: id, clase: 'ayudante' as const, d
 const guardar = (db: SupabaseClient, semana: string, ids: string[]) =>
   guardarPeriodoNomina(db, { proyectoId: 'obra-1', semanaInicio: semana, tasaBcvPago: 100, tasaAnclaCestaBcv: 100, items: ids.map(obrero) })
 
-test('volver a guardar la semana conserva el adelanto firmado y no duplica el saldo', async () => {
+test('la cuarta semana causa el derecho a la semana adicional pero no la paga', async () => {
   const { db, tablas } = baseFalsa()
-  // Tres semanas trabajadas; en la cuarta toca la quinta (adelanto).
   for (let n = 1; n <= 3; n++) await guardar(db, SEMANA(n), ['a'])
   const cuarta = await guardar(db, SEMANA(4), ['a'])
-  const adelantoId = cuarta.item_ids['a:adelanto_prestaciones']
-  assert.ok(adelantoId, 'la cuarta semana trae el ítem de adelanto')
-
-  await registrarAdelantoPrestaciones(db, { itemId: adelantoId!, solicitudTexto: 'Solicito', firmanteNombre: 'Ana', firmar: true })
-  assert.equal(tablas.ci_nomina_obra_adelantos!.length, 1)
-  const saldo = { ...tablas.ci_prestaciones_saldo![0]! }
-  assert.ok(Number(saldo.adelantado_ves) > 0)
-
-  // Corrigen algo y guardan de nuevo la misma semana.
-  const otraVez = await guardar(db, SEMANA(4), ['a'])
-  assert.equal(otraVez.item_ids['a:adelanto_prestaciones'], adelantoId, 'el ítem conserva su id')
-  assert.equal(tablas.ci_nomina_obra_adelantos!.length, 1, 'la solicitud firmada sigue ahí')
-  assert.equal(tablas.ci_nomina_obra_adelantos![0]!.firmante_nombre, 'Ana')
-  assert.equal(tablas.ci_nomina_obra_items!.filter((i) => i.periodo_id === otraVez.periodo_id).length, 2)
-
-  // Firmar otra vez el mismo adelanto no suma dos veces.
-  await registrarAdelantoPrestaciones(db, { itemId: adelantoId!, solicitudTexto: 'Solicito', firmar: true })
-  assert.equal(tablas.ci_prestaciones_saldo![0]!.adelantado_ves, saldo.adelantado_ves)
+  assert.equal(cuarta.previews[0]?.toca_adelanto, true)
+  assert.equal(cuarta.previews[0]?.adelanto, null)
+  assert.equal(cuarta.item_ids['a:adelanto_prestaciones'], undefined)
+  assert.equal(tablas.ci_nomina_obra_items!.filter((i) => i.tipo === 'adelanto_prestaciones').length, 0)
+  assert.equal(tablas.ci_nomina_obra_items!.filter((i) => i.periodo_id === cuarta.periodo_id).length, 1)
 })
 
-test('quien sale de la semana se quita, salvo su adelanto ya registrado', async () => {
+test('quien sale de la semana se quita', async () => {
   const { db, tablas } = baseFalsa()
-  for (let n = 1; n <= 3; n++) await guardar(db, SEMANA(n), ['a', 'b'])
-  const cuarta = await guardar(db, SEMANA(4), ['a', 'b'])
-  await registrarAdelantoPrestaciones(db, { itemId: cuarta.item_ids['a:adelanto_prestaciones']!, solicitudTexto: 'Solicito', firmar: true })
-
-  // Guardan la semana solo con «b».
-  await guardar(db, SEMANA(4), ['b'])
+  for (let n = 1; n <= 4; n++) await guardar(db, SEMANA(n), ['a', 'b'])
+  const cuarta = await guardar(db, SEMANA(4), ['b'])
   const items = tablas.ci_nomina_obra_items!.filter((i) => i.periodo_id === cuarta.periodo_id)
   const de = (emp: string) => items.filter((i) => i.empleado_id === emp).map((i) => i.tipo).sort()
-  assert.deepEqual(de('b'), ['adelanto_prestaciones', 'semanal'])
-  assert.deepEqual(de('a'), ['adelanto_prestaciones'], 'de «a» solo queda el adelanto firmado')
-  assert.equal(tablas.ci_nomina_obra_adelantos!.length, 1)
+  assert.deepEqual(de('b'), ['semanal'])
+  assert.deepEqual(de('a'), [])
+})
+
+test('un ítem histórico de semana adicional no se borra al volver a guardar', async () => {
+  const { db, tablas } = baseFalsa()
+  const primera = await guardar(db, SEMANA(1), ['a'])
+  tablas.ci_nomina_obra_items!.push({
+    id: 'hist-adelanto',
+    periodo_id: primera.periodo_id,
+    empleado_id: 'a',
+    tipo: 'adelanto_prestaciones',
+  })
+  await guardar(db, SEMANA(1), ['a'])
+  assert.ok(tablas.ci_nomina_obra_items!.some((i) => i.id === 'hist-adelanto'))
 })

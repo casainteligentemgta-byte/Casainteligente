@@ -51,7 +51,7 @@ function fmtFecha(iso: string) {
 function titulo(cara: MetaReciboNomina['cara']) {
   if (cara === 'legal') return 'RECIBO DE PAGO — CARA LEGAL';
   if (cara === 'patio') return 'RECIBO DE PAGO — CARA DE PATIO';
-  return 'COMPENSACIÓN CADA CUATRO SEMANAS — CLÁUSULA SÉPTIMA';
+  return 'SEMANA ADICIONAL — PAGO AL FINIQUITO (CLÁUSULA SÉPTIMA)';
 }
 
 export function ReciboNominaObraPdf({
@@ -82,10 +82,10 @@ export function ReciboNominaObraPdf({
           diario Bs. {calc.oficio.diarioVes.toFixed(2)}
         </Text>
         <Text style={styles.meta}>
-          Clase de patio: {calc.clase === 'ayudante' ? 'Ayudante' : 'Clasificado / de 1ra'} (USD {calc.sobreUsdPactado})
+          Clase de patio: {calc.clase === 'ayudante' ? 'Ayudante' : 'Clasificado / de 1ra'}
           {calc.tipo === 'semanal'
             ? ` · Días laborados: ${calc.diasLaborados} · Días pagados (Cl. 8): ${calc.diasPagados}`
-            : ' · Compensación cada 4 semanas trabajadas (Cl. SÉPTIMA del contrato)'}
+            : ` · Cl. SÉPTIMA: semana adicional de monto fijo (USD ${calc.totalUsd.toFixed(2)}; pago al finiquito)`}
         </Text>
         <Text style={styles.meta}>
           Tasa BCV del pago: {calc.tasaBcvPago.toFixed(4)} Bs/USD
@@ -111,31 +111,32 @@ export function ReciboNominaObraPdf({
         {meta.cara === 'legal' && calc.tipo === 'semanal' ? (
           <Text style={styles.nota}>
             Cara legal (Cl. 46 / art. 106 LOTTT). El salario básico corresponde al tabulador del{' '}
-            {REFERENCIA_ACTA_HOMOLOGACION}. La cesta ticket está incluida en el sobre de patio y no
-            tiene carácter salarial (Cl. 20). Los descansos se pagan según la Cláusula 8.
-            {calc.aplicaPisoLegal ? ' Este viernes rige el piso legal (tabulador + cesta) por superar el sobre pactado.' : ''}
+            {REFERENCIA_ACTA_HOMOLOGACION}. La cesta ticket no tiene carácter salarial (Cl. 20). El
+            «Complemento del beneficio de alimentación» (Cl. SEXTA c) es un beneficio social no
+            remunerativo: no depende del oficio ni de la asistencia. Los descansos se pagan según la
+            Cláusula 8.
           </Text>
         ) : null}
 
         {meta.cara === 'patio' ? (
           <Text style={styles.nota}>
-            Cara de patio: monto pactado en el contrato de trabajo (USD {calc.sobreUsdPactado}),
-            cesta ticket incluida y anclada al dólar. El pago se hace en bolívares al BCV del día.
-            Un solo pago; esta cara y la legal describen el mismo dinero.
+            Cara de patio: salario del tabulador + cesta ticket anclada al dólar
+            {calc.bonoOtorgado ? ' + complemento del beneficio de alimentación (Cl. SEXTA c)' : ''}.
+            El pago se hace en bolívares al BCV del día. Un solo pago; esta cara y la legal
+            describen el mismo dinero.
           </Text>
         ) : null}
 
         {esAdelanto ? (
           <Text style={styles.nota}>
-            Compensación prevista en la Cláusula SÉPTIMA del contrato de trabajo, que se paga cada
-            cuatro (4) semanas trabajadas y se imputa en este orden: anticipo de la garantía de
-            prestaciones sociales (Cl. 50), a solicitud escrita del trabajador y hasta el 75% de lo
-            acreditado (artículo 144 de la LOTTT); anticipo de utilidades (Cl. 48); y el remanente,
-            complemento voluntario del beneficio de alimentación, sin carácter salarial. Las
-            vacaciones no se anticipan.{'\n\n'}
+            Semana adicional de monto fijo prevista en la Cláusula SÉPTIMA: el derecho nace cada
+            cuatro (4) semanas trabajadas y se paga al terminar la relación de trabajo (finiquito),
+            no en la nómina semanal. Se destina a prestaciones sociales, vacaciones, utilidades y
+            demás conceptos; al sacar la cuenta es mayor que las alícuotas del Tabulador. Al
+            finiquito se imputa a esos conceptos y el remanente, a complemento de alimentación.{'\n\n'}
             {meta.solicitudTexto?.trim()
               ? `Declaración: ${meta.solicitudTexto.trim()}`
-              : 'El trabajador declara haber solicitado por escrito que la porción de prestaciones sociales se impute como anticipo.'}
+              : 'Se paga al terminar la relación de trabajo (cierre de obra o finiquito).'}
           </Text>
         ) : null}
 

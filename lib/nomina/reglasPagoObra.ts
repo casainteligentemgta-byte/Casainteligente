@@ -9,11 +9,21 @@ import {
 } from '@/lib/nomina/tabuladorHomologado2026';
 
 /**
- * Arreglo de pago por defecto (cesta ticket incluida). Es el monto preestablecido:
- * cada contrato puede pactar otro (ver `lib/nomina/arregloPago.ts`).
+ * Cl. SÉPTIMA: semana adicional de monto fijo por clase (USD). El derecho nace cada 4
+ * semanas trabajadas y se paga al terminar la relación (finiquito), no en la nómina semanal.
  */
 export const SOBRE_AYUDANTE_USD = 90;
 export const SOBRE_CLASIFICADO_USD = 115;
+/** @deprecated Preferir `semanaAdicionalFijaUsd(clase)`. */
+export const SEMANA_ADICIONAL_FIJA_USD = SOBRE_AYUDANTE_USD;
+
+/**
+ * Cl. SEXTA c): complemento del beneficio de alimentación, USD por semana.
+ * Cantidad fija, igual para todos los oficios; no depende de productividad ni asistencia.
+ */
+export const COMPLEMENTO_ALIMENTACION_SEMANAL_USD = 33;
+export const COMPLEMENTO_ALIMENTACION_RECIBO =
+  'Complemento del beneficio de alimentación';
 
 /** Oficio del recibo legal: ayudante = 2.1; clasificado = de 1ra (nivel 5) salvo oficio de nivel mayor. */
 export const OFICIO_AYUDANTE_CODIGO = '2.1';
@@ -26,7 +36,7 @@ export const DIAS_JORNADA_SEMANA = 5;
 export const MIN_JORNADAS_PARA_DESCANSO = 3;
 export const DIAS_DESCANSO_SEMANA = 2;
 
-/** Cada 4 semanas trabajadas se paga una quinta (adelanto de prestaciones + conceptos CCT). */
+/** Cada 4 semanas trabajadas se causa una semana adicional (pago al finiquito). */
 export const SEMANAS_TRABAJADAS_PARA_ADELANTO = 4;
 /** Cl. 50: 6 días de salario básico por mes / ciclo de 4 semanas. */
 export const DIAS_GARANTIA_PRESTACIONES_POR_CICLO = 6;
@@ -41,7 +51,7 @@ export const CICLOS_CUATRO_SEMANAS_POR_ANIO = 13;
  * imputada a prestaciones sociales cuente como anticipo (art. 144 LOTTT exige la solicitud).
  */
 export const SOLICITUD_ANTICIPO_SEPTIMA_TEXTO =
-  'Solicito que la compensación de la Cláusula SÉPTIMA de mi contrato de trabajo, correspondiente a estas cuatro semanas trabajadas, se impute en la parte que corresponda como anticipo de mis prestaciones sociales, conforme al artículo 144 de la LOTTT.';
+  'Declaro que la semana adicional de la Cláusula SÉPTIMA de mi contrato, causada por cada cuatro semanas trabajadas, se pagará al terminar la relación de trabajo e imputará a prestaciones sociales, vacaciones, utilidades y demás conceptos, conforme a la LOTTT y a la Convención Colectiva.';
 
 export const CESTA_MENSUAL_VES_ACTA = ALIMENTACION_MENSUAL_VES_HOMOLOGADA_2026;
 export const FECHA_ANCLAJE_CESTA_ISO = FECHA_FIRMA_ACUERDO_2026;
@@ -135,6 +145,11 @@ export function oficioReciboLegal(
 
 export function sobreUsdDeClase(clase: ClasePagoObra): number {
   return clase === 'ayudante' ? SOBRE_AYUDANTE_USD : SOBRE_CLASIFICADO_USD;
+}
+
+/** Cl. SÉPTIMA: 90 USD ayudante / 115 USD clasificado, por cada 4 semanas. */
+export function semanaAdicionalFijaUsd(clase: ClasePagoObra): number {
+  return sobreUsdDeClase(clase);
 }
 
 /**

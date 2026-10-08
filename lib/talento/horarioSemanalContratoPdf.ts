@@ -5,7 +5,7 @@
 
 /** Cuando no hay horario en contrato ni en proyecto (jornada diurna): coincide con la cláusula TERCERA del PDF. */
 export const HORARIO_JORNADA_TERCERA_CONTRATO_PDF_DEFAULT =
-  'De lunes a jueves, de 7:00 a.m. a 5:00 p.m. y los viernes de 7:00 a.m. a 12:00 p.m.';
+  'de lunes a jueves, de 7:00 a.m. a 12:00 m. y de 1:00 p.m. a 5:00 p.m., y los viernes de 7:00 a.m. a 11:00 a.m.';
 
 export function textoHorarioDesdeJornadaContrato(jornada: string | null | undefined): string {
   const t = (jornada ?? '').trim().toLowerCase();

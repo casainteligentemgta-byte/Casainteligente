@@ -1,12 +1,17 @@
 import type { HojaVidaObreroCompleta } from '@/lib/talento/hojaVidaObreroCompleta';
-import { CESTATICKET_SEMANAL_USD } from '@/lib/nomina/cestaticketLegalUsd';
 import {
   ALIMENTACION_MENSUAL_VES_HOMOLOGADA_2026,
+  alimentacionSemanalUsdAnclada,
   alimentacionSemanalVes,
   nivelDesdeCodigoOficio,
   nivelDesdeSalarioDiario2023,
   salarioDiarioHomologado,
 } from '@/lib/nomina/tabuladorHomologado2026';
+import {
+  COMPLEMENTO_ALIMENTACION_SEMANAL_USD,
+  inferirClasePagoObra,
+  semanaAdicionalFijaUsd,
+} from '@/lib/nomina/reglasPagoObra';
 import {
   dueñoPlaceholderContrato,
   valorPlantillaEfectivamenteVacio,
@@ -83,10 +88,25 @@ const ETIQUETAS: Record<string, { etiqueta: string; ayuda: string }> = {
   CONTRATO_SALARIO_SEMANAL_VES: { etiqueta: 'Salario semanal en Bs.', ayuda: 'Salario diario del tabulador homologado × 7 (Cláusula 8).' },
   CONTRATO_ALIMENTACION_MENSUAL_VES: { etiqueta: 'Alimentación mensual en Bs.', ayuda: 'Monto del acuerdo homologado el 19/08/2026.' },
   CONTRATO_ALIMENTACION_SEMANAL_VES: { etiqueta: 'Alimentación semanal en Bs.', ayuda: 'Mensual × 12 ÷ 52.' },
-  CONTRATO_CESTA_TICKET_USD_SEMANAL: { etiqueta: 'Cesta ticket semanal USD', ayuda: 'Por defecto 10 USD.' },
-  CONTRATO_INGRESO_SEMANAL_USD_TOTAL: { etiqueta: 'Ingreso semanal total USD', ayuda: 'Tabulador + bono especial.' },
+  CONTRATO_CESTA_TICKET_USD_SEMANAL: {
+    etiqueta: 'Cesta ticket semanal USD',
+    ayuda: 'Anclado a la tasa BCV del acuerdo homologado (40,38 USD).',
+  },
+  CONTRATO_COMPLEMENTO_ALIMENTACION_USD: {
+    etiqueta: 'Complemento de alimentación semanal USD',
+    ayuda: 'Cl. SEXTA c): 33 USD fijos, no salariales, iguales para todos los oficios.',
+  },
+  CONTRATO_SEMANA_ADICIONAL_USD: {
+    etiqueta: 'Semana adicional (monto fijo USD)',
+    ayuda: 'Cl. SÉPTIMA: 90 USD ayudante / 115 USD clasificado. Nace cada 4 semanas y se paga al finiquito.',
+  },
+  CONTRATO_ANTICIPO_CUATRO_SEMANAS_USD: {
+    etiqueta: 'Semana adicional cada cuatro semanas',
+    ayuda: 'Reservado. La Cl. SÉPTIMA usa CONTRATO_SEMANA_ADICIONAL_USD (90 o 115 USD al finiquito).',
+  },
+  CONTRATO_INGRESO_SEMANAL_USD_TOTAL: { etiqueta: 'Ingreso semanal total USD', ayuda: 'Reservado; el PDF usa salario + cesta + complemento.' },
   CONTRATO_COMPENSACION_CULMINACION_USD: { etiqueta: 'Compensación por culminación USD/mes', ayuda: 'Canon mensual al cierre.' },
-  CONTRATO_DOMICILIO_PROCESAL: { etiqueta: 'Domicilio procesal (ciudad)', ayuda: 'Ciudad de la cláusula DÉCIMA. Default Pampatar si la obra no lo define.' },
+  CONTRATO_DOMICILIO_PROCESAL: { etiqueta: 'Domicilio procesal (ciudad)', ayuda: 'Ciudad de la cláusula NOVENA. Default Pampatar si la obra no lo define.' },
   CONTRATO_DIA_FIRMA: { etiqueta: 'Día de firma', ayuda: 'Fecha de firma o ingreso.' },
   CONTRATO_MES_FIRMA: { etiqueta: 'Mes de firma', ayuda: 'Fecha de firma o ingreso.' },
   CONTRATO_ANIO_FIRMA: { etiqueta: 'Año de firma', ayuda: 'Fecha de firma o ingreso.' },
@@ -123,6 +143,10 @@ const ETIQUETAS: Record<string, { etiqueta: string; ayuda: string }> = {
   EMPLEADO_LUGAR_NACIMIENTO: { etiqueta: 'Lugar de nacimiento', ayuda: 'Planilla de empleo.' },
   EMPLEADO_CELULAR: { etiqueta: 'Teléfono celular', ayuda: 'Planilla de empleo.' },
   CONTRATO_CARGO_OFICIO: { etiqueta: 'Cargo u oficio del contrato', ayuda: 'RRHH al generar el contrato o tabulador.' },
+  CONTRATO_OFICIO_TABULADOR: {
+    etiqueta: 'Oficio del tabulador (código y denominación)',
+    ayuda: 'Código y nombre del oficio, p. ej. 2.1 AYUDANTE. RRHH al generar el contrato.',
+  },
   CONTRATO_LABORES_OFICIO: {
     etiqueta: 'Labores del oficio (gaceta)',
     ayuda: 'Solo si el cargo tiene ficha de labores en la referencia de gaceta.',
@@ -205,7 +229,7 @@ export type FuentesContratoObrero = {
     punto_encuentro_transporte_contrato?: string | null;
     /** `ci_proyectos.fase_tecnica_contrato` — PM una vez por obra */
     fase_tecnica_contrato?: string | null;
-    /** `ci_proyectos.domicilio_procesal_contrato` — ciudad cláusula DÉCIMA */
+    /** `ci_proyectos.domicilio_procesal_contrato` — ciudad cláusula NOVENA */
     domicilio_procesal_contrato?: string | null;
   };
   /** Valores por defecto patrono (env, planilla o `ci_entidades`). */
@@ -380,6 +404,12 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
   /** Sin default hardcodeado: si el PM no cargó el punto, queda como faltante (dueño PM). */
   const puntoEnc = str(f.obra.punto_encuentro_transporte_contrato);
   const puntoEncFragmento = !puntoEnc ? '' : /^en\s/i.test(puntoEnc) ? puntoEnc : `en ${puntoEnc}`;
+  const semanaAdicionalUsd = semanaAdicionalFijaUsd(
+    inferirClasePagoObra(
+      str(f.contrato.numero_oficio_tabulador),
+      str(f.contrato.cargo_oficio_desempeño) || str(hv?.contratacion?.cargoUOficio),
+    ),
+  );
 
   return {
     PATRON_INSCRIPCION_RM: textoInscripcionRegistroMercantilComparecencia(f.patron.registro_mercantil),
@@ -413,6 +443,12 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
     EMPLEADO_LUGAR_NACIMIENTO: lugarNac,
     EMPLEADO_CELULAR: celular,
     CONTRATO_CARGO_OFICIO: str(f.contrato.cargo_oficio_desempeño) || str(hv?.contratacion?.cargoUOficio),
+    CONTRATO_OFICIO_TABULADOR: (() => {
+      const cargo = (str(f.contrato.cargo_oficio_desempeño) || str(hv?.contratacion?.cargoUOficio)).toUpperCase();
+      const codigo = str(f.contrato.numero_oficio_tabulador).replace(',', '.');
+      if (codigo && cargo) return `${codigo} ${cargo}`;
+      return cargo || codigo;
+    })(),
     CONTRATO_LABORES_OFICIO: laboresContratoDesdeCargo({
       cargoCodigo: str(f.contrato.numero_oficio_tabulador),
       cargoNombre: str(f.contrato.cargo_oficio_desempeño) || str(hv?.contratacion?.cargoUOficio),
@@ -444,7 +480,10 @@ export function construirMapaVariablesContratoObrero(f: FuentesContratoObrero): 
     CONTRATO_SALARIO_SEMANAL_VES: salSemanalTxt,
     CONTRATO_ALIMENTACION_MENSUAL_VES: fmtVes(ALIMENTACION_MENSUAL_VES_HOMOLOGADA_2026),
     CONTRATO_ALIMENTACION_SEMANAL_VES: fmtVes(alimentacionSemanalVes()),
-    CONTRATO_CESTA_TICKET_USD_SEMANAL: `${CESTATICKET_SEMANAL_USD} USD`,
+    CONTRATO_CESTA_TICKET_USD_SEMANAL: `${alimentacionSemanalUsdAnclada().toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`,
+    CONTRATO_COMPLEMENTO_ALIMENTACION_USD: `${COMPLEMENTO_ALIMENTACION_SEMANAL_USD} USD`,
+    CONTRATO_SEMANA_ADICIONAL_USD: `${semanaAdicionalUsd.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`,
+    CONTRATO_ANTICIPO_CUATRO_SEMANAS_USD: `${semanaAdicionalUsd.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`,
     CONTRATO_INGRESO_SEMANAL_USD_TOTAL: '__________ USD',
     CONTRATO_COMPENSACION_CULMINACION_USD: '100,00',
     CONTRATO_DOMICILIO_PROCESAL: domicilioProcesal,

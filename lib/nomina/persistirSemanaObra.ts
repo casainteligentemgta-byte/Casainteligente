@@ -16,11 +16,11 @@ export type ItemEntradaNomina = {
   cargo_codigo?: string | null;
   cargo_nombre?: string | null;
   incluir_adelanto?: boolean;
-  /** Cl. SEXTA: el bono especial es potestativo; `false` = no se otorga esta semana. */
+  /** Cl. SEXTA c): el complemento de alimentación es potestativo; `false` = no se otorga esta semana. */
   otorgar_bono?: boolean;
-  /** Arreglo semanal pactado en el contrato (USD). Sin valor: monto por defecto de la clase. */
+  /** Arreglo semanal histórico; la Cl. SEXTA ya no usa un sobre semanal. */
   sobre_usd?: number | null;
-  /** Arreglo mensual pactado (quinta semana). Sin valor: igual al semanal. */
+  /** Reservado. La Cl. SÉPTIMA es monto fijo y se paga al finiquito, no en la semana. */
   mensual_usd?: number | null;
 };
 
@@ -92,19 +92,8 @@ export function previewItemsNomina(args: {
       sobreUsd: it.sobre_usd,
       otorgarBono: it.otorgar_bono,
     });
-    const adelanto =
-      toca && it.incluir_adelanto !== false
-        ? calcularSemanaObra({
-            clase: it.clase,
-            tipo: 'adelanto_prestaciones',
-            diasLaborados: it.dias_laborados,
-            tasaBcvPago: args.tasaBcvPago,
-            tasaAnclaCestaBcv: args.tasaAnclaCestaBcv,
-            cargoCodigo: it.cargo_codigo,
-            cargoNombre: it.cargo_nombre,
-            sobreUsd: it.mensual_usd ?? it.sobre_usd,
-          })
-        : null;
+    /** Cl. SÉPTIMA: el derecho nace cada 4 semanas, pero el pago es al finiquito. */
+    const adelanto = null;
     return {
       empleado_id: it.empleado_id,
       semanas_trabajadas_previas: prev,
@@ -209,7 +198,10 @@ export async function guardarPeriodoNomina(
 
   // Volver a guardar una semana no debe borrar lo ya firmado: los ítems se
   // actualizan en su sitio (conservan su id y, con él, el adelanto registrado).
-  const { data: previos, error: ePrev } = await db.from('ci_nomina_obra_items').select('id').eq('periodo_id', periodoId);
+  const { data: previos, error: ePrev } = await db
+    .from('ci_nomina_obra_items')
+    .select('id, tipo')
+    .eq('periodo_id', periodoId);
   if (ePrev) throw errMigracion(ePrev) ?? new Error(ePrev.message);
 
   const filas: Record<string, unknown>[] = [];
@@ -223,9 +215,14 @@ export async function guardarPeriodoNomina(
     .select('id, empleado_id, tipo');
   if (eIt) throw errMigracion(eIt) ?? new Error(eIt.message);
 
-  // Lo que ya no está en la semana se quita, salvo los adelantos con solicitud registrada.
+  // Lo que ya no está en la semana se quita. La semana adicional (Cl. SÉPTIMA) no se paga
+  // en la nómina semanal; si quedó un ítem histórico, no se borra.
   const vigentes: Record<string, true> = {};
   for (const row of saved ?? []) vigentes[String((row as { id: string }).id)] = true;
+  const tipoPorId: Record<string, string> = {};
+  for (const row of previos ?? []) {
+    tipoPorId[String((row as { id: string }).id)] = String((row as { tipo?: string }).tipo ?? '');
+  }
   const sobrantes = (previos ?? []).map((r) => String((r as { id: string }).id)).filter((id) => !vigentes[id]);
   if (sobrantes.length > 0) {
     const { data: conAdelanto, error: eAdel } = await db
@@ -235,7 +232,9 @@ export async function guardarPeriodoNomina(
     if (eAdel) throw errMigracion(eAdel) ?? new Error(eAdel.message);
     const protegidos: Record<string, true> = {};
     for (const row of conAdelanto ?? []) protegidos[String((row as { item_id: string }).item_id)] = true;
-    const borrar = sobrantes.filter((id) => !protegidos[id]);
+    const borrar = sobrantes.filter(
+      (id) => !protegidos[id] && tipoPorId[id] !== 'adelanto_prestaciones',
+    );
     if (borrar.length > 0) {
       const { error: eDel } = await db.from('ci_nomina_obra_items').delete().in('id', borrar);
       if (eDel) throw new Error(eDel.message);

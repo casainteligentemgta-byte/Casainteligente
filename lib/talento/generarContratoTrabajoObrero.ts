@@ -24,6 +24,7 @@ import {
   trabajadorFemeninoDesdeEstadoCivil,
 } from '@/lib/talento/cedulaAuth';
 import { resolverCodigoExpedienteContrato } from '@/lib/talento/codigoExpedienteContrato';
+import { expedienteDesdeCedula, registrarExpedienteObraYEntidad } from '@/lib/talento/expedienteCedula';
 import { esContratoExpressAdministracionDelegada } from '@/lib/talento/filtrarContratosExpressObrero';
 import { montoArregloValido, resolverArregloPago } from '@/lib/nomina/arregloPago';
 
@@ -211,12 +212,15 @@ export async function generarContratoTrabajoObrero(
   }
 
   const expressId = crypto.randomUUID();
-  const expedienteLabel = await resolverCodigoExpedienteContrato(admin, {
-    proyectoId: input.proyecto_id.trim(),
-    entidadPatronoId: input.entidad_patrono_id?.trim() || null,
-    fecha: fechaFirmaIso,
-    expressId: null,
-  });
+  const expedientePorCedula = expedienteDesdeCedula(cedula);
+  const expedienteLabel =
+    expedientePorCedula ||
+    (await resolverCodigoExpedienteContrato(admin, {
+      proyectoId: input.proyecto_id.trim(),
+      entidadPatronoId: input.entidad_patrono_id?.trim() || null,
+      fecha: fechaFirmaIso,
+      expressId: null,
+    }));
 
   let buf: Buffer;
   try {
@@ -353,6 +357,14 @@ export async function generarContratoTrabajoObrero(
   }
 
   const signed = await signedUrlContratoLaboralBucket(admin, storagePath, 3600);
+
+  await registrarExpedienteObraYEntidad(admin, {
+    empleadoId: formalizadoEmpleadoId,
+    proyectoId: input.proyecto_id.trim(),
+    entidadId: input.entidad_patrono_id?.trim() || null,
+    cedula,
+    nombreCompleto: obreroNombreCompleto,
+  });
 
   return {
     ok: true,

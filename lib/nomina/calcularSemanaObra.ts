@@ -6,11 +6,13 @@ import {
   DIAS_UTILIDADES_ANUALES_CCT,
   CICLOS_CUATRO_SEMANAS_POR_ANIO,
   TOPE_ANTICIPO_PRESTACIONES,
-  DIAS_JORNADA_SEMANA,
+  COMPLEMENTO_ALIMENTACION_SEMANAL_USD,
+  COMPLEMENTO_ALIMENTACION_RECIBO,
   cestaSemanalUsdAnclada,
   diasPagadosClausula8,
   oficioReciboLegal,
   round2,
+  semanaAdicionalFijaUsd,
   sobreUsdDeClase,
 } from '@/lib/nomina/reglasPagoObra';
 
@@ -27,7 +29,7 @@ export type CalcularSemanaObraInput = {
    * Si falta o no es válido, se usa el monto por defecto de la clase.
    */
   sobreUsd?: number | null;
-  /** Cl. SEXTA: el bono especial es potestativo; `false` = la entidad no lo otorga esta semana. */
+  /** Cl. SEXTA c): el complemento de alimentación es potestativo; `false` = no se otorga esta semana. */
   otorgarBono?: boolean;
 };
 
@@ -58,7 +60,7 @@ export type ResultadoSemanaObra = {
   totalUsd: number;
   totalVes: number;
   aplicaPisoLegal: boolean;
-  /** Si la semana llevó bono especial (semana completa y otorgado por la entidad). */
+  /** Si la semana llevó el complemento de alimentación (potestativo, independiente de la asistencia). */
   bonoOtorgado: boolean;
   lineasLegal: LineaRecibo[];
   lineasPatio: LineaRecibo[];
@@ -100,31 +102,29 @@ export function calcularSemanaObra(input: CalcularSemanaObraInput): ResultadoSem
   const salarioBasicoVes = round2(oficio.diarioVes * diasPagados);
   const salarioBasicoUsd = vesAUsd(salarioBasicoVes, tasa);
 
-  const cestaUsdAnclada = tipo === 'semanal' ? cestaSemanalUsdAnclada(ancla) : 0;
+  const cestaSemanalRef = cestaSemanalUsdAnclada(ancla);
+  const cestaUsdAnclada = tipo === 'semanal' ? cestaSemanalRef : 0;
   const pisoLegalUsd = round2(salarioBasicoUsd + cestaUsdAnclada);
   /**
-   * Cláusula SEXTA del contrato: el bono especial se causa solo con la semana completa.
-   * Con una o más faltas se paga el salario de los días (Cl. 8 para los descansos) y el cesta
-   * ticket completo, sin bono.
+   * Cláusula SEXTA c): el complemento del beneficio de alimentación no depende de la
+   * asistencia ni del oficio. Es potestativo con carácter general (`otorgarBono`).
    */
-  const semanaCompleta = diasLaborados >= DIAS_JORNADA_SEMANA;
-  const bonoOtorgado = tipo === 'semanal' && semanaCompleta && input.otorgarBono !== false;
-  const totalUsd =
-    tipo === 'adelanto_prestaciones'
-      ? sobreUsd
-      : bonoOtorgado
-        ? round2(Math.max(sobreUsd, pisoLegalUsd))
-        : pisoLegalUsd;
-  const aplicaPisoLegal = bonoOtorgado && totalUsd > sobreUsd + 0.001;
-  const totalVes = usdAVes(totalUsd, tasa);
-
+  const complementoOtorgado = input.otorgarBono !== false;
+  const complementoSemanalUsd = complementoOtorgado ? COMPLEMENTO_ALIMENTACION_SEMANAL_USD : 0;
+  const bonoOtorgado = tipo === 'semanal' && complementoOtorgado;
   let cestaUsd = 0;
   let complementoUsd = 0;
-  if (tipo === 'semanal') {
-    const restoTrasBasico = round2(Math.max(0, totalUsd - salarioBasicoUsd));
-    cestaUsd = round2(Math.min(cestaUsdAnclada, restoTrasBasico));
-    complementoUsd = round2(Math.max(0, totalUsd - salarioBasicoUsd - cestaUsd));
+  let totalUsd = 0;
+  if (tipo === 'adelanto_prestaciones') {
+    /** Cl. SÉPTIMA: 90 USD ayudante / 115 USD clasificado; nace cada 4 semanas y se paga al finiquito. */
+    totalUsd = semanaAdicionalFijaUsd(clase);
+  } else {
+    cestaUsd = cestaUsdAnclada;
+    complementoUsd = complementoSemanalUsd;
+    totalUsd = round2(salarioBasicoUsd + cestaUsd + complementoUsd);
   }
+  const aplicaPisoLegal = false;
+  const totalVes = usdAVes(totalUsd, tasa);
 
   const cestaVesDelDia = usdAVes(cestaUsd, tasa);
   const complementoVes = usdAVes(complementoUsd, tasa);
@@ -147,7 +147,7 @@ export function calcularSemanaObra(input: CalcularSemanaObraInput): ResultadoSem
     });
     lineasLegal.push({
       codigo: 'CESTA',
-      concepto: 'Cesta ticket (incluida en el sobre; anclada al dólar; no salarial)',
+      concepto: 'Cesta ticket (anclada al dólar; no salarial)',
       usd: cestaUsd,
       ves: cestaVesDelDia,
       salarial: false,
@@ -155,7 +155,7 @@ export function calcularSemanaObra(input: CalcularSemanaObraInput): ResultadoSem
     if (complementoUsd > 0) {
       lineasLegal.push({
         codigo: 'COMP',
-        concepto: 'Bono especial no salarial (Cl. SEXTA del contrato; semana de asistencia completa)',
+        concepto: `${COMPLEMENTO_ALIMENTACION_RECIBO} (Cl. SEXTA c; no salarial)`,
         usd: complementoUsd,
         ves: complementoVes,
         salarial: false,
@@ -164,17 +164,15 @@ export function calcularSemanaObra(input: CalcularSemanaObraInput): ResultadoSem
     lineasPatio.push({
       codigo: 'SOBRE',
       concepto: bonoOtorgado
-        ? `Sobre de patio ${clase} — USD ${sobreUsd} (cesta incluida)`
-        : semanaCompleta
-          ? `Semana sin bono especial (no otorgado por la entidad de trabajo): salario y cesta ticket (pactado USD ${sobreUsd})`
-          : `Semana con ${DIAS_JORNADA_SEMANA - diasLaborados} falta(s): salario de los días y cesta ticket, sin bono especial (pactado USD ${sobreUsd})`,
+        ? `Pago semanal ${clase}: salario + cesta ticket + ${COMPLEMENTO_ALIMENTACION_RECIBO.toLowerCase()} (USD ${COMPLEMENTO_ALIMENTACION_SEMANAL_USD})`
+        : `Semana sin complemento de alimentación (no otorgado por la entidad de trabajo): salario y cesta ticket`,
       usd: totalUsd,
       ves: totalVes,
       salarial: false,
     });
   } else {
-    // Cl. SÉPTIMA: a) anticipo de prestaciones (hasta 75% de lo acreditado, art. 144 LOTTT);
-    // b) anticipo de utilidades (Cl. 48, la parte del ciclo); c) el resto, complemento de alimentación.
+    // Cl. SÉPTIMA (pago al finiquito): a) prestaciones (hasta 75% de lo acreditado);
+    // b) utilidades (Cl. 48, la parte del ciclo); c) el resto, complemento de alimentación.
     const diasAnticipoPrest = round2(diasGarantia * TOPE_ANTICIPO_PRESTACIONES);
     const prestVes = round2(Math.min(oficio.diarioVes * diasAnticipoPrest, totalVes));
     anticipoPrestacionesVes = prestVes;
@@ -186,7 +184,7 @@ export function calcularSemanaObra(input: CalcularSemanaObraInput): ResultadoSem
     const alimVes = usdAVes(alimUsd, tasa);
     lineasLegal.push({
       codigo: 'PREST',
-      concepto: `Compensación Cl. SÉPTIMA: anticipo de prestaciones sociales (art. 144 LOTTT; ${diasAnticipoPrest} días de SB, 75% de lo acreditado según Cl. 50)`,
+      concepto: `Semana adicional Cl. SÉPTIMA: anticipo de prestaciones sociales (art. 144 LOTTT; ${diasAnticipoPrest} días de SB, 75% de lo acreditado según Cl. 50)`,
       usd: prestUsd,
       ves: prestVes,
       salarial: false,
@@ -194,7 +192,7 @@ export function calcularSemanaObra(input: CalcularSemanaObraInput): ResultadoSem
     if (utilUsd > 0) {
       lineasLegal.push({
         codigo: 'UTIL',
-        concepto: `Compensación Cl. SÉPTIMA: anticipo de utilidades (Cl. 48; ${diasUtil} días de SB)`,
+        concepto: `Semana adicional Cl. SÉPTIMA: anticipo de utilidades (Cl. 48; ${diasUtil} días de SB)`,
         usd: utilUsd,
         ves: utilVes,
         salarial: false,
@@ -203,7 +201,7 @@ export function calcularSemanaObra(input: CalcularSemanaObraInput): ResultadoSem
     if (alimUsd > 0) {
       lineasLegal.push({
         codigo: 'ALIM',
-        concepto: 'Compensación Cl. SÉPTIMA: complemento voluntario del beneficio de alimentación (no salarial)',
+        concepto: 'Semana adicional Cl. SÉPTIMA: complemento voluntario del beneficio de alimentación (no salarial)',
         usd: alimUsd,
         ves: alimVes,
         salarial: false,
@@ -211,7 +209,7 @@ export function calcularSemanaObra(input: CalcularSemanaObraInput): ResultadoSem
     }
     lineasPatio.push({
       codigo: 'ADELANTO',
-      concepto: `Compensación cada 4 semanas trabajadas (Cl. SÉPTIMA del contrato) — USD ${sobreUsd}`,
+      concepto: `Semana adicional Cl. SÉPTIMA (monto fijo USD ${semanaAdicionalFijaUsd(clase)}; pago al finiquito)`,
       usd: totalUsd,
       ves: totalVes,
       salarial: false,
@@ -226,7 +224,7 @@ export function calcularSemanaObra(input: CalcularSemanaObraInput): ResultadoSem
     diasPagados,
     tasaBcvPago: tasa,
     tasaAnclaCestaBcv: ancla,
-    sobreUsdPactado: sobreUsd,
+    sobreUsdPactado: tipo === 'adelanto_prestaciones' ? totalUsd : sobreUsd,
     salarioBasicoVes,
     salarioBasicoUsd,
     cestaUsdAnclada: cestaUsd,

@@ -12,6 +12,7 @@ import {
   cestaSemanalUsdAnclada,
   SOBRE_AYUDANTE_USD,
   SOBRE_CLASIFICADO_USD,
+  COMPLEMENTO_ALIMENTACION_SEMANAL_USD,
 } from './reglasPagoObra';
 
 describe('diasPagadosClausula8', () => {
@@ -72,7 +73,7 @@ describe('calcularSemanaObra', () => {
   const ancla = 770;
   const tasa = 770;
 
-  it('ayudante 5 días: sobre 90 con cesta adentro', () => {
+  it('ayudante 5 días: salario + cesta + complemento fijo de 33 USD', () => {
     const r = calcularSemanaObra({
       clase: 'ayudante',
       tipo: 'semanal',
@@ -81,17 +82,21 @@ describe('calcularSemanaObra', () => {
       tasaAnclaCestaBcv: ancla,
     });
     assert.equal(r.diasPagados, 7);
-    assert.equal(r.sobreUsdPactado, SOBRE_AYUDANTE_USD);
     assert.equal(r.oficio.codigo, '2.1');
     assert.ok(r.cestaUsdAnclada > 0);
     assert.ok(r.salarioBasicoVes > 0);
     const suma = r.lineasLegal.reduce((a, l) => a + l.usd, 0);
     assert.ok(Math.abs(suma - r.totalUsd) < 0.02);
-    assert.equal(r.totalUsd, SOBRE_AYUDANTE_USD);
+    assert.equal(r.complementoUsd, COMPLEMENTO_ALIMENTACION_SEMANAL_USD);
+    assert.equal(
+      r.totalUsd,
+      Math.round((r.salarioBasicoUsd + r.cestaUsdAnclada + COMPLEMENTO_ALIMENTACION_SEMANAL_USD) * 100) / 100,
+    );
     assert.ok(r.lineasLegal.some((l) => l.codigo === 'CESTA' && !l.salarial));
+    assert.ok(r.lineasLegal.some((l) => l.codigo === 'COMP' && /Complemento del beneficio de alimentación/i.test(l.concepto)));
   });
 
-  it('clasificado 5 días: sobre por defecto y oficio de 1ra', () => {
+  it('clasificado 5 días: mismo complemento de 33 USD y oficio de 1ra', () => {
     const r = calcularSemanaObra({
       clase: 'clasificado',
       tipo: 'semanal',
@@ -100,10 +105,13 @@ describe('calcularSemanaObra', () => {
       tasaAnclaCestaBcv: ancla,
       cargoCodigo: '5.1',
     });
-    assert.equal(r.sobreUsdPactado, SOBRE_CLASIFICADO_USD);
-    assert.equal(r.totalUsd, SOBRE_CLASIFICADO_USD);
+    assert.equal(r.complementoUsd, COMPLEMENTO_ALIMENTACION_SEMANAL_USD);
     assert.equal(r.oficio.codigo, '5.1');
     assert.match(r.oficio.denominacion, /1ra/i);
+    assert.equal(
+      r.totalUsd,
+      Math.round((r.salarioBasicoUsd + r.cestaUsdAnclada + COMPLEMENTO_ALIMENTACION_SEMANAL_USD) * 100) / 100,
+    );
   });
 
   it('adelanto no duplica cesta y desglosa prestaciones', () => {
@@ -133,7 +141,7 @@ describe('calcularSemanaObra', () => {
     assert.equal(r.salarioBasicoVes, 0);
   });
 
-  it('usa el monto pactado en el contrato en lugar del monto por defecto', () => {
+  it('el arreglo semanal no altera el complemento fijo de la Cl. SEXTA', () => {
     const r = calcularSemanaObra({
       clase: 'clasificado',
       tipo: 'semanal',
@@ -143,28 +151,20 @@ describe('calcularSemanaObra', () => {
       cargoCodigo: '5.1',
       sobreUsd: 130,
     });
-    assert.equal(r.sobreUsdPactado, 130);
-    assert.equal(r.totalUsd, 130);
+    assert.equal(r.complementoUsd, COMPLEMENTO_ALIMENTACION_SEMANAL_USD);
     const suma = r.lineasLegal.reduce((a, l) => a + l.usd, 0);
-    assert.ok(Math.abs(suma - 130) < 0.02);
+    assert.ok(Math.abs(suma - r.totalUsd) < 0.02);
   });
 
-  it('un monto pactado inválido cae al monto por defecto de la clase', () => {
-    for (const sobreUsd of [0, -5, Number.NaN, null]) {
-      const r = calcularSemanaObra({
-        clase: 'ayudante',
-        tipo: 'semanal',
-        diasLaborados: 5,
-        tasaBcvPago: tasa,
-        tasaAnclaCestaBcv: ancla,
-        sobreUsd,
-      });
-      assert.equal(r.sobreUsdPactado, SOBRE_AYUDANTE_USD);
-    }
-  });
-
-  it('la quinta semana paga el arreglo mensual pactado', () => {
-    const r = calcularSemanaObra({
+  it('la SÉPTIMA es un monto fijo e ignora el arreglo pactado', () => {
+    const sinArreglo = calcularSemanaObra({
+      clase: 'ayudante',
+      tipo: 'adelanto_prestaciones',
+      diasLaborados: 5,
+      tasaBcvPago: tasa,
+      tasaAnclaCestaBcv: ancla,
+    });
+    const conArreglo = calcularSemanaObra({
       clase: 'ayudante',
       tipo: 'adelanto_prestaciones',
       diasLaborados: 5,
@@ -172,10 +172,11 @@ describe('calcularSemanaObra', () => {
       tasaAnclaCestaBcv: ancla,
       sobreUsd: 100,
     });
-    assert.equal(r.totalUsd, 100);
+    assert.equal(conArreglo.totalUsd, SOBRE_AYUDANTE_USD);
+    assert.equal(sinArreglo.totalUsd, SOBRE_AYUDANTE_USD);
   });
 
-  it('con una falta pierde el bono especial: salario de los días + cesta completo', () => {
+  it('con una falta sigue el complemento: salario de los días + cesta + 33 USD', () => {
     const r = calcularSemanaObra({
       clase: 'clasificado',
       tipo: 'semanal',
@@ -186,15 +187,17 @@ describe('calcularSemanaObra', () => {
       sobreUsd: 115,
     });
     assert.equal(r.diasPagados, 6);
-    assert.ok(!r.lineasLegal.some((l) => l.codigo === 'COMP'));
+    assert.equal(r.complementoUsd, COMPLEMENTO_ALIMENTACION_SEMANAL_USD);
+    assert.ok(r.lineasLegal.some((l) => l.codigo === 'COMP'));
     assert.equal(r.cestaUsdAnclada, cestaSemanalUsdAnclada(ancla));
-    const esperado = Math.round((r.salarioBasicoUsd + cestaSemanalUsdAnclada(ancla)) * 100) / 100;
+    const esperado =
+      Math.round((r.salarioBasicoUsd + cestaSemanalUsdAnclada(ancla) + COMPLEMENTO_ALIMENTACION_SEMANAL_USD) * 100) /
+      100;
     assert.equal(r.totalUsd, esperado);
-    assert.ok(r.totalUsd < 115);
     assert.equal(r.aplicaPisoLegal, false);
   });
 
-  it('semana completa: cobra el arreglo pactado con el bono especial', () => {
+  it('semana completa: salario + cesta + complemento fijo', () => {
     const r = calcularSemanaObra({
       clase: 'clasificado',
       tipo: 'semanal',
@@ -204,8 +207,8 @@ describe('calcularSemanaObra', () => {
       cargoCodigo: '5.1',
       sobreUsd: 115,
     });
-    assert.equal(r.totalUsd, 115);
-    assert.ok(r.lineasLegal.some((l) => l.codigo === 'COMP' && /bono especial/i.test(l.concepto)));
+    assert.equal(r.complementoUsd, COMPLEMENTO_ALIMENTACION_SEMANAL_USD);
+    assert.ok(r.lineasLegal.some((l) => l.codigo === 'COMP' && /Complemento del beneficio de alimentación/i.test(l.concepto)));
   });
 
   it('la compensación de la SÉPTIMA se reparte: 75% de prestaciones, utilidades y el resto alimentación', () => {
@@ -225,10 +228,33 @@ describe('calcularSemanaObra', () => {
     assert.ok(Math.abs(r.anticipoPrestacionesVes - r.montoGarantiaPrestacionesVes * 0.75) < 0.05);
     assert.ok(r.lineasLegal.every((l) => !l.salarial));
     const suma = r.lineasLegal.reduce((a, l) => a + l.usd, 0);
-    assert.ok(Math.abs(suma - 115) < 0.03);
+    assert.ok(Math.abs(suma - r.totalUsd) < 0.03);
+    assert.equal(r.totalUsd, SOBRE_CLASIFICADO_USD);
   });
 
-  it('el bono especial es potestativo: sin otorgarlo, salario y cesta aunque la semana esté completa', () => {
+  it('el clasificado causa 115 USD por cada 4 semanas y el ayudante 90 USD', () => {
+    const clas = calcularSemanaObra({
+      clase: 'clasificado',
+      tipo: 'adelanto_prestaciones',
+      diasLaborados: 5,
+      tasaBcvPago: tasa,
+      tasaAnclaCestaBcv: ancla,
+      cargoCodigo: '5.1',
+      sobreUsd: 200,
+    });
+    const ayu = calcularSemanaObra({
+      clase: 'ayudante',
+      tipo: 'adelanto_prestaciones',
+      diasLaborados: 5,
+      tasaBcvPago: tasa,
+      tasaAnclaCestaBcv: ancla,
+      sobreUsd: 50,
+    });
+    assert.equal(clas.totalUsd, SOBRE_CLASIFICADO_USD);
+    assert.equal(ayu.totalUsd, SOBRE_AYUDANTE_USD);
+  });
+
+  it('el complemento es potestativo: sin otorgarlo, salario y cesta aunque la semana esté completa', () => {
     const r = calcularSemanaObra({
       clase: 'clasificado',
       tipo: 'semanal',

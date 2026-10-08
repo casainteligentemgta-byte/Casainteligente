@@ -11,9 +11,7 @@ import { previewItemsNomina, type PreviewItemNomina } from '@/lib/nomina/persist
 import {
   type ClasePagoObra,
   inferirClasePagoObra,
-  SOBRE_AYUDANTE_USD,
-  SOBRE_CLASIFICADO_USD,
-  SOLICITUD_ANTICIPO_SEPTIMA_TEXTO,
+  semanaAdicionalFijaUsd,
   TASA_ANCLA_CESTA_BCV,
 } from '@/lib/nomina/reglasPagoObra';
 import { domingoDeSemanaIso, lunesDeSemanaIso } from '@/lib/nomina/semanaIsoNomina';
@@ -39,7 +37,7 @@ type FilaUi = {
   clase: ClasePagoObra;
   dias: number;
   incluirAdelanto: boolean;
-  /** Cl. SEXTA: bono especial potestativo; `false` = no se otorga esta semana. */
+  /** Cl. SEXTA c): complemento de alimentación potestativo; `false` = no se otorga esta semana. */
   otorgarBono?: boolean;
   /** Arreglo pactado en el contrato (USD). Sin valor: monto por defecto de la clase. */
   sobreUsd?: number | null;
@@ -213,7 +211,7 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
             const claseGuardada = g.semanal.clase;
             if (claseGuardada === 'ayudante' || claseGuardada === 'clasificado') f.clase = claseGuardada;
             f.incluirAdelanto = Boolean(g.adelanto);
-            f.otorgarBono = (g.semanal.snapshot as { bonoOtorgado?: boolean } | undefined)?.bonoOtorgado !== false || f.dias < 5;
+            f.otorgarBono = (g.semanal.snapshot as { bonoOtorgado?: boolean } | undefined)?.bonoOtorgado !== false;
           }
           previosGuardados = next
             .filter((f) => porEmpleado[f.empleadoId]?.semanal?.snapshot)
@@ -390,38 +388,6 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
     }
   }
 
-  async function firmarAdelanto(fila: FilaUi) {
-    const itemId = itemIds[`${fila.empleadoId}:adelanto_prestaciones`];
-    if (!itemId) {
-      toast.error('Guarda la semana primero para registrar la solicitud.');
-      return;
-    }
-    setTrabajando(true);
-    try {
-      const res = await fetch(apiUrl('/api/rrhh/nomina/adelanto'), {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          item_id: itemId,
-          firmar: true,
-          firmante_nombre: `${fila.nombres} ${fila.apellidos}`.trim(),
-          solicitud_texto: SOLICITUD_ANTICIPO_SEPTIMA_TEXTO,
-        }),
-      });
-      const j = (await res.json()) as { error?: string };
-      if (!res.ok) {
-        toast.error(j.error || 'No se registró la solicitud.');
-        return;
-      }
-      toast.success('Solicitud firmada; la porción de prestaciones se descontó del saldo.');
-      const p = previewDe(fila.empleadoId);
-      if (p?.adelanto) await pdfDe(fila, 'adelanto', p.adelanto);
-    } finally {
-      setTrabajando(false);
-    }
-  }
-
   return (
     <section className="mt-6 rounded-2xl border border-emerald-500/20 bg-emerald-950/15 p-5">
       <div className="flex gap-3">
@@ -431,8 +397,8 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
         <div>
           <h2 className="text-sm font-bold uppercase tracking-wide text-emerald-100">Nómina semanal</h2>
           <p className="mt-0.5 text-xs text-zinc-500">
-            Se paga el arreglo pactado en cada contrato (por defecto: ayudante USD {SOBRE_AYUDANTE_USD} · clasificado
-            USD {SOBRE_CLASIFICADO_USD}), cesta incluida · compensación de la Cl. SÉPTIMA cada 4 semanas trabajadas.
+            Cl. SEXTA: salario del oficio + cesta ticket + complemento de alimentación. Cl. SÉPTIMA:
+            cada 4 semanas nace una semana adicional (90 USD ayudante / 115 USD clasificado), que se paga al finiquito.
           </p>
         </div>
       </div>
@@ -551,7 +517,7 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
               <TableRow className="border-white/10 hover:bg-transparent">
                 <TableHead className="text-zinc-400">Obrero</TableHead>
                 <TableHead className="text-zinc-400">Clase</TableHead>
-                <TableHead className="text-zinc-400" title="Días trabajados más faltas justificadas (reposo, permiso). Con menos de 5 se pierde el bono especial de la semana.">Días (trab. + justif.)</TableHead>
+                <TableHead className="text-zinc-400" title="Días trabajados más faltas justificadas (reposo, permiso). El complemento de alimentación de la Cl. SEXTA no depende de la asistencia.">Días (trab. + justif.)</TableHead>
                 <TableHead className="text-right text-zinc-400">Legal</TableHead>
                 <TableHead className="text-right text-zinc-400">Patio</TableHead>
                 <TableHead className="text-zinc-400">Recibos</TableHead>
@@ -616,12 +582,11 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
                       />
                       <label
                         className="mt-1.5 flex items-center gap-1.5 text-[11px] text-zinc-400"
-                        title="Cláusula SEXTA: el bono especial es potestativo de la entidad de trabajo"
+                        title="Cláusula SEXTA c): complemento del beneficio de alimentación, potestativo con carácter general; no depende de la asistencia"
                       >
                         <input
                           type="checkbox"
                           checked={f.otorgarBono !== false}
-                          disabled={f.dias < 5}
                           onChange={(e) =>
                             setFilas((prev) =>
                               prev.map((x) =>
@@ -630,7 +595,7 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
                             )
                           }
                         />
-                        {f.dias < 5 ? 'Sin bono (faltas)' : 'Bono especial'}
+                        Complemento alimentación
                       </label>
                     </TableCell>
                     <TableCell className="text-right font-mono text-xs text-zinc-300">
@@ -667,48 +632,9 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
                             Patio
                           </Button>
                           {p.toca_adelanto ? (
-                            <>
-                              <label className="flex items-center gap-1 text-[11px] text-amber-200">
-                                <input
-                                  type="checkbox"
-                                  checked={f.incluirAdelanto}
-                                  onChange={(e) =>
-                                    setFilas((prev) =>
-                                      prev.map((x) =>
-                                        x.empleadoId === f.empleadoId
-                                          ? { ...x, incluirAdelanto: e.target.checked }
-                                          : x,
-                                      ),
-                                    )
-                                  }
-                                />
-                                Compensación 4 semanas
-                              </label>
-                              {p.adelanto ? (
-                                <>
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-7 px-2 text-[11px]"
-                                    onClick={() => void pdfDe(f, 'adelanto', p.adelanto!)}
-                                  >
-                                    PDF compensación
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    className="h-7 px-2 text-[11px]"
-                                    disabled={trabajando}
-                                    onClick={() => void firmarAdelanto(f)}
-                                  >
-                                    Firmar solicitud
-                                  </Button>
-                                </>
-                              ) : (
-                                <span className="text-[11px] text-zinc-500">Recalcular para incluirla</span>
-                              )}
-                            </>
+                            <span className="text-[11px] text-amber-200/90">
+                              Se causó 1 semana adicional (USD {semanaAdicionalFijaUsd(f.clase)}). Se paga al finiquito.
+                            </span>
                           ) : null}
                         </div>
                       ) : (

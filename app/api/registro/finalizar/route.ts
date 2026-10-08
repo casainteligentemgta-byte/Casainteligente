@@ -9,6 +9,7 @@ import {
   esCodigoSinEvaluacionValido,
   unificarExpedientePorCedula,
 } from '@/lib/rrhh/solicitudPersonalServer';
+import { registrarExpedienteObraYEntidad } from '@/lib/talento/expedienteCedula';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -54,7 +55,7 @@ export async function POST(req: Request) {
 
   const { data: emp, error: e1 } = await db
     .from('ci_empleados')
-    .select('id, cedula, documento, token, token_registro, recruitment_need_id, estado, estatus_evaluacion')
+    .select('id, cedula, documento, token, token_registro, recruitment_need_id, estado, estatus_evaluacion, proyecto_modulo_id, nombre_completo')
     .eq('id', empleadoId)
     .maybeSingle();
   if (e1 || !emp) return NextResponse.json({ error: e1?.message ?? 'Expediente no encontrado' }, { status: 500 });
@@ -67,6 +68,8 @@ export async function POST(req: Request) {
     recruitment_need_id: string | null;
     estado: string | null;
     estatus_evaluacion: string | null;
+    proyecto_modulo_id?: string | null;
+    nombre_completo?: string | null;
   };
 
   const solicitudId = String(e.recruitment_need_id ?? '').trim();
@@ -102,6 +105,12 @@ export async function POST(req: Request) {
   }
 
   if (solicitudId) await cerrarSolicitudSiCubierta(db, solicitudId);
+  await registrarExpedienteObraYEntidad(db, {
+    empleadoId,
+    proyectoId: e.proyecto_modulo_id,
+    cedula: e.cedula ?? e.documento,
+    nombreCompleto: e.nombre_completo,
+  });
   await avisarRegistroObreroTelegram(db, empleadoId, base);
 
   return NextResponse.json({

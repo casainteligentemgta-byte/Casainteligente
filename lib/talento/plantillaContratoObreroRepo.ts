@@ -1,5 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { CONTRATO_OBRERO_CUERPO_DEFAULT } from '@/lib/talento/plantillas/contratoObreroDefaultCuerpo';
+import {
+  CONTRATO_OBRERO_CUERPO_DEFAULT,
+  esCuerpoContratoObreroObsoleto,
+} from '@/lib/talento/plantillas/contratoObreroDefaultCuerpo';
 
 const CODIGO = 'contrato_obrero';
 
@@ -13,7 +16,7 @@ export async function obtenerCuerpoPlantillaContratoObrero(client: SupabaseClien
 
   if (!error && data && typeof (data as { cuerpo?: string }).cuerpo === 'string') {
     const c = String((data as { cuerpo: string }).cuerpo).trim();
-    if (c.length > 80) return c;
+    if (c.length > 80 && !esCuerpoContratoObreroObsoleto(c)) return c;
   }
 
   const ins = await client.from('ci_documento_plantillas').upsert(
@@ -36,7 +39,7 @@ export async function obtenerCuerpoPlantillaContratoObrero(client: SupabaseClien
 
   const { data: again } = await client.from('ci_documento_plantillas').select('cuerpo').eq('codigo', CODIGO).maybeSingle();
   const c2 = String((again as { cuerpo?: string } | null)?.cuerpo ?? '').trim();
-  return c2.length > 80 ? c2 : CONTRATO_OBRERO_CUERPO_DEFAULT;
+  return c2.length > 80 && !esCuerpoContratoObreroObsoleto(c2) ? c2 : CONTRATO_OBRERO_CUERPO_DEFAULT;
 }
 
 export async function listarPlantillasDocumento(client: SupabaseClient) {
