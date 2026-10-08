@@ -40,7 +40,7 @@ export default function CampoFotoFrente({
         {required ? ' *' : ''}
       </label>
       <p className="mt-1 text-[11px] leading-snug text-zinc-500">
-        Abre la cámara y acerca el teléfono hasta llenar la silueta (cara y hombros).
+        Abre la cámara y acerca el teléfono hasta que tu cara llene el óvalo.
       </p>
       <div className="mt-2 flex flex-wrap gap-2">
         <button

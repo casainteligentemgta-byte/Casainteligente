@@ -239,7 +239,7 @@ export default function RegistroPorNeedCliente({
       if (!cel.numero || cel.numero.length !== 7) return 'Indica el celular con prefijo venezolano y 7 dígitos.';
       if (!form.direccion.trim()) return 'Indica la dirección / domicilio.';
       if (!form.fechaNacimiento.trim()) return 'Indica la fecha de nacimiento.';
-      if (!form.fotoPerfilFile) return 'Toma la foto de frente (cara y hombros).';
+      if (!form.fotoPerfilFile) return 'Toma la foto de frente (cara en el óvalo).';
       if (!form.fotoCedulaFile) return 'Sube la foto de la cédula.';
     }
     if (i === 1) {

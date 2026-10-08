@@ -85,7 +85,7 @@ export default function DocumentUpload({
       ) : (
         <p className="text-xs text-zinc-500">
           {siluetaBusto
-            ? 'Abre la cámara y acerca el teléfono hasta llenar la silueta (cara y hombros).'
+            ? 'Abre la cámara y acerca el teléfono hasta que tu cara llene el óvalo.'
             : 'Toma una foto clara o elige un archivo (JPG, PNG o PDF).'}
         </p>
       )}

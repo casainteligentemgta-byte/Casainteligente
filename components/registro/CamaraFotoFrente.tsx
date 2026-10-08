@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { Camera, X } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { SwitchCamera, X } from 'lucide-react';
 
 type Props = {
   open: boolean;
@@ -9,16 +9,17 @@ type Props = {
   onCapture: (file: File) => void;
 };
 
+type Facing = 'user' | 'environment';
+
 /**
- * Cámara frontal con silueta de busto (cabeza + hombros).
- * El obrero acerca el teléfono hasta llenar el contorno.
+ * Cámara con óvalo de encuadre (cara). El obrero acerca el teléfono hasta llenar el óvalo.
  */
 export default function CamaraFotoFrente({ open, onClose, onCapture }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const maskId = useId().replace(/:/g, '');
   const [error, setError] = useState<string | null>(null);
   const [listo, setListo] = useState(false);
+  const [facing, setFacing] = useState<Facing>('user');
 
   const detener = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -40,10 +41,11 @@ export default function CamaraFotoFrente({ open, onClose, onCapture }: Props) {
           setError('Este teléfono no permite cámara en el navegador. Elige una foto de la galería.');
           return;
         }
+        detener();
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: false,
           video: {
-            facingMode: { ideal: 'user' },
+            facingMode: { ideal: facing },
             width: { ideal: 1280 },
             height: { ideal: 1280 },
           },
@@ -69,7 +71,7 @@ export default function CamaraFotoFrente({ open, onClose, onCapture }: Props) {
       cancel = true;
       detener();
     };
-  }, [open, detener]);
+  }, [open, facing, detener]);
 
   function capturar() {
     const video = videoRef.current;
@@ -79,6 +81,10 @@ export default function CamaraFotoFrente({ open, onClose, onCapture }: Props) {
     canvas.height = video.videoHeight;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    if (facing === 'user') {
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+    }
     ctx.drawImage(video, 0, 0);
     canvas.toBlob(
       (blob) => {
@@ -97,63 +103,63 @@ export default function CamaraFotoFrente({ open, onClose, onCapture }: Props) {
 
   return (
     <div className="fixed inset-0 z-[80] flex flex-col bg-black" role="dialog" aria-modal aria-label="Foto de frente">
-      <div className="relative min-h-0 flex-1">
-        <video
-          ref={videoRef}
-          className="absolute inset-0 h-full w-full -scale-x-100 object-cover"
-          playsInline
-          muted
-          autoPlay
-        />
-        <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 160" preserveAspectRatio="xMidYMid slice">
-          <defs>
-            <mask id={maskId}>
-              <rect width="100" height="160" fill="white" />
-              <path
-                d="M50 16 C36 16 26 28 26 46 C26 60 32 70 39 76 C24 84 14 104 12 160 L88 160 C86 104 76 84 61 76 C68 70 74 60 74 46 C74 28 64 16 50 16 Z"
-                fill="black"
-              />
-            </mask>
-          </defs>
-          <rect width="100" height="160" fill="rgba(0,0,0,0.58)" mask={`url(#${maskId})`} />
-          <path
-            d="M50 16 C36 16 26 28 26 46 C26 60 32 70 39 76 C24 84 14 104 12 160 L88 160 C86 104 76 84 61 76 C68 70 74 60 74 46 C74 28 64 16 50 16 Z"
-            fill="none"
-            stroke="rgba(255,255,255,0.95)"
-            strokeWidth="1.15"
+      <p className="px-6 pt-[max(1rem,env(safe-area-inset-top))] text-center text-[13px] leading-snug text-zinc-400">
+        Acerca el teléfono hasta que tu cara llene el óvalo.
+      </p>
+
+      <div className="flex min-h-0 flex-1 items-center justify-center px-7 py-4">
+        <div className="relative aspect-[3/4] w-full max-w-[22rem] overflow-hidden rounded-2xl border border-dashed border-white/35 bg-zinc-950">
+          <video
+            ref={videoRef}
+            className={`absolute inset-0 h-full w-full object-cover ${facing === 'user' ? '-scale-x-100' : ''}`}
+            playsInline
+            muted
+            autoPlay
           />
-        </svg>
-        <p className="absolute inset-x-4 top-[max(0.75rem,env(safe-area-inset-top))] rounded-xl bg-black/55 px-3 py-2 text-center text-[13px] font-semibold leading-snug text-white">
-          Acerca el teléfono hasta que tu cara y hombros llenen la silueta.
-        </p>
-        {error ? (
-          <p className="absolute inset-x-4 top-1/2 -translate-y-1/2 rounded-xl border border-amber-500/40 bg-zinc-950/90 px-4 py-3 text-center text-sm text-amber-100">
-            {error}
-          </p>
-        ) : null}
+          <svg
+            className="pointer-events-none absolute inset-0 h-full w-full"
+            viewBox="0 0 300 400"
+            preserveAspectRatio="xMidYMid meet"
+            aria-hidden
+          >
+            <ellipse cx="150" cy="158" rx="92" ry="118" fill="none" stroke="white" strokeWidth="2.4" />
+          </svg>
+          {error ? (
+            <p className="absolute inset-x-4 top-1/2 -translate-y-1/2 rounded-xl border border-amber-500/40 bg-zinc-950/90 px-4 py-3 text-center text-sm text-amber-100">
+              {error}
+            </p>
+          ) : null}
+        </div>
       </div>
-      <div className="grid grid-cols-3 items-center bg-black px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3">
+
+      <div className="grid grid-cols-3 items-center px-8 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-2">
         <button
           type="button"
           onClick={() => {
             detener();
             onClose();
           }}
-          className="inline-flex items-center justify-self-start gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold text-zinc-200"
+          className="justify-self-start p-2 text-white"
+          aria-label="Cancelar"
         >
-          <X className="h-4 w-4" aria-hidden />
-          Cancelar
+          <X className="h-7 w-7" strokeWidth={1.75} />
         </button>
         <button
           type="button"
           disabled={!listo || Boolean(error)}
           onClick={capturar}
-          className="inline-flex h-16 w-16 items-center justify-center justify-self-center rounded-full border-4 border-white bg-[#FF9500] text-black shadow-lg disabled:opacity-40"
+          className="justify-self-center h-[3.25rem] w-[3.25rem] rounded-full border-[3px] border-white bg-transparent disabled:opacity-40"
           aria-label="Tomar foto"
+        />
+        <button
+          type="button"
+          disabled={Boolean(error)}
+          onClick={() => setFacing((f) => (f === 'user' ? 'environment' : 'user'))}
+          className="justify-self-end p-2 text-white disabled:opacity-40"
+          aria-label="Cambiar cámara"
         >
-          <Camera className="h-7 w-7" aria-hidden />
+          <SwitchCamera className="h-7 w-7" strokeWidth={1.75} />
         </button>
-        <span aria-hidden />
       </div>
     </div>
   );
