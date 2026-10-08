@@ -469,7 +469,7 @@ export default function RrhhHojasVidaArchivoPage() {
             const doc = docMostrado(r);
             const pdfBase = `/registro/planilla?empleadoId=${encodeURIComponent(r.id)}&cedula=${encodeURIComponent(doc === '—' ? '' : doc)}&volver=${encodeURIComponent(VOLVER_PATH)}`;
             const estadoEtiqueta = etiquetaEstadoArchivo(r);
-            const pdfHojaVida = `${pdfBase}&tipo=hoja_vida`;
+            const vistaHojaVida = `/rrhh/hojas-vida/archivo/${encodeURIComponent(r.id)}`;
             const pdfHojaEmpleo = `${pdfBase}&tipo=hoja_empleo`;
 
             return (
@@ -496,15 +496,13 @@ export default function RrhhHojasVidaArchivoPage() {
                 <div className="mt-3 flex w-full flex-wrap items-center gap-2 border-t border-white/10 pt-3">
                   {doc !== '—' ? (
                     <>
-                      <a
-                        href={pdfHojaVida}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <Link
+                        href={vistaHojaVida}
                         className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-zinc-200 transition hover:bg-white/10"
                       >
                         <FileText className="h-3.5 w-3.5 opacity-70" />
                         Hoja de vida
-                      </a>
+                      </Link>
                       <a
                         href={pdfHojaEmpleo}
                         target="_blank"

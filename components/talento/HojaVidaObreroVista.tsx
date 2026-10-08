@@ -16,6 +16,33 @@ import {
 } from '@/lib/talento/hojaVidaLegalVistaMeta';
 import type { PlanillaPatronoCampos } from '@/lib/talento/planillaPatronoTypes';
 
+function esUrlFoto(v: string): boolean {
+  return /^https?:\/\//i.test(v) || v.startsWith('data:image/');
+}
+
+function ValorCampoLegal({ id, valor, grande }: { id: string; valor: string; grande: boolean }) {
+  if ((id === 'fotoUrl' || id === 'fotoCedulaUrl') && valor && esUrlFoto(valor)) {
+    const carnet = id === 'fotoUrl';
+    return (
+      <img
+        src={valor}
+        alt={carnet ? 'Fotografía tipo carnet' : 'Fotografía de la cédula'}
+        className={
+          carnet
+            ? grande
+              ? 'h-48 w-36 rounded border border-slate-300 object-cover'
+              : 'h-28 w-20 rounded border border-slate-300 object-cover'
+            : grande
+              ? 'max-h-44 w-full max-w-xl rounded border border-slate-300 object-contain bg-white'
+              : 'max-h-24 w-full max-w-sm rounded border border-slate-300 object-contain bg-white'
+        }
+      />
+    );
+  }
+  if (!valor) return <span className="text-slate-400">—</span>;
+  return <span className="whitespace-pre-wrap break-words">{valor}</span>;
+}
+
 export type HojaVidaObreroVistaProps = {
   /** Datos actuales del formulario o vacío para solo mostrar el esquema. */
   hojaVidaLegal: HojaVidaObreroCompleta;
@@ -27,6 +54,8 @@ export type HojaVidaObreroVistaProps = {
    * `hoja_vida`: sin patrono/obra/contratación (PDF hoja de vida).
    */
   documentVariant?: 'hoja_empleo' | 'hoja_vida';
+  /** `ampliado`: tipografía y fotos grandes para lectura en banca / RRHH. */
+  tamano?: 'compacto' | 'ampliado';
 };
 
 /**
@@ -37,7 +66,22 @@ export default function HojaVidaObreroVista({
   className = '',
   planillaPatrono,
   documentVariant = 'hoja_empleo',
+  tamano = 'compacto',
 }: HojaVidaObreroVistaProps) {
+  const grande = tamano === 'ampliado';
+  const hSec = grande
+    ? 'bg-slate-900 px-3 py-2.5 text-sm font-bold uppercase tracking-wide text-white'
+    : 'bg-slate-900 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wide text-white';
+  const labelCls = grande
+    ? 'w-full shrink-0 text-sm font-bold uppercase text-slate-800 sm:w-[34%] sm:border-r sm:border-black sm:pr-3'
+    : 'w-full shrink-0 text-[10px] font-bold uppercase text-slate-800 sm:w-[38%] sm:border-r sm:border-black sm:pr-2';
+  const valueCls = grande
+    ? 'min-h-[2rem] flex-1 bg-slate-50 px-3 py-2 text-base leading-relaxed text-slate-900'
+    : 'min-h-[1.35rem] flex-1 bg-slate-50 px-2 py-0.5 text-xs text-slate-900 sm:text-right';
+  const tableCls = grande
+    ? 'overflow-x-auto border border-t-0 border-black bg-white text-sm'
+    : 'overflow-x-auto border border-t-0 border-black bg-white text-[10px]';
+  const td = grande ? 'border border-black px-2 py-2' : 'border border-black px-1 py-1';
   const esHojaEmpleo = documentVariant === 'hoja_empleo';
   const bySec = new Map<string, FilaVistaLegal[]>();
   for (const f of HOJA_VIDA_LEGAL_VISTA_FILAS) {
@@ -61,26 +105,30 @@ export default function HojaVidaObreroVista({
 
   return (
     <div
-      className={`rounded-2xl border border-white/10 bg-[#fafafa] p-5 text-slate-900 shadow-inner ${className}`}
+      className={`rounded-2xl border border-white/10 bg-[#fafafa] text-slate-900 shadow-inner ${grande ? 'p-6 sm:p-10' : 'p-5'} ${className}`}
     >
-      <div className="border-b-2 border-black pb-2 mb-3 flex flex-wrap items-start justify-between gap-2 text-[10px] font-bold leading-tight text-black">
+      <div
+        className={`border-b-2 border-black pb-2 mb-3 flex flex-wrap items-start justify-between gap-2 font-bold leading-tight text-black ${grande ? 'text-sm' : 'text-[10px]'}`}
+      >
         <span className="shrink-0 max-w-[28%]">{HOJA_VIDA_GACETA_NUMERO}</span>
         <span className="min-w-0 flex-1 text-center uppercase tracking-tight">
           Gaceta Oficial de la República Bolivariana de Venezuela
-          <span className="block font-normal normal-case text-[9px] text-slate-600 mt-0.5">
+          <span className={`block font-normal normal-case text-slate-600 mt-0.5 ${grande ? 'text-xs' : 'text-[9px]'}`}>
             (presentación tipo expediente — Casa Inteligente)
           </span>
         </span>
         <span className="shrink-0 text-right max-w-[22%]">Vista previa</span>
       </div>
-      <header className="border-2 border-black px-3 py-3 text-center">
-        <h3 className="text-sm font-black uppercase tracking-wide text-black">
+      <header className={`border-2 border-black text-center ${grande ? 'px-5 py-5' : 'px-3 py-3'}`}>
+        <h3 className={`font-black uppercase tracking-wide text-black ${grande ? 'text-2xl' : 'text-sm'}`}>
           {esHojaEmpleo ? HOJA_EMPLEO_TITULO : HOJA_VIDA_SOLO_TITULO}
         </h3>
-        <p className="mt-1 text-[10px] font-medium leading-snug text-slate-800">
+        <p className={`mt-1 font-medium leading-snug text-slate-800 ${grande ? 'text-sm' : 'text-[10px]'}`}>
           {esHojaEmpleo ? HOJA_EMPLEO_SUBTITULO : HOJA_VIDA_SOLO_SUBTITULO}
         </p>
-        <p className="mt-2 border-t border-slate-300 pt-2 text-[10px] leading-relaxed text-slate-600">{HOJA_VIDA_GACETA_REFERENCIA}</p>
+        <p className={`mt-2 border-t border-slate-300 pt-2 leading-relaxed text-slate-600 ${grande ? 'text-sm' : 'text-[10px]'}`}>
+          {HOJA_VIDA_GACETA_REFERENCIA}
+        </p>
       </header>
 
       {esHojaEmpleo ? (
@@ -173,10 +221,10 @@ export default function HojaVidaObreroVista({
         </div>
       ) : null}
 
-      <div className="mt-4 space-y-5">
+      <div className={`mt-4 ${grande ? 'space-y-8' : 'space-y-5'}`}>
         {Array.from(bySec.entries()).map(([titulo, filas]) => (
           <section key={titulo}>
-            <h4 className="bg-slate-900 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wide text-white">
+            <h4 className={hSec}>
               {esHojaEmpleo && titulo === 'I. Datos personales'
                 ? 'IV. Identificación del trabajador (datos personales)'
                 : titulo}
@@ -187,13 +235,11 @@ export default function HojaVidaObreroVista({
                 return (
                   <li
                     key={campo.id}
-                    className="flex flex-col gap-0.5 border-b border-black px-2 py-1.5 last:border-b-0 sm:flex-row sm:items-stretch sm:gap-0"
+                    className={`flex flex-col border-b border-black last:border-b-0 sm:flex-row sm:items-stretch sm:gap-0 ${grande ? 'gap-1 px-3 py-3' : 'gap-0.5 px-2 py-1.5'}`}
                   >
-                    <p className="w-full shrink-0 text-[10px] font-bold uppercase text-slate-800 sm:w-[38%] sm:border-r sm:border-black sm:pr-2">
-                      {campo.etiqueta}
-                    </p>
-                    <div className="min-h-[1.35rem] flex-1 bg-slate-50 px-2 py-0.5 text-xs text-slate-900 sm:text-right">
-                      {v ? <span>{v}</span> : <span className="text-slate-400">—</span>}
+                    <p className={labelCls}>{campo.etiqueta}</p>
+                    <div className={valueCls}>
+                      <ValorCampoLegal id={campo.id} valor={v} grande={grande} />
                     </div>
                   </li>
                 );
@@ -203,32 +249,30 @@ export default function HojaVidaObreroVista({
         ))}
 
         <section>
-          <h4 className="bg-slate-900 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wide text-white">
-            Familiares dependientes a cargo
-          </h4>
-          <div className="overflow-x-auto border border-t-0 border-black bg-white text-[10px]">
+          <h4 className={hSec}>Familiares dependientes a cargo</h4>
+          <div className={tableCls}>
             <table className="w-full border-collapse text-left">
               <thead>
                 <tr className="bg-slate-200">
-                  <th className="border border-black px-1 py-1 font-bold">N°</th>
-                  <th className="border border-black px-1 py-1 font-bold">Apellidos y nombres</th>
-                  <th className="border border-black px-1 py-1 font-bold">Parentesco</th>
-                  <th className="border border-black px-1 py-1 font-bold">Fecha nac.</th>
-                  <th className="border border-black px-1 py-1 font-bold">No aplica</th>
-                  <th className="border border-black px-1 py-1 font-bold">Obs.</th>
+                  <th className={td}>N°</th>
+                  <th className={td}>Apellidos y nombres</th>
+                  <th className={td}>Parentesco</th>
+                  <th className={td}>Fecha nac.</th>
+                  <th className={td}>No aplica</th>
+                  <th className={td}>Obs.</th>
                 </tr>
               </thead>
               <tbody>
                 {hojaVidaLegal.familiaresDependientes.map((dep, i) => (
                   <tr key={i}>
-                    <td className="border border-black px-1 py-1">{i + 1}</td>
-                    <td className="border border-black px-1 py-1">
+                    <td className={td}>{i + 1}</td>
+                    <td className={td}>
                       {[dep.apellido, dep.nombre].filter(Boolean).join(', ') || '—'}
                     </td>
-                    <td className="border border-black px-1 py-1">{dep.parentesco || '—'}</td>
-                    <td className="border border-black px-1 py-1">{dep.fechaNacimiento || '—'}</td>
-                    <td className="border border-black px-1 py-1">{dep.noAplica ? 'Sí' : '—'}</td>
-                    <td className="border border-black px-1 py-1">{(dep.observaciones ?? '').trim() || '—'}</td>
+                    <td className={td}>{dep.parentesco || '—'}</td>
+                    <td className={td}>{dep.fechaNacimiento || '—'}</td>
+                    <td className={td}>{dep.noAplica ? 'Sí' : '—'}</td>
+                    <td className={td}>{(dep.observaciones ?? '').trim() || '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -237,30 +281,28 @@ export default function HojaVidaObreroVista({
         </section>
 
         <section>
-          <h4 className="bg-slate-900 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wide text-white">
-            Experiencia laboral (trabajos previos)
-          </h4>
-          <div className="overflow-x-auto border border-t-0 border-black bg-white text-[10px]">
+          <h4 className={hSec}>Experiencia laboral (trabajos previos)</h4>
+          <div className={tableCls}>
             <table className="w-full border-collapse text-left">
               <thead>
                 <tr className="bg-slate-200">
-                  <th className="border border-black px-1 py-1 font-bold">Patrono</th>
-                  <th className="border border-black px-1 py-1 font-bold">Lugar</th>
-                  <th className="border border-black px-1 py-1 font-bold">Cargo</th>
-                  <th className="border border-black px-1 py-1 font-bold">Duración</th>
-                  <th className="border border-black px-1 py-1 font-bold">Retiro</th>
-                  <th className="border border-black px-1 py-1 font-bold">Motivo</th>
+                  <th className={td}>Patrono</th>
+                  <th className={td}>Lugar</th>
+                  <th className={td}>Cargo</th>
+                  <th className={td}>Duración</th>
+                  <th className={td}>Retiro</th>
+                  <th className={td}>Motivo</th>
                 </tr>
               </thead>
               <tbody>
                 {hojaVidaLegal.trabajosPrevios.map((t, i) => (
                   <tr key={i}>
-                    <td className="border border-black px-1 py-1">{t.empresaPatrono || '—'}</td>
-                    <td className="border border-black px-1 py-1">{t.lugar || '—'}</td>
-                    <td className="border border-black px-1 py-1">{t.oficioOCargo || '—'}</td>
-                    <td className="border border-black px-1 py-1">{t.duracion || '—'}</td>
-                    <td className="border border-black px-1 py-1">{t.fechaRetiro || '—'}</td>
-                    <td className="border border-black px-1 py-1">{t.motivoRetiro || '—'}</td>
+                    <td className={td}>{t.empresaPatrono || '—'}</td>
+                    <td className={td}>{t.lugar || '—'}</td>
+                    <td className={td}>{t.oficioOCargo || '—'}</td>
+                    <td className={td}>{t.duracion || '—'}</td>
+                    <td className={td}>{t.fechaRetiro || '—'}</td>
+                    <td className={td}>{t.motivoRetiro || '—'}</td>
                   </tr>
                 ))}
               </tbody>

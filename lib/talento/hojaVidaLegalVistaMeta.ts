@@ -35,6 +35,7 @@ export const HOJA_VIDA_LEGAL_VISTA_FILAS: FilaVistaLegal[] = [
   { seccion: 'Instrucción', id: 'tecnica', etiqueta: 'Técnica' },
   { seccion: 'Instrucción', id: 'superior', etiqueta: 'Superior' },
   { seccion: 'Instrucción', id: 'profesionUOficioActual', etiqueta: 'Profesión u oficio actual' },
+  { seccion: 'Gremial', id: 'realizaActividad', etiqueta: 'Realiza actividad gremial' },
   { seccion: 'Gremial', id: 'federacionSindicatoGremio', etiqueta: 'Federación / Sindicato / Gremio' },
   { seccion: 'Gremial', id: 'cargoQueEjerce', etiqueta: 'Cargo que ejerce' },
   { seccion: 'Médicos', id: 'examenMedicoPrevio', etiqueta: 'Examen médico previo' },
@@ -96,6 +97,12 @@ export function valorVistaLegal(
     tecnica: h.instruccionCapacitacion.tecnica ? 'Sí' : 'No',
     superior: h.instruccionCapacitacion.superior ? 'Sí' : 'No',
     profesionUOficioActual: h.instruccionCapacitacion.profesionUOficioActual,
+    realizaActividad:
+      h.actividadGremial.realizaActividad === 'si'
+        ? 'Sí'
+        : h.actividadGremial.realizaActividad === 'no'
+          ? 'No'
+          : '',
     federacionSindicatoGremio: h.actividadGremial.federacionSindicatoGremio,
     cargoQueEjerce: h.actividadGremial.cargoQueEjerce,
     examenMedicoPrevio:
