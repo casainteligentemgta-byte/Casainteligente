@@ -19,7 +19,7 @@ type DocumentUploadProps = {
   uploadOnSelect?: (file: File) => Promise<{ publicUrl?: string } | void>;
   /** Muestra botón de cámara trasera en móvil (recomendado para cédula). */
   preferCamera?: boolean;
-  /** Cámara frontal con silueta de busto (foto de frente). */
+  /** Cámara frontal con óvalo de encuadre (foto de frente). */
   siluetaBusto?: boolean;
   acceptFiles?: string;
 };
