@@ -59,25 +59,26 @@ export async function cargarVinculosContratacionProyecto(
     }
   }
 
-  const exFull = await supabase
-    .from('ci_contratos_express')
-    .select('proyecto_id,obrero_cedula,obrero_nombre,formalizado_empleado_id,tipo_contrato')
-    .limit(4000);
-  let exRows = !exFull.error ? exFull.data : null;
-  if (exFull.error && /formalizado_empleado_id|tipo_contrato|42703|schema cache|column/i.test(exFull.error.message ?? '')) {
-    const lite = await supabase
-      .from('ci_contratos_express')
-      .select('proyecto_id,obrero_cedula,obrero_nombre')
-      .limit(4000);
-    exRows = !lite.error ? lite.data : null;
-  }
-  for (const raw of (exRows ?? []) as {
+  type ExpressRow = {
     proyecto_id?: string;
     obrero_cedula?: string | null;
     obrero_nombre?: string | null;
     formalizado_empleado_id?: string | null;
     tipo_contrato?: string | null;
-  }[]) {
+  };
+  const exFull = await supabase
+    .from('ci_contratos_express')
+    .select('proyecto_id,obrero_cedula,obrero_nombre,formalizado_empleado_id,tipo_contrato')
+    .limit(4000);
+  let exRows: ExpressRow[] | null = !exFull.error ? (exFull.data as ExpressRow[]) : null;
+  if (exFull.error && /formalizado_empleado_id|tipo_contrato|42703|schema cache|column/i.test(exFull.error.message ?? '')) {
+    const lite = await supabase
+      .from('ci_contratos_express')
+      .select('proyecto_id,obrero_cedula,obrero_nombre')
+      .limit(4000);
+    exRows = !lite.error ? (lite.data as ExpressRow[]) : null;
+  }
+  for (const raw of exRows ?? []) {
     if (esContratoExpressAdministracionDelegada(raw)) continue;
     const pid = s(raw.proyecto_id);
     const fid = s(raw.formalizado_empleado_id);
@@ -86,15 +87,18 @@ export async function cargarVinculosContratacionProyecto(
     if (eid) agregarVinculoContrato(vinculos, eid, pid);
   }
 
-  let obra = await supabase
+  type ObraRow = { empleado_id?: string; obra_id?: string; proyecto_id?: string };
+  const obraFull = await supabase
     .from('ci_contratos_empleado_obra')
     .select('empleado_id,obra_id,proyecto_id')
     .limit(4000);
-  if (obra.error && /obra_id|42703|schema cache|column/i.test(obra.error.message ?? '')) {
-    obra = await supabase.from('ci_contratos_empleado_obra').select('empleado_id,proyecto_id').limit(4000);
+  let obraRows: ObraRow[] | null = !obraFull.error ? (obraFull.data as ObraRow[]) : null;
+  if (obraFull.error && /obra_id|42703|schema cache|column/i.test(obraFull.error.message ?? '')) {
+    const obraLite = await supabase.from('ci_contratos_empleado_obra').select('empleado_id,proyecto_id').limit(4000);
+    obraRows = !obraLite.error ? (obraLite.data as ObraRow[]) : null;
   }
-  if (!obra.error && obra.data) {
-    for (const raw of obra.data as { empleado_id?: string; obra_id?: string; proyecto_id?: string }[]) {
+  if (obraRows) {
+    for (const raw of obraRows) {
       agregarVinculoContrato(vinculos, raw.empleado_id, raw.obra_id);
       agregarVinculoContrato(vinculos, raw.empleado_id, raw.proyecto_id);
     }
