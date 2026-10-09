@@ -399,10 +399,7 @@ export default function NexusVisionArchitectClient() {
   const [lookPanelOpen, setLookPanelOpen] = useState(false)
   /** Primera carga del plano en este proyecto: rotar / calibrar / OK. */
   const [planoSetupOpen, setPlanoSetupOpen] = useState(false)
-  /**
-   * Recargó el JPG/PDF sobre un diseño ya guardado: rotar mueve solo la imagen
-   * para alinearla con las cámaras, sin girar los equipos.
-   */
+  /** Si true, Rotar gira solo el dibujo (las cámaras no se mueven). */
   const [alinearSoloImagen, setAlinearSoloImagen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [exportingPdf, setExportingPdf] = useState(false)
@@ -1264,8 +1261,8 @@ export default function NexusVisionArchitectClient() {
         const cam = project.cameras.length
         setInfo(
           autoAlinear
-            ? `${file.name} actualizado. Se conservan ${cam} cámara${cam === 1 ? '' : 's'}; el plano se giró para coincidir con el diseño.`
-            : `${file.name} actualizado. Se conservan ${cam} cámara${cam === 1 ? '' : 's'} y el resto del diseño. Gira solo la imagen hasta que coincida; las cámaras no se mueven.`,
+            ? `${file.name} actualizado. Se conservan ${cam} cámara${cam === 1 ? '' : 's'}; el plano se orientó como la última vez.`
+            : `${file.name} actualizado. Se conservan ${cam} cámara${cam === 1 ? '' : 's'}. Rotar gira el plano y las cámaras juntos.`,
         )
       }
       setProject((p) => {
@@ -1306,15 +1303,12 @@ export default function NexusVisionArchitectClient() {
       setUndergroundDraft(null)
       setDrawCable(false)
       clearCableDraft()
-      const needAlignSetup = keepDesign && !autoAlinear
-      if (firstPlano || needAlignSetup) {
+      if (firstPlano || (keepDesign && !autoAlinear)) {
         setLookPanelOpen(false)
         setPlanoSetupOpen(true)
         setInspectorOpen(false)
-        setAlinearSoloImagen(needAlignSetup)
-      } else {
-        setAlinearSoloImagen(false)
       }
+      setAlinearSoloImagen(false)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al cargar el plano')
     } finally {
@@ -3963,7 +3957,13 @@ export default function NexusVisionArchitectClient() {
                       <NetVisionPlanoSetupMenu
                         calibrating={calibrateMode}
                         disabled={loading}
-                        alignSavedDesign={alinearSoloImagen}
+                        soloImagen={alinearSoloImagen}
+                        onSoloImagen={
+                          project.cameras.length > 0 ||
+                          project.networkNodes.length > 0
+                            ? setAlinearSoloImagen
+                            : undefined
+                        }
                         onRotateLeft={() => void rotatePlano('ccw')}
                         onRotateRight={() => void rotatePlano('cw')}
                         onCalibrate={() => {

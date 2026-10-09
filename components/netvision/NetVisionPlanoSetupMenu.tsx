@@ -5,8 +5,9 @@ import { RotateCcw, RotateCw } from 'lucide-react'
 type Props = {
   calibrating: boolean
   disabled?: boolean
-  /** Recargó el plano sobre cámaras ya guardadas: rotar no mueve equipos. */
-  alignSavedDesign?: boolean
+  /** Si true, rotar gira solo el dibujo y deja las cámaras quietas. */
+  soloImagen?: boolean
+  onSoloImagen?: (value: boolean) => void
   onRotateLeft: () => void
   onRotateRight: () => void
   onCalibrate: () => void
@@ -17,7 +18,8 @@ type Props = {
 export default function NetVisionPlanoSetupMenu({
   calibrating,
   disabled = false,
-  alignSavedDesign = false,
+  soloImagen = false,
+  onSoloImagen,
   onRotateLeft,
   onRotateRight,
   onCalibrate,
@@ -26,16 +28,16 @@ export default function NetVisionPlanoSetupMenu({
   return (
     <div
       data-nv-plano-setup
-      data-nv-alinear={alignSavedDesign ? '1' : undefined}
+      data-nv-alinear={soloImagen ? '1' : undefined}
       className="pointer-events-auto w-[min(20.5rem,calc(100%-1.5rem))] rounded-xl border border-cyan-400/40 bg-[#071018]/95 p-2.5 shadow-xl backdrop-blur-md"
     >
       <p className="px-0.5 text-[10px] font-semibold uppercase tracking-wide text-cyan-200">
         Ajustar plano
       </p>
       <p className="mt-0.5 px-0.5 text-[11px] leading-snug text-white/70">
-        {alignSavedDesign
-          ? 'Gira solo la imagen hasta que coincida con las cámaras. Los equipos no se mueven.'
-          : 'Gira la imagen, calibra una medida conocida y pulsa OK.'}
+        {soloImagen
+          ? 'Gira solo el dibujo. Las cámaras se quedan donde estaban.'
+          : 'Gira el plano y las cámaras juntos. Luego calibra y pulsa OK.'}
       </p>
       <div className="mt-2 flex items-center gap-1">
         <button
@@ -72,6 +74,21 @@ export default function NetVisionPlanoSetupMenu({
           Calibrar
         </button>
       </div>
+      {onSoloImagen ? (
+        <button
+          type="button"
+          data-nv-solo-imagen
+          disabled={disabled}
+          onClick={() => onSoloImagen(!soloImagen)}
+          className={`mt-2 min-h-10 w-full rounded-lg px-2.5 text-[11px] font-semibold disabled:opacity-40 ${
+            soloImagen
+              ? 'bg-amber-400 text-black'
+              : 'border border-white/20 text-white/80 hover:bg-white/10'
+          }`}
+        >
+          {soloImagen ? 'Solo imagen · ON (cámaras quietas)' : 'Solo imagen (si el dibujo no calza)'}
+        </button>
+      ) : null}
       <button
         type="button"
         onClick={onOk}
