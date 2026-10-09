@@ -51,6 +51,29 @@ describe('rotateNormPoint', () => {
 })
 
 describe('rotateProjectGeometry', () => {
+  it('no toca el PDF ni los cuartos de giro del plano', () => {
+    const project = {
+      ...emptyProject({ id: 't', name: 't' }),
+      planoUrl: 'data:image/png;base64,xxx',
+      planoRotateQuarters: 2,
+      cameras: [
+        {
+          id: 'c1',
+          label: 'CAM-01',
+          x: 0.25,
+          y: 0.1,
+          modelId: 'x',
+          yawDeg: 0,
+          mountHeightM: 2.8,
+        },
+      ],
+    }
+    const next = rotateProjectGeometry(project, 'cw')
+    assert.equal(next.planoUrl, project.planoUrl)
+    assert.equal(next.planoRotateQuarters, 2)
+    assert.notEqual(next.cameras[0]!.x, project.cameras[0]!.x)
+  })
+
   it('rota cámara, yaw y escala', () => {
     const base = emptyProject({ id: 't', name: 't' })
     const project = {

@@ -16,8 +16,6 @@ import {
   FilePlus,
   ListChecks,
   Presentation,
-  RotateCcw,
-  RotateCw,
   Save,
   Trash2,
   Redo2,
@@ -45,6 +43,7 @@ import NetVisionLayerHelp, {
 } from '@/components/netvision/NetVisionLayerHelp'
 import NetVisionPlanoLookControls from '@/components/netvision/NetVisionPlanoLookControls'
 import NetVisionPlanoSetupMenu from '@/components/netvision/NetVisionPlanoSetupMenu'
+import NetVisionRotateLayers from '@/components/netvision/NetVisionRotateLayers'
 import NetVisionCameraVisionToggles from '@/components/netvision/NetVisionCameraVisionToggles'
 import NetVisionCalibracionOkModal from '@/components/netvision/NetVisionCalibracionOkModal'
 import StructureDesigner from '@/components/netvision/StructureDesigner'
@@ -399,11 +398,6 @@ export default function NexusVisionArchitectClient() {
   const [lookPanelOpen, setLookPanelOpen] = useState(false)
   /** Primera carga del plano en este proyecto: rotar / calibrar / OK. */
   const [planoSetupOpen, setPlanoSetupOpen] = useState(false)
-  /**
-   * Recargó el JPG/PDF sobre un diseño ya guardado: rotar mueve solo la imagen
-   * para alinearla con las cámaras, sin girar los equipos.
-   */
-  const [alinearSoloImagen, setAlinearSoloImagen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [exportingPdf, setExportingPdf] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -1265,7 +1259,7 @@ export default function NexusVisionArchitectClient() {
         setInfo(
           autoAlinear
             ? `${file.name} actualizado. Se conservan ${cam} cámara${cam === 1 ? '' : 's'}; el plano se giró para coincidir con el diseño.`
-            : `${file.name} actualizado. Se conservan ${cam} cámara${cam === 1 ? '' : 's'} y el resto del diseño. Gira solo la imagen hasta que coincida; las cámaras no se mueven.`,
+            : `${file.name} actualizado. Se conservan ${cam} cámara${cam === 1 ? '' : 's'}. Usa PDF para girar el dibujo o Cámaras para girar los equipos, sin el plano.`,
         )
       }
       setProject((p) => {
@@ -1311,9 +1305,6 @@ export default function NexusVisionArchitectClient() {
         setLookPanelOpen(false)
         setPlanoSetupOpen(true)
         setInspectorOpen(false)
-        setAlinearSoloImagen(needAlignSetup)
-      } else {
-        setAlinearSoloImagen(false)
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al cargar el plano')
@@ -1330,7 +1321,8 @@ export default function NexusVisionArchitectClient() {
     project.planoRotateQuarters,
   ])
 
-  const rotatePlano = useCallback(
+  /** Gira el PDF/imagen. Las cámaras y el resto del diseño se quedan. */
+  const rotatePlanoPdf = useCallback(
     async (dir: PlanoRotateDir) => {
       const url = project.planoUrl
       if (!url || loading) return
@@ -1338,30 +1330,40 @@ export default function NexusVisionArchitectClient() {
       setLoading(true)
       try {
         const rotated = await rotatePlanoDataUrl90(url, dir)
-        const imageOnly = alinearSoloImagen
         pdfRotateQuartersRef.current = nextRotateQuarters(
           pdfRotateQuartersRef.current,
           dir,
         )
-        setProject((p) => {
-          const base = imageOnly ? p : rotateProjectGeometry(p, dir)
-          return {
-            ...base,
-            planoUrl: rotated,
-            planoRotateQuarters: nextRotateQuarters(p.planoRotateQuarters, dir),
-          }
-        })
+        setProject((p) => ({
+          ...p,
+          planoUrl: rotated,
+          planoRotateQuarters: nextRotateQuarters(p.planoRotateQuarters, dir),
+        }))
         setCalibPoints((pts) => pts.map((pt) => rotateNormPoint(pt.x, pt.y, dir)))
         setCalibCursor((c) => (c ? rotateNormPoint(c.x, c.y, dir) : null))
         setPlanoDims((dims) => rotatePlanoDimensions(dims, dir))
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'No se pudo rotar el plano')
+        setError(e instanceof Error ? e.message : 'No se pudo girar el PDF')
       } finally {
         setLoading(false)
       }
     },
-    [project.planoUrl, loading, alinearSoloImagen],
+    [project.planoUrl, loading],
   )
+
+  /** Gira cámaras, muros y cables. El PDF no se mueve. */
+  const rotateCamaras = useCallback((dir: PlanoRotateDir) => {
+    setError(null)
+    setProject((p) => rotateProjectGeometry(p, dir))
+  }, [])
+
+  const hayEquiposParaGirar =
+    project.cameras.length > 0 ||
+    project.networkNodes.length > 0 ||
+    (project.planDevices?.length ?? 0) > 0 ||
+    (project.infraDevices?.length ?? 0) > 0 ||
+    project.structures.length > 0 ||
+    (project.cableSegments?.length ?? 0) > 0
 
   /** Posición inicial al agregar por botón (leve desplazamiento para no apilar). */
   const buttonSpawnPos = (index: number, baseX: number, baseY: number) => {
@@ -2310,7 +2312,6 @@ export default function NexusVisionArchitectClient() {
     setCanDetectPdfWalls(false)
     setPlanoDims([])
     setCalibCursor(null)
-    setAlinearSoloImagen(false)
     setPlanoSetupOpen(false)
   }
 
@@ -2362,7 +2363,6 @@ export default function NexusVisionArchitectClient() {
       setCanDetectPdfWalls(false)
       setPlanoDims([])
       setCalibCursor(null)
-      setAlinearSoloImagen(false)
       setPlanoSetupOpen(false)
       if (p.cameras.length > 0 && !p.planoUrl) {
         setInfo(
@@ -3077,29 +3077,13 @@ export default function NexusVisionArchitectClient() {
           <p className="px-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-text-dim)]">
             Vista del plano
           </p>
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              title="Rotar el plano 90° a la izquierda"
-              aria-label="Rotar el plano a la izquierda"
-              disabled={loading}
-              className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-md text-white hover:bg-white/10 disabled:opacity-40"
-              onClick={() => void rotatePlano('ccw')}
-            >
-              <RotateCcw className="h-3.5 w-3.5" />
-            </button>
-            <span className="text-[11px] font-semibold text-[var(--nexus-cyan)]">Rotar</span>
-            <button
-              type="button"
-              title="Rotar el plano 90° a la derecha"
-              aria-label="Rotar el plano a la derecha"
-              disabled={loading}
-              className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-md text-white hover:bg-white/10 disabled:opacity-40"
-              onClick={() => void rotatePlano('cw')}
-            >
-              <RotateCw className="h-3.5 w-3.5" />
-            </button>
-          </div>
+          <NetVisionRotateLayers
+            variant="side"
+            disabled={loading}
+            camerasDisabled={!hayEquiposParaGirar}
+            onRotatePdf={(dir) => void rotatePlanoPdf(dir)}
+            onRotateCameras={rotateCamaras}
+          />
           <button
             type="button"
             data-nv-calibrar
@@ -3963,9 +3947,9 @@ export default function NexusVisionArchitectClient() {
                       <NetVisionPlanoSetupMenu
                         calibrating={calibrateMode}
                         disabled={loading}
-                        alignSavedDesign={alinearSoloImagen}
-                        onRotateLeft={() => void rotatePlano('ccw')}
-                        onRotateRight={() => void rotatePlano('cw')}
+                        camerasDisabled={!hayEquiposParaGirar}
+                        onRotatePdf={(dir) => void rotatePlanoPdf(dir)}
+                        onRotateCameras={rotateCamaras}
                         onCalibrate={() => {
                           if (calibrateMode) {
                             setCalibrateMode(false)
@@ -3981,7 +3965,6 @@ export default function NexusVisionArchitectClient() {
                           setPlanoSetupOpen(false)
                           setLookPanelOpen(false)
                           setInspectorOpen(false)
-                          setAlinearSoloImagen(false)
                           setCalibrateMode(false)
                           setCalibPoints([])
                           setCalibCursor(null)

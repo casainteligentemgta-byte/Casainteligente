@@ -99,7 +99,7 @@ export const NETVISION_LAYER_HELP: LayerHelpItem[] = [
     id: 'rotate',
     label: 'Rotar',
     blurb:
-      'Gira el PDF o la imagen del plano 90° (izquierda o derecha). Las cámaras, muros y cables se mueven con el plano.',
+      'Hay dos giros: PDF mueve solo el dibujo (las cámaras se quedan) y Cámaras mueve los equipos, muros y cables (el PDF se queda). 90° a la izquierda o a la derecha.',
   },
   {
     id: 'structures',
