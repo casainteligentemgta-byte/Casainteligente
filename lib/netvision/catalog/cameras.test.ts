@@ -1,6 +1,8 @@
 /**
  * Ejecutar: npx tsx --test lib/netvision/catalog/cameras.test.ts
  */
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {
@@ -144,6 +146,11 @@ describe('catálogo Hikvision · modelos de electronica.com.ve', () => {
     assert.equal(fisheye.sensorWidthPx, 2560)
     assert.match(fisheye.notes ?? '', /180°/)
     assert.equal(turret.name, 'DS-2CD1353G0-IUF 5MP Turret')
+    assert.equal(turret.imageUrl, '/netvision/camaras/hik-ds2cd1353.webp')
+    assert.ok(
+      existsSync(join(process.cwd(), 'public', 'netvision', 'camaras', 'hik-ds2cd1353.webp')),
+      'falta la foto de catálogo hik-ds2cd1353.webp',
+    )
     assert.equal(turret.fovDeg, 98)
     assert.equal(turret.rangeNightM, 30)
     assert.equal(turret.poeWatts, 6.5)
