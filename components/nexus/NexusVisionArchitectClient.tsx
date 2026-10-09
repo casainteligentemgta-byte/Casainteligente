@@ -439,7 +439,7 @@ export default function NexusVisionArchitectClient() {
   const [sideTab, setSideTab] = useState<NetVisionBranchId>('cctv')
   const [redFocusKind, setRedFocusKind] = useState<NetworkNodeKind>('switch')
   const [headerNavEl, setHeaderNavEl] = useState<HTMLElement | null>(null)
-  /** Panel derecho (inspector): visible por defecto; se oculta con el botón. */
+  /** Inspector de cámara/elemento: solo al pulsar Configurar. */
   const [inspectorOpen, setInspectorOpen] = useState(false)
   /** Menú desplegable con todas las cámaras del plano. */
   const [camerasMenuOpen, setCamerasMenuOpen] = useState(false)
@@ -2754,6 +2754,7 @@ export default function NexusVisionArchitectClient() {
                   const next = active ? null : m.id
                   setDrawStructureMaterial(next)
                   setStructureDraft(null)
+                  setStructureCursor(null)
                   setDrawUnderground(false)
                   setUndergroundDraft(null)
                   setDrawCable(false)
@@ -2762,6 +2763,7 @@ export default function NexusVisionArchitectClient() {
                     setCalibrateMode(false)
                     setViewMode('plano')
                     setShowStructures(true)
+                    setInspectorOpen(false)
                   }
                 }}
               >
@@ -3939,6 +3941,11 @@ export default function NexusVisionArchitectClient() {
                         onOk={() => {
                           setPlanoSetupOpen(false)
                           setLookPanelOpen(false)
+                          setInspectorOpen(false)
+                          setCalibrateMode(false)
+                          setCalibPoints([])
+                          setCalibCursor(null)
+                          setInfo(null)
                         }}
                       />
                     ) : lookPanelOpen ? (
@@ -4003,7 +4010,10 @@ export default function NexusVisionArchitectClient() {
                       </button>
                     </div>
                   ) : null}
-                  {project.cameras.length > 0 && !inspectorOpen ? (
+                  {project.cameras.length > 0 &&
+                  !inspectorOpen &&
+                  !drawStructureMaterial &&
+                  !planoSetupOpen ? (
                     <div
                       className="absolute inset-x-2 bottom-12 z-20 flex items-center gap-2 rounded-xl border border-white/15 bg-[#071018]/90 px-2 py-1.5 shadow-lg backdrop-blur-md"
                       data-cameras-menu
@@ -4090,10 +4100,15 @@ export default function NexusVisionArchitectClient() {
                       </div>
                     </div>
                   ) : null}
-                  {selectedId && !inspectorOpen && !multiMode ? (
+                  {selectedId &&
+                  !inspectorOpen &&
+                  !multiMode &&
+                  !drawStructureMaterial &&
+                  !planoSetupOpen ? (
                     <div className="absolute right-3 top-14 z-20 flex flex-col items-end gap-2">
                       <button
                         type="button"
+                        data-nv-configurar
                         onClick={() => setInspectorOpen(true)}
                         className="min-h-10 rounded-full bg-[var(--nexus-cyan)] px-3.5 py-2 text-[11px] font-semibold text-black shadow-lg"
                       >
@@ -4216,7 +4231,7 @@ export default function NexusVisionArchitectClient() {
           )}
         </GlassCardMotion>
 
-        {inspectorOpen ? (
+        {inspectorOpen && !planoSetupOpen ? (
         <div className="absolute inset-x-0 bottom-0 z-30 max-h-[min(52dvh,480px)] overflow-y-auto rounded-t-2xl border border-white/15 bg-[#071018]/96 p-3 shadow-[0_-12px_40px_rgba(0,0,0,0.45)] backdrop-blur-md xl:inset-y-2 xl:bottom-2 xl:left-auto xl:right-2 xl:w-[min(340px,40vw)] xl:max-h-[calc(100%-1rem)] xl:rounded-2xl">
           <div className="mb-2 flex items-center justify-between gap-2">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-text-muted)]">
@@ -4424,6 +4439,7 @@ export default function NexusVisionArchitectClient() {
                   setCalibrateMode(false)
                   setViewMode('plano')
                   setShowStructures(true)
+                  setInspectorOpen(false)
                 }
               }}
               onSelect={(id) => {
