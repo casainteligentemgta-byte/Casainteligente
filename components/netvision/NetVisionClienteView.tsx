@@ -35,9 +35,11 @@ import NetVisionClientePresupuesto from '@/components/netvision/NetVisionCliente
 import {
   PARAM_COMPARTIDO,
   esTokenCompartir,
+  tienePlanoAparte,
   urlCompartida,
 } from '@/lib/netvision/compartir'
-import { descargarPlanoFirmado, subirPlanoNube } from '@/lib/netvision/planoNube'
+import { descargarPlanoFirmado, descargarPlanoNube, subirPlanoNube } from '@/lib/netvision/planoNube'
+import { bajarProyectoDeNube } from '@/lib/netvision/bajarDeNube'
 import type {
   ClientePresupuestoSnapshot,
   DesignCamera,
@@ -476,11 +478,44 @@ export default function NetVisionClienteView() {
     }
 
     if (!esCompartido) {
-      const loaded = loadClienteProject(search.get('id'))
+      // Lado del instalador: el proyecto sale de este navegador. Un plano grande (foto de
+      // varios MB) no cabe en el almacenamiento local, y un proyecto abierto en otro equipo
+      // no está aquí: en ambos casos se trae de la nube en vez de mostrar la vista vacía.
+      let cancelado = false
+      const idPedido = search.get('id')
+      const loaded = loadClienteProject(idPedido)
       setProject(loaded)
       setEstadoCompartido('listo')
+      setPlanoEstado('no')
       enfocar(loaded)
-      return
+      void (async () => {
+        if (!loaded) {
+          if (!idPedido) return
+          setEstadoCompartido('cargando')
+          const r = await bajarProyectoDeNube(idPedido)
+          if (cancelado) return
+          setEstadoCompartido('listo')
+          if (r.ok) {
+            setProject(r.project)
+            enfocar(r.project)
+            if (r.planoFalta) setPlanoEstado('error')
+          }
+          return
+        }
+        if (loaded.planoUrl || !tienePlanoAparte(loaded)) return
+        setPlanoEstado('cargando')
+        const plano = await descargarPlanoNube(loaded.id)
+        if (cancelado) return
+        if (plano) {
+          setProject((p) => (p && p.id === loaded.id ? { ...p, planoUrl: plano } : p))
+          setPlanoEstado('no')
+        } else {
+          setPlanoEstado('error')
+        }
+      })()
+      return () => {
+        cancelado = true
+      }
     }
 
     // Enlace del cliente: el proyecto viene de la nube, no de este navegador.
@@ -777,7 +812,7 @@ export default function NetVisionClienteView() {
     }
   }, [imprimiendo, project?.name, project?.planoNombre])
 
-  if (esCompartido && estadoCompartido !== 'listo') {
+  if (estadoCompartido === 'cargando' || (esCompartido && estadoCompartido !== 'listo')) {
     return (
       <div
         data-nv-compartido-estado={estadoCompartido}
