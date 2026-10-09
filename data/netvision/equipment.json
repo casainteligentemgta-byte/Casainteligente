@@ -64,6 +64,7 @@
       "name": "DS-2CD1353G0-IUF 5MP Turret",
       "formFactor": "dome",
       "conexiones": ["cable"],
+      "imageUrl": "/netvision/camaras/hik-ds2cd1353.webp",
       "fovDeg": 98,
       "focalMm": 2.8,
       "sensorWidthPx": 2560,
