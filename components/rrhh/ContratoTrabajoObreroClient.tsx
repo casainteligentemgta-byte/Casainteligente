@@ -20,6 +20,7 @@ import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import { apiUrl } from '@/lib/http/apiUrl';
 import AccionesContratoPdfFila from '@/components/rrhh/AccionesContratoPdfFila';
+import RrhhSubnavEnlaces from '@/components/rrhh/RrhhSubnavEnlaces';
 import ContratacionMasivaCandidatos from '@/components/rrhh/ContratacionMasivaCandidatos';
 import {
   esUuidProyectoModulo,
@@ -787,6 +788,7 @@ export default function ContratoTrabajoObreroClient() {
               : 'Seleccione la obra para ver contratados, crear uno nuevo o contratar a quienes ya llenaron el enlace.'}
           </p>
         </header>
+        <RrhhSubnavEnlaces proyectoModuloId={proyectoId || null} />
 
         {/* Acciones principales */}
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
