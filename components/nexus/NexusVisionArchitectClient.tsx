@@ -224,8 +224,11 @@ import {
 } from '@/lib/netvision/utils/planoRotulo'
 import NetVisionPlanoRotulo from '@/components/netvision/NetVisionPlanoRotulo'
 import {
+  clampRotateQuarters,
+  nextRotateQuarters,
   rotateNormPoint,
   rotatePlanoDataUrl90,
+  rotatePlanoDataUrlQuarters,
   rotateProjectGeometry,
   type PlanoRotateDir,
 } from '@/lib/netvision/utils/rotatePlano'
@@ -246,6 +249,7 @@ import {
   extractPdfDimensionsFromBytes,
   pickDimensionForSegment,
   rotatePlanoDimensions,
+  rotatePlanoDimensionsQuarters,
   type PlanoDimension,
 } from '@/lib/netvision/utils/extractPdfDimensions'
 import {
@@ -395,6 +399,11 @@ export default function NexusVisionArchitectClient() {
   const [lookPanelOpen, setLookPanelOpen] = useState(false)
   /** Primera carga del plano en este proyecto: rotar / calibrar / OK. */
   const [planoSetupOpen, setPlanoSetupOpen] = useState(false)
+  /**
+   * Recargó el JPG/PDF sobre un diseño ya guardado: rotar mueve solo la imagen
+   * para alinearla con las cámaras, sin girar los equipos.
+   */
+  const [alinearSoloImagen, setAlinearSoloImagen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [exportingPdf, setExportingPdf] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -1194,19 +1203,18 @@ export default function NexusVisionArchitectClient() {
       const isPdf = file.type === 'application/pdf' || lower.endsWith('.pdf')
       let url: string
       let detected: DesignStructure[] = []
+      let dims: PlanoDimension[] = []
       if (isPdf) {
         const data = new Uint8Array(await file.arrayBuffer())
         pdfBytesRef.current = data.slice()
         pdfRotateQuartersRef.current = 0
         setCanDetectPdfWalls(true)
         url = await renderPdfFirstPageFromBytes(data)
-        let dims: PlanoDimension[] = []
         try {
           dims = await extractPdfDimensionsFromBytes(data)
         } catch {
           dims = []
         }
-        setPlanoDims(dims)
         const dimHint =
           dims.length > 0
             ? ` ${dims.length} cota(s) leídas. Pulsa Calibrar y traza una línea sobre un acotamiento.`
@@ -1228,7 +1236,6 @@ export default function NexusVisionArchitectClient() {
         pdfBytesRef.current = null
         pdfRotateQuartersRef.current = 0
         setCanDetectPdfWalls(false)
-        setPlanoDims([])
         url = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader()
           reader.onload = () => resolve(String(reader.result))
@@ -1244,10 +1251,21 @@ export default function NexusVisionArchitectClient() {
         project.networkNodes.length > 0 ||
         (project.planDevices?.length ?? 0) > 0 ||
         (project.cableSegments?.length ?? 0) > 0
+      const savedQuarters = clampRotateQuarters(project.planoRotateQuarters)
+      const autoAlinear = keepDesign && savedQuarters > 0
+      if (autoAlinear) {
+        url = await rotatePlanoDataUrlQuarters(url, savedQuarters)
+        pdfRotateQuartersRef.current = savedQuarters
+        dims = rotatePlanoDimensionsQuarters(dims, savedQuarters)
+        detected = rotateStructuresCwQuarters(detected, savedQuarters)
+      }
+      setPlanoDims(dims)
       if (keepDesign) {
         const cam = project.cameras.length
         setInfo(
-          `${file.name} actualizado. Se conservan ${cam} cámara${cam === 1 ? '' : 's'} y el resto del diseño.`,
+          autoAlinear
+            ? `${file.name} actualizado. Se conservan ${cam} cámara${cam === 1 ? '' : 's'}; el plano se giró para coincidir con el diseño.`
+            : `${file.name} actualizado. Se conservan ${cam} cámara${cam === 1 ? '' : 's'} y el resto del diseño. Gira solo la imagen hasta que coincida; las cámaras no se mueven.`,
         )
       }
       setProject((p) => {
@@ -1275,6 +1293,7 @@ export default function NexusVisionArchitectClient() {
           undergroundSegments: [],
           cableSegments: [],
           cableRouteOverrides: {},
+          planoRotateQuarters: 0,
         }
       })
       setSelectedId(null)
@@ -1287,10 +1306,14 @@ export default function NexusVisionArchitectClient() {
       setUndergroundDraft(null)
       setDrawCable(false)
       clearCableDraft()
-      if (firstPlano) {
+      const needAlignSetup = keepDesign && !autoAlinear
+      if (firstPlano || needAlignSetup) {
         setLookPanelOpen(false)
         setPlanoSetupOpen(true)
         setInspectorOpen(false)
+        setAlinearSoloImagen(needAlignSetup)
+      } else {
+        setAlinearSoloImagen(false)
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al cargar el plano')
@@ -1304,6 +1327,7 @@ export default function NexusVisionArchitectClient() {
     project.planDevices,
     project.cableSegments,
     project.planoUrl,
+    project.planoRotateQuarters,
   ])
 
   const rotatePlano = useCallback(
@@ -1314,9 +1338,19 @@ export default function NexusVisionArchitectClient() {
       setLoading(true)
       try {
         const rotated = await rotatePlanoDataUrl90(url, dir)
-        pdfRotateQuartersRef.current =
-          (pdfRotateQuartersRef.current + (dir === 'cw' ? 1 : 3)) % 4
-        setProject((p) => ({ ...rotateProjectGeometry(p, dir), planoUrl: rotated }))
+        const imageOnly = alinearSoloImagen
+        pdfRotateQuartersRef.current = nextRotateQuarters(
+          pdfRotateQuartersRef.current,
+          dir,
+        )
+        setProject((p) => {
+          const base = imageOnly ? p : rotateProjectGeometry(p, dir)
+          return {
+            ...base,
+            planoUrl: rotated,
+            planoRotateQuarters: nextRotateQuarters(p.planoRotateQuarters, dir),
+          }
+        })
         setCalibPoints((pts) => pts.map((pt) => rotateNormPoint(pt.x, pt.y, dir)))
         setCalibCursor((c) => (c ? rotateNormPoint(c.x, c.y, dir) : null))
         setPlanoDims((dims) => rotatePlanoDimensions(dims, dir))
@@ -1326,7 +1360,7 @@ export default function NexusVisionArchitectClient() {
         setLoading(false)
       }
     },
-    [project.planoUrl, loading],
+    [project.planoUrl, loading, alinearSoloImagen],
   )
 
   /** Posición inicial al agregar por botón (leve desplazamiento para no apilar). */
@@ -2276,6 +2310,8 @@ export default function NexusVisionArchitectClient() {
     setCanDetectPdfWalls(false)
     setPlanoDims([])
     setCalibCursor(null)
+    setAlinearSoloImagen(false)
+    setPlanoSetupOpen(false)
   }
 
   const detectWallsFromLoadedPdf = useCallback(async () => {
@@ -2322,10 +2358,12 @@ export default function NexusVisionArchitectClient() {
       setCalibMetersTouched(false)
       setError(null)
       pdfBytesRef.current = null
-      pdfRotateQuartersRef.current = 0
+      pdfRotateQuartersRef.current = clampRotateQuarters(p.planoRotateQuarters)
       setCanDetectPdfWalls(false)
       setPlanoDims([])
       setCalibCursor(null)
+      setAlinearSoloImagen(false)
+      setPlanoSetupOpen(false)
       if (p.cameras.length > 0 && !p.planoUrl) {
         setInfo(
           `Abierto «${p.name}» (${p.cameras.length} cámaras). Falta el plano en este iPad/navegador: Cargar plano no borra las cámaras.`,
@@ -3925,6 +3963,7 @@ export default function NexusVisionArchitectClient() {
                       <NetVisionPlanoSetupMenu
                         calibrating={calibrateMode}
                         disabled={loading}
+                        alignSavedDesign={alinearSoloImagen}
                         onRotateLeft={() => void rotatePlano('ccw')}
                         onRotateRight={() => void rotatePlano('cw')}
                         onCalibrate={() => {
@@ -3942,6 +3981,7 @@ export default function NexusVisionArchitectClient() {
                           setPlanoSetupOpen(false)
                           setLookPanelOpen(false)
                           setInspectorOpen(false)
+                          setAlinearSoloImagen(false)
                           setCalibrateMode(false)
                           setCalibPoints([])
                           setCalibCursor(null)

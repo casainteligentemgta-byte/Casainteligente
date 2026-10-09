@@ -138,6 +138,16 @@ export function rotatePlanoDimensions(
   )
 }
 
+export function rotatePlanoDimensionsQuarters(
+  dims: PlanoDimension[],
+  quarters: number,
+): PlanoDimension[] {
+  const q = ((quarters % 4) + 4) % 4
+  let next = dims
+  for (let i = 0; i < q; i++) next = rotatePlanoDimensions(next, 'cw')
+  return next
+}
+
 export async function extractPdfDimensionsFromBytes(
   data: Uint8Array,
 ): Promise<PlanoDimension[]> {

@@ -8,8 +8,13 @@ import {
   type NightPlanoOptions,
 } from '@/lib/netvision/utils/nightPlanoPalette'
 import { rotateCameraLabelOffset } from '@/lib/netvision/utils/cameraLabelOffset'
+import {
+  clampRotateQuarters,
+  nextRotateQuarters,
+} from '@/lib/netvision/utils/planoRotateQuarters'
 
 export type PlanoRotateDir = 'cw' | 'ccw'
+export { clampRotateQuarters, nextRotateQuarters }
 
 export function rotateNormPoint(
   x: number,
@@ -173,6 +178,19 @@ export function rotatePlanoDataUrl90(
     img.onerror = () => reject(new Error('No se pudo leer el plano para rotarlo.'))
     img.src = src
   })
+}
+
+/** Aplica N giros horarios de 90° a un data URL (para reabrir el archivo original). */
+export async function rotatePlanoDataUrlQuarters(
+  dataUrl: string,
+  quarters: number,
+): Promise<string> {
+  const n = clampRotateQuarters(quarters)
+  let url = dataUrl
+  for (let i = 0; i < n; i++) {
+    url = await rotatePlanoDataUrl90(url, 'cw')
+  }
+  return url
 }
 
 /** Data URL con colores invertidos (para fondo negro / líneas blancas). */

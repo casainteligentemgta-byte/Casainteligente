@@ -373,6 +373,12 @@ export type NetVisionProject = {
    * proyecto tiene plano y si es el mismo.
    */
   planoHuella?: string
+  /**
+   * Giros de 90° en sentido horario aplicados al archivo original (0–3).
+   * Al volver a cargar el JPG/PDF se usa para orientar solo la imagen y no
+   * mover las cámaras ya guardadas.
+   */
+  planoRotateQuarters?: number
   /** Si true, el plano se muestra invertido (fondo negro, trazos blancos). */
   planoInvertido?: boolean
   /** Color de cotas/números en modo fondo negro. */

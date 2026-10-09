@@ -5,6 +5,8 @@ import { RotateCcw, RotateCw } from 'lucide-react'
 type Props = {
   calibrating: boolean
   disabled?: boolean
+  /** Recargó el plano sobre cámaras ya guardadas: rotar no mueve equipos. */
+  alignSavedDesign?: boolean
   onRotateLeft: () => void
   onRotateRight: () => void
   onCalibrate: () => void
@@ -15,6 +17,7 @@ type Props = {
 export default function NetVisionPlanoSetupMenu({
   calibrating,
   disabled = false,
+  alignSavedDesign = false,
   onRotateLeft,
   onRotateRight,
   onCalibrate,
@@ -23,13 +26,16 @@ export default function NetVisionPlanoSetupMenu({
   return (
     <div
       data-nv-plano-setup
+      data-nv-alinear={alignSavedDesign ? '1' : undefined}
       className="pointer-events-auto w-[min(20.5rem,calc(100%-1.5rem))] rounded-xl border border-cyan-400/40 bg-[#071018]/95 p-2.5 shadow-xl backdrop-blur-md"
     >
       <p className="px-0.5 text-[10px] font-semibold uppercase tracking-wide text-cyan-200">
         Ajustar plano
       </p>
       <p className="mt-0.5 px-0.5 text-[11px] leading-snug text-white/70">
-        Gira la imagen, calibra una medida conocida y pulsa OK.
+        {alignSavedDesign
+          ? 'Gira solo la imagen hasta que coincida con las cámaras. Los equipos no se mueven.'
+          : 'Gira la imagen, calibra una medida conocida y pulsa OK.'}
       </p>
       <div className="mt-2 flex items-center gap-1">
         <button
