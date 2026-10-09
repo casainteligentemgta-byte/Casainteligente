@@ -6,8 +6,10 @@ import {
   hayOfertaCliente,
   notaParaCliente,
   sanitizarClientePresupuesto,
+  snapshotDesdeBom,
   snapshotDesdeItemsVentas,
 } from '@/lib/netvision/clientePresupuesto'
+import { bomDelProyecto } from '@/lib/netvision/services/configGenerator'
 
 describe('oferta del cliente desde Ventas', () => {
   const items = [
@@ -97,5 +99,68 @@ describe('oferta del cliente desde Ventas', () => {
   it('filtra la nota interna de NetVision', () => {
     assert.equal(notaParaCliente('Generado desde NetVision: Casa.'), undefined)
     assert.equal(notaParaCliente('  '), undefined)
+  })
+
+  it('acepta renglones de Ventas con name / quantity / unitPrice', () => {
+    const snap = snapshotDesdeItemsVentas({
+      items: [
+        { product: { name: 'Cámara H9c Dual 2K' }, quantity: 2, unitPrice: 89 },
+        { nombre: 'Cable Cat 6 (por metro)', qty: 40, precio: 0.4 },
+      ],
+      subtotal: 194,
+      moneda: 'USD',
+    })
+    assert.ok(snap)
+    assert.equal(snap!.renglones.length, 2)
+    assert.equal(snap!.renglones[0]!.descripcion, 'Cámara h9c dual 2k')
+    assert.equal(snap!.renglones[0]!.qty, 2)
+    assert.equal(snap!.renglones[0]!.unitUsd, 89)
+    assert.equal(snap!.renglones[1]!.qty, 40)
+    assert.equal(snap!.renglones[1]!.unitUsd, 0.4)
+  })
+
+  it('arma la oferta del cliente desde el listado del plano si no hay Ventas', () => {
+    const bom = {
+      lines: [
+        {
+          sku: 'ezviz-h9c',
+          category: 'camera' as const,
+          description: 'Ezviz H9c Dual 2K',
+          qty: 2,
+          unitUsd: 80,
+          totalUsd: 160,
+        },
+      ],
+    }
+    const snap = snapshotDesdeBom(
+      { name: 'Proyecto CCS', currency: 'USD', distributorMarginPct: 25 },
+      bom,
+    )
+    assert.ok(snap)
+    assert.equal(snap!.renglones.length, 1)
+    assert.equal(snap!.renglones[0]!.qty, 2)
+    assert.equal(snap!.renglones[0]!.unitUsd, 100)
+    assert.equal(snap!.subtotalUsd, 200)
+  })
+
+  it('un proyecto con cámaras produce oferta aunque no tenga id de Ventas', () => {
+    const p = emptyProject({ id: 'p-ccs', name: 'Proyecto CCS' })
+    p.cameras = [
+      {
+        id: 'c1',
+        label: 'CAM-01',
+        x: 0.2,
+        y: 0.3,
+        modelId: 'ezviz-h9c',
+        yawDeg: 0,
+        mountHeightM: 3,
+      },
+    ]
+    assert.equal(p.ventasBudgetId, undefined)
+    const snap = snapshotDesdeBom(p, bomDelProyecto(p))
+    assert.ok(snap)
+    assert.ok((snap!.renglones.length ?? 0) > 0)
+    assert.ok(snap!.renglones.some((r) => /h9c/i.test(r.descripcion)))
+    assert.ok(snap!.subtotalUsd > 0)
   })
 })
