@@ -44,6 +44,7 @@ import NetVisionLayerHelp, {
   layerHelpTitle,
 } from '@/components/netvision/NetVisionLayerHelp'
 import NetVisionPlanoLookControls from '@/components/netvision/NetVisionPlanoLookControls'
+import NetVisionPlanoSetupMenu from '@/components/netvision/NetVisionPlanoSetupMenu'
 import NetVisionCameraVisionToggles from '@/components/netvision/NetVisionCameraVisionToggles'
 import NetVisionCalibracionOkModal from '@/components/netvision/NetVisionCalibracionOkModal'
 import StructureDesigner from '@/components/netvision/StructureDesigner'
@@ -391,7 +392,9 @@ export default function NexusVisionArchitectClient() {
   const [ugTerrain, setUgTerrain] = useState<TerrainType>('medium')
   const [ugChamberMat, setUgChamberMat] = useState<ChamberMaterial>('polietileno')
   const [nightMode, setNightMode] = useState(false)
-  const [lookPanelOpen, setLookPanelOpen] = useState(true)
+  const [lookPanelOpen, setLookPanelOpen] = useState(false)
+  /** Primera carga del plano en este proyecto: rotar / calibrar / OK. */
+  const [planoSetupOpen, setPlanoSetupOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [exportingPdf, setExportingPdf] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -1235,6 +1238,7 @@ export default function NexusVisionArchitectClient() {
       } else {
         throw new Error('Usa un PDF (exportado del CAD) o una imagen (JPG/PNG/WEBP).')
       }
+      const firstPlano = !project.planoUrl
       const keepDesign =
         project.cameras.length > 0 ||
         project.networkNodes.length > 0 ||
@@ -1283,12 +1287,24 @@ export default function NexusVisionArchitectClient() {
       setUndergroundDraft(null)
       setDrawCable(false)
       clearCableDraft()
+      if (firstPlano) {
+        setLookPanelOpen(false)
+        setPlanoSetupOpen(true)
+        setInspectorOpen(false)
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al cargar el plano')
     } finally {
       setLoading(false)
     }
-  }, [clearCableDraft, project.cameras.length, project.networkNodes.length, project.planDevices, project.cableSegments])
+  }, [
+    clearCableDraft,
+    project.cameras.length,
+    project.networkNodes.length,
+    project.planDevices,
+    project.cableSegments,
+    project.planoUrl,
+  ])
 
   const rotatePlano = useCallback(
     async (dir: PlanoRotateDir) => {
@@ -1523,7 +1539,7 @@ export default function NexusVisionArchitectClient() {
     const pos = buttonSpawnPos(idx, 0.35, 0.65)
     addNetworkAt('nvr', pos.x, pos.y, modelId)
     setSideTab('cctv')
-    setInspectorOpen(true)
+    setInspectorOpen(false)
   }
 
   const addInfraFromButton = (kind: InfraKind) => {
@@ -1560,7 +1576,7 @@ export default function NexusVisionArchitectClient() {
       infraDevices: [...(p.infraDevices ?? []), device],
     }))
     setSelectedId(device.id)
-    setInspectorOpen(true)
+    setInspectorOpen(false)
     setSideTab('cctv')
     setViewMode('plano')
   }
@@ -2753,6 +2769,19 @@ export default function NexusVisionArchitectClient() {
               </button>
             )
           })}
+          {drawStructureMaterial ? (
+            <button
+              type="button"
+              className="rounded-md bg-amber-400 px-2.5 py-1 text-[11px] font-bold text-black"
+              onClick={() => {
+                setDrawStructureMaterial(null)
+                setStructureDraft(null)
+                setStructureCursor(null)
+              }}
+            >
+              Listo · dejar de colocar
+            </button>
+          ) : null}
         </>
       )
     }
@@ -3733,7 +3762,6 @@ export default function NexusVisionArchitectClient() {
                     metersPerNormY={project.scale.metersPerNormY}
                     nightMode={nightMode}
                     showCameraLabels={!hideLabelsForPrint}
-                    onInspect={() => setInspectorOpen(true)}
                     multiSelectedIds={multiMode ? multiIds : undefined}
                     onToggleMulti={
                       multiMode
@@ -3890,8 +3918,30 @@ export default function NexusVisionArchitectClient() {
                       </div>
                     </div>
                   ) : null}
-                  <div className="pointer-events-none absolute left-3 top-14 z-20 w-[min(16.75rem,calc(100%-1.5rem))]">
-                    {lookPanelOpen ? (
+                  <div className="pointer-events-none absolute left-3 top-14 z-20 w-[min(20.5rem,calc(100%-1.5rem))]">
+                    {planoSetupOpen ? (
+                      <NetVisionPlanoSetupMenu
+                        calibrating={calibrateMode}
+                        disabled={loading}
+                        onRotateLeft={() => void rotatePlano('ccw')}
+                        onRotateRight={() => void rotatePlano('cw')}
+                        onCalibrate={() => {
+                          if (calibrateMode) {
+                            setCalibrateMode(false)
+                            setCalibPoints([])
+                            setCalibCursor(null)
+                            setCalibMetersTouched(false)
+                            setInfo(null)
+                            return
+                          }
+                          iniciarCalibracion()
+                        }}
+                        onOk={() => {
+                          setPlanoSetupOpen(false)
+                          setLookPanelOpen(false)
+                        }}
+                      />
+                    ) : lookPanelOpen ? (
                       <div className="pointer-events-auto rounded-xl border border-white/20 bg-[#071018]/92 p-2.5 shadow-xl backdrop-blur-md">
                         <div className="mb-1.5 flex items-center justify-between gap-2">
                           <p className="px-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-text-dim)]">
@@ -3937,6 +3987,22 @@ export default function NexusVisionArchitectClient() {
                       </button>
                     )}
                   </div>
+                  {drawStructureMaterial ? (
+                    <div className="pointer-events-none absolute inset-x-2 bottom-16 z-30 flex justify-center">
+                      <button
+                        type="button"
+                        data-nv-muros-listo
+                        onClick={() => {
+                          setDrawStructureMaterial(null)
+                          setStructureDraft(null)
+                          setStructureCursor(null)
+                        }}
+                        className="pointer-events-auto min-h-11 rounded-full bg-amber-400 px-4 py-2 text-[13px] font-bold text-black shadow-lg"
+                      >
+                        Listo · dejar de colocar muros
+                      </button>
+                    </div>
+                  ) : null}
                   {project.cameras.length > 0 && !inspectorOpen ? (
                     <div
                       className="absolute inset-x-2 bottom-12 z-20 flex items-center gap-2 rounded-xl border border-white/15 bg-[#071018]/90 px-2 py-1.5 shadow-lg backdrop-blur-md"
@@ -4031,14 +4097,16 @@ export default function NexusVisionArchitectClient() {
                         onClick={() => setInspectorOpen(true)}
                         className="min-h-10 rounded-full bg-[var(--nexus-cyan)] px-3.5 py-2 text-[11px] font-semibold text-black shadow-lg"
                       >
-                        Configurar{' '}
-                        {selectedCam?.label ||
-                          selectedNet?.label ||
-                          selectedPlanDevice?.label ||
-                          selectedStructure?.label ||
-                          selectedManualCable?.label ||
-                          selectedUnderground?.label ||
-                          'elemento'}
+                        {selectedCam
+                          ? 'Configurar cámara'
+                          : `Configurar ${
+                              selectedNet?.label ||
+                              selectedPlanDevice?.label ||
+                              selectedStructure?.label ||
+                              selectedManualCable?.label ||
+                              selectedUnderground?.label ||
+                              'elemento'
+                            }`}
                       </button>
                       {selectedCam ? (
                         <button
