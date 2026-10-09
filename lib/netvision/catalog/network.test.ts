@@ -1,6 +1,12 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { DEFAULT_AP_ID, DEFAULT_SWITCH_ID, getNetworkModel, networkCatalogByKind } from './network'
+import {
+  DEFAULT_AP_ID,
+  DEFAULT_SWITCH_ID,
+  getNetworkModel,
+  networkCatalogByKind,
+  nvrCatalog,
+} from './network'
 
 describe('catálogo de red · UniFi (ficha oficial ui.com)', () => {
   it('el Switch Lite 8 PoE tiene 8 puertos y solo 4 con PoE (52 W)', () => {
@@ -38,5 +44,25 @@ describe('catálogo de red · UniFi (ficha oficial ui.com)', () => {
     assert.equal(DEFAULT_SWITCH_ID, 'sw-poe-8')
     assert.equal(DEFAULT_AP_ID, 'ap-u6-lite')
     assert.equal(networkCatalogByKind('ap').length, 2)
+  })
+})
+
+describe('catálogo NVR · Hikvision Q2', () => {
+  it('DS-7616NI-Q2/16P: 16 PoE, 150 W, 2 bahías, 4K', () => {
+    const q2 = getNetworkModel('nvr-ds7616-q2')
+    const k2 = getNetworkModel('nvr-ds7616')
+    assert.ok(q2 && k2)
+    assert.equal(q2.name, 'DS-7616NI-Q2/16P')
+    assert.equal(q2.kind, 'nvr')
+    assert.equal(q2.recorder, 'nvr')
+    assert.equal(q2.channels, 16)
+    assert.equal(q2.poePorts, 16)
+    assert.equal(q2.poeBudgetW, 150)
+    assert.equal(q2.drawWatts, 15)
+    assert.equal(q2.hddBays, 2)
+    assert.equal(q2.rackUnits, 1)
+    assert.equal(q2.priceUsd, 276)
+    assert.notEqual(q2.id, k2.id)
+    assert.ok(nvrCatalog('nvr').some((m) => m.id === 'nvr-ds7616-q2'))
   })
 })

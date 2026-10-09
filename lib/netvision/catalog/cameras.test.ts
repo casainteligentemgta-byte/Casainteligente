@@ -130,6 +130,35 @@ describe('Dual · conos autónomos', () => {
   })
 })
 
+describe('catálogo Hikvision · modelos de electronica.com.ve', () => {
+  it('incluye la mini fisheye 5MP y el turret 5MP', () => {
+    const fisheye = getCameraModel('hik-ds2cd2955')
+    const turret = getCameraModel('hik-ds2cd1353')
+    assert.ok(fisheye && turret)
+    assert.equal(fisheye.name, 'DS-2CD2955G0-ISU 5MP Fisheye')
+    assert.equal(fisheye.formFactor, 'dome')
+    assert.equal(fisheye.focalMm, 1.05)
+    assert.equal(fisheye.fovDeg, 170)
+    assert.equal(fisheye.rangeNightM, 8)
+    assert.equal(fisheye.poeWatts, 7.5)
+    assert.equal(fisheye.sensorWidthPx, 2560)
+    assert.match(fisheye.notes ?? '', /180°/)
+    assert.equal(turret.name, 'DS-2CD1353G0-IUF 5MP Turret')
+    assert.equal(turret.fovDeg, 98)
+    assert.equal(turret.rangeNightM, 30)
+    assert.equal(turret.poeWatts, 6.5)
+    assert.deepEqual(
+      opcionesLente(turret).map((o) => [o.focalMm, o.fovDeg]),
+      [
+        [2.8, 98],
+        [4, 75.3],
+      ],
+    )
+    assert.equal(lenteDeFicha(turret)?.focalMm, 2.8)
+    assert.equal(isDualCameraModel('hik-ds2cd2955'), false)
+  })
+})
+
 describe('lentes intercambiables', () => {
   const hik = getCameraModel('hik-ds2cd2143')!
 
@@ -155,7 +184,16 @@ describe('lentes intercambiables', () => {
 
   it('la lente de ficha de cada modelo coincide con su ángulo de catálogo', () => {
     let conOpciones = 0
-    for (const id of ['hik-ds2cd2143', 'hik-ds2cd2t47', 'ezviz-h3', 'ezviz-h4', 'ezviz-h4-poe', 'ezviz-h8c', 'ezviz-c3w-pro']) {
+    for (const id of [
+      'hik-ds2cd2143',
+      'hik-ds2cd2t47',
+      'hik-ds2cd1353',
+      'ezviz-h3',
+      'ezviz-h4',
+      'ezviz-h4-poe',
+      'ezviz-h8c',
+      'ezviz-c3w-pro',
+    ]) {
       const m = getCameraModel(id)!
       const ficha = lenteDeFicha(m)
       assert.ok(ficha, id)
@@ -163,7 +201,7 @@ describe('lentes intercambiables', () => {
       assert.equal(ficha!.focalMm, m.focalMm, id)
       conOpciones++
     }
-    assert.equal(conOpciones, 7)
+    assert.equal(conOpciones, 8)
     // Un modelo de una sola lente no ofrece opciones.
     assert.deepEqual(opcionesLente(getCameraModel('ezviz-c6n')!), [])
     assert.equal(lenteElegida(getCameraModel('ezviz-c6n')!, {}), null)
