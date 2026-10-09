@@ -12,6 +12,7 @@ import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi'
 import type { TelegramEstado } from '@/lib/telegram/estados';
 import { getTelegramEstado, setTelegramContexto } from '@/lib/telegram/estados';
 import { nombreProyectoTelegram } from '@/lib/telegram/proyectoPicker';
+import { MENSAJE_INICIO_SALIDA_OBRA } from '@/lib/telegram/mensajesSalidaTelegram';
 import { enviarPickerOrigenSalidaTelegram } from '@/lib/telegram/salidaOrigenPicker';
 
 export const FLUJO_EGRESO_V2 = 'egreso_v2';
@@ -115,13 +116,7 @@ export async function manejarComandoSalidaEgresoTelegram(
     proyecto_id: null,
     metadata: { flujo: FLUJO_EGRESO_V2, paso: 'origen' },
   });
-  await sendTelegramMessage(
-    chatId,
-    '📤 <b>Egreso de material</b>\n\n' +
-      'Registre quién recibe el material, a qué partida/actividad va y las cantidades.\n' +
-      'La foto es <b>opcional</b>. Puede incluir varios productos en un mismo egreso.',
-    { parse_mode: 'HTML' },
-  );
+  await sendTelegramMessage(chatId, MENSAJE_INICIO_SALIDA_OBRA, { parse_mode: 'HTML' });
   const { enviarPickerProyectosTelegram } = await import('@/lib/telegram/proyectoPicker');
   await enviarPickerProyectosTelegram(supabase, chatId, 'salida_obra');
 }

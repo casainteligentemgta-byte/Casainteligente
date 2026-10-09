@@ -18,7 +18,7 @@ export const TELEGRAM_BOT_COMMANDS: Array<{ command: string; description: string
   { command: 'agenda', description: 'Cumpleaños, citas y recordatorios (IA)' },
   { command: 'tecnico', description: 'Técnico de cámaras y redes (IA): /tecnico <pregunta>' },
   { command: 'ingreso', description: 'Menú ingreso: factura, nota, sin nota, precargadas' },
-  { command: 'salida', description: 'Menú salidas: obra, almacén o préstamo/traspaso' },
+  { command: 'salida', description: 'Menú salida: obrero en obra, despacho o traspaso' },
   { command: 'bitacora', description: 'Bitácora de obra por nota de voz' },
   { command: 'agua', description: 'Registro agua: camión, PPM y litros' },
   { command: 'stock', description: 'Stock guiado o por obra/material' },
@@ -45,7 +45,7 @@ export const MENSAJE_MENU_TELEGRAM =
   '<b>Ingresos almacén</b>\n' +
   '• /ingreso — manual · automático · nota · sin nota · precargadas\n\n' +
   '<b>Salidas</b>\n' +
-  '• /salida — obra · almacén · traspaso\n\n' +
+  '• /salida — obrero en obra · despacho · traspaso\n\n' +
   '<b>Campo</b>\n' +
   '• /bitacora — nota de voz · /agua — camión, PPM, litros\n\n' +
   '<b>Consultas</b>\n' +

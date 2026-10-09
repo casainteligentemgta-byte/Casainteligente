@@ -10,6 +10,7 @@ import {
 import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi';
 import type { TelegramEstado } from '@/lib/telegram/estados';
 import { getTelegramEstado, setTelegramContexto } from '@/lib/telegram/estados';
+import { MENSAJE_INICIO_SALIDA_TRASPASO } from '@/lib/telegram/mensajesSalidaTelegram';
 import type { UbicacionInventario } from '@/types/inventario-obra';
 
 export type PasoTraspasoTelegram =
@@ -204,7 +205,7 @@ export async function cancelarTraspasoTelegram(
   chatId: string,
 ): Promise<void> {
   await finalizarSesionTraspaso(supabase, chatId);
-  await sendTelegramMessage(chatId, '❌ Traspaso cancelado. Usa /traspaso para iniciar otro.');
+  await sendTelegramMessage(chatId, '❌ Traspaso cancelado. Usa /salida para iniciar otro.');
 }
 
 export async function manejarComandoTraspasoTelegram(
@@ -216,6 +217,7 @@ export async function manejarComandoTraspasoTelegram(
     proyecto_id: null,
     metadata: { paso: 'origen' },
   });
+  await sendTelegramMessage(chatId, MENSAJE_INICIO_SALIDA_TRASPASO, { parse_mode: 'HTML' });
   await enviarPickerUbicaciones(supabase, chatId, 'origen', 0);
 }
 
@@ -227,7 +229,7 @@ export async function manejarCallbackTraspasoTelegram(
 
   const estado = await getTelegramEstado(supabase, params.chatId);
   if (!esFlujoTraspasoTelegram(estado) && params.data !== PREFIX_CANCEL) {
-    await answerCallbackQuery(params.callbackId, 'Sesión de traspaso no activa. Use /traspaso');
+    await answerCallbackQuery(params.callbackId, 'Sesión de traspaso no activa. Use /salida');
     return true;
   }
 
@@ -371,7 +373,7 @@ async function ejecutarTraspasoTelegram(
 ): Promise<void> {
   const m = meta(estado);
   if (!m.origen_id || !m.destino_id || !m.producto_id || !m.cantidad) {
-    await sendTelegramMessage(chatId, '❌ Datos incompletos. Reinicie con /traspaso.');
+    await sendTelegramMessage(chatId, '❌ Datos incompletos. Reinicie con /salida.');
     await cancelarTraspasoTelegram(supabase, chatId);
     return;
   }
@@ -434,7 +436,7 @@ async function ejecutarTraspasoTelegram(
     );
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Error al registrar traspaso';
-    await sendTelegramMessage(chatId, `❌ ${msg}\n\nPuede reintentar con /traspaso.`);
+    await sendTelegramMessage(chatId, `❌ ${msg}\n\nPuede reintentar con /salida.`);
   }
 }
 
@@ -451,7 +453,7 @@ export async function manejarTextoTraspasoTelegram(
 
   if (m.paso === 'producto') {
     if (!m.origen_id) {
-      await sendTelegramMessage(chatId, '❌ Falta origen. Use /traspaso de nuevo.');
+      await sendTelegramMessage(chatId, '❌ Falta origen. Use /salida de nuevo.');
       return true;
     }
     const pattern = patronIlike(t);
@@ -510,7 +512,7 @@ export async function manejarTextoTraspasoTelegram(
       return true;
     }
     if (!m.origen_id || !m.producto_id) {
-      await sendTelegramMessage(chatId, '❌ Sesión incompleta. /traspaso');
+      await sendTelegramMessage(chatId, '❌ Sesión incompleta. Use /salida.');
       return true;
     }
     const disp = await stockDisponibleOrigen(supabase, m.origen_id, m.producto_id);

@@ -17,12 +17,13 @@ import { registrarDespachoWeb } from '@/lib/almacen/registrarDespachoWeb';
 import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi';
 import type { TelegramEstado } from '@/lib/telegram/estados';
 import { getTelegramEstado, setTelegramContexto } from '@/lib/telegram/estados';
+import { MENSAJE_INICIO_SALIDA_DESPACHO } from '@/lib/telegram/mensajesSalidaTelegram';
 import {
   enviarPickerProyectosTelegram,
   nombreProyectoTelegram,
 } from '@/lib/telegram/proyectoPicker';
 
-/** Flujo unificado: /salidaalmacen (alias /salidaobra, /despacho). */
+/** Despacho desde /salida → «Despacho a obra u otro almacén» (paridad /almacen/despacho). */
 export const FLUJO_SALIDA_ALMACEN = 'salida_almacen';
 export const FLUJO_SALIDA_OBRA = FLUJO_SALIDA_ALMACEN;
 
@@ -136,17 +137,6 @@ async function patchMeta(
   });
 }
 
-const MENSAJE_INICIO =
-  '📤 <b>Salida desde almacén</b> (<code>/salidaalmacen</code>)\n\n' +
-  '1️⃣ Obra y <b>almacén de origen</b>\n' +
-  '2️⃣ <b>Obrero</b> que recibe (nómina o nombre + cédula)\n' +
-  '3️⃣ Destino: <b>obra</b> (capítulo → partida o actividad) u <b>almacén de la entidad</b>\n' +
-  '4️⃣ Observaciones opcionales → materiales del <b>stock</b> y cantidades\n' +
-  '5️⃣ Foto opcional del material saliente\n' +
-  '6️⃣ Confirmar — descuenta stock\n\n' +
-  '<i>No configura alarmas de despacho.</i>\n' +
-  '<code>/cancelar</code> para abortar.';
-
 export async function manejarComandoSalidaObraTelegram(
   supabase: SupabaseClient,
   chatId: string,
@@ -156,7 +146,7 @@ export async function manejarComandoSalidaObraTelegram(
     proyecto_id: null,
     metadata: { flujo: FLUJO_SALIDA_ALMACEN, paso: 'almacen', lineas: [] },
   });
-  await sendTelegramMessage(chatId, MENSAJE_INICIO, { parse_mode: 'HTML' });
+  await sendTelegramMessage(chatId, MENSAJE_INICIO_SALIDA_DESPACHO, { parse_mode: 'HTML' });
   await enviarPickerProyectosTelegram(supabase, chatId, 'salida_almacen');
 }
 
@@ -443,7 +433,7 @@ async function enviarPickerMaterialStock(
   if (!stock.length) {
     await sendTelegramMessage(
       chatId,
-      '⚠️ No hay stock en este almacén. Reinicie con <code>/salidaalmacen</code>.',
+      '⚠️ No hay stock en este almacén. Reinicie con <code>/salida</code>.',
       { parse_mode: 'HTML' },
     );
     return;

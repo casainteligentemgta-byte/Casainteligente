@@ -206,11 +206,13 @@ Auditoría log bot: cada mensaje/callback + eventos OCR y confirmación compra.
 
 ### Salidas `/salida`
 
+Menú unificado (`mensajesSalidaTelegram.ts`). Tres tipos; persistencia por backend.
+
 | Menú | Archivo | Persistencia |
 |------|---------|--------------|
-| Salida a obra | `salidaEgresoFlujo.ts` | `transferencias_inventario` + `inv_egresos_campo` |
-| Salida almacén | `salidaObraTelegram.ts` | `registrarDespachoWeb` |
-| Traspaso/préstamo | `traspasoFlujoTelegram.ts` | `transferencias_inventario` |
+| A un obrero en obra | `salidaEgresoFlujo.ts` | `transferencias_inventario` + `inv_egresos_campo` |
+| Despacho a obra u otro almacén | `salidaObraTelegram.ts` | `registrarDespachoWeb` |
+| Traspaso / préstamo | `traspasoFlujoTelegram.ts` | `transferencias_inventario` |
 
 ### Bot de logs (infraestructura)
 

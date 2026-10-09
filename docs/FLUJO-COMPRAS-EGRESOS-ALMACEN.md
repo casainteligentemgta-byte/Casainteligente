@@ -41,7 +41,15 @@ Todas convergen en **`/contabilidad/compras`** (cuadro unificado) y en las tabla
 
 ### Comando Telegram `/salida`
 
-Flujo del depositario (migración **206**):
+Menú unificado (misma idea que `/ingreso`). Tres tipos; todos descuentan stock al confirmar.
+
+| Opción | Flujo | Persistencia |
+|---|---|---|
+| **A un obrero en obra** | obra → almacén → quién recibe → material/cantidad → partida → Gantt → foto | `transferencias_inventario` + `inv_egresos_campo` |
+| **Despacho a obra u otro almacén** | paridad con `/almacen/despacho` (capítulo, partida, destino) | `registrarDespachoWeb` |
+| **Traspaso / préstamo** | origen → destino → material → cantidad | `transferencias_inventario` |
+
+#### A un obrero en obra (migración **206**)
 
 1. Elegir **obra**
 2. Elegir **almacén origen** (central o móvil)
@@ -109,7 +117,8 @@ Flujo del depositario (migración **206**):
 
 ```mermaid
 flowchart TD
-    A[/salida] --> B[Obra]
+    A[/salida] --> MNU{Tipo}
+    MNU -->|Obrero en obra| B[Obra]
     B --> C[Almacén origen]
     C --> D[Obrero ci_empleados o texto]
     D --> E[Material + cantidad]
@@ -121,5 +130,9 @@ flowchart TD
     I --> J[Observaciones]
     J --> K[Confirmar]
     K --> L[transferencias_inventario + inv_egresos_campo]
-    L --> M[inventario_stock actualizado]
+    L --> ST[inventario_stock actualizado]
+    MNU -->|Despacho| DES[registrarDespachoWeb]
+    DES --> ST
+    MNU -->|Traspaso| TR[transferencias_inventario]
+    TR --> ST
 ```
