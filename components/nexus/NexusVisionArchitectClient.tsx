@@ -14,6 +14,7 @@ import {
   CopyPlus,
   Download,
   FilePlus,
+  FolderOpen,
   ListChecks,
   Presentation,
   Save,
@@ -398,6 +399,7 @@ export default function NexusVisionArchitectClient() {
   const [lookPanelOpen, setLookPanelOpen] = useState(false)
   /** Primera carga del plano en este proyecto: rotar / calibrar / OK. */
   const [planoSetupOpen, setPlanoSetupOpen] = useState(false)
+  const [projectsOpen, setProjectsOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [exportingPdf, setExportingPdf] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -3008,17 +3010,17 @@ export default function NexusVisionArchitectClient() {
         <FilePlus className="mr-1.5 h-3.5 w-3.5" />
         Nuevo plano
       </Button>
-      <div className="w-full">
-        <NetVisionProjectsPanel
-          activeId={project.id}
-          projectName={project.name}
-          onOpen={switchToProject}
-          onNameChange={(name) =>
-            setProject((p) => ({ ...p, name: name.slice(0, 120) }))
-          }
-          triggerSize="sm"
-        />
-      </div>
+      <Button
+        type="button"
+        variant="glass"
+        size="sm"
+        data-nv-mis-proyectos
+        className="w-full justify-start"
+        onClick={() => setProjectsOpen(true)}
+      >
+        <FolderOpen className="mr-1.5 h-3.5 w-3.5" />
+        Mis proyectos
+      </Button>
       <Button
         type="button"
         variant="glass"
@@ -3595,6 +3597,18 @@ export default function NexusVisionArchitectClient() {
         }}
       />
       {headerNav}
+
+      <NetVisionProjectsPanel
+        activeId={project.id}
+        projectName={project.name}
+        open={projectsOpen}
+        onOpenChange={setProjectsOpen}
+        showTrigger={false}
+        onOpen={switchToProject}
+        onNameChange={(name) =>
+          setProject((p) => ({ ...p, name: name.slice(0, 120) }))
+        }
+      />
 
       {calibOk ? (
         <NetVisionCalibracionOkModal
