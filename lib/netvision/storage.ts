@@ -24,6 +24,7 @@ import type {
 import { sanitizarClientePresupuesto } from '@/lib/netvision/clientePresupuesto'
 import { huellaPlano } from '@/lib/netvision/compartir'
 import { normalizarTasa } from '@/lib/netvision/utils/moneda'
+import { clampRotateQuarters } from '@/lib/netvision/utils/planoRotateQuarters'
 import { DRAWABLE_CABLE_TYPES } from '@/lib/netvision/services/cableCalculator'
 import { defaultScale } from '@/lib/netvision/services/coverageCalculator'
 import { DEFAULT_CAMERA_MODEL_ID } from '@/lib/netvision/catalog/cameras'
@@ -95,6 +96,7 @@ export function emptyProject(partial?: {
     distributorMarginPct: 15,
     planoUrl: null,
     planoNombre: '',
+    planoRotateQuarters: 0,
     planoInvertido: false,
     planoCotaColor: 'auto',
     planoGrosorMuro: 50,
@@ -563,6 +565,7 @@ function normalizeProject(
     planoUrl: p.planoUrl ?? null,
     planoNombre: p.planoNombre ?? '',
     ...(typeof p.planoHuella === 'string' ? { planoHuella: p.planoHuella.slice(0, 64) } : {}),
+    planoRotateQuarters: clampRotateQuarters(p.planoRotateQuarters),
     planoInvertido: Boolean(p.planoInvertido),
     planoCotaColor: normalizeCotaColor(p.planoCotaColor),
     planoGrosorMuro: clampGrosorMuro(p.planoGrosorMuro),

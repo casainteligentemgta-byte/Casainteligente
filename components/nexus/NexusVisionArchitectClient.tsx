@@ -44,6 +44,7 @@ import NetVisionLayerHelp, {
   layerHelpTitle,
 } from '@/components/netvision/NetVisionLayerHelp'
 import NetVisionPlanoLookControls from '@/components/netvision/NetVisionPlanoLookControls'
+import NetVisionPlanoSetupMenu from '@/components/netvision/NetVisionPlanoSetupMenu'
 import NetVisionCameraVisionToggles from '@/components/netvision/NetVisionCameraVisionToggles'
 import NetVisionCalibracionOkModal from '@/components/netvision/NetVisionCalibracionOkModal'
 import StructureDesigner from '@/components/netvision/StructureDesigner'
@@ -223,8 +224,11 @@ import {
 } from '@/lib/netvision/utils/planoRotulo'
 import NetVisionPlanoRotulo from '@/components/netvision/NetVisionPlanoRotulo'
 import {
+  clampRotateQuarters,
+  nextRotateQuarters,
   rotateNormPoint,
   rotatePlanoDataUrl90,
+  rotatePlanoDataUrlQuarters,
   rotateProjectGeometry,
   type PlanoRotateDir,
 } from '@/lib/netvision/utils/rotatePlano'
@@ -245,6 +249,7 @@ import {
   extractPdfDimensionsFromBytes,
   pickDimensionForSegment,
   rotatePlanoDimensions,
+  rotatePlanoDimensionsQuarters,
   type PlanoDimension,
 } from '@/lib/netvision/utils/extractPdfDimensions'
 import {
@@ -391,7 +396,14 @@ export default function NexusVisionArchitectClient() {
   const [ugTerrain, setUgTerrain] = useState<TerrainType>('medium')
   const [ugChamberMat, setUgChamberMat] = useState<ChamberMaterial>('polietileno')
   const [nightMode, setNightMode] = useState(false)
-  const [lookPanelOpen, setLookPanelOpen] = useState(true)
+  const [lookPanelOpen, setLookPanelOpen] = useState(false)
+  /** Primera carga del plano en este proyecto: rotar / calibrar / OK. */
+  const [planoSetupOpen, setPlanoSetupOpen] = useState(false)
+  /**
+   * Recargó el JPG/PDF sobre un diseño ya guardado: rotar mueve solo la imagen
+   * para alinearla con las cámaras, sin girar los equipos.
+   */
+  const [alinearSoloImagen, setAlinearSoloImagen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [exportingPdf, setExportingPdf] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -436,7 +448,7 @@ export default function NexusVisionArchitectClient() {
   const [sideTab, setSideTab] = useState<NetVisionBranchId>('cctv')
   const [redFocusKind, setRedFocusKind] = useState<NetworkNodeKind>('switch')
   const [headerNavEl, setHeaderNavEl] = useState<HTMLElement | null>(null)
-  /** Panel derecho (inspector): visible por defecto; se oculta con el botón. */
+  /** Inspector de cámara/elemento: solo al pulsar Configurar. */
   const [inspectorOpen, setInspectorOpen] = useState(false)
   /** Menú desplegable con todas las cámaras del plano. */
   const [camerasMenuOpen, setCamerasMenuOpen] = useState(false)
@@ -1191,19 +1203,18 @@ export default function NexusVisionArchitectClient() {
       const isPdf = file.type === 'application/pdf' || lower.endsWith('.pdf')
       let url: string
       let detected: DesignStructure[] = []
+      let dims: PlanoDimension[] = []
       if (isPdf) {
         const data = new Uint8Array(await file.arrayBuffer())
         pdfBytesRef.current = data.slice()
         pdfRotateQuartersRef.current = 0
         setCanDetectPdfWalls(true)
         url = await renderPdfFirstPageFromBytes(data)
-        let dims: PlanoDimension[] = []
         try {
           dims = await extractPdfDimensionsFromBytes(data)
         } catch {
           dims = []
         }
-        setPlanoDims(dims)
         const dimHint =
           dims.length > 0
             ? ` ${dims.length} cota(s) leídas. Pulsa Calibrar y traza una línea sobre un acotamiento.`
@@ -1225,7 +1236,6 @@ export default function NexusVisionArchitectClient() {
         pdfBytesRef.current = null
         pdfRotateQuartersRef.current = 0
         setCanDetectPdfWalls(false)
-        setPlanoDims([])
         url = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader()
           reader.onload = () => resolve(String(reader.result))
@@ -1235,15 +1245,27 @@ export default function NexusVisionArchitectClient() {
       } else {
         throw new Error('Usa un PDF (exportado del CAD) o una imagen (JPG/PNG/WEBP).')
       }
+      const firstPlano = !project.planoUrl
       const keepDesign =
         project.cameras.length > 0 ||
         project.networkNodes.length > 0 ||
         (project.planDevices?.length ?? 0) > 0 ||
         (project.cableSegments?.length ?? 0) > 0
+      const savedQuarters = clampRotateQuarters(project.planoRotateQuarters)
+      const autoAlinear = keepDesign && savedQuarters > 0
+      if (autoAlinear) {
+        url = await rotatePlanoDataUrlQuarters(url, savedQuarters)
+        pdfRotateQuartersRef.current = savedQuarters
+        dims = rotatePlanoDimensionsQuarters(dims, savedQuarters)
+        detected = rotateStructuresCwQuarters(detected, savedQuarters)
+      }
+      setPlanoDims(dims)
       if (keepDesign) {
         const cam = project.cameras.length
         setInfo(
-          `${file.name} actualizado. Se conservan ${cam} cámara${cam === 1 ? '' : 's'} y el resto del diseño.`,
+          autoAlinear
+            ? `${file.name} actualizado. Se conservan ${cam} cámara${cam === 1 ? '' : 's'}; el plano se giró para coincidir con el diseño.`
+            : `${file.name} actualizado. Se conservan ${cam} cámara${cam === 1 ? '' : 's'} y el resto del diseño. Gira solo la imagen hasta que coincida; las cámaras no se mueven.`,
         )
       }
       setProject((p) => {
@@ -1271,6 +1293,7 @@ export default function NexusVisionArchitectClient() {
           undergroundSegments: [],
           cableSegments: [],
           cableRouteOverrides: {},
+          planoRotateQuarters: 0,
         }
       })
       setSelectedId(null)
@@ -1283,12 +1306,29 @@ export default function NexusVisionArchitectClient() {
       setUndergroundDraft(null)
       setDrawCable(false)
       clearCableDraft()
+      const needAlignSetup = keepDesign && !autoAlinear
+      if (firstPlano || needAlignSetup) {
+        setLookPanelOpen(false)
+        setPlanoSetupOpen(true)
+        setInspectorOpen(false)
+        setAlinearSoloImagen(needAlignSetup)
+      } else {
+        setAlinearSoloImagen(false)
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al cargar el plano')
     } finally {
       setLoading(false)
     }
-  }, [clearCableDraft, project.cameras.length, project.networkNodes.length, project.planDevices, project.cableSegments])
+  }, [
+    clearCableDraft,
+    project.cameras.length,
+    project.networkNodes.length,
+    project.planDevices,
+    project.cableSegments,
+    project.planoUrl,
+    project.planoRotateQuarters,
+  ])
 
   const rotatePlano = useCallback(
     async (dir: PlanoRotateDir) => {
@@ -1298,9 +1338,19 @@ export default function NexusVisionArchitectClient() {
       setLoading(true)
       try {
         const rotated = await rotatePlanoDataUrl90(url, dir)
-        pdfRotateQuartersRef.current =
-          (pdfRotateQuartersRef.current + (dir === 'cw' ? 1 : 3)) % 4
-        setProject((p) => ({ ...rotateProjectGeometry(p, dir), planoUrl: rotated }))
+        const imageOnly = alinearSoloImagen
+        pdfRotateQuartersRef.current = nextRotateQuarters(
+          pdfRotateQuartersRef.current,
+          dir,
+        )
+        setProject((p) => {
+          const base = imageOnly ? p : rotateProjectGeometry(p, dir)
+          return {
+            ...base,
+            planoUrl: rotated,
+            planoRotateQuarters: nextRotateQuarters(p.planoRotateQuarters, dir),
+          }
+        })
         setCalibPoints((pts) => pts.map((pt) => rotateNormPoint(pt.x, pt.y, dir)))
         setCalibCursor((c) => (c ? rotateNormPoint(c.x, c.y, dir) : null))
         setPlanoDims((dims) => rotatePlanoDimensions(dims, dir))
@@ -1310,7 +1360,7 @@ export default function NexusVisionArchitectClient() {
         setLoading(false)
       }
     },
-    [project.planoUrl, loading],
+    [project.planoUrl, loading, alinearSoloImagen],
   )
 
   /** Posición inicial al agregar por botón (leve desplazamiento para no apilar). */
@@ -1523,7 +1573,7 @@ export default function NexusVisionArchitectClient() {
     const pos = buttonSpawnPos(idx, 0.35, 0.65)
     addNetworkAt('nvr', pos.x, pos.y, modelId)
     setSideTab('cctv')
-    setInspectorOpen(true)
+    setInspectorOpen(false)
   }
 
   const addInfraFromButton = (kind: InfraKind) => {
@@ -1560,7 +1610,7 @@ export default function NexusVisionArchitectClient() {
       infraDevices: [...(p.infraDevices ?? []), device],
     }))
     setSelectedId(device.id)
-    setInspectorOpen(true)
+    setInspectorOpen(false)
     setSideTab('cctv')
     setViewMode('plano')
   }
@@ -2260,6 +2310,8 @@ export default function NexusVisionArchitectClient() {
     setCanDetectPdfWalls(false)
     setPlanoDims([])
     setCalibCursor(null)
+    setAlinearSoloImagen(false)
+    setPlanoSetupOpen(false)
   }
 
   const detectWallsFromLoadedPdf = useCallback(async () => {
@@ -2306,10 +2358,12 @@ export default function NexusVisionArchitectClient() {
       setCalibMetersTouched(false)
       setError(null)
       pdfBytesRef.current = null
-      pdfRotateQuartersRef.current = 0
+      pdfRotateQuartersRef.current = clampRotateQuarters(p.planoRotateQuarters)
       setCanDetectPdfWalls(false)
       setPlanoDims([])
       setCalibCursor(null)
+      setAlinearSoloImagen(false)
+      setPlanoSetupOpen(false)
       if (p.cameras.length > 0 && !p.planoUrl) {
         setInfo(
           `Abierto «${p.name}» (${p.cameras.length} cámaras). Falta el plano en este iPad/navegador: Cargar plano no borra las cámaras.`,
@@ -2738,6 +2792,7 @@ export default function NexusVisionArchitectClient() {
                   const next = active ? null : m.id
                   setDrawStructureMaterial(next)
                   setStructureDraft(null)
+                  setStructureCursor(null)
                   setDrawUnderground(false)
                   setUndergroundDraft(null)
                   setDrawCable(false)
@@ -2746,6 +2801,7 @@ export default function NexusVisionArchitectClient() {
                     setCalibrateMode(false)
                     setViewMode('plano')
                     setShowStructures(true)
+                    setInspectorOpen(false)
                   }
                 }}
               >
@@ -2753,6 +2809,19 @@ export default function NexusVisionArchitectClient() {
               </button>
             )
           })}
+          {drawStructureMaterial ? (
+            <button
+              type="button"
+              className="rounded-md bg-amber-400 px-2.5 py-1 text-[11px] font-bold text-black"
+              onClick={() => {
+                setDrawStructureMaterial(null)
+                setStructureDraft(null)
+                setStructureCursor(null)
+              }}
+            >
+              Listo · dejar de colocar
+            </button>
+          ) : null}
         </>
       )
     }
@@ -3733,7 +3802,6 @@ export default function NexusVisionArchitectClient() {
                     metersPerNormY={project.scale.metersPerNormY}
                     nightMode={nightMode}
                     showCameraLabels={!hideLabelsForPrint}
-                    onInspect={() => setInspectorOpen(true)}
                     multiSelectedIds={multiMode ? multiIds : undefined}
                     onToggleMulti={
                       multiMode
@@ -3890,8 +3958,37 @@ export default function NexusVisionArchitectClient() {
                       </div>
                     </div>
                   ) : null}
-                  <div className="pointer-events-none absolute left-3 top-14 z-20 w-[min(16.75rem,calc(100%-1.5rem))]">
-                    {lookPanelOpen ? (
+                  <div className="pointer-events-none absolute left-3 top-14 z-20 w-[min(20.5rem,calc(100%-1.5rem))]">
+                    {planoSetupOpen ? (
+                      <NetVisionPlanoSetupMenu
+                        calibrating={calibrateMode}
+                        disabled={loading}
+                        alignSavedDesign={alinearSoloImagen}
+                        onRotateLeft={() => void rotatePlano('ccw')}
+                        onRotateRight={() => void rotatePlano('cw')}
+                        onCalibrate={() => {
+                          if (calibrateMode) {
+                            setCalibrateMode(false)
+                            setCalibPoints([])
+                            setCalibCursor(null)
+                            setCalibMetersTouched(false)
+                            setInfo(null)
+                            return
+                          }
+                          iniciarCalibracion()
+                        }}
+                        onOk={() => {
+                          setPlanoSetupOpen(false)
+                          setLookPanelOpen(false)
+                          setInspectorOpen(false)
+                          setAlinearSoloImagen(false)
+                          setCalibrateMode(false)
+                          setCalibPoints([])
+                          setCalibCursor(null)
+                          setInfo(null)
+                        }}
+                      />
+                    ) : lookPanelOpen ? (
                       <div className="pointer-events-auto rounded-xl border border-white/20 bg-[#071018]/92 p-2.5 shadow-xl backdrop-blur-md">
                         <div className="mb-1.5 flex items-center justify-between gap-2">
                           <p className="px-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-text-dim)]">
@@ -3937,7 +4034,26 @@ export default function NexusVisionArchitectClient() {
                       </button>
                     )}
                   </div>
-                  {project.cameras.length > 0 && !inspectorOpen ? (
+                  {drawStructureMaterial ? (
+                    <div className="pointer-events-none absolute inset-x-2 bottom-16 z-30 flex justify-center">
+                      <button
+                        type="button"
+                        data-nv-muros-listo
+                        onClick={() => {
+                          setDrawStructureMaterial(null)
+                          setStructureDraft(null)
+                          setStructureCursor(null)
+                        }}
+                        className="pointer-events-auto min-h-11 rounded-full bg-amber-400 px-4 py-2 text-[13px] font-bold text-black shadow-lg"
+                      >
+                        Listo · dejar de colocar muros
+                      </button>
+                    </div>
+                  ) : null}
+                  {project.cameras.length > 0 &&
+                  !inspectorOpen &&
+                  !drawStructureMaterial &&
+                  !planoSetupOpen ? (
                     <div
                       className="absolute inset-x-2 bottom-12 z-20 flex items-center gap-2 rounded-xl border border-white/15 bg-[#071018]/90 px-2 py-1.5 shadow-lg backdrop-blur-md"
                       data-cameras-menu
@@ -4024,21 +4140,28 @@ export default function NexusVisionArchitectClient() {
                       </div>
                     </div>
                   ) : null}
-                  {selectedId && !inspectorOpen && !multiMode ? (
+                  {selectedId &&
+                  !inspectorOpen &&
+                  !multiMode &&
+                  !drawStructureMaterial &&
+                  !planoSetupOpen ? (
                     <div className="absolute right-3 top-14 z-20 flex flex-col items-end gap-2">
                       <button
                         type="button"
+                        data-nv-configurar
                         onClick={() => setInspectorOpen(true)}
                         className="min-h-10 rounded-full bg-[var(--nexus-cyan)] px-3.5 py-2 text-[11px] font-semibold text-black shadow-lg"
                       >
-                        Configurar{' '}
-                        {selectedCam?.label ||
-                          selectedNet?.label ||
-                          selectedPlanDevice?.label ||
-                          selectedStructure?.label ||
-                          selectedManualCable?.label ||
-                          selectedUnderground?.label ||
-                          'elemento'}
+                        {selectedCam
+                          ? 'Configurar cámara'
+                          : `Configurar ${
+                              selectedNet?.label ||
+                              selectedPlanDevice?.label ||
+                              selectedStructure?.label ||
+                              selectedManualCable?.label ||
+                              selectedUnderground?.label ||
+                              'elemento'
+                            }`}
                       </button>
                       {selectedCam ? (
                         <button
@@ -4148,7 +4271,7 @@ export default function NexusVisionArchitectClient() {
           )}
         </GlassCardMotion>
 
-        {inspectorOpen ? (
+        {inspectorOpen && !planoSetupOpen ? (
         <div className="absolute inset-x-0 bottom-0 z-30 max-h-[min(52dvh,480px)] overflow-y-auto rounded-t-2xl border border-white/15 bg-[#071018]/96 p-3 shadow-[0_-12px_40px_rgba(0,0,0,0.45)] backdrop-blur-md xl:inset-y-2 xl:bottom-2 xl:left-auto xl:right-2 xl:w-[min(340px,40vw)] xl:max-h-[calc(100%-1rem)] xl:rounded-2xl">
           <div className="mb-2 flex items-center justify-between gap-2">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-text-muted)]">
@@ -4356,6 +4479,7 @@ export default function NexusVisionArchitectClient() {
                   setCalibrateMode(false)
                   setViewMode('plano')
                   setShowStructures(true)
+                  setInspectorOpen(false)
                 }
               }}
               onSelect={(id) => {

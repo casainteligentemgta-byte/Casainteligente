@@ -1,7 +1,33 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { rotateNormPoint, rotateProjectGeometry, invertRgbPixels } from './rotatePlano'
-import { emptyProject } from '@/lib/netvision/storage'
+import {
+  clampRotateQuarters,
+  invertRgbPixels,
+  nextRotateQuarters,
+  rotateNormPoint,
+  rotateProjectGeometry,
+} from './rotatePlano'
+import { emptyProject, projectFromPartial } from '@/lib/netvision/storage'
+
+describe('clampRotateQuarters / nextRotateQuarters', () => {
+  it('normaliza a 0–3', () => {
+    assert.equal(clampRotateQuarters(undefined), 0)
+    assert.equal(clampRotateQuarters(-1), 3)
+    assert.equal(clampRotateQuarters(5), 1)
+  })
+
+  it('avanza y retrocede de 90° en 90°', () => {
+    assert.equal(nextRotateQuarters(0, 'cw'), 1)
+    assert.equal(nextRotateQuarters(3, 'cw'), 0)
+    assert.equal(nextRotateQuarters(0, 'ccw'), 3)
+    assert.equal(nextRotateQuarters(1, 'ccw'), 0)
+  })
+
+  it('sobrevive al guardar y reabrir el proyecto', () => {
+    assert.equal(projectFromPartial({ id: 'p', planoRotateQuarters: 6 }).planoRotateQuarters, 2)
+    assert.equal(projectFromPartial({ id: 'p' }).planoRotateQuarters, 0)
+  })
+})
 
 describe('rotateNormPoint', () => {
   it('90° horario: esquina superior izquierda va a superior derecha', () => {
