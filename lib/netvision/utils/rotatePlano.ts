@@ -1,5 +1,6 @@
 /** Rotación 90° del plano NetVision (PDF/imagen rasterizado) y de la geometría 0–1. */
 
+import { intensificarTrazosPlano } from '@/lib/netvision/utils/intensidadPlano'
 import type { NetVisionProject } from '@/lib/netvision/types'
 import { clamp01 } from '@/lib/netvision/utils/geometryHelpers'
 import { encodePlanoCanvas } from '@/lib/netvision/utils/renderPdfPlano'
@@ -229,6 +230,7 @@ export function invertPlanoDataUrl(
       }
       ctx.drawImage(img, 0, 0)
       const imageData = ctx.getImageData(0, 0, w, h)
+      intensificarTrazosPlano(imageData.data, w, h, options?.intensidadTrazos)
       applyNightPlanoPalette(imageData.data, w, h, options)
       ctx.putImageData(imageData, 0, 0)
       resolve(canvas.toDataURL('image/png'))

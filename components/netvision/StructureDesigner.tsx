@@ -25,6 +25,9 @@ type Props = {
   canDetectPdf?: boolean
   detecting?: boolean
   onDetectFromPdf?: () => void
+  /** Detecta muros, puertas y ventanas con IA en la imagen del plano. */
+  onDetectIa?: () => void
+  detectingIa?: boolean
   grosorMuro?: number
   onGrosorMuro?: (value: number) => void
 }
@@ -44,6 +47,8 @@ export default function StructureDesigner({
   canDetectPdf = false,
   detecting = false,
   onDetectFromPdf,
+  onDetectIa,
+  detectingIa = false,
   grosorMuro,
   onGrosorMuro,
 }: Props) {
@@ -57,7 +62,8 @@ export default function StructureDesigner({
           Toca puntos en el plano: cada tramo se ajusta a 90° (H/V) y puedes seguir desde la
           esquina. Verás la guía antes de confirmar. Pulsa «Terminar» o Enter al cerrar el
           muro. Arrastra el segmento o los extremos para mover. En un PDF vectorial (CAD) se
-          detectan muros, puertas y ventanas; puedes corregir o dibujar a mano.
+          detectan muros, puertas y ventanas; con «Detectar muros con IA» también en fotos y
+          escaneos. Puedes corregir o dibujar a mano.
         </p>
       </div>
 
@@ -99,6 +105,18 @@ export default function StructureDesigner({
             <span>Gruesa</span>
           </span>
         </label>
+      ) : null}
+
+      {onDetectIa ? (
+        <button
+          type="button"
+          disabled={disabled || detectingIa}
+          onClick={onDetectIa}
+          title="Analiza la imagen del plano (foto, escaneo o PDF) con IA y dibuja muros, puertas y ventanas. Luego puedes corregirlos."
+          className="w-full rounded-lg border border-[rgba(167,139,250,0.45)] bg-[rgba(167,139,250,0.12)] px-2 py-1.5 text-[11px] font-semibold text-[#c4b5fd] disabled:opacity-40"
+        >
+          {detectingIa ? 'Analizando el plano con IA…' : '✦ Detectar muros con IA'}
+        </button>
       ) : null}
 
       {onDetectFromPdf ? (

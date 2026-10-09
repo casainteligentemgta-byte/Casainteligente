@@ -29,7 +29,7 @@ export const VISION_SEMAFORO_LEGEND: { band: VisionBand; label: string; hex: str
  * (el color se mezcla con 0); se sube el alpha en la misma proporción.
  */
 export function visionOverlayAlpha(slider = 0.36, invertido = false): number {
-  const s = Math.min(0.8, Math.max(0.15, slider))
+  const s = Math.min(0.95, Math.max(0.05, slider))
   if (!invertido) return s
   return Math.min(0.95, 0.22 + s * 1.55)
 }

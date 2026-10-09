@@ -1,5 +1,8 @@
 'use client'
 
+import { imagenPlanoParaIa } from '@/lib/netvision/utils/imagenParaIa'
+import { resumenMurosIa } from '@/lib/netvision/murosIa'
+import { clampIntensidad, opacidadCobertura } from '@/lib/netvision/utils/intensidadPlano'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { createPortal } from 'react-dom'
@@ -241,6 +244,7 @@ import {
   detectWallsFromPdfBytes,
   structuresFromWallDetection,
   summarizePdfDetection,
+  type DetectWallsResult,
 } from '@/lib/netvision/detectWallsFromPdf'
 import type { NetVisionZoomControls } from '@/components/netvision/CameraPlacementTool'
 import { renderPdfFirstPageFromBytes } from '@/lib/netvision/utils/renderPdfPlano'
@@ -339,10 +343,11 @@ function cambiarMoneda(p: NetVisionProject, currency: NetVisionProject['currency
 
 export default function NexusVisionArchitectClient() {
   const [project, setProject] = useState<NetVisionProject>(() => emptyProject())
+  /** Intensidad del espectro de las cámaras: se guarda en el proyecto (llega a la vista del cliente). */
+  const visionOpacity = opacidadCobertura(project.coberturaIntensidad)
   const [hydrated, setHydrated] = useState(false)
   const [showFov, setShowFov] = useState(true)
   /** Opacidad del semáforo (translúcido por defecto para ver el plano). */
-  const [visionOpacity, setVisionOpacity] = useState(0.36)
   /** Ids cuyo semáforo está apagado. Las cámaras nuevas se ven. */
   const [hiddenCoverageIds, setHiddenCoverageIds] = useState<string[]>([])
   const [showWifi, setShowWifi] = useState(false)
@@ -2347,6 +2352,50 @@ export default function NexusVisionArchitectClient() {
     }
   }, [loading, project.planoUrl, project.structures?.length])
 
+  const [detectandoIa, setDetectandoIa] = useState(false)
+  /** Muros, puertas y ventanas detectados con IA en la imagen del plano (fotos, escaneos, PDF). */
+  const detectarMurosConIa = useCallback(async () => {
+    if (!project.planoUrl || loading || detectandoIa) return
+    if ((project.structures?.length ?? 0) > 0) {
+      const ok = window.confirm(
+        'La IA reemplaza los muros, puertas y ventanas actuales por los que detecte en el plano. ¿Continuar?',
+      )
+      if (!ok) return
+    }
+    setError(null)
+    setInfo('Analizando el plano con IA… puede tardar hasta un minuto.')
+    setDetectandoIa(true)
+    try {
+      const imagen = await imagenPlanoParaIa(project.planoUrl, clampIntensidad(project.planoIntensidad))
+      const res = await fetch('/api/netvision/detectar-muros', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imagen }),
+      })
+      const j = (await res.json().catch(() => ({}))) as {
+        error?: string
+        resultado?: DetectWallsResult
+      }
+      if (!res.ok || !j.resultado) {
+        throw new Error(j.error || 'No se pudieron detectar los muros con IA.')
+      }
+      const detected = structuresFromWallDetection(j.resultado, { makeId: uid })
+      setInfo(resumenMurosIa(j.resultado))
+      if (detected.length > 0) {
+        setProject((p) => ({ ...p, structures: detected }))
+        setSelectedId(null)
+        setSideTab('muros')
+        setShowStructures(true)
+      }
+    } catch (e) {
+      setInfo(null)
+      setError(e instanceof Error ? e.message : 'No se pudieron detectar los muros con IA.')
+    } finally {
+      setDetectandoIa(false)
+    }
+  }, [loading, detectandoIa, project.planoUrl, project.planoIntensidad, project.structures?.length])
+
   const switchToProject = (p: NetVisionProject) => {
     try {
       setProject(p)
@@ -3183,16 +3232,19 @@ export default function NexusVisionArchitectClient() {
               {showFov ? (
                 <label
                   className="inline-flex min-w-[9rem] flex-1 cursor-pointer items-center gap-1.5 text-[10px] text-[var(--nexus-text-muted)]"
-                  title="Translucidez del semáforo sobre el plano"
+                  title="Intensidad del espectro de las cámaras sobre el plano (se guarda en el proyecto y se ve igual en la vista del cliente)"
                 >
-                  <span className="shrink-0">Opacidad</span>
+                  <span className="shrink-0">Intensidad</span>
                   <input
                     type="range"
-                    min={15}
-                    max={80}
+                    min={5}
+                    max={95}
                     step={1}
                     value={Math.round(visionOpacity * 100)}
-                    onChange={(e) => setVisionOpacity(Number(e.target.value) / 100)}
+                    onChange={(e) => {
+                      const v = Number(e.target.value)
+                      setProject((p) => ({ ...p, coberturaIntensidad: v }))
+                    }}
                     className="h-1.5 w-full accent-[var(--nexus-cyan)]"
                   />
                   <span className="w-8 tabular-nums text-[var(--nexus-cyan)]">
@@ -3295,6 +3347,8 @@ export default function NexusVisionArchitectClient() {
                 setProject((p) => ({ ...p, planoCotaColor: value }))
               }
               onGrosorMuro={applyGrosorMuro}
+              intensidadPlano={clampIntensidad(project.planoIntensidad)}
+              onIntensidadPlano={(value) => setProject((p) => ({ ...p, planoIntensidad: value }))}
             />
           </div>
           <div className="flex overflow-hidden rounded-md border border-white/15 bg-black/40">
@@ -3712,6 +3766,7 @@ export default function NexusVisionArchitectClient() {
                     invertOptions={{
                       cotaColor: normalizeCotaColor(project.planoCotaColor),
                       grosorMuro: clampGrosorMuro(project.planoGrosorMuro),
+                      intensidadTrazos: clampIntensidad(project.planoIntensidad),
                     }}
                     wallStrokeGrosor={clampGrosorMuro(project.planoGrosorMuro)}
                     cameras={project.cameras}
@@ -4000,6 +4055,10 @@ export default function NexusVisionArchitectClient() {
                             setProject((p) => ({ ...p, planoCotaColor: value }))
                           }
                           onGrosorMuro={applyGrosorMuro}
+                          intensidadPlano={clampIntensidad(project.planoIntensidad)}
+                          onIntensidadPlano={(value) =>
+                            setProject((p) => ({ ...p, planoIntensidad: value }))
+                          }
                         />
                       </div>
                     ) : (
@@ -4447,6 +4506,8 @@ export default function NexusVisionArchitectClient() {
               canDetectPdf={canDetectPdfWalls}
               detecting={loading && canDetectPdfWalls}
               onDetectFromPdf={() => void detectWallsFromLoadedPdf()}
+              onDetectIa={() => void detectarMurosConIa()}
+              detectingIa={detectandoIa}
               onShowOnPlan={setShowStructures}
               grosorMuro={sliderGrosor}
               onGrosorMuro={applyGrosorMuro}

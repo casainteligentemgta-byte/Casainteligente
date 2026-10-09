@@ -1196,6 +1196,8 @@ export default function NetVisionClienteView() {
               atenuar={viendoUnaSola}
               verCables={verCables}
               paleta={paleta}
+              intensidadPlano={project.planoIntensidad}
+              intensidadCobertura={project.coberturaIntensidad}
               onSelect={(id) => {
                 if (!id) {
                   showAll()

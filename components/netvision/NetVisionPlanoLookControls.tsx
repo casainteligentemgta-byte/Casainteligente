@@ -29,6 +29,9 @@ export type NetVisionPlanoLookControlsProps = {
   onInvertido: (value: boolean) => void
   onCotaColor: (value: NightCotaColor) => void
   onGrosorMuro: (value: number) => void
+  /** Intensidad de los trazos del plano (0 = original, 100 = máximo). */
+  intensidadPlano?: number
+  onIntensidadPlano?: (value: number) => void
 }
 
 export default function NetVisionPlanoLookControls({
@@ -40,6 +43,8 @@ export default function NetVisionPlanoLookControls({
   onInvertido,
   onCotaColor,
   onGrosorMuro,
+  intensidadPlano,
+  onIntensidadPlano,
 }: NetVisionPlanoLookControlsProps) {
   const color = normalizeCotaColor(cotaColor)
   const grosor = clampGrosorMuro(grosorMuro)
@@ -147,6 +152,35 @@ export default function NetVisionPlanoLookControls({
           <span>Gruesa</span>
         </span>
       </label>
+
+      {onIntensidadPlano ? (
+        <label
+          className="block px-0.5"
+          title="Oscurece y engruesa muros y líneas del plano y limpia el papel (útil en fotos de planos). Se ve igual en la vista del cliente."
+        >
+          <span className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-text-dim)]">
+            Intensidad del plano
+            <span className="tabular-nums text-[var(--nexus-cyan)]">
+              {intensidadPlano && intensidadPlano > 0 ? intensidadPlano : 'Original'}
+            </span>
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={5}
+            disabled={disabled}
+            value={intensidadPlano ?? 0}
+            onChange={(e) => onIntensidadPlano(Number(e.target.value))}
+            className="mt-1 h-1.5 w-full accent-[var(--nexus-cyan)]"
+            aria-label="Intensidad de muros y trazos del plano"
+          />
+          <span className="mt-0.5 flex justify-between text-[10px] text-[var(--nexus-text-dim)]">
+            <span>Original</span>
+            <span>Trazos fuertes</span>
+          </span>
+        </label>
+      ) : null}
     </div>
   )
 }

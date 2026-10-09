@@ -7,6 +7,7 @@
  * dirección. Solo lectura. Se dibuja con HTML + SVG (no Konva): imprime nítido
  * y se mueve con un dedo, pellizco o rueda.
  */
+import { clampIntensidad, factorCobertura, intensificarTrazosPlano } from '@/lib/netvision/utils/intensidadPlano'
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { getCameraModelOrDefault, splitterDeCamara } from '@/lib/netvision/catalog/cameras'
 import type {
@@ -81,7 +82,55 @@ type Props = {
   verCables: boolean
   /** 'tonos' (por defecto): gama de verde. 'semaforo': verde / naranja / amarillo translúcido. */
   paleta?: PaletaCobertura
+  /** Intensidad de los trazos del plano (0–100, 0 = original). */
+  intensidadPlano?: number
+  /** Intensidad del espectro de las cámaras (0–100, 36 = la de siempre). */
+  intensidadCobertura?: number
   onSelect: (id: string | null) => void
+}
+
+/** Tope del lado mayor al reprocesar el plano (iPad no aguanta 6000 px). */
+const INTENSIFICAR_MAX_LADO = 2400
+
+/** El plano con los trazos intensificados (data URL); mientras se procesa, el original. */
+function usePlanoIntensificado(url: string, intensidad: number): string {
+  const [procesado, setProcesado] = useState<{ clave: string; url: string } | null>(null)
+  const clave = `${intensidad}:${url.length}:${url.slice(-48)}`
+  useEffect(() => {
+    if (intensidad <= 0) return
+    let cancelado = false
+    const img = new window.Image()
+    if (/^https?:/i.test(url)) img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      if (cancelado) return
+      try {
+        const w0 = img.naturalWidth || img.width
+        const h0 = img.naturalHeight || img.height
+        const f = Math.min(1, INTENSIFICAR_MAX_LADO / Math.max(w0, h0))
+        const w = Math.max(1, Math.round(w0 * f))
+        const h = Math.max(1, Math.round(h0 * f))
+        const canvas = document.createElement('canvas')
+        canvas.width = w
+        canvas.height = h
+        const ctx = canvas.getContext('2d', { willReadFrequently: true })
+        if (!ctx) return
+        ctx.fillStyle = '#ffffff'
+        ctx.fillRect(0, 0, w, h)
+        ctx.drawImage(img, 0, 0, w, h)
+        const datos = ctx.getImageData(0, 0, w, h)
+        intensificarTrazosPlano(datos.data, w, h, intensidad)
+        ctx.putImageData(datos, 0, 0)
+        setProcesado({ clave, url: canvas.toDataURL('image/jpeg', 0.9) })
+      } catch {
+        /* sin canvas: queda el original */
+      }
+    }
+    img.src = url
+    return () => {
+      cancelado = true
+    }
+  }, [url, intensidad, clave])
+  return intensidad > 0 && procesado?.clave === clave ? procesado.url : url
 }
 
 function useTamanoMarco(
@@ -165,7 +214,7 @@ const ETIQUETA_RED: Record<DesignNetworkNode['kind'], string> = {
 }
 
 export default function NetVisionPlanoCliente({
-  planoUrl,
+  planoUrl: planoUrlOriginal,
   cameras,
   networkNodes,
   planDevices = [],
@@ -179,8 +228,14 @@ export default function NetVisionPlanoCliente({
   atenuar,
   verCables,
   paleta = 'tonos',
+  intensidadPlano = 0,
+  intensidadCobertura,
   onSelect,
 }: Props) {
+  const planoVisible = usePlanoIntensificado(planoUrlOriginal, clampIntensidad(intensidadPlano))
+  const planoUrl = planoVisible
+  /** Multiplica la opacidad de siempre según la intensidad elegida en el editor. */
+  const fCob = factorCobertura(intensidadCobertura)
   const marcoRef = useRef<HTMLDivElement>(null)
   const imprimiendoRef = useRef(false)
   const { w: marcoW, h: marcoH } = useTamanoMarco(marcoRef, imprimiendoRef)
@@ -450,12 +505,15 @@ export default function NetVisionPlanoCliente({
                   poly?.length
                     ? poly.map((q) => `${mx(q.x).toFixed(1)},${my(q.y).toFixed(1)}`).join(' ')
                     : null
-                const opacidad =
-                  capa === 'elegida'
-                    ? SEMAFORO_CLIENTE_OPACIDAD + 0.14
-                    : hayAislada
-                      ? SEMAFORO_CLIENTE_OPACIDAD * 0.4
-                      : SEMAFORO_CLIENTE_OPACIDAD
+                const opacidad = Math.min(
+                  0.95,
+                  fCob *
+                    (capa === 'elegida'
+                      ? SEMAFORO_CLIENTE_OPACIDAD + 0.14
+                      : hayAislada
+                        ? SEMAFORO_CLIENTE_OPACIDAD * 0.4
+                        : SEMAFORO_CLIENTE_OPACIDAD),
+                )
                 return (
                   <g key={capa} data-nv-semaforo={capa} opacity={opacidad}>
                     {(['red', 'yellow', 'green'] as const).flatMap((banda) =>
@@ -525,9 +583,9 @@ export default function NetVisionPlanoCliente({
               >
                 <clipPath id={clip}>{forma({})}</clipPath>
                 <g clipPath={`url(#${clip})`} fill={PLANO_CLIENTE_TONO}>
-                  {forma({ fillOpacity: 0.1 })}
-                  <circle cx={cx} cy={cy} r={zonas.reconocerNorm * mundo.medio} fillOpacity={0.14} />
-                  <circle cx={cx} cy={cy} r={zonas.identificarNorm * mundo.medio} fillOpacity={0.26} />
+                  {forma({ fillOpacity: Math.min(0.9, 0.1 * fCob) })}
+                  <circle cx={cx} cy={cy} r={zonas.reconocerNorm * mundo.medio} fillOpacity={Math.min(0.9, 0.14 * fCob)} />
+                  <circle cx={cx} cy={cy} r={zonas.identificarNorm * mundo.medio} fillOpacity={Math.min(0.9, 0.26 * fCob)} />
                   {nivel === 'resaltada' ? (
                     <g fill="none" stroke="#a7f3d0" strokeWidth={1.3}>
                       <circle cx={cx} cy={cy} r={zonas.reconocerNorm * mundo.medio} vectorEffect="non-scaling-stroke" />

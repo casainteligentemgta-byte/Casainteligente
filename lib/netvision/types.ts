@@ -385,6 +385,10 @@ export type NetVisionProject = {
   planoCotaColor?: 'auto' | 'verde' | 'naranja' | 'azul' | 'blanco' | 'amarillo'
   /** Grosor visual de la línea de muro (0 = fina, 100 = gruesa). */
   planoGrosorMuro?: number
+  /** Intensidad de los trazos del plano (0 = original, 100 = muros y líneas al máximo). */
+  planoIntensidad?: number
+  /** Intensidad del espectro (semáforo) de las cámaras, 0–100 (36 = la de siempre). */
+  coberturaIntensidad?: number
   cameras: DesignCamera[]
   networkNodes: DesignNetworkNode[]
   /** Pantalla, disco, UPS y rack de la sala técnica CCTV. */

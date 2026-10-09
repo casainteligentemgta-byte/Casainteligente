@@ -1,3 +1,4 @@
+import { COBERTURA_INTENSIDAD_DEFECTO, clampIntensidad } from '@/lib/netvision/utils/intensidadPlano'
 import type {
   CableType,
   DesignCableSegment,
@@ -100,6 +101,8 @@ export function emptyProject(partial?: {
     planoInvertido: false,
     planoCotaColor: 'auto',
     planoGrosorMuro: 50,
+    planoIntensidad: 0,
+    coberturaIntensidad: COBERTURA_INTENSIDAD_DEFECTO,
     cameras: [],
     networkNodes: [],
     infraDevices: [],
@@ -569,6 +572,8 @@ function normalizeProject(
     planoInvertido: Boolean(p.planoInvertido),
     planoCotaColor: normalizeCotaColor(p.planoCotaColor),
     planoGrosorMuro: clampGrosorMuro(p.planoGrosorMuro),
+    planoIntensidad: clampIntensidad(p.planoIntensidad, 0),
+    coberturaIntensidad: clampIntensidad(p.coberturaIntensidad, COBERTURA_INTENSIDAD_DEFECTO),
     cameras: Array.isArray(p.cameras) ? p.cameras.map(normalizeCamera) : [],
     networkNodes: Array.isArray(p.networkNodes)
       ? p.networkNodes.map(normalizeNetworkNode)
