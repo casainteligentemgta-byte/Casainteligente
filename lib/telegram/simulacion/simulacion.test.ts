@@ -5,6 +5,13 @@ import { crearFakeSupabase, type FakeSupabase } from '../testing/fakeSupabase'
 import { answerCallbackQuery, downloadTelegramFile, getTelegramBotToken, sendTelegramMessage } from '../botApi'
 import { enSimulacionBot, simulacionBotActiva } from './contexto'
 import { BotDeEnsayo, ErrorDeEnsayo, leerGuion, sinFormato } from './botDeEnsayo'
+import { isChatAllowedAsync } from '../chatWhitelist'
+import { listarUsuariosOrdenCompraTelegram, obtenerUsuarioSistemaTelegram } from '../../compras/usuariosSistemaTelegram'
+import {
+  listarAprobadoresProcuraTelegram,
+  listarContadoresProcuraTelegram,
+  listarProjectManagersProcuraTelegram,
+} from '../../procuras/aprobadoresProcuraTelegram'
 import {
   ALMACEN_ENSAYO,
   MATERIAL_ENSAYO_1,
@@ -16,6 +23,7 @@ import {
   esChatDeEnsayo,
   referenciaReal,
   reiniciarObraDeEnsayo,
+  usuariosSistemaDeEnsayo,
   uuidsEn,
 } from './obraDeEnsayo'
 
@@ -371,6 +379,87 @@ describe('bot de ensayo', () => {
   })
 })
 
+describe('personas con rol en el departamento de compras', () => {
+  const real = {
+    id: 'u-neo',
+    nombre: 'Neo Cardenas',
+    telegram_id: 111,
+    rol: 'Comprador',
+    proyecto_id: OBRA_REAL,
+    activo: true,
+  }
+  const db = () => base({ ci_usuarios_sistema_telegram: [real], ci_proyecto_nomina: [] })
+  const simulados = usuariosSistemaDeEnsayo()
+
+  it('las personas del ensayo tienen los cuatro roles de la cadena, atados a la obra ficticia', () => {
+    assert.deepEqual(
+      simulados.map((u) => [u.nombre, u.rol]),
+      [
+        ['Ing. Ensayo', 'Solicitante'],
+        ['PM Ensayo', 'Aprobador'],
+        ['Conta Ensayo', 'Contador'],
+        ['Compra Ensayo', 'Comprador'],
+      ],
+    )
+    assert.ok(simulados.every((u) => u.proyecto_id === OBRA_ENSAYO.id))
+    // Nadie de la nómina de ensayo es «admin»: ese rol se copia como Administrador global.
+    assert.ok(Object.values(PERSONAS_ENSAYO).every((p) => p.rol !== 'admin'))
+  })
+
+  it('fuera de un ensayo solo existen los usuarios reales', async () => {
+    const d = db()
+    assert.equal((await obtenerUsuarioSistemaTelegram(sb(d), 111))?.nombre, 'Neo Cardenas')
+    assert.equal(await obtenerUsuarioSistemaTelegram(sb(d), PERSONAS_ENSAYO.compra.chatId), null)
+    assert.deepEqual((await listarUsuariosOrdenCompraTelegram(sb(d))).map((u) => u.nombre), ['Neo Cardenas'])
+    assert.deepEqual(await listarContadoresProcuraTelegram(sb(d), OBRA_REAL), [])
+  })
+
+  it('dentro de un ensayo solo existen las personas del ensayo', async () => {
+    const d = db()
+    await enSimulacionBot(
+      async () => {
+        assert.equal(await obtenerUsuarioSistemaTelegram(sb(d), 111), null)
+        const compra = await obtenerUsuarioSistemaTelegram(sb(d), PERSONAS_ENSAYO.compra.chatId)
+        assert.equal(compra?.rol, 'Comprador')
+        assert.equal(compra?.activo, true)
+        assert.equal(await obtenerUsuarioSistemaTelegram(sb(d), PERSONAS_ENSAYO.depo.chatId), null)
+
+        assert.deepEqual((await listarUsuariosOrdenCompraTelegram(sb(d))).map((u) => u.nombre), ['Compra Ensayo'])
+        assert.deepEqual(
+          (await listarContadoresProcuraTelegram(sb(d), OBRA_ENSAYO.id)).map((c) => c.chatId),
+          [PERSONAS_ENSAYO.conta.chatId],
+        )
+        assert.deepEqual(
+          (await listarProjectManagersProcuraTelegram(sb(d), OBRA_ENSAYO.id)).map((c) => c.chatId),
+          [PERSONAS_ENSAYO.pm.chatId],
+        )
+      },
+      { usuariosSistema: simulados },
+    )
+  })
+
+  it('un ensayo no copia a nadie de la nómina a la tabla real de usuarios', async () => {
+    const d = db()
+    d.tablas.ci_proyecto_nomina.push({
+      id: PERSONAS_ENSAYO.pm.nominaId,
+      proyecto_id: OBRA_ENSAYO.id,
+      categoria: 'empleado',
+      rol: 'pm_obra',
+      nombre: 'PM Ensayo',
+      telegram_chat_id: PERSONAS_ENSAYO.pm.chatId,
+      activo: true,
+    })
+    await enSimulacionBot(() => listarAprobadoresProcuraTelegram(sb(d), OBRA_ENSAYO.id), { usuariosSistema: simulados })
+    assert.deepEqual(d.tablas.ci_usuarios_sistema_telegram, [real])
+  })
+
+  it('en un ensayo los chats de ensayo están autorizados aunque la lista blanca no los tenga', async () => {
+    await enSimulacionBot(async () => {
+      assert.equal(await isChatAllowedAsync(PERSONAS_ENSAYO.logi.chatId), true)
+    })
+  })
+})
+
 describe('guion libre', () => {
   it('acepta pasos de texto, botón, dato y foto', () => {
     const r = leerGuion([
@@ -391,7 +480,7 @@ describe('guion libre', () => {
   })
 
   it('rechaza personas que no son de ensayo, pasos sin acción o con dos, y guiones enormes', () => {
-    assert.match(String((leerGuion([{ q: 'neo', t: 'hola' }]) as { error: string }).error), /«q» debe ser ing, depo, admin/)
+    assert.match(String((leerGuion([{ q: 'neo', t: 'hola' }]) as { error: string }).error), /«q» debe ser ing, depo, pm, conta, compra, logi/)
     assert.match(String((leerGuion([{ q: 'depo' }]) as { error: string }).error), /exactamente una acción/)
     assert.match(String((leerGuion([{ q: 'depo', t: 'a', b: 'b' }]) as { error: string }).error), /exactamente una acción/)
     assert.match(String((leerGuion({}) as { error: string }).error), /lista de pasos/)

@@ -1,6 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getTelegramAllowedChatIds } from '@/lib/telegram/botApi';
 import { telegramSupabaseAdmin } from '@/lib/telegram/supabaseAdmin';
+import { simulacionBotActiva } from '@/lib/telegram/simulacion/contexto';
+import { esChatDeEnsayo } from '@/lib/telegram/simulacion/obraDeEnsayo';
 
 export type FilaTelegramWhitelist = {
   id: string;
@@ -150,6 +152,9 @@ export async function telegramWhitelistEstaActiva(): Promise<boolean> {
  */
 export async function isChatAllowedAsync(chatId: string | number): Promise<boolean> {
   const id = String(chatId);
+
+  // En un ensayo del bot, las personas del ensayo están autorizadas (y solo ellas actúan).
+  if (simulacionBotActiva() && esChatDeEnsayo(id)) return true;
 
   if (getTelegramAllowedChatIds().has(id)) return true;
 

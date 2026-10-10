@@ -10,6 +10,7 @@ import { enSimulacionBot, type BotonSimulado, type EnvioSimulado } from '@/lib/t
 import {
   PERSONAS_ENSAYO,
   referenciaReal,
+  usuariosSistemaDeEnsayo,
   uuidsEn,
   type ClavePersonaEnsayo,
   type ObraDeEnsayoLista,
@@ -177,7 +178,9 @@ export class BotDeEnsayo {
     this.pasos.push(paso);
 
     try {
-      const { resultado, envios } = await enSimulacionBot(() => this.despachar(update));
+      const { resultado, envios } = await enSimulacionBot(() => this.despachar(update), {
+        usuariosSistema: usuariosSistemaDeEnsayo(),
+      });
       paso.ruta = resultado;
       paso.respuestas = envios.map(resumirEnvio);
       this.envios.push(...envios);

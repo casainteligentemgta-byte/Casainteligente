@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { simulacionBotActiva } from '@/lib/telegram/simulacion/contexto';
 
 export type RolComprasTelegram =
   | 'Solicitante'
@@ -44,6 +45,13 @@ export async function obtenerUsuarioSistemaTelegram(
 ): Promise<UsuarioSistemaTelegram | null> {
   const tid = parseTelegramIdNumerico(telegramId);
   if (tid == null) return null;
+
+  // En un ensayo del bot solo existen las personas del ensayo (no se lee la tabla real).
+  const simulacion = simulacionBotActiva();
+  if (simulacion) {
+    const u = simulacion.usuariosSistema.find((x) => x.telegram_id === tid);
+    return u ? { ...u, activo: true } : null;
+  }
 
   const { data, error } = await supabase
     .from('ci_usuarios_sistema_telegram')
@@ -103,6 +111,13 @@ export function usuarioEsProjectManagerProcura(u: UsuarioSistemaTelegram): boole
 export async function listarUsuariosOrdenCompraTelegram(
   supabase: SupabaseClient,
 ): Promise<UsuarioSistemaTelegram[]> {
+  const simulacion = simulacionBotActiva();
+  if (simulacion) {
+    return simulacion.usuariosSistema
+      .filter((u) => u.rol === 'Comprador' || u.rol === 'Administrador')
+      .map((u) => ({ ...u, activo: true }));
+  }
+
   const { data, error } = await supabase
     .from('ci_usuarios_sistema_telegram')
     .select('id, nombre, telegram_id, rol, proyecto_id, activo')

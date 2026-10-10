@@ -42,13 +42,23 @@ quedó abierta.
 
 ## Personas
 
-| Clave | Nombre | Rol en la nómina de la obra de ensayo |
-| --- | --- | --- |
-| `ing` | Ing. Ensayo | Ingeniero residente |
-| `depo` | Depo Ensayo | Depositario |
-| `admin` | Admin Ensayo | Administrador |
+| Clave | Nombre | En la nómina de la obra de ensayo | En el departamento de compras |
+| --- | --- | --- | --- |
+| `ing` | Ing. Ensayo | Ingeniero residente | Solicitante |
+| `conta` | Conta Ensayo | Contador | Contador (revisa fondos) |
+| `pm` | PM Ensayo | PM de obra | Aprobador |
+| `compra` | Compra Ensayo | Comprador | Comprador |
+| `logi` | Logi Ensayo | Logística | — |
+| `depo` | Depo Ensayo | Depositario | — |
 
 Sus chats son números que no pueden existir en Telegram.
+
+Los roles del departamento de compras son **globales** en `ci_usuarios_sistema_telegram`:
+una fila ficticia allí recibiría los avisos de las obras reales. Por eso esos roles
+**no se guardan en la base**: existen solo dentro del ensayo (`usuariosSistema` del
+contexto). Mientras corre un ensayo, las funciones que leen esa tabla devuelven
+únicamente a las personas del ensayo, y nada se copia de la nómina a la tabla real.
+Nadie de la nómina de ensayo es `admin`, porque ese rol sí se copia como Administrador global.
 
 ## Seguros
 
@@ -64,8 +74,6 @@ Sus chats son números que no pueden existir en Telegram.
 
 - La entrega real por Telegram (que el mensaje llegue al teléfono) ni cómo se ve.
 - La lectura automática de facturas por foto.
-- Avisos a personas con rol global del bot (Contador, Comprador, PM): las personas de
-  ensayo solo existen en la nómina de la obra ficticia.
 
 ## Datos
 
