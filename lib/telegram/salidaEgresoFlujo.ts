@@ -16,6 +16,11 @@ import {
   fotoMovimientoObligatoria,
 } from '@/lib/telegram/fotoObligatoria';
 import { getTelegramEstado, setTelegramContexto } from '@/lib/telegram/estados';
+import {
+  MENSAJE_PEDIR_OBSERVACIONES,
+  observacionDesdeTexto,
+  tecladoSinObservaciones,
+} from '@/lib/telegram/observacionRapida';
 import { nombreProyectoTelegram } from '@/lib/telegram/proyectoPicker';
 import { MENSAJE_INICIO_SALIDA_OBRA } from '@/lib/telegram/mensajesSalidaTelegram';
 import { enviarPickerOrigenSalidaTelegram } from '@/lib/telegram/salidaOrigenPicker';
@@ -431,6 +436,14 @@ function resumenLineas(lineas: LineaEgresoDraft[]): string {
     .join('\n');
 }
 
+/** Pide la observación con un botón para seguir sin escribir nada. */
+async function pedirObservaciones(chatId: string, encabezado = ''): Promise<void> {
+  await sendTelegramMessage(chatId, `${encabezado}${MENSAJE_PEDIR_OBSERVACIONES}`, {
+    parse_mode: 'HTML',
+    reply_markup: tecladoSinObservaciones(`${PREFIX}obs:skip`),
+  });
+}
+
 async function enviarConfirmacion(
   supabase: SupabaseClient,
   chatId: string,
@@ -716,10 +729,19 @@ export async function manejarCallbackSalidaEgreso(
     }
     await answerCallbackQuery(params.callbackId);
     await patchMeta(supabase, params.chatId, estado, { paso: 'observacion' });
-    await sendTelegramMessage(
+    await pedirObservaciones(params.chatId);
+    return true;
+  }
+
+  if (data === 'obs:skip') {
+    await answerCallbackQuery(params.callbackId);
+    // Botón repetido o de un mensaje viejo: la observación ya se resolvió.
+    if (m.paso !== 'observacion') return true;
+    await patchMeta(supabase, params.chatId, estado, { paso: 'confirmar', observaciones: '' });
+    await enviarConfirmacion(
+      supabase,
       params.chatId,
-      '📝 Escriba <b>observaciones</b> del egreso (opcional; envíe <code>-</code> para omitir):',
-      { parse_mode: 'HTML' },
+      await getTelegramEstado(supabase, params.chatId),
     );
     return true;
   }
@@ -857,7 +879,7 @@ export async function manejarTextoSalidaEgreso(
   }
 
   if (paso === 'observacion') {
-    const obs = trimmed === '-' ? '' : trimmed;
+    const obs = observacionDesdeTexto(trimmed);
     await patchMeta(supabase, chatId, estado, {
       paso: 'confirmar',
       observaciones: obs,
@@ -914,19 +936,29 @@ export async function manejarFotoSalidaEgreso(params: {
 
   const { data } = params.supabase.storage.from('ci-proyectos-media').getPublicUrl(storagePath);
 
+  // El texto que acompaña la foto vale como observación: no se vuelve a preguntar.
+  const pie = params.caption?.trim() ?? '';
   await patchMeta(params.supabase, params.chatId, estado, {
     foto_storage_path: storagePath,
     foto_url: data.publicUrl ?? undefined,
     telegram_user_id: params.userId,
     telegram_username: params.username ?? null,
-    paso: 'observacion',
-    observaciones: params.caption?.trim() || meta(estado).observaciones,
+    paso: pie ? 'confirmar' : 'observacion',
+    observaciones: pie || meta(estado).observaciones,
   });
 
-  await sendTelegramMessage(
-    params.chatId,
-    '✅ Foto guardada.\n\n📝 Escriba <b>observaciones</b> (opcional; <code>-</code> para omitir):',
-    { parse_mode: 'HTML' },
-  );
+  if (pie) {
+    await sendTelegramMessage(params.chatId, '✅ Foto y observación guardadas.', {
+      parse_mode: 'HTML',
+    });
+    await enviarConfirmacion(
+      params.supabase,
+      params.chatId,
+      await getTelegramEstado(params.supabase, params.chatId),
+    );
+    return true;
+  }
+
+  await pedirObservaciones(params.chatId, '✅ Foto guardada.\n\n');
   return true;
 }

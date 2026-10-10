@@ -204,6 +204,7 @@ import {
   manejarFotoTraspasoTelegram,
   manejarTextoTraspasoTelegram,
 } from '@/lib/telegram/traspasoFlujoTelegram';
+import { mensajeFotoFueraDePaso } from '@/lib/telegram/observacionRapida';
 import {
   enviarMenuSalidaTelegram,
   esCallbackMenuIngresoTelegram,
@@ -1378,7 +1379,14 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
         if (!photos?.length) return false;
         const estadoTraspaso = await getTelegramEstado(supabase, chatId);
         if (!esFlujoTraspasoTelegram(estadoTraspaso)) return false;
-        if ((estadoTraspaso.metadata as { paso?: string })?.paso !== 'foto') return false;
+        const pasoTraspaso = (estadoTraspaso.metadata as { paso?: string })?.paso;
+        if (pasoTraspaso !== 'foto') {
+          // Foto antes de tiempo: se avisa qué falta, sin descargarla.
+          await sendTelegramMessage(chatId, mensajeFotoFueraDePaso(pasoTraspaso), {
+            parse_mode: 'HTML',
+          });
+          return true;
+        }
         const fileId = photos[photos.length - 1]?.file_id;
         if (!fileId) return false;
         try {
