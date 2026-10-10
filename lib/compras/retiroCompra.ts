@@ -73,7 +73,12 @@ function esEstadoRetiro(v: unknown): v is EstadoRetiroCompra {
   return (ESTADOS_RETIRO_COMPRA as readonly string[]).includes(String(v));
 }
 
-function mapRetiro(row: Record<string, unknown>): RetiroCompra {
+/**
+ * Recibe `unknown` a propósito: con una lista de columnas armada por partes, el tipado de
+ * supabase-js no puede inferir la fila y la marca como error de parseo del select.
+ */
+function mapRetiro(fila: unknown): RetiroCompra {
+  const row = fila as Record<string, unknown>;
   const fotosRaw = Array.isArray(row.fotos) ? row.fotos : [];
   return {
     id: String(row.id),
@@ -100,7 +105,7 @@ function mapRetiro(row: Record<string, unknown>): RetiroCompra {
 
 function primeraFila(data: unknown): RetiroCompra | null {
   const fila = Array.isArray(data) ? data[0] : data;
-  return fila ? mapRetiro(fila as Record<string, unknown>) : null;
+  return fila ? mapRetiro(fila) : null;
 }
 
 export type CrearRetiroCompraInput = {
@@ -128,7 +133,7 @@ export async function obtenerRetiroPorFactura(
     .eq('purchase_invoice_id', purchaseInvoiceId.trim())
     .maybeSingle();
   if (error || !data) return null;
-  return mapRetiro(data as Record<string, unknown>);
+  return mapRetiro(data);
 }
 
 export async function obtenerRetiro(
@@ -141,7 +146,7 @@ export async function obtenerRetiro(
     .eq('id', retiroId.trim())
     .maybeSingle();
   if (error || !data) return null;
-  return mapRetiro(data as Record<string, unknown>);
+  return mapRetiro(data);
 }
 
 /** Un retiro por factura. Si ya existe lo devuelve con `creado: false` (no se vuelve a avisar). */
@@ -159,7 +164,7 @@ export async function crearRetiroCompra(
     .maybeSingle();
   if (esTablaRetirosAusente(previoErr)) return { ok: false, motivo: 'sin_migracion' };
   if (previoErr) return { ok: false, motivo: 'error', error: previoErr.message };
-  if (previo) return { ok: true, retiro: mapRetiro(previo as Record<string, unknown>), creado: false };
+  if (previo) return { ok: true, retiro: mapRetiro(previo), creado: false };
 
   const { data, error } = await supabase
     .from(TABLA)
@@ -185,7 +190,7 @@ export async function crearRetiroCompra(
     if (existente) return { ok: true, retiro: existente, creado: false };
   }
   if (error || !data) return { ok: false, motivo: 'error', error: error?.message ?? 'Sin datos' };
-  return { ok: true, retiro: mapRetiro(data as Record<string, unknown>), creado: true };
+  return { ok: true, retiro: mapRetiro(data), creado: true };
 }
 
 /**
