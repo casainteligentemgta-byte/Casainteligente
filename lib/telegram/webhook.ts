@@ -193,6 +193,11 @@ import {
   manejarTextoDepositarioRecepcion,
 } from '@/lib/telegram/depositarioRecepcion';
 import {
+  esCallbackRetiroCompra,
+  manejarCallbackRetiroCompra,
+  manejarFotoRetiroCompra,
+} from '@/lib/telegram/retiroCompraTelegram';
+import {
   esCallbackTraspasoTelegram,
   esFlujoTraspasoTelegram,
   manejarCallbackTraspasoTelegram,
@@ -588,6 +593,18 @@ export async function handleTelegramCallbackQuery(
       });
       if (handledFacturasMenu) {
         return NextResponse.json({ ok: true, callback: 'menu_facturas' });
+      }
+    }
+
+    if (esCallbackRetiroCompra(cq.data)) {
+      const handledRetiro = await manejarCallbackRetiroCompra(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+        nombre: cq.from?.first_name ?? cq.from?.username ?? null,
+      });
+      if (handledRetiro) {
+        return NextResponse.json({ ok: true, callback: 'retiro_compra' });
       }
     }
 
@@ -1163,6 +1180,34 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
             pendingId: factura.pendingId,
           });
         }
+      }
+
+      // Foto de mercancía retirada: solo con el chat en el menú, para no tomar la de otro registro.
+      const fotoRetiro = await (async () => {
+        if (estadoFoto.contexto !== 'menu') return false;
+        const fileId = msg.photo?.[msg.photo.length - 1]?.file_id;
+        if (!fileId) return false;
+        try {
+          const { retiroEsperandoFoto } = await import('@/lib/compras/retiroCompra');
+          if (!(await retiroEsperandoFoto(supabase, chatId))) return false;
+          const { downloadTelegramFile, mimeFromTelegramPath } = await import('@/lib/telegram/botApi');
+          const { buffer, filePath } = await downloadTelegramFile(fileId);
+          const ext = filePath.split('.').pop() ?? 'jpg';
+          return await manejarFotoRetiroCompra({
+            supabase,
+            chatId,
+            buffer,
+            mimeType: mimeFromTelegramPath(filePath),
+            ext,
+          });
+        } catch (err) {
+          console.error('[telegram retiro compra foto]', err);
+          await sendTelegramMessage(chatId, '❌ No se pudo guardar la foto.', { parse_mode: 'HTML' });
+          return true;
+        }
+      })();
+      if (fotoRetiro) {
+        return NextResponse.json({ ok: true, retiro_compra_foto: true });
       }
 
       const fotoFacturaManual = await (async () => {
