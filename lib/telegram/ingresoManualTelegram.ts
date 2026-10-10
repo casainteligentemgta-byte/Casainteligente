@@ -39,6 +39,13 @@ import {
 } from '@/lib/almacen/formaIngresoRecepcion';
 import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi';
 import {
+  ALERTA_FOTO_OBLIGATORIA,
+  MENSAJE_FOTO_OBLIGATORIA,
+  etiquetaRequisitoFoto,
+  fotoMovimientoObligatoria,
+  fotosSuficientes,
+} from '@/lib/telegram/fotoObligatoria';
+import {
   responderHintCamaraTelegram,
   tecladoSoporteFotosTelegram,
   TEXTO_AYUDA_CAMARA_TELEGRAM,
@@ -434,7 +441,7 @@ const FLUJO_PASOS_ARTICULOS_REGISTRO =
   '5️⃣ <b>Artículos a ingresar</b>: material de la obra o nuevo; elige <b>categoría</b> por línea.\n' +
   '6️⃣ Indica la <b>cantidad</b> de cada artículo.\n' +
   '7️⃣ <b>¿Agregar más artículos?</b>\n' +
-  '8️⃣ <b>Soporte fotográfico</b> (opcional).\n' +
+  `8️⃣ <b>Soporte fotográfico</b> ${etiquetaRequisitoFoto()}.\n` +
   '9️⃣ <b>Observaciones</b> (opcional) y <b>registrar ingreso</b> (stock + contabilidad provisional).\n\n' +
   '<code>/cancelar</code> para abortar.';
 
@@ -1258,18 +1265,27 @@ async function preguntarMasLineas(supabase: SupabaseClient, chatId: string, nLin
   );
 }
 
-async function preguntarFotoOpcional(supabase: SupabaseClient, chatId: string): Promise<void> {
+/** Fotos del ingreso: las generales (o el soporte único) más las tomadas por línea. */
+function contarFotosIngresoManual(m: MetadataIngresoManual): number {
+  const generales = m.fotos_storage_paths?.length ?? 0;
+  const soporte = m.soporte_storage_path?.trim() ? 1 : 0;
+  const deLinea = (m.lineas ?? []).filter((l) => l.soporte_storage_path?.trim()).length;
+  return Math.max(generales, soporte) + deLinea;
+}
+
+async function preguntarFoto(supabase: SupabaseClient, chatId: string): Promise<void> {
   const estado = await getTelegramEstado(supabase, chatId);
   await patchMeta(supabase, chatId, estado, { paso: 'foto' });
   const f = flujoActivo(estado);
+  const requisito = etiquetaRequisitoFoto();
   const tituloFoto =
     flujoTelegramCompletoEnBot(f)
       ? f === FLUJO_NOTA_ENTREGA
-        ? '8️⃣ 📷 <b>Fotos de la nota de entrega</b> (opcional)'
+        ? `8️⃣ 📷 <b>Fotos de la nota de entrega</b> ${requisito}`
         : f === FLUJO_EMERGENCIA
-          ? '8️⃣ 📷 <b>Soporte fotográfico</b> (opcional, sin nota)'
-          : '8️⃣ 📷 <b>Soporte fotográfico</b> (opcional)'
-      : '📷 <b>Soporte fotográfico</b> (opcional)';
+          ? `8️⃣ 📷 <b>Soporte fotográfico</b> ${requisito.replace(')', ', sin nota)')}`
+          : `8️⃣ 📷 <b>Soporte fotográfico</b> ${requisito}`
+      : `📷 <b>Soporte fotográfico</b> ${requisito}`;
   await sendTelegramMessage(
     chatId,
     `${tituloFoto}\n\nEnvía una o varias fotos del documento o del material recibido.\n${TEXTO_AYUDA_CAMARA_TELEGRAM}`,
@@ -1752,7 +1768,7 @@ export async function manejarCallbackIngresoManual(
       return true;
     }
     if (flujoTelegramCompletoEnBot(m.flujo)) {
-      await preguntarFotoOpcional(supabase, params.chatId);
+      await preguntarFoto(supabase, params.chatId);
     } else {
       await patchMeta(supabase, params.chatId, estado, { paso: 'observacion' });
       await sendTelegramMessage(
@@ -1789,6 +1805,10 @@ export async function manejarCallbackIngresoManual(
   }
 
   if (data === 'foto:skip' || data === 'foto:done') {
+    if (!fotosSuficientes(contarFotosIngresoManual(m))) {
+      await answerCallbackQuery(params.callbackId, ALERTA_FOTO_OBLIGATORIA, true);
+      return true;
+    }
     await answerCallbackQuery(params.callbackId);
     await patchMeta(supabase, params.chatId, estado, { paso: 'observacion' });
     const obsPrompt = flujoTelegramCompletoEnBot(m.flujo)
@@ -1816,6 +1836,14 @@ export async function manejarCallbackIngresoManual(
     const lineas = fm.lineas ?? [];
     if (!lineas.length || !fm.ubicacion_id || !fm.proveedor_nombre) {
       await sendTelegramMessage(params.chatId, '❌ Ingreso incompleto.', { parse_mode: 'HTML' });
+      return true;
+    }
+    if (!fotosSuficientes(contarFotosIngresoManual(fm))) {
+      await patchMeta(supabase, params.chatId, fresh, { paso: 'foto' });
+      await sendTelegramMessage(params.chatId, MENSAJE_FOTO_OBLIGATORIA, {
+        parse_mode: 'HTML',
+        reply_markup: tecladoSoporteFotosTelegram(PREFIX),
+      });
       return true;
     }
 
@@ -2101,7 +2129,9 @@ export async function manejarTextoIngresoManual(
   if (paso === 'foto') {
     await sendTelegramMessage(
       chatId,
-      'Envíe la foto o pulse <b>Omitir foto</b> en el mensaje anterior.',
+      fotoMovimientoObligatoria()
+        ? MENSAJE_FOTO_OBLIGATORIA
+        : 'Envíe la foto o pulse <b>Omitir foto</b> en el mensaje anterior.',
       { parse_mode: 'HTML' },
     );
     return true;

@@ -10,6 +10,11 @@ import {
 import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi';
 import type { TelegramEstado } from '@/lib/telegram/estados';
 import { getTelegramEstado, setTelegramContexto } from '@/lib/telegram/estados';
+import {
+  ALERTA_FOTO_OBLIGATORIA,
+  MENSAJE_FOTO_OBLIGATORIA,
+  fotoMovimientoObligatoria,
+} from '@/lib/telegram/fotoObligatoria';
 import { MENSAJE_INICIO_SALIDA_TRASPASO } from '@/lib/telegram/mensajesSalidaTelegram';
 import type { UbicacionInventario } from '@/types/inventario-obra';
 
@@ -19,6 +24,7 @@ export type PasoTraspasoTelegram =
   | 'producto'
   | 'cantidad'
   | 'nota'
+  | 'foto'
   | 'confirmar';
 
 export type MetadataTraspasoTelegram = {
@@ -31,6 +37,8 @@ export type MetadataTraspasoTelegram = {
   producto_nombre?: string;
   cantidad?: number;
   nota?: string;
+  foto_storage_path?: string;
+  foto_url?: string;
 };
 
 const PREFIX_ORIGEN = 'tso:';
@@ -40,6 +48,10 @@ const PREFIX_PAGE_DESTINO = 'tsdp:';
 const PREFIX_MAT = 'tsm:';
 const PREFIX_OK = 'tsok';
 const PREFIX_CANCEL = 'tsc';
+const PREFIX_FOTO_SKIP = 'tsfs';
+
+/** Bucket de evidencias de movimientos (el mismo de las salidas a obra). */
+const BUCKET_FOTOS_TRASPASO = 'ci-proyectos-media';
 
 const PAGE_SIZE = 8;
 
@@ -64,7 +76,8 @@ export function esCallbackTraspasoTelegram(data: string): boolean {
     data.startsWith(PREFIX_PAGE_DESTINO) ||
     data.startsWith(PREFIX_MAT) ||
     data === PREFIX_OK ||
-    data === PREFIX_CANCEL
+    data === PREFIX_CANCEL ||
+    data === PREFIX_FOTO_SKIP
   );
 }
 
@@ -328,13 +341,77 @@ export async function manejarCallbackTraspasoTelegram(
     return true;
   }
 
+  if (params.data === PREFIX_FOTO_SKIP) {
+    if (fotoMovimientoObligatoria()) {
+      await answerCallbackQuery(params.callbackId, ALERTA_FOTO_OBLIGATORIA, true);
+      return true;
+    }
+    await answerCallbackQuery(params.callbackId);
+    await enviarResumenConfirmacion(supabase, params.chatId, estado);
+    return true;
+  }
+
   if (params.data === PREFIX_OK) {
+    if (fotoMovimientoObligatoria() && !m.foto_storage_path?.trim()) {
+      await answerCallbackQuery(params.callbackId, ALERTA_FOTO_OBLIGATORIA, true);
+      await preguntarFotoTraspaso(supabase, params.chatId, estado);
+      return true;
+    }
     await answerCallbackQuery(params.callbackId, 'Procesando…');
     await ejecutarTraspasoTelegram(supabase, params.chatId, estado);
     return true;
   }
 
   return false;
+}
+
+async function preguntarFotoTraspaso(
+  supabase: SupabaseClient,
+  chatId: string,
+  estado: TelegramEstado,
+): Promise<void> {
+  await patchMeta(supabase, chatId, estado, { paso: 'foto' });
+  if (fotoMovimientoObligatoria()) {
+    await sendTelegramMessage(
+      chatId,
+      '📷 Envíe la <b>foto del material que se traspasa</b> (obligatoria).',
+      { parse_mode: 'HTML' },
+    );
+    return;
+  }
+  await sendTelegramMessage(chatId, '📷 <b>Foto del material</b> (opcional)\nEnvíe una imagen u omita:', {
+    parse_mode: 'HTML',
+    reply_markup: {
+      inline_keyboard: [[{ text: '⏭ Omitir foto', callback_data: PREFIX_FOTO_SKIP }]],
+    },
+  });
+}
+
+/**
+ * Deja la foto en la transferencia. Si la columna `fotos` aún no existe en la base
+ * (migración 340 sin aplicar) no se pierde la evidencia: la ruta queda en observaciones.
+ */
+export async function guardarFotoTransferencia(
+  supabase: SupabaseClient,
+  transferenciaId: string,
+  foto: { storage_path: string; url: string },
+  observaciones: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('transferencias_inventario')
+    .update({ fotos: [foto] })
+    .eq('id', transferenciaId);
+  if (!error) return;
+
+  console.warn('[traspaso telegram] columna fotos no disponible:', error.message);
+  const conRuta = [observaciones, `Foto: ${foto.storage_path}`].filter(Boolean).join(' · ');
+  const { error: obsError } = await supabase
+    .from('transferencias_inventario')
+    .update({ observaciones: conRuta })
+    .eq('id', transferenciaId);
+  if (obsError) {
+    console.error('[traspaso telegram] no se pudo guardar la foto:', obsError.message);
+  }
 }
 
 async function enviarResumenConfirmacion(
@@ -349,7 +426,8 @@ async function enviarResumenConfirmacion(
     `📥 Destino: <b>${m.destino_nombre ?? '—'}</b>\n` +
     `📦 Material: <b>${m.producto_nombre ?? '—'}</b>\n` +
     `🔢 Cantidad: <b>${m.cantidad ?? 0}</b> u.\n` +
-    `📝 Observaciones: ${m.nota ? `"${m.nota}"` : '—'}\n\n` +
+    `📝 Observaciones: ${m.nota ? `"${m.nota}"` : '—'}\n` +
+    `📷 Foto: ${m.foto_storage_path ? 'adjunta' : '—'}\n\n` +
     '<i>Al confirmar, el stock se restará del origen y se sumará al destino.</i>';
 
   await patchMeta(supabase, chatId, estado, { paso: 'confirmar' });
@@ -424,6 +502,15 @@ async function ejecutarTraspasoTelegram(
       ],
     });
     await completarTransferenciaInventario(supabase, transferenciaId);
+
+    if (m.foto_storage_path?.trim()) {
+      await guardarFotoTransferencia(
+        supabase,
+        transferenciaId,
+        { storage_path: m.foto_storage_path.trim(), url: m.foto_url ?? '' },
+        obs,
+      );
+    }
 
     await finalizarSesionTraspaso(supabase, chatId);
     await sendTelegramMessage(
@@ -533,11 +620,56 @@ export async function manejarTextoTraspasoTelegram(
   }
 
   if (m.paso === 'nota') {
-    await patchMeta(supabase, chatId, estado, { nota: t });
-    const actualizado = await getTelegramEstado(supabase, chatId);
-    await enviarResumenConfirmacion(supabase, chatId, actualizado);
+    const conNota = await patchMeta(supabase, chatId, estado, { nota: t });
+    await preguntarFotoTraspaso(supabase, chatId, conNota);
+    return true;
+  }
+
+  if (m.paso === 'foto') {
+    await sendTelegramMessage(
+      chatId,
+      fotoMovimientoObligatoria()
+        ? MENSAJE_FOTO_OBLIGATORIA
+        : 'Envíe la foto o pulse <b>Omitir foto</b> en el mensaje anterior.',
+      { parse_mode: 'HTML' },
+    );
     return true;
   }
 
   return false;
+}
+
+/** Foto del material en el paso «foto» del traspaso; al guardarla pasa a la confirmación. */
+export async function manejarFotoTraspasoTelegram(params: {
+  supabase: SupabaseClient;
+  chatId: string;
+  buffer: Buffer;
+  mimeType: string;
+  ext: string;
+}): Promise<boolean> {
+  const estado = await getTelegramEstado(params.supabase, params.chatId);
+  if (!esFlujoTraspasoTelegram(estado)) return false;
+  if (meta(estado).paso !== 'foto') return false;
+
+  const storagePath = `telegram-movimientos/traspasos/${params.chatId}/${Date.now()}.${params.ext}`;
+  const { error } = await params.supabase.storage
+    .from(BUCKET_FOTOS_TRASPASO)
+    .upload(storagePath, params.buffer, { contentType: params.mimeType, upsert: false });
+
+  if (error) {
+    await sendTelegramMessage(params.chatId, '❌ No se pudo guardar la foto. Envíela de nuevo.', {
+      parse_mode: 'HTML',
+    });
+    return true;
+  }
+
+  const { data } = params.supabase.storage.from(BUCKET_FOTOS_TRASPASO).getPublicUrl(storagePath);
+  const conFoto = await patchMeta(params.supabase, params.chatId, estado, {
+    foto_storage_path: storagePath,
+    foto_url: data.publicUrl ?? undefined,
+  });
+
+  await sendTelegramMessage(params.chatId, '✅ Foto guardada.', { parse_mode: 'HTML' });
+  await enviarResumenConfirmacion(params.supabase, params.chatId, conFoto);
+  return true;
 }

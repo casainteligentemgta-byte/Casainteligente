@@ -10,6 +10,11 @@ import {
 } from '@/lib/almacen/registrarEgresoCampo';
 import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi';
 import type { TelegramEstado } from '@/lib/telegram/estados';
+import {
+  ALERTA_FOTO_OBLIGATORIA,
+  MENSAJE_FOTO_OBLIGATORIA,
+  fotoMovimientoObligatoria,
+} from '@/lib/telegram/fotoObligatoria';
 import { getTelegramEstado, setTelegramContexto } from '@/lib/telegram/estados';
 import { nombreProyectoTelegram } from '@/lib/telegram/proyectoPicker';
 import { MENSAJE_INICIO_SALIDA_OBRA } from '@/lib/telegram/mensajesSalidaTelegram';
@@ -363,13 +368,21 @@ async function preguntarMasLineas(supabase: SupabaseClient, chatId: string, nLin
   );
 }
 
-async function preguntarFotoOpcional(supabase: SupabaseClient, chatId: string): Promise<void> {
+async function preguntarFoto(supabase: SupabaseClient, chatId: string): Promise<void> {
   await patchMeta(
     supabase,
     chatId,
     await getTelegramEstado(supabase, chatId),
     { paso: 'foto' },
   );
+  if (fotoMovimientoObligatoria()) {
+    await sendTelegramMessage(
+      chatId,
+      '📷 Envíe la <b>foto del material que sale</b> (obligatoria).',
+      { parse_mode: 'HTML' },
+    );
+    return;
+  }
   await sendTelegramMessage(
     chatId,
     '📷 ¿Desea adjuntar una <b>foto</b>? (opcional)',
@@ -691,11 +704,16 @@ export async function manejarCallbackSalidaEgreso(
 
   if (data === 'mas:no') {
     await answerCallbackQuery(params.callbackId);
-    await preguntarFotoOpcional(supabase, params.chatId);
+    await preguntarFoto(supabase, params.chatId);
     return true;
   }
 
   if (data === 'foto:skip') {
+    // Botón de un mensaje anterior al cambio de regla: ya no se puede omitir.
+    if (fotoMovimientoObligatoria()) {
+      await answerCallbackQuery(params.callbackId, ALERTA_FOTO_OBLIGATORIA, true);
+      return true;
+    }
     await answerCallbackQuery(params.callbackId);
     await patchMeta(supabase, params.chatId, estado, { paso: 'observacion' });
     await sendTelegramMessage(
@@ -713,6 +731,11 @@ export async function manejarCallbackSalidaEgreso(
     const lineas = fm.lineas ?? [];
     if (!lineas.length || !fm.origen_ubicacion_id || !fm.obrero_nombre) {
       await sendTelegramMessage(params.chatId, '❌ Egreso incompleto.', { parse_mode: 'HTML' });
+      return true;
+    }
+    if (fotoMovimientoObligatoria() && !fm.foto_storage_path?.trim()) {
+      await patchMeta(supabase, params.chatId, fresh, { paso: 'foto' });
+      await sendTelegramMessage(params.chatId, MENSAJE_FOTO_OBLIGATORIA, { parse_mode: 'HTML' });
       return true;
     }
 
@@ -848,7 +871,9 @@ export async function manejarTextoSalidaEgreso(
   if (paso === 'foto') {
     await sendTelegramMessage(
       chatId,
-      'Envíe la foto o pulse <b>Omitir foto</b> en el mensaje anterior.',
+      fotoMovimientoObligatoria()
+        ? MENSAJE_FOTO_OBLIGATORIA
+        : 'Envíe la foto o pulse <b>Omitir foto</b> en el mensaje anterior.',
       { parse_mode: 'HTML' },
     );
     return true;

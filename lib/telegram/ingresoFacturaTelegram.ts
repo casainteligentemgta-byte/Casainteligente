@@ -10,6 +10,12 @@ import { ingresoAlmacenDesdePendienteCanal } from '@/lib/contabilidad/ingresoAlm
 import { resolverMaterialIdLineasCompra } from '@/lib/almacen/resolverMaterialIdPorSku';
 import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi';
 import {
+  ALERTA_FOTO_OBLIGATORIA,
+  MENSAJE_FOTO_OBLIGATORIA,
+  fotoMovimientoObligatoria,
+  fotosSuficientes,
+} from '@/lib/telegram/fotoObligatoria';
+import {
   responderHintCamaraTelegram,
   tecladoSoporteFotosTelegram,
   TEXTO_AYUDA_CAMARA_TELEGRAM,
@@ -548,7 +554,9 @@ async function preguntarFotos(supabase: SupabaseClient, chatId: string): Promise
     '📷 <b>Soporte fotográfico</b>\n\n' +
       'Envía una o varias fotos del material o comprobante.\n' +
       `${TEXTO_AYUDA_CAMARA_TELEGRAM}\n\n` +
-      'Cuando termines, pulsa <b>Listo con fotos</b> o <b>Omitir fotos</b>.',
+      (fotoMovimientoObligatoria()
+        ? 'Se necesita <b>al menos una foto</b>. Cuando termines, pulsa <b>Listo con fotos</b>.'
+        : 'Cuando termines, pulsa <b>Listo con fotos</b> o <b>Omitir fotos</b>.'),
     {
       parse_mode: 'HTML',
       reply_markup: tecladoSoporteFotosTelegram(PREFIX),
@@ -728,6 +736,10 @@ export async function manejarCallbackIngresoFacturaTelegram(
   }
 
   if (parsed.type === 'foto_skip' || parsed.type === 'foto_done') {
+    if (!fotosSuficientes(meta(estado).fotos_storage_paths?.length ?? 0)) {
+      await answerCallbackQuery(params.callbackId, ALERTA_FOTO_OBLIGATORIA, true);
+      return true;
+    }
     await answerCallbackQuery(params.callbackId);
     await enviarResumenConfirmacion(supabase, params.chatId, estado);
     return true;
@@ -741,6 +753,15 @@ export async function manejarCallbackIngresoFacturaTelegram(
     if (!pendienteId) {
       await sendTelegramMessage(params.chatId, '❌ Sesión incompleta. Reinicia con /ingresofactura.', {
         parse_mode: 'HTML',
+      });
+      return true;
+    }
+
+    if (!fotosSuficientes(m.fotos_storage_paths?.length ?? 0)) {
+      await patchMeta(supabase, params.chatId, estado, { paso: 'foto' });
+      await sendTelegramMessage(params.chatId, MENSAJE_FOTO_OBLIGATORIA, {
+        parse_mode: 'HTML',
+        reply_markup: tecladoSoporteFotosTelegram(PREFIX),
       });
       return true;
     }

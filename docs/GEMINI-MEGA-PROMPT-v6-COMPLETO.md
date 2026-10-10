@@ -394,7 +394,7 @@ flowchart LR
 ```
 Obra → Almacén → Proveedor → Documento (OCR o manual)
   → Artículos + categoría → Cantidad → ¿Más líneas?
-  → Foto opcional → Observaciones → Confirmar
+  → Foto obligatoria → Observaciones → Confirmar
   → ci_registrar_ingreso_manual_campo
   → registrarCompraDesdeIngresoManualFactura (sin duplicar stock)
   → sincronizarContabilidadDesdeRecepcionCampo (provisional)

@@ -153,7 +153,7 @@ Fuente única menú: `lib/telegram/botCommands.ts`.
 
 Los **4 flujos guiados** (manual factura, OCR automático, nota, sin nota) comparten en Telegram:
 
-1. Obra → 2. Almacén → 3. Proveedor (lista o nombre) → 4. Nº doc / foto IA → 5. Artículos + categoría → 6. Cantidad → 7. ¿Más artículos? → 8. Foto opcional → 9. Observaciones → **Registrar ingreso** (stock + **contabilidad provisional**).
+1. Obra → 2. Almacén → 3. Proveedor (lista o nombre) → 4. Nº doc / foto IA → 5. Artículos + categoría → 6. Cantidad → 7. ¿Más artículos? → 8. Foto obligatoria → 9. Observaciones → **Registrar ingreso** (stock + **contabilidad provisional**).
 
 | Opción / atajo | RPC / tipo FRM | Efecto |
 |----------------|----------------|--------|

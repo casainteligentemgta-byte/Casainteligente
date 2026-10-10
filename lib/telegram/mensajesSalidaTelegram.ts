@@ -1,4 +1,8 @@
+import { etiquetaRequisitoFoto } from '@/lib/telegram/fotoObligatoria';
+
 /** Textos del menú /salida y pasos de cada flujo (una sola fuente). */
+
+const REQUISITO_FOTO = etiquetaRequisitoFoto();
 
 export const MENU_SALIDA_TEXTO =
   '📤 <b>Salida de material</b>\n\n' +
@@ -16,7 +20,7 @@ export const FLUJO_PASOS_SALIDA_OBRA =
   '5️⃣ <b>Partida</b> presupuestaria (opcional).\n' +
   '6️⃣ <b>Actividad Gantt</b> (opcional).\n' +
   '7️⃣ ¿<b>Agregar más materiales</b>?\n' +
-  '8️⃣ <b>Foto</b> (opcional) y <b>observaciones</b>.\n' +
+  `8️⃣ <b>Foto</b> ${REQUISITO_FOTO} y <b>observaciones</b>.\n` +
   '9️⃣ <b>Confirmar</b> — descuenta stock y deja trazabilidad.\n\n' +
   '<code>/cancelar</code> para abortar.';
 
@@ -25,7 +29,7 @@ export const FLUJO_PASOS_SALIDA_DESPACHO =
   '2️⃣ <b>Obrero</b> que recibe (nómina o nombre + cédula).\n' +
   '3️⃣ Destino: <b>obra</b> (capítulo → partida o actividad) u <b>otro almacén</b>.\n' +
   '4️⃣ <b>Observaciones</b> (opcional) → materiales del stock y cantidades.\n' +
-  '5️⃣ <b>Foto</b> opcional del material saliente.\n' +
+  `5️⃣ <b>Foto</b> del material saliente ${REQUISITO_FOTO}.\n` +
   '6️⃣ <b>Confirmar</b> — descuenta stock (paridad con Despacho en la app).\n\n' +
   '<code>/cancelar</code> para abortar.';
 
@@ -33,7 +37,9 @@ export const FLUJO_PASOS_SALIDA_TRASPASO =
   '1️⃣ Elige el <b>almacén u obra de origen</b>.\n' +
   '2️⃣ Elige el <b>destino</b> (otro almacén u obra).\n' +
   '3️⃣ Elige el <b>material</b> con stock y la <b>cantidad</b>.\n' +
-  '4️⃣ <b>Nota</b> (opcional) y <b>confirmar</b> — mueve el stock.\n\n' +
+  '4️⃣ <b>Nota</b> breve (chofer, placas, motivo).\n' +
+  `5️⃣ <b>Foto</b> del material ${REQUISITO_FOTO}.\n` +
+  '6️⃣ <b>Confirmar</b> — mueve el stock.\n\n' +
   '<code>/cancelar</code> para abortar.';
 
 export const MENSAJE_INICIO_SALIDA_OBRA =
