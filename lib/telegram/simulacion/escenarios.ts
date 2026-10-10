@@ -533,6 +533,43 @@ export const ESCENARIOS: Escenario[] = [
     },
   },
   {
+    id: 'traspaso_foto_antes',
+    titulo: 'Traspaso enviando la foto antes de tiempo: se guarda y no se vuelve a pedir',
+    async correr(ctx) {
+      const { bot, supabase } = ctx;
+      await bot.escribir('depo', '/salida');
+      await bot.pulsar('depo', 'Traspaso');
+      await bot.pulsar('depo', ALMACEN_ENSAYO.nombre);
+      await bot.pulsar('depo', `${OBRA_ENSAYO.nombre} (`);
+      await bot.foto('depo');
+      ctx.exigir(
+        'la foto enviada antes de tiempo queda guardada',
+        /foto guardada/i.test(bot.textoUltimoPaso()) && /no tendr[aá] que enviarla de nuevo/i.test(bot.textoUltimoPaso()),
+        bot.textoUltimoPaso(),
+      );
+      ctx.comprobar('el traspaso sigue en el paso donde estaba', bot.pasos.at(-1)?.sesion?.paso === 'producto', JSON.stringify(bot.pasos.at(-1)?.sesion));
+      await bot.escribir('depo', 'ZZ');
+      await bot.pulsar('depo', MATERIAL_ENSAYO_1.nombre);
+      await bot.escribir('depo', '5');
+      await bot.pulsar('depo', 'Sin nota');
+      ctx.exigir(
+        'tras la nota va directo a confirmar, sin volver a pedir la foto',
+        bot.pasos.at(-1)?.sesion?.paso === 'confirmar' && /foto: adjunta/i.test(bot.textoUltimoPaso()),
+        `${JSON.stringify(bot.pasos.at(-1)?.sesion)} · ${bot.textoUltimoPaso()}`,
+      );
+      await bot.pulsar('depo', 'Confirmar despacho');
+
+      const enAlmacen = await stockDeEnsayo(supabase, ALMACEN_ENSAYO.id, MATERIAL_ENSAYO_1.id);
+      ctx.comprobar('el stock del almacén baja 5', enAlmacen === MATERIAL_ENSAYO_1.stockInicial - 5, `quedó en ${enAlmacen} · ${bot.textoUltimoPaso()}`);
+      const { data } = await supabase
+        .from('transferencias_inventario')
+        .select('fotos')
+        .eq('origen_ubicacion_id', ALMACEN_ENSAYO.id);
+      const t = ((data ?? []) as Array<Record<string, unknown>>)[0];
+      ctx.comprobar('la transferencia guarda esa foto', Array.isArray(t?.fotos) && (t?.fotos as unknown[]).length === 1, JSON.stringify(t?.fotos));
+    },
+  },
+  {
     id: 'compra_completa',
     titulo:
       'Cadena de compra completa: ingeniero → Contador → PM → almacén y comprador → factura → retiro → ingreso al almacén',

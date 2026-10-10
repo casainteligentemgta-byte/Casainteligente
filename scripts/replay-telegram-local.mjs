@@ -8,6 +8,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { claveWebhook } from './clave-webhook.shared.mjs';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const envPath = path.join(root, '.env.local');
@@ -96,8 +97,10 @@ async function main() {
   console.log(`\n▶ Restaurar webhook producción: ${webhookUrl}`);
   const set = await tg(token, 'setWebhook', {
     url: webhookUrl,
-    allowed_updates: ['message'],
+    allowed_updates: ['message', 'callback_query'],
     drop_pending_updates: true,
+    // Sin esto Telegram quita la clave y el servidor rechaza los avisos.
+    secret_token: claveWebhook(token, 'bot', env.TELEGRAM_WEBHOOK_SECRET),
   });
   console.log(JSON.stringify(set, null, 2));
 

@@ -46,6 +46,25 @@ describe('rutas que piden sesión', () => {
   })
 })
 
+describe('páginas de personal que leen tablas cerradas', () => {
+  it('clientes, tablero, flota y personas piden sesión', () => {
+    for (const ruta of ['/clientes', '/clientes/crm', '/dashboard', '/dashboard/contracts', '/flota/gasolina', '/personas']) {
+      assert.equal(requiereSesion(ruta), true, ruta)
+    }
+  })
+})
+
+describe('quién puede usar el bot', () => {
+  it('la lista de chats autorizados pide sesión; el webhook de Telegram no', () => {
+    assert.equal(apiRequiereSesion('/api/telegram/whitelist'), true)
+    assert.equal(apiRequiereSesion('/api/telegram/whitelist/abc'), true)
+    assert.equal(apiRequiereSesion('/api/telegram'), false)
+    assert.equal(apiRequiereSesion('/api/telegram/registrar-webhook'), false)
+    assert.equal(apiRequiereSesion('/api/webhooks/telegram'), false)
+    assert.equal(apiRequiereSesion('/api/webhook-logs'), false)
+  })
+})
+
 describe('APIs que piden sesión', () => {
   it('almacén, compras, procuras y facturas del canal la piden', () => {
     for (const ruta of [

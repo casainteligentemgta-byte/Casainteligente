@@ -7,6 +7,7 @@ import {
   getTelegramLogChatId,
   isLogBotConfigured,
 } from '@/lib/telegram/logBotApi';
+import { claveWebhookAceptada, validarClaveWebhook } from '@/lib/telegram/claveWebhook';
 import { telegramSupabaseAdmin } from '@/lib/telegram/supabaseAdmin';
 
 export const runtime = 'nodejs';
@@ -86,6 +87,18 @@ async function handleLiberarFactura(params: {
 export async function POST(req: Request) {
   if (!isLogBotConfigured()) {
     return NextResponse.json({ ok: false, error: 'Log bot no configurado' }, { status: 503 });
+  }
+
+  // Desde este chat se puede actuar a nombre de otras personas: solo vale si lo envía Telegram.
+  const clave = validarClaveWebhook(req, 'registro');
+  if (!claveWebhookAceptada(clave)) {
+    console.warn(`[webhook registro] aviso rechazado: clave ${clave}`);
+    return NextResponse.json({ ok: false, error: 'unauthorized_webhook' }, { status: 401 });
+  }
+  if (clave === 'ausente_permitida') {
+    console.warn('[webhook registro] aviso sin clave (todavía permitido)');
+  } else {
+    console.info('[webhook registro] clave válida');
   }
 
   let update: TelegramUpdate;

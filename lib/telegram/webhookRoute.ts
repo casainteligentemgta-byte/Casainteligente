@@ -31,6 +31,7 @@ import {
   textoTieneTicketProcura,
 } from '@/lib/telegram/procuraConciliacionWebhook';
 import { auditarUpdateTelegramAsync } from '@/lib/telegram/logBotAuditoria';
+import { claveWebhookAceptada, validarClaveWebhook } from '@/lib/telegram/claveWebhook';
 
 /** Telegram exige HTTP 200; un 503/502 hace que marque el webhook como fallido. */
 function respuestaWebhook(body: Record<string, unknown>, status = 200) {
@@ -55,20 +56,6 @@ export function handleTelegramWebhookGet() {
   });
 }
 
-function validarSecretoWebhookTelegram(req: Request): boolean {
-  const secret = process.env.TELEGRAM_WEBHOOK_SECRET?.trim();
-  if (!secret) {
-    if (process.env.NODE_ENV === 'production') {
-      console.warn(
-        '[telegram webhook] TELEGRAM_WEBHOOK_SECRET no configurado — webhook expuesto a spoofing',
-      );
-    }
-    return true;
-  }
-  const header = req.headers.get('x-telegram-bot-api-secret-token');
-  return header === secret;
-}
-
 export async function handleTelegramWebhookRoutePost(req: Request) {
   if (!getTelegramBotToken()) {
     console.error('[telegram webhook] TELEGRAM_BOT_TOKEN no configurado en el servidor');
@@ -79,9 +66,16 @@ export async function handleTelegramWebhookRoutePost(req: Request) {
     });
   }
 
-  if (!validarSecretoWebhookTelegram(req)) {
-    console.warn('[telegram webhook] secret_token inválido o ausente');
+  const clave = validarClaveWebhook(req, 'bot');
+  if (!claveWebhookAceptada(clave)) {
+    console.warn(`[telegram webhook] aviso rechazado: clave ${clave}`);
     return respuestaWebhook({ ok: false, error: 'unauthorized_webhook' }, 401);
+  }
+  if (clave === 'ausente_permitida') {
+    // Rastro para saber cuándo Telegram ya envía la clave y se puede exigir.
+    console.warn('[telegram webhook] aviso sin clave (todavía permitido)');
+  } else {
+    console.info('[telegram webhook] clave válida');
   }
 
   let update: TelegramUpdate;

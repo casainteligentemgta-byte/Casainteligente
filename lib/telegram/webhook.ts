@@ -211,7 +211,6 @@ import {
   manejarFotoTraspasoTelegram,
   manejarTextoTraspasoTelegram,
 } from '@/lib/telegram/traspasoFlujoTelegram';
-import { mensajeFotoFueraDePaso } from '@/lib/telegram/observacionRapida';
 import {
   enviarMenuSalidaTelegram,
   esCallbackMenuIngresoTelegram,
@@ -1418,14 +1417,15 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
         if (!photos?.length) return false;
         const estadoSa = await getTelegramEstado(supabase, chatId);
         if (!esFlujoSalidaObraTelegram(estadoSa)) return false;
-        if ((estadoSa.metadata as { paso?: string })?.paso !== 'foto') return false;
+        // El despacho acepta la foto en cualquier paso, una vez elegida la obra.
+        if (!estadoSa.proyecto_id) return false;
         const fileId = photos[photos.length - 1]?.file_id;
         if (!fileId) return false;
         try {
           const { downloadTelegramFile, mimeFromTelegramPath } = await import('@/lib/telegram/botApi');
           const { buffer, filePath } = await downloadTelegramFile(fileId);
           const ext = filePath.split('.').pop() ?? 'jpg';
-          await manejarFotoSalidaAlmacenTelegram({
+          return await manejarFotoSalidaAlmacenTelegram({
             supabase,
             chatId,
             userId,
@@ -1434,7 +1434,6 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
             mimeType: mimeFromTelegramPath(filePath),
             ext,
           });
-          return true;
         } catch (err) {
           console.error('[telegram salida almacen foto]', err);
           await sendTelegramMessage(chatId, '❌ No se pudo guardar la foto.', { parse_mode: 'HTML' });
@@ -1484,14 +1483,7 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
         if (!photos?.length) return false;
         const estadoTraspaso = await getTelegramEstado(supabase, chatId);
         if (!esFlujoTraspasoTelegram(estadoTraspaso)) return false;
-        const pasoTraspaso = (estadoTraspaso.metadata as { paso?: string })?.paso;
-        if (pasoTraspaso !== 'foto') {
-          // Foto antes de tiempo: se avisa qué falta, sin descargarla.
-          await sendTelegramMessage(chatId, mensajeFotoFueraDePaso(pasoTraspaso), {
-            parse_mode: 'HTML',
-          });
-          return true;
-        }
+        // El traspaso acepta la foto en cualquier paso: la guarda y sigue donde estaba.
         const fileId = photos[photos.length - 1]?.file_id;
         if (!fileId) return false;
         try {

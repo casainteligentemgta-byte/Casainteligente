@@ -213,7 +213,7 @@ describe('foto enviada antes de tiempo', () => {
     assert.equal(db.subidas.length, 0)
   })
 
-  it('traspaso antes del paso de la foto: avisa y no guarda nada', async () => {
+  it('traspaso antes del paso de la foto: la guarda y sigue en el mismo paso', async () => {
     const db = crearFakeSupabase({
       ci_telegram_estados: [
         {
@@ -232,8 +232,9 @@ describe('foto enviada antes de tiempo', () => {
     })
 
     assert.equal(manejada, true)
-    assert.match(String(telegram.enviados.at(-1)?.text), /Todavía no toca la foto/)
-    assert.equal(db.subidas.length, 0)
+    assert.match(String(telegram.enviados.at(-1)?.text), /Foto guardada/)
+    assert.doesNotMatch(String(telegram.enviados.at(-1)?.text), /Todavía no toca/)
+    assert.equal(db.subidas.length, 1)
     assert.equal(metadata(db).paso, 'cantidad')
   })
 })
