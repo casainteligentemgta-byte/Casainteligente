@@ -43,6 +43,7 @@ function decodificarGuion(valor: string): unknown {
  *   (sin parámetros)        lista de recorridos y personas
  *   ?escenario=<id>         corre un recorrido completo (reinicia la obra de ensayo antes)
  *   ?escenario=todos        corre todos los recorridos y deja la obra de ensayo limpia
+ *   &grupo=<prefijo>        con «todos»: solo los recorridos cuyo id empieza así (salida, pedido, traspaso, compra)
  *   &detalle=1              incluye la conversación completa, paso a paso
  *   ?guion=<json en base64> corre pasos sueltos: [{"q":"depo","t":"/salida"},{"q":"depo","b":"obrero"}]
  *   &reiniciar=1            con guion: deja la obra de ensayo como al principio antes de empezar
@@ -172,8 +173,14 @@ export async function GET(req: Request) {
     };
 
     if (escenarioId === 'todos') {
+      // Correrlos todos de una vez puede pasar de dos minutos: por grupos cada llamada es corta.
+      const grupo = q.get('grupo')?.trim().toLowerCase() || '';
+      const elegidos = grupo ? ESCENARIOS.filter((e) => e.id.startsWith(grupo)) : ESCENARIOS;
+      if (!elegidos.length) {
+        return NextResponse.json({ ok: false, error: `Ningún recorrido empieza por «${grupo}».` }, { status: 404 });
+      }
       const resultados: Array<Awaited<ReturnType<typeof correr>>> = [];
-      for (const e of ESCENARIOS) resultados.push(await correrYLimpiar(e));
+      for (const e of elegidos) resultados.push(await correrYLimpiar(e));
       return NextResponse.json({
         ok: true,
         pasaron: resultados.filter((r) => r.paso).length,

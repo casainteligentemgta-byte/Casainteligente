@@ -89,7 +89,9 @@ ve las facturas de su obra y que el monto en bolívares sea dólares × tasa una
 `compra_a_credito`: el Contador dice que no hay fondos, el PM aprueba **a crédito**, la orden
 al comprador lo dice y la factura se registra a crédito sin preguntar contado o crédito.
 
-`?escenario=todos` los corre todos, uno tras otro.
+`?escenario=todos` los corre todos, uno tras otro (más de dos minutos). Con `&grupo=compra`
+(o `salida`, `pedido`, `traspaso`) corre solo ese grupo, que es lo práctico desde una herramienta
+con límite de tiempo por llamada.
 
 ## Qué no cubre
 
