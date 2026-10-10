@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import { BotDeEnsayo, ErrorDeEnsayo, leerGuion, type PasoGuion } from '@/lib/telegram/simulacion/botDeEnsayo';
-import { ESCENARIOS, buscarEscenario, type Comprobacion } from '@/lib/telegram/simulacion/escenarios';
+import {
+  ESCENARIOS,
+  buscarEscenario,
+  type Comprobacion,
+  type Escenario,
+} from '@/lib/telegram/simulacion/escenarios';
 import {
   ALMACEN_ENSAYO,
   MATERIAL_ENSAYO_1,
@@ -37,6 +42,8 @@ function decodificarGuion(valor: string): unknown {
  * GET /api/pruebas/bot
  *   (sin parámetros)        lista de recorridos y personas
  *   ?escenario=<id>         corre un recorrido completo (reinicia la obra de ensayo antes)
+ *   ?escenario=todos        corre todos los recorridos y deja la obra de ensayo limpia
+ *   &detalle=1              incluye la conversación completa, paso a paso
  *   ?guion=<json en base64> corre pasos sueltos: [{"q":"depo","t":"/salida"},{"q":"depo","b":"obrero"}]
  *   &reiniciar=1            con guion: deja la obra de ensayo como al principio antes de empezar
  */
@@ -76,18 +83,16 @@ export async function GET(req: Request) {
     if (!leido.ok) return NextResponse.json({ ok: false, error: leido.error }, { status: 400 });
     guion = leido.guion;
   }
-  const escenario = escenarioId ? buscarEscenario(escenarioId) : undefined;
-  if (escenarioId && !escenario) {
+  const escenario = escenarioId && escenarioId !== 'todos' ? buscarEscenario(escenarioId) : undefined;
+  if (escenarioId && escenarioId !== 'todos' && !escenario) {
     return NextResponse.json({ ok: false, error: `No existe el recorrido «${escenarioId}».` }, { status: 404 });
   }
 
   try {
     const obra = await cargarObraDeEnsayo(supabase);
-    const reiniciar = Boolean(escenario) || q.get('reiniciar') === '1';
-    const limpieza = reiniciar ? await reiniciarObraDeEnsayo(supabase, obra) : [];
-    const fallosLimpieza = limpieza.filter((l) => !l.ok);
+    const detallado = q.get('detalle') === '1' || Boolean(guion);
 
-    const bot = new BotDeEnsayo(supabase, obra, async (update) => {
+    const despachar = async (update: Record<string, unknown>) => {
       const secreto = process.env.TELEGRAM_WEBHOOK_SECRET?.trim();
       const res = await handleTelegramWebhookRoutePost(
         new Request('https://ensayo.invalid/api/webhooks/telegram', {
@@ -100,45 +105,80 @@ export async function GET(req: Request) {
         }),
       );
       return res.json().catch(() => null);
+    };
+
+    const stockActual = async () => ({
+      almacen: {
+        material1: await stockDeEnsayo(supabase, ALMACEN_ENSAYO.id, MATERIAL_ENSAYO_1.id),
+        material2: await stockDeEnsayo(supabase, ALMACEN_ENSAYO.id, MATERIAL_ENSAYO_2.id),
+      },
+      obra1: { material1: await stockDeEnsayo(supabase, obra.ubicacionObra1, MATERIAL_ENSAYO_1.id) },
+      obra2: { material1: await stockDeEnsayo(supabase, obra.ubicacionObra2, MATERIAL_ENSAYO_1.id) },
     });
 
-    const comprobaciones: Comprobacion[] = [];
-    let detenido: string | null = null;
-    const comprobar = (que: string, ok: boolean, detalle?: string) => {
-      comprobaciones.push(ok ? { que, ok } : { que, ok, detalle: detalle?.slice(0, 600) });
-    };
-    const exigir = (que: string, ok: boolean, detalle?: string) => {
-      comprobar(que, ok, detalle);
-      if (!ok) throw new ErrorDeEnsayo(`No se cumplió: ${que}`);
+    /** Corre un recorrido (o un guion) y arma su reporte. */
+    const correr = async (escenarioACorrer: Escenario | null, reiniciar: boolean) => {
+      const t0 = Date.now();
+      const limpieza = reiniciar ? await reiniciarObraDeEnsayo(supabase, obra) : [];
+      const fallosLimpieza = limpieza.filter((l) => !l.ok);
+      const bot = new BotDeEnsayo(supabase, obra, despachar);
+
+      const comprobaciones: Comprobacion[] = [];
+      let detenido: string | null = null;
+      const comprobar = (que: string, ok: boolean, detalle?: string) => {
+        comprobaciones.push(ok && !que.startsWith('(dato)') ? { que, ok } : { que, ok, detalle: detalle?.slice(0, 600) });
+      };
+      const exigir = (que: string, ok: boolean, detalle?: string) => {
+        comprobar(que, ok, detalle);
+        if (!ok) throw new ErrorDeEnsayo(`No se cumplió: ${que}`);
+      };
+
+      try {
+        if (escenarioACorrer) await escenarioACorrer.correr({ bot, supabase, obra, comprobar, exigir });
+        else if (guion) await bot.ejecutarGuion(guion);
+      } catch (e) {
+        detenido = e instanceof Error ? e.message : String(e);
+        if (!(e instanceof ErrorDeEnsayo)) console.error('[pruebas/bot]', e);
+      }
+
+      const paso = !detenido && comprobaciones.every((c) => c.ok) && fallosLimpieza.length === 0;
+      // Reporte corto: si todo pasó basta el resumen; si no, los últimos pasos dicen dónde falló.
+      const pasos = detallado
+        ? bot.pasos
+        : paso
+          ? undefined
+          : bot.pasos.slice(-3);
+      return {
+        recorrido: escenarioACorrer ? { id: escenarioACorrer.id, titulo: escenarioACorrer.titulo } : null,
+        paso,
+        detenido,
+        comprobaciones: detallado || !paso ? comprobaciones : comprobaciones.filter((c) => c.detalle),
+        nComprobaciones: comprobaciones.length,
+        nPasos: bot.pasos.length,
+        fallosLimpieza,
+        stock: await stockActual(),
+        pasos,
+        duracionMs: Date.now() - t0,
+      };
     };
 
-    try {
-      if (escenario) await escenario.correr({ bot, supabase, obra, comprobar, exigir });
-      else if (guion) await bot.ejecutarGuion(guion);
-    } catch (e) {
-      detenido = e instanceof Error ? e.message : String(e);
-      if (!(e instanceof ErrorDeEnsayo)) console.error('[pruebas/bot]', e);
+    if (escenarioId === 'todos') {
+      const resultados: Array<Awaited<ReturnType<typeof correr>>> = [];
+      for (const e of ESCENARIOS) resultados.push(await correr(e, true));
+      // Al terminar, la obra de ensayo queda limpia.
+      const limpiezaFinal = (await reiniciarObraDeEnsayo(supabase, obra)).filter((l) => !l.ok);
+      return NextResponse.json({
+        ok: true,
+        pasaron: resultados.filter((r) => r.paso).length,
+        total: resultados.length,
+        limpiezaFinal,
+        resultados,
+        duracionMs: Date.now() - inicio,
+      });
     }
 
-    const paso = !detenido && comprobaciones.every((c) => c.ok) && fallosLimpieza.length === 0;
-    return NextResponse.json({
-      ok: true,
-      recorrido: escenario ? { id: escenario.id, titulo: escenario.titulo } : null,
-      paso,
-      detenido,
-      comprobaciones,
-      fallosLimpieza,
-      stock: {
-        almacen: {
-          material1: await stockDeEnsayo(supabase, ALMACEN_ENSAYO.id, MATERIAL_ENSAYO_1.id),
-          material2: await stockDeEnsayo(supabase, ALMACEN_ENSAYO.id, MATERIAL_ENSAYO_2.id),
-        },
-        obra1: { material1: await stockDeEnsayo(supabase, obra.ubicacionObra1, MATERIAL_ENSAYO_1.id) },
-        obra2: { material1: await stockDeEnsayo(supabase, obra.ubicacionObra2, MATERIAL_ENSAYO_1.id) },
-      },
-      pasos: bot.pasos,
-      duracionMs: Date.now() - inicio,
-    });
+    const resultado = await correr(escenario ?? null, Boolean(escenario) || q.get('reiniciar') === '1');
+    return NextResponse.json({ ok: true, ...resultado, duracionMs: Date.now() - inicio });
   } catch (e) {
     const mensaje = e instanceof Error ? e.message : 'Error en el ensayo.';
     return NextResponse.json({ ok: false, error: mensaje, duracionMs: Date.now() - inicio }, { status: 500 });
