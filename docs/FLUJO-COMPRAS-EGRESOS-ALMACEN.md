@@ -35,6 +35,28 @@ Todas convergen en **`/contabilidad/compras`** (cuadro unificado) y en las tabla
 
 `inventario_stock` en la **ubicación destino** (`ubicacion_destino_id`) + ledger `inv_movimientos` (`ingreso_compra`).
 
+### Retiro de la mercancía (migración **341**)
+
+Tramo entre «el comprador cargó la factura» y «el almacén la recibió».
+
+| Estado | Qué pasó | Quién recibe aviso por Telegram |
+|---|---|---|
+| `pendiente` | Factura confirmada con mercancía por recibir | **Logística** de la obra y el comprador, con botón «La retiro yo» |
+| `asignado` | Alguien pulsó el botón | El comprador; a quien la retira se le pide la foto |
+| `en_camino` | Envió la foto de lo que retiró | El almacén de destino (depositario / grupo de la obra) y el comprador |
+| `entregado` | El almacén registró el ingreso (`/ingreso` o la web) | Quien la traía |
+
+- **Quién retira:** personal con rol **Logística** en la nómina del proyecto
+  (`ci_proyecto_nomina.rol = 'logistica'`) con Telegram. Si la obra no tiene, solo se avisa
+  al comprador, que puede llevarla él mismo.
+- Solo se asigna al primero que pulsa; puede devolverlo con «No puedo retirarla» antes de la foto.
+- La foto se toma con el chat en el menú del bot. Quien tenga un retiro a su nombre y envíe
+  una foto estando en el menú la registra como foto del retiro.
+- Tabla `ci_compras_retiros` (una fila por factura). Código: `lib/compras/retiroCompra.ts` y
+  `lib/telegram/retiroCompraTelegram.ts`.
+- **Sin la migración 341 no se crean retiros** y compras e ingresos funcionan igual que antes.
+- En la web: **Almacén → Retiros** (`/almacen/retiros`), con estado, quién retira, horas y foto.
+
 ---
 
 ## Parte 2: Egreso (almacén → obra / obrero)
@@ -123,6 +145,7 @@ salidas (`/salida`) y la factura que carga el comprador (`/facturas` manual). El
 | 203 | Ledger `inv_movimientos` |
 | 206 | Trazabilidad egresos campo (`inv_egresos_campo`) |
 | 340 | Foto en traspasos (`transferencias_inventario.fotos`) |
+| 341 | Retiro de mercancía comprada (`ci_compras_retiros`) |
 
 ---
 
