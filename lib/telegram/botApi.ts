@@ -4,9 +4,18 @@ import {
   debeMostrarPieDestinatario,
 } from '@/lib/telegram/pieDestinatarioLog';
 
+import {
+  TOKEN_BOT_SIMULADO,
+  archivoTelegramSimulado,
+  responderTelegramSimulado,
+  simulacionBotActiva,
+} from '@/lib/telegram/simulacion/contexto';
+
 const TELEGRAM_API = 'https://api.telegram.org';
 
 export function getTelegramBotToken(): string | null {
+  // En un ensayo (lib/telegram/simulacion) no hace falta el token: nada sale a Telegram.
+  if (simulacionBotActiva()) return TOKEN_BOT_SIMULADO;
   return process.env.TELEGRAM_BOT_TOKEN?.trim() || null;
 }
 
@@ -32,6 +41,9 @@ export async function telegramApi<T>(
   method: string,
   body: Record<string, unknown>,
 ): Promise<T> {
+  const simulacion = simulacionBotActiva();
+  if (simulacion) return responderTelegramSimulado(simulacion, method, body) as T;
+
   const token = getTelegramBotToken();
   if (!token) throw new Error('TELEGRAM_BOT_TOKEN no configurado');
 
@@ -186,6 +198,8 @@ export async function downloadTelegramFile(fileId: string): Promise<{
   buffer: Buffer;
   filePath: string;
 }> {
+  if (simulacionBotActiva()) return archivoTelegramSimulado();
+
   const token = getTelegramBotToken();
   if (!token) throw new Error('TELEGRAM_BOT_TOKEN no configurado');
 

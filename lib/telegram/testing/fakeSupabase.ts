@@ -1,7 +1,7 @@
 /**
  * Doble mínimo de Supabase para pruebas de flujos del bot (node:test).
  * Guarda filas en memoria y entiende solo lo que usan los flujos probados:
- * select / insert / update / upsert con filtros eq, gt, in, is, not, order y limit;
+ * select / insert / update / upsert / delete con filtros eq, gt, in, is, not, order y limit;
  * y el bucket de Storage (upload / getPublicUrl).
  *
  * No es un emulador de PostgREST: si un flujo nuevo usa algo que falta aquí,
@@ -25,6 +25,11 @@ export type FakeSupabase = {
 type FakeBucket = {
   upload: (ruta: string, cuerpo: unknown, opts?: unknown) => Promise<Resultado>;
   getPublicUrl: (ruta: string) => { data: { publicUrl: string } };
+  list: (
+    carpeta?: string,
+    opts?: unknown,
+  ) => Promise<{ data: Array<{ name: string; id: string | null }> | null; error: { message: string } | null }>;
+  remove: (rutas: string[]) => Promise<{ data: Array<{ name: string }> | null; error: { message: string } | null }>;
   createSignedUrls: (
     rutas: string[],
     segundos: number,
@@ -48,7 +53,7 @@ function nuevoId(): string {
 
 class Consulta implements PromiseLike<Resultado> {
   private filtros: Filtro[] = [];
-  private accion: 'select' | 'insert' | 'update' | 'upsert' = 'select';
+  private accion: 'select' | 'insert' | 'update' | 'upsert' | 'delete' = 'select';
   private carga: Fila | Fila[] | null = null;
   private conflicto: string | null = null;
   private orden: { col: string; asc: boolean } | null = null;
@@ -72,6 +77,10 @@ class Consulta implements PromiseLike<Resultado> {
   update(carga: Fila): this {
     this.accion = 'update';
     this.carga = carga;
+    return this;
+  }
+  delete(): this {
+    this.accion = 'delete';
     return this;
   }
   upsert(carga: Fila | Fila[], o?: { onConflict?: string }): this {
@@ -178,6 +187,9 @@ class Consulta implements PromiseLike<Resultado> {
     } else if (this.accion === 'update') {
       afectadas = filas.filter(pasa);
       for (const f of afectadas) Object.assign(f, this.carga);
+    } else if (this.accion === 'delete') {
+      afectadas = filas.filter(pasa);
+      this.db.tablas[this.tabla] = filas.filter((f) => !pasa(f));
     } else {
       afectadas = filas.filter(pasa);
     }
@@ -216,6 +228,22 @@ export function crearFakeSupabase(
           return { data: { path: ruta }, error: null };
         },
         getPublicUrl: (ruta) => ({ data: { publicUrl: `https://storage.test/${bucket}/${ruta}` } }),
+        list: async (carpeta) => {
+          // Como Storage: devuelve solo el nivel inmediato; las subcarpetas vienen sin id.
+          const prefijo = `${bucket}/${String(carpeta ?? '').replace(/\/$/, '')}/`;
+          const vistos = new Map<string, { name: string; id: string | null }>();
+          for (const subida of db.subidas) {
+            if (!subida.startsWith(prefijo)) continue;
+            const [nombre, ...resto] = subida.slice(prefijo.length).split('/');
+            if (!vistos.has(nombre)) vistos.set(nombre, { name: nombre, id: resto.length ? null : `id-${nombre}` });
+          }
+          return { data: Array.from(vistos.values()), error: null };
+        },
+        remove: async (rutas) => {
+          const borrar = new Set(rutas.map((r) => `${bucket}/${r}`));
+          db.subidas = db.subidas.filter((s) => !borrar.has(s));
+          return { data: rutas.map((name) => ({ name })), error: null };
+        },
         createSignedUrls: async (rutas) => ({
           data: rutas.map((ruta) => ({ signedUrl: `https://storage.test/firmado/${bucket}/${ruta}` })),
           error: null,
