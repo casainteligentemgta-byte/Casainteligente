@@ -1,5 +1,6 @@
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { getTelegramAllowedChatIds, sendTelegramMessage } from '@/lib/telegram/botApi';
+import { resolverChatAdministracion } from '@/lib/telegram/chatAdministracion';
 import {
   extraerVencimientosEntidad,
   textoDiasRestantes,
@@ -80,7 +81,17 @@ export async function notificarPermisologiaTelegram(
     errors: [],
   };
 
-  const { chatId, fuente } = resolverChatLegalTelegram();
+  let { chatId, fuente } = resolverChatLegalTelegram();
+  if (!chatId) {
+    // Sin chat propio de Legal: va al chat de administración.
+    try {
+      const adm = await resolverChatAdministracion(createSupabaseAdminClient());
+      chatId = adm.chatId;
+      fuente = adm.fuente;
+    } catch (e) {
+      console.warn('[permisología] chat de administración:', e instanceof Error ? e.message : e);
+    }
+  }
   result.chatId = chatId;
   if (!chatId) {
     result.errors.push(

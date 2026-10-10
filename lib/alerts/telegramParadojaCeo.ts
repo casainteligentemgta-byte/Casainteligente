@@ -49,9 +49,13 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
-export async function enviarTelegramHtml(text: string): Promise<{ ok: boolean; status: number; body: string }> {
+/** `chatDestino`: a quién enviar; si no se indica, al chat de TELEGRAM_CHAT_ID. */
+export async function enviarTelegramHtml(
+  text: string,
+  chatDestino?: string | null,
+): Promise<{ ok: boolean; status: number; body: string }> {
   const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
-  const chatId = process.env.TELEGRAM_CHAT_ID?.trim();
+  const chatId = chatDestino?.trim() || process.env.TELEGRAM_CHAT_ID?.trim();
   if (!token || !chatId) {
     return { ok: false, status: 503, body: 'TELEGRAM_BOT_TOKEN o TELEGRAM_CHAT_ID no configurados' };
   }

@@ -6,6 +6,7 @@ import {
   rangoUltimos7Dias,
 } from '@/lib/cron/weeklyTalentoReport';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
+import { resolverChatAdministracion } from '@/lib/telegram/chatAdministracion';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -37,7 +38,8 @@ export async function GET(req: Request) {
   const rango = rangoUltimos7Dias();
   const reporte = await buildWeeklyTalentoReport(admin.client, rango);
   const text = formatTelegramWeeklyTalentoReport(reporte);
-  const tg = await enviarTelegramHtml(text);
+  const destino = await resolverChatAdministracion(admin.client);
+  const tg = await enviarTelegramHtml(text, destino.chatId);
 
   if (!tg.ok) {
     return NextResponse.json(

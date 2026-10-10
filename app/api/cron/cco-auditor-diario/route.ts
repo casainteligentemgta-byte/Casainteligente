@@ -18,7 +18,8 @@ function authorizeCron(req: Request): boolean {
 /**
  * Cron diario: revisa tablas CCO + contratos de todas las obras con config.
  * Solo notifica por Telegram si hay hallazgos.
- * Horario sugerido: 04:15 UTC (tras snapshots 04:00).
+ * Horario (vercel.json): 11:30 UTC ≈ 07:30 Caracas, después de las fotos diarias de las 04:00 UTC.
+ * Avisa por Telegram solo si hay hallazgos; por eso corre de día y no a medianoche.
  */
 export async function GET(req: Request) {
   if (!authorizeCron(req)) {
