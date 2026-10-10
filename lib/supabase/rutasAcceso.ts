@@ -42,6 +42,12 @@ export const RUTAS_PROTEGIDAS = [
   '/cambiar-password',
   '/obra-digital',
   '/entidades',
+  // Leen tablas que solo responden con sesión (migración 345): sin ella se va a /login
+  // en vez de mostrar la página vacía.
+  '/clientes',
+  '/dashboard',
+  '/flota',
+  '/personas',
 ];
 
 /** Rutas de personal que cuelgan de un prefijo público: siempre exigen sesión. */
@@ -73,6 +79,9 @@ export const APIS_CON_SESION = [
   '/api/procuras',
   '/api/facturas-canal',
   '/api/contabilidad/compras',
+  // Quién puede usar el bot: no debe poder leerse ni cambiarse sin sesión.
+  // (El webhook del bot es /api/telegram y /api/webhooks/telegram: esos siguen abiertos.)
+  '/api/telegram/whitelist',
 ];
 
 /** ¿Esta ruta de API debe rechazar a quien llama sin sesión? */

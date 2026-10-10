@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowLeftRight, Package, Route, Truck } from 'lucide-react';
+import { ArrowLeftRight, ClipboardList, Package, Route, Truck } from 'lucide-react';
 
 export type CuadroAlmacen = 'inventario' | 'movimientos' | 'trazabilidad';
 
@@ -44,6 +44,7 @@ export default function AlmacenCuadroNav({
   search = '',
   loCompradoActivo = false,
   retirosActivo = false,
+  pedidosActivo = false,
 }: {
   activo: CuadroAlmacen;
   search?: string;
@@ -51,10 +52,12 @@ export default function AlmacenCuadroNav({
   loCompradoActivo?: boolean;
   /** Resalta el enlace a /almacen/retiros cuando estamos en esa ruta. */
   retirosActivo?: boolean;
+  /** Resalta el enlace a /almacen/pedidos cuando estamos en esa ruta. */
+  pedidosActivo?: boolean;
 }) {
   return (
     <nav
-      className="mb-4 box-border grid w-full max-w-full grid-cols-4 gap-1 rounded-2xl border border-white/[0.06] bg-white/[0.04] p-1.5 backdrop-blur-xl"
+      className="mb-4 box-border grid w-full max-w-full grid-cols-5 gap-1 rounded-2xl border border-white/[0.06] bg-white/[0.04] p-1.5 backdrop-blur-xl"
       aria-label="Vistas de almacén"
     >
       <Link
@@ -65,7 +68,7 @@ export default function AlmacenCuadroNav({
         <span className="min-w-0 max-w-full break-words hyphens-auto">Lo comprado</span>
       </Link>
       {TABS.map(({ id, label, icon: Icon }) => {
-        const active = !loCompradoActivo && !retirosActivo && activo === id;
+        const active = !loCompradoActivo && !retirosActivo && !pedidosActivo && activo === id;
         return (
           <Link
             key={id}
@@ -77,6 +80,10 @@ export default function AlmacenCuadroNav({
           </Link>
         );
       })}
+      <Link href="/almacen/pedidos" className={`${linkBase} ${tabClass(pedidosActivo)}`}>
+        <ClipboardList size={14} className="shrink-0" aria-hidden />
+        <span className="min-w-0 max-w-full break-words hyphens-auto">Pedidos</span>
+      </Link>
       <Link href="/almacen/retiros" className={`${linkBase} ${tabClass(retirosActivo)}`}>
         <Truck size={14} className="shrink-0" aria-hidden />
         <span className="min-w-0 max-w-full break-words hyphens-auto">Retiros</span>
