@@ -1,5 +1,6 @@
 'use client'
 
+import { factorCobertura } from '@/lib/netvision/utils/intensidadPlano'
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ArrowLeft, Minus, Plus, Printer } from 'lucide-react'
@@ -374,6 +375,7 @@ export default function NetVisionPlanoPrintView() {
                   invertOptions={{
                     cotaColor: normalizeCotaColor(project.planoCotaColor),
                     grosorMuro: project.planoGrosorMuro,
+                    intensidadTrazos: project.planoIntensidad,
                   }}
                   wallStrokeGrosor={project.planoGrosorMuro}
                   cameras={project.cameras}
@@ -387,7 +389,7 @@ export default function NetVisionPlanoPrintView() {
                   selectedId={null}
                   placeMode={false}
                   showFov
-                  visionOpacity={0.28}
+                  visionOpacity={0.28 * factorCobertura(project.coberturaIntensidad)}
                   showWifi={false}
                   showLinks={false}
                   showCableRoutes

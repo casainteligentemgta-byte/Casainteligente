@@ -1,5 +1,6 @@
 /** Rotación 90° del plano NetVision (PDF/imagen rasterizado) y de la geometría 0–1. */
 
+import { intensificarTrazosPlano } from '@/lib/netvision/utils/intensidadPlano'
 import type { NetVisionProject } from '@/lib/netvision/types'
 import { clamp01 } from '@/lib/netvision/utils/geometryHelpers'
 import { encodePlanoCanvas } from '@/lib/netvision/utils/renderPdfPlano'
@@ -8,8 +9,13 @@ import {
   type NightPlanoOptions,
 } from '@/lib/netvision/utils/nightPlanoPalette'
 import { rotateCameraLabelOffset } from '@/lib/netvision/utils/cameraLabelOffset'
+import {
+  clampRotateQuarters,
+  nextRotateQuarters,
+} from '@/lib/netvision/utils/planoRotateQuarters'
 
 export type PlanoRotateDir = 'cw' | 'ccw'
+export { clampRotateQuarters, nextRotateQuarters }
 
 export function rotateNormPoint(
   x: number,
@@ -175,6 +181,19 @@ export function rotatePlanoDataUrl90(
   })
 }
 
+/** Aplica N giros horarios de 90° a un data URL (para reabrir el archivo original). */
+export async function rotatePlanoDataUrlQuarters(
+  dataUrl: string,
+  quarters: number,
+): Promise<string> {
+  const n = clampRotateQuarters(quarters)
+  let url = dataUrl
+  for (let i = 0; i < n; i++) {
+    url = await rotatePlanoDataUrl90(url, 'cw')
+  }
+  return url
+}
+
 /** Data URL con colores invertidos (para fondo negro / líneas blancas). */
 export function invertPlanoDataUrl(
   dataUrl: string,
@@ -211,6 +230,7 @@ export function invertPlanoDataUrl(
       }
       ctx.drawImage(img, 0, 0)
       const imageData = ctx.getImageData(0, 0, w, h)
+      intensificarTrazosPlano(imageData.data, w, h, options?.intensidadTrazos)
       applyNightPlanoPalette(imageData.data, w, h, options)
       ctx.putImageData(imageData, 0, 0)
       resolve(canvas.toDataURL('image/png'))

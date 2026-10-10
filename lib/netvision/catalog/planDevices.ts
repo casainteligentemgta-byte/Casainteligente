@@ -26,6 +26,16 @@ export const PLAN_DEVICE_CATALOG: PlanDeviceModel[] = [
     priceUsd: 120,
   },
   {
+    id: 'snd-ezviz-t9c',
+    discipline: 'sonido',
+    kind: 'siren',
+    brand: 'Ezviz',
+    name: 'T9C (requiere gateway A3)',
+    rangeM: 12,
+    fovDeg: 360,
+    priceUsd: 54,
+  },
+  {
     id: 'snd-mic-amb',
     discipline: 'sonido',
     kind: 'mic',

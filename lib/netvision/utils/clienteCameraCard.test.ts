@@ -85,6 +85,16 @@ describe('clienteCameraCard', () => {
     assert.equal(totalClienteCableMeters([wired, wireless]), wired.cableMeters)
   })
 
+  it('la turret Hikvision 5MP lleva la foto de catálogo en la ficha al cliente', () => {
+    const card = buildClienteCameraCard(
+      { id: 'c-t', label: 'CAM-T', x: 0.2, y: 0.3, modelId: 'hik-ds2cd1353', yawDeg: 0, mountHeightM: 2.8 },
+      [],
+    )
+    assert.equal(card.imageUrl, '/netvision/camaras/hik-ds2cd1353.webp')
+    assert.equal(card.modelName, 'DS-2CD1353G0-IUF 5MP Turret')
+    assert.equal(card.formFactor, 'dome')
+  })
+
   it('la H9c lleva la foto y los ángulos de la ficha oficial, y sigue cableada', () => {
     const card = buildClienteCameraCard(
       { id: 'c2', label: 'CAM-02', x: 0.2, y: 0.3, modelId: 'ezviz-h9c', yawDeg: 0, mountHeightM: 2.8 },

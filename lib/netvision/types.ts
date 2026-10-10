@@ -373,12 +373,22 @@ export type NetVisionProject = {
    * proyecto tiene plano y si es el mismo.
    */
   planoHuella?: string
+  /**
+   * Giros de 90° en sentido horario aplicados al archivo original (0–3).
+   * Al volver a cargar el JPG/PDF se usa para orientar solo la imagen y no
+   * mover las cámaras ya guardadas.
+   */
+  planoRotateQuarters?: number
   /** Si true, el plano se muestra invertido (fondo negro, trazos blancos). */
   planoInvertido?: boolean
   /** Color de cotas/números en modo fondo negro. */
   planoCotaColor?: 'auto' | 'verde' | 'naranja' | 'azul' | 'blanco' | 'amarillo'
   /** Grosor visual de la línea de muro (0 = fina, 100 = gruesa). */
   planoGrosorMuro?: number
+  /** Intensidad de los trazos del plano (0 = original, 100 = muros y líneas al máximo). */
+  planoIntensidad?: number
+  /** Intensidad del espectro (semáforo) de las cámaras, 0–100 (36 = la de siempre). */
+  coberturaIntensidad?: number
   cameras: DesignCamera[]
   networkNodes: DesignNetworkNode[]
   /** Pantalla, disco, UPS y rack de la sala técnica CCTV. */

@@ -1,3 +1,4 @@
+import { COBERTURA_INTENSIDAD_DEFECTO, clampIntensidad } from '@/lib/netvision/utils/intensidadPlano'
 import type {
   CableType,
   DesignCableSegment,
@@ -24,6 +25,7 @@ import type {
 import { sanitizarClientePresupuesto } from '@/lib/netvision/clientePresupuesto'
 import { huellaPlano } from '@/lib/netvision/compartir'
 import { normalizarTasa } from '@/lib/netvision/utils/moneda'
+import { clampRotateQuarters } from '@/lib/netvision/utils/planoRotateQuarters'
 import { DRAWABLE_CABLE_TYPES } from '@/lib/netvision/services/cableCalculator'
 import { defaultScale } from '@/lib/netvision/services/coverageCalculator'
 import { DEFAULT_CAMERA_MODEL_ID } from '@/lib/netvision/catalog/cameras'
@@ -95,9 +97,12 @@ export function emptyProject(partial?: {
     distributorMarginPct: 15,
     planoUrl: null,
     planoNombre: '',
+    planoRotateQuarters: 0,
     planoInvertido: false,
     planoCotaColor: 'auto',
     planoGrosorMuro: 50,
+    planoIntensidad: 0,
+    coberturaIntensidad: COBERTURA_INTENSIDAD_DEFECTO,
     cameras: [],
     networkNodes: [],
     infraDevices: [],
@@ -563,9 +568,12 @@ function normalizeProject(
     planoUrl: p.planoUrl ?? null,
     planoNombre: p.planoNombre ?? '',
     ...(typeof p.planoHuella === 'string' ? { planoHuella: p.planoHuella.slice(0, 64) } : {}),
+    planoRotateQuarters: clampRotateQuarters(p.planoRotateQuarters),
     planoInvertido: Boolean(p.planoInvertido),
     planoCotaColor: normalizeCotaColor(p.planoCotaColor),
     planoGrosorMuro: clampGrosorMuro(p.planoGrosorMuro),
+    planoIntensidad: clampIntensidad(p.planoIntensidad, 0),
+    coberturaIntensidad: clampIntensidad(p.coberturaIntensidad, COBERTURA_INTENSIDAD_DEFECTO),
     cameras: Array.isArray(p.cameras) ? p.cameras.map(normalizeCamera) : [],
     networkNodes: Array.isArray(p.networkNodes)
       ? p.networkNodes.map(normalizeNetworkNode)

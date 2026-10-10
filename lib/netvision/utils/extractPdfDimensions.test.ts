@@ -7,6 +7,7 @@ import {
   parseDimensionLabel,
   pickDimensionForSegment,
   rotatePlanoDimensions,
+  rotatePlanoDimensionsQuarters,
 } from './extractPdfDimensions'
 
 describe('parseDimensionLabel', () => {
@@ -79,5 +80,22 @@ describe('rotatePlanoDimensions', () => {
   it('90° horario', () => {
     const next = rotatePlanoDimensions([{ meters: 3, label: '3', x: 0, y: 0 }], 'cw')
     assert.deepEqual(next[0], { meters: 3, label: '3', x: 1, y: 0 })
+  })
+
+  it('N cuartos horarios', () => {
+    const start = [{ meters: 3, label: '3', x: 0, y: 0 }]
+    assert.deepEqual(rotatePlanoDimensionsQuarters(start, 0)[0], start[0])
+    assert.deepEqual(rotatePlanoDimensionsQuarters(start, 1)[0], {
+      meters: 3,
+      label: '3',
+      x: 1,
+      y: 0,
+    })
+    assert.deepEqual(rotatePlanoDimensionsQuarters(start, 2)[0], {
+      meters: 3,
+      label: '3',
+      x: 1,
+      y: 1,
+    })
   })
 })

@@ -24,6 +24,8 @@ export type NightPlanoOptions = {
    * Default 50 = dilatar 2 px (comportamiento actual).
    */
   grosorMuro?: number
+  /** Intensidad de los trazos (0–100); se aplica antes de pasar a fondo negro. */
+  intensidadTrazos?: number
 }
 
 /** Índice en NIGHT_NEON, o -1 = blanco (mismo RGB que muros). */

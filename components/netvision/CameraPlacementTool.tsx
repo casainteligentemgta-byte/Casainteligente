@@ -1,5 +1,6 @@
 'use client'
 
+import { clampIntensidad, intensificarTrazosPlano } from '@/lib/netvision/utils/intensidadPlano'
 import { Fragment, useEffect, useRef, useState } from 'react'
 import {
   Arc,
@@ -412,6 +413,7 @@ const INVERT_MAX_EDGE = 2048
 function invertLoadedImage(
   img: HTMLImageElement,
   options?: NightPlanoOptions,
+  invert = true,
 ): HTMLImageElement | null {
   const w = img.naturalWidth || img.width
   const h = img.naturalHeight || img.height
@@ -427,7 +429,8 @@ function invertLoadedImage(
   ctx.imageSmoothingEnabled = scale < 1
   ctx.drawImage(img, 0, 0, cw, ch)
   const imageData = ctx.getImageData(0, 0, cw, ch)
-  applyNightPlanoPalette(imageData.data, cw, ch, options)
+  intensificarTrazosPlano(imageData.data, cw, ch, options?.intensidadTrazos)
+  if (invert) applyNightPlanoPalette(imageData.data, cw, ch, options)
   ctx.putImageData(imageData, 0, 0)
   const inverted = new window.Image()
   inverted.src = canvas.toDataURL('image/jpeg', 0.92)
@@ -435,7 +438,7 @@ function invertLoadedImage(
 }
 
 function invertOptionsKey(opts?: NightPlanoOptions): string {
-  return `${opts?.cotaColor ?? 'auto'}:${clampGrosorMuro(opts?.grosorMuro)}`
+  return `${opts?.cotaColor ?? 'auto'}:${clampGrosorMuro(opts?.grosorMuro)}:${clampIntensidad(opts?.intensidadTrazos)}`
 }
 
 function useHtmlImage(url: string | null, invert = false, invertOptions?: NightPlanoOptions) {
@@ -452,12 +455,13 @@ function useHtmlImage(url: string | null, invert = false, invertOptions?: NightP
     }
     img.onload = () => {
       if (cancelled) return
-      if (!invert) {
+      const intensificar = clampIntensidad(invertOptions?.intensidadTrazos) > 0
+      if (!invert && !intensificar) {
         setImage(img)
         return
       }
       try {
-        const inverted = invertLoadedImage(img, invertOptions)
+        const inverted = invertLoadedImage(img, invertOptions, invert)
         if (!inverted) {
           setImage(img)
           return
