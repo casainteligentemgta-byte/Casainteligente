@@ -72,6 +72,22 @@ describe('formularios públicos de reclutamiento', () => {
     for (const ruta of ['/operaciones', '/operaciones/proyectos', '/operaciones/rentabilidad']) {
       assert.equal(requiereSesion(ruta), true, ruta)
     }
+    for (const ruta of [
+      '/presupuestos',
+      '/contratos/administracion-delegada',
+      '/evaluaciones',
+      '/evaluaciones/abc/reporte',
+      '/ajustes',
+      '/nexus/builder',
+      '/nexus/clientes',
+      '/nexus/proyectos',
+    ]) {
+      assert.equal(requiereSesion(ruta), true, ruta)
+    }
+    // Lo que ve el cliente por enlace sigue abierto.
+    for (const ruta of ['/nexus/vision/cliente', '/presupuesto/p-49', '/abogado/registro', '/ventas/preview']) {
+      assert.equal(requiereSesion(ruta), false, ruta)
+    }
   })
 
   it('las rutas que les entregan datos no piden sesión (validan el enlace)', () => {
@@ -115,19 +131,64 @@ describe('APIs que piden sesión', () => {
     }
   })
 
-  it('el bot, los cron y lo público no se tocan', () => {
+  it('el bot, los cron y lo que no puede traer sesión siguen abiertos', () => {
     for (const ruta of [
       '/api/webhooks/telegram',
-      '/api/telegram',
       '/api/webhooks/whatsapp',
+      '/api/telegram',
+      '/api/webhook-logs',
+      '/api/telegram/registrar-webhook',
       '/api/cron/weekly-report',
+      '/api/cron/cco-snapshots-diarios',
+      '/api/health',
       '/api/health/supabase',
+      '/api/auth/permisos',
+      '/api/auth/me',
+      '/api/pruebas/bot',
+      '/api/alerts/telegram-exception',
+      '/api/proyectos/tours/worker-callback',
+      '/api/netvision/compartido/abc',
+      '/api/legal/solicitudes',
+      '/api/finanzas/bcv-tasa',
       '/api/talento/examen/submit',
-      '/api/contabilidad/cco/emparejar-soportes',
-      '/api/almacenes-publicos',
     ]) {
       assert.equal(apiRequiereSesion(ruta), false, ruta)
     }
+  })
+
+  it('todo lo demás pide sesión, también lo que todavía no existe', () => {
+    for (const ruta of [
+      '/api/contabilidad/balance-mensual',
+      '/api/contabilidad/cco/emparejar-soportes',
+      '/api/contabilidad/gastos-entidad',
+      '/api/proyectos/clientes',
+      '/api/proyectos/abc/nomina',
+      '/api/proyectos/abc/bot-usuarios',
+      '/api/proyectos/tours/worker-health',
+      '/api/budgets/abc/pdf',
+      '/api/legal/casos',
+      '/api/legal/solicitudes/admin',
+      '/api/legal/solicitudes/abc/aprobar',
+      '/api/flota/conductores',
+      '/api/metron/analisis',
+      '/api/pheme/minuta',
+      '/api/netvision/projects',
+      '/api/nexus/proposals/demo/pdf',
+      '/api/finanzas/bcv-tasas',
+      '/api/finanzas/bcv-tasa/otra',
+      '/api/scan-invoice',
+      '/api/alertas-config',
+      '/api/usuarios-roles',
+      '/api/telegram/whitelist',
+      '/api',
+      '/api/una-ruta-nueva',
+      '/api/almacenes-publicos',
+    ]) {
+      assert.equal(apiRequiereSesion(ruta), true, ruta)
+    }
+    // Las páginas no son asunto de esta regla.
+    assert.equal(apiRequiereSesion('/apiario'), false)
+    assert.equal(apiRequiereSesion('/registro'), false)
   })
 })
 
@@ -211,11 +272,45 @@ describe('APIs de RRHH: cerradas salvo las del candidato', () => {
     assert.equal(apiRequiereSesion('/api/reclutamiento/vacantes'), true)
     assert.equal(apiRequiereSesion('/api/talento/examenes'), true)
   })
+})
 
-  it('cada ruta abierta bajo esos prefijos está en la lista revisada', () => {
-    // Recorre las rutas reales del proyecto: si aparece una abierta que no está aquí,
-    // alguien amplió APIS_DEL_CANDIDATO sin revisar que la ruta valide el enlace.
+describe('toda ruta abierta del proyecto está revisada', () => {
+  it('las rutas reales que responden sin sesión son exactamente estas', () => {
+    // Recorre app/api: si aparece una ruta abierta que no está aquí, alguien amplió las
+    // listas de rutasAcceso.ts sin revisar que la ruta tenga su propio control.
     const revisadas = [
+      // llamadas de fuera, con su propia clave
+      '/api/webhooks/telegram',
+      '/api/webhooks/whatsapp',
+      '/api/webhooks/vercel-deploy',
+      '/api/webhook-logs',
+      '/api/telegram',
+      '/api/telegram/registrar-webhook',
+      '/api/alerts/telegram-exception',
+      '/api/proyectos/tours/worker-callback',
+      '/api/cron/agenda-reminders',
+      '/api/cron/avance-diario-campo',
+      '/api/cron/cco-auditor-diario',
+      '/api/cron/cco-snapshots-diarios',
+      '/api/cron/permisologia-vencimientos',
+      '/api/cron/weekly-report',
+      // sesión y diagnóstico
+      '/api/auth/cambiar-password',
+      '/api/auth/invitar',
+      '/api/auth/me',
+      '/api/auth/permisos',
+      '/api/auth/usuarios-roles',
+      '/api/health',
+      '/api/health/local',
+      '/api/health/supabase',
+      '/api/pruebas/bot',
+      // públicas por diseño
+      '/api/finanzas/bcv-tasa',
+      '/api/legal/solicitudes',
+      '/api/netvision/compartido/[token]',
+      // candidato y trabajador, con su enlace
+      '/api/expediente/marcar-token-usado',
+      '/api/expediente/validar-token',
       '/api/reclutamiento/captacion-completar',
       '/api/reclutamiento/captacion-meta',
       '/api/reclutamiento/firma-resumen',
@@ -243,23 +338,21 @@ describe('APIs de RRHH: cerradas salvo las del candidato', () => {
     ]
     const raiz = join(process.cwd(), 'app', 'api')
     const abiertas: string[] = []
+    let total = 0
     const recorrer = (dir: string) => {
       for (const e of readdirSync(dir, { withFileTypes: true })) {
         const ruta = join(dir, e.name)
         if (e.isDirectory()) recorrer(ruta)
         else if (/^route\.(ts|tsx|js)$/.test(e.name)) {
+          total += 1
           const url = '/api/' + relative(raiz, dir).split(sep).join('/')
-          const bajoPrefijo = ['rrhh', 'talento', 'recruitment', 'reclutamiento', 'registro', 'admin'].some(
-            (p) => url === `/api/${p}` || url.startsWith(`/api/${p}/`),
-          )
           // Los tramos dinámicos ([id]) se prueban con un valor cualquiera.
-          const ejemplo = url.replace(/\[[^\]]+\]/g, 'abc')
-          if (bajoPrefijo && !apiRequiereSesion(ejemplo)) abiertas.push(url)
+          if (!apiRequiereSesion(url.replace(/\[[^\]]+\]/g, 'abc'))) abiertas.push(url)
         }
       }
     }
     recorrer(raiz)
+    assert.ok(total > 250, `se esperaban más de 250 rutas y se encontraron ${total}`)
     assert.deepEqual(abiertas.sort(), [...revisadas].sort())
   })
 })
-

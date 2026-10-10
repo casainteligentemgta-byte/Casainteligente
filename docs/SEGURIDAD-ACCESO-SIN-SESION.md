@@ -42,42 +42,63 @@ lo que tenían.
   comprueban la sesión (`lib/auth/sesionPersonalRuta.ts`). El examen público guarda con el
   cliente del servidor después de validar la invitación.
 
-### Rutas del servidor de RRHH
+### Rutas del servidor (`/api/*`)
 
-Las rutas de `/api/rrhh`, `/api/talento`, `/api/recruitment`, `/api/reclutamiento`,
-`/api/registro` y `/api/admin` trabajan con `service_role`: no pasan por las políticas de
-la base, así que cerrar tablas no las cubre. Varias respondían a cualquiera: listar y
-borrar contratos exprés, crear vacantes, generar enlaces de examen (con su token), leer el
-tablero de reclutamiento, cambiar la configuración de alertas y aplicar la de nómina.
+Muchas rutas trabajan con `service_role`: no pasan por las políticas de la base, así que
+cerrar tablas no las cubre. Varias respondían a cualquiera (contratos exprés, vacantes,
+enlaces de examen, tablero de reclutamiento, configuración de alertas y de nómina, nómina
+y usuarios del bot de cada obra, análisis de presupuestos…).
 
-Ahora **todo lo que cuelga de esos prefijos pide sesión** (`APIS_CON_SESION`), salvo las
-rutas del candidato listadas en `APIS_DEL_CANDIDATO`, que validan su enlace:
+Regla actual (`lib/supabase/rutasAcceso.ts`): **toda ruta `/api/*` pide sesión** y sin
+ella el middleware responde 401. Una ruta nueva nace cerrada. Solo quedan abiertas las
+listadas, porque no pueden traer sesión, y cada una tiene su propio control:
 
-| Para qué | Rutas | Qué valida |
+| Lista | Rutas | Control propio |
 | --- | --- | --- |
-| Postulación | `reclutamiento/vacante`, `captacion-meta`, `captacion-completar`, `registro/finalizar`, `registro/subir-firma` | Identificador de la vacante, token de captación, o expediente + cédula |
-| Entrevista guiada | `recruitment/session`, `session-cv`, `turn`, `events` | Identificador de la sesión de entrevista |
-| Planilla y firma | `reclutamiento/patrono`, `firma-resumen`, `talento/contratos/firmar`, `talento/hoja-legal/generar`, `registro/contrato-laboral/*` | Token del expediente o del contrato |
-| Examen | `talento/examen/*` | Token de la invitación |
+| `APIS_SIN_SESION` | `webhooks/*`, `webhook-logs`, `telegram/registrar-webhook` | Clave de Telegram; dirección protegida por Vercel |
+| | `cron/*` | `CRON_SECRET` |
+| | `alerts/telegram-exception`, `proyectos/tours/worker-callback` | Clave o token del trabajo |
+| | `auth/*` | Comprueban la sesión ellas mismas |
+| | `health/*`, `pruebas/*` | Diagnóstico; el bot de ensayo no existe en producción |
+| | `expediente/*`, `netvision/compartido/*` | Token del enlace |
+| `APIS_SIN_SESION_EXACTAS` | `telegram`, `legal/solicitudes`, `finanzas/bcv-tasa` | Webhook con clave; formulario público; dato público |
+| `APIS_DEL_CANDIDATO` | postulación, entrevista, planilla, firma y examen | Token de invitación, identificador de vacante o sesión, o expediente + cédula |
 
-Una ruta nueva bajo esos prefijos nace cerrada. Para abrir una al candidato hay que
-añadirla a `APIS_DEL_CANDIDATO` **y** a la lista revisada de
+Para abrir una ruta hay que añadirla a una de esas listas **y** a la lista revisada de
 `lib/supabase/rutasAcceso.test.ts`, que recorre las rutas reales del proyecto y falla si
 aparece una abierta sin revisar.
 
 `talento/hoja-legal/generar` tiene dos usos: con `token` (candidato) y con `empleadoId`
 (personal); el segundo comprueba la sesión dentro de la propia ruta.
 
+Cuando el middleware rechaza una llamada deja en el registro del servidor
+`[api] sin sesión, rechazada: <método> <dirección>`: sirve para detectar una ruta que
+debía estar abierta.
+
+### Tareas programadas
+
+Las seis tareas de `vercel.json` exigen `CRON_SECRET` (Vercel la envía sola cuando la
+variable existe). Sin ella rechazan toda llamada y no se ejecutan.
+
+| Tarea | Cuándo (Caracas) | Qué hace | A quién escribe |
+| --- | --- | --- | --- |
+| Fotos diarias del CCO | 00:00 | Guarda una foto de la contabilidad de cada obra | A nadie |
+| Auditor del CCO | 07:30 | Revisa descuadres, duplicados y contratos | Canal de administración, solo si hay hallazgos |
+| Vencimientos de permisología | 08:00 | Permisos que vencen en 30 días o menos | Legal; si no hay chat propio, administración |
+| Informe semanal de talento | Lunes 08:00 | Vacantes, candidatos y contratos de la semana | Administración |
+| Recordatorios de agenda | 09:00 | Fechas de mañana y de hoy | A quien anotó cada fecha |
+| Avance diario de campo | Lun–Vie 17:00 | Pide el avance del día | Ingeniero residente de cada obra |
+
+«Administración» se resuelve en `lib/telegram/chatAdministracion.ts`: `TELEGRAM_CHAT_ID` →
+canal de administración de Configuración → Alertas → chat personal del administrador.
+
 ### Lo que sigue pendiente
 
-- Las tareas programadas (`/api/cron/*`) exigen la clave `CRON_SECRET`, que **no está
-  configurada** en producción: rechazan toda llamada, también la de Vercel. Están cerradas,
-  pero no se ejecutan (informe semanal, avance diario, fotos y auditor del CCO,
-  recordatorios de agenda y vencimientos de permisología). Activarlas es crear esa variable
-  en Vercel y volver a desplegar.
-- Otras rutas con `service_role` fuera de RRHH (`/api/proyectos`, `/api/contabilidad`,
-  `/api/nexus`, `/api/legal`, …) no se han revisado una por una.
-- `/nexus/builder` es una pantalla de personal bajo un prefijo público.
+- `webhooks/vercel-deploy` acepta avisos sin clave mientras no exista
+  `VERCEL_DEPLOY_NOTIFY_SECRET` (solo envía un aviso de despliegue por Telegram).
+- `webhooks/whatsapp` no comprueba la firma de Meta en los mensajes entrantes. Hoy no hay
+  credenciales de WhatsApp configuradas.
+- Las páginas `/nexus` y `/nexus/vision` no piden sesión (sus datos sí, por las rutas).
 
 ### Cómo comprobar
 

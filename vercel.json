@@ -14,7 +14,7 @@
     },
     {
       "path": "/api/cron/cco-auditor-diario",
-      "schedule": "15 4 * * *"
+      "schedule": "30 11 * * *"
     },
     {
       "path": "/api/cron/agenda-reminders",

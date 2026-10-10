@@ -75,6 +75,8 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
 
   if (pathname.startsWith('/api')) {
     if (!user && apiRequiereSesion(pathname)) {
+      // Deja rastro (solo la dirección) para detectar una ruta que debía estar abierta.
+      console.warn(`[api] sin sesión, rechazada: ${request.method} ${pathname}`);
       return NextResponse.json(
         { error: 'Inicia sesión para continuar.', code: 'SIN_SESION' },
         { status: 401 },

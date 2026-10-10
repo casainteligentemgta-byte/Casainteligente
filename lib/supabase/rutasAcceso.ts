@@ -50,10 +50,22 @@ export const RUTAS_PROTEGIDAS = [
   '/personas',
   // Lista de obras y su rentabilidad: la tabla de obras solo responde con sesión.
   '/operaciones',
+  // Presupuestos, contratos, evaluaciones y ajustes: pantallas del personal.
+  '/presupuestos',
+  '/contratos',
+  '/evaluaciones',
+  '/ajustes',
 ];
 
 /** Rutas de personal que cuelgan de un prefijo público: siempre exigen sesión. */
-export const RUTAS_STAFF_BAJO_PREFIJO_PUBLICO = ['/reclutamiento/hoja-de-vida/view'];
+export const RUTAS_STAFF_BAJO_PREFIJO_PUBLICO = [
+  '/reclutamiento/hoja-de-vida/view',
+  // Constructor de presupuestos y directorios de Nexus (el plano compartido con el
+  // cliente, /nexus/vision/cliente, sigue abierto).
+  '/nexus/builder',
+  '/nexus/clientes',
+  '/nexus/proyectos',
+];
 
 const bajo = (lista: readonly string[], pathname: string) =>
   lista.some((p) => pathname === p || pathname.startsWith(`${p}/`));
@@ -71,28 +83,46 @@ export function esRutaProtegida(pathname: string): boolean {
 }
 
 /**
- * APIs del personal. Sus rutas trabajan con service_role (no pasan por las políticas de
- * la base), así que la sesión se exige aquí: sin ella responden 401.
- * El bot de Telegram y los cron no usan estas rutas.
+ * APIs: TODAS piden sesión, salvo las listadas aquí abajo. Muchas rutas trabajan con
+ * service_role (no pasan por las políticas de la base), así que la sesión se exige en el
+ * middleware: sin ella responden 401. Una ruta nueva nace cerrada.
+ *
+ * Quedan abiertas solo las que por diseño no pueden traer sesión, y cada una tiene su
+ * propio control (clave, token o enlace) o no entrega datos:
  */
-export const APIS_CON_SESION = [
-  '/api/almacen',
-  '/api/compras',
-  '/api/procuras',
-  '/api/facturas-canal',
-  '/api/contabilidad/compras',
-  // Quién puede usar el bot: no debe poder leerse ni cambiarse sin sesión.
-  // (El webhook del bot es /api/telegram y /api/webhooks/telegram: esos siguen abiertos.)
-  '/api/telegram/whitelist',
-  // RRHH, contratos, vacantes y configuración: todo lo que cuelga de estos prefijos pide
-  // sesión, salvo las rutas del candidato listadas en APIS_DEL_CANDIDATO. Una ruta nueva
-  // bajo estos prefijos nace cerrada.
-  '/api/rrhh',
-  '/api/talento',
-  '/api/recruitment',
-  '/api/reclutamiento',
-  '/api/registro',
-  '/api/admin',
+export const APIS_SIN_SESION = [
+  // Telegram y WhatsApp llaman aquí; los protege su clave (lib/telegram/claveWebhook.ts).
+  '/api/webhooks',
+  '/api/webhook-logs',
+  '/api/telegram/registrar-webhook',
+  // Tareas programadas de Vercel: exigen CRON_SECRET.
+  '/api/cron',
+  // Aviso de la base de datos (exige ALERTS_WEBHOOK_SECRET) y del servidor de recorridos 3D
+  // (exige el token del trabajo).
+  '/api/alerts/telegram-exception',
+  '/api/proyectos/tours/worker-callback',
+  // Inicio de sesión y permisos: comprueban la sesión ellas mismas y deben responder
+  // también a quien todavía no entró.
+  '/api/auth',
+  // Diagnóstico: solo dicen si el servidor responde.
+  '/api/health',
+  // Bot de ensayo: solo existe en las vistas previas (en producción responde 404).
+  '/api/pruebas',
+  // Expediente del candidato por token.
+  '/api/expediente',
+  // Plano compartido con el cliente por enlace (token).
+  '/api/netvision/compartido',
+];
+
+/** Abiertas solo en esa dirección exacta (lo que cuelga de ellas sí pide sesión). */
+export const APIS_SIN_SESION_EXACTAS = [
+  // Webhook del bot (alias de /api/webhooks/telegram). /api/telegram/whitelist pide sesión.
+  '/api/telegram',
+  // Solicitud de acceso del portal de abogados (formulario público). Aprobar o listar
+  // solicitudes (/api/legal/solicitudes/…) pide sesión.
+  '/api/legal/solicitudes',
+  // Tasa oficial del día: dato público.
+  '/api/finanzas/bcv-tasa',
 ];
 
 /**
@@ -125,7 +155,11 @@ export const APIS_DEL_CANDIDATO = [
 
 /** ¿Esta ruta de API debe rechazar a quien llama sin sesión? */
 export function apiRequiereSesion(pathname: string): boolean {
-  return bajo(APIS_CON_SESION, pathname) && !bajo(APIS_DEL_CANDIDATO, pathname);
+  if (pathname !== '/api' && !pathname.startsWith('/api/')) return false;
+  if (APIS_SIN_SESION_EXACTAS.includes(pathname)) return false;
+  if (bajo(APIS_SIN_SESION, pathname)) return false;
+  if (bajo(APIS_DEL_CANDIDATO, pathname)) return false;
+  return true;
 }
 
 /** ¿Hay que mandar a /login a quien entra a esta ruta sin sesión? */
