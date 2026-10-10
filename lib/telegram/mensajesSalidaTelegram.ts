@@ -6,10 +6,11 @@ const REQUISITO_FOTO = etiquetaRequisitoFoto();
 
 export const MENU_SALIDA_TEXTO =
   '📤 <b>Salida de material</b>\n\n' +
-  'Elige el tipo. Todas descuentan stock al confirmar.\n\n' +
+  'Elige el tipo. Las tres primeras las registra el almacén y descuentan stock al confirmar.\n\n' +
   '🏗 <b>A un obrero en obra</b> — quién recibe, partida y actividad.\n' +
   '🏭 <b>Despacho</b> — a obra u otro almacén (igual que en la app).\n' +
-  '🔄 <b>Traspaso / préstamo</b> — mueve stock entre almacenes.\n\n' +
+  '🔄 <b>Traspaso / préstamo</b> — mueve stock entre almacenes.\n' +
+  '📝 <b>Pedir material al almacén</b> — usted pide y dice para qué; el almacén despacha con foto.\n\n' +
   '<code>/cancelar</code> para abortar.';
 
 export const FLUJO_PASOS_SALIDA_OBRA =

@@ -198,6 +198,13 @@ import {
   manejarFotoRetiroCompra,
 } from '@/lib/telegram/retiroCompraTelegram';
 import {
+  esCallbackRequerimientoSalida,
+  esFlujoRequerimientoSalida,
+  manejarCallbackRequerimientoSalida,
+  manejarFotoRequerimientoSalida,
+  manejarTextoRequerimientoSalida,
+} from '@/lib/telegram/requerimientoSalidaTelegram';
+import {
   esCallbackTraspasoTelegram,
   esFlujoTraspasoTelegram,
   manejarCallbackTraspasoTelegram,
@@ -597,6 +604,18 @@ export async function handleTelegramCallbackQuery(
       }
     }
 
+    if (esCallbackRequerimientoSalida(cq.data)) {
+      const handledRequerimiento = await manejarCallbackRequerimientoSalida(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+        nombre: cq.from?.first_name ?? cq.from?.username ?? null,
+      });
+      if (handledRequerimiento) {
+        return NextResponse.json({ ok: true, callback: 'requerimiento_salida' });
+      }
+    }
+
     if (esCallbackRetiroCompra(cq.data)) {
       const handledRetiro = await manejarCallbackRetiroCompra(admin.client, {
         chatId,
@@ -970,6 +989,12 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
     }
 
     if (texto && !texto.startsWith('/')) {
+      // Va primero: comparte el contexto «salida_obra» con flujos antiguos que leen cualquier texto.
+      const textoRequerimiento = await manejarTextoRequerimientoSalida(supabase, chatId, texto);
+      if (textoRequerimiento) {
+        return NextResponse.json({ ok: true, requerimiento_salida_texto: true });
+      }
+
       const recepcionFisica = await manejarTextoDepositarioRecepcion(supabase, chatId, texto);
       if (recepcionFisica.handled) {
         return NextResponse.json({ ok: true, depositario_recepcion: true });
@@ -1209,6 +1234,44 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
       })();
       if (fotoRetiro) {
         return NextResponse.json({ ok: true, retiro_compra_foto: true });
+      }
+
+      // Foto del material al despachar un requerimiento: misma regla, solo con el chat en el menú.
+      const fotoRequerimiento = await (async () => {
+        if (estadoFoto.contexto !== 'menu') return false;
+        const fileId = msg.photo?.[msg.photo.length - 1]?.file_id;
+        if (!fileId) return false;
+        try {
+          const { requerimientoEsperandoFoto } = await import('@/lib/almacen/requerimientoSalida');
+          if (!(await requerimientoEsperandoFoto(supabase, chatId))) return false;
+          const { downloadTelegramFile, mimeFromTelegramPath } = await import('@/lib/telegram/botApi');
+          const { buffer, filePath } = await downloadTelegramFile(fileId);
+          const ext = filePath.split('.').pop() ?? 'jpg';
+          return await manejarFotoRequerimientoSalida({
+            supabase,
+            chatId,
+            buffer,
+            mimeType: mimeFromTelegramPath(filePath),
+            ext,
+          });
+        } catch (err) {
+          console.error('[telegram requerimiento salida foto]', err);
+          await sendTelegramMessage(chatId, '❌ No se pudo guardar la foto.', { parse_mode: 'HTML' });
+          return true;
+        }
+      })();
+      if (fotoRequerimiento) {
+        return NextResponse.json({ ok: true, requerimiento_salida_foto: true });
+      }
+
+      // Quien pide material no envía foto: la toma el almacén al despachar.
+      if (esFlujoRequerimientoSalida(estadoFoto)) {
+        await sendTelegramMessage(
+          chatId,
+          'Este pedido no lleva foto: la toma el almacén al entregar. Siga con los botones o use <code>/cancelar</code>.',
+          { parse_mode: 'HTML' },
+        );
+        return NextResponse.json({ ok: true, requerimiento_salida_foto_ignorada: true });
       }
 
       const fotoFacturaManual = await (async () => {

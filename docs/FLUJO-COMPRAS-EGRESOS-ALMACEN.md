@@ -71,6 +71,32 @@ Menú unificado (misma idea que `/ingreso`). Tres tipos; todos descuentan stock 
 | **Despacho a obra u otro almacén** | paridad con `/almacen/despacho` (capítulo, partida, destino) | `registrarDespachoWeb` |
 | **Traspaso / préstamo** | origen → destino → material → cantidad → nota → foto | `transferencias_inventario` (foto en `fotos`, migración **340**) |
 
+#### Pedir material al almacén (migración **343**)
+
+Cuarta opción de `/salida`, para quien necesita el material y no es quien lo custodia.
+
+1. Quien pide elige **obra**, **almacén**, **material** con stock y **cantidad**.
+2. Indica el **motivo de la salida** y escribe para qué:
+
+   | Motivo | A dónde va el stock | Movimiento |
+   |---|---|---|
+   | Uso en obra | Ubicación de la obra | `salida_obra` + `inv_egresos_campo` |
+   | Colocación en obra | Ubicación de la obra | `salida_obra` + `inv_egresos_campo` |
+   | Traspaso a otra obra | Ubicación de la otra obra | `transferencia` |
+   | Devolución a proveedor | Ubicación virtual `DEVOLUCIONES` | `retorno_garantia` |
+   | Deterioro o pérdida | Ubicación virtual `BAJAS` | `retorno_merma` |
+
+3. El almacén de la obra recibe el pedido con **Despachar** y **Rechazar** (con motivo).
+4. Quien pulsa **Despachar** queda a cargo y envía la **foto** del material. Con la foto se
+   mueve el stock y se avisa a quien pidió.
+
+- Quien pide no puede despachar su propio pedido.
+- El stock no se aparta al pedir: se descuenta al despachar. Si ya no alcanza, el despacho
+  falla y el pedido sigue abierto para soltarlo o rechazarlo.
+- Tabla `inv_requerimientos_salida`. Código: `lib/almacen/requerimientoSalida.ts` y
+  `lib/telegram/requerimientoSalidaTelegram.ts`.
+- Todavía no hay pantalla en la web para ver los pedidos.
+
 #### Foto obligatoria
 
 Todo movimiento registrado por el bot lleva foto: recepción en almacén (`/ingreso`), las tres
@@ -146,6 +172,7 @@ salidas (`/salida`) y la factura que carga el comprador (`/facturas` manual). El
 | 206 | Trazabilidad egresos campo (`inv_egresos_campo`) |
 | 340 | Foto en traspasos (`transferencias_inventario.fotos`) |
 | 341 | Retiro de mercancía comprada (`ci_compras_retiros`) |
+| 343 | Requerimientos de salida (`inv_requerimientos_salida`) y ubicaciones virtuales `DEVOLUCIONES` / `BAJAS` |
 
 ---
 
