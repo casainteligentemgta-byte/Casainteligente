@@ -16,6 +16,7 @@ import {
   type RetiroCompra,
 } from '@/lib/compras/retiroCompra';
 import { esUuidProcura } from '@/lib/compras/telegramMetadata';
+import { obtenerUsuarioSistemaTelegram } from '@/lib/compras/usuariosSistemaTelegram';
 import { resolverNombreMostrarTelegram } from '@/lib/procuras/resolverNombreTelegramObra';
 import { listarNominaProyecto } from '@/lib/proyectos/proyectoNomina';
 import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi';
@@ -122,7 +123,16 @@ async function destinatariosRetiro(
 
   if (retiro.solicitado_por_chat_id != null) {
     const chat = String(retiro.solicitado_por_chat_id);
-    if (!out.has(chat)) out.set(chat, { chatId: chat, nombre: 'Comprador', rol: 'Comprador' });
+    if (!out.has(chat)) {
+      // Con su nombre, para que el aviso no diga «Corresponde a: Comprador · Comprador».
+      let nombre = 'Comprador';
+      try {
+        nombre = (await obtenerUsuarioSistemaTelegram(supabase, chat))?.nombre?.trim() || nombre;
+      } catch {
+        /* sin nombre: se queda el rol */
+      }
+      out.set(chat, { chatId: chat, nombre, rol: 'Comprador' });
+    }
   }
 
   return Array.from(out.values());
