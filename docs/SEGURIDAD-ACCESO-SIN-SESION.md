@@ -42,13 +42,42 @@ lo que tenían.
   comprueban la sesión (`lib/auth/sesionPersonalRuta.ts`). El examen público guarda con el
   cliente del servidor después de validar la invitación.
 
+### Rutas del servidor de RRHH
+
+Las rutas de `/api/rrhh`, `/api/talento`, `/api/recruitment`, `/api/reclutamiento`,
+`/api/registro` y `/api/admin` trabajan con `service_role`: no pasan por las políticas de
+la base, así que cerrar tablas no las cubre. Varias respondían a cualquiera: listar y
+borrar contratos exprés, crear vacantes, generar enlaces de examen (con su token), leer el
+tablero de reclutamiento, cambiar la configuración de alertas y aplicar la de nómina.
+
+Ahora **todo lo que cuelga de esos prefijos pide sesión** (`APIS_CON_SESION`), salvo las
+rutas del candidato listadas en `APIS_DEL_CANDIDATO`, que validan su enlace:
+
+| Para qué | Rutas | Qué valida |
+| --- | --- | --- |
+| Postulación | `reclutamiento/vacante`, `captacion-meta`, `captacion-completar`, `registro/finalizar`, `registro/subir-firma` | Identificador de la vacante, token de captación, o expediente + cédula |
+| Entrevista guiada | `recruitment/session`, `session-cv`, `turn`, `events` | Identificador de la sesión de entrevista |
+| Planilla y firma | `reclutamiento/patrono`, `firma-resumen`, `talento/contratos/firmar`, `talento/hoja-legal/generar`, `registro/contrato-laboral/*` | Token del expediente o del contrato |
+| Examen | `talento/examen/*` | Token de la invitación |
+
+Una ruta nueva bajo esos prefijos nace cerrada. Para abrir una al candidato hay que
+añadirla a `APIS_DEL_CANDIDATO` **y** a la lista revisada de
+`lib/supabase/rutasAcceso.test.ts`, que recorre las rutas reales del proyecto y falla si
+aparece una abierta sin revisar.
+
+`talento/hoja-legal/generar` tiene dos usos: con `token` (candidato) y con `empleadoId`
+(personal); el segundo comprueba la sesión dentro de la propia ruta.
+
 ### Lo que sigue pendiente
 
-Varias rutas del servidor de RRHH (`/api/talento/*`, `/api/recruitment/*`, `/api/rrhh/*`,
-`/api/admin/*`) trabajan con `service_role` y no comprueban sesión: no dependen de las
-políticas de la base, así que cerrar tablas no las cubre. Hay que revisarlas una por una
-(algunas las usan páginas con enlace del candidato) y exigir sesión en las de personal,
-como se hizo con almacén y compras en `APIS_CON_SESION`.
+- Las tareas programadas (`/api/cron/*`) exigen la clave `CRON_SECRET`, que **no está
+  configurada** en producción: rechazan toda llamada, también la de Vercel. Están cerradas,
+  pero no se ejecutan (informe semanal, avance diario, fotos y auditor del CCO,
+  recordatorios de agenda y vencimientos de permisología). Activarlas es crear esa variable
+  en Vercel y volver a desplegar.
+- Otras rutas con `service_role` fuera de RRHH (`/api/proyectos`, `/api/contabilidad`,
+  `/api/nexus`, `/api/legal`, …) no se han revisado una por una.
+- `/nexus/builder` es una pantalla de personal bajo un prefijo público.
 
 ### Cómo comprobar
 
