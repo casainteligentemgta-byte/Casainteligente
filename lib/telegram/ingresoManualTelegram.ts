@@ -52,6 +52,11 @@ import {
 } from '@/lib/telegram/tecladoSoporteFotoTelegram';
 import type { TelegramEstado } from '@/lib/telegram/estados';
 import { getTelegramEstado, setTelegramContexto, upsertTelegramEstado } from '@/lib/telegram/estados';
+import {
+  MENSAJE_PEDIR_OBSERVACIONES,
+  observacionDesdeTexto,
+  tecladoSinObservaciones,
+} from '@/lib/telegram/observacionRapida';
 import { enviarPickerProyectosTelegram, nombreProyectoTelegram } from '@/lib/telegram/proyectoPicker';
 
 export const FLUJO_INGRESO_MANUAL = 'ingreso_manual';
@@ -1308,6 +1313,14 @@ function resumenLineas(lineas: LineaIngresoManualDraft[]): string {
     .join('\n');
 }
 
+/** Pide la observación con un botón para seguir sin escribir nada. */
+async function pedirObservaciones(chatId: string, encabezado = ''): Promise<void> {
+  await sendTelegramMessage(chatId, `${encabezado}${MENSAJE_PEDIR_OBSERVACIONES}`, {
+    parse_mode: 'HTML',
+    reply_markup: tecladoSinObservaciones(`${PREFIX}obs:skip`),
+  });
+}
+
 async function enviarConfirmacion(
   supabase: SupabaseClient,
   chatId: string,
@@ -1771,12 +1784,21 @@ export async function manejarCallbackIngresoManual(
       await preguntarFoto(supabase, params.chatId);
     } else {
       await patchMeta(supabase, params.chatId, estado, { paso: 'observacion' });
-      await sendTelegramMessage(
-        params.chatId,
-        '📝 Escriba <b>observaciones</b> (opcional; envíe <code>-</code> para omitir):',
-        { parse_mode: 'HTML' },
-      );
+      await pedirObservaciones(params.chatId);
     }
+    return true;
+  }
+
+  if (data === 'obs:skip') {
+    await answerCallbackQuery(params.callbackId);
+    // Botón repetido o de un mensaje viejo: la observación ya se resolvió.
+    if (m.paso !== 'observacion') return true;
+    await patchMeta(supabase, params.chatId, estado, { paso: 'confirmar', observaciones: '' });
+    await enviarConfirmacion(
+      supabase,
+      params.chatId,
+      await getTelegramEstado(supabase, params.chatId),
+    );
     return true;
   }
 
@@ -1811,10 +1833,16 @@ export async function manejarCallbackIngresoManual(
     }
     await answerCallbackQuery(params.callbackId);
     await patchMeta(supabase, params.chatId, estado, { paso: 'observacion' });
-    const obsPrompt = flujoTelegramCompletoEnBot(m.flujo)
-      ? '9️⃣ 📝 Escriba <b>observaciones</b> (opcional; envíe <code>-</code> para omitir):'
-      : '📝 Escriba <b>observaciones</b> (opcional; envíe <code>-</code> para omitir):';
-    await sendTelegramMessage(params.chatId, obsPrompt, { parse_mode: 'HTML' });
+    // Si alguna foto llegó con texto, ese texto ya quedó como observación.
+    if (m.observaciones?.trim()) {
+      await enviarConfirmacion(
+        supabase,
+        params.chatId,
+        await getTelegramEstado(supabase, params.chatId),
+      );
+      return true;
+    }
+    await pedirObservaciones(params.chatId, flujoTelegramCompletoEnBot(m.flujo) ? '9️⃣ ' : '');
     return true;
   }
 
@@ -2099,7 +2127,7 @@ export async function manejarTextoIngresoManual(
   }
 
   if (paso === 'observacion') {
-    const obs = trimmed === '-' ? '' : trimmed;
+    const obs = observacionDesdeTexto(trimmed);
     await patchMeta(supabase, chatId, estado, {
       paso: 'confirmar',
       observaciones: obs,

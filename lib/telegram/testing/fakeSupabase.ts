@@ -1,7 +1,7 @@
 /**
  * Doble mínimo de Supabase para pruebas de flujos del bot (node:test).
  * Guarda filas en memoria y entiende solo lo que usan los flujos probados:
- * select / insert / update / upsert con filtros eq, in, is, not, order y limit;
+ * select / insert / update / upsert con filtros eq, gt, in, is, not, order y limit;
  * y el bucket de Storage (upload / getPublicUrl).
  *
  * No es un emulador de PostgREST: si un flujo nuevo usa algo que falta aquí,
@@ -25,6 +25,10 @@ export type FakeSupabase = {
 type FakeBucket = {
   upload: (ruta: string, cuerpo: unknown, opts?: unknown) => Promise<Resultado>;
   getPublicUrl: (ruta: string) => { data: { publicUrl: string } };
+  createSignedUrls: (
+    rutas: string[],
+    segundos: number,
+  ) => Promise<{ data: Array<{ signedUrl: string }> | null; error: { message: string } | null }>;
 };
 
 export type OpcionesFakeSupabase = {
@@ -78,6 +82,10 @@ class Consulta implements PromiseLike<Resultado> {
   }
   eq(col: string, v: unknown): this {
     this.filtros.push((f) => String(f[col] ?? '') === String(v ?? ''));
+    return this;
+  }
+  gt(col: string, v: number): this {
+    this.filtros.push((f) => Number(f[col]) > v);
     return this;
   }
   in(col: string, vs: unknown[]): this {
@@ -208,6 +216,10 @@ export function crearFakeSupabase(
           return { data: { path: ruta }, error: null };
         },
         getPublicUrl: (ruta) => ({ data: { publicUrl: `https://storage.test/${bucket}/${ruta}` } }),
+        createSignedUrls: async (rutas) => ({
+          data: rutas.map((ruta) => ({ signedUrl: `https://storage.test/firmado/${bucket}/${ruta}` })),
+          error: null,
+        }),
       }),
     },
     rpc: async (nombre) => ({

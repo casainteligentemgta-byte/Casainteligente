@@ -270,7 +270,48 @@ async function intentarCompletarCompraFacturaExistente(
 /**
  * Ingreso a almacén desde factura Telegram: aprueba cuarentena pendiente o fallback legacy.
  */
+/**
+ * Ingreso a almacén de una compra confirmada (bot y web). Si sale bien, cierra el retiro
+ * de mercancía de esa factura y avisa a quien la traía.
+ */
 export async function ingresoAlmacenDesdePendienteCanal(
+  supabase: SupabaseClient,
+  pendingId: string,
+  opts?: OpcionesIngresoAlmacenCanal,
+): Promise<ResultadoIngresoAlmacenCanal> {
+  const resultado = await registrarIngresoAlmacenDesdePendienteCanal(supabase, pendingId, opts);
+  if (resultado.success) {
+    await cerrarRetiroDeLaFactura(supabase, pendingId, opts?.purchaseInvoiceId);
+  }
+  return resultado;
+}
+
+/** `pendingId` puede ser la factura del canal o la compra contable; ambas llevan a la factura. */
+async function cerrarRetiroDeLaFactura(
+  supabase: SupabaseClient,
+  pendingId: string,
+  purchaseInvoiceIdConocido?: string | null,
+): Promise<void> {
+  try {
+    let purchaseInvoiceId = purchaseInvoiceIdConocido?.trim() || '';
+    for (const tabla of ['ci_facturas_canal_pendientes', 'contabilidad_compras']) {
+      if (purchaseInvoiceId) break;
+      const { data } = await supabase
+        .from(tabla)
+        .select('purchase_invoice_id')
+        .eq('id', pendingId)
+        .maybeSingle();
+      purchaseInvoiceId = String(data?.purchase_invoice_id ?? '').trim();
+    }
+    if (!purchaseInvoiceId) return;
+    const { cerrarRetiroCompraTrasIngreso } = await import('@/lib/telegram/retiroCompraTelegram');
+    await cerrarRetiroCompraTrasIngreso(supabase, purchaseInvoiceId);
+  } catch (e) {
+    console.warn('[ingresoAlmacen] cerrar retiro:', e);
+  }
+}
+
+async function registrarIngresoAlmacenDesdePendienteCanal(
   supabase: SupabaseClient,
   pendingId: string,
   opts?: OpcionesIngresoAlmacenCanal,
