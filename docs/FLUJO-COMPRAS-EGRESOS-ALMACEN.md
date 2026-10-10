@@ -55,7 +55,7 @@ Tramo entre «el comprador cargó la factura» y «el almacén la recibió».
 - Tabla `ci_compras_retiros` (una fila por factura). Código: `lib/compras/retiroCompra.ts` y
   `lib/telegram/retiroCompraTelegram.ts`.
 - **Sin la migración 341 no se crean retiros** y compras e ingresos funcionan igual que antes.
-- Todavía no hay pantalla en la web para ver los retiros.
+- En la web: **Almacén → Retiros** (`/almacen/retiros`), con estado, quién retira, horas y foto.
 
 ---
 

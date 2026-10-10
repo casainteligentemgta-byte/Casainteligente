@@ -25,6 +25,10 @@ export type FakeSupabase = {
 type FakeBucket = {
   upload: (ruta: string, cuerpo: unknown, opts?: unknown) => Promise<Resultado>;
   getPublicUrl: (ruta: string) => { data: { publicUrl: string } };
+  createSignedUrls: (
+    rutas: string[],
+    segundos: number,
+  ) => Promise<{ data: Array<{ signedUrl: string }> | null; error: { message: string } | null }>;
 };
 
 export type OpcionesFakeSupabase = {
@@ -208,6 +212,10 @@ export function crearFakeSupabase(
           return { data: { path: ruta }, error: null };
         },
         getPublicUrl: (ruta) => ({ data: { publicUrl: `https://storage.test/${bucket}/${ruta}` } }),
+        createSignedUrls: async (rutas) => ({
+          data: rutas.map((ruta) => ({ signedUrl: `https://storage.test/firmado/${bucket}/${ruta}` })),
+          error: null,
+        }),
       }),
     },
     rpc: async (nombre) => ({
