@@ -266,7 +266,14 @@ export async function reiniciarObraDeEnsayo(
   const documentos: string[] = CHATS.flatMap((chat) => [
     `facturas-comprador-manual/${chat}`,
     `recepciones-campo/telegram-${chat}`,
+    `recepciones-campo/telegram-factura-${chat}`,
   ]);
+  // Restos de las primeras corridas (facturas de ensayo ya borradas, quedó su foto de relleno).
+  documentos.push(
+    '4b1ad24f-1bb5-49f3-a5f6-9edbed8f0e43',
+    '9070e569-c684-46bc-ad8b-8dfdf15b1ded',
+    '6071a7b2-81a1-4892-9185-86b8638aead8',
+  );
   const sueltos: string[] = [];
   const porObra = async (tabla: string) =>
     anotar(tabla, (await supabase.from(tabla).delete().in('proyecto_id', [...OBRAS])).error);
@@ -301,6 +308,8 @@ export async function reiniciarObraDeEnsayo(
     .in('proyecto_id', [...OBRAS]);
   anotar('purchase_invoices (lectura)', eFacturas);
   const facturaIds = ((facturas ?? []) as Array<{ id: string }>).map((f) => f.id);
+  // La foto de cada factura vive en una carpeta con el id de la factura.
+  documentos.push(...facturaIds);
   if (facturaIds.length) {
     anotar(
       'quality_inspections',
