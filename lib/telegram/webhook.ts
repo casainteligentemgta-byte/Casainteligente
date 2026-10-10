@@ -1345,8 +1345,8 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
         if (!photos?.length) return false;
         const estadoEgreso = await getTelegramEstado(supabase, chatId);
         if (!esFlujoEgresoV2(estadoEgreso)) return false;
-        const paso = (estadoEgreso.metadata as { paso?: string })?.paso;
-        if (paso !== 'foto' && paso !== 'observacion') return false;
+        // La salida a obrero acepta la foto en cualquier paso, una vez elegida la obra.
+        if (!estadoEgreso.proyecto_id) return false;
         const fileId = photos[photos.length - 1]?.file_id;
         if (!fileId) return false;
         try {
