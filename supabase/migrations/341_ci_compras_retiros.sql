@@ -45,11 +45,13 @@ comment on column public.ci_compras_retiros.solicitado_por_chat_id is
 comment on column public.ci_compras_retiros.fotos is
   'Array JSON [{storage_path}] de fotos de la mercancía al retirarla (bucket procurement-documents).';
 
--- Solo el servidor (service role) escribe. La app con sesión puede consultar.
+-- Solo el servidor (service role) escribe. La app con sesión puede consultar; sin sesión, nada.
 alter table public.ci_compras_retiros enable row level security;
 
 drop policy if exists "ci_compras_retiros_select_auth" on public.ci_compras_retiros;
 create policy "ci_compras_retiros_select_auth" on public.ci_compras_retiros
   for select to authenticated using (true);
+
+revoke all on public.ci_compras_retiros from anon;
 
 notify pgrst, 'reload schema';
