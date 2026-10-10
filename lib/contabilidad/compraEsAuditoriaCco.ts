@@ -286,3 +286,24 @@ export function esCompraSoloAuditoriaCco(input: {
 
   return false;
 }
+
+/**
+ * Regla única de los KPIs oficiales del CCO: ¿esta fila de contabilidad_compras es
+ * bitácora del programa (no un gasto)? La usan el tablero y la rendición de
+ * honorarios, para que ambos cuenten exactamente los mismos gastos.
+ */
+export function esFilaAuditoriaKpiCco(r: {
+  supplier_name?: unknown;
+  notas?: unknown;
+  invoice_number?: unknown;
+}): boolean {
+  const notas = r.notas != null ? String(r.notas) : '';
+  const invoice = r.invoice_number != null ? String(r.invoice_number) : '';
+  if (esDescripcionAuditoriaCco(notas)) return true;
+  return esCompraSoloAuditoriaCco({
+    supplier_name: r.supplier_name != null ? String(r.supplier_name) : null,
+    notas,
+    invoice_number: invoice,
+    lineas: notas ? [{ descripcion: notas }] : [],
+  });
+}
