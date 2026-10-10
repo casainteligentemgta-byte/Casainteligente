@@ -153,7 +153,7 @@ Fuente única menú: `lib/telegram/botCommands.ts`.
 
 Los **4 flujos guiados** (manual factura, OCR automático, nota, sin nota) comparten en Telegram:
 
-1. Obra → 2. Almacén → 3. Proveedor (lista o nombre) → 4. Nº doc / foto IA → 5. Artículos + categoría → 6. Cantidad → 7. ¿Más artículos? → 8. Foto opcional → 9. Observaciones → **Registrar ingreso** (stock + **contabilidad provisional**).
+1. Obra → 2. Almacén → 3. Proveedor (lista o nombre) → 4. Nº doc / foto IA → 5. Artículos + categoría → 6. Cantidad → 7. ¿Más artículos? → 8. Foto obligatoria → 9. Observaciones → **Registrar ingreso** (stock + **contabilidad provisional**).
 
 | Opción / atajo | RPC / tipo FRM | Efecto |
 |----------------|----------------|--------|
@@ -309,12 +309,14 @@ Cada `ci_entidades` tiene catálogo en `ci_catalogos_entidad` con prefijo SAP (`
 - FK Telegram: `pending_factura_id` → solo `ci_facturas_canal_pendientes`; contabilidad usa `cc:{id}` en metadata
 - **Entidad:** `ci_proyectos.entidad_id` al elegir obra; catálogo aislado por `global_inventory.entidad_id` (241)
 
-### 9. Salidas Telegram (`/salida`) — pendiente unificación
+### 9. Salidas Telegram (`/salida`) — menú unificado
+Textos y pasos: `lib/telegram/mensajesSalidaTelegram.ts`. El menú `/salida` elige el tipo; cada backend sigue igual.
+
 | Menú | Archivo | Persistencia |
 |------|---------|--------------|
-| Salida a obra | `salidaEgresoFlujo.ts` | `transferencias_inventario` + `inv_egresos_campo` |
-| Salida desde almacén | `salidaObraTelegram.ts` | `registrarDespachoWeb` (paridad `/almacen/despacho`) |
-| Préstamo/traspaso | `traspasoFlujoTelegram.ts` | `transferencias_inventario` |
+| A un obrero en obra | `salidaEgresoFlujo.ts` | `transferencias_inventario` + `inv_egresos_campo` |
+| Despacho a obra u otro almacén | `salidaObraTelegram.ts` | `registrarDespachoWeb` (paridad `/almacen/despacho`) |
+| Traspaso / préstamo | `traspasoFlujoTelegram.ts` | `transferencias_inventario` |
 
 ---
 

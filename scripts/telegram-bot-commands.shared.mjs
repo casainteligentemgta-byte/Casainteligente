@@ -12,7 +12,7 @@ export const TELEGRAM_BOT_COMMANDS = [
   { command: 'ayuda', description: 'Lista completa de comandos' },
   ...TELEGRAM_COMANDOS_COMPRAS_ABASTECIMIENTO,
   { command: 'ingreso', description: 'Menú ingreso: factura, nota, sin nota, precargadas' },
-  { command: 'salida', description: 'Menú salidas: obra, almacén o préstamo/traspaso' },
+  { command: 'salida', description: 'Menú salida: obrero en obra, despacho o traspaso' },
   { command: 'bitacora', description: 'Bitácora de obra por nota de voz' },
   { command: 'agua', description: 'Registro agua: camión, PPM y litros' },
   { command: 'stock', description: 'Stock guiado o por obra/material' },

@@ -194,7 +194,9 @@ import {
 } from '@/lib/telegram/depositarioRecepcion';
 import {
   esCallbackTraspasoTelegram,
+  esFlujoTraspasoTelegram,
   manejarCallbackTraspasoTelegram,
+  manejarFotoTraspasoTelegram,
   manejarTextoTraspasoTelegram,
 } from '@/lib/telegram/traspasoFlujoTelegram';
 import {
@@ -1324,6 +1326,36 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
       })();
       if (fotoSalidaEgreso) {
         return NextResponse.json({ ok: true, salida_egreso_foto: true });
+      }
+
+      const fotoTraspaso = await (async () => {
+        const photos = msg.photo;
+        if (!photos?.length) return false;
+        const estadoTraspaso = await getTelegramEstado(supabase, chatId);
+        if (!esFlujoTraspasoTelegram(estadoTraspaso)) return false;
+        if ((estadoTraspaso.metadata as { paso?: string })?.paso !== 'foto') return false;
+        const fileId = photos[photos.length - 1]?.file_id;
+        if (!fileId) return false;
+        try {
+          const { downloadTelegramFile, mimeFromTelegramPath } = await import('@/lib/telegram/botApi');
+          const { buffer, filePath } = await downloadTelegramFile(fileId);
+          const ext = filePath.split('.').pop() ?? 'jpg';
+          await manejarFotoTraspasoTelegram({
+            supabase,
+            chatId,
+            buffer,
+            mimeType: mimeFromTelegramPath(filePath),
+            ext,
+          });
+          return true;
+        } catch (err) {
+          console.error('[telegram traspaso foto]', err);
+          await sendTelegramMessage(chatId, '❌ No se pudo guardar la foto.', { parse_mode: 'HTML' });
+          return true;
+        }
+      })();
+      if (fotoTraspaso) {
+        return NextResponse.json({ ok: true, traspaso_foto: true });
       }
 
       const fotoEntradaSalida = await manejarFotoEntradaSalidaTelegram({

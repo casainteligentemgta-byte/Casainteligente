@@ -1,4 +1,5 @@
 import { answerCallbackQuery } from '@/lib/telegram/botApi';
+import { fotoMovimientoObligatoria } from '@/lib/telegram/fotoObligatoria';
 
 export const SUFIJO_CALLBACK_FOTO_CAMARA = 'foto:camera';
 
@@ -8,17 +9,18 @@ export const TEXTO_AYUDA_CAMARA_TELEGRAM =
 export const ALERTA_CAMARA_TELEGRAM =
   'Toca 📎 Adjuntar abajo → Cámara o Galería. Envía la foto al chat y pulsa Listo con fotos.';
 
-/** Teclado inline: cámara (ayuda) + listo / omitir. */
+/** Teclado inline: cámara (ayuda) + listo. «Omitir» solo aparece si la foto es opcional. */
 export function tecladoSoporteFotosTelegram(prefix: string): {
   inline_keyboard: Array<Array<{ text: string; callback_data: string }>>;
 } {
+  const acciones = [{ text: '✅ Listo con fotos', callback_data: `${prefix}foto:done` }];
+  if (!fotoMovimientoObligatoria()) {
+    acciones.push({ text: '⏭ Omitir fotos', callback_data: `${prefix}foto:skip` });
+  }
   return {
     inline_keyboard: [
       [{ text: '📷 Cámara / adjuntar', callback_data: `${prefix}${SUFIJO_CALLBACK_FOTO_CAMARA}` }],
-      [
-        { text: '✅ Listo con fotos', callback_data: `${prefix}foto:done` },
-        { text: '⏭ Omitir fotos', callback_data: `${prefix}foto:skip` },
-      ],
+      acciones,
     ],
   };
 }

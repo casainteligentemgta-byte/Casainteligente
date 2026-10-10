@@ -16,13 +16,19 @@ import { listarStockUbicacionEgreso } from '@/lib/almacen/registrarEgresoCampo';
 import { registrarDespachoWeb } from '@/lib/almacen/registrarDespachoWeb';
 import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi';
 import type { TelegramEstado } from '@/lib/telegram/estados';
+import {
+  ALERTA_FOTO_OBLIGATORIA,
+  MENSAJE_FOTO_OBLIGATORIA,
+  fotoMovimientoObligatoria,
+} from '@/lib/telegram/fotoObligatoria';
 import { getTelegramEstado, setTelegramContexto } from '@/lib/telegram/estados';
+import { MENSAJE_INICIO_SALIDA_DESPACHO } from '@/lib/telegram/mensajesSalidaTelegram';
 import {
   enviarPickerProyectosTelegram,
   nombreProyectoTelegram,
 } from '@/lib/telegram/proyectoPicker';
 
-/** Flujo unificado: /salidaalmacen (alias /salidaobra, /despacho). */
+/** Despacho desde /salida → «Despacho a obra u otro almacén» (paridad /almacen/despacho). */
 export const FLUJO_SALIDA_ALMACEN = 'salida_almacen';
 export const FLUJO_SALIDA_OBRA = FLUJO_SALIDA_ALMACEN;
 
@@ -136,17 +142,6 @@ async function patchMeta(
   });
 }
 
-const MENSAJE_INICIO =
-  '📤 <b>Salida desde almacén</b> (<code>/salidaalmacen</code>)\n\n' +
-  '1️⃣ Obra y <b>almacén de origen</b>\n' +
-  '2️⃣ <b>Obrero</b> que recibe (nómina o nombre + cédula)\n' +
-  '3️⃣ Destino: <b>obra</b> (capítulo → partida o actividad) u <b>almacén de la entidad</b>\n' +
-  '4️⃣ Observaciones opcionales → materiales del <b>stock</b> y cantidades\n' +
-  '5️⃣ Foto opcional del material saliente\n' +
-  '6️⃣ Confirmar — descuenta stock\n\n' +
-  '<i>No configura alarmas de despacho.</i>\n' +
-  '<code>/cancelar</code> para abortar.';
-
 export async function manejarComandoSalidaObraTelegram(
   supabase: SupabaseClient,
   chatId: string,
@@ -156,7 +151,7 @@ export async function manejarComandoSalidaObraTelegram(
     proyecto_id: null,
     metadata: { flujo: FLUJO_SALIDA_ALMACEN, paso: 'almacen', lineas: [] },
   });
-  await sendTelegramMessage(chatId, MENSAJE_INICIO, { parse_mode: 'HTML' });
+  await sendTelegramMessage(chatId, MENSAJE_INICIO_SALIDA_DESPACHO, { parse_mode: 'HTML' });
   await enviarPickerProyectosTelegram(supabase, chatId, 'salida_almacen');
 }
 
@@ -443,7 +438,7 @@ async function enviarPickerMaterialStock(
   if (!stock.length) {
     await sendTelegramMessage(
       chatId,
-      '⚠️ No hay stock en este almacén. Reinicie con <code>/salidaalmacen</code>.',
+      '⚠️ No hay stock en este almacén. Reinicie con <code>/salida</code>.',
       { parse_mode: 'HTML' },
     );
     return;
@@ -585,8 +580,16 @@ async function preguntarMasLineas(supabase: SupabaseClient, chatId: string, nLin
   );
 }
 
-async function preguntarFotoOpcional(supabase: SupabaseClient, chatId: string): Promise<void> {
+async function preguntarFoto(supabase: SupabaseClient, chatId: string): Promise<void> {
   await patchMeta(supabase, chatId, await getTelegramEstado(supabase, chatId), { paso: 'foto' });
+  if (fotoMovimientoObligatoria()) {
+    await sendTelegramMessage(
+      chatId,
+      '📷 Envíe la <b>foto del material saliente</b> (obligatoria).',
+      { parse_mode: 'HTML' },
+    );
+    return;
+  }
   await sendTelegramMessage(
     chatId,
     '📷 <b>Foto del material saliente</b> (opcional)\nEnvía una imagen o omite:',
@@ -950,11 +953,16 @@ export async function manejarCallbackSalidaObraTelegram(
       await sendTelegramMessage(params.chatId, '⚠️ Agregue al menos un material.', { parse_mode: 'HTML' });
       return true;
     }
-    await preguntarFotoOpcional(supabase, params.chatId);
+    await preguntarFoto(supabase, params.chatId);
     return true;
   }
 
   if (data === 'foto:skip') {
+    // Botón de un mensaje anterior al cambio de regla: ya no se puede omitir.
+    if (fotoMovimientoObligatoria()) {
+      await answerCallbackQuery(params.callbackId, ALERTA_FOTO_OBLIGATORIA, true);
+      return true;
+    }
     await answerCallbackQuery(params.callbackId);
     await enviarConfirmacion(supabase, params.chatId, await getTelegramEstado(supabase, params.chatId));
     return true;
@@ -1023,6 +1031,11 @@ export async function manejarCallbackSalidaObraTelegram(
 
     if (!lineas.length || !fm.origen_ubicacion_id || !fm.obrero_nombre?.trim()) {
       await sendTelegramMessage(params.chatId, '❌ Salida incompleta.', { parse_mode: 'HTML' });
+      return true;
+    }
+    if (fotoMovimientoObligatoria() && !fm.foto_storage_path?.trim()) {
+      await patchMeta(supabase, params.chatId, fresh, { paso: 'foto' });
+      await sendTelegramMessage(params.chatId, MENSAJE_FOTO_OBLIGATORIA, { parse_mode: 'HTML' });
       return true;
     }
 
@@ -1274,7 +1287,9 @@ export async function manejarTextoSalidaObraTelegram(
   if (paso === 'foto') {
     await sendTelegramMessage(
       chatId,
-      'Envíe la foto o pulse <b>Omitir foto</b>.',
+      fotoMovimientoObligatoria()
+        ? MENSAJE_FOTO_OBLIGATORIA
+        : 'Envíe la foto o pulse <b>Omitir foto</b>.',
       { parse_mode: 'HTML' },
     );
     return true;

@@ -18,6 +18,7 @@ import {
 } from '@/lib/telegram/ingresoManualTelegram';
 import { manejarComandoSalidaEgresoTelegram } from '@/lib/telegram/salidaEgresoFlujo';
 import { manejarComandoSalidaObraTelegram } from '@/lib/telegram/salidaObraTelegram';
+import { MENU_SALIDA_TEXTO } from '@/lib/telegram/mensajesSalidaTelegram';
 import { manejarComandoTraspasoTelegram } from '@/lib/telegram/traspasoFlujoTelegram';
 
 const PREFIX_INGRESO = 'ig:';
@@ -217,20 +218,16 @@ async function manejarProveedorPrecargadoMenu(
 }
 
 export async function enviarMenuSalidaTelegram(chatId: string): Promise<void> {
-  await sendTelegramMessage(
-    chatId,
-    '📤 <b>Salida de material</b>\n\n' + 'Elige el tipo de salida:',
-    {
-      parse_mode: 'HTML',
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: '🏗 Salida a obra', callback_data: callbackMenuSalida('obra') }],
-          [{ text: '🏭 Salida a almacén', callback_data: callbackMenuSalida('almacen') }],
-          [{ text: '🔄 Préstamo / traspaso', callback_data: callbackMenuSalida('prestamo') }],
-        ],
-      },
+  await sendTelegramMessage(chatId, MENU_SALIDA_TEXTO, {
+    parse_mode: 'HTML',
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '🏗 A un obrero en obra', callback_data: callbackMenuSalida('obra') }],
+        [{ text: '🏭 Despacho a obra u otro almacén', callback_data: callbackMenuSalida('almacen') }],
+        [{ text: '🔄 Traspaso / préstamo', callback_data: callbackMenuSalida('prestamo') }],
+      ],
     },
-  );
+  });
 }
 
 function normalizarOpcionMenuIngreso(raw: string): OpcionMenuIngreso | null {
@@ -306,9 +303,9 @@ const ETIQUETA_INGRESO: Record<OpcionMenuIngreso, string> = {
 };
 
 const ETIQUETA_SALIDA: Record<OpcionMenuSalida, string> = {
-  obra: 'Salida a obra',
-  almacen: 'Salida a almacén',
-  prestamo: 'Préstamo',
+  obra: 'A un obrero en obra',
+  almacen: 'Despacho a obra u otro almacén',
+  prestamo: 'Traspaso / préstamo',
 };
 
 export async function manejarCallbackMenuIngresoTelegram(

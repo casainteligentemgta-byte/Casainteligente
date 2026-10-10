@@ -8,6 +8,11 @@ import { reservarFacturaCanalTelegram } from '@/lib/canal/reservarFacturaCanalTe
 import { avanzarFlujoFacturaCompradorTelegram } from '@/lib/telegram/flujoFacturaCompradorTelegram';
 import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi';
 import type { TelegramEstado } from '@/lib/telegram/estados';
+import {
+  ALERTA_FOTO_OBLIGATORIA,
+  MENSAJE_FOTO_OBLIGATORIA,
+  fotoMovimientoObligatoria,
+} from '@/lib/telegram/fotoObligatoria';
 import { getTelegramEstado, setTelegramContexto } from '@/lib/telegram/estados';
 import { enviarPickerProyectosTelegram } from '@/lib/telegram/proyectoPicker';
 
@@ -225,6 +230,12 @@ async function preguntarMasLineas(supabase: SupabaseClient, chatId: string): Pro
 async function preguntarFotoSoporte(supabase: SupabaseClient, chatId: string): Promise<void> {
   const estado = await getTelegramEstado(supabase, chatId);
   await patchMeta(supabase, chatId, estado, { paso: 'foto' });
+  if (fotoMovimientoObligatoria()) {
+    await sendTelegramMessage(chatId, '📷 Envíe la <b>foto de la factura</b> (obligatoria).', {
+      parse_mode: 'HTML',
+    });
+    return;
+  }
   await sendTelegramMessage(
     chatId,
     '📷 Envíe una <b>foto de la factura</b> (opcional) o pulse <b>Omitir foto</b>.',
@@ -345,6 +356,12 @@ export async function manejarCallbackFacturaCompradorManual(
     await sendTelegramMessage(params.chatId, 'Escriba el <b>material</b> de la siguiente línea:', {
       parse_mode: 'HTML',
     });
+    return true;
+  }
+
+  if (params.data === `${PREFIX}foto:skip` && fotoMovimientoObligatoria()) {
+    // Botón de un mensaje anterior al cambio de regla: ya no se puede omitir.
+    await answerCallbackQuery(params.callbackId, ALERTA_FOTO_OBLIGATORIA, true);
     return true;
   }
 
@@ -510,7 +527,9 @@ export async function manejarTextoFacturaCompradorManual(
   if (paso === 'foto') {
     await sendTelegramMessage(
       chatId,
-      'Envíe la <b>foto</b> o pulse <b>Omitir foto</b> en el mensaje anterior.',
+      fotoMovimientoObligatoria()
+        ? MENSAJE_FOTO_OBLIGATORIA
+        : 'Envíe la <b>foto</b> o pulse <b>Omitir foto</b> en el mensaje anterior.',
       { parse_mode: 'HTML' },
     );
   }

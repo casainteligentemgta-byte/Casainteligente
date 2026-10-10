@@ -41,7 +41,27 @@ Todas convergen en **`/contabilidad/compras`** (cuadro unificado) y en las tabla
 
 ### Comando Telegram `/salida`
 
-Flujo del depositario (migración **206**):
+Menú unificado (misma idea que `/ingreso`). Tres tipos; todos descuentan stock al confirmar.
+
+| Opción | Flujo | Persistencia |
+|---|---|---|
+| **A un obrero en obra** | obra → almacén → quién recibe → material/cantidad → partida → Gantt → foto | `transferencias_inventario` + `inv_egresos_campo` |
+| **Despacho a obra u otro almacén** | paridad con `/almacen/despacho` (capítulo, partida, destino) | `registrarDespachoWeb` |
+| **Traspaso / préstamo** | origen → destino → material → cantidad → nota → foto | `transferencias_inventario` (foto en `fotos`, migración **340**) |
+
+#### Foto obligatoria
+
+Todo movimiento registrado por el bot lleva foto: recepción en almacén (`/ingreso`), las tres
+salidas (`/salida`) y la factura que carga el comprador (`/facturas` manual). El bot no ofrece
+«Omitir» y no registra el movimiento hasta recibirla.
+
+- Regla en un solo lugar: `lib/telegram/fotoObligatoria.ts`.
+- Válvula de emergencia: `TELEGRAM_FOTO_OPCIONAL=1` vuelve a permitir omitirla (requiere redeploy).
+- En el ingreso manual la foto por línea sigue siendo opcional; basta una foto del ingreso
+  (general o de alguna línea).
+- El despacho y la recepción hechos desde la web no cambian con esta regla.
+
+#### A un obrero en obra (migración **206**)
 
 1. Elegir **obra**
 2. Elegir **almacén origen** (central o móvil)
@@ -52,7 +72,7 @@ Flujo del depositario (migración **206**):
    - **Partida presupuestaria** (solo las que usan ese material en APU / `obra_partidas_materiales`)
    - **Actividad Gantt** (`cronograma_tareas` vinculada a la partida) o omitir
 5. ¿Agregar otro material? Sí / No
-6. **Foto opcional** (omitir permitido)
+6. **Foto del material** (obligatoria)
 7. **Observaciones** (opcional; `-` para omitir)
 8. Confirmar → descuenta stock y registra trazabilidad
 
@@ -102,6 +122,7 @@ Flujo del depositario (migración **206**):
 | 180 | Stock, transferencias, partidas despacho |
 | 203 | Ledger `inv_movimientos` |
 | 206 | Trazabilidad egresos campo (`inv_egresos_campo`) |
+| 340 | Foto en traspasos (`transferencias_inventario.fotos`) |
 
 ---
 
@@ -109,7 +130,8 @@ Flujo del depositario (migración **206**):
 
 ```mermaid
 flowchart TD
-    A[/salida] --> B[Obra]
+    A[/salida] --> MNU{Tipo}
+    MNU -->|Obrero en obra| B[Obra]
     B --> C[Almacén origen]
     C --> D[Obrero ci_empleados o texto]
     D --> E[Material + cantidad]
@@ -117,9 +139,14 @@ flowchart TD
     F --> G[Tarea Gantt opcional]
     G --> H{¿Más materiales?}
     H -->|Sí| E
-    H -->|No| I[Foto opcional]
+    H -->|No| I[Foto obligatoria]
     I --> J[Observaciones]
     J --> K[Confirmar]
     K --> L[transferencias_inventario + inv_egresos_campo]
-    L --> M[inventario_stock actualizado]
+    L --> ST[inventario_stock actualizado]
+    MNU -->|Despacho| DES[registrarDespachoWeb]
+    DES --> ST
+    MNU -->|Traspaso| TRF[Foto obligatoria]
+    TRF --> TR[transferencias_inventario]
+    TR --> ST
 ```
