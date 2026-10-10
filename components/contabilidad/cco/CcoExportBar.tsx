@@ -63,6 +63,13 @@ export default function CcoExportBar({ proyectoId, disabled }: Props) {
       >
         {busy === 'pdf' ? 'PDF…' : '⬇ PDF rubros'}
       </button>
+      <a
+        href={`/contabilidad/cco/rendicion${proyectoId ? `?proyecto=${encodeURIComponent(proyectoId)}` : ''}`}
+        style={{ ...btn('#0F172A'), textDecoration: 'none', display: 'inline-block' }}
+        title="Rendición de cuentas por semana, mes o toda la obra"
+      >
+        📑 Rendición
+      </a>
       {error ? <span style={{ color: '#B91C1C', fontSize: 12 }}>{error}</span> : null}
     </div>
   );

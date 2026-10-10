@@ -14,10 +14,7 @@ import {
   resolverMontoBaseUsdKpi,
 } from '@/lib/contabilidad/cco/kpisOficiales';
 import { normalizarDevaluacionConfig } from '@/lib/contabilidad/cco/tasas';
-import {
-  esCompraSoloAuditoriaCco,
-  esDescripcionAuditoriaCco,
-} from '@/lib/contabilidad/compraEsAuditoriaCco';
+import { esFilaAuditoriaKpiCco } from '@/lib/contabilidad/compraEsAuditoriaCco';
 import { tieneRegistrosGastos } from '@/lib/contabilidad/cco/registrosGastos';
 import { cargarDashboardDesdeRegistrosGastos } from '@/lib/contabilidad/cco/cargarDashboardDesdeRegistrosGastos';
 
@@ -371,19 +368,7 @@ export async function cargarCcoDashboard(
 
   const nombrePorId = new Map(proyectos.map((p) => [p.id, p.nombre]));
 
-  function esFilaAuditoriaKpi(r: CompraRow): boolean {
-    const notas = r.notas != null ? String(r.notas) : '';
-    const invoice = r.invoice_number != null ? String(r.invoice_number) : '';
-    if (esDescripcionAuditoriaCco(notas)) return true;
-    return esCompraSoloAuditoriaCco({
-      supplier_name: r.supplier_name != null ? String(r.supplier_name) : null,
-      notas,
-      invoice_number: invoice,
-      lineas: notas ? [{ descripcion: notas }] : [],
-    });
-  }
-
-  const comprasKpi = (compras ?? []).filter((row) => !esFilaAuditoriaKpi(row as CompraRow));
+  const comprasKpi = (compras ?? []).filter((row) => !esFilaAuditoriaKpiCco(row as CompraRow));
   const gastosKpiInput = comprasKpi.map((row) => row as CompraRow);
 
   const kpisCalc = calcularKpisOficiales({
