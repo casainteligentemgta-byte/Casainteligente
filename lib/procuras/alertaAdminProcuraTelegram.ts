@@ -6,6 +6,7 @@ import {
   prioridadProcuraDesdeObs,
 } from '@/lib/alertas/alertasConfig';
 import { listarContadoresProcuraTelegram } from '@/lib/procuras/aprobadoresProcuraTelegram';
+import { cargarFondosObraProcura } from '@/lib/procuras/fondosObraProcura';
 import {
   construirMensajeAdminViabilidadProcura,
   construirResumenStockProcuraMensaje,
@@ -78,7 +79,8 @@ export async function enviarAlertaProcuraPendienteAdmin(
   const prioridad =
     row.prioridad?.trim() || prioridadProcuraDesdeObs(row.observaciones, alertas);
   const stock = await construirResumenStockProcuraMensaje(supabase, row);
-  const mensaje = construirMensajeAdminViabilidadProcura(row, prioridad, stock);
+  const fondos = await cargarFondosObraProcura(supabase, row.proyecto_id);
+  const mensaje = construirMensajeAdminViabilidadProcura(row, prioridad, stock, fondos);
   const replyMarkup = tecladoViabilidadAdmin(row.id);
 
   const proyectoId = row.proyecto_id?.trim() || null;
