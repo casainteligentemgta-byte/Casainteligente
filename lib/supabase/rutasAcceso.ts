@@ -62,6 +62,24 @@ export function esRutaProtegida(pathname: string): boolean {
   return bajo(RUTAS_PROTEGIDAS, pathname);
 }
 
+/**
+ * APIs de almacén, compras y procuras. Sus rutas trabajan con service_role (no pasan
+ * por las políticas de la base), así que la sesión se exige aquí: sin ella responden 401.
+ * El bot de Telegram y los cron no usan estas rutas.
+ */
+export const APIS_CON_SESION = [
+  '/api/almacen',
+  '/api/compras',
+  '/api/procuras',
+  '/api/facturas-canal',
+  '/api/contabilidad/compras',
+];
+
+/** ¿Esta ruta de API debe rechazar a quien llama sin sesión? */
+export function apiRequiereSesion(pathname: string): boolean {
+  return bajo(APIS_CON_SESION, pathname);
+}
+
 /** ¿Hay que mandar a /login a quien entra a esta ruta sin sesión? */
 export function requiereSesion(pathname: string): boolean {
   return (esRutaProtegida(pathname) && !esRutaPublica(pathname)) || esRutaStaffBajoPublico(pathname);
