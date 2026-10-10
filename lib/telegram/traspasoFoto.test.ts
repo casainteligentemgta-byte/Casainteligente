@@ -127,15 +127,17 @@ describe('traspaso: la foto es parte del registro', () => {
     assert.match(String(telegram.enviados.at(-1)?.text), /No se pudo guardar/)
   })
 
-  it('una foto fuera del paso de foto no la toma este flujo', async () => {
+  it('una foto fuera del paso de foto no se guarda y se avisa cuándo toca', async () => {
     const db = sesionTraspaso('cantidad')
     const manejado = await manejarFotoTraspasoTelegram({
       supabase: db as unknown as SupabaseClient,
       chatId: CHAT,
       ...foto,
     })
-    assert.equal(manejado, false)
+    assert.equal(manejado, true)
     assert.equal(db.subidas.length, 0)
+    assert.equal(metadata(db).paso, 'cantidad')
+    assert.match(String(telegram.enviados.at(-1)?.text), /Todavía no toca la foto/)
   })
 
   it('con TELEGRAM_FOTO_OPCIONAL=1 se puede omitir', async () => {

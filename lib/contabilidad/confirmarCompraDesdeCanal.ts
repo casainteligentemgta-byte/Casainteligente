@@ -610,6 +610,21 @@ async function confirmarCompraDesdeCanalInterno(
     notificado = Boolean(notify.ok && !notify.skipped);
   }
 
+  // Hay mercancía por recibir: avisar a quien la retira (no bloquea la confirmación).
+  if (cuarentena.lineasCreadas > 0) {
+    const { avisarRetiroCompraPendiente } = await import('@/lib/telegram/retiroCompraTelegram');
+    await avisarRetiroCompraPendiente(supabase, {
+      purchaseInvoiceId,
+      contabilidadCompraId: compraId,
+      procuraId: params.procuraId,
+      proyectoId,
+      ubicacionDestinoId,
+      numeroFactura: extracted.invoice_number,
+      proveedorNombre: extracted.supplier_name,
+      solicitadoPorChatId: row.chat_id,
+    });
+  }
+
   auditarCompraConfirmadaCanal({
     row,
     compraId,

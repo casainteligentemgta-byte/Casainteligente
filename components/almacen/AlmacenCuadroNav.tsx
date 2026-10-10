@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowLeftRight, Package, Route } from 'lucide-react';
+import { ArrowLeftRight, Package, Route, Truck } from 'lucide-react';
 
 export type CuadroAlmacen = 'inventario' | 'movimientos' | 'trazabilidad';
 
@@ -43,15 +43,18 @@ export default function AlmacenCuadroNav({
   activo,
   search = '',
   loCompradoActivo = false,
+  retirosActivo = false,
 }: {
   activo: CuadroAlmacen;
   search?: string;
   /** Resalta el enlace a /almacen/lo-comprado cuando estamos en esa ruta. */
   loCompradoActivo?: boolean;
+  /** Resalta el enlace a /almacen/retiros cuando estamos en esa ruta. */
+  retirosActivo?: boolean;
 }) {
   return (
     <nav
-      className="mb-4 box-border grid w-full max-w-full grid-cols-3 gap-1 rounded-2xl border border-white/[0.06] bg-white/[0.04] p-1.5 backdrop-blur-xl"
+      className="mb-4 box-border grid w-full max-w-full grid-cols-4 gap-1 rounded-2xl border border-white/[0.06] bg-white/[0.04] p-1.5 backdrop-blur-xl"
       aria-label="Vistas de almacén"
     >
       <Link
@@ -62,7 +65,7 @@ export default function AlmacenCuadroNav({
         <span className="min-w-0 max-w-full break-words hyphens-auto">Lo comprado</span>
       </Link>
       {TABS.map(({ id, label, icon: Icon }) => {
-        const active = !loCompradoActivo && activo === id;
+        const active = !loCompradoActivo && !retirosActivo && activo === id;
         return (
           <Link
             key={id}
@@ -74,6 +77,10 @@ export default function AlmacenCuadroNav({
           </Link>
         );
       })}
+      <Link href="/almacen/retiros" className={`${linkBase} ${tabClass(retirosActivo)}`}>
+        <Truck size={14} className="shrink-0" aria-hidden />
+        <span className="min-w-0 max-w-full break-words hyphens-auto">Retiros</span>
+      </Link>
     </nav>
   );
 }

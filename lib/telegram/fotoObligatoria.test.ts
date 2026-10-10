@@ -58,7 +58,7 @@ describe('regla de foto obligatoria', () => {
   it('el teclado de fotos solo ofrece «Omitir» cuando es opcional', () => {
     delete process.env.TELEGRAM_FOTO_OPCIONAL
     const obligatorio = tecladoSoporteFotosTelegram('x:').inline_keyboard.flat().map((b) => b.text)
-    assert.deepEqual(obligatorio, ['📷 Cámara / adjuntar', '✅ Listo con fotos'])
+    assert.deepEqual(obligatorio, ['❓ ¿Cómo envío la foto?', '✅ Listo con fotos'])
 
     process.env.TELEGRAM_FOTO_OPCIONAL = 'true'
     const opcional = tecladoSoporteFotosTelegram('x:').inline_keyboard.flat().map((b) => b.text)

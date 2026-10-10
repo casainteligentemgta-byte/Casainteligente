@@ -16,6 +16,12 @@ import {
   fotoMovimientoObligatoria,
 } from '@/lib/telegram/fotoObligatoria';
 import { MENSAJE_INICIO_SALIDA_TRASPASO } from '@/lib/telegram/mensajesSalidaTelegram';
+import {
+  TEXTO_BOTON_SIN_NOTA,
+  mensajeFotoFueraDePaso,
+  observacionDesdeTexto,
+  tecladoSinObservaciones,
+} from '@/lib/telegram/observacionRapida';
 import type { UbicacionInventario } from '@/types/inventario-obra';
 
 export type PasoTraspasoTelegram =
@@ -49,6 +55,7 @@ const PREFIX_MAT = 'tsm:';
 const PREFIX_OK = 'tsok';
 const PREFIX_CANCEL = 'tsc';
 const PREFIX_FOTO_SKIP = 'tsfs';
+const PREFIX_SIN_NOTA = 'tsnn';
 
 /** Bucket de evidencias de movimientos (el mismo de las salidas a obra). */
 const BUCKET_FOTOS_TRASPASO = 'ci-proyectos-media';
@@ -77,7 +84,8 @@ export function esCallbackTraspasoTelegram(data: string): boolean {
     data.startsWith(PREFIX_MAT) ||
     data === PREFIX_OK ||
     data === PREFIX_CANCEL ||
-    data === PREFIX_FOTO_SKIP
+    data === PREFIX_FOTO_SKIP ||
+    data === PREFIX_SIN_NOTA
   );
 }
 
@@ -338,6 +346,15 @@ export async function manejarCallbackTraspasoTelegram(
         'Ingrese la <b>cantidad</b> a traspasar:',
       { parse_mode: 'HTML' },
     );
+    return true;
+  }
+
+  if (params.data === PREFIX_SIN_NOTA) {
+    await answerCallbackQuery(params.callbackId);
+    // Botón repetido o de un mensaje viejo: la nota ya se resolvió.
+    if (m.paso !== 'nota') return true;
+    const sinNota = await patchMeta(supabase, params.chatId, estado, { nota: '' });
+    await preguntarFotoTraspaso(supabase, params.chatId, sinNota);
     return true;
   }
 
@@ -614,13 +631,18 @@ export async function manejarTextoTraspasoTelegram(
     await patchMeta(supabase, chatId, estado, { paso: 'nota', cantidad: cant });
     await sendTelegramMessage(
       chatId,
-      '📝 Escriba una nota breve (chofer, placas, motivo del préstamo, etc.):',
+      '📝 <b>Nota</b> (opcional)\n' +
+        'Escriba chofer, placas o motivo del préstamo, o pulse <b>Sin nota</b> para continuar.',
+      {
+        parse_mode: 'HTML',
+        reply_markup: tecladoSinObservaciones(PREFIX_SIN_NOTA, TEXTO_BOTON_SIN_NOTA),
+      },
     );
     return true;
   }
 
   if (m.paso === 'nota') {
-    const conNota = await patchMeta(supabase, chatId, estado, { nota: t });
+    const conNota = await patchMeta(supabase, chatId, estado, { nota: observacionDesdeTexto(t) });
     await preguntarFotoTraspaso(supabase, chatId, conNota);
     return true;
   }
@@ -649,7 +671,12 @@ export async function manejarFotoTraspasoTelegram(params: {
 }): Promise<boolean> {
   const estado = await getTelegramEstado(params.supabase, params.chatId);
   if (!esFlujoTraspasoTelegram(estado)) return false;
-  if (meta(estado).paso !== 'foto') return false;
+  if (meta(estado).paso !== 'foto') {
+    await sendTelegramMessage(params.chatId, mensajeFotoFueraDePaso(meta(estado).paso), {
+      parse_mode: 'HTML',
+    });
+    return true;
+  }
 
   const storagePath = `telegram-movimientos/traspasos/${params.chatId}/${Date.now()}.${params.ext}`;
   const { error } = await params.supabase.storage
