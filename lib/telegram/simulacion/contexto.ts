@@ -7,8 +7,12 @@
  *
  * El contexto vive en AsyncLocalStorage: solo afecta a la ejecución que lo abre, no a
  * otras peticiones que el mismo servidor esté atendiendo a la vez.
+ *
+ * Este archivo no importa nada de Node en la cabecera a propósito: botApi.ts llega
+ * también al paquete del navegador (por tipos y utilidades compartidas) y un
+ * `import 'node:async_hooks'` rompería la compilación. AsyncLocalStorage se obtiene
+ * al abrir el primer ensayo, que siempre ocurre en el servidor.
  */
-import { AsyncLocalStorage } from 'node:async_hooks';
 
 export type BotonSimulado = { texto: string; data: string | null; url: string | null };
 
@@ -26,7 +30,30 @@ export type ContextoSimulacionBot = {
   siguienteMensajeId: number;
 };
 
-const almacen = new AsyncLocalStorage<ContextoSimulacionBot>();
+type AlmacenAsincrono = {
+  getStore(): ContextoSimulacionBot | undefined;
+  run<R>(store: ContextoSimulacionBot, fn: () => R): R;
+};
+type ConstructorAlmacen = new () => AlmacenAsincrono;
+
+/** En `globalThis` para que todas las copias de este módulo compartan el mismo almacén. */
+const compartido = globalThis as {
+  __ciSimulacionBot?: AlmacenAsincrono;
+  AsyncLocalStorage?: ConstructorAlmacen;
+};
+
+async function obtenerAlmacen(): Promise<AlmacenAsincrono> {
+  if (compartido.__ciSimulacionBot) return compartido.__ciSimulacionBot;
+  // Next.js deja AsyncLocalStorage como global en el servidor; fuera de Next se importa de Node.
+  let Constructor = typeof compartido.AsyncLocalStorage === 'function' ? compartido.AsyncLocalStorage : null;
+  if (!Constructor) {
+    const modulo = 'node:async_hooks';
+    const hooks = (await import(/* webpackIgnore: true */ modulo)) as { AsyncLocalStorage: ConstructorAlmacen };
+    Constructor = hooks.AsyncLocalStorage;
+  }
+  compartido.__ciSimulacionBot = new Constructor();
+  return compartido.__ciSimulacionBot;
+}
 
 /** Token ficticio: permite pasar las comprobaciones de «bot configurado» sin tener el real. */
 export const TOKEN_BOT_SIMULADO = 'SIMULACION';
@@ -38,7 +65,7 @@ const JPEG_DE_RELLENO = Buffer.from(
 );
 
 export function simulacionBotActiva(): ContextoSimulacionBot | undefined {
-  return almacen.getStore();
+  return compartido.__ciSimulacionBot?.getStore();
 }
 
 /** Ejecuta `fn` con Telegram en modo captura y devuelve lo que el bot habría enviado. */
@@ -46,6 +73,7 @@ export async function enSimulacionBot<T>(
   fn: () => Promise<T>,
 ): Promise<{ resultado: T; envios: EnvioSimulado[] }> {
   const contexto: ContextoSimulacionBot = { envios: [], siguienteMensajeId: 500_000 };
+  const almacen = await obtenerAlmacen();
   const resultado = await almacen.run(contexto, fn);
   return { resultado, envios: contexto.envios };
 }
