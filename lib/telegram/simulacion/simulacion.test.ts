@@ -189,10 +189,21 @@ describe('la obra de ensayo no deja tocar obras reales', () => {
         { ubicacion_id: ALMACEN_REAL, material_id: 'mat-real', cantidad_disponible: 10 },
       ],
     })
+    db.subidas.push(
+      `ci-proyectos-media/telegram-movimientos/${OBRA_ENSAYO.id}/salida/1.jpg`,
+      `ci-proyectos-media/telegram-movimientos/${OBRA_ENSAYO.id}/requerimientos/abc/2.jpg`,
+      `ci-proyectos-media/telegram-movimientos/traspasos/${DEPO}/3.jpg`,
+      `ci-proyectos-media/telegram-movimientos/${OBRA_REAL}/salida/real.jpg`,
+      'ci-proyectos-media/telegram-movimientos/traspasos/267515133/real.jpg',
+    )
     const obra = await cargarObraDeEnsayo(sb(db))
     const pasos = await reiniciarObraDeEnsayo(sb(db), obra)
 
     assert.deepEqual(pasos.filter((p) => !p.ok), [])
+    assert.deepEqual(db.subidas, [
+      `ci-proyectos-media/telegram-movimientos/${OBRA_REAL}/salida/real.jpg`,
+      'ci-proyectos-media/telegram-movimientos/traspasos/267515133/real.jpg',
+    ])
     const ids = (tabla: string, col = 'id') => db.tablas[tabla].map((f) => f[col])
     assert.deepEqual(ids('ci_telegram_estados', 'chat_id'), ['267515133'])
     assert.deepEqual(ids('inv_egresos_campo'), ['e-real'])

@@ -25,6 +25,11 @@ export type FakeSupabase = {
 type FakeBucket = {
   upload: (ruta: string, cuerpo: unknown, opts?: unknown) => Promise<Resultado>;
   getPublicUrl: (ruta: string) => { data: { publicUrl: string } };
+  list: (
+    carpeta?: string,
+    opts?: unknown,
+  ) => Promise<{ data: Array<{ name: string; id: string | null }> | null; error: { message: string } | null }>;
+  remove: (rutas: string[]) => Promise<{ data: Array<{ name: string }> | null; error: { message: string } | null }>;
   createSignedUrls: (
     rutas: string[],
     segundos: number,
@@ -223,6 +228,22 @@ export function crearFakeSupabase(
           return { data: { path: ruta }, error: null };
         },
         getPublicUrl: (ruta) => ({ data: { publicUrl: `https://storage.test/${bucket}/${ruta}` } }),
+        list: async (carpeta) => {
+          // Como Storage: devuelve solo el nivel inmediato; las subcarpetas vienen sin id.
+          const prefijo = `${bucket}/${String(carpeta ?? '').replace(/\/$/, '')}/`;
+          const vistos = new Map<string, { name: string; id: string | null }>();
+          for (const subida of db.subidas) {
+            if (!subida.startsWith(prefijo)) continue;
+            const [nombre, ...resto] = subida.slice(prefijo.length).split('/');
+            if (!vistos.has(nombre)) vistos.set(nombre, { name: nombre, id: resto.length ? null : `id-${nombre}` });
+          }
+          return { data: Array.from(vistos.values()), error: null };
+        },
+        remove: async (rutas) => {
+          const borrar = new Set(rutas.map((r) => `${bucket}/${r}`));
+          db.subidas = db.subidas.filter((s) => !borrar.has(s));
+          return { data: rutas.map((name) => ({ name })), error: null };
+        },
         createSignedUrls: async (rutas) => ({
           data: rutas.map((ruta) => ({ signedUrl: `https://storage.test/firmado/${bucket}/${ruta}` })),
           error: null,

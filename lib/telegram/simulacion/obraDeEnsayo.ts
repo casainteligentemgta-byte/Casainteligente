@@ -213,7 +213,49 @@ export async function reiniciarObraDeEnsayo(
     ).error,
   );
 
+  anotar('fotos de ensayo (Storage)', await borrarFotosDeEnsayo(supabase));
+
   return pasos;
+}
+
+const BUCKET_FOTOS = 'ci-proyectos-media';
+
+/**
+ * Borra las fotos de relleno que subieron los ensayos. Solo mira carpetas que llevan
+ * el identificador de una obra o de un chat de ensayo.
+ */
+async function borrarFotosDeEnsayo(supabase: SupabaseClient): Promise<{ message?: string } | null> {
+  const carpetas = [
+    ...OBRAS.map((id) => `telegram-movimientos/${id}`),
+    ...CHATS.map((chat) => `telegram-movimientos/traspasos/${chat}`),
+  ];
+  const bucket = supabase.storage.from(BUCKET_FOTOS);
+  const archivos: string[] = [];
+
+  // Storage lista una carpeta a la vez: se baja hasta dos niveles (obra/tipo/archivo).
+  const listar = async (carpeta: string, nivel: number): Promise<{ message?: string } | null> => {
+    const { data, error } = await bucket.list(carpeta, { limit: 1000 });
+    if (error) return error;
+    for (const item of (data ?? []) as Array<{ name: string; id?: string | null }>) {
+      const ruta = `${carpeta}/${item.name}`;
+      if (item.id) archivos.push(ruta);
+      else if (nivel < 2) {
+        const fallo = await listar(ruta, nivel + 1);
+        if (fallo) return fallo;
+      }
+    }
+    return null;
+  };
+
+  for (const carpeta of carpetas) {
+    const fallo = await listar(carpeta, 0);
+    if (fallo) return fallo;
+  }
+  for (let i = 0; i < archivos.length; i += 100) {
+    const { error } = await bucket.remove(archivos.slice(i, i + 100));
+    if (error) return error;
+  }
+  return null;
 }
 
 /** Stock disponible de un material de ensayo en una ubicación (0 si no hay fila). */
