@@ -9,30 +9,60 @@ que esa llave permite sin sesión debe ser lo mínimo.
 | --- | --- |
 | 342 | Inventario, compras, procuras, fondos y abonos de clientes, nómina de obra. |
 | 345 | Contabilidad de obra (CCO) y gastos, presupuestos y partidas, catálogos, productos, ventas, archivos y equipos de proyecto. Además 12 **vistas** (`ci_compras` y `vista_cuadro_procuras` dejaban leer compras y procuras pese a la 342) y 6 funciones que asignan roles o cargan gastos. |
+| 346 | Reclutamiento y RRHH: obras, vacantes, contratos de trabajo, configuración de nómina y exámenes. El expediente del candidato queda accesible solo con su enlace. |
 
-Regla de ambas: lo que podía hacer «cualquiera» pasa a poder hacerlo solo quien tiene
+Regla de las tres: lo que podía hacer «cualquiera» pasa a poder hacerlo solo quien tiene
 sesión. El personal con sesión y el servidor (bot, rutas API con `service_role`) conservan
 lo que tenían.
 
-### Lo que sigue abierto (pendiente)
+### Reclutamiento y RRHH (migración 346)
 
-Las tablas que usan los **formularios públicos** de reclutamiento y registro de
-trabajadores: `ci_empleados`, `ci_contratos_empleado_obra`, `ci_examenes`, `ci_hojas_vida`,
-`ci_preguntas`, `ci_psique_*`, `recruitment_needs`, `ci_obra_empleados`, `ci_config_nomina`,
-`ci_proyectos` (solo lectura), `ci_materiales_obra`, `labor_requests`,
-`project_assignments`, `obreros_expediente_tarea`, y la función `firmar_contrato_y_asignar`.
+| Quién | Qué puede hacer |
+| --- | --- |
+| Personal con sesión y servidor | Lo mismo que antes. |
+| Candidato sin sesión, con su enlace | Ver y completar **solo su expediente** (`ci_empleados`) y guardar su hoja de vida (`ci_hojas_vida`). El token del enlace viaja en la cabecera `x-invite-token`. |
+| Cualquier otra persona sin sesión | Nada. |
 
-Esos formularios (`/registro`, `/reclutamiento`, `/onboarding`, `/talento/examen`) leen y
-escriben la base directamente desde el navegador, y siete rutas de `app/api/talento` usan
-un cliente anónimo (`lib/talento/supabase-route.ts`). Cerrarlas hoy los rompería. Para
-cerrarlas hay que pasar esos formularios a rutas del servidor que validen el enlace o
-token del candidato.
+- Cerradas del todo: `ci_proyectos`, `recruitment_needs`, `ci_contratos_empleado_obra`,
+  `ci_config_nomina`, `ci_obra_empleados`, `ci_materiales_obra`, `labor_requests`,
+  `project_assignments`, `obreros_expediente_tarea`, `ci_examenes`, `ci_preguntas`,
+  `ci_psique_*`, y la función `firmar_contrato_y_asignar` (solo el servidor).
+- Los formularios públicos ya no leen vacantes, obras ni contratos desde el navegador. Se
+  los entrega el servidor, solo con los campos necesarios
+  (`lib/reclutamiento/datosPublicos.ts`):
+  - `GET /api/reclutamiento/vacante?need=<id>` (o `?proyecto=<id>`): cargo, nivel, tipo y
+    nombre de la obra.
+  - `GET /api/reclutamiento/firma-resumen?token=`: resumen del contrato a firmar.
+  - `GET /api/reclutamiento/patrono?token=`: datos del patrono para la planilla.
+- **Campos reservados** (disparador `a_ci_empleados_campos_reservados`): escribiendo sin
+  sesión no se pueden fijar ni cambiar los permisos del bot (`telegram_chat_id`,
+  `alertas_almacen_global`), la evaluación (semáforo, estado, puntajes), el cargo, la obra,
+  la firma electrónica ni el token. El formulario los manda y la base los ignora.
+- Las rutas de personal de `app/api/talento` que usaban un cliente anónimo ahora
+  comprueban la sesión (`lib/auth/sesionPersonalRuta.ts`). El examen público guarda con el
+  cliente del servidor después de validar la invitación.
+
+### Lo que sigue pendiente
+
+Varias rutas del servidor de RRHH (`/api/talento/*`, `/api/recruitment/*`, `/api/rrhh/*`,
+`/api/admin/*`) trabajan con `service_role` y no comprueban sesión: no dependen de las
+políticas de la base, así que cerrar tablas no las cubre. Hay que revisarlas una por una
+(algunas las usan páginas con enlace del candidato) y exigir sesión en las de personal,
+como se hizo con almacén y compras en `APIS_CON_SESION`.
 
 ### Cómo comprobar
 
 ```sql
 begin; set local role anon;
 select count(*) from ci_compras;        -- debe dar «permission denied»
+rollback;
+
+begin; set local role anon;
+select count(*) from ci_proyectos;      -- debe dar «permission denied»
+rollback;
+
+begin; set local role anon;
+select count(*) from ci_empleados;      -- debe dar 0: sin enlace no se ve ningún expediente
 rollback;
 ```
 
