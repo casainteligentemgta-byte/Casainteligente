@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { obtenerConfigTelegramAlmacenProyecto } from '@/lib/almacen/depositarioObra';
+import { depositariosNomina } from '@/lib/almacen/depositariosNomina';
 import {
   ejecutarTransicionProcuraLote,
   metadatosAuditoriaSupervisor,
@@ -190,10 +191,17 @@ export async function enviarOrdenVerificacionDepositarioProcura(
   const destinos = new Set<string>();
 
   const depChat = config?.depositarioAsignado?.telegram_chat_id;
-  const depNombre = config?.depositarioAsignado?.nombre ?? null;
+  let depNombre = config?.depositarioAsignado?.nombre ?? null;
   if (depChat != null && Number.isFinite(depChat)) destinos.add(String(depChat));
   const grupo = config?.telegramGrupoAlmacenId;
   if (grupo != null && Number.isFinite(grupo)) destinos.add(String(grupo));
+
+  // También vale quien tenga rol Depositario en la nómina de la obra. Sin esto, una obra
+  // sin depositario fijo despachaba el almacén sola, sin que nadie lo verificara.
+  for (const p of await depositariosNomina(supabase, proyectoId)) {
+    destinos.add(p.chatId);
+    if (!depNombre) depNombre = p.nombre;
+  }
 
   if (!destinos.size) return { enviado: false, destinos: 0 };
 
@@ -269,10 +277,17 @@ export async function enviarOrdenDespachoDepositarioProcura(
   const destinos = new Set<string>();
 
   const depChat = config?.depositarioAsignado?.telegram_chat_id;
-  const depNombre = config?.depositarioAsignado?.nombre ?? null;
+  let depNombre = config?.depositarioAsignado?.nombre ?? null;
   if (depChat != null && Number.isFinite(depChat)) destinos.add(String(depChat));
   const grupo = config?.telegramGrupoAlmacenId;
   if (grupo != null && Number.isFinite(grupo)) destinos.add(String(grupo));
+
+  // También vale quien tenga rol Depositario en la nómina de la obra. Sin esto, una obra
+  // sin depositario fijo despachaba el almacén sola, sin que nadie lo verificara.
+  for (const p of await depositariosNomina(supabase, proyectoId)) {
+    destinos.add(p.chatId);
+    if (!depNombre) depNombre = p.nombre;
+  }
 
   if (!destinos.size) return { enviado: false, destinos: 0 };
 
@@ -518,12 +533,15 @@ export async function procesarAbastecimientoProcuraAprobada(
     };
   }
 
-  return confirmarAbastecimientoProcura(supabase, {
+  const resultado = await confirmarAbastecimientoProcura(supabase, {
     procuraId,
     autorNombre: params.autorNombre,
     auditoriaSupervisor: params.auditoriaSupervisor,
     skipOrdenCompra: compraEmitida,
   });
+  // La orden de compra ya se emitió arriba: se conserva a cuántos compradores llegó
+  // (sin esto el PM leía «sin comprador Telegram» aunque el comprador sí fue avisado).
+  return resultado.ok && compraEmitida ? { ...resultado, compradoresNotificados } : resultado;
 }
 
 /** Depositario confirma (o fallback sin depositario): despacho + orden de compra según stock. */

@@ -145,3 +145,14 @@ export function responderTelegramSimulado(
 export function archivoTelegramSimulado(): { buffer: Buffer; filePath: string } {
   return { buffer: Buffer.from(JPEG_DE_RELLENO), filePath: 'photos/ensayo.jpg' };
 }
+
+let ultimoTicketDeEnsayo = 0;
+
+/**
+ * Ticket para una procura creada en un ensayo. Lleva el año 0000 para que no se confunda
+ * con uno real y no consume la secuencia de tickets de la base.
+ */
+export function ticketProcuraDeEnsayo(): string {
+  ultimoTicketDeEnsayo = Math.max(ultimoTicketDeEnsayo + 1, Date.now() % 100_000);
+  return `PR-0000-${String(ultimoTicketDeEnsayo % 100_000).padStart(5, '0')}`;
+}

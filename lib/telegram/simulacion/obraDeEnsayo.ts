@@ -262,8 +262,35 @@ export async function reiniciarObraDeEnsayo(
   anotar('ci_telegram_estados', (await supabase.from('ci_telegram_estados').delete().in('chat_id', CHATS)).error);
 
   // --- Cadena de compras (de lo más dependiente a lo menos) ---
+  /** Carpetas y archivos sueltos de documentos de compra que subió el ensayo. */
+  const documentos: string[] = CHATS.flatMap((chat) => [
+    `facturas-comprador-manual/${chat}`,
+    `recepciones-campo/telegram-${chat}`,
+  ]);
+  const sueltos: string[] = [];
   const porObra = async (tabla: string) =>
     anotar(tabla, (await supabase.from(tabla).delete().in('proyecto_id', [...OBRAS])).error);
+
+  // Facturas en trámite: las de la obra y las que cargó un chat de ensayo (aún sin obra).
+  const { data: pendObra, error: ePendObra } = await supabase
+    .from('ci_facturas_canal_pendientes')
+    .select('id,document_storage_path')
+    .in('proyecto_id', [...OBRAS]);
+  const { data: pendChat, error: ePendChat } = await supabase
+    .from('ci_facturas_canal_pendientes')
+    .select('id,document_storage_path')
+    .in('chat_id', CHATS);
+  anotar('ci_facturas_canal_pendientes (lectura)', ePendObra ?? ePendChat);
+  const pendientes = [...(pendObra ?? []), ...(pendChat ?? [])] as Array<{
+    id: string;
+    document_storage_path: string | null;
+  }>;
+  const { data: retiros } = await supabase.from('ci_compras_retiros').select('id').in('proyecto_id', [...OBRAS]);
+  documentos.push(
+    ...pendientes.map((p) => `telegram-pending/${p.id}`),
+    ...((retiros ?? []) as Array<{ id: string }>).map((r) => `retiros-compra/${r.id}`),
+  );
+  sueltos.push(...pendientes.map((p) => String(p.document_storage_path ?? '').trim()).filter(Boolean));
 
   await porObra('ci_compras_retiros');
   await porObra('ci_recepciones_campo'); // sus líneas se borran en cascada
@@ -289,6 +316,12 @@ export async function reiniciarObraDeEnsayo(
     anotar('purchase_invoices', (await supabase.from('purchase_invoices').delete().in('id', facturaIds)).error);
   }
   await porObra('ci_facturas_canal_pendientes');
+  if (pendientes.length) {
+    anotar(
+      'ci_facturas_canal_pendientes (chats de ensayo)',
+      (await supabase.from('ci_facturas_canal_pendientes').delete().in('id', pendientes.map((p) => p.id))).error,
+    );
+  }
   await porObra('ci_procuras'); // su historial de estados se borra en cascada
   await porObra('gastos_obra');
   await porObra('ci_notificaciones');
@@ -370,24 +403,33 @@ export async function reiniciarObraDeEnsayo(
     ).error,
   );
 
-  anotar('fotos de ensayo (Storage)', await borrarFotosDeEnsayo(supabase));
+  anotar(
+    'fotos de ensayo (Storage)',
+    await borrarArchivosDeEnsayo(supabase, 'ci-proyectos-media', [
+      ...OBRAS.map((id) => `telegram-movimientos/${id}`),
+      ...CHATS.map((chat) => `telegram-movimientos/traspasos/${chat}`),
+    ]),
+  );
+  anotar(
+    'documentos de compra de ensayo (Storage)',
+    await borrarArchivosDeEnsayo(supabase, 'procurement-documents', documentos, sueltos),
+  );
 
   return pasos;
 }
 
-const BUCKET_FOTOS = 'ci-proyectos-media';
-
 /**
- * Borra las fotos de relleno que subieron los ensayos. Solo mira carpetas que llevan
- * el identificador de una obra o de un chat de ensayo.
+ * Borra de Storage los archivos de relleno que subieron los ensayos. Solo mira carpetas
+ * que llevan el identificador de una obra, un chat o un registro de ensayo.
  */
-async function borrarFotosDeEnsayo(supabase: SupabaseClient): Promise<{ message?: string } | null> {
-  const carpetas = [
-    ...OBRAS.map((id) => `telegram-movimientos/${id}`),
-    ...CHATS.map((chat) => `telegram-movimientos/traspasos/${chat}`),
-  ];
-  const bucket = supabase.storage.from(BUCKET_FOTOS);
-  const archivos: string[] = [];
+async function borrarArchivosDeEnsayo(
+  supabase: SupabaseClient,
+  nombreBucket: string,
+  carpetas: string[],
+  sueltos: string[] = [],
+): Promise<{ message?: string } | null> {
+  const bucket = supabase.storage.from(nombreBucket);
+  const archivos: string[] = [...sueltos];
 
   // Storage lista una carpeta a la vez: se baja hasta dos niveles (obra/tipo/archivo).
   const listar = async (carpeta: string, nivel: number): Promise<{ message?: string } | null> => {
