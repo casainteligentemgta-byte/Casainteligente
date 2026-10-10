@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { patronIlike } from '@/lib/contabilidad/comprasQueryFiltros';
 import { completarTransferenciaInventario } from '@/lib/almacen/completarTransferenciaInventario';
 import { crearTransferenciaInventario } from '@/lib/almacen/crearTransferenciaInventario';
+import { guardarFotoTransferencia } from '@/lib/almacen/fotoTransferencia';
 import {
   etiquetaUbicacionSelector,
   listarUbicacionesInventario,
@@ -387,33 +388,6 @@ async function preguntarFotoTraspaso(
   });
 }
 
-/**
- * Deja la foto en la transferencia. Si la columna `fotos` aún no existe en la base
- * (migración 340 sin aplicar) no se pierde la evidencia: la ruta queda en observaciones.
- */
-export async function guardarFotoTransferencia(
-  supabase: SupabaseClient,
-  transferenciaId: string,
-  foto: { storage_path: string; url: string },
-  observaciones: string,
-): Promise<void> {
-  const { error } = await supabase
-    .from('transferencias_inventario')
-    .update({ fotos: [foto] })
-    .eq('id', transferenciaId);
-  if (!error) return;
-
-  console.warn('[traspaso telegram] columna fotos no disponible:', error.message);
-  const conRuta = [observaciones, `Foto: ${foto.storage_path}`].filter(Boolean).join(' · ');
-  const { error: obsError } = await supabase
-    .from('transferencias_inventario')
-    .update({ observaciones: conRuta })
-    .eq('id', transferenciaId);
-  if (obsError) {
-    console.error('[traspaso telegram] no se pudo guardar la foto:', obsError.message);
-  }
-}
-
 async function enviarResumenConfirmacion(
   supabase: SupabaseClient,
   chatId: string,
@@ -673,3 +647,5 @@ export async function manejarFotoTraspasoTelegram(params: {
   await enviarResumenConfirmacion(params.supabase, params.chatId, conFoto);
   return true;
 }
+
+export { guardarFotoTransferencia };

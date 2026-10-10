@@ -19,6 +19,7 @@ import {
 import { manejarComandoSalidaEgresoTelegram } from '@/lib/telegram/salidaEgresoFlujo';
 import { manejarComandoSalidaObraTelegram } from '@/lib/telegram/salidaObraTelegram';
 import { MENU_SALIDA_TEXTO } from '@/lib/telegram/mensajesSalidaTelegram';
+import { iniciarRequerimientoSalidaTelegram } from '@/lib/telegram/requerimientoSalidaTelegram';
 import { manejarComandoTraspasoTelegram } from '@/lib/telegram/traspasoFlujoTelegram';
 
 const PREFIX_INGRESO = 'ig:';
@@ -45,7 +46,7 @@ function callbackMenuFacturasPagina(provKey: string, page: number): string {
 
 /** Opciones del submenú /ingreso (4 flujos + listado precargadas). */
 export type OpcionMenuIngreso = 'factura' | 'factauto' | 'nota' | 'sinnota' | 'precargadas';
-export type OpcionMenuSalida = 'obra' | 'almacen' | 'prestamo';
+export type OpcionMenuSalida = 'obra' | 'almacen' | 'prestamo' | 'requerir';
 
 function escapeHtml(s: string): string {
   return s
@@ -225,6 +226,7 @@ export async function enviarMenuSalidaTelegram(chatId: string): Promise<void> {
         [{ text: '🏗 A un obrero en obra', callback_data: callbackMenuSalida('obra') }],
         [{ text: '🏭 Despacho a obra u otro almacén', callback_data: callbackMenuSalida('almacen') }],
         [{ text: '🔄 Traspaso / préstamo', callback_data: callbackMenuSalida('prestamo') }],
+        [{ text: '📝 Pedir material al almacén', callback_data: callbackMenuSalida('requerir') }],
       ],
     },
   });
@@ -287,6 +289,9 @@ async function iniciarSalidaPorOpcion(
     case 'prestamo':
       await manejarComandoTraspasoTelegram(supabase, chatId);
       break;
+    case 'requerir':
+      await iniciarRequerimientoSalidaTelegram(supabase, chatId);
+      break;
     default:
       await sendTelegramMessage(chatId, '⚠️ Opción no válida. Use <code>/salida</code>.', {
         parse_mode: 'HTML',
@@ -306,6 +311,7 @@ const ETIQUETA_SALIDA: Record<OpcionMenuSalida, string> = {
   obra: 'A un obrero en obra',
   almacen: 'Despacho a obra u otro almacén',
   prestamo: 'Traspaso / préstamo',
+  requerir: 'Pedir material al almacén',
 };
 
 export async function manejarCallbackMenuIngresoTelegram(
