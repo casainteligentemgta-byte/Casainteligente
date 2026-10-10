@@ -176,7 +176,40 @@ describe('requerimiento de salida de almacén', () => {
     await pulsar(INGENIERO, 'rq:ok')
 
     assert.equal(requerimiento(), undefined)
-    assert.match(String(ultimoA(INGENIERO)?.text), /no tiene a nadie del almacén/)
+    assert.match(String(ultimoA(INGENIERO)?.text), /no tiene a nadie más con Telegram/)
+    assert.match(String(ultimoA(INGENIERO)?.text), /Depositario/)
+  })
+
+  it('sin depositario fijo, el pedido llega a quien tiene rol Depositario en la nómina de la obra', async () => {
+    db = baseDeDatos({ conDepositario: false })
+    db.tablas.ci_proyecto_nomina.push(
+      { proyecto_id: OBRA_A, categoria: 'empleado', rol: 'depositario', nombre: 'Dani', telegram_chat_id: 910, activo: true },
+      { proyecto_id: OBRA_A, categoria: 'empleado', rol: 'admin', nombre: 'Luis', telegram_chat_id: 920, activo: true },
+    )
+    await armarPedido('uso')
+    await pulsar(INGENIERO, 'rq:ok')
+
+    assert.equal(requerimiento()?.estado, 'solicitado')
+    assert.equal(mensajesA('910').length, 1)
+    assert.equal(mensajesA('920').length, 0)
+  })
+
+  it('si nadie atiende el almacén, lo reciben los administradores de la obra (nunca quien pidió)', async () => {
+    db = baseDeDatos({ conDepositario: false })
+    db.tablas.ci_proyecto_nomina.push(
+      { proyecto_id: OBRA_A, categoria: 'empleado', rol: 'admin', nombre: 'Luis', telegram_chat_id: 920, activo: true },
+      { proyecto_id: OBRA_A, categoria: 'empleado', rol: 'admin', nombre: 'Ana', telegram_chat_id: Number(INGENIERO), activo: true },
+      { proyecto_id: OBRA_A, categoria: 'empleado', rol: 'comprador', nombre: 'Neo', telegram_chat_id: 930, activo: true },
+      { proyecto_id: OBRA_B, categoria: 'empleado', rol: 'admin', nombre: 'Otro', telegram_chat_id: 940, activo: true },
+    )
+    await armarPedido('uso')
+    await pulsar(INGENIERO, 'rq:ok')
+
+    assert.equal(requerimiento()?.estado, 'solicitado')
+    assert.equal(mensajesA('920').length, 1)
+    assert.equal(mensajesA('930').length, 0)
+    assert.equal(mensajesA('940').length, 0)
+    assert.doesNotMatch(String(ultimoA(INGENIERO)?.text), /Lo despacho yo/)
   })
 
   it('quien pide no puede despachar su propio pedido', async () => {

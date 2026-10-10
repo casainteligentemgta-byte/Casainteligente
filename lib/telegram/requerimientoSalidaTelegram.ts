@@ -21,6 +21,7 @@ import {
 } from '@/lib/almacen/resolverDestinatariosCuarentenaTelegram';
 import { listarUbicacionesParaSelector } from '@/lib/almacen/ubicacionesInventario';
 import { esUuidProcura } from '@/lib/compras/telegramMetadata';
+import { listarNominaProyecto } from '@/lib/proyectos/proyectoNomina';
 import { resolverNombreMostrarTelegram } from '@/lib/procuras/resolverNombreTelegramObra';
 import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi';
 import type { TelegramEstado } from '@/lib/telegram/estados';
@@ -417,19 +418,48 @@ async function nombrePersona(
   }
 }
 
+/** Roles de la nómina de la obra (Proyecto → Nómina) que atienden el almacén. */
+const ROLES_NOMINA_ALMACEN = new Set(['depositario', 'almacenista', 'almacen']);
+/** Si la obra no tiene a nadie de almacén, el pedido no se pierde: lo recibe quien la administra. */
+const ROLES_NOMINA_RESPALDO = new Set(['admin', 'administrador']);
+
+/**
+ * Quién recibe un pedido de material: el depositario / grupo de almacén de la obra,
+ * más quien tenga rol de almacén en la nómina de la obra. Si no hay nadie, los
+ * administradores de la obra. Nunca quien hizo el pedido.
+ */
 async function chatsAlmacen(
   supabase: SupabaseClient,
   proyectoId: string,
   origenUbicacionId: string,
   excluir: string | number | null,
 ): Promise<string[]> {
+  const noEsSolicitante = (c: string) => excluir == null || c !== String(excluir);
   const almacen = await resolverDestinatariosCuarentenaTelegram(supabase, {
     proyectoId,
     ubicacionDestinoId: origenUbicacionId,
   });
-  return chatIdsDesdeDestinatarios(almacen.destinatarios).filter(
-    (c) => excluir == null || c !== String(excluir),
-  );
+  const chats = new Set(chatIdsDesdeDestinatarios(almacen.destinatarios).filter(noEsSolicitante));
+
+  let nomina: Awaited<ReturnType<typeof listarNominaProyecto>> = [];
+  try {
+    nomina = await listarNominaProyecto(supabase, proyectoId);
+  } catch (e) {
+    console.warn('[requerimiento salida] nómina de la obra no disponible:', e);
+  }
+  const chatsConRol = (roles: Set<string>): string[] =>
+    nomina
+      .filter((f) => roles.has(String(f.rol ?? '').trim().toLowerCase()))
+      .map((f) => f.telegram_chat_id ?? f.empleado_telegram_chat_id)
+      .filter((c) => c != null && Number.isFinite(Number(c)))
+      .map((c) => String(c))
+      .filter(noEsSolicitante);
+
+  for (const c of chatsConRol(ROLES_NOMINA_ALMACEN)) chats.add(c);
+  if (!chats.size) {
+    for (const c of chatsConRol(ROLES_NOMINA_RESPALDO)) chats.add(c);
+  }
+  return Array.from(chats);
 }
 
 type ContextoRequerimiento = { obra: string | null; origen: string | null; destino: string | null };
@@ -532,8 +562,8 @@ async function enviarPedido(
     await cerrarSesion(supabase, chatId);
     await sendTelegramMessage(
       chatId,
-      '❌ No se envió: esta obra no tiene a nadie del almacén con Telegram para despachar.\n' +
-        'Pida al administrador que asigne el depositario de la obra.',
+      '❌ No se envió: esta obra no tiene a nadie más con Telegram para despachar.\n' +
+        'En la web, entre a la obra → Nómina y asigne a alguien el rol <b>Depositario</b>.',
       { parse_mode: 'HTML' },
     );
     return;

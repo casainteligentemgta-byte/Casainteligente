@@ -39,6 +39,7 @@ declare
     'quality_inspections', 'ci_recepciones_campo', 'ci_recepciones_campo_lineas',
     'ci_facturas_canal_pendientes', 'ci_compras_capitulos_maestro', 'ci_alertas_config',
     'contabilidad_compras', 'contabilidad_compra_lineas', 'ci_compras_retiros',
+    'inv_requerimientos_salida',
     -- procuras y bot
     'ci_procuras', 'ci_procura_estados_historial', 'ci_usuarios_sistema_telegram',
     'ci_telegram_whitelist', 'ci_telegram_estados',
