@@ -165,6 +165,17 @@ async function enviarPickerObrero(
   page = 0,
 ): Promise<void> {
   const empleados = await listarEmpleadosProyectoEgreso(supabase, proyectoId);
+  if (!empleados.length) {
+    // Sin cuadrilla cargada no hay lista que mostrar: se pide el nombre de una vez.
+    await sendTelegramMessage(
+      chatId,
+      '👷 <b>¿Quién recibe el material?</b>\n' +
+        'Escriba <b>nombre y apellido</b>. Si quiere, añada el oficio tras una coma.\n' +
+        'Ej: <code>Juan Pérez, Albañil</code>',
+      { parse_mode: 'HTML' },
+    );
+    return;
+  }
   const totalPages = Math.max(1, Math.ceil((empleados.length + 1) / PAGE_SIZE));
   const safePage = Math.min(Math.max(0, page), totalPages - 1);
   const sliceStart = safePage * PAGE_SIZE;
@@ -193,7 +204,7 @@ async function enviarPickerObrero(
 
   await sendTelegramMessage(
     chatId,
-    '👷 <b>¿Quién recibe el material?</b>\nElige de la cuadrilla o escribe el nombre.',
+    '👷 <b>¿Quién recibe el material?</b>\nElija de la lista o escriba aquí nombre y apellido.',
     { parse_mode: 'HTML', reply_markup: { inline_keyboard: buttons } },
   );
 }
@@ -374,12 +385,19 @@ async function preguntarMasLineas(supabase: SupabaseClient, chatId: string, nLin
 }
 
 async function preguntarFoto(supabase: SupabaseClient, chatId: string): Promise<void> {
-  await patchMeta(
-    supabase,
-    chatId,
-    await getTelegramEstado(supabase, chatId),
-    { paso: 'foto' },
-  );
+  const estado = await getTelegramEstado(supabase, chatId);
+  const m = meta(estado);
+  if (m.foto_storage_path?.trim()) {
+    // La foto llegó antes (se acepta en cualquier paso): no se vuelve a pedir.
+    if (m.observaciones?.trim()) {
+      await enviarConfirmacion(supabase, chatId, estado);
+      return;
+    }
+    await patchMeta(supabase, chatId, estado, { paso: 'observacion' });
+    await pedirObservaciones(chatId, '📷 Ya tengo la foto.\n\n');
+    return;
+  }
+  await patchMeta(supabase, chatId, estado, { paso: 'foto' });
   if (fotoMovimientoObligatoria()) {
     await sendTelegramMessage(
       chatId,
@@ -827,7 +845,9 @@ export async function manejarTextoSalidaEgreso(
   const paso = meta(estado).paso;
   const trimmed = texto.trim();
 
-  if (paso === 'obrero_texto') {
+  // En el paso «obrero» también vale escribir el nombre sin pulsar ningún botón.
+  if (paso === 'obrero_texto' || paso === 'obrero') {
+    if (trimmed.startsWith('/')) return false;
     if (trimmed.length < 3) {
       await sendTelegramMessage(chatId, 'Nombre muy corto. Intente de nuevo.', { parse_mode: 'HTML' });
       return true;
@@ -901,7 +921,53 @@ export async function manejarTextoSalidaEgreso(
     return true;
   }
 
+  // Pasos que se responden con botones: en vez de callar, se repite lo que falta.
+  if (
+    !trimmed.startsWith('/') &&
+    (paso === 'material' ||
+      paso === 'partida' ||
+      paso === 'tarea' ||
+      paso === 'mas_lineas' ||
+      paso === 'confirmar')
+  ) {
+    await repetirPasoPendiente(supabase, chatId, estado);
+    return true;
+  }
+
   return false;
+}
+
+/** Vuelve a mostrar lo que el flujo está esperando, sin cambiar de paso. */
+async function repetirPasoPendiente(
+  supabase: SupabaseClient,
+  chatId: string,
+  estado: TelegramEstado,
+): Promise<void> {
+  const m = meta(estado);
+  const paso = m.paso;
+
+  if (paso === 'obrero' && estado.proyecto_id) {
+    await enviarPickerObrero(supabase, chatId, estado.proyecto_id);
+    return;
+  }
+  if (paso === 'material' && m.origen_ubicacion_id) {
+    await enviarPickerMaterial(supabase, chatId, m.origen_ubicacion_id);
+    return;
+  }
+  if (paso === 'confirmar') {
+    await enviarConfirmacion(supabase, chatId, estado);
+    return;
+  }
+
+  const texto =
+    paso === 'obrero_texto'
+      ? '👷 Escriba <b>nombre y apellido</b> de quien recibe el material.'
+      : paso === 'cantidad'
+        ? `🔢 Escriba la <b>cantidad</b> de «${m.draft_material_nombre ?? 'el material'}».`
+        : paso === 'origen'
+          ? '🏭 Elija el <b>almacén</b> con los botones del mensaje anterior.'
+          : '👆 Continúe con los <b>botones</b> del mensaje anterior.';
+  await sendTelegramMessage(chatId, texto, { parse_mode: 'HTML' });
 }
 
 export async function manejarFotoSalidaEgreso(params: {
@@ -917,10 +983,10 @@ export async function manejarFotoSalidaEgreso(params: {
   const estado = await getTelegramEstado(params.supabase, params.chatId);
   if (!esFlujoEgresoV2(estado)) return false;
 
+  // La foto se acepta en cualquier paso (una vez elegida la obra): quien está en el
+  // almacén la toma cuando tiene el material delante, no cuando el bot la pide.
   const paso = meta(estado).paso;
-  if (paso !== 'foto' && paso !== 'observacion') {
-    return false;
-  }
+  const fueraDePaso = paso !== 'foto' && paso !== 'observacion';
 
   if (!estado.proyecto_id) return false;
 
@@ -938,6 +1004,28 @@ export async function manejarFotoSalidaEgreso(params: {
 
   // El texto que acompaña la foto vale como observación: no se vuelve a preguntar.
   const pie = params.caption?.trim() ?? '';
+
+  if (fueraDePaso) {
+    await patchMeta(params.supabase, params.chatId, estado, {
+      foto_storage_path: storagePath,
+      foto_url: data.publicUrl ?? undefined,
+      telegram_user_id: params.userId,
+      telegram_username: params.username ?? null,
+      observaciones: pie || meta(estado).observaciones,
+    });
+    await sendTelegramMessage(
+      params.chatId,
+      '✅ <b>Foto guardada.</b> No tendrá que enviarla de nuevo.\n\nAhora continúe con lo que falta:',
+      { parse_mode: 'HTML' },
+    );
+    await repetirPasoPendiente(
+      params.supabase,
+      params.chatId,
+      await getTelegramEstado(params.supabase, params.chatId),
+    );
+    return true;
+  }
+
   await patchMeta(params.supabase, params.chatId, estado, {
     foto_storage_path: storagePath,
     foto_url: data.publicUrl ?? undefined,

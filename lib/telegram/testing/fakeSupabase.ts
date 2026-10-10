@@ -1,7 +1,7 @@
 /**
  * Doble mínimo de Supabase para pruebas de flujos del bot (node:test).
  * Guarda filas en memoria y entiende solo lo que usan los flujos probados:
- * select / insert / update / upsert con filtros eq, in, is, not, order y limit;
+ * select / insert / update / upsert con filtros eq, gt, in, is, not, order y limit;
  * y el bucket de Storage (upload / getPublicUrl).
  *
  * No es un emulador de PostgREST: si un flujo nuevo usa algo que falta aquí,
@@ -82,6 +82,10 @@ class Consulta implements PromiseLike<Resultado> {
   }
   eq(col: string, v: unknown): this {
     this.filtros.push((f) => String(f[col] ?? '') === String(v ?? ''));
+    return this;
+  }
+  gt(col: string, v: number): this {
+    this.filtros.push((f) => Number(f[col]) > v);
     return this;
   }
   in(col: string, vs: unknown[]): this {
