@@ -120,8 +120,8 @@ salidas (`/salida`) y la factura que carga el comprador (`/facturas` manual). El
    - **Partida presupuestaria** (solo las que usan ese material en APU / `obra_partidas_materiales`)
    - **Actividad Gantt** (`cronograma_tareas` vinculada a la partida) o omitir
 5. ¿Agregar otro material? Sí / No
-6. **Foto del material** (obligatoria)
-7. **Observaciones** (opcional; `-` para omitir)
+6. **Foto del material** (obligatoria). Se puede enviar en cualquier paso una vez elegida la obra: el bot la guarda y no la vuelve a pedir
+7. **Observaciones** (opcional; botón **Sin observaciones** para seguir sin escribir. El texto que acompaña la foto vale como observación)
 8. Confirmar → descuenta stock y registra trazabilidad
 
 ### Datos que se guardan

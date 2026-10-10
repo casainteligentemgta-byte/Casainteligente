@@ -21,6 +21,11 @@ import {
   MENSAJE_FOTO_OBLIGATORIA,
   fotoMovimientoObligatoria,
 } from '@/lib/telegram/fotoObligatoria';
+import {
+  MENSAJE_PEDIR_OBSERVACIONES,
+  observacionDesdeTexto,
+  tecladoSinObservaciones,
+} from '@/lib/telegram/observacionRapida';
 import { getTelegramEstado, setTelegramContexto } from '@/lib/telegram/estados';
 import { MENSAJE_INICIO_SALIDA_DESPACHO } from '@/lib/telegram/mensajesSalidaTelegram';
 import {
@@ -663,13 +668,10 @@ async function preguntarObservacionOpcional(supabase: SupabaseClient, chatId: st
   await patchMeta(supabase, chatId, await getTelegramEstado(supabase, chatId), { paso: 'observacion' });
   await sendTelegramMessage(
     chatId,
-    '📝 <b>Observaciones</b> (opcional)\n' +
-      'Escribe notas del despacho o envía <code>-</code> para continuar sin observaciones:',
+    MENSAJE_PEDIR_OBSERVACIONES,
     {
       parse_mode: 'HTML',
-      reply_markup: {
-        inline_keyboard: [[{ text: '⏭ Sin observaciones', callback_data: `${PREFIX}obs:skip` }]],
-      },
+      reply_markup: tecladoSinObservaciones(`${PREFIX}obs:skip`),
     },
   );
 }
@@ -1267,7 +1269,7 @@ export async function manejarTextoSalidaObraTelegram(
   }
 
   if (paso === 'observacion') {
-    const obs = trimmed === '-' ? '' : trimmed;
+    const obs = observacionDesdeTexto(trimmed);
     await patchMeta(supabase, chatId, estado, {
       observaciones: obs,
       telegram_user_id: userId,

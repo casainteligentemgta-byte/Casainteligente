@@ -16,6 +16,7 @@ import {
   enviarPickerProyectosTelegram,
   nombreProyectoTelegram,
 } from '@/lib/telegram/proyectoPicker';
+import { mensajeFotoFueraDePaso } from '@/lib/telegram/observacionRapida';
 import type { TelegramPhotoSize } from '@/lib/telegram/aguaRegistro';
 import { fileIdFotoTelegramMaxResolucion } from '@/lib/telegram/aguaRegistro';
 import { extractPurchaseInvoiceFromFile } from '@/lib/almacen/extractPurchaseInvoiceGemini';
@@ -477,6 +478,18 @@ export async function manejarFotoEntradaSalidaTelegram(params: {
 
   const tipo = meta(estado).tipo_movimiento ?? tipoDesdeContexto(estado.contexto);
   if (!tipo) return { handled: false };
+
+  // Los flujos nuevos de /salida (obrero, despacho) comparten este contexto y piden
+  // la foto en su propio paso; si llega antes, no es la foto de este flujo antiguo.
+  const flujoNuevo = (estado.metadata as { flujo?: unknown } | null)?.flujo;
+  if (typeof flujoNuevo === 'string' && flujoNuevo.trim()) {
+    await sendTelegramMessage(
+      params.chatId,
+      mensajeFotoFueraDePaso((estado.metadata as { paso?: string } | null)?.paso),
+      { parse_mode: 'HTML' },
+    );
+    return { handled: true, motivo: 'foto_fuera_de_paso' };
+  }
 
   const paso = meta(estado).paso ?? 'foto';
   if (paso !== 'foto') {
