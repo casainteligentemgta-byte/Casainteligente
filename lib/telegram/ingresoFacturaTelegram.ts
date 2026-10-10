@@ -1,8 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import {
-  listarFacturasPendientesIngreso,
-  type FacturaPendienteIngreso,
-} from '@/lib/almacen/listarFacturasPendientesIngreso';
+import type { FacturaPendienteIngreso } from '@/lib/almacen/listarFacturasPendientesIngreso';
+import { listarFacturasPendientesDeMisObras } from '@/lib/telegram/facturasPendientesDeMisObras';
 import { PROCUREMENT_DOCUMENTS_BUCKET } from '@/lib/almacen/procurementDocumentStorage';
 import { linkConfirmarCompraTelegram } from '@/lib/contabilidad/confirmarCompraDesdeCanal';
 import type { ExtractedCanalHeader } from '@/lib/contabilidad/extractedCanal';
@@ -375,7 +373,7 @@ export async function seleccionarFacturaPrecargadaTelegram(
   chatId: string,
   key: string,
 ): Promise<'ok' | 'confirmar' | 'not_found'> {
-  const todas = await listarFacturasPendientesIngreso(supabase);
+  const todas = await listarFacturasPendientesDeMisObras(supabase, chatId);
   const hit = todas.find((f) => f.key === key);
   if (!hit) return 'not_found';
 
@@ -444,7 +442,7 @@ async function enviarListaProveedores(
   chatId: string,
   page = 0,
 ): Promise<void> {
-  const todas = await listarFacturasPendientesIngreso(supabase);
+  const todas = await listarFacturasPendientesDeMisObras(supabase, chatId);
 
   if (!todas.length) {
     await setTelegramContexto(supabase, chatId, { contexto: 'menu', metadata: {} });
@@ -482,7 +480,7 @@ async function enviarListaFacturasProveedor(
   provKey: string,
   page = 0,
 ): Promise<void> {
-  const todas = await listarFacturasPendientesIngreso(supabase);
+  const todas = await listarFacturasPendientesDeMisObras(supabase, chatId);
   const facturas = ordenarFacturasPendientesPorNumero(
     todas.filter((f) => proveedorKey(f.supplier_name) === provKey),
   );
@@ -704,7 +702,7 @@ export async function manejarCallbackIngresoFacturaTelegram(
   }
 
   if (parsed.type === 'fact') {
-    const todas = await listarFacturasPendientesIngreso(supabase);
+    const todas = await listarFacturasPendientesDeMisObras(supabase, params.chatId);
     const hit = todas.find((f) => f.key === parsed.key);
     if (!hit) {
       await answerCallbackQuery(params.callbackId, 'Factura no encontrada', true);

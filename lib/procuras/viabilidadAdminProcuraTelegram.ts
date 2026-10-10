@@ -15,6 +15,7 @@ import {
   construirResumenStockProcuraMensaje,
   type FilaProcuraMensaje,
 } from '@/lib/procuras/mensajeAlertaProcuraTelegram';
+import { procuraSinFondos } from '@/lib/procuras/compraACredito';
 import { listarProjectManagersProcuraTelegram } from '@/lib/procuras/aprobadoresProcuraTelegram';
 import { tecladoAprobacionDepartamento } from '@/lib/compras/aprobacionDepartamentoTelegram';
 import { esUuidProcura } from '@/lib/compras/telegramMetadata';
@@ -98,7 +99,7 @@ export async function enviarAlertaPmTrasViabilidadAdmin(
   const stock = await construirResumenStockProcuraMensaje(supabase, row);
 
   const texto = construirMensajePmDecisionProcura(row, prioridad, stock, opts?.informadoPorRol);
-  const replyMarkup = tecladoAprobacionDepartamento(row.id);
+  const replyMarkup = tecladoAprobacionDepartamento(row.id, { aCredito: procuraSinFondos(row) });
   const solicitanteChatId =
     row.solicitante_telegram_chat_id != null
       ? Number(row.solicitante_telegram_chat_id)

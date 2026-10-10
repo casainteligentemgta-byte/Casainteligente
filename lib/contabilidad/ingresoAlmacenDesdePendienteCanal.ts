@@ -281,7 +281,12 @@ export async function ingresoAlmacenDesdePendienteCanal(
 ): Promise<ResultadoIngresoAlmacenCanal> {
   const resultado = await registrarIngresoAlmacenDesdePendienteCanal(supabase, pendingId, opts);
   if (resultado.success) {
-    await cerrarRetiroDeLaFactura(supabase, pendingId, opts?.purchaseInvoiceId);
+    const purchaseInvoiceId = await cerrarRetiroDeLaFactura(supabase, pendingId, opts?.purchaseInvoiceId);
+    // La solicitud que originó la compra pasa a «Recibida» y se avisa a quien la pidió.
+    if (purchaseInvoiceId) {
+      const { marcarProcurasRecibidasTrasIngreso } = await import('@/lib/procuras/procuraRecibidaTrasIngreso');
+      await marcarProcurasRecibidasTrasIngreso(supabase, purchaseInvoiceId, opts?.cantidadesRecibidas);
+    }
   }
   return resultado;
 }
@@ -291,9 +296,9 @@ async function cerrarRetiroDeLaFactura(
   supabase: SupabaseClient,
   pendingId: string,
   purchaseInvoiceIdConocido?: string | null,
-): Promise<void> {
+): Promise<string | null> {
+  let purchaseInvoiceId = purchaseInvoiceIdConocido?.trim() || '';
   try {
-    let purchaseInvoiceId = purchaseInvoiceIdConocido?.trim() || '';
     for (const tabla of ['ci_facturas_canal_pendientes', 'contabilidad_compras']) {
       if (purchaseInvoiceId) break;
       const { data } = await supabase
@@ -303,12 +308,13 @@ async function cerrarRetiroDeLaFactura(
         .maybeSingle();
       purchaseInvoiceId = String(data?.purchase_invoice_id ?? '').trim();
     }
-    if (!purchaseInvoiceId) return;
+    if (!purchaseInvoiceId) return null;
     const { cerrarRetiroCompraTrasIngreso } = await import('@/lib/telegram/retiroCompraTelegram');
     await cerrarRetiroCompraTrasIngreso(supabase, purchaseInvoiceId);
   } catch (e) {
     console.warn('[ingresoAlmacen] cerrar retiro:', e);
   }
+  return purchaseInvoiceId || null;
 }
 
 async function registrarIngresoAlmacenDesdePendienteCanal(

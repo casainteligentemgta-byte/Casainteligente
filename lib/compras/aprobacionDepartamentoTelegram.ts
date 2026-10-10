@@ -13,6 +13,7 @@ import { esChatCanalAdminTelegram } from '@/lib/procuras/canalAdminTelegram';
 import { etiquetaEstadoProcura } from '@/lib/procuras/procuraEstados';
 import { resolverProcuraDepartamento } from '@/lib/compras/registrarProcuraDepartamento';
 import { etiquetaResultadoAbastecimiento, mensajeResolucionAprobacionPm } from '@/lib/procuras/abastecimientoProcuraAprobada';
+import { procuraSinFondos } from '@/lib/procuras/compraACredito';
 import {
   esUuidProcura,
   parseMetadataMotivoRechazo,
@@ -122,6 +123,7 @@ type ProcuraAprobacionRow = {
   id: string;
   ticket: string;
   estado: string;
+  viabilidad_presupuestaria?: string | null;
   solicitante_nombre: string | null;
   material_txt: string;
   cantidad: number;
@@ -137,7 +139,7 @@ async function cargarProcuraParaAprobacion(
   const { data, error } = await supabase
     .from('ci_procuras')
     .select(
-      'id,ticket,estado,solicitante_nombre,material_txt,cantidad,unidad,solicitante_telegram_chat_id,proyecto_id',
+      'id,ticket,estado,solicitante_nombre,material_txt,cantidad,unidad,solicitante_telegram_chat_id,proyecto_id,viabilidad_presupuestaria',
     )
     .eq('id', procuraId.trim())
     .maybeSingle();
@@ -548,7 +550,7 @@ export async function manejarCallbackAprobacionDepartamentoCompras(
     const procura = await cargarProcuraParaAprobacion(supabase, parsed.procuraId);
 
     const pie =
-      `\n\n🟢 <b>Aprobada</b> por <b>${escHtml(perm.nombre)}</b>\n` +
+      `\n\n🟢 <b>${procuraSinFondos(procura) ? 'Aprobada a crédito' : 'Aprobada'}</b> por <b>${escHtml(perm.nombre)}</b>\n` +
       `${escHtml(mensajeResolucionAprobacionPm(resultado))}\n` +
       `Estado: <b>${escHtml(etiquetaEstadoProcura(resultado.estado ?? 'aprobada'))}</b>`;
 
@@ -586,11 +588,14 @@ export async function manejarCallbackAprobacionDepartamentoCompras(
 }
 
 /** Botones [Aprobar] [Rechazar] para el Project Manager (vía larga, tras viabilidad Admin). */
-export function tecladoAprobacionDepartamento(procuraId: string) {
+export function tecladoAprobacionDepartamento(procuraId: string, opts?: { aCredito?: boolean }) {
   return {
     inline_keyboard: [
       [
-        { text: '🟢 Aprobar', callback_data: `${CB_CMP_APROBAR}${procuraId}` },
+        {
+          text: opts?.aCredito ? '🟢 Aprobar a crédito' : '🟢 Aprobar',
+          callback_data: `${CB_CMP_APROBAR}${procuraId}`,
+        },
         { text: '🔴 Rechazar', callback_data: `${CB_CMP_RECHAZAR}${procuraId}` },
       ],
     ],

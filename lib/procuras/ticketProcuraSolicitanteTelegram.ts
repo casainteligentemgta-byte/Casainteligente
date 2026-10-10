@@ -33,6 +33,7 @@ export type FilaTicketProcuraSolicitante = {
   solicitante_telegram_message_id?: number | null;
   stock_almacen_detectado?: number | null;
   cantidad_compra?: number | null;
+  abastecimiento_codigo_despacho?: string | null;
 };
 
 export type OpcionesMensajeTicketSolicitante = {
@@ -45,7 +46,7 @@ const SELECT_TICKET_SOLICITANTE = `
   id,ticket,material_txt,cantidad,unidad,estado,via_rapida,
   viabilidad_presupuestaria,viabilidad_informada_por,motivo_rechazo,
   solicitante_nombre,solicitante_telegram_chat_id,solicitante_telegram_message_id,
-  stock_almacen_detectado,cantidad_compra
+  stock_almacen_detectado,cantidad_compra,abastecimiento_codigo_despacho
 `;
 
 function lineasFirmasAprobacion(
@@ -99,7 +100,11 @@ function lineasFirmasAprobacion(
       opts?.pmAprobadorNombre?.trim() ||
       transPm.usuario?.trim() ||
       'Project Manager';
-    lineas.push(`✅ PM: aprobada (${escHtml(quien)})`);
+    lineas.push(
+      via === 'no'
+        ? `✅ PM: aprobada <b>a crédito</b> (${escHtml(quien)})`
+        : `✅ PM: aprobada (${escHtml(quien)})`,
+    );
   } else if (
     transPmDesdeSolicitada &&
     !transSupervisorDirecta &&
@@ -120,8 +125,9 @@ function lineasFirmasAprobacion(
     lineas.push(`❌ Rechazada: ${escHtml(motivo)}`);
   }
 
-  if (opts?.despachoCodigo?.trim()) {
-    lineas.push(`📦 Despacho almacén: ${escHtml(opts.despachoCodigo.trim())}`);
+  const codigoDespacho = opts?.despachoCodigo?.trim() || row.abastecimiento_codigo_despacho?.trim();
+  if (codigoDespacho) {
+    lineas.push(`📦 Despacho almacén: ${escHtml(codigoDespacho)}`);
   } else if (
     Number(row.stock_almacen_detectado ?? 0) > 0 &&
     Number(row.cantidad_compra ?? 0) <= 0 &&
@@ -130,8 +136,17 @@ function lineasFirmasAprobacion(
     lineas.push('📦 Despacho desde almacén en curso');
   }
 
-  if (opts?.ordenCompraEmitida) {
+  const estadoFila = String(row.estado ?? '').toLowerCase();
+  const compraEnCurso = estadoFila === 'en_compra' || estadoFila === 'recibida' || estadoFila === 'recibida_parcial';
+  if (opts?.ordenCompraEmitida || (compraEnCurso && Number(row.cantidad_compra ?? 0) > 0)) {
     lineas.push('🛒 Orden enviada al comprador');
+  }
+  if (estadoFila === 'en_compra') {
+    lineas.push('🧾 Comprado: falta que llegue al almacén');
+  }
+  const transRecibida = historial.find((h) => String(h.estado_nuevo).toLowerCase() === 'recibida');
+  if (estadoFila === 'recibida' && /compra recibida/i.test(String(transRecibida?.motivo ?? ''))) {
+    lineas.push('📥 Compra recibida en el almacén');
   }
 
   return lineas;

@@ -1270,6 +1270,36 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
         return NextResponse.json({ ok: true, requerimiento_salida_foto: true });
       }
 
+      // Foto del material que sale del almacén por una solicitud (procura): misma regla.
+      const fotoDespachoProcura = await (async () => {
+        if (estadoFoto.contexto !== 'menu') return false;
+        const fileId = msg.photo?.[msg.photo.length - 1]?.file_id;
+        if (!fileId) return false;
+        try {
+          const { manejarFotoDespachoProcura, procuraEsperandoFotoDespacho } = await import(
+            '@/lib/telegram/despachoProcuraTelegram'
+          );
+          if (!(await procuraEsperandoFotoDespacho(supabase, chatId))) return false;
+          const { downloadTelegramFile, mimeFromTelegramPath } = await import('@/lib/telegram/botApi');
+          const { buffer, filePath } = await downloadTelegramFile(fileId);
+          const ext = filePath.split('.').pop() ?? 'jpg';
+          return await manejarFotoDespachoProcura({
+            supabase,
+            chatId,
+            buffer,
+            mimeType: mimeFromTelegramPath(filePath),
+            ext,
+          });
+        } catch (err) {
+          console.error('[telegram despacho procura foto]', err);
+          await sendTelegramMessage(chatId, '❌ No se pudo guardar la foto.', { parse_mode: 'HTML' });
+          return true;
+        }
+      })();
+      if (fotoDespachoProcura) {
+        return NextResponse.json({ ok: true, procura_despacho_foto: true });
+      }
+
       // Quien pide material no envía foto: la toma el almacén al despachar.
       if (esFlujoRequerimientoSalida(estadoFoto)) {
         await sendTelegramMessage(

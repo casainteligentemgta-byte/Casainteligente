@@ -21,7 +21,7 @@ import {
 } from '@/lib/almacen/resolverDestinatariosCuarentenaTelegram';
 import { listarUbicacionesParaSelector } from '@/lib/almacen/ubicacionesInventario';
 import { esUuidProcura } from '@/lib/compras/telegramMetadata';
-import { depositariosNomina, personasNominaConRol } from '@/lib/almacen/depositariosNomina';
+import { depositarioVirtualObra, depositariosNomina } from '@/lib/almacen/depositariosNomina';
 import { resolverNombreMostrarTelegram } from '@/lib/procuras/resolverNombreTelegramObra';
 import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi';
 import type { TelegramEstado } from '@/lib/telegram/estados';
@@ -418,9 +418,6 @@ async function nombrePersona(
   }
 }
 
-/** Si la obra no tiene a nadie de almacén, el pedido no se pierde: lo recibe quien la administra. */
-const ROLES_NOMINA_RESPALDO = new Set(['admin', 'administrador']);
-
 /**
  * Quién recibe un pedido de material: el depositario / grupo de almacén de la obra,
  * más quien tenga rol de almacén en la nómina de la obra. Si no hay nadie, los
@@ -443,7 +440,7 @@ async function chatsAlmacen(
     if (noEsSolicitante(p.chatId)) chats.add(p.chatId);
   }
   if (!chats.size) {
-    for (const p of await personasNominaConRol(supabase, proyectoId, ROLES_NOMINA_RESPALDO)) {
+    for (const p of await depositarioVirtualObra(supabase, proyectoId)) {
       if (noEsSolicitante(p.chatId)) chats.add(p.chatId);
     }
   }
