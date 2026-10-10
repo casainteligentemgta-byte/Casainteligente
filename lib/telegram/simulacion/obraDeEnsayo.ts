@@ -8,6 +8,7 @@
  * Los datos se crean con supabase/pruebas/obra_de_ensayo.sql.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { UsuarioSistemaSimulado } from '@/lib/telegram/simulacion/contexto';
 
 export const OBRA_ENSAYO = {
   id: '00000000-0000-4000-a000-0000000000a1',
@@ -36,15 +37,91 @@ export const MATERIAL_ENSAYO_2 = {
   stockInicial: 50,
 } as const;
 
-export type ClavePersonaEnsayo = 'ing' | 'depo' | 'admin';
-export type PersonaEnsayo = { clave: ClavePersonaEnsayo; nombre: string; rol: string; chatId: number };
+export type ClavePersonaEnsayo = 'ing' | 'conta' | 'pm' | 'compra' | 'logi' | 'depo';
 
-/** Chats que no pueden existir en Telegram (sus identificadores van por 10 dígitos). */
-export const PERSONAS_ENSAYO: Record<ClavePersonaEnsayo, PersonaEnsayo> = {
-  ing: { clave: 'ing', nombre: 'Ing. Ensayo', rol: 'ingeniero_residente', chatId: 9_990_000_000_001 },
-  depo: { clave: 'depo', nombre: 'Depo Ensayo', rol: 'depositario', chatId: 9_990_000_000_002 },
-  admin: { clave: 'admin', nombre: 'Admin Ensayo', rol: 'admin', chatId: 9_990_000_000_003 },
+export type PersonaEnsayo = {
+  clave: ClavePersonaEnsayo;
+  nombre: string;
+  /** Rol en la nómina de la obra de ensayo (fila real, solo de esa obra). */
+  rol: string;
+  /** Rol en el departamento de compras. Es global, así que solo existe dentro del ensayo. */
+  rolSistema: UsuarioSistemaSimulado['rol'] | null;
+  /** Fila fija en ci_proyecto_nomina. */
+  nominaId: string;
+  chatId: number;
 };
+
+/**
+ * Personas del ensayo. Sus chats no pueden existir en Telegram (los reales van por
+ * 10 dígitos). Nadie tiene rol «admin» en la nómina a propósito: el sistema copia ese
+ * rol como Administrador global y recibiría avisos de las obras reales.
+ */
+export const PERSONAS_ENSAYO: Record<ClavePersonaEnsayo, PersonaEnsayo> = {
+  ing: {
+    clave: 'ing',
+    nombre: 'Ing. Ensayo',
+    rol: 'ingeniero_residente',
+    rolSistema: 'Solicitante',
+    nominaId: '00000000-0000-4000-a000-0000000000e1',
+    chatId: 9_990_000_000_001,
+  },
+  depo: {
+    clave: 'depo',
+    nombre: 'Depo Ensayo',
+    rol: 'depositario',
+    rolSistema: null,
+    nominaId: '00000000-0000-4000-a000-0000000000e2',
+    chatId: 9_990_000_000_002,
+  },
+  pm: {
+    clave: 'pm',
+    nombre: 'PM Ensayo',
+    rol: 'pm_obra',
+    rolSistema: 'Aprobador',
+    nominaId: '00000000-0000-4000-a000-0000000000e3',
+    chatId: 9_990_000_000_003,
+  },
+  conta: {
+    clave: 'conta',
+    nombre: 'Conta Ensayo',
+    rol: 'contador',
+    rolSistema: 'Contador',
+    nominaId: '00000000-0000-4000-a000-0000000000e4',
+    chatId: 9_990_000_000_004,
+  },
+  compra: {
+    clave: 'compra',
+    nombre: 'Compra Ensayo',
+    rol: 'comprador',
+    rolSistema: 'Comprador',
+    nominaId: '00000000-0000-4000-a000-0000000000e5',
+    chatId: 9_990_000_000_005,
+  },
+  logi: {
+    clave: 'logi',
+    nombre: 'Logi Ensayo',
+    rol: 'logistica',
+    rolSistema: null,
+    nominaId: '00000000-0000-4000-a000-0000000000e6',
+    chatId: 9_990_000_000_006,
+  },
+};
+
+/** Las personas con rol en el departamento de compras, tal como las ve el bot en un ensayo. */
+export function usuariosSistemaDeEnsayo(): UsuarioSistemaSimulado[] {
+  const usuarios: UsuarioSistemaSimulado[] = [];
+  for (const p of Object.values(PERSONAS_ENSAYO)) {
+    if (!p.rolSistema) continue;
+    usuarios.push({
+      id: p.nominaId,
+      nombre: p.nombre,
+      telegram_id: p.chatId,
+      rol: p.rolSistema,
+      proyecto_id: OBRA_ENSAYO.id,
+    });
+  }
+  return usuarios;
+}
 
 const OBRAS = [OBRA_ENSAYO.id, OBRA_ENSAYO_2.id] as const;
 const MATERIALES = [MATERIAL_ENSAYO_1.id, MATERIAL_ENSAYO_2.id] as const;
@@ -152,7 +229,123 @@ export async function reiniciarObraDeEnsayo(
     pasos.push(ok ? { tabla, ok } : { tabla, ok, detalle: error?.message });
   };
 
+  // Las personas del ensayo se dejan siempre como dice el código (nómina de la obra ficticia).
+  anotar(
+    'ci_proyecto_nomina (personas)',
+    (
+      await supabase.from('ci_proyecto_nomina').upsert(
+        Object.values(PERSONAS_ENSAYO).map((p) => ({
+          id: p.nominaId,
+          proyecto_id: OBRA_ENSAYO.id,
+          categoria: 'empleado',
+          rol: p.rol,
+          nombre: p.nombre,
+          telegram_chat_id: p.chatId,
+          activo: true,
+          notas: 'Persona ficticia de los ensayos del bot.',
+        })),
+        { onConflict: 'id' },
+      )
+    ).error,
+  );
+  // Ningún chat de ensayo debe quedar como usuario global del departamento de compras.
+  anotar(
+    'ci_usuarios_sistema_telegram (chats de ensayo)',
+    (
+      await supabase
+        .from('ci_usuarios_sistema_telegram')
+        .delete()
+        .in('telegram_id', Object.values(PERSONAS_ENSAYO).map((p) => p.chatId))
+    ).error,
+  );
+
   anotar('ci_telegram_estados', (await supabase.from('ci_telegram_estados').delete().in('chat_id', CHATS)).error);
+
+  // --- Cadena de compras (de lo más dependiente a lo menos) ---
+  /** Carpetas y archivos sueltos de documentos de compra que subió el ensayo. */
+  const documentos: string[] = CHATS.flatMap((chat) => [
+    `facturas-comprador-manual/${chat}`,
+    `recepciones-campo/telegram-${chat}`,
+    `recepciones-campo/telegram-factura-${chat}`,
+  ]);
+  const sueltos: string[] = [];
+  const porObra = async (tabla: string) =>
+    anotar(tabla, (await supabase.from(tabla).delete().in('proyecto_id', [...OBRAS])).error);
+
+  // Facturas en trámite: las de la obra y las que cargó un chat de ensayo (aún sin obra).
+  const { data: pendObra, error: ePendObra } = await supabase
+    .from('ci_facturas_canal_pendientes')
+    .select('id,document_storage_path')
+    .in('proyecto_id', [...OBRAS]);
+  const { data: pendChat, error: ePendChat } = await supabase
+    .from('ci_facturas_canal_pendientes')
+    .select('id,document_storage_path')
+    .in('chat_id', CHATS);
+  anotar('ci_facturas_canal_pendientes (lectura)', ePendObra ?? ePendChat);
+  const pendientes = [...(pendObra ?? []), ...(pendChat ?? [])] as Array<{
+    id: string;
+    document_storage_path: string | null;
+  }>;
+  const { data: retiros } = await supabase.from('ci_compras_retiros').select('id').in('proyecto_id', [...OBRAS]);
+  documentos.push(
+    ...pendientes.map((p) => `telegram-pending/${p.id}`),
+    ...((retiros ?? []) as Array<{ id: string }>).map((r) => `retiros-compra/${r.id}`),
+  );
+  sueltos.push(...pendientes.map((p) => String(p.document_storage_path ?? '').trim()).filter(Boolean));
+
+  await porObra('ci_compras_retiros');
+  await porObra('ci_recepciones_campo'); // sus líneas se borran en cascada
+
+  const { data: facturas, error: eFacturas } = await supabase
+    .from('purchase_invoices')
+    .select('id')
+    .in('proyecto_id', [...OBRAS]);
+  anotar('purchase_invoices (lectura)', eFacturas);
+  const facturaIds = ((facturas ?? []) as Array<{ id: string }>).map((f) => f.id);
+  // La foto de cada factura vive en una carpeta con el id de la factura.
+  documentos.push(...facturaIds);
+  if (facturaIds.length) {
+    anotar(
+      'quality_inspections',
+      (await supabase.from('quality_inspections').delete().in('invoice_id', facturaIds)).error,
+    );
+    anotar(
+      'compras_facturas',
+      (await supabase.from('compras_facturas').delete().in('purchase_invoice_id', facturaIds)).error,
+    );
+  }
+  await porObra('contabilidad_compras'); // sus líneas se borran en cascada
+  if (facturaIds.length) {
+    anotar('purchase_invoices', (await supabase.from('purchase_invoices').delete().in('id', facturaIds)).error);
+  }
+  await porObra('ci_facturas_canal_pendientes');
+  if (pendientes.length) {
+    anotar(
+      'ci_facturas_canal_pendientes (chats de ensayo)',
+      (await supabase.from('ci_facturas_canal_pendientes').delete().in('id', pendientes.map((p) => p.id))).error,
+    );
+  }
+  await porObra('ci_procuras'); // su historial de estados se borra en cascada
+  await porObra('gastos_obra');
+  await porObra('ci_notificaciones');
+  // Una compra actualiza el costo y el stock global del material: se dejan en cero.
+  anotar(
+    'global_inventory (materiales de ensayo)',
+    (
+      await supabase
+        .from('global_inventory')
+        .update({
+          stock_available: 0,
+          stock_quarantine: 0,
+          last_purchase_price: null,
+          last_purchase_date: null,
+          average_weighted_cost: null,
+          last_supplier_id: null,
+        })
+        .in('id', [...MATERIALES])
+    ).error,
+  );
+
   anotar(
     'inv_requerimientos_salida',
     (await supabase.from('inv_requerimientos_salida').delete().in('proyecto_id', [...OBRAS])).error,
@@ -213,24 +406,33 @@ export async function reiniciarObraDeEnsayo(
     ).error,
   );
 
-  anotar('fotos de ensayo (Storage)', await borrarFotosDeEnsayo(supabase));
+  anotar(
+    'fotos de ensayo (Storage)',
+    await borrarArchivosDeEnsayo(supabase, 'ci-proyectos-media', [
+      ...OBRAS.map((id) => `telegram-movimientos/${id}`),
+      ...CHATS.map((chat) => `telegram-movimientos/traspasos/${chat}`),
+    ]),
+  );
+  anotar(
+    'documentos de compra de ensayo (Storage)',
+    await borrarArchivosDeEnsayo(supabase, 'procurement-documents', documentos, sueltos),
+  );
 
   return pasos;
 }
 
-const BUCKET_FOTOS = 'ci-proyectos-media';
-
 /**
- * Borra las fotos de relleno que subieron los ensayos. Solo mira carpetas que llevan
- * el identificador de una obra o de un chat de ensayo.
+ * Borra de Storage los archivos de relleno que subieron los ensayos. Solo mira carpetas
+ * que llevan el identificador de una obra, un chat o un registro de ensayo.
  */
-async function borrarFotosDeEnsayo(supabase: SupabaseClient): Promise<{ message?: string } | null> {
-  const carpetas = [
-    ...OBRAS.map((id) => `telegram-movimientos/${id}`),
-    ...CHATS.map((chat) => `telegram-movimientos/traspasos/${chat}`),
-  ];
-  const bucket = supabase.storage.from(BUCKET_FOTOS);
-  const archivos: string[] = [];
+async function borrarArchivosDeEnsayo(
+  supabase: SupabaseClient,
+  nombreBucket: string,
+  carpetas: string[],
+  sueltos: string[] = [],
+): Promise<{ message?: string } | null> {
+  const bucket = supabase.storage.from(nombreBucket);
+  const archivos: string[] = [...sueltos];
 
   // Storage lista una carpeta a la vez: se baja hasta dos niveles (obra/tipo/archivo).
   const listar = async (carpeta: string, nivel: number): Promise<{ message?: string } | null> => {

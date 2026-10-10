@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { simulacionBotActiva, ticketProcuraDeEnsayo } from '@/lib/telegram/simulacion/contexto';
 import { resolverEntidadIdDesdeProyecto } from '@/lib/contabilidad/resolverEntidadProyecto';
 import type { ContextoAuditoriaSupervisor } from '@/lib/procuras/auditoriaSupervisorProcura';
 import { obtenerCapituloMaestroPorId } from '@/lib/compras/capitulosMaestro';
@@ -144,6 +145,8 @@ export async function registrarProcuraDepartamento(
     if (proyectoId) row.proyecto_id = proyectoId;
     if (entidadId) row.entidad_id = entidadId;
     if (materialId) row.material_id = materialId;
+    // Un ensayo del bot no gasta números de la secuencia real de tickets.
+    if (simulacionBotActiva()) row.ticket = ticketProcuraDeEnsayo();
 
     const { data, error } = await supabase
       .from('ci_procuras')
@@ -247,6 +250,8 @@ export async function registrarProcuraDepartamento(
   if (proyectoId) row.proyecto_id = proyectoId;
   if (entidadId) row.entidad_id = entidadId;
   if (materialId) row.material_id = materialId;
+  // Un ensayo del bot no gasta números de la secuencia real de tickets.
+  if (simulacionBotActiva()) row.ticket = ticketProcuraDeEnsayo();
 
   const { data, error } = await supabase
     .from('ci_procuras')

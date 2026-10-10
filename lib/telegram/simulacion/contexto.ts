@@ -25,9 +25,24 @@ export type EnvioSimulado = {
   alerta: boolean;
 };
 
+/**
+ * Persona del ensayo con rol en el departamento de compras (Solicitante, Contador,
+ * PM, Comprador). Estos roles son globales en la tabla real: una fila ficticia allí
+ * recibiría avisos de las obras de verdad. Por eso solo existen dentro del ensayo.
+ */
+export type UsuarioSistemaSimulado = {
+  id: string;
+  nombre: string;
+  telegram_id: number;
+  rol: 'Solicitante' | 'Aprobador' | 'Comprador' | 'Contador' | 'Administrador';
+  proyecto_id: string | null;
+};
+
 export type ContextoSimulacionBot = {
   envios: EnvioSimulado[];
   siguienteMensajeId: number;
+  /** Dentro de un ensayo, los únicos usuarios del departamento de compras son estos. */
+  usuariosSistema: UsuarioSistemaSimulado[];
 };
 
 type AlmacenAsincrono = {
@@ -71,8 +86,13 @@ export function simulacionBotActiva(): ContextoSimulacionBot | undefined {
 /** Ejecuta `fn` con Telegram en modo captura y devuelve lo que el bot habría enviado. */
 export async function enSimulacionBot<T>(
   fn: () => Promise<T>,
+  opciones?: { usuariosSistema?: UsuarioSistemaSimulado[] },
 ): Promise<{ resultado: T; envios: EnvioSimulado[] }> {
-  const contexto: ContextoSimulacionBot = { envios: [], siguienteMensajeId: 500_000 };
+  const contexto: ContextoSimulacionBot = {
+    envios: [],
+    siguienteMensajeId: 500_000,
+    usuariosSistema: opciones?.usuariosSistema ?? [],
+  };
   const almacen = await obtenerAlmacen();
   const resultado = await almacen.run(contexto, fn);
   return { resultado, envios: contexto.envios };
@@ -124,4 +144,15 @@ export function responderTelegramSimulado(
 /** Archivo que el bot «descarga» de Telegram durante un ensayo. */
 export function archivoTelegramSimulado(): { buffer: Buffer; filePath: string } {
   return { buffer: Buffer.from(JPEG_DE_RELLENO), filePath: 'photos/ensayo.jpg' };
+}
+
+let ultimoTicketDeEnsayo = 0;
+
+/**
+ * Ticket para una procura creada en un ensayo. Lleva el año 0000 para que no se confunda
+ * con uno real y no consume la secuencia de tickets de la base.
+ */
+export function ticketProcuraDeEnsayo(): string {
+  ultimoTicketDeEnsayo = Math.max(ultimoTicketDeEnsayo + 1, Date.now() % 100_000);
+  return `PR-0000-${String(ultimoTicketDeEnsayo % 100_000).padStart(5, '0')}`;
 }

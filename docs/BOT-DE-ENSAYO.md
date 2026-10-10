@@ -42,13 +42,23 @@ quedó abierta.
 
 ## Personas
 
-| Clave | Nombre | Rol en la nómina de la obra de ensayo |
-| --- | --- | --- |
-| `ing` | Ing. Ensayo | Ingeniero residente |
-| `depo` | Depo Ensayo | Depositario |
-| `admin` | Admin Ensayo | Administrador |
+| Clave | Nombre | En la nómina de la obra de ensayo | En el departamento de compras |
+| --- | --- | --- | --- |
+| `ing` | Ing. Ensayo | Ingeniero residente | Solicitante |
+| `conta` | Conta Ensayo | Contador | Contador (revisa fondos) |
+| `pm` | PM Ensayo | PM de obra | Aprobador |
+| `compra` | Compra Ensayo | Comprador | Comprador |
+| `logi` | Logi Ensayo | Logística | — |
+| `depo` | Depo Ensayo | Depositario | — |
 
 Sus chats son números que no pueden existir en Telegram.
+
+Los roles del departamento de compras son **globales** en `ci_usuarios_sistema_telegram`:
+una fila ficticia allí recibiría los avisos de las obras reales. Por eso esos roles
+**no se guardan en la base**: existen solo dentro del ensayo (`usuariosSistema` del
+contexto). Mientras corre un ensayo, las funciones que leen esa tabla devuelven
+únicamente a las personas del ensayo, y nada se copia de la nómina a la tabla real.
+Nadie de la nómina de ensayo es `admin`, porque ese rol sí se copia como Administrador global.
 
 ## Seguros
 
@@ -60,12 +70,27 @@ Sus chats son números que no pueden existir en Telegram.
 - Si alguien renombra la obra ficticia (deja de empezar por «ZZ ·»), los ensayos se niegan
   a correr.
 
+## Recorridos
+
+| Grupo | Recorridos |
+| --- | --- |
+| Salida a obrero | `salida_obrero`, `salida_obrero_foto_antes`, `salida_obrero_sin_foto` |
+| Pedir material al almacén | `pedido_uso`, `pedido_colocacion`, `pedido_traspaso`, `pedido_devolucion`, `pedido_deterioro`, `pedido_no_propio`, `pedido_rechazado`, `pedido_soltado`, `pedido_supera_stock` |
+| Traspaso | `traspaso` |
+| Compras | `compra_completa`, `compra_foto_factura_antes`, `compra_sin_fondos` |
+
+`compra_completa` recorre toda la cadena: el ingeniero pide 150 con 100 en almacén → el
+Contador confirma fondos → el PM aprueba → el depositario despacha 100 y el comprador recibe
+**una sola** orden por 50 → factura manual con foto, en dólares → Logística la retira con
+foto → el depositario la ingresa con foto y el almacén sube 50. Comprueba además que el
+monto en bolívares de Contabilidad sea dólares × tasa una sola vez.
+
+`?escenario=todos` los corre todos, uno tras otro.
+
 ## Qué no cubre
 
 - La entrega real por Telegram (que el mensaje llegue al teléfono) ni cómo se ve.
 - La lectura automática de facturas por foto.
-- Avisos a personas con rol global del bot (Contador, Comprador, PM): las personas de
-  ensayo solo existen en la nómina de la obra ficticia.
 
 ## Datos
 

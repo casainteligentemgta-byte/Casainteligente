@@ -447,6 +447,8 @@ async function ejecutarDepositarioSupervisor(
     procuraId,
     autorNombre: nombreActorSupervisorFormal(supervisorNombre),
     auditoriaSupervisor: auditoria,
+    // Igual que el depositario: la compra pedida al aprobar no se repite.
+    compraOrdenadaAlAprobar: true,
   });
 
   if (!resultado.ok) {

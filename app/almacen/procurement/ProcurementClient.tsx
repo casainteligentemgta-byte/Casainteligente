@@ -15,6 +15,7 @@ import SelectorUnidadMedida from '@/components/almacen/SelectorUnidadMedida';
 import { formatearBs, vesAUsdConTasa } from '@/lib/contabilidad/comprasMontos';
 import { resolverTasaBcvVesPorUsd } from '@/lib/finanzas/bcvTasaPorFecha';
 import {
+    montoEnMonedaOriginal,
     payloadCompraBimonetario,
     resolverMontosCompraBimonetario,
 } from '@/lib/contabilidad/comprasBimonetario';
@@ -820,7 +821,7 @@ export default function ProcurementClient() {
                 supplier_rif: payload.supplier_rif,
                 supplier_name: payload.supplier_name,
                 fecha: payload.date,
-                total_amount: montos.totalAmountLegacy,
+                total_amount: montoEnMonedaOriginal(montos),
                 moneda: montos.monedaOriginal,
                 tasa_bcv_ves_por_usd: montos.tasaApplied,
                 total_amount_usd: montos.montoUsd,

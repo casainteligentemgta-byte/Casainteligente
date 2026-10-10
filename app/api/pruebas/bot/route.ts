@@ -162,22 +162,31 @@ export async function GET(req: Request) {
       };
     };
 
+    /** Un recorrido con nombre no deja nada tras de sí: la obra de ensayo vuelve a quedar limpia. */
+    const correrYLimpiar = async (e: Escenario) => {
+      const resultado = await correr(e, true);
+      const sobrantes = (await reiniciarObraDeEnsayo(supabase, obra)).filter((l) => !l.ok);
+      return sobrantes.length
+        ? { ...resultado, paso: false, fallosLimpieza: [...resultado.fallosLimpieza, ...sobrantes] }
+        : resultado;
+    };
+
     if (escenarioId === 'todos') {
       const resultados: Array<Awaited<ReturnType<typeof correr>>> = [];
-      for (const e of ESCENARIOS) resultados.push(await correr(e, true));
-      // Al terminar, la obra de ensayo queda limpia.
-      const limpiezaFinal = (await reiniciarObraDeEnsayo(supabase, obra)).filter((l) => !l.ok);
+      for (const e of ESCENARIOS) resultados.push(await correrYLimpiar(e));
       return NextResponse.json({
         ok: true,
         pasaron: resultados.filter((r) => r.paso).length,
         total: resultados.length,
-        limpiezaFinal,
         resultados,
         duracionMs: Date.now() - inicio,
       });
     }
 
-    const resultado = await correr(escenario ?? null, Boolean(escenario) || q.get('reiniciar') === '1');
+    // Un guion libre deja la conversación abierta para poder continuarla en otra llamada.
+    const resultado = escenario
+      ? await correrYLimpiar(escenario)
+      : await correr(null, q.get('reiniciar') === '1');
     return NextResponse.json({ ok: true, ...resultado, duracionMs: Date.now() - inicio });
   } catch (e) {
     const mensaje = e instanceof Error ? e.message : 'Error en el ensayo.';

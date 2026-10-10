@@ -16,6 +16,7 @@ import {
   type RetiroCompra,
 } from '@/lib/compras/retiroCompra';
 import { esUuidProcura } from '@/lib/compras/telegramMetadata';
+import { obtenerUsuarioSistemaTelegram } from '@/lib/compras/usuariosSistemaTelegram';
 import { resolverNombreMostrarTelegram } from '@/lib/procuras/resolverNombreTelegramObra';
 import { listarNominaProyecto } from '@/lib/proyectos/proyectoNomina';
 import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi';
@@ -122,7 +123,16 @@ async function destinatariosRetiro(
 
   if (retiro.solicitado_por_chat_id != null) {
     const chat = String(retiro.solicitado_por_chat_id);
-    if (!out.has(chat)) out.set(chat, { chatId: chat, nombre: 'Comprador', rol: 'Comprador' });
+    if (!out.has(chat)) {
+      // Con su nombre, para que el aviso no diga «Corresponde a: Comprador · Comprador».
+      let nombre = 'Comprador';
+      try {
+        nombre = (await obtenerUsuarioSistemaTelegram(supabase, chat))?.nombre?.trim() || nombre;
+      } catch {
+        /* sin nombre: se queda el rol */
+      }
+      out.set(chat, { chatId: chat, nombre, rol: 'Comprador' });
+    }
   }
 
   return Array.from(out.values());
@@ -294,6 +304,15 @@ export async function manejarCallbackRetiroCompra(
   return true;
 }
 
+/** Qué se le dice a quien retira sobre el aviso al almacén. */
+export function mensajeAvisoAlmacenRetiro(avisados: number, quienRetiraEsAlmacen = false): string {
+  if (avisados > 0) return 'El almacén ya fue avisado de que va en camino.';
+  if (quienRetiraEsAlmacen) {
+    return 'Al llegar al almacén, regístrela con <code>/ingreso</code> → facturas precargadas (con foto).';
+  }
+  return '⚠️ Esta obra no tiene a nadie de almacén con Telegram: <b>avise usted</b> al almacén que va en camino.';
+}
+
 /**
  * Foto de la mercancía al retirarla. Solo la toma si este chat tiene un retiro a su
  * nombre esperando foto; si no, devuelve false y el webhook sigue con los demás flujos.
@@ -331,20 +350,18 @@ export async function manejarFotoRetiroCompra(params: {
 
   const ctx = await cargarContextoRetiro(params.supabase, enCamino);
   const detalle = detalleRetiro(enCamino, ctx);
-  await sendTelegramMessage(
-    params.chatId,
-    `✅ <b>Retiro registrado con foto</b>\n\n${detalle}\n\n` +
-      'El almacén ya fue avisado de que va en camino.',
-    { parse_mode: 'HTML' },
-  );
-
   const quien = enCamino.transportista_nombre ?? 'Transportista';
   const almacen = await resolverDestinatariosCuarentenaTelegram(params.supabase, {
     proyectoId: enCamino.proyecto_id,
     ubicacionDestinoId: enCamino.ubicacion_destino_id,
   });
+  let avisadosAlmacen = 0;
+  let quienRetiraEsAlmacen = false;
   for (const chatId of chatIdsDesdeDestinatarios(almacen.destinatarios)) {
-    if (chatId === params.chatId) continue;
+    if (chatId === params.chatId) {
+      quienRetiraEsAlmacen = true;
+      continue;
+    }
     try {
       await sendTelegramMessage(
         chatId,
@@ -352,10 +369,18 @@ export async function manejarFotoRetiroCompra(params: {
           'Al recibirla, regístrela con <code>/ingreso</code> → facturas precargadas (con foto).',
         { parse_mode: 'HTML', rolDestinatario: 'Depositario', contextoLogEspejo: '[Compra · en camino]' },
       );
+      avisadosAlmacen += 1;
     } catch (e) {
       console.warn('[retiroCompra] aviso almacén', chatId, e);
     }
   }
+
+  // Solo se afirma que el almacén fue avisado si de verdad le llegó a alguien.
+  await sendTelegramMessage(
+    params.chatId,
+    `✅ <b>Retiro registrado con foto</b>\n\n${detalle}\n\n` + mensajeAvisoAlmacenRetiro(avisadosAlmacen, quienRetiraEsAlmacen),
+    { parse_mode: 'HTML' },
+  );
 
   await avisarAlComprador(
     enCamino,

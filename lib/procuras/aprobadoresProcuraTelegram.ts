@@ -5,6 +5,7 @@ import {
   type RolComprasTelegram,
 } from '@/lib/compras/usuariosSistemaTelegram';
 import { listarNominaProyecto } from '@/lib/proyectos/proyectoNomina';
+import { simulacionBotActiva } from '@/lib/telegram/simulacion/contexto';
 import {
   corregirNombreDisplayTelegram,
   resolverNombreMostrarTelegram,
@@ -26,6 +27,33 @@ export function rolSistemaTelegramDesdeSlugApp(slug: string): RolComprasTelegram
 
 export const ROLES_NOMINA_APROBADOR = new Set(['pm_obra', 'coordinador', 'admin']);
 
+type FilaUsuarioSistema = {
+  nombre: string | null;
+  telegram_id: number | string;
+  rol: string | null;
+  proyecto_id: string | null;
+};
+
+/**
+ * Usuarios activos del departamento de compras con alguno de estos roles.
+ * En un ensayo del bot devuelve solo las personas del ensayo, sin leer la tabla real.
+ */
+async function usuariosSistemaConRol(
+  supabase: SupabaseClient,
+  roles: RolComprasTelegram[],
+): Promise<{ data: FilaUsuarioSistema[] | null; error: { message: string; code?: string } | null }> {
+  const simulacion = simulacionBotActiva();
+  if (simulacion) {
+    return { data: simulacion.usuariosSistema.filter((u) => roles.includes(u.rol)), error: null };
+  }
+  const { data, error } = await supabase
+    .from('ci_usuarios_sistema_telegram')
+    .select('nombre, telegram_id, rol, proyecto_id')
+    .eq('activo', true)
+    .in('rol', roles);
+  return { data: (data ?? null) as FilaUsuarioSistema[] | null, error };
+}
+
 export type AprobadorProcuraTelegram = {
   chatId: number;
   nombre: string;
@@ -46,6 +74,8 @@ export async function sincronizarUsuarioSistemaTelegramProyecto(
 ): Promise<void> {
   const rol = rolSistemaTelegramDesdeSlugApp(params.rolSlug);
   if (!rol) return;
+  // Un ensayo del bot no escribe usuarios en la tabla real.
+  if (simulacionBotActiva()) return;
 
   const row = {
     nombre: params.nombre.slice(0, 150),
@@ -71,11 +101,7 @@ export async function listarAprobadoresProcuraTelegram(
 ): Promise<AprobadorProcuraTelegram[]> {
   const out = new Map<number, AprobadorProcuraTelegram>();
 
-  const { data: sistema, error: errSis } = await supabase
-    .from('ci_usuarios_sistema_telegram')
-    .select('nombre, telegram_id, rol, proyecto_id')
-    .eq('activo', true)
-    .in('rol', ['Aprobador', 'Administrador']);
+  const { data: sistema, error: errSis } = await usuariosSistemaConRol(supabase, ['Aprobador', 'Administrador']);
 
   if (errSis?.code === '42P01') {
     /* tabla ausente */
@@ -155,11 +181,7 @@ export async function listarContadoresProcuraTelegram(
 ): Promise<AprobadorProcuraTelegram[]> {
   const out = new Map<number, AprobadorProcuraTelegram>();
 
-  const { data: sistema, error: errSis } = await supabase
-    .from('ci_usuarios_sistema_telegram')
-    .select('nombre, telegram_id, rol, proyecto_id')
-    .eq('activo', true)
-    .in('rol', ['Contador', 'Administrador']);
+  const { data: sistema, error: errSis } = await usuariosSistemaConRol(supabase, ['Contador', 'Administrador']);
 
   if (errSis?.code === '42P01') {
     /* tabla ausente */

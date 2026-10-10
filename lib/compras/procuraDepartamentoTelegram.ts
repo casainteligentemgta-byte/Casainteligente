@@ -943,6 +943,8 @@ export async function manejarCallbackProcuraDepartamentoTelegram(
     const resultado = await confirmarAbastecimientoProcura(supabase, {
       procuraId,
       autorNombre: nombre,
+      // El botón viene de la orden que salió al aprobar: la compra ya se le pidió al comprador.
+      compraOrdenadaAlAprobar: true,
     });
     await sendTelegramMessage(
       params.chatId,

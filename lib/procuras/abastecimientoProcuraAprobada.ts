@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { obtenerConfigTelegramAlmacenProyecto } from '@/lib/almacen/depositarioObra';
+import { depositariosNomina } from '@/lib/almacen/depositariosNomina';
 import {
   ejecutarTransicionProcuraLote,
   metadatosAuditoriaSupervisor,
@@ -52,13 +53,15 @@ export async function cargarProcuraAbastecimiento(
       proyecto_id: string | null;
       material_id: string | null;
       capitulo_maestro_id: string | null;
+      cantidad_compra?: number | null;
+      abastecimiento_codigo_despacho?: string | null;
     })
   | null
 > {
   const { data, error } = await supabase
     .from('ci_procuras')
     .select(
-      'id,ticket,estado,material_txt,material_id,cantidad,unidad,solicitante_nombre,solicitante_telegram_chat_id,prioridad,monto_estimado_usd,observaciones,proyecto_id,capitulo_maestro_id,cantidad_despacho,cantidad_compra,stock_almacen_detectado,viabilidad_presupuestaria,ci_proyectos(nombre),ci_entidades(nombre),ci_compras_capitulos_maestro(codigo,nombre)',
+      'id,ticket,estado,material_txt,material_id,cantidad,unidad,solicitante_nombre,solicitante_telegram_chat_id,prioridad,monto_estimado_usd,observaciones,proyecto_id,capitulo_maestro_id,cantidad_despacho,cantidad_compra,stock_almacen_detectado,abastecimiento_codigo_despacho,viabilidad_presupuestaria,ci_proyectos(nombre),ci_entidades(nombre),ci_compras_capitulos_maestro(codigo,nombre)',
     )
     .eq('id', procuraId.trim())
     .maybeSingle();
@@ -69,6 +72,8 @@ export async function cargarProcuraAbastecimiento(
     proyecto_id: string | null;
     material_id: string | null;
     capitulo_maestro_id: string | null;
+    cantidad_compra?: number | null;
+    abastecimiento_codigo_despacho?: string | null;
   };
 }
 
@@ -190,10 +195,17 @@ export async function enviarOrdenVerificacionDepositarioProcura(
   const destinos = new Set<string>();
 
   const depChat = config?.depositarioAsignado?.telegram_chat_id;
-  const depNombre = config?.depositarioAsignado?.nombre ?? null;
+  let depNombre = config?.depositarioAsignado?.nombre ?? null;
   if (depChat != null && Number.isFinite(depChat)) destinos.add(String(depChat));
   const grupo = config?.telegramGrupoAlmacenId;
   if (grupo != null && Number.isFinite(grupo)) destinos.add(String(grupo));
+
+  // También vale quien tenga rol Depositario en la nómina de la obra. Sin esto, una obra
+  // sin depositario fijo despachaba el almacén sola, sin que nadie lo verificara.
+  for (const p of await depositariosNomina(supabase, proyectoId)) {
+    destinos.add(p.chatId);
+    if (!depNombre) depNombre = p.nombre;
+  }
 
   if (!destinos.size) return { enviado: false, destinos: 0 };
 
@@ -269,10 +281,17 @@ export async function enviarOrdenDespachoDepositarioProcura(
   const destinos = new Set<string>();
 
   const depChat = config?.depositarioAsignado?.telegram_chat_id;
-  const depNombre = config?.depositarioAsignado?.nombre ?? null;
+  let depNombre = config?.depositarioAsignado?.nombre ?? null;
   if (depChat != null && Number.isFinite(depChat)) destinos.add(String(depChat));
   const grupo = config?.telegramGrupoAlmacenId;
   if (grupo != null && Number.isFinite(grupo)) destinos.add(String(grupo));
+
+  // También vale quien tenga rol Depositario en la nómina de la obra. Sin esto, una obra
+  // sin depositario fijo despachaba el almacén sola, sin que nadie lo verificara.
+  for (const p of await depositariosNomina(supabase, proyectoId)) {
+    destinos.add(p.chatId);
+    if (!depNombre) depNombre = p.nombre;
+  }
 
   if (!destinos.size) return { enviado: false, destinos: 0 };
 
@@ -424,8 +443,23 @@ export type ResultadoAbastecimientoProcura = {
   despachoCodigo?: string;
   compraEmitida?: boolean;
   compradoresNotificados?: number;
+  /** La orden de compra ya se había enviado al aprobar; aquí no se repitió. */
+  compraYaOrdenada?: boolean;
+  /** El despacho ya estaba confirmado: esta vez no se movió nada. */
+  yaConfirmado?: boolean;
   modo?: 'pendiente_depositario' | 'ejecutado';
 };
+
+/**
+ * Cuánto falta por pedirle al comprador al confirmar el almacén.
+ * Lo que ya se le ordenó al aprobar no se vuelve a pedir; solo la diferencia si,
+ * entre la aprobación y la verificación, el almacén se quedó con menos de lo previsto.
+ */
+export function cantidadCompraPendienteDeOrdenar(cantidadCompraAhora: number, yaOrdenado: number): number {
+  const ahora = Number.isFinite(cantidadCompraAhora) ? Math.max(0, cantidadCompraAhora) : 0;
+  const antes = Number.isFinite(yaOrdenado) ? Math.max(0, yaOrdenado) : 0;
+  return Math.max(0, ahora - antes);
+}
 
 /** PM aprueba: evalúa stock, orden al depositario y (si no hay depositario) ejecuta de inmediato. */
 export async function procesarAbastecimientoProcuraAprobada(
@@ -518,12 +552,15 @@ export async function procesarAbastecimientoProcuraAprobada(
     };
   }
 
-  return confirmarAbastecimientoProcura(supabase, {
+  const resultado = await confirmarAbastecimientoProcura(supabase, {
     procuraId,
     autorNombre: params.autorNombre,
     auditoriaSupervisor: params.auditoriaSupervisor,
     skipOrdenCompra: compraEmitida,
   });
+  // La orden de compra ya se emitió arriba: se conserva a cuántos compradores llegó
+  // (sin esto el PM leía «sin comprador Telegram» aunque el comprador sí fue avisado).
+  return resultado.ok && compraEmitida ? { ...resultado, compradoresNotificados } : resultado;
 }
 
 /** Depositario confirma (o fallback sin depositario): despacho + orden de compra según stock. */
@@ -535,13 +572,36 @@ export async function confirmarAbastecimientoProcura(
     auditoriaSupervisor?: ContextoAuditoriaSupervisor | null;
     /** Evita duplicar orden si ya se emitió al aprobar el PM. */
     skipOrdenCompra?: boolean;
+    /**
+     * Quien confirma responde a la orden de verificación que salió al aprobar: la compra
+     * guardada en la procura ya se le pidió al comprador y solo se ordena lo que falte.
+     */
+    compraOrdenadaAlAprobar?: boolean;
   },
 ): Promise<ResultadoAbastecimientoProcura> {
   const procuraId = params.procuraId.trim();
   const procura = await cargarProcuraAbastecimiento(supabase, procuraId);
   if (!procura) return { ok: false, error: 'Procura no encontrada.' };
 
+  // Segundo toque del botón (o dos personas del almacén): el material ya salió una vez.
+  const despachoPrevio = String(procura.abastecimiento_codigo_despacho ?? '').trim();
+  if (despachoPrevio) {
+    return {
+      ok: true,
+      ticket: procura.ticket,
+      estado: procura.estado,
+      despachoCodigo: despachoPrevio,
+      yaConfirmado: true,
+      modo: 'ejecutado',
+    };
+  }
+
   const evaluacion = await evaluarAbastecimientoProcura(supabase, procura);
+  const yaOrdenado = params.compraOrdenadaAlAprobar ? Number(procura.cantidad_compra ?? 0) : 0;
+  const faltaOrdenar = cantidadCompraPendienteDeOrdenar(evaluacion.cantidadCompra, yaOrdenado);
+  const compraYaOrdenada =
+    Boolean(params.compraOrdenadaAlAprobar) && evaluacion.cantidadCompra > 0 && faltaOrdenar <= 0;
+  const skipOrdenCompra = Boolean(params.skipOrdenCompra) || compraYaOrdenada;
   const despacho = await ejecutarDespachoProcura(supabase, {
     procura,
     evaluacion,
@@ -578,17 +638,26 @@ export async function confirmarAbastecimientoProcura(
     estadoFinal = 'recibida';
   }
 
-  if ((soloCompra || parcial) && !params.skipOrdenCompra) {
+  if ((soloCompra || parcial) && !skipOrdenCompra) {
+    // Si al aprobar ya se pidió una parte, aquí solo se ordena la diferencia.
+    const cantidadOrden = params.compraOrdenadaAlAprobar ? faltaOrdenar : evaluacion.cantidadCompra;
     const oc = await emitirOrdenCompraProcura(supabase, {
       procuraId,
       autorNombre: params.autorNombre,
-      motivo: parcial
-        ? `Orden de compra por saldo (${evaluacion.cantidadCompra} ${procura.unidad}) tras despacho ${despacho.codigo ?? ''}`
-        : 'Orden de compra — sin stock en almacén',
-      cantidadCompra: parcial || soloCompra ? evaluacion.cantidadCompra : null,
+      motivo:
+        yaOrdenado > 0
+          ? `Orden de compra adicional (${cantidadOrden} ${procura.unidad}): el almacén tenía menos de lo previsto al aprobar`
+          : parcial
+            ? `Orden de compra por saldo (${cantidadOrden} ${procura.unidad}) tras despacho ${despacho.codigo ?? ''}`
+            : 'Orden de compra — sin stock en almacén',
+      cantidadCompra: cantidadOrden,
     });
     if (!oc.ok) {
       return { ok: false, error: oc.error ?? 'No se pudo emitir orden de compra.' };
+    }
+    if (params.compraOrdenadaAlAprobar) {
+      // Deja guardado el nuevo total pedido para que otro toque no lo repita.
+      await persistirEvaluacionAbastecimiento(supabase, procuraId, evaluacion);
     }
     compraEmitida = true;
     estadoFinal = parcial ? 'recibida_parcial' : 'aprobada';
@@ -601,7 +670,7 @@ export async function confirmarAbastecimientoProcura(
       compradoresNotificados: oc.compradoresNotificados ?? 0,
       modo: 'ejecutado',
     };
-  } else if (params.skipOrdenCompra && (soloCompra || parcial)) {
+  } else if (skipOrdenCompra && (soloCompra || parcial)) {
     compraEmitida = true;
   }
 
@@ -611,6 +680,7 @@ export async function confirmarAbastecimientoProcura(
     estado: estadoFinal,
     despachoCodigo: despacho.codigo,
     compraEmitida,
+    compraYaOrdenada: compraEmitida && skipOrdenCompra,
     modo: 'ejecutado',
   };
 }
@@ -638,13 +708,18 @@ export function etiquetaResultadoAbastecimiento(r: ResultadoAbastecimientoProcur
     }
     return partes.join(' ');
   }
+  if (r.yaConfirmado) {
+    return `Este despacho ya estaba confirmado (${r.despachoCodigo ?? 'sin código'}). No se movió nada más.`;
+  }
   const partes: string[] = [];
   if (r.despachoCodigo) partes.push(`Despacho ${r.despachoCodigo}`);
   if (r.compraEmitida) {
     partes.push(
       r.compradoresNotificados && r.compradoresNotificados > 0
         ? `Orden de compra enviada al comprador (${r.compradoresNotificados})`
-        : 'Orden de compra en log bot (sin comprador Telegram)',
+        : r.compraYaOrdenada
+          ? 'La orden de compra del saldo ya se había enviado al comprador'
+          : 'Orden de compra en log bot (sin comprador Telegram)',
     );
   }
   if (r.estado) partes.push(etiquetaEstadoProcura(r.estado));

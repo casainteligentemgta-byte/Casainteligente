@@ -21,7 +21,7 @@ import {
 } from '@/lib/almacen/resolverDestinatariosCuarentenaTelegram';
 import { listarUbicacionesParaSelector } from '@/lib/almacen/ubicacionesInventario';
 import { esUuidProcura } from '@/lib/compras/telegramMetadata';
-import { listarNominaProyecto } from '@/lib/proyectos/proyectoNomina';
+import { depositariosNomina, personasNominaConRol } from '@/lib/almacen/depositariosNomina';
 import { resolverNombreMostrarTelegram } from '@/lib/procuras/resolverNombreTelegramObra';
 import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi';
 import type { TelegramEstado } from '@/lib/telegram/estados';
@@ -418,8 +418,6 @@ async function nombrePersona(
   }
 }
 
-/** Roles de la nómina de la obra (Proyecto → Nómina) que atienden el almacén. */
-const ROLES_NOMINA_ALMACEN = new Set(['depositario', 'almacenista', 'almacen']);
 /** Si la obra no tiene a nadie de almacén, el pedido no se pierde: lo recibe quien la administra. */
 const ROLES_NOMINA_RESPALDO = new Set(['admin', 'administrador']);
 
@@ -441,23 +439,13 @@ async function chatsAlmacen(
   });
   const chats = new Set(chatIdsDesdeDestinatarios(almacen.destinatarios).filter(noEsSolicitante));
 
-  let nomina: Awaited<ReturnType<typeof listarNominaProyecto>> = [];
-  try {
-    nomina = await listarNominaProyecto(supabase, proyectoId);
-  } catch (e) {
-    console.warn('[requerimiento salida] nómina de la obra no disponible:', e);
+  for (const p of await depositariosNomina(supabase, proyectoId)) {
+    if (noEsSolicitante(p.chatId)) chats.add(p.chatId);
   }
-  const chatsConRol = (roles: Set<string>): string[] =>
-    nomina
-      .filter((f) => roles.has(String(f.rol ?? '').trim().toLowerCase()))
-      .map((f) => f.telegram_chat_id ?? f.empleado_telegram_chat_id)
-      .filter((c) => c != null && Number.isFinite(Number(c)))
-      .map((c) => String(c))
-      .filter(noEsSolicitante);
-
-  for (const c of chatsConRol(ROLES_NOMINA_ALMACEN)) chats.add(c);
   if (!chats.size) {
-    for (const c of chatsConRol(ROLES_NOMINA_RESPALDO)) chats.add(c);
+    for (const p of await personasNominaConRol(supabase, proyectoId, ROLES_NOMINA_RESPALDO)) {
+      if (noEsSolicitante(p.chatId)) chats.add(p.chatId);
+    }
   }
   return Array.from(chats);
 }
