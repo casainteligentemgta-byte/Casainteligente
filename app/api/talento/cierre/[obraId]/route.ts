@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { margenNetoProyecto } from '@/lib/talento/obra-math';
-import { supabaseForRoute } from '@/lib/talento/supabase-route';
+import { clientePersonalConSesion } from '@/lib/auth/sesionPersonalRuta';
 
 export async function GET(_req: Request, { params }: { params: { obraId: string } }) {
   const obraId = params.obraId?.trim();
@@ -8,7 +8,7 @@ export async function GET(_req: Request, { params }: { params: { obraId: string 
     return NextResponse.json({ error: 'obraId requerido' }, { status: 400 });
   }
 
-  const sb = supabaseForRoute();
+  const sb = await clientePersonalConSesion();
   if (!sb.ok) return sb.response;
   const supabase = sb.client;
 

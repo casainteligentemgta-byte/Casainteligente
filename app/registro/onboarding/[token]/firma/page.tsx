@@ -1,10 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { apiUrl } from '@/lib/http/apiUrl';
 import { cn } from '@/lib/utils';
-import { createClientConInvitacion } from '@/lib/supabase/clientInvitacion';
 
 type PageProps = { params: { token: string } };
 
@@ -65,7 +64,6 @@ function SwitchLopcymat({
 
 export default function FirmaDigitalOnboardingPage({ params }: PageProps) {
   const token = (params.token ?? '').trim();
-  const supabase = useMemo(() => createClientConInvitacion(token), [token]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -88,57 +86,44 @@ export default function FirmaDigitalOnboardingPage({ params }: PageProps) {
       }
       setLoading(true);
       setError(null);
-      const { data: emp, error: e1 } = await supabase
-        .from('ci_empleados')
-        .select('id,nombre_completo')
-        .eq('token_registro', token)
-        .maybeSingle();
-      if (!alive) return;
-      if (e1 || !emp) {
-        setError('No encontramos tu expediente. Verifica el enlace.');
+      // El resumen lo entrega el servidor validando el token: el contrato ya no se lee
+      // desde el navegador.
+      let res: Response;
+      try {
+        res = await fetch(apiUrl(`/api/reclutamiento/firma-resumen?token=${encodeURIComponent(token)}`), {
+          cache: 'no-store',
+        });
+      } catch {
+        if (!alive) return;
+        setError('Error de red. Revisa tu conexión e intenta de nuevo.');
         setLoading(false);
         return;
       }
-      const e = emp as { id: string; nombre_completo: string | null };
-      const { data: ctr, error: e2 } = await supabase
-        .from('ci_contratos_empleado_obra')
-        .select('cargo_oficio_desempeño,salario_basico_diario_ves,lugar_prestacion_servicio,obra_id,proyecto_id')
-        .eq('empleado_id', e.id)
-        .order('id', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (!alive) return;
-      if (e2 || !ctr) {
-        setError('Aún no hay contrato generado. Cuando RRHH lo emita, podrás firmar desde este enlace.');
-        setLoading(false);
-        return;
-      }
-      const c = ctr as {
-        cargo_oficio_desempeño?: string | null;
+      const j = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        nombre?: string;
+        cargo?: string;
         salario_basico_diario_ves?: number | null;
-        lugar_prestacion_servicio?: string | null;
-        obra_id?: string | null;
-        proyecto_id?: string | null;
+        obra?: string;
       };
-      let obraTxt = (c.lugar_prestacion_servicio ?? '').trim();
-      const pid = (c.obra_id ?? c.proyecto_id ?? '').trim();
-      if (!obraTxt && pid) {
-        const { data: pr } = await supabase.from('ci_proyectos').select('nombre').eq('id', pid).maybeSingle();
-        if (pr) obraTxt = String((pr as { nombre?: string }).nombre ?? '').trim();
-      }
       if (!alive) return;
+      if (!res.ok) {
+        setError(j.error ?? 'No encontramos tu expediente. Verifica el enlace.');
+        setLoading(false);
+        return;
+      }
       setResumen({
-        nombre: (e.nombre_completo ?? '').trim() || 'Trabajador',
-        cargo: (c.cargo_oficio_desempeño ?? '').trim() || '—',
-        salarioDiario: fmtSalarioVes(c.salario_basico_diario_ves),
-        obra: obraTxt || '—',
+        nombre: (j.nombre ?? '').trim() || 'Trabajador',
+        cargo: (j.cargo ?? '').trim() || '—',
+        salarioDiario: fmtSalarioVes(j.salario_basico_diario_ves),
+        obra: (j.obra ?? '').trim() || '—',
       });
       setLoading(false);
     })();
     return () => {
       alive = false;
     };
-  }, [token, supabase]);
+  }, [token]);
 
   const firmar = useCallback(async () => {
     if (!listo || !token) return;

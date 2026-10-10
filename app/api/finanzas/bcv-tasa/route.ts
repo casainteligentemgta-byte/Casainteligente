@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { createSupabaseAdminOnlyClient } from '@/lib/supabase/adminOnlyClient';
 import { createClient } from '@/lib/supabase/server';
 import { obtenerTasaBcvVesPorUsd } from '@/lib/finanzas/bcvTasaPorFecha';
 
@@ -8,7 +9,9 @@ export const dynamic = 'force-dynamic';
 export async function GET(req: Request) {
   try {
     const fecha = new URL(req.url).searchParams.get('fecha') ?? new Date().toISOString().slice(0, 10);
-    const supabase = await createClient();
+    // La tasa es un dato público, pero su respaldo está en la configuración de nómina,
+    // que solo lee el servidor: así responde igual con o sin sesión.
+    const supabase = createSupabaseAdminOnlyClient() ?? (await createClient());
     const result = await obtenerTasaBcvVesPorUsd(fecha, { supabase });
     return NextResponse.json(result, {
       headers: { 'Cache-Control': 'private, max-age=300' },

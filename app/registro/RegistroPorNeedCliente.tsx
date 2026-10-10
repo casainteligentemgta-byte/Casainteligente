@@ -153,76 +153,59 @@ export default function RegistroPorNeedCliente({
       setMetaPhase('loading');
       setMetaError(null);
 
-      if (captacionToken) {
-        const res = await fetch(`/api/reclutamiento/captacion-meta?token=${encodeURIComponent(captacionToken)}`, {
-          cache: 'no-store',
-        });
-        const j = (await res.json().catch(() => ({}))) as {
-          ok?: boolean;
-          error?: string;
-          message?: string;
-          need?: NeedLoaded;
-          proyectoNombre?: string;
-        };
+      // La vacante la entrega el servidor (por el token de captación o por su identificador):
+      // la tabla de vacantes ya no se lee desde el navegador.
+      const url = captacionToken
+        ? `/api/reclutamiento/captacion-meta?token=${encodeURIComponent(captacionToken)}`
+        : `/api/reclutamiento/vacante?need=${encodeURIComponent(needId)}`;
+      let res: Response;
+      try {
+        res = await fetch(url, { cache: 'no-store' });
+      } catch {
         if (!alive) return;
-        if (!res.ok) {
-          if (res.status === 410) {
-            setMetaPhase('closed');
-            setMetaError(null);
-            return;
-          }
-          setMetaPhase('error');
-          setMetaError(j.message ?? j.error ?? 'No se pudo validar el enlace.');
-          return;
-        }
-        if (!j.need) {
-          setMetaPhase('error');
-          setMetaError('Respuesta inválida del servidor.');
-          return;
-        }
-        setNeed(j.need);
-        if (j.need.protocol_active === false) {
-          setMetaPhase('closed');
-          return;
-        }
-        setProyectoNombre((j.proyectoNombre ?? '').trim());
-        setMetaPhase('ready');
-        return;
-      }
-
-      const { data: row, error } = await supabase
-        .from('recruitment_needs')
-        .select('id,title,cargo_nombre,cargo_codigo,cargo_nivel,tipo_vacante,protocol_active,proyecto_modulo_id')
-        .eq('id', needId)
-        .maybeSingle();
-
-      if (!alive) return;
-      if (error || !row) {
         setMetaPhase('error');
-        setMetaError(error?.message ?? 'No se encontró la vacante o el enlace expiró.');
+        setMetaError('No se pudo cargar la vacante. Revisa tu conexión e intenta de nuevo.');
         return;
       }
-      const n = row as NeedLoaded;
-      setNeed(n);
-      if (n.protocol_active === false) {
+      const j = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        message?: string;
+        need?: NeedLoaded;
+        proyectoNombre?: string;
+      };
+      if (!alive) return;
+      if (!res.ok) {
+        if (res.status === 410) {
+          setMetaPhase('closed');
+          setMetaError(null);
+          return;
+        }
+        setMetaPhase('error');
+        setMetaError(
+          j.message ??
+            j.error ??
+            (captacionToken ? 'No se pudo validar el enlace.' : 'No se encontró la vacante o el enlace expiró.'),
+        );
+        return;
+      }
+      if (!j.need) {
+        setMetaPhase('error');
+        setMetaError('Respuesta inválida del servidor.');
+        return;
+      }
+      setNeed(j.need);
+      if (j.need.protocol_active === false) {
         setMetaPhase('closed');
         return;
       }
-      let pn = '';
-      const pid = (n.proyecto_modulo_id ?? '').trim();
-      if (pid) {
-        const { data: pr } = await supabase.from('ci_proyectos').select('nombre').eq('id', pid).maybeSingle();
-        if (alive) pn = String((pr as { nombre?: string } | null)?.nombre ?? '').trim();
-      }
-      if (alive) {
-        setProyectoNombre(pn);
-        setMetaPhase('ready');
-      }
+      setProyectoNombre((j.proyectoNombre ?? '').trim());
+      setMetaPhase('ready');
     })();
     return () => {
       alive = false;
     };
-  }, [needId, captacionToken, supabase]);
+  }, [needId, captacionToken]);
 
   const setF = useCallback(<K extends keyof GacetaPostulacionFormState>(key: K, value: GacetaPostulacionFormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));

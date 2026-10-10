@@ -6,7 +6,7 @@ import {
   salarioBasicoDiarioVesDesdeNivel,
 } from '@/lib/talento/contratoGacetaLaboral';
 import { resolverPatronoDesdeEntidad } from '@/lib/talento/contratoObreroPdfContext';
-import { supabaseForRoute } from '@/lib/talento/supabase-route';
+import { clientePersonalConSesion } from '@/lib/auth/sesionPersonalRuta';
 
 function formatDate(d?: string | null): string | null {
   if (!d) return null;
@@ -31,7 +31,7 @@ export async function GET(_req: Request, context: { params: { id: string } }) {
     return NextResponse.json({ error: 'Falta id de contrato' }, { status: 400 });
   }
 
-  const sb = supabaseForRoute();
+  const sb = await clientePersonalConSesion();
   if (!sb.ok) return sb.response;
   const supabase = sb.client;
 
@@ -198,7 +198,7 @@ export async function PATCH(req: Request, context: { params: { id: string } }) {
     return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
   }
 
-  const sb = supabaseForRoute();
+  const sb = await clientePersonalConSesion();
   if (!sb.ok) return sb.response;
   const supabase = sb.client;
 

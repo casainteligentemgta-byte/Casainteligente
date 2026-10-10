@@ -48,6 +48,8 @@ export const RUTAS_PROTEGIDAS = [
   '/dashboard',
   '/flota',
   '/personas',
+  // Lista de obras y su rentabilidad: la tabla de obras solo responde con sesión.
+  '/operaciones',
 ];
 
 /** Rutas de personal que cuelgan de un prefijo público: siempre exigen sesión. */

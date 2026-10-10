@@ -12,7 +12,6 @@ import {
   type SiNo,
 } from '@/lib/talento/hojaVidaObreroCompleta';
 import type { PlanillaPatronoCampos } from '@/lib/talento/planillaPatronoTypes';
-import { resolvePlanillaPatronoParaEmpleado } from '@/lib/talento/resolvePlanillaPatronoPdf';
 import { celularParaInserto } from '@/lib/registro/ciEmpleadosCelular';
 
 const HojaVidaObreroVista = dynamic(() => import('@/components/talento/HojaVidaObreroVista'), {
@@ -107,6 +106,23 @@ function hvInicialOnboarding(row: Record<string, unknown>): HojaVidaObreroComple
   vacia.datosPersonales.celular = desdeRow.datosPersonales.celular;
   limpiarNombresEnHv(vacia);
   return vacia;
+}
+
+/**
+ * Datos del patrono para la planilla. Los entrega el servidor validando el token del
+ * enlace: las tablas de obras, vacantes y contratos ya no se leen desde el navegador.
+ */
+async function cargarPatronoPlanilla(token: string): Promise<PlanillaPatronoCampos | null> {
+  try {
+    const res = await fetch(apiUrl(`/api/reclutamiento/patrono?token=${encodeURIComponent(token)}`), {
+      cache: 'no-store',
+    });
+    if (!res.ok) return null;
+    const j = (await res.json().catch(() => ({}))) as { planillaPatrono?: PlanillaPatronoCampos };
+    return j.planillaPatrono ?? null;
+  } catch {
+    return null;
+  }
 }
 
 function HojaDeVidaMovilInner({ params }: Props) {
@@ -226,11 +242,9 @@ function HojaDeVidaMovilInner({ params }: Props) {
           }));
           if (hvLeg.datosPersonales.fotoCedulaUrl) setCedulaFotoUrl(hvLeg.datosPersonales.fotoCedulaUrl);
           if (hvLeg.datosPersonales.fotoUrl) setPerfilFotoUrl(hvLeg.datosPersonales.fotoUrl);
-          try {
-            const campos = await resolvePlanillaPatronoParaEmpleado(supabase, rowLeg);
+          {
+            const campos = await cargarPatronoPlanilla(params.token);
             if (alive) setPlanillaPatrono(campos);
-          } catch {
-            if (alive) setPlanillaPatrono(null);
           }
           setTokenValidando(false);
           return;
@@ -255,11 +269,9 @@ function HojaDeVidaMovilInner({ params }: Props) {
         }));
         if (hv.datosPersonales.fotoCedulaUrl) setCedulaFotoUrl(hv.datosPersonales.fotoCedulaUrl);
         if (hv.datosPersonales.fotoUrl) setPerfilFotoUrl(hv.datosPersonales.fotoUrl);
-        try {
-          const campos = await resolvePlanillaPatronoParaEmpleado(supabase, row);
+        {
+          const campos = await cargarPatronoPlanilla(params.token);
           if (alive) setPlanillaPatrono(campos);
-        } catch {
-          if (alive) setPlanillaPatrono(null);
         }
       } catch {
         if (alive) setTokenInvalido('No se pudo validar el enlace. Revisa tu conexión.');

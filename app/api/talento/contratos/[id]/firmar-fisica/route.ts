@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
-import { supabaseForRoute } from '@/lib/talento/supabase-route';
+import { clientePersonalConSesion } from '@/lib/auth/sesionPersonalRuta';
 
 export const runtime = 'nodejs';
 
 /**
  * POST — Marca el contrato como firmado en físico (huella + autógrafo) y activo.
- * Solo desde estado `firmado_electronico`.
+ * Solo desde estado `firmado_electronico`. Requiere sesión (personal de RRHH).
  */
 export async function POST(_req: Request, context: { params: { id: string } }) {
   const id = context.params.id?.trim();
@@ -13,7 +13,7 @@ export async function POST(_req: Request, context: { params: { id: string } }) {
     return NextResponse.json({ error: 'Falta id de contrato' }, { status: 400 });
   }
 
-  const sb = supabaseForRoute();
+  const sb = await clientePersonalConSesion();
   if (!sb.ok) return sb.response;
 
   const { data: row, error: sel } = await sb.client

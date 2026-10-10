@@ -2,8 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
+import { useEffect, useState } from 'react';
 import { cargoPorCodigo } from '@/lib/constants/cargosObreros';
 
 function uuidOk(s: string): boolean {
@@ -57,7 +56,6 @@ function matchesRole(row: NeedRow, role: string): boolean {
 export default function RegistroLegacyPrjRole() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const supabase = useMemo(() => createClient(), []);
 
   const prj = (searchParams.get('prj') ?? '').trim();
   const role = (searchParams.get('role') ?? '').trim();
@@ -84,21 +82,28 @@ export default function RegistroLegacyPrjRole() {
       setPhase('loading');
       setError(null);
 
-      const { data: rows, error: err } = await supabase
-        .from('recruitment_needs')
-        .select('id,title,cargo_nombre,cargo_codigo,protocol_active,proyecto_modulo_id')
-        .eq('proyecto_modulo_id', prj)
-        .order('created_at', { ascending: false });
-
-      if (!alive) return;
-
-      if (err) {
+      // Las vacantes las entrega el servidor: la tabla ya no se lee desde el navegador.
+      let rows: NeedRow[] = [];
+      try {
+        const res = await fetch(`/api/reclutamiento/vacante?proyecto=${encodeURIComponent(prj)}`, {
+          cache: 'no-store',
+        });
+        const j = (await res.json().catch(() => ({}))) as { error?: string; needs?: NeedRow[] };
+        if (!alive) return;
+        if (!res.ok) {
+          setPhase('error');
+          setError(j.error || 'No se pudieron cargar las vacantes.');
+          return;
+        }
+        rows = j.needs ?? [];
+      } catch {
+        if (!alive) return;
         setPhase('error');
-        setError(err.message || 'No se pudieron cargar las vacantes.');
+        setError('No se pudieron cargar las vacantes. Revisa tu conexión e intenta de nuevo.');
         return;
       }
 
-      const list = (rows ?? []) as NeedRow[];
+      const list = rows;
       const active = list.filter((r) => r.protocol_active !== false);
       const pool = active.length ? active : list;
       const direct = pool.filter((r) => matchesRole(r, role));
@@ -118,7 +123,7 @@ export default function RegistroLegacyPrjRole() {
     return () => {
       alive = false;
     };
-  }, [prj, role, router, supabase]);
+  }, [prj, role, router]);
 
   if (phase === 'loading' || (phase === 'idle' && prj && role && uuidOk(prj))) {
     return (

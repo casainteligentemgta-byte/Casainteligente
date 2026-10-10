@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabaseForRoute } from '@/lib/talento/supabase-route';
+import { clientePersonalConSesion } from '@/lib/auth/sesionPersonalRuta';
 import { forceAceptarContrato } from '@/lib/talento/forceAceptarContrato';
 
 export const runtime = 'nodejs';
@@ -15,14 +15,9 @@ export async function POST(req: Request, context: { params: { id: string } }) {
     return NextResponse.json({ error: 'Falta id de contrato o empleado' }, { status: 400 });
   }
 
-  const sb = supabaseForRoute();
+  // Verificar que el usuario está autenticado (sesión de la app).
+  const sb = await clientePersonalConSesion();
   if (!sb.ok) return sb.response;
-
-  // Verificar que el usuario está autenticado
-  const { data: { user } } = await sb.client.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-  }
 
   let body: { admin_id?: string; motivo?: string };
   try {
@@ -31,7 +26,7 @@ export async function POST(req: Request, context: { params: { id: string } }) {
     body = {};
   }
 
-  const adminId = body.admin_id || user.id;
+  const adminId = body.admin_id || sb.userId;
   const motivo = body.motivo;
 
   try {
