@@ -1,7 +1,7 @@
 /**
  * Doble mínimo de Supabase para pruebas de flujos del bot (node:test).
  * Guarda filas en memoria y entiende solo lo que usan los flujos probados:
- * select / insert / update / upsert con filtros eq, gt, in, is, not, order y limit;
+ * select / insert / update / upsert / delete con filtros eq, gt, in, is, not, order y limit;
  * y el bucket de Storage (upload / getPublicUrl).
  *
  * No es un emulador de PostgREST: si un flujo nuevo usa algo que falta aquí,
@@ -48,7 +48,7 @@ function nuevoId(): string {
 
 class Consulta implements PromiseLike<Resultado> {
   private filtros: Filtro[] = [];
-  private accion: 'select' | 'insert' | 'update' | 'upsert' = 'select';
+  private accion: 'select' | 'insert' | 'update' | 'upsert' | 'delete' = 'select';
   private carga: Fila | Fila[] | null = null;
   private conflicto: string | null = null;
   private orden: { col: string; asc: boolean } | null = null;
@@ -72,6 +72,10 @@ class Consulta implements PromiseLike<Resultado> {
   update(carga: Fila): this {
     this.accion = 'update';
     this.carga = carga;
+    return this;
+  }
+  delete(): this {
+    this.accion = 'delete';
     return this;
   }
   upsert(carga: Fila | Fila[], o?: { onConflict?: string }): this {
@@ -178,6 +182,9 @@ class Consulta implements PromiseLike<Resultado> {
     } else if (this.accion === 'update') {
       afectadas = filas.filter(pasa);
       for (const f of afectadas) Object.assign(f, this.carga);
+    } else if (this.accion === 'delete') {
+      afectadas = filas.filter(pasa);
+      this.db.tablas[this.tabla] = filas.filter((f) => !pasa(f));
     } else {
       afectadas = filas.filter(pasa);
     }

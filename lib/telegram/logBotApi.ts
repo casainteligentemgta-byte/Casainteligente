@@ -1,3 +1,5 @@
+import { simulacionBotActiva } from '@/lib/telegram/simulacion/contexto';
+
 const TELEGRAM_API = 'https://api.telegram.org';
 
 export function getTelegramLogBotToken(): string | null {
@@ -9,6 +11,8 @@ export function getTelegramLogChatId(): string | null {
 }
 
 export function isLogBotConfigured(): boolean {
+  // En un ensayo del bot no se escribe en el chat espejo.
+  if (simulacionBotActiva()) return false;
   return Boolean(getTelegramLogBotToken() && getTelegramLogChatId());
 }
 
@@ -16,6 +20,7 @@ export async function logBotApi<T>(
   method: string,
   body: Record<string, unknown>,
 ): Promise<T> {
+  if (simulacionBotActiva()) return { message_id: 0 } as T;
   const token = getTelegramLogBotToken();
   if (!token) throw new Error('TELEGRAM_LOG_BOT_TOKEN no configurado');
 
