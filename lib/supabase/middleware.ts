@@ -1,7 +1,7 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { debeCambiarPassword } from '@/lib/auth/passwordPolicy';
-import { requiereSesion } from '@/lib/supabase/rutasAcceso';
+import { apiRequiereSesion, requiereSesion } from '@/lib/supabase/rutasAcceso';
 import { supabaseFetch } from '@/lib/supabase/supabaseFetch';
 
 function esHostLocalDev(request: NextRequest): boolean {
@@ -74,6 +74,12 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
   const { pathname } = request.nextUrl;
 
   if (pathname.startsWith('/api')) {
+    if (!user && apiRequiereSesion(pathname)) {
+      return NextResponse.json(
+        { error: 'Inicia sesión para continuar.', code: 'SIN_SESION' },
+        { status: 401 },
+      );
+    }
     return supabaseResponse;
   }
 

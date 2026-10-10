@@ -37,7 +37,11 @@ export async function GET() {
       .select('id,name,locality,is_default')
       .limit(20);
 
-    if (error) {
+    if (error?.code === '42501') {
+      // Sin sesión ya no se puede leer inventario (migración 342): que la base responda
+      // «permiso denegado» demuestra que Supabase está accesible.
+      supabaseOk = true;
+    } else if (error) {
       supabaseError = error.message;
     } else {
       supabaseOk = true;

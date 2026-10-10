@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AlertaProcuraAdminRow } from '@/lib/procuras/alertaAdminProcuraTelegram';
+import { bloqueFondosProcura, type ResumenFondosObra } from '@/lib/procuras/fondosObraProcura';
 import { etiquetaCapituloMaestro } from '@/lib/compras/capitulosMaestro';
 import {
   limpiarDescripcionProcura,
@@ -123,10 +124,12 @@ export function construirMensajeAdminViabilidadProcura(
   row: FilaProcuraMensaje,
   prioridad: string,
   stock?: ResumenStockProcuraTicket | null,
+  fondos?: ResumenFondosObra | null,
 ): string {
   return (
     '📊 <b>PROCURA — revisión de fondos (Contador)</b>\n\n' +
     cuerpoDetalleProcura(row, prioridad, stock) +
+    bloqueFondosProcura(fondos, row.monto_estimado_usd) +
     '\n\n¿Hay <b>disponibilidad presupuestaria</b> para la compra?'
   );
 }

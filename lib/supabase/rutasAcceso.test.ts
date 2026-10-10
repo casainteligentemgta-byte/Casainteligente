@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { requiereSesion } from './rutasAcceso'
+import { apiRequiereSesion, requiereSesion } from './rutasAcceso'
 
 describe('rutas que piden sesión', () => {
   it('el catálogo de productos y los presupuestos piden sesión', () => {
@@ -43,5 +43,39 @@ describe('rutas que piden sesión', () => {
     // No confunde prefijos parecidos.
     assert.equal(requiereSesion('/productos-publicos'), false)
     assert.equal(requiereSesion('/ventasx'), false)
+  })
+})
+
+describe('APIs que piden sesión', () => {
+  it('almacén, compras, procuras y facturas del canal la piden', () => {
+    for (const ruta of [
+      '/api/almacen/transferencias',
+      '/api/almacen/stock',
+      '/api/almacen/inventario/abc/stock',
+      '/api/compras/procuras',
+      '/api/compras/usuarios-telegram/7',
+      '/api/procuras',
+      '/api/procuras/procesar-lote',
+      '/api/facturas-canal/pendientes/1/ingreso-almacen',
+      '/api/contabilidad/compras/9/ingreso-almacen',
+    ]) {
+      assert.equal(apiRequiereSesion(ruta), true, ruta)
+    }
+  })
+
+  it('el bot, los cron y lo público no se tocan', () => {
+    for (const ruta of [
+      '/api/webhooks/telegram',
+      '/api/telegram',
+      '/api/webhooks/whatsapp',
+      '/api/cron/weekly-report',
+      '/api/health/supabase',
+      '/api/recruitment/needs',
+      '/api/talento/examen/submit',
+      '/api/contabilidad/cco/emparejar-soportes',
+      '/api/almacenes-publicos',
+    ]) {
+      assert.equal(apiRequiereSesion(ruta), false, ruta)
+    }
   })
 })
