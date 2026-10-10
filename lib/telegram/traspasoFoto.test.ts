@@ -10,6 +10,7 @@ import {
 import {
   guardarFotoTransferencia,
   manejarCallbackTraspasoTelegram,
+  manejarComandoTraspasoTelegram,
   manejarFotoTraspasoTelegram,
   manejarTextoTraspasoTelegram,
 } from './traspasoFlujoTelegram'
@@ -127,7 +128,7 @@ describe('traspaso: la foto es parte del registro', () => {
     assert.match(String(telegram.enviados.at(-1)?.text), /No se pudo guardar/)
   })
 
-  it('una foto fuera del paso de foto no se guarda y se avisa cuándo toca', async () => {
+  it('una foto antes de tiempo se guarda y el traspaso sigue donde estaba', async () => {
     const db = sesionTraspaso('cantidad')
     const manejado = await manejarFotoTraspasoTelegram({
       supabase: db as unknown as SupabaseClient,
@@ -135,9 +136,38 @@ describe('traspaso: la foto es parte del registro', () => {
       ...foto,
     })
     assert.equal(manejado, true)
-    assert.equal(db.subidas.length, 0)
+    assert.equal(db.subidas.length, 1)
     assert.equal(metadata(db).paso, 'cantidad')
-    assert.match(String(telegram.enviados.at(-1)?.text), /Todavía no toca la foto/)
+    assert.ok(String(metadata(db).foto_storage_path).endsWith('.jpg'))
+    assert.match(String(telegram.enviados.at(-1)?.text), /No tendrá que enviarla de nuevo/)
+  })
+
+  it('con la foto ya guardada, tras la nota va directo a confirmar', async () => {
+    const db = sesionTraspaso('nota', { foto_storage_path: 'telegram-movimientos/traspasos/100/1.jpg' })
+    await manejarTextoTraspasoTelegram(db as unknown as SupabaseClient, CHAT, 'Chofer Luis')
+
+    assert.equal(metadata(db).paso, 'confirmar')
+    const resumen = telegram.enviados.at(-1)
+    assert.match(String(resumen?.text), /Foto: adjunta/)
+    assert.deepEqual(botonesDe(resumen), ['🔒 Confirmar despacho', '❌ Cancelar'])
+    assert.ok(!telegram.enviados.some((e) => /obligatoria/.test(String(e.text))))
+  })
+
+  it('en la confirmación avisa que ya tiene su foto y no guarda otra', async () => {
+    const db = sesionTraspaso('confirmar', { foto_storage_path: 'telegram-movimientos/traspasos/100/1.jpg' })
+    await manejarFotoTraspasoTelegram({ supabase: db as unknown as SupabaseClient, chatId: CHAT, ...foto })
+
+    assert.equal(db.subidas.length, 0)
+    assert.match(String(telegram.enviados.at(-1)?.text), /ya tiene su foto/)
+  })
+
+  it('un traspaso nuevo no hereda la foto de uno anterior', async () => {
+    const db = sesionTraspaso('cantidad', { foto_storage_path: 'telegram-movimientos/traspasos/100/viejo.jpg' })
+    await manejarComandoTraspasoTelegram(db as unknown as SupabaseClient, CHAT)
+
+    assert.equal(metadata(db).paso, 'origen')
+    assert.equal(metadata(db).foto_storage_path, undefined)
+    assert.equal(metadata(db).producto_id, undefined)
   })
 
   it('con TELEGRAM_FOTO_OPCIONAL=1 se puede omitir', async () => {

@@ -76,7 +76,7 @@ Nadie de la nómina de ensayo es `admin`, porque ese rol sí se copia como Admin
 | --- | --- |
 | Salida a obrero | `salida_obrero`, `salida_obrero_foto_antes`, `salida_obrero_sin_foto` |
 | Pedir material al almacén | `pedido_uso`, `pedido_colocacion`, `pedido_traspaso`, `pedido_devolucion`, `pedido_deterioro`, `pedido_no_propio`, `pedido_rechazado`, `pedido_soltado`, `pedido_supera_stock` |
-| Traspaso | `traspaso` |
+| Traspaso | `traspaso`, `traspaso_foto_antes` |
 | Compras | `compra_completa`, `compra_foto_factura_antes`, `compra_despacho_con_foto`, `compra_a_credito` |
 
 `compra_completa` recorre toda la cadena: el ingeniero pide 150 con 100 en almacén → el

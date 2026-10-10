@@ -64,3 +64,11 @@ export function mensajeFotoFueraDePaso(paso?: string | null): string {
     'Continúe con el último mensaje (botones o texto) y envíela cuando se la pida.'
   );
 }
+
+/**
+ * Respuesta cuando la foto llega antes del paso de la foto y el flujo la acepta igual:
+ * queda guardada y el bot no la vuelve a pedir.
+ */
+export const MENSAJE_FOTO_GUARDADA_ANTES =
+  '✅ <b>Foto guardada.</b> No tendrá que enviarla de nuevo.\n\n' +
+  'Continúe con el último mensaje (botones o texto).';

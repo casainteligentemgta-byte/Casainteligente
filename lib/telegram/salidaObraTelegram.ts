@@ -22,7 +22,9 @@ import {
   fotoMovimientoObligatoria,
 } from '@/lib/telegram/fotoObligatoria';
 import {
+  MENSAJE_FOTO_GUARDADA_ANTES,
   MENSAJE_PEDIR_OBSERVACIONES,
+  mensajeFotoFueraDePaso,
   observacionDesdeTexto,
   tecladoSinObservaciones,
 } from '@/lib/telegram/observacionRapida';
@@ -154,6 +156,8 @@ export async function manejarComandoSalidaObraTelegram(
   await setTelegramContexto(supabase, chatId, {
     contexto: 'salida_obra',
     proyecto_id: null,
+    // Sesión nueva de verdad: una foto de un despacho anterior no debe colarse en este.
+    reemplazarMetadata: true,
     metadata: { flujo: FLUJO_SALIDA_ALMACEN, paso: 'almacen', lineas: [] },
   });
   await sendTelegramMessage(chatId, MENSAJE_INICIO_SALIDA_DESPACHO, { parse_mode: 'HTML' });
@@ -170,6 +174,7 @@ export async function prepararSalidaObraTrasProyecto(
   await setTelegramContexto(supabase, chatId, {
     contexto: 'salida_obra',
     proyecto_id: proyectoId,
+    reemplazarMetadata: true,
     metadata: { flujo: FLUJO_SALIDA_ALMACEN, paso: 'almacen', lineas: [] },
   });
   await enviarPickerAlmacenOrigen(supabase, chatId, proyectoId, nombre);
@@ -586,7 +591,13 @@ async function preguntarMasLineas(supabase: SupabaseClient, chatId: string, nLin
 }
 
 async function preguntarFoto(supabase: SupabaseClient, chatId: string): Promise<void> {
-  await patchMeta(supabase, chatId, await getTelegramEstado(supabase, chatId), { paso: 'foto' });
+  const estado = await getTelegramEstado(supabase, chatId);
+  // Si la foto ya llegó antes (se acepta en cualquier paso), no se vuelve a pedir.
+  if (meta(estado).foto_storage_path?.trim()) {
+    await enviarConfirmacion(supabase, chatId, estado);
+    return;
+  }
+  await patchMeta(supabase, chatId, estado, { paso: 'foto' });
   if (fotoMovimientoObligatoria()) {
     await sendTelegramMessage(
       chatId,
@@ -1328,7 +1339,13 @@ export async function manejarFotoSalidaAlmacenTelegram(params: {
 }): Promise<boolean> {
   const estado = await getTelegramEstado(params.supabase, params.chatId);
   if (!esFlujoSalidaObraTelegram(estado)) return false;
-  if (meta(estado).paso !== 'foto' || !estado.proyecto_id) return false;
+  // Hace falta la obra para saber dónde guardar la foto; antes de elegirla no se acepta.
+  if (!estado.proyecto_id) return false;
+  const paso = meta(estado).paso;
+  if (paso === 'confirmar') {
+    await sendTelegramMessage(params.chatId, mensajeFotoFueraDePaso(paso), { parse_mode: 'HTML' });
+    return true;
+  }
 
   const storagePath = `telegram-movimientos/${estado.proyecto_id}/salida-almacen/${Date.now()}.${params.ext}`;
   const { error } = await params.supabase.storage
@@ -1347,6 +1364,12 @@ export async function manejarFotoSalidaAlmacenTelegram(params: {
     telegram_user_id: params.userId,
     telegram_username: params.username ?? null,
   });
+
+  // La foto se acepta en cualquier paso: antes de tiempo queda guardada y el flujo sigue.
+  if (paso !== 'foto') {
+    await sendTelegramMessage(params.chatId, MENSAJE_FOTO_GUARDADA_ANTES, { parse_mode: 'HTML' });
+    return true;
+  }
 
   await sendTelegramMessage(params.chatId, '✅ Foto guardada.', { parse_mode: 'HTML' });
   await enviarConfirmacion(

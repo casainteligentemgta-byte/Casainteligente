@@ -19,6 +19,7 @@ import {
 import { MENSAJE_INICIO_SALIDA_TRASPASO } from '@/lib/telegram/mensajesSalidaTelegram';
 import {
   TEXTO_BOTON_SIN_NOTA,
+  MENSAJE_FOTO_GUARDADA_ANTES,
   mensajeFotoFueraDePaso,
   observacionDesdeTexto,
   tecladoSinObservaciones,
@@ -237,6 +238,8 @@ export async function manejarComandoTraspasoTelegram(
   await setTelegramContexto(supabase, chatId, {
     contexto: 'traspaso_inventario',
     proyecto_id: null,
+    // Sesión nueva de verdad: una foto de un traspaso anterior no debe colarse en este.
+    reemplazarMetadata: true,
     metadata: { paso: 'origen' },
   });
   await sendTelegramMessage(chatId, MENSAJE_INICIO_SALIDA_TRASPASO, { parse_mode: 'HTML' });
@@ -388,6 +391,11 @@ async function preguntarFotoTraspaso(
   chatId: string,
   estado: TelegramEstado,
 ): Promise<void> {
+  // Si la foto ya llegó antes (se acepta en cualquier paso), no se vuelve a pedir.
+  if (meta(estado).foto_storage_path?.trim()) {
+    await enviarResumenConfirmacion(supabase, chatId, estado);
+    return;
+  }
   await patchMeta(supabase, chatId, estado, { paso: 'foto' });
   if (fotoMovimientoObligatoria()) {
     await sendTelegramMessage(
@@ -635,7 +643,10 @@ export async function manejarTextoTraspasoTelegram(
   return false;
 }
 
-/** Foto del material en el paso «foto» del traspaso; al guardarla pasa a la confirmación. */
+/**
+ * Foto del material del traspaso. Se acepta en cualquier paso: si llega antes de tiempo
+ * queda guardada y el flujo sigue donde estaba; en el paso «foto» pasa a la confirmación.
+ */
 export async function manejarFotoTraspasoTelegram(params: {
   supabase: SupabaseClient;
   chatId: string;
@@ -645,10 +656,9 @@ export async function manejarFotoTraspasoTelegram(params: {
 }): Promise<boolean> {
   const estado = await getTelegramEstado(params.supabase, params.chatId);
   if (!esFlujoTraspasoTelegram(estado)) return false;
-  if (meta(estado).paso !== 'foto') {
-    await sendTelegramMessage(params.chatId, mensajeFotoFueraDePaso(meta(estado).paso), {
-      parse_mode: 'HTML',
-    });
+  const paso = meta(estado).paso;
+  if (paso === 'confirmar') {
+    await sendTelegramMessage(params.chatId, mensajeFotoFueraDePaso(paso), { parse_mode: 'HTML' });
     return true;
   }
 
@@ -669,6 +679,11 @@ export async function manejarFotoTraspasoTelegram(params: {
     foto_storage_path: storagePath,
     foto_url: data.publicUrl ?? undefined,
   });
+
+  if (paso !== 'foto') {
+    await sendTelegramMessage(params.chatId, MENSAJE_FOTO_GUARDADA_ANTES, { parse_mode: 'HTML' });
+    return true;
+  }
 
   await sendTelegramMessage(params.chatId, '✅ Foto guardada.', { parse_mode: 'HTML' });
   await enviarResumenConfirmacion(params.supabase, params.chatId, conFoto);
