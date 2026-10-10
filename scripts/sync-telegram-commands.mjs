@@ -5,6 +5,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { claveWebhook } from './clave-webhook.shared.mjs';
 import {
   TELEGRAM_ALLOWED_UPDATES,
   TELEGRAM_BOT_COMMANDS,
@@ -67,6 +68,8 @@ async function main() {
       body: JSON.stringify({
         url: webhookUrl,
         allowed_updates: [...TELEGRAM_ALLOWED_UPDATES],
+        // Sin esto Telegram quita la clave y el servidor rechaza los avisos.
+        secret_token: claveWebhook(token, 'bot', process.env.TELEGRAM_WEBHOOK_SECRET),
       }),
     });
     const whJson = await wh.json();

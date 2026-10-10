@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { claveWebhook } from './clave-webhook.shared.mjs';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const env = Object.fromEntries(
@@ -27,9 +28,15 @@ if (!token) {
 }
 
 const webhookUrl = 'https://casainteligente.company/api/webhook-logs';
-const setRes = await fetch(
-  `https://api.telegram.org/bot${token}/setWebhook?url=${encodeURIComponent(webhookUrl)}`,
-);
+// Siempre con clave: desde el chat de registro se actúa a nombre de otras personas.
+const setRes = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    url: webhookUrl,
+    secret_token: claveWebhook(token, 'registro', env.TELEGRAM_LOG_WEBHOOK_SECRET),
+  }),
+});
 const setJson = await setRes.json();
 if (!setJson.ok) {
   console.error('setWebhook falló:', setJson.description);
