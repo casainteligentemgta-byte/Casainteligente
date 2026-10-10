@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getTelegramAlmacenChatIds } from '@/lib/almacen/notificarCuarentenaTelegram';
+import { depositariosNomina } from '@/lib/almacen/depositariosNomina';
 
 export type RutaDestinatarioCuarentena =
   | 'depositario_obra'
@@ -32,7 +33,7 @@ function agregarDestinatario(
   }
 }
 
-/** Resuelve chats Telegram según obra, ubicación, depositarios globales y env. */
+/** Resuelve chats Telegram según obra (depositario fijo, grupo y nómina), depositarios globales y env. */
 export async function resolverDestinatariosCuarentenaTelegram(
   supabase: SupabaseClient,
   ctx: {
@@ -100,6 +101,15 @@ export async function resolverDestinatariosCuarentenaTelegram(
         );
         enrutamientoObra = true;
       }
+    }
+  }
+
+  if (proyectoId) {
+    // Quien tenga rol de almacén en la nómina de la obra (Proyecto → Nómina) también es
+    // su depositario: sin esto, una obra sin depositario fijo no recibía ningún aviso.
+    for (const p of await depositariosNomina(supabase, proyectoId)) {
+      agregarDestinatario(map, p.chatId, 'depositario_obra', p.nombre ?? 'Depositario');
+      enrutamientoObra = true;
     }
   }
 

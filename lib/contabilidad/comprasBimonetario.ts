@@ -66,6 +66,15 @@ export async function resolverMontosCompraBimonetario(
   };
 }
 
+/**
+ * Total en la moneda en que vino la factura. Es lo que espera `registerCompraDesdeRecepcion`:
+ * si a una factura en dólares se le pasa el total ya convertido a bolívares, el monto en Bs
+ * queda multiplicado por la tasa dos veces.
+ */
+export function montoEnMonedaOriginal(montos: MontosCompraBimonetario): number {
+  return montos.monedaOriginal === 'USD' ? montos.montoUsd : montos.montoVes;
+}
+
 /** Campos comunes para insert/update en compras (contabilidad + recepción). */
 export function payloadCompraBimonetario(montos: MontosCompraBimonetario) {
   return {

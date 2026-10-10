@@ -32,6 +32,7 @@ import {
 } from '@/lib/contabilidad/imputacionCompra';
 import type { ClasificacionGastoEntidad } from '@/lib/contabilidad/clasificacionGastoEntidad';
 import {
+  montoEnMonedaOriginal,
   payloadCompraBimonetario,
   resolverMontosCompraBimonetario,
   type MontosCompraBimonetario,
@@ -518,7 +519,7 @@ async function confirmarCompraDesdeCanalInterno(
     supplier_rif: (extracted.supplier_rif ?? 'S/R').trim(),
     supplier_name: (extracted.supplier_name ?? 'Proveedor').trim(),
     fecha,
-    total_amount: montos.totalAmountLegacy,
+    total_amount: montoEnMonedaOriginal(montos),
     moneda: montos.monedaOriginal,
     tasa_bcv_ves_por_usd: montos.tasaApplied,
     total_amount_usd: montos.montoUsd,
