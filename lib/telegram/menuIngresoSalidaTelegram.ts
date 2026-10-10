@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { FacturaPendienteIngreso } from '@/lib/almacen/listarFacturasPendientesIngreso';
-import { listarFacturasPendientesIngreso } from '@/lib/almacen/listarFacturasPendientesIngreso';
+import { listarFacturasPendientesDeMisObras } from '@/lib/telegram/facturasPendientesDeMisObras';
 import {
   agruparProveedoresFacturasPrecargadas,
   etiquetaFacturaBotonPorNumero,
@@ -83,7 +83,7 @@ export async function enviarMenuIngresoTelegram(
   chatId: string,
   pageProveedores = 0,
 ): Promise<void> {
-  const facturas = await listarFacturasPendientesIngreso(supabase);
+  const facturas = await listarFacturasPendientesDeMisObras(supabase, chatId);
 
   const rows: Array<Array<{ text: string; callback_data: string }>> = [
     [{ text: '🧾 Ingreso manual de factura', callback_data: callbackMenuIngreso('factura') }],
@@ -183,7 +183,7 @@ async function enviarFacturasPrecargadasMenuPorProveedor(
   provKey: string,
   page = 0,
 ): Promise<void> {
-  const todas = await listarFacturasPendientesIngreso(supabase);
+  const todas = await listarFacturasPendientesDeMisObras(supabase, chatId);
   const facturas = ordenarFacturasPendientesPorNumero(
     todas.filter((f) => proveedorKeyFactura(f.supplier_name) === provKey),
   );

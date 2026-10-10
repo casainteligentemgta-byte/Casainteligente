@@ -5,6 +5,7 @@ import {
   parseDiasCreditoExtracted,
   type ExtractedCanalHeader,
 } from '@/lib/contabilidad/extractedCanal';
+import { AVISO_FACTURA_A_CREDITO, procuraSinFondos } from '@/lib/procuras/compraACredito';
 import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi';
 import type { TelegramEstado } from '@/lib/telegram/estados';
 import { getTelegramEstado, setTelegramContexto } from '@/lib/telegram/estados';
@@ -32,6 +33,23 @@ export function esperandoDiasCreditoFactura(estado: TelegramEstado): boolean {
   );
 }
 
+/** La factura que carga este chat es de una solicitud que el PM aprobó sin fondos. */
+async function facturaDeProcuraACredito(supabase: SupabaseClient, chatId: string): Promise<boolean> {
+  try {
+    const estado = await getTelegramEstado(supabase, chatId);
+    const procuraId = String((estado.metadata as { procura_id?: unknown } | null)?.procura_id ?? '').trim();
+    if (!procuraId) return false;
+    const { data } = await supabase
+      .from('ci_procuras')
+      .select('viabilidad_presupuestaria')
+      .eq('id', procuraId)
+      .maybeSingle();
+    return procuraSinFondos(data as { viabilidad_presupuestaria?: string | null } | null);
+  } catch {
+    return false;
+  }
+}
+
 export async function enviarPickerCondicionPagoTelegram(
   supabase: SupabaseClient,
   chatId: string,
@@ -50,6 +68,22 @@ export async function enviarPickerCondicionPagoTelegram(
     .eq('id', pendingId)
     .maybeSingle();
   const extracted = (row?.extracted ?? {}) as Record<string, unknown>;
+
+  // Aprobada sin fondos: el PM ya autorizó el crédito, no se pregunta de nuevo.
+  if (await facturaDeProcuraACredito(supabase, chatId)) {
+    const { error } = await supabase
+      .from('ci_facturas_canal_pendientes')
+      .update({
+        extracted: { ...(extracted as ExtractedCanalHeader), condicion_pago: 'credito', dias_credito: null },
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', pendingId);
+    if (!error) {
+      await sendTelegramMessage(chatId, AVISO_FACTURA_A_CREDITO, { parse_mode: 'HTML' });
+      await enviarPreguntaDiasCreditoTelegram(supabase, chatId, pendingId);
+      return;
+    }
+  }
 
   await sendTelegramMessage(
     chatId,

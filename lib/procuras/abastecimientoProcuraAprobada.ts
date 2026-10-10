@@ -1,6 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { obtenerConfigTelegramAlmacenProyecto } from '@/lib/almacen/depositarioObra';
-import { depositariosNomina } from '@/lib/almacen/depositariosNomina';
+import {
+  NOTA_DEPOSITARIO_VIRTUAL,
+  ROL_DEPOSITARIO_VIRTUAL,
+  depositarioVirtualObra,
+  depositariosNomina,
+} from '@/lib/almacen/depositariosNomina';
 import {
   ejecutarTransicionProcuraLote,
   metadatosAuditoriaSupervisor,
@@ -10,6 +15,7 @@ import {
 } from '@/lib/procuras/auditoriaSupervisorProcura';
 import { completarTransferenciaInventario } from '@/lib/almacen/completarTransferenciaInventario';
 import { crearTransferenciaInventario } from '@/lib/almacen/crearTransferenciaInventario';
+import { guardarFotoTransferencia } from '@/lib/almacen/fotoTransferencia';
 import { esUbicacionAlmacenFisico } from '@/lib/almacen/inventarioFiltroUbicacion';
 import { getStockRealObra } from '@/lib/almacen/getStockRealObra';
 import { asegurarUbicacionObra } from '@/lib/almacen/ubicacionesInventario';
@@ -54,6 +60,7 @@ export async function cargarProcuraAbastecimiento(
       material_id: string | null;
       capitulo_maestro_id: string | null;
       cantidad_compra?: number | null;
+      cantidad_despacho?: number | null;
       abastecimiento_codigo_despacho?: string | null;
     })
   | null
@@ -73,6 +80,7 @@ export async function cargarProcuraAbastecimiento(
     material_id: string | null;
     capitulo_maestro_id: string | null;
     cantidad_compra?: number | null;
+    cantidad_despacho?: number | null;
     abastecimiento_codigo_despacho?: string | null;
   };
 }
@@ -207,6 +215,16 @@ export async function enviarOrdenVerificacionDepositarioProcura(
     if (!depNombre) depNombre = p.nombre;
   }
 
+  // Obra sin nadie de almacén: lo atiende el depositario virtual (quien administra la obra).
+  let depositarioVirtual = false;
+  if (!destinos.size) {
+    for (const p of await depositarioVirtualObra(supabase, proyectoId)) {
+      destinos.add(p.chatId);
+      depositarioVirtual = true;
+    }
+    if (depositarioVirtual) depNombre = null;
+  }
+
   if (!destinos.size) return { enviado: false, destinos: 0 };
 
   const cap = procura.ci_compras_capitulos_maestro;
@@ -248,10 +266,14 @@ export async function enviarOrdenVerificacionDepositarioProcura(
   for (const chatId of Array.from(destinos)) {
     const esGrupo = grupoId != null && chatId === grupoId;
     try {
-      await sendTelegramMessage(chatId, msg, {
+      await sendTelegramMessage(chatId, depositarioVirtual ? `${msg}\n\n${NOTA_DEPOSITARIO_VIRTUAL}` : msg, {
         parse_mode: 'HTML',
         reply_markup,
-        rolDestinatario: esGrupo ? 'Grupo de almacén' : 'Depositario',
+        rolDestinatario: esGrupo
+          ? 'Grupo de almacén'
+          : depositarioVirtual
+            ? ROL_DEPOSITARIO_VIRTUAL
+            : 'Depositario',
         nombreDestinatario: esGrupo ? config?.proyectoNombre : depNombre,
         accionLogDestinatario: 'confirmar_almacen',
         contextoLogEspejo: '[Procura · verificación almacén]',
@@ -291,6 +313,16 @@ export async function enviarOrdenDespachoDepositarioProcura(
   for (const p of await depositariosNomina(supabase, proyectoId)) {
     destinos.add(p.chatId);
     if (!depNombre) depNombre = p.nombre;
+  }
+
+  // Obra sin nadie de almacén: lo atiende el depositario virtual (quien administra la obra).
+  let depositarioVirtual = false;
+  if (!destinos.size) {
+    for (const p of await depositarioVirtualObra(supabase, proyectoId)) {
+      destinos.add(p.chatId);
+      depositarioVirtual = true;
+    }
+    if (depositarioVirtual) depNombre = null;
   }
 
   if (!destinos.size) return { enviado: false, destinos: 0 };
@@ -333,10 +365,14 @@ export async function enviarOrdenDespachoDepositarioProcura(
   for (const chatId of Array.from(destinos)) {
     const esGrupo = grupoId != null && chatId === grupoId;
     try {
-      await sendTelegramMessage(chatId, msg, {
+      await sendTelegramMessage(chatId, depositarioVirtual ? `${msg}\n\n${NOTA_DEPOSITARIO_VIRTUAL}` : msg, {
         parse_mode: 'HTML',
         reply_markup,
-        rolDestinatario: esGrupo ? 'Grupo de almacén' : 'Depositario',
+        rolDestinatario: esGrupo
+          ? 'Grupo de almacén'
+          : depositarioVirtual
+            ? ROL_DEPOSITARIO_VIRTUAL
+            : 'Depositario',
         nombreDestinatario: esGrupo ? config?.proyectoNombre : depNombre,
         accionLogDestinatario: 'confirmar_almacen',
         contextoLogEspejo: '[Procura · despacho almacén]',
@@ -359,6 +395,8 @@ async function ejecutarDespachoProcura(
     };
     evaluacion: EvaluacionAbastecimientoProcura;
     autorNombre: string;
+    /** Foto del material que sale (obligatoria cuando confirma el depositario por Telegram). */
+    foto?: { storage_path: string; url: string };
   },
 ): Promise<{ ok: boolean; codigo?: string; error?: string }> {
   const { procura, evaluacion } = params;
@@ -382,16 +420,17 @@ async function ejecutarDespachoProcura(
   }
 
   try {
+    const observaciones = (
+      params.foto
+        ? `[Procura ${procura.ticket}] Despacho con foto tras verificación del depositario · ${params.autorNombre}`
+        : `[Procura ${procura.ticket}] Despacho automático tras verificación depositario · ${params.autorNombre}`
+    ).slice(0, 500);
     const { transferenciaId, codigo } = await crearTransferenciaInventario(supabase, {
       origen_ubicacion_id: origenId,
       destino_ubicacion_id: destinoId,
       ci_proyecto_id: proyectoId,
       tipo_movimiento: 'salida_obra',
-      observaciones:
-        `[Procura ${procura.ticket}] Despacho automático tras verificación depositario · ${params.autorNombre}`.slice(
-          0,
-          500,
-        ),
+      observaciones,
       lineas: [
         {
           material_id: materialId,
@@ -402,6 +441,9 @@ async function ejecutarDespachoProcura(
     });
 
     await completarTransferenciaInventario(supabase, transferenciaId);
+    if (params.foto) {
+      await guardarFotoTransferencia(supabase, transferenciaId, params.foto, observaciones);
+    }
 
     await supabase
       .from('ci_procuras')
@@ -441,6 +483,8 @@ export type ResultadoAbastecimientoProcura = {
   error?: string;
   verificacionEnviada?: boolean;
   despachoCodigo?: string;
+  /** Cuánto salió del almacén en este despacho. */
+  cantidadDespachada?: number;
   compraEmitida?: boolean;
   compradoresNotificados?: number;
   /** La orden de compra ya se había enviado al aprobar; aquí no se repitió. */
@@ -577,6 +621,8 @@ export async function confirmarAbastecimientoProcura(
      * guardada en la procura ya se le pidió al comprador y solo se ordena lo que falte.
      */
     compraOrdenadaAlAprobar?: boolean;
+    /** Foto del material que sale del almacén; queda guardada en la transferencia. */
+    foto?: { storage_path: string; url: string };
   },
 ): Promise<ResultadoAbastecimientoProcura> {
   const procuraId = params.procuraId.trim();
@@ -606,6 +652,7 @@ export async function confirmarAbastecimientoProcura(
     procura,
     evaluacion,
     autorNombre: params.autorNombre,
+    foto: params.foto,
   });
 
   if (!despacho.ok) {
@@ -666,6 +713,7 @@ export async function confirmarAbastecimientoProcura(
       ticket: procura.ticket,
       estado: estadoFinal,
       despachoCodigo: despacho.codigo,
+      cantidadDespachada: despacho.codigo ? evaluacion.cantidadDespacho : 0,
       compraEmitida,
       compradoresNotificados: oc.compradoresNotificados ?? 0,
       modo: 'ejecutado',
@@ -679,6 +727,7 @@ export async function confirmarAbastecimientoProcura(
     ticket: procura.ticket,
     estado: estadoFinal,
     despachoCodigo: despacho.codigo,
+    cantidadDespachada: despacho.codigo ? evaluacion.cantidadDespacho : 0,
     compraEmitida,
     compraYaOrdenada: compraEmitida && skipOrdenCompra,
     modo: 'ejecutado',

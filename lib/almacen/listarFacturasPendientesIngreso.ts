@@ -15,6 +15,10 @@ export type FacturaPendienteIngreso = {
   accion: AccionFacturaPendiente;
   pendienteId: string;
   purchase_invoice_id: string | null;
+  /** Obra a la que pertenece la factura (null si aún no se le asignó). */
+  proyecto_id?: string | null;
+  /** Chat que la cargó por Telegram/WhatsApp (solo facturas del canal). */
+  chat_id?: string | null;
 };
 
 /** Estados con acción pendiente de ingreso / confirmación. */
@@ -35,6 +39,8 @@ export type IndiceContabilidadIngreso = {
 type FilaCanalPendiente = {
   id: string;
   canal?: string | null;
+  chat_id?: string | number | null;
+  proyecto_id?: string | null;
   chat_label?: string | null;
   estado?: string | null;
   purchase_invoice_id?: string | null;
@@ -333,6 +339,8 @@ function mapCompraContabilidadAFactura(
     accion,
     pendienteId: String(row.id),
     purchase_invoice_id: pi,
+    proyecto_id: String(row.proyecto_id ?? '').trim() || null,
+    chat_id: null,
   };
 }
 
@@ -375,6 +383,8 @@ function mapFilaCanalAFactura(
     accion,
     pendienteId: String(row.id),
     purchase_invoice_id: piEfectivo,
+    proyecto_id: String(row.proyecto_id ?? '').trim() || null,
+    chat_id: row.chat_id == null ? null : String(row.chat_id).trim() || null,
   };
 }
 
@@ -390,7 +400,7 @@ export async function listarFacturasPendientesIngreso(
   const { data: canalRows, error: canalErr } = await supabase
     .from('ci_facturas_canal_pendientes')
     .select(
-      'id, canal, chat_label, estado, purchase_invoice_id, ubicacion_destino_id, extracted, created_at',
+      'id, canal, chat_id, proyecto_id, chat_label, estado, purchase_invoice_id, ubicacion_destino_id, extracted, created_at',
     )
     .in('estado', [...ESTADOS_TRANSITO])
     .order('created_at', { ascending: false })
@@ -426,6 +436,18 @@ export async function listarFacturasPendientesIngreso(
     if (!/ingresado_almacen_at|42703|does not exist/i.test(comprasErr.message ?? '')) {
       throw new Error(comprasErr.message);
     }
+  }
+
+  // Una factura del canal sin obra propia toma la de su compra en contabilidad.
+  const obraPorFactura = new Map<string, string>();
+  for (const row of (comprasAbiertas ?? []) as FilaCompraContabilidad[]) {
+    const pi = String(row.purchase_invoice_id ?? '').trim();
+    const obra = String(row.proyecto_id ?? '').trim();
+    if (pi && obra) obraPorFactura.set(pi, obra);
+  }
+  for (const item of items) {
+    const pi = item.purchase_invoice_id?.trim();
+    if (!item.proyecto_id && pi) item.proyecto_id = obraPorFactura.get(pi) ?? null;
   }
 
   for (const row of comprasAbiertas ?? []) {
@@ -520,4 +542,25 @@ export async function ampliarPendientesCanalConContabilidad(
   }
 
   return [...pendientesCanal, ...extra];
+}
+
+/** Obras cuyas facturas puede ver una persona: todas, o solo las suyas. */
+export type ObrasVisiblesAlmacen = 'todas' | Set<string>;
+
+/**
+ * Deja solo las facturas de las obras de la persona. Una factura que todavía no tiene
+ * obra asignada la ve únicamente quien la cargó.
+ */
+export function filtrarFacturasPorObras(
+  facturas: FacturaPendienteIngreso[],
+  visibles: ObrasVisiblesAlmacen,
+  chatId?: string | number | null,
+): FacturaPendienteIngreso[] {
+  if (visibles === 'todas') return facturas;
+  const chat = chatId == null ? '' : String(chatId).trim();
+  return facturas.filter((f) => {
+    const obra = f.proyecto_id?.trim();
+    if (obra) return visibles.has(obra);
+    return Boolean(chat) && String(f.chat_id ?? '').trim() === chat;
+  });
 }

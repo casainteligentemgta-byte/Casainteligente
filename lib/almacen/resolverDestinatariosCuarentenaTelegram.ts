@@ -1,11 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getTelegramAlmacenChatIds } from '@/lib/almacen/notificarCuarentenaTelegram';
-import { depositariosNomina } from '@/lib/almacen/depositariosNomina';
+import { depositarioVirtualObra, depositariosNomina } from '@/lib/almacen/depositariosNomina';
 
 export type RutaDestinatarioCuarentena =
   | 'depositario_obra'
   | 'grupo_obra'
   | 'depositario_global'
+  | 'depositario_virtual'
   | 'env_fallback';
 
 export type DestinatarioCuarentena = {
@@ -132,6 +133,13 @@ export async function resolverDestinatariosCuarentenaTelegram(
 
     for (const chatId of getTelegramAlmacenChatIds()) {
       agregarDestinatario(map, chatId, 'env_fallback', 'TELEGRAM_ALMACEN_CHAT_IDS');
+    }
+  }
+
+  // Nadie de almacén ni en la obra ni global: lo recibe el depositario virtual de la obra.
+  if (!map.size && proyectoId) {
+    for (const p of await depositarioVirtualObra(supabase, proyectoId)) {
+      agregarDestinatario(map, p.chatId, 'depositario_virtual', p.nombre ?? 'Depositario virtual');
     }
   }
 

@@ -54,7 +54,6 @@ import {
 import {
   confirmarAbastecimientoProcura,
   esCallbackAbastecimientoProcura,
-  etiquetaResultadoAbastecimiento,
   parseCallbackAbastecimientoProcura,
 } from '@/lib/procuras/abastecimientoProcuraAprobada';
 import {
@@ -937,23 +936,19 @@ export async function manejarCallbackProcuraDepartamentoTelegram(
       await answerCallbackQuery(params.callbackId, 'Procura inválida', true);
       return true;
     }
-    const auth = await exigirUsuarioSistemaTelegram(supabase, params.userId);
-    const nombre = auth.ok ? auth.usuario.nombre : 'Depositario';
-    await answerCallbackQuery(params.callbackId, 'Verificando almacén…');
-    const resultado = await confirmarAbastecimientoProcura(supabase, {
+    // Si hay material que sacar del almacén, primero pide la foto de lo que sale.
+    const { manejarConfirmarAbastecimientoTelegram } = await import('@/lib/telegram/despachoProcuraTelegram');
+    await manejarConfirmarAbastecimientoTelegram(supabase, {
+      chatId: params.chatId,
+      callbackId: params.callbackId,
       procuraId,
-      autorNombre: nombre,
-      // El botón viene de la orden que salió al aprobar: la compra ya se le pidió al comprador.
-      compraOrdenadaAlAprobar: true,
     });
-    await sendTelegramMessage(
-      params.chatId,
-      resultado.ok
-        ? `✅ <b>${escHtml(etiquetaResultadoAbastecimiento(resultado))}</b>`
-        : `❌ ${escHtml(resultado.error ?? 'No se pudo abastecer')}`,
-      { parse_mode: 'HTML' },
-    );
     return true;
+  }
+
+  {
+    const { manejarSoltarDespachoProcuraTelegram } = await import('@/lib/telegram/despachoProcuraTelegram');
+    if (await manejarSoltarDespachoProcuraTelegram(supabase, params)) return true;
   }
 
   if (await manejarCallbackTtlProcuraDepartamento(supabase, params)) {

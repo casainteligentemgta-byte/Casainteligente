@@ -540,10 +540,20 @@ export const ESCENARIOS: Escenario[] = [
       const { bot, supabase, obra } = ctx;
       const procura = await procuraHastaAprobacion(ctx);
 
-      // El depositario verifica y despacha lo que sí hay.
+      // El depositario verifica y despacha lo que sí hay: primero la foto de lo que sale.
       await bot.pulsar('depo', 'Confirmar verificación y abastecer');
+      ctx.exigir(
+        'antes de sacar material pide la foto de lo que sale, como obligatoria',
+        /foto del material que sale/i.test(bot.textoUltimoPaso()) && /obligatoria/i.test(bot.textoUltimoPaso()),
+        sinSaltos(bot.textoUltimoPaso()),
+      );
       ctx.comprobar(
-        `del almacén salen ${MATERIAL_ENSAYO_1.stockInicial} hacia la obra`,
+        'sin la foto el almacén no se mueve',
+        (await stockDeEnsayo(supabase, ALMACEN_ENSAYO.id, MATERIAL_ENSAYO_1.id)) === MATERIAL_ENSAYO_1.stockInicial,
+      );
+      await bot.foto('depo');
+      ctx.comprobar(
+        `con la foto, del almacén salen ${MATERIAL_ENSAYO_1.stockInicial} hacia la obra`,
         (await stockDeEnsayo(supabase, ALMACEN_ENSAYO.id, MATERIAL_ENSAYO_1.id)) === 0 &&
           (await stockDeEnsayo(supabase, obra.ubicacionObra1, MATERIAL_ENSAYO_1.id)) === MATERIAL_ENSAYO_1.stockInicial,
         bot.textoUltimoPaso(),
@@ -559,7 +569,23 @@ export const ESCENARIOS: Escenario[] = [
         sinSaltos(bot.textoUltimoPaso()),
       );
 
-      await bot.pulsar('depo', 'Confirmar verificación y abastecer');
+      const { data: despachos } = await supabase
+        .from('transferencias_inventario')
+        .select('fotos,observaciones')
+        .eq('origen_ubicacion_id', ALMACEN_ENSAYO.id);
+      const despacho = ((despachos ?? []) as Fila[])[0];
+      ctx.comprobar(
+        'el despacho queda registrado con su foto',
+        (despachos ?? []).length === 1 && Array.isArray(despacho?.fotos) && (despacho?.fotos as unknown[]).length === 1,
+        JSON.stringify({ n: (despachos ?? []).length, fotos: despacho?.fotos }),
+      );
+      ctx.comprobar(
+        'al ingeniero se le avisa que el almacén despachó su material',
+        bot.mensajesPara('ing').some((e) => /el almac[eé]n despach[oó] material de su solicitud/i.test(sinFormato(e.texto))),
+        sinSaltos(textoPara(ctx, 'ing')),
+      );
+
+      await bot.pulsarDato('depo', `cmp:prc_abas:${String(procura.id)}`, 'Confirmar verificación y abastecer (otra vez)');
       ctx.comprobar(
         'un segundo toque del mismo botón no despacha otra vez',
         /ya estaba confirmado/i.test(bot.textoUltimoPaso()) &&
@@ -639,6 +665,12 @@ export const ESCENARIOS: Escenario[] = [
         bot.botonesVigentes('depo').some((b) => b.texto.includes(PROVEEDOR_ENSAYO)),
         bot.textoUltimoPaso(),
       );
+      const proveedoresVisibles = bot.botonesVigentes('depo').filter((b) => String(b.data ?? '').startsWith('ig:pr:'));
+      ctx.comprobar(
+        'el depositario solo ve las facturas de su obra, no las de otras',
+        proveedoresVisibles.length === 1,
+        proveedoresVisibles.map((b) => b.texto).join(' | '),
+      );
       await bot.pulsar('depo', PROVEEDOR_ENSAYO);
       ctx.exigir(
         'muestra la factura y pide contar lo recibido',
@@ -669,7 +701,50 @@ export const ESCENARIOS: Escenario[] = [
         .eq('proyecto_id', OBRA_ENSAYO.id);
       ctx.comprobar('Contabilidad marca la compra como ingresada al almacén', Boolean(((trasIngreso ?? []) as Fila[])[0]?.ingresado_almacen_at));
       ctx.comprobar('la sesión del bot vuelve al menú', bot.pasos.at(-1)?.sesion?.contexto === 'menu', JSON.stringify(bot.pasos.at(-1)?.sesion));
-      ctx.comprobar('(dato) estado final de la procura', true, String((await procuraDeEnsayo(ctx))?.estado));
+      const procuraFinal = await procuraDeEnsayo(ctx);
+      ctx.comprobar('la solicitud queda «recibida»', procuraFinal?.estado === 'recibida', String(procuraFinal?.estado));
+      ctx.comprobar(
+        'al ingeniero se le avisa que su material ya está en el almacén y cómo pedirlo',
+        bot
+          .mensajesPara('ing')
+          .some((e) => /ya est[aá] en el almac[eé]n/i.test(sinFormato(e.texto)) && /pedir material/i.test(sinFormato(e.texto))),
+        sinSaltos(textoPara(ctx, 'ing')),
+      );
+    },
+  },
+  {
+    id: 'compra_despacho_con_foto',
+    titulo: 'El almacén no despacha una solicitud sin foto, y el depositario puede soltar el despacho',
+    async correr(ctx) {
+      const { bot, supabase, obra } = ctx;
+      const procura = await procuraHastaAprobacion(ctx);
+      const enAlmacen = () => stockDeEnsayo(supabase, ALMACEN_ENSAYO.id, MATERIAL_ENSAYO_1.id);
+      const reserva = async () => {
+        const { data } = await supabase
+          .from('ci_procuras')
+          .select('despacho_chat_id,abastecimiento_codigo_despacho')
+          .eq('id', String(procura.id))
+          .maybeSingle();
+        return (data ?? {}) as Fila;
+      };
+
+      await bot.pulsar('depo', 'Confirmar verificación y abastecer');
+      ctx.exigir('pide la foto del material que sale', /foto del material que sale/i.test(bot.textoUltimoPaso()), sinSaltos(bot.textoUltimoPaso()));
+      ctx.comprobar('el despacho queda a nombre de quien lo tomó', (await reserva()).despacho_chat_id != null);
+
+      await bot.pulsar('depo', 'No lo despacho yo');
+      ctx.comprobar('al soltarlo queda libre y sin mover stock', (await reserva()).despacho_chat_id == null && (await enAlmacen()) === MATERIAL_ENSAYO_1.stockInicial, sinSaltos(bot.textoUltimoPaso()));
+
+      await bot.pulsarDato('depo', `cmp:prc_abas:${String(procura.id)}`, 'Confirmar verificación y abastecer');
+      ctx.exigir('al tomarlo de nuevo vuelve a pedir la foto', /foto del material que sale/i.test(bot.textoUltimoPaso()), sinSaltos(bot.textoUltimoPaso()));
+      await bot.foto('depo');
+      ctx.comprobar(
+        'con la foto sale el material',
+        (await enAlmacen()) === 0 &&
+          (await stockDeEnsayo(supabase, obra.ubicacionObra1, MATERIAL_ENSAYO_1.id)) === MATERIAL_ENSAYO_1.stockInicial,
+        sinSaltos(bot.textoUltimoPaso()),
+      );
+      ctx.comprobar('la orden de compra no se repite', ordenesDeCompraRecibidas(ctx) === 1, `le llegaron ${ordenesDeCompraRecibidas(ctx)}`);
     },
   },
   {
@@ -695,19 +770,79 @@ export const ESCENARIOS: Escenario[] = [
     },
   },
   {
-    id: 'compra_sin_fondos',
-    titulo: 'El Contador dice que no hay fondos: la compra no llega al comprador',
+    id: 'compra_a_credito',
+    titulo: 'Sin fondos: la solicitud llega igual al PM y, si aprueba, la compra es a crédito',
     async correr(ctx) {
       const { bot, supabase } = ctx;
       await registrarProcura(ctx);
       await bot.pulsar('conta', 'No hay disponibilidad');
-      const p = await procuraDeEnsayo(ctx);
-      ctx.comprobar('(dato) cómo queda la procura y qué responde el bot', true, `${String(p?.estado)} · ${sinSaltos(bot.textoUltimoPaso())}`);
-      ctx.comprobar('el comprador no recibe ninguna orden', ordenesDeCompraRecibidas(ctx) === 0, `le llegaron ${ordenesDeCompraRecibidas(ctx)}`);
+      ctx.exigir(
+        'sin fondos, la solicitud llega igual al PM con el botón «Aprobar a crédito»',
+        bot.botonesVigentes('pm').some((b) => /aprobar a cr[eé]dito/i.test(b.texto)),
+        sinSaltos(bot.textoUltimoPaso()),
+      );
+      ctx.comprobar(
+        'al PM se le advierte que no hay fondos y que aprobar es autorizar el crédito',
+        /sin fondos disponibles/i.test(textoPara(ctx, 'pm')) && /a cr[eé]dito/i.test(textoPara(ctx, 'pm')),
+        sinSaltos(textoPara(ctx, 'pm')),
+      );
+      ctx.comprobar('mientras el PM no aprueba, el comprador no recibe nada', ordenesDeCompraRecibidas(ctx) === 0);
       ctx.comprobar(
         'el almacén no se mueve',
         (await stockDeEnsayo(supabase, ALMACEN_ENSAYO.id, MATERIAL_ENSAYO_1.id)) === MATERIAL_ENSAYO_1.stockInicial,
       );
+
+      await bot.pulsar('pm', 'Aprobar a crédito');
+      ctx.exigir('al aprobar, la orden le llega al comprador', ordenesDeCompraRecibidas(ctx) === 1, sinSaltos(bot.textoUltimoPaso()));
+      ctx.comprobar(
+        'la orden de compra dice que es a crédito',
+        /compra a cr[eé]dito/i.test(textoPara(ctx, 'compra')),
+        sinSaltos(textoPara(ctx, 'compra')),
+      );
+      ctx.comprobar(
+        'el ingeniero ve en su ticket que fue aprobada a crédito',
+        bot.mensajesPara('ing').some((e) => /aprobada a cr[eé]dito/i.test(sinFormato(e.texto))),
+        sinSaltos(textoPara(ctx, 'ing')),
+      );
+      ctx.comprobar(
+        'al PM se le confirma «Aprobada a crédito»',
+        /aprobada a cr[eé]dito/i.test(bot.textoUltimoPaso()),
+        sinSaltos(bot.textoUltimoPaso()),
+      );
+
+      await cargarFacturaManualHastaFoto(ctx);
+      await bot.foto('compra');
+      await bot.pulsar('compra', 'Dólares (USD)');
+      ctx.exigir(
+        'al comprador no se le pregunta contado o crédito: pasa directo a los días de crédito',
+        /d[ií]as de cr[eé]dito/i.test(bot.textoUltimoPaso()) &&
+          !bot.botonesVigentes('compra').some((b) => /^contado$/i.test(b.texto.trim())),
+        sinSaltos(bot.textoUltimoPaso()),
+      );
+      await bot.pulsar('compra', '30 días');
+      ctx.exigir(
+        'luego pregunta a qué almacén va',
+        bot.botonesVigentes('compra').some((b) => b.texto.includes(ALMACEN)),
+        sinSaltos(bot.textoUltimoPaso()),
+      );
+      await bot.pulsar('compra', ALMACEN);
+      ctx.exigir('la compra queda registrada en Contabilidad', /compra registrada en contabilidad/i.test(bot.textoUltimoPaso()), sinSaltos(bot.textoUltimoPaso()));
+
+      const { data: pendientes } = await supabase
+        .from('ci_facturas_canal_pendientes')
+        .select('extracted')
+        .eq('proyecto_id', OBRA_ENSAYO.id);
+      const extracted = (((pendientes ?? []) as Fila[])[0]?.extracted ?? {}) as Fila;
+      ctx.comprobar(
+        'la factura queda a crédito a 30 días',
+        extracted.condicion_pago === 'credito' && Number(extracted.dias_credito) === 30,
+        JSON.stringify({ condicion_pago: extracted.condicion_pago, dias_credito: extracted.dias_credito }),
+      );
+      const { data: compras } = await supabase
+        .from('contabilidad_compras')
+        .select('cco_estado,forma_pago_cco,monto_usd')
+        .eq('proyecto_id', OBRA_ENSAYO.id);
+      ctx.comprobar('(dato) cómo queda la compra en Contabilidad', true, JSON.stringify(((compras ?? []) as Fila[])[0] ?? null));
     },
   },
 ];

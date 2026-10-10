@@ -167,3 +167,31 @@ export async function exigirUsuarioSistemaTelegram(
   }
   return { ok: true, usuario };
 }
+
+/**
+ * Administradores activos del sistema con Telegram.
+ * En un ensayo del bot devuelve solo los del ensayo (no se lee la tabla real).
+ */
+export async function listarAdministradoresSistemaTelegram(
+  supabase: SupabaseClient,
+): Promise<Array<{ chatId: string; nombre: string | null }>> {
+  const simulacion = simulacionBotActiva();
+  if (simulacion) {
+    return simulacion.usuariosSistema
+      .filter((u) => u.rol === 'Administrador')
+      .map((u) => ({ chatId: String(u.telegram_id), nombre: u.nombre ?? null }));
+  }
+  const { data, error } = await supabase
+    .from('ci_usuarios_sistema_telegram')
+    .select('nombre, telegram_id')
+    .eq('activo', true)
+    .eq('rol', 'Administrador');
+  if (error) return [];
+  const out: Array<{ chatId: string; nombre: string | null }> = [];
+  for (const row of (data ?? []) as Array<{ nombre?: string | null; telegram_id?: string | number | null }>) {
+    const id = row.telegram_id == null ? null : parseTelegramIdNumerico(row.telegram_id);
+    if (id == null) continue;
+    out.push({ chatId: String(id), nombre: String(row.nombre ?? '').trim() || null });
+  }
+  return out;
+}

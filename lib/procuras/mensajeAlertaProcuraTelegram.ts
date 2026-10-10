@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AlertaProcuraAdminRow } from '@/lib/procuras/alertaAdminProcuraTelegram';
 import { bloqueFondosProcura, type ResumenFondosObra } from '@/lib/procuras/fondosObraProcura';
 import { etiquetaCapituloMaestro } from '@/lib/compras/capitulosMaestro';
+import { AVISO_PM_SIN_FONDOS, procuraSinFondos } from '@/lib/procuras/compraACredito';
 import {
   limpiarDescripcionProcura,
   nombreMaterialProcuraVisible,
@@ -149,7 +150,8 @@ export function construirMensajePmDecisionProcura(
     cuerpoDetalleProcura(row, prioridad, stock) +
     `\n💰 <b>Disponibilidad presupuestaria:</b> ${escHtml(etiquetaViabilidad(row.viabilidad_presupuestaria))}\n` +
     `👤 <b>Informó:</b> ${escHtml(informante)} (${rolLabel})\n\n` +
-    '¿Aprueba la procura?\n' +
+    (procuraSinFondos(row) ? `${AVISO_PM_SIN_FONDOS}\n\n` : '') +
+    (procuraSinFondos(row) ? '¿Aprueba la procura <b>a crédito</b>?\n' : '¿Aprueba la procura?\n') +
     '<i>Tras aprobar: orden de compra al comprador y/o verificación de almacén según stock.</i>'
   );
 }

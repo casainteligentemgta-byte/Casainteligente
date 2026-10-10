@@ -4,6 +4,7 @@ import {
 } from '@/lib/compras/usuariosSistemaTelegram';
 import { etiquetaCapituloMaestro } from '@/lib/compras/capitulosMaestro';
 import { nombreMaterialProcuraVisible } from '@/lib/compras/procuraMaterialTexto';
+import { LINEA_COMPRA_A_CREDITO, procuraSinFondos } from '@/lib/procuras/compraACredito';
 import {
   insertarAuditoriaProcuraSinTransicion,
   metadatosAuditoriaSupervisor,
@@ -48,6 +49,7 @@ export type ProcuraOrdenCompraRow = {
   observaciones: string | null;
   proyecto_id?: string | null;
   entidad_id?: string | null;
+  viabilidad_presupuestaria?: string | null;
   ci_proyectos?: { nombre: string } | { nombre: string }[] | null;
   ci_entidades?: { nombre: string } | { nombre: string }[] | null;
   ci_compras_capitulos_maestro?: { codigo?: string; nombre?: string } | null;
@@ -77,7 +79,7 @@ export async function cargarProcuraOrdenCompra(
   const { data, error } = await supabase
     .from('ci_procuras')
     .select(
-      'id,ticket,estado,material_txt,material_id,cantidad,unidad,solicitante_nombre,solicitante_telegram_chat_id,prioridad,monto_estimado_usd,observaciones,proyecto_id,entidad_id,ci_proyectos(nombre),ci_entidades(nombre),ci_compras_capitulos_maestro(codigo,nombre)',
+      'id,ticket,estado,material_txt,material_id,cantidad,unidad,solicitante_nombre,solicitante_telegram_chat_id,prioridad,monto_estimado_usd,observaciones,proyecto_id,entidad_id,viabilidad_presupuestaria,ci_proyectos(nombre),ci_entidades(nombre),ci_compras_capitulos_maestro(codigo,nombre)',
     )
     .eq('id', procuraId.trim())
     .maybeSingle();
@@ -130,6 +132,7 @@ export function mensajeOrdenCompraComprador(
     `👷 <b>Solicitante:</b> ${escHtml(procura.solicitante_nombre?.trim() || '—')}\n` +
     `📁 <b>Obra / capítulo:</b> ${escHtml(obra)}\n` +
     `🔴 <b>Prioridad:</b> ${escHtml(prioridad)}${monto}${notaLogistica}\n` +
+    (procuraSinFondos(procura) ? `${LINEA_COMPRA_A_CREDITO}\n` : '') +
     `✅ <b>Autorizó:</b> ${escHtml(params.autorNombre)}${motivo}\n\n` +
     'Registre la factura con los botones o con <code>/facturas</code> (foto o manual).\n' +
     `<a href="${escHtml(urlCuadroProcuras())}">Ver cuadro de procuras</a>`
