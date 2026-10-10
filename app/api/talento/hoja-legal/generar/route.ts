@@ -1,14 +1,31 @@
 import { NextResponse } from 'next/server';
 import { persistirPdfHojaLegalEmpleado } from '@/lib/talento/persistirPdfHojaLegalEmpleado';
+import { createClient } from '@/lib/supabase/server';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
 export const runtime = 'nodejs';
+
+async function haySesion(): Promise<boolean> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    return Boolean(user);
+  } catch {
+    return false;
+  }
+}
 
 /**
  * POST { empleadoId, variante: 'hoja_vida' | 'hoja_empleo' }
  * o { token, variante } para onboarding por token_registro.
  *
  * Persiste el PDF en Storage y actualiza columnas en ci_empleados.
+ *
+ * Con `token` la usa el candidato desde su enlace (el token es la credencial). Con
+ * `empleadoId` la usa el personal y exige sesión: sin ese control cualquiera podía
+ * regenerar la planilla de un expediente ajeno conociendo su identificador.
  */
 export async function POST(req: Request) {
   const admin = supabaseAdminForRoute();
@@ -28,6 +45,10 @@ export async function POST(req: Request) {
 
   let empleadoId = (body.empleadoId ?? '').trim();
   const token = (body.token ?? '').trim();
+
+  if (empleadoId && !(await haySesion())) {
+    return NextResponse.json({ error: 'No autorizado. Inicie sesión.', code: 'SIN_SESION' }, { status: 401 });
+  }
 
   if (!empleadoId && token) {
     const byReg = await admin.client.from('ci_empleados').select('id').eq('token_registro', token).maybeSingle();
