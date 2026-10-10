@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { buildEmpleadoUpdateOficioHojaEmpleo } from '@/lib/rrhh/empleadoOficioHojaEmpleo';
-import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
-import { supabaseForRoute } from '@/lib/talento/supabase-route';
+import { clientePersonalConSesion } from '@/lib/auth/sesionPersonalRuta';
 
 export const runtime = 'nodejs';
 
@@ -15,15 +14,8 @@ export async function PATCH(req: Request, context: { params: { id: string } }) {
     return NextResponse.json({ error: 'id de empleado requerido' }, { status: 400 });
   }
 
-  const sb = supabaseForRoute();
-  if (!sb.ok) return sb.response;
-
-  const {
-    data: { user },
-  } = await sb.client.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-  }
+  const admin = await clientePersonalConSesion();
+  if (!admin.ok) return admin.response;
 
   let body: { cargoUOficio?: string };
   try {
@@ -39,9 +31,6 @@ export async function PATCH(req: Request, context: { params: { id: string } }) {
   if (cargoUOficio.length > 240) {
     return NextResponse.json({ error: 'El oficio no puede superar 240 caracteres' }, { status: 400 });
   }
-
-  const admin = supabaseAdminForRoute();
-  if (!admin.ok) return admin.response;
 
   const { data: row, error: fetchErr } = await admin.client
     .from('ci_empleados')

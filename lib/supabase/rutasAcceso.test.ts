@@ -54,6 +54,37 @@ describe('páginas de personal que leen tablas cerradas', () => {
   })
 })
 
+describe('formularios públicos de reclutamiento', () => {
+  it('los enlaces del candidato siguen abiertos; operaciones pide sesión', () => {
+    for (const ruta of [
+      '/registro',
+      '/registro/onboarding/abc/firma',
+      '/reclutamiento',
+      '/reclutamiento/onboarding/abc',
+      '/onboarding/hoja-de-vida/abc',
+      '/talento/examen',
+    ]) {
+      assert.equal(requiereSesion(ruta), false, ruta)
+    }
+    assert.equal(requiereSesion('/reclutamiento/hoja-de-vida/view/123'), true)
+    for (const ruta of ['/operaciones', '/operaciones/proyectos', '/operaciones/rentabilidad']) {
+      assert.equal(requiereSesion(ruta), true, ruta)
+    }
+  })
+
+  it('las rutas que les entregan datos no piden sesión (validan el enlace)', () => {
+    for (const ruta of [
+      '/api/reclutamiento/vacante',
+      '/api/reclutamiento/firma-resumen',
+      '/api/reclutamiento/patrono',
+      '/api/reclutamiento/captacion-meta',
+      '/api/talento/examen/submit',
+    ]) {
+      assert.equal(apiRequiereSesion(ruta), false, ruta)
+    }
+  })
+})
+
 describe('quién puede usar el bot', () => {
   it('la lista de chats autorizados pide sesión; el webhook de Telegram no', () => {
     assert.equal(apiRequiereSesion('/api/telegram/whitelist'), true)

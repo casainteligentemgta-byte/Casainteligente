@@ -17,7 +17,6 @@ import { randomUUID } from 'crypto';
 import { celularParaInserto } from '@/lib/registro/ciEmpleadosCelular';
 import { nombresLegadoDesdeTextoLibre } from '@/lib/registro/ciEmpleadosNombresLegado';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
-import { supabaseForRoute } from '@/lib/talento/supabase-route';
 import type { RolExamen } from '@/types/talento';
 
 const QUINCE_MIN_MS = 15 * 60 * 1000;
@@ -28,7 +27,10 @@ const HINT_CI_EMPLEADOS =
 
 export async function POST(req: Request) {
   try {
-    const sb = supabaseForRoute();
+    // El examen se guarda con el cliente del servidor: la tabla de candidatos ya no
+    // acepta escrituras anónimas por identificador. En el flujo con invitación, más
+    // abajo se valida el token antes de tocar el expediente.
+    const sb = supabaseAdminForRoute();
     if (!sb.ok) return sb.response;
     const supabase = sb.client;
     const body = (await req.json()) as {
