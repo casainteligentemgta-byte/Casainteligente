@@ -64,6 +64,9 @@ drop policy if exists "inv_requerimientos_salida_select_auth" on public.inv_requ
 create policy "inv_requerimientos_salida_select_auth" on public.inv_requerimientos_salida
   for select to authenticated using (true);
 
+-- Sin acceso anónimo: nadie sin sesión lee ni escribe requerimientos.
+revoke all on public.inv_requerimientos_salida from anon;
+
 -- Ubicaciones virtuales para lo que sale del inventario disponible. Mismo tipo que
 -- GARANTIAS (migración 180): no aparecen como almacén de origen ni de destino.
 insert into public.inv_ubicaciones (codigo, nombre, tipo)
