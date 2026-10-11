@@ -85,8 +85,37 @@ export function coloresCategoria(nombre: string | null | undefined): {
   return { bg: hexToRgba(hex, 0.12), text: hex, dot: hex };
 }
 
+/**
+ * Clave para comparar nombres: sin mayúsculas, sin acentos y sin espacios de más.
+ * «Domotica» y «Domótica» son la misma categoría.
+ */
+export function claveNombreCategoria(nombre: string): string {
+  return nombre
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
+
 function claveNombre(nombre: string): string {
-  return nombre.trim().toLowerCase();
+  return claveNombreCategoria(nombre);
+}
+
+/**
+ * Devuelve la categoría ya existente que equivale a `nombre` (ignorando acentos y
+ * mayúsculas), o `null` si es nueva. Evita crear «Domotica» cuando ya hay «Domótica».
+ */
+export function categoriaExistenteEquivalente(
+  nombre: string,
+  existentes: readonly string[],
+): string | null {
+  const clave = claveNombreCategoria(nombre);
+  if (!clave) return null;
+  for (const e of existentes) {
+    if (claveNombreCategoria(e) === clave) return normalizarNombreCategoria(e);
+  }
+  return null;
 }
 
 export function normalizarNombreCategoria(raw: string): string {
@@ -185,17 +214,19 @@ async function sincronizarExtrasEnTabla(
   extras: readonly string[],
   actuales: readonly string[],
 ): Promise<void> {
-  const have = new Set(actuales.map((n) => n.toLowerCase()));
+  // Las categorías de base cuentan como existentes: si un navegador guardó «Domotica»,
+  // no se vuelve a crear al lado de «Domótica».
+  const have = new Set([...CATEGORIAS_CATALOGO_DEFAULT, ...actuales].map((n) => claveNombre(n)));
   for (const extra of extras) {
     const name = normalizarNombreCategoria(extra);
-    if (!name || have.has(name.toLowerCase())) continue;
+    if (!name || have.has(claveNombre(name))) continue;
     const { error } = await supabase.from('product_categories').insert({
       name,
       kind: 'personalizada',
       sort_order: 500,
       color: colorHexCategoria(name),
     });
-    if (!error) have.add(name.toLowerCase());
+    if (!error) have.add(claveNombre(name));
   }
 }
 
@@ -242,12 +273,12 @@ export async function crearCategoriaCatalogo(
   const color = colorHexCategoria(name);
 
   try {
-    const { data: existente } = await supabase
-      .from('product_categories')
-      .select('name')
-      .ilike('name', name)
-      .maybeSingle();
-    const existenteNombre = normalizarNombreCategoria(String(existente?.name ?? ''));
+    // ¿Ya existe con otro acento o mayúsculas? Se usa la que ya está.
+    const enTabla = (await listarDesdeTabla(supabase)) ?? [];
+    const existenteNombre = categoriaExistenteEquivalente(name, [
+      ...CATEGORIAS_CATALOGO_DEFAULT,
+      ...enTabla,
+    ]);
     if (existenteNombre) {
       guardarCategoriaExtraLocal(existenteNombre);
       return existenteNombre;

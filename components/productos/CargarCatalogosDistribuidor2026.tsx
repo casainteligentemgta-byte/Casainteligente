@@ -5,6 +5,7 @@ import type { CSSProperties } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import accesoJson from '@/data/productos/acceso-alarma-septiembre-2026.json';
 import siemonJson from '@/data/productos/siemon-agosto-2026.json';
+import { tinta, tintaTexto, tonoTexto } from '@/lib/tema/tinta';
 import {
     payloadCatalogoDistribuidor,
     planearCargaCatalogo,
@@ -17,8 +18,8 @@ const VERDE = '#34C759';
 const ROJO = '#FF6B60';
 
 const caja: CSSProperties = {
-    background: 'rgba(255,255,255,0.04)',
-    border: '1px solid rgba(255,255,255,0.08)',
+    background: tinta(0.04),
+    border: `1px solid ${tinta(0.08)}`,
     borderRadius: '16px',
     padding: '16px',
 };
@@ -37,9 +38,9 @@ const botonPrincipal: CSSProperties = {
 };
 
 const botonSecundario: CSSProperties = {
-    background: 'rgba(255,255,255,0.08)',
-    color: 'white',
-    border: '1px solid rgba(255,255,255,0.12)',
+    background: tinta(0.08),
+    color: 'var(--label-primary)',
+    border: `1px solid ${tinta(0.12)}`,
     borderRadius: '12px',
     padding: '10px 16px',
     fontWeight: 700,
@@ -187,10 +188,10 @@ export default function CargarCatalogosDistribuidor2026() {
                     background: 'rgba(255,107,96,0.08)',
                 }}
             >
-                <p style={{ fontSize: '14px', fontWeight: 800, color: ROJO, margin: 0 }}>
+                <p style={{ fontSize: '14px', fontWeight: 800, color: tonoTexto(ROJO), margin: 0 }}>
                     Cierra el SQL Editor. No pegues el error.
                 </p>
-                <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.75)', margin: '8px 0 0' }}>
+                <p style={{ fontSize: '13px', color: tintaTexto(0.75), margin: '8px 0 0' }}>
                     El mensaje Failed to run sql query aparece cuando el editor ejecuta el texto del error
                     en vez de SQL. Aquí la carga es un clic, con tu sesión, sin duplicar SKU.
                 </p>
@@ -207,9 +208,9 @@ export default function CargarCatalogosDistribuidor2026() {
                     }}
                     style={{
                         ...botonSecundario,
-                        background: catalogo === 'acceso' ? NARANJA : 'rgba(255,255,255,0.08)',
-                        color: catalogo === 'acceso' ? '#1a0b00' : 'white',
-                        border: catalogo === 'acceso' ? 'none' : '1px solid rgba(255,255,255,0.12)',
+                        background: catalogo === 'acceso' ? NARANJA : tinta(0.08),
+                        color: catalogo === 'acceso' ? '#1a0b00' : 'var(--label-primary)',
+                        border: catalogo === 'acceso' ? 'none' : `1px solid ${tinta(0.12)}`,
                     }}
                 >
                     Acceso-Alarma
@@ -224,9 +225,9 @@ export default function CargarCatalogosDistribuidor2026() {
                     }}
                     style={{
                         ...botonSecundario,
-                        background: catalogo === 'siemon' ? NARANJA : 'rgba(255,255,255,0.08)',
-                        color: catalogo === 'siemon' ? '#1a0b00' : 'white',
-                        border: catalogo === 'siemon' ? 'none' : '1px solid rgba(255,255,255,0.12)',
+                        background: catalogo === 'siemon' ? NARANJA : tinta(0.08),
+                        color: catalogo === 'siemon' ? '#1a0b00' : 'var(--label-primary)',
+                        border: catalogo === 'siemon' ? 'none' : `1px solid ${tinta(0.12)}`,
                     }}
                 >
                     Siemon
@@ -234,43 +235,43 @@ export default function CargarCatalogosDistribuidor2026() {
             </div>
 
             <div style={caja}>
-                <h2 style={{ fontSize: '16px', fontWeight: 800, color: 'white', margin: 0 }}>{elegido.titulo}</h2>
-                <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.65)', margin: '8px 0 0' }}>{elegido.nota}</p>
-                <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)', margin: '10px 0 0' }}>
+                <h2 style={{ fontSize: '16px', fontWeight: 800, color: 'var(--label-primary)', margin: 0 }}>{elegido.titulo}</h2>
+                <p style={{ fontSize: '13px', color: tintaTexto(0.65), margin: '8px 0 0' }}>{elegido.nota}</p>
+                <p style={{ fontSize: '13px', color: tintaTexto(0.5), margin: '10px 0 0' }}>
                     {elegido.items.length} SKU · costo = lista USD · precio = costo · utilidad = 0
                 </p>
             </div>
 
             {errorProductos ? (
-                <p data-catalogo-error style={{ color: ROJO, fontSize: '13px', margin: 0 }}>
+                <p data-catalogo-error style={{ color: tonoTexto(ROJO), fontSize: '13px', margin: 0 }}>
                     {errorProductos}
                 </p>
             ) : plan ? (
                 <div style={caja} data-catalogo-plan>
-                    <p style={{ fontSize: '14px', fontWeight: 700, color: 'white', margin: 0 }}>
+                    <p style={{ fontSize: '14px', fontWeight: 700, color: 'var(--label-primary)', margin: 0 }}>
                         Crear {plan.crear.length} · actualizar {plan.actualizar.length}
                     </p>
-                    <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.55)', margin: '6px 0 0' }}>
+                    <p style={{ fontSize: '12px', color: tintaTexto(0.55), margin: '6px 0 0' }}>
                         Si el número a crear es 0, esa lista ya está en Productos.
                     </p>
                 </div>
             ) : (
-                <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)', margin: 0 }}>Leyendo catálogo…</p>
+                <p style={{ fontSize: '13px', color: tintaTexto(0.5), margin: 0 }}>Leyendo catálogo…</p>
             )}
 
             {progreso ? (
-                <p data-catalogo-progreso style={{ fontSize: '13px', color: NARANJA, margin: 0, fontWeight: 700 }}>
+                <p data-catalogo-progreso style={{ fontSize: '13px', color: tonoTexto(NARANJA), margin: 0, fontWeight: 700 }}>
                     Guardando {progreso.hechos} de {progreso.total}…
                 </p>
             ) : null}
 
             {resultado ? (
                 <div style={caja} data-catalogo-resultado>
-                    <p style={{ fontSize: '14px', fontWeight: 800, color: VERDE, margin: 0 }}>
+                    <p style={{ fontSize: '14px', fontWeight: 800, color: tonoTexto(VERDE), margin: 0 }}>
                         Listo: {resultado.creados} creados, {resultado.actualizados} actualizados
                     </p>
                     {resultado.errores.length > 0 ? (
-                        <ul style={{ margin: '8px 0 0', paddingLeft: '18px', color: ROJO, fontSize: '12px' }}>
+                        <ul style={{ margin: '8px 0 0', paddingLeft: '18px', color: tonoTexto(ROJO), fontSize: '12px' }}>
                             {resultado.errores.slice(0, 8).map((e) => (
                                 <li key={e}>{e}</li>
                             ))}
@@ -281,7 +282,7 @@ export default function CargarCatalogosDistribuidor2026() {
 
             {confirmar ? (
                 <div style={caja}>
-                    <p style={{ fontSize: '13px', color: 'white', margin: '0 0 12px' }}>
+                    <p style={{ fontSize: '13px', color: 'var(--label-primary)', margin: '0 0 12px' }}>
                         ¿Cargar {elegido.titulo}? Precio de venta = costo de lista. No se aplica margen.
                     </p>
                     <div style={{ display: 'flex', gap: '8px' }}>

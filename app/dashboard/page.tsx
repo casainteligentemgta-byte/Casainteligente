@@ -54,7 +54,7 @@ async function contarDocumentosVencidosEnObra(): Promise<ResultadoConteo> {
 export default async function DashboardPage() {
   const [clientes, productos, ventas, docsVencidosObra] = await Promise.all([
     contar('customers'),
-    contar('productos'),
+    contar('products'),
     contar('ventas'),
     contarDocumentosVencidosEnObra(),
   ]);
@@ -213,7 +213,7 @@ export default async function DashboardPage() {
             </li>
             <li>
               Comprueba en Supabase → <strong>Table Editor</strong> que existan las tablas:{' '}
-              <code>customers</code>, <code>productos</code>, <code>ventas</code>.
+              <code>customers</code>, <code>products</code>, <code>ventas</code>.
             </li>
             <li>
               Si el error es <code>TypeError: fetch failed</code>, suele ser <strong>red o firewall</strong>, no

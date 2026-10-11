@@ -5,9 +5,20 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Package } from 'lucide-react';
 import ModuloPageTitle from '@/components/ui/ModuloPageTitle';
+import BotonTema from '@/components/tema/BotonTema';
 import { createClient } from '@/lib/supabase/client';
 import { coloresCategoria } from '@/lib/productos/categoriasCatalogo';
 import { useCategoriasCatalogo } from '@/lib/productos/useCategoriasCatalogo';
+import { tinta, tintaTexto, tonoTexto } from '@/lib/tema/tinta';
+import {
+    REVISIONES_CATALOGO,
+    avisoEliminarProducto,
+    contarPorCorregir,
+    filtrarPorCorregir,
+    terminoBusquedaCatalogo,
+    usoDeProducto,
+    type RevisionCatalogo,
+} from '@/lib/productos/revisionCatalogo';
 
 interface Product {
     id: number;
@@ -30,8 +41,8 @@ interface Product {
 
 /** Aviso corto cuando el proveedor no lo tiene (o viene en camino). */
 function avisoProveedor(p: Product): { texto: string; color: string } | null {
-    if (p.disponibilidad_proveedor === 'no_disponible') return { texto: 'Proveedor: no disponible', color: '#FF6B60' };
-    if (p.disponibilidad_proveedor === 'en_transito') return { texto: 'Proveedor: en tránsito', color: '#FFD60A' };
+    if (p.disponibilidad_proveedor === 'no_disponible') return { texto: 'Proveedor: no disponible', color: 'var(--tono-coral)' };
+    if (p.disponibilidad_proveedor === 'en_transito') return { texto: 'Proveedor: en tránsito', color: 'var(--tono-amarillo)' };
     return null;
 }
 
@@ -82,7 +93,7 @@ function ProductAvatar({ product }: { product: Product }) {
             flexDirection: 'column', gap: '2px',
         }}>
             <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: color, opacity: 0.8 }} />
-            <span style={{ fontSize: '10px', fontWeight: 700, color, letterSpacing: '0.5px' }}>{initials}</span>
+            <span style={{ fontSize: '10px', fontWeight: 700, color: tonoTexto(color), letterSpacing: '0.5px' }}>{initials}</span>
         </div>
     );
 }
@@ -110,7 +121,7 @@ function ProductRow({
 
     return (
         <div style={{
-            borderBottom: '1px solid rgba(255,255,255,0.05)',
+            borderBottom: `1px solid ${tinta(0.05)}`,
             background: 'transparent',
         }}>
             {/* ── Info row (clickable) ── */}
@@ -139,13 +150,13 @@ function ProductRow({
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', minWidth: 0, flex: 1 }}>
                             <span style={{
                                 fontSize: '10px', fontWeight: 800, padding: '2px 8px',
-                                borderRadius: '6px', background: colors.bg, color: colors.text,
+                                borderRadius: '6px', background: colors.bg, color: tonoTexto(colors.text),
                                 textTransform: 'uppercase', letterSpacing: '0.5px'
                             }}>
                                 {cat}
                             </span>
                             {product.marca && (
-                                <span style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>
+                                <span style={{ fontSize: '10px', fontWeight: 700, color: tintaTexto(0.3), textTransform: 'uppercase' }}>
                                     {product.marca}
                                 </span>
                             )}
@@ -154,7 +165,7 @@ function ProductRow({
                                     data-producto-proveedor={product.disponibilidad_proveedor}
                                     style={{
                                         fontSize: '10px', fontWeight: 800, padding: '2px 8px', borderRadius: '6px',
-                                        background: `${aviso.color}22`, color: aviso.color,
+                                        background: `${aviso.color}22`, color: tonoTexto(aviso.color),
                                     }}
                                 >
                                     {aviso.texto}
@@ -163,7 +174,7 @@ function ProductRow({
                         </div>
                         <div
                             style={{
-                                color: '#34C759',
+                                color: 'var(--tono-verde)',
                                 fontSize: '17px',
                                 fontWeight: 800,
                                 lineHeight: 1.15,
@@ -178,7 +189,7 @@ function ProductRow({
 
                     <h3
                         style={{
-                            color: 'white',
+                            color: 'var(--label-primary)',
                             fontSize: '16px',
                             fontWeight: 700,
                             lineHeight: 1.25,
@@ -195,14 +206,14 @@ function ProductRow({
                     >
                         {product.nombre}
                     </h3>
-                    <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '13px', margin: 0 }}>
+                    <p style={{ color: tintaTexto(0.4), fontSize: '13px', margin: 0 }}>
                         {product.modelo || 'Sin modelo'}
                     </p>
                 </div>
             </button>
 
             {/* ── Action bar ── */}
-            <div style={{ display: 'flex', borderTop: '1px solid rgba(255,255,255,0.04)', margin: '0 16px', marginBottom: '2px' }}>
+            <div style={{ display: 'flex', borderTop: `1px solid ${tinta(0.04)}`, margin: '0 16px', marginBottom: '2px' }}>
                 <button
                     onClick={() => onAddToCart(product)}
                     style={{
@@ -210,9 +221,9 @@ function ProductRow({
                         background: inCart ? 'rgba(52,199,89,0.12)' : 'transparent',
                         border: 'none', cursor: 'pointer', fontFamily: 'inherit',
                         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px',
-                        color: inCart ? '#34C759' : 'rgba(255,255,255,0.4)',
+                        color: inCart ? 'var(--tono-verde)' : tintaTexto(0.4),
                         fontSize: '11px', fontWeight: 600,
-                        borderRight: '1px solid rgba(255,255,255,0.05)',
+                        borderRight: `1px solid ${tinta(0.05)}`,
                         transition: 'all 0.15s',
                     }}
                 >
@@ -224,10 +235,10 @@ function ProductRow({
                     style={{
                         flex: 1, padding: '8px 0',
                         background: 'transparent',
-                        borderRight: '1px solid rgba(255,255,255,0.05)',
+                        borderRight: `1px solid ${tinta(0.05)}`,
                         textDecoration: 'none',
                         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px',
-                        color: '#FF9500', fontSize: '11px', fontWeight: 600,
+                        color: 'var(--tono-naranja)', fontSize: '11px', fontWeight: 600,
                     }}
                 >
                     Editar
@@ -240,7 +251,7 @@ function ProductRow({
                         background: confirmDel ? 'rgba(255,59,48,0.10)' : 'transparent',
                         border: 'none', cursor: 'pointer', fontFamily: 'inherit',
                         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px',
-                        color: '#FF3B30', fontSize: '11px', fontWeight: 600,
+                        color: 'var(--tono-rojo)', fontSize: '11px', fontWeight: 600,
                     }}
                 >
                     {confirmDel ? '¿Seguro?' : 'Eliminar'}
@@ -263,14 +274,14 @@ function ProductDetail({ product, onClose }: { product: Product; onClose: () => 
                 onClick={e => e.stopPropagation()}
                 style={{
                     width: '100%', maxWidth: '600px', margin: '0 auto',
-                    background: '#1C1C1E', borderRadius: '32px 32px 0 0',
+                    background: 'var(--bg-secondary)', borderRadius: '32px 32px 0 0',
                     padding: '30px 24px 50px',
-                    boxShadow: '0 -10px 40px rgba(0,0,0,0.5)',
+                    boxShadow: 'var(--sombra-hoja)',
                     maxHeight: '90vh',
                     overflowY: 'auto',
                 }}
             >
-                <div style={{ width: '40px', height: '4px', background: 'rgba(255,255,255,0.2)', borderRadius: '2px', margin: '0 auto 20px' }} />
+                <div style={{ width: '40px', height: '4px', background: tinta(0.2), borderRadius: '2px', margin: '0 auto 20px' }} />
                 {product.imagen ? (
                     <img
                         src={product.imagen}
@@ -285,19 +296,19 @@ function ProductDetail({ product, onClose }: { product: Product; onClose: () => 
                         }}
                     />
                 ) : null}
-                <h2 style={{ color: 'white', fontSize: '24px', fontWeight: 800, marginBottom: '8px' }}>{product.nombre}</h2>
-                <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '15px', marginBottom: '24px', whiteSpace: 'pre-wrap' }}>{product.descripcion || 'Sin descripción.'}</p>
+                <h2 style={{ color: 'var(--label-primary)', fontSize: '24px', fontWeight: 800, marginBottom: '8px' }}>{product.nombre}</h2>
+                <p style={{ color: tintaTexto(0.5), fontSize: '15px', marginBottom: '24px', whiteSpace: 'pre-wrap' }}>{product.descripcion || 'Sin descripción.'}</p>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
-                    <div style={{ background: 'rgba(255,255,255,0.05)', padding: '16px', borderRadius: '16px' }}>
-                        <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '11px', fontWeight: 700 }}>PRECIO VENTA</p>
-                        <p style={{ color: '#34C759', fontSize: '24px', fontWeight: 800, marginTop: '4px' }}>${fmt(product.precio)}</p>
+                    <div style={{ background: tinta(0.05), padding: '16px', borderRadius: '16px' }}>
+                        <p style={{ color: tintaTexto(0.3), fontSize: '11px', fontWeight: 700 }}>PRECIO VENTA</p>
+                        <p style={{ color: 'var(--tono-verde)', fontSize: '24px', fontWeight: 800, marginTop: '4px' }}>${fmt(product.precio)}</p>
                     </div>
                 </div>
 
                 {(product.manual_instrucciones || product.manual_documento_url) ? (
-                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '20px' }}>
-                        <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', fontWeight: 700, marginBottom: '10px' }}>MANUAL E INSTRUCCIONES</p>
+                    <div style={{ borderTop: `1px solid ${tinta(0.08)}`, paddingTop: '20px' }}>
+                        <p style={{ color: tintaTexto(0.45), fontSize: '11px', fontWeight: 700, marginBottom: '10px' }}>MANUAL E INSTRUCCIONES</p>
                         {product.manual_documento_url ? (
                             <a
                                 href={product.manual_documento_url}
@@ -309,7 +320,7 @@ function ProductDetail({ product, onClose }: { product: Product; onClose: () => 
                                     padding: '10px 16px',
                                     borderRadius: '12px',
                                     background: 'rgba(0,122,255,0.2)',
-                                    color: '#5AC8FA',
+                                    color: 'var(--tono-celeste)',
                                     fontSize: '14px',
                                     fontWeight: 700,
                                     textDecoration: 'none',
@@ -319,7 +330,7 @@ function ProductDetail({ product, onClose }: { product: Product; onClose: () => 
                             </a>
                         ) : null}
                         {product.manual_instrucciones ? (
-                            <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: '13px', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
+                            <p style={{ color: tintaTexto(0.65), fontSize: '13px', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
                                 {product.manual_instrucciones}
                             </p>
                         ) : null}
@@ -346,14 +357,26 @@ export default function ProductosPage() {
     const [nombreNuevaCategoria, setNombreNuevaCategoria] = useState('');
     const [guardandoCategoria, setGuardandoCategoria] = useState(false);
     const [errorCategoria, setErrorCategoria] = useState<string | null>(null);
+    const [errorCarga, setErrorCarga] = useState<string | null>(null);
+    /** Filtro «por corregir»: fichas sin precio, sin categoría o con el nombre repetido. */
+    const [revision, setRevision] = useState<RevisionCatalogo | ''>('');
 
     useEffect(() => {
-        const saved = localStorage.getItem('cart_ventas');
-        if (saved) setCart(JSON.parse(saved));
+        try {
+            const saved = localStorage.getItem('cart_ventas');
+            const parsed: unknown = saved ? JSON.parse(saved) : null;
+            if (Array.isArray(parsed)) setCart(parsed as CartItem[]);
+        } catch {
+            // Carrito guardado ilegible o navegador sin almacenamiento: se empieza vacío.
+        }
     }, []);
 
     useEffect(() => {
-        localStorage.setItem('cart_ventas', JSON.stringify(cart));
+        try {
+            localStorage.setItem('cart_ventas', JSON.stringify(cart));
+        } catch {
+            // Sin almacenamiento: el carrito vale mientras la página siga abierta.
+        }
     }, [cart]);
 
     const addToCart = useCallback((product: Product) => {
@@ -366,12 +389,25 @@ export default function ProductosPage() {
     }, []);
 
     const deleteProduct = useCallback(async (id: number) => {
-        const { error } = await supabase.from('products').delete().eq('id', id);
-        if (!error) {
-            setProducts(prev => prev.filter(p => p.id !== id));
-            setTotal(t => t - 1);
+        const nombre = products.find((p) => p.id === id)?.nombre ?? 'Este producto';
+        // Si está en presupuestos o enlazado a almacén, se avisa antes de eliminar.
+        const { uso, error: errUso } = await usoDeProducto(supabase, id);
+        if (errUso) {
+            alert('No se pudo comprobar dónde se usa este producto. No se eliminó. ' + errUso);
+            return;
         }
-    }, [supabase]);
+        const aviso = avisoEliminarProducto(nombre, uso);
+        if (aviso && !window.confirm(aviso)) return;
+
+        const { error } = await supabase.from('products').delete().eq('id', id);
+        if (error) {
+            alert('No se pudo eliminar: ' + error.message);
+            return;
+        }
+        setProducts(prev => prev.filter(p => p.id !== id));
+        setTotal(t => t - 1);
+        setCart(prev => prev.filter(i => i.product.id !== id));
+    }, [supabase, products]);
 
     const guardarNuevaCategoria = useCallback(async () => {
         setGuardandoCategoria(true);
@@ -390,7 +426,7 @@ export default function ProductosPage() {
 
     const fetchProducts = useCallback(async () => {
         setLoading(true);
-        const q = search.trim();
+        const q = terminoBusquedaCatalogo(search);
         const collected: Product[] = [];
         let from = 0;
         let totalCount = 0;
@@ -424,9 +460,25 @@ export default function ProductosPage() {
         if (!failed) {
             setProducts(collected);
             setTotal(totalCount || collected.length);
+            setErrorCarga(null);
+        } else {
+            setErrorCarga('No se pudo cargar el catálogo. Revisa la conexión e intenta de nuevo.');
         }
         setLoading(false);
     }, [search, categoria, supabase]);
+
+    /** Los conteos «por corregir» solo tienen sentido con el catálogo completo a la vista. */
+    const catalogoCompleto = categoria === 'Todas' && terminoBusquedaCatalogo(search).length < 2;
+    const porCorregir = useMemo(() => contarPorCorregir(products), [products]);
+    const hayPorCorregir = porCorregir.sin_precio + porCorregir.sin_categoria + porCorregir.repetidos > 0;
+    const visibles = useMemo(
+        () => (revision && catalogoCompleto ? filtrarPorCorregir(products, revision) : products),
+        [products, revision, catalogoCompleto],
+    );
+
+    useEffect(() => {
+        if (!catalogoCompleto && revision) setRevision('');
+    }, [catalogoCompleto, revision]);
 
     useEffect(() => {
         const t = setTimeout(fetchProducts, search ? 350 : 0);
@@ -437,8 +489,8 @@ export default function ProductosPage() {
         <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', paddingBottom: '120px' }}>
             <div style={{
                 position: 'sticky', top: 0, zIndex: 100,
-                background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(20px)',
-                padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.1)',
+                background: 'var(--barra-fondo)', backdropFilter: 'blur(20px)',
+                padding: '16px 20px', borderBottom: `1px solid ${tinta(0.1)}`,
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px'
             }}>
                 <ModuloPageTitle
@@ -447,6 +499,7 @@ export default function ProductosPage() {
                     iconClassName="text-orange-400"
                 />
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                    <BotonTema compacto />
                     {cart.length > 0 ? (
                         <button
                             type="button"
@@ -498,8 +551,8 @@ export default function ProductosPage() {
                     onChange={(e) => setSearch(e.target.value)}
                     style={{
                         width: '100%', marginBottom: '10px',
-                        background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-                        borderRadius: '12px', padding: '12px 16px', color: 'white', outline: 'none'
+                        background: tinta(0.05), border: `1px solid ${tinta(0.1)}`,
+                        borderRadius: '12px', padding: '12px 16px', color: 'var(--label-primary)', outline: 'none'
                     }}
                 />
 
@@ -508,7 +561,7 @@ export default function ProductosPage() {
                         href="/productos/cargar-catalogos-2026"
                         data-productos-cargar-catalogos-2026
                         style={{
-                            color: '#FF9500', fontSize: '13px', fontWeight: 700, textDecoration: 'none',
+                            color: 'var(--tono-naranja)', fontSize: '13px', fontWeight: 700, textDecoration: 'none',
                         }}
                     >
                         Cargar catálogos 2026 (Acceso-Alarma / Siemon) →
@@ -517,7 +570,7 @@ export default function ProductosPage() {
                         href="/productos/importar-lista"
                         data-productos-importar-lista
                         style={{
-                            color: '#FF9500', fontSize: '13px', fontWeight: 700, textDecoration: 'none',
+                            color: 'var(--tono-naranja)', fontSize: '13px', fontWeight: 700, textDecoration: 'none',
                         }}
                     >
                         Importar lista de precios del proveedor →
@@ -552,7 +605,7 @@ export default function ProductosPage() {
                                     onClick={() => setCategoria(c)}
                                     style={{
                                         background: categoria === c ? 'rgba(255,149,0,0.15)' : 'transparent',
-                                        color: categoria === c ? '#FF9500' : 'rgba(255,255,255,0.4)',
+                                        color: categoria === c ? 'var(--tono-naranja)' : tintaTexto(0.4),
                                         border: 'none',
                                         borderRadius: '10px',
                                         padding: '6px 14px',
@@ -576,7 +629,7 @@ export default function ProductosPage() {
                             }}
                             style={{
                                 background: creandoCategoria ? 'rgba(255,149,0,0.15)' : 'transparent',
-                                color: '#FF9500',
+                                color: 'var(--tono-naranja)',
                                 border: '1px dashed rgba(255,149,0,0.45)',
                                 borderRadius: '10px',
                                 padding: '6px 12px',
@@ -621,11 +674,11 @@ export default function ProductosPage() {
                                 style={{
                                     flex: 1,
                                     minWidth: '160px',
-                                    background: 'rgba(255,255,255,0.08)',
+                                    background: tinta(0.08),
                                     border: '1px solid rgba(255,149,0,0.45)',
                                     borderRadius: '10px',
                                     padding: '10px 12px',
-                                    color: 'white',
+                                    color: 'var(--label-primary)',
                                     outline: 'none',
                                     fontSize: '14px',
                                     fontFamily: 'inherit',
@@ -637,7 +690,7 @@ export default function ProductosPage() {
                                 onClick={() => void guardarNuevaCategoria()}
                                 style={{
                                     background: 'rgba(52,199,89,0.18)',
-                                    color: '#34C759',
+                                    color: 'var(--tono-verde)',
                                     border: 'none',
                                     borderRadius: '10px',
                                     padding: '10px 14px',
@@ -660,8 +713,8 @@ export default function ProductosPage() {
                                 }}
                                 style={{
                                     background: 'transparent',
-                                    color: 'rgba(255,255,255,0.45)',
-                                    border: '1px solid rgba(255,255,255,0.12)',
+                                    color: tintaTexto(0.45),
+                                    border: `1px solid ${tinta(0.12)}`,
                                     borderRadius: '10px',
                                     padding: '10px 14px',
                                     fontSize: '13px',
@@ -675,27 +728,72 @@ export default function ProductosPage() {
                         </div>
                     ) : null}
                     {errorCategoria ? (
-                        <p style={{ margin: '8px 0 0', fontSize: '12px', color: '#FF8A80', fontWeight: 600 }}>
+                        <p style={{ margin: '8px 0 0', fontSize: '12px', color: 'var(--tono-coral)', fontWeight: 600 }}>
                             {errorCategoria}
                         </p>
                     ) : null}
                 </div>
 
-                {!loading && total > 0 ? (
-                    <p style={{ margin: '0 0 12px', fontSize: '12px', color: 'rgba(255,255,255,0.35)', fontWeight: 600 }}>
-                        {products.length === total
-                            ? `${total} producto${total === 1 ? '' : 's'}`
-                            : `Mostrando ${products.length} de ${total}`}
+                {!loading && catalogoCompleto && (hayPorCorregir || revision) ? (
+                    <div
+                        style={{
+                            display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px',
+                            marginBottom: '12px',
+                        }}
+                    >
+                        <span style={{ fontSize: '12px', fontWeight: 700, color: tintaTexto(0.45) }}>
+                            Por corregir:
+                        </span>
+                        {REVISIONES_CATALOGO.filter((r) => porCorregir[r.id] > 0 || revision === r.id).map((r) => {
+                            const activa = revision === r.id;
+                            return (
+                                <button
+                                    key={r.id}
+                                    type="button"
+                                    onClick={() => setRevision(activa ? '' : r.id)}
+                                    style={{
+                                        background: activa ? 'rgba(255,59,48,0.18)' : tinta(0.05),
+                                        color: activa ? 'var(--tono-rojo)' : tintaTexto(0.6),
+                                        border: activa ? '1px solid rgba(255,59,48,0.45)' : `1px solid ${tinta(0.12)}`,
+                                        borderRadius: '10px',
+                                        padding: '5px 11px',
+                                        fontSize: '12px',
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                        whiteSpace: 'nowrap',
+                                        fontFamily: 'inherit',
+                                    }}
+                                >
+                                    {r.etiqueta} ({porCorregir[r.id]})
+                                </button>
+                            );
+                        })}
+                    </div>
+                ) : null}
+
+                {errorCarga ? (
+                    <p style={{ margin: '0 0 12px', fontSize: '13px', color: 'var(--tono-rojo)', fontWeight: 600 }}>
+                        {errorCarga}
                     </p>
                 ) : null}
 
-                <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '20px', overflow: 'hidden' }}>
+                {!loading && total > 0 ? (
+                    <p style={{ margin: '0 0 12px', fontSize: '12px', color: tintaTexto(0.35), fontWeight: 600 }}>
+                        {revision && catalogoCompleto
+                            ? `${visibles.length} por corregir de ${total}`
+                            : products.length === total
+                              ? `${total} producto${total === 1 ? '' : 's'}`
+                              : `Mostrando ${products.length} de ${total}`}
+                    </p>
+                ) : null}
+
+                <div style={{ background: tinta(0.03), borderRadius: '20px', overflow: 'hidden' }}>
                     {loading ? (
-                        <div style={{ padding: '60px', textAlign: 'center', color: 'rgba(255,255,255,0.3)' }}>Cargando catálogo...</div>
-                    ) : products.length === 0 ? (
-                        <div style={{ padding: '60px', textAlign: 'center', color: 'rgba(255,255,255,0.2)' }}>Sin resultados</div>
+                        <div style={{ padding: '60px', textAlign: 'center', color: tintaTexto(0.3) }}>Cargando catálogo...</div>
+                    ) : visibles.length === 0 ? (
+                        <div style={{ padding: '60px', textAlign: 'center', color: tintaTexto(0.2) }}>Sin resultados</div>
                     ) : (
-                        products.map(p => (
+                        visibles.map(p => (
                             <ProductRow
                                 key={p.id}
                                 product={p}

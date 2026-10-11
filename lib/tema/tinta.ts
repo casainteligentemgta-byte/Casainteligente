@@ -19,3 +19,11 @@ export function tinta(opacidad: number): string {
 export function tintaTexto(opacidad: number): string {
   return `rgb(var(--tinta) / calc(${opacidad} * var(--tinta-realce, 1)))`;
 }
+
+/**
+ * Un color vivo usado como texto o icono sobre su propio tinte (etiquetas de categoría).
+ * En oscuro queda igual; en claro se oscurece para que se lea sobre fondo blanco.
+ */
+export function tonoTexto(color: string): string {
+  return `color-mix(in srgb, ${color} var(--tono-mezcla, 100%), black)`;
+}

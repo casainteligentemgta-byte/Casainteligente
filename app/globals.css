@@ -67,6 +67,11 @@
     --tono-rojo: #FF3B30;
     --tono-celeste: #5AC8FA;
     --tono-whatsapp: #25D366;
+    --tono-amarillo: #FFD60A;
+    --tono-coral: #FF6B60;
+    --tono-mezcla: 100%;
+    --esquema-color: dark;
+    --sombra-hoja: 0 -10px 40px rgba(0, 0, 0, 0.5);
 
     /* Radius */
     --radius-sm: 10px;

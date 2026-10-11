@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { uploadProductImage, uploadProductManualPdf } from '@/lib/supabase/product-media';
 import SelectorCategoriaProducto from '@/components/productos/SelectorCategoriaProducto';
+import { tinta, tintaTexto } from '@/lib/tema/tinta';
 
 export default function NuevoProductoForm({ initialData, isEditing }: { initialData?: any; isEditing?: boolean }) {
     const router = useRouter();
@@ -160,10 +161,10 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
     } as React.CSSProperties;
 
     const fieldBox = {
-        background: 'rgba(255,255,255,0.06)',
+        background: tinta(0.06),
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
-        border: '1px solid rgba(255,255,255,0.1)',
+        border: `1px solid ${tinta(0.1)}`,
         borderRadius: '14px',
         padding: '14px 16px',
         marginBottom: '10px',
@@ -182,8 +183,8 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
     const btnSecondary = {
         padding: '10px 14px',
         borderRadius: '10px',
-        border: '1px solid rgba(255,255,255,0.15)',
-        background: 'rgba(255,255,255,0.06)',
+        border: `1px solid ${tinta(0.15)}`,
+        background: tinta(0.06),
         color: 'var(--label-primary)',
         fontSize: '13px',
         fontWeight: 600,
@@ -231,7 +232,7 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
                         ...fieldBox,
                         border: '1px solid rgba(255,59,48,0.35)',
                         background: 'rgba(255,59,48,0.08)',
-                        color: '#FF8A80',
+                        color: 'var(--tono-coral)',
                         fontSize: '13px',
                         lineHeight: 1.45,
                     }}
@@ -283,7 +284,7 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
                         <button
                             type="button"
                             onClick={() => set('imagen', '')}
-                            style={{ ...btnSecondary, borderColor: 'rgba(255,59,48,0.35)', color: '#FF8A80' }}
+                            style={{ ...btnSecondary, borderColor: 'rgba(255,59,48,0.35)', color: 'var(--tono-coral)' }}
                         >
                             Quitar foto
                         </button>
@@ -307,8 +308,8 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
                             padding: '28px',
                             textAlign: 'center',
                             borderRadius: '12px',
-                            background: 'rgba(255,255,255,0.04)',
-                            color: 'rgba(255,255,255,0.35)',
+                            background: tinta(0.04),
+                            color: tintaTexto(0.35),
                             fontSize: '13px',
                         }}
                     >
@@ -364,7 +365,7 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
                 <div style={{ ...fieldBox, marginBottom: 0 }}>
                     <label style={labelStyle}>Costo ($)</label>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '16px' }}>$</span>
+                        <span style={{ color: tintaTexto(0.3), fontSize: '16px' }}>$</span>
                         <input
                             type="number"
                             min={0}
@@ -372,14 +373,14 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
                             value={form.costo}
                             onChange={(e) => set('costo', e.target.value)}
                             placeholder="0.00"
-                            style={{ ...inputStyle, color: '#FF3B30' }}
+                            style={{ ...inputStyle, color: 'var(--tono-rojo)' }}
                         />
                     </div>
                 </div>
                 <div style={{ ...fieldBox, marginBottom: 0 }}>
                     <label style={labelStyle}>Precio ($)</label>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '16px' }}>$</span>
+                        <span style={{ color: tintaTexto(0.3), fontSize: '16px' }}>$</span>
                         <input
                             type="number"
                             min={0}
@@ -387,7 +388,7 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
                             value={form.precio}
                             onChange={(e) => set('precio', e.target.value)}
                             placeholder="0.00"
-                            style={{ ...inputStyle, color: '#34C759' }}
+                            style={{ ...inputStyle, color: 'var(--tono-verde)' }}
                         />
                     </div>
                 </div>
@@ -412,12 +413,12 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
                     }}
                 >
                     <div>
-                        <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', fontWeight: 500 }}>Utilidad</p>
+                        <p style={{ fontSize: '12px', color: tintaTexto(0.4), fontWeight: 500 }}>Utilidad</p>
                         <p
                             style={{
                                 fontSize: '20px',
                                 fontWeight: 700,
-                                color: parseFloat(form.precio) > parseFloat(form.costo) ? '#34C759' : '#FF3B30',
+                                color: parseFloat(form.precio) > parseFloat(form.costo) ? 'var(--tono-verde)' : 'var(--tono-rojo)',
                             }}
                         >
                             ${utilidad}
@@ -425,12 +426,12 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
                     </div>
                     {margenPct && (
                         <div style={{ textAlign: 'right' }}>
-                            <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)' }}>Margen</p>
+                            <p style={{ fontSize: '12px', color: tintaTexto(0.4) }}>Margen</p>
                             <p
                                 style={{
                                     fontSize: '24px',
                                     fontWeight: 800,
-                                    color: parseFloat(margenPct) >= 20 ? '#34C759' : '#FF9500',
+                                    color: parseFloat(margenPct) >= 20 ? 'var(--tono-verde)' : 'var(--tono-naranja)',
                                 }}
                             >
                                 {margenPct}%
@@ -496,7 +497,7 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
                         <button
                             type="button"
                             onClick={() => set('manual_documento_url', '')}
-                            style={{ ...btnSecondary, borderColor: 'rgba(255,59,48,0.35)', color: '#FF8A80' }}
+                            style={{ ...btnSecondary, borderColor: 'rgba(255,59,48,0.35)', color: 'var(--tono-coral)' }}
                         >
                             Quitar PDF
                         </button>
@@ -507,7 +508,7 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
                         href={form.manual_documento_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        style={{ color: '#5AC8FA', fontSize: '13px', wordBreak: 'break-all' }}
+                        style={{ color: 'var(--tono-celeste)', fontSize: '13px', wordBreak: 'break-all' }}
                     >
                         Abrir manual actual →
                     </a>
@@ -525,13 +526,13 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
             <p
                 style={{
                     fontSize: '12px',
-                    color: 'rgba(255,255,255,0.45)',
+                    color: tintaTexto(0.45),
                     textAlign: 'center',
                     marginBottom: '10px',
                     lineHeight: 1.5,
                 }}
             >
-                Solo el <strong style={{ color: 'rgba(255,255,255,0.7)' }}>nombre</strong> es obligatorio. Sin imagen el producto
+                Solo el <strong style={{ color: tintaTexto(0.7) }}>nombre</strong> es obligatorio. Sin imagen el producto
                 se guarda igual; luego puedes editarlo y añadir foto o URL.
             </p>
             <button

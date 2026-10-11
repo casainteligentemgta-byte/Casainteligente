@@ -49,6 +49,11 @@ html[data-theme="light"] .ci-tema {
   --tono-rojo: #D70015;
   --tono-celeste: #0071A4;
   --tono-whatsapp: #128C4B;
+  --tono-amarillo: #8A6100;
+  --tono-coral: #C22B1F;
+  --tono-mezcla: 62%;
+  --esquema-color: light;
+  --sombra-hoja: 0 -6px 30px rgba(0, 0, 0, 0.16);
 
   background-color: var(--bg-primary);
   color: var(--label-primary);

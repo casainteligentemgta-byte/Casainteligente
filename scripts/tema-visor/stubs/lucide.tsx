@@ -16,3 +16,4 @@ export const Sun = icono('Sun');
 export const Moon = icono('Moon');
 export const SunMoon = icono('SunMoon');
 export const Monitor = icono('Monitor');
+export const Package = icono('Package');

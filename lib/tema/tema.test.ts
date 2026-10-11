@@ -11,7 +11,7 @@ import {
   siguientePreferenciaTema,
   type PreferenciaTema,
 } from './tema';
-import { tinta, tintaTexto } from './tinta';
+import { tinta, tintaTexto, tonoTexto } from './tinta';
 
 describe('preferencia de tema', () => {
   it('lo que no sea «claro» u «oscuro» es automático', () => {
@@ -42,12 +42,14 @@ describe('preferencia de tema', () => {
 });
 
 describe('módulos con tema claro', () => {
-  it('Clientes y sus pantallas internas', () => {
-    for (const r of ['/clientes', '/clientes/nuevo', '/clientes/abc/editar']) assert.equal(rutaConTema(r), true, r);
+  it('Clientes y Productos, con sus pantallas internas', () => {
+    for (const r of ['/clientes', '/clientes/nuevo', '/clientes/abc/editar', '/productos', '/productos/3/editar', '/productos/importar-lista']) {
+      assert.equal(rutaConTema(r), true, r);
+    }
   });
 
   it('los demás módulos siguen en oscuro hasta revisarlos', () => {
-    for (const r of ['/', '/clientes-viejos', '/presupuestos', '/ventas', '', null, undefined]) {
+    for (const r of ['/', '/clientes-viejos', '/productos-viejos', '/presupuestos', '/ventas', '', null, undefined]) {
       assert.equal(rutaConTema(r), false, String(r));
     }
   });
@@ -91,6 +93,10 @@ describe('script que fija el tema antes de pintar', () => {
 describe('tinta translúcida', () => {
   it('rellenos: misma opacidad sobre la tinta del tema', () => {
     assert.equal(tinta(0.1), 'rgb(var(--tinta) / 0.1)');
+  });
+
+  it('color vivo como texto: se oscurece en claro con la mezcla del tema', () => {
+    assert.equal(tonoTexto('#FFD60A'), 'color-mix(in srgb, #FFD60A var(--tono-mezcla, 100%), black)');
   });
 
   it('texto: la opacidad se realza según el tema', () => {

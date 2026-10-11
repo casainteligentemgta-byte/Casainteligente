@@ -19,12 +19,13 @@ import {
     type ProductoActual,
 } from '@/lib/productos/importarListaPrecios';
 import { extraerDeZip, listarZip, nombreBase, tipoDeImagen, type EntradaZip } from '@/lib/productos/leerZip';
+import { tinta, tintaTexto, tonoTexto } from '@/lib/tema/tinta';
 
 const NARANJA = '#FF9500';
 const VERDE = '#34C759';
 const ROJO = '#FF6B60';
 const AMARILLO = '#FFD60A';
-const TENUE = 'rgba(255,255,255,0.45)';
+const TENUE = tintaTexto(0.45);
 
 const POR_TANDA = 40;
 
@@ -40,9 +41,9 @@ function hoyLocal(): string {
 }
 
 const ETIQUETA_ESTATUS: Record<EstatusProveedor, { texto: string; color: string }> = {
-    disponible: { texto: 'Disponible', color: VERDE },
-    no_disponible: { texto: 'No disponible', color: ROJO },
-    en_transito: { texto: 'En tránsito', color: AMARILLO },
+    disponible: { texto: 'Disponible', color: tonoTexto(VERDE) },
+    no_disponible: { texto: 'No disponible', color: tonoTexto(ROJO) },
+    en_transito: { texto: 'En tránsito', color: tonoTexto(AMARILLO) },
 };
 
 function Estatus({ valor }: { valor: EstatusProveedor | null }) {
@@ -55,7 +56,7 @@ function Estatus({ valor }: { valor: EstatusProveedor | null }) {
                 fontWeight: 800,
                 padding: '2px 7px',
                 borderRadius: '6px',
-                color: e.color,
+                color: tonoTexto(e.color),
                 background: `${e.color}22`,
                 whiteSpace: 'nowrap',
             }}
@@ -66,16 +67,16 @@ function Estatus({ valor }: { valor: EstatusProveedor | null }) {
 }
 
 const caja: CSSProperties = {
-    background: 'rgba(255,255,255,0.04)',
-    border: '1px solid rgba(255,255,255,0.08)',
+    background: tinta(0.04),
+    border: `1px solid ${tinta(0.08)}`,
     borderRadius: '16px',
     padding: '16px',
 };
 
 const botonSecundario: CSSProperties = {
-    background: 'rgba(255,255,255,0.08)',
-    color: 'white',
-    border: '1px solid rgba(255,255,255,0.12)',
+    background: tinta(0.08),
+    color: 'var(--label-primary)',
+    border: `1px solid ${tinta(0.12)}`,
     borderRadius: '10px',
     padding: '8px 12px',
     fontSize: '13px',
@@ -134,8 +135,8 @@ function Miniatura({
                     height: '52px',
                     borderRadius: '12px',
                     overflow: 'hidden',
-                    background: src ? 'white' : 'rgba(255,255,255,0.06)',
-                    border: '1px solid rgba(255,255,255,0.1)',
+                    background: src ? 'white' : tinta(0.06),
+                    border: `1px solid ${tinta(0.1)}`,
                 }}
             >
                 {src ? (
@@ -207,14 +208,14 @@ function Grupo({
             >
                 <span style={{ color: TENUE, fontSize: '12px', width: '12px' }}>{abierto ? '▾' : '▸'}</span>
                 <span style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ display: 'block', color: 'white', fontSize: '15px', fontWeight: 800 }}>
-                        {titulo} <span data-ilp-grupo-cuenta style={{ color: NARANJA }}>({cuenta})</span>
+                    <span style={{ display: 'block', color: 'var(--label-primary)', fontSize: '15px', fontWeight: 800 }}>
+                        {titulo} <span data-ilp-grupo-cuenta style={{ color: tonoTexto(NARANJA) }}>({cuenta})</span>
                     </span>
                     <span style={{ display: 'block', color: TENUE, fontSize: '12px', marginTop: '2px' }}>{ayuda}</span>
                 </span>
             </button>
             {abierto ? (
-                <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                <div style={{ borderTop: `1px solid ${tinta(0.06)}` }}>
                     {acciones ? <div style={{ padding: '10px 16px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>{acciones}</div> : null}
                     {children}
                 </div>
@@ -567,7 +568,7 @@ export default function ImportarListaPrecios() {
             <div
                 key={c.producto.id}
                 data-ilp-producto={c.producto.id}
-                style={{ display: 'flex', gap: '12px', padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.05)', alignItems: 'flex-start' }}
+                style={{ display: 'flex', gap: '12px', padding: '12px 16px', borderTop: `1px solid ${tinta(0.05)}`, alignItems: 'flex-start' }}
             >
                 <input
                     type="checkbox"
@@ -585,7 +586,7 @@ export default function ImportarListaPrecios() {
                     usarNueva={llevaFotoNueva(c.producto, f)}
                 />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ color: 'white', fontSize: '14px', fontWeight: 700, lineHeight: 1.25, overflowWrap: 'anywhere' }}>
+                    <div style={{ color: 'var(--label-primary)', fontSize: '14px', fontWeight: 700, lineHeight: 1.25, overflowWrap: 'anywhere' }}>
                         {c.producto.nombre}
                     </div>
                     <div style={{ color: TENUE, fontSize: '12px', marginTop: '2px', overflowWrap: 'anywhere' }}>
@@ -594,7 +595,7 @@ export default function ImportarListaPrecios() {
 
                     {c.tipo === 'dudoso' ? (
                         <div style={{ marginTop: '8px' }}>
-                            <div style={{ color: AMARILLO, fontSize: '12px', marginBottom: '6px' }}>{c.motivo} ¿Cuál es?</div>
+                            <div style={{ color: tonoTexto(AMARILLO), fontSize: '12px', marginBottom: '6px' }}>{c.motivo} ¿Cuál es?</div>
                             {c.opciones.map((o) => (
                                 <label
                                     key={o.n}
@@ -611,8 +612,8 @@ export default function ImportarListaPrecios() {
                                         }}
                                         style={{ width: '18px', height: '18px', accentColor: NARANJA }}
                                     />
-                                    <span style={{ color: 'white', fontSize: '13px', fontWeight: 600, overflowWrap: 'anywhere' }}>{o.modelo}</span>
-                                    <span style={{ color: VERDE, fontSize: '13px', fontWeight: 700 }}>{dinero(precioUsable(o))}</span>
+                                    <span style={{ color: 'var(--label-primary)', fontSize: '13px', fontWeight: 600, overflowWrap: 'anywhere' }}>{o.modelo}</span>
+                                    <span style={{ color: tonoTexto(VERDE), fontSize: '13px', fontWeight: 700 }}>{dinero(precioUsable(o))}</span>
                                     <Estatus valor={o.estatus} />
                                 </label>
                             ))}
@@ -639,7 +640,7 @@ export default function ImportarListaPrecios() {
                     {e ? (
                         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center', marginTop: '6px', fontSize: '13px' }}>
                             {e.cambiaCosto ? (
-                                <span data-ilp-costo style={{ color: 'white' }}>
+                                <span data-ilp-costo style={{ color: 'var(--label-primary)' }}>
                                     Costo <span style={{ color: TENUE }}>{dinero(c.producto.costo)}</span> →{' '}
                                     <strong>{dinero(e.costo)}</strong>
                                     {sube != null ? (
@@ -654,7 +655,7 @@ export default function ImportarListaPrecios() {
                                 <span style={{ color: TENUE }}>Costo {dinero(c.producto.costo)} (queda igual)</span>
                             )}
                             {e.cambiaPrecio ? (
-                                <span data-ilp-precio style={{ color: 'white' }}>
+                                <span data-ilp-precio style={{ color: 'var(--label-primary)' }}>
                                     Venta <span style={{ color: TENUE }}>{dinero(c.producto.precio)}</span> → <strong>{dinero(e.precio)}</strong>
                                 </span>
                             ) : (
@@ -664,7 +665,7 @@ export default function ImportarListaPrecios() {
                         </div>
                     ) : null}
                     {e && e.vendeBajoCosto ? (
-                        <div data-ilp-aviso-perdida style={{ color: ROJO, fontSize: '12px', fontWeight: 700, marginTop: '4px' }}>
+                        <div data-ilp-aviso-perdida style={{ color: tonoTexto(ROJO), fontSize: '12px', fontWeight: 700, marginTop: '4px' }}>
                             Ojo: el costo nuevo queda por encima de tu precio de venta.
                         </div>
                     ) : null}
@@ -693,7 +694,7 @@ export default function ImportarListaPrecios() {
                 style={{ width: '20px', height: '20px', accentColor: NARANJA, flexShrink: 0, marginTop: '2px' }}
             />
             <span>
-                <span style={{ display: 'block', color: 'white', fontSize: '14px', fontWeight: 700 }}>{titulo}</span>
+                <span style={{ display: 'block', color: 'var(--label-primary)', fontSize: '14px', fontWeight: 700 }}>{titulo}</span>
                 <span style={{ display: 'block', color: TENUE, fontSize: '12px', marginTop: '2px' }}>{ayuda}</span>
             </span>
         </label>
@@ -704,13 +705,13 @@ export default function ImportarListaPrecios() {
     return (
         <div data-ilp style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '900px', margin: '0 auto' }}>
             <section style={caja}>
-                <h2 style={{ color: 'white', fontSize: '16px', fontWeight: 800, margin: '0 0 4px' }}>1. Sube la lista</h2>
+                <h2 style={{ color: 'var(--label-primary)', fontSize: '16px', fontWeight: 800, margin: '0 0 4px' }}>1. Sube la lista</h2>
                 <p style={{ color: TENUE, fontSize: '13px', margin: '0 0 14px', lineHeight: 1.5 }}>
                     Aquí no se cambia nada todavía: primero ves qué pasaría con cada producto y luego decides.
                 </p>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px' }}>
                     <label style={{ display: 'block' }}>
-                        <span style={{ display: 'block', color: 'white', fontSize: '13px', fontWeight: 700, marginBottom: '6px' }}>
+                        <span style={{ display: 'block', color: 'var(--label-primary)', fontSize: '13px', fontWeight: 700, marginBottom: '6px' }}>
                             Lista de precios (archivo .csv)
                         </span>
                         <input
@@ -721,18 +722,18 @@ export default function ImportarListaPrecios() {
                             style={{ color: TENUE, fontSize: '13px', maxWidth: '100%' }}
                         />
                         {filas ? (
-                            <span data-ilp-csv-ok style={{ display: 'block', color: VERDE, fontSize: '12px', marginTop: '6px' }}>
+                            <span data-ilp-csv-ok style={{ display: 'block', color: tonoTexto(VERDE), fontSize: '12px', marginTop: '6px' }}>
                                 {nombreCsv}: {filas.length.toLocaleString('es')} renglones leídos.
                             </span>
                         ) : null}
                         {errorCsv ? (
-                            <span data-ilp-csv-error style={{ display: 'block', color: ROJO, fontSize: '12px', marginTop: '6px' }}>
+                            <span data-ilp-csv-error style={{ display: 'block', color: tonoTexto(ROJO), fontSize: '12px', marginTop: '6px' }}>
                                 {errorCsv}
                             </span>
                         ) : null}
                     </label>
                     <label style={{ display: 'block' }}>
-                        <span style={{ display: 'block', color: 'white', fontSize: '13px', fontWeight: 700, marginBottom: '6px' }}>
+                        <span style={{ display: 'block', color: 'var(--label-primary)', fontSize: '13px', fontWeight: 700, marginBottom: '6px' }}>
                             Fotos (archivo .zip, opcional)
                         </span>
                         <input
@@ -743,18 +744,18 @@ export default function ImportarListaPrecios() {
                             style={{ color: TENUE, fontSize: '13px', maxWidth: '100%' }}
                         />
                         {zip ? (
-                            <span data-ilp-zip-ok style={{ display: 'block', color: VERDE, fontSize: '12px', marginTop: '6px' }}>
+                            <span data-ilp-zip-ok style={{ display: 'block', color: tonoTexto(VERDE), fontSize: '12px', marginTop: '6px' }}>
                                 {cuentaFotos.toLocaleString('es')} fotos listas.
                             </span>
                         ) : null}
                         {errorZip ? (
-                            <span data-ilp-zip-error style={{ display: 'block', color: ROJO, fontSize: '12px', marginTop: '6px' }}>
+                            <span data-ilp-zip-error style={{ display: 'block', color: tonoTexto(ROJO), fontSize: '12px', marginTop: '6px' }}>
                                 {errorZip}
                             </span>
                         ) : null}
                     </label>
                     <label style={{ display: 'block' }}>
-                        <span style={{ display: 'block', color: 'white', fontSize: '13px', fontWeight: 700, marginBottom: '6px' }}>
+                        <span style={{ display: 'block', color: 'var(--label-primary)', fontSize: '13px', fontWeight: 700, marginBottom: '6px' }}>
                             Fecha de la lista
                         </span>
                         <input
@@ -763,20 +764,20 @@ export default function ImportarListaPrecios() {
                             value={fechaLista}
                             onChange={(ev) => setFechaLista(ev.target.value || hoyLocal())}
                             style={{
-                                background: 'rgba(255,255,255,0.06)',
-                                border: '1px solid rgba(255,255,255,0.12)',
+                                background: tinta(0.06),
+                                border: `1px solid ${tinta(0.12)}`,
                                 borderRadius: '10px',
                                 padding: '8px 10px',
-                                color: 'white',
+                                color: 'var(--label-primary)',
                                 fontSize: '14px',
                                 fontFamily: 'inherit',
-                                colorScheme: 'dark',
+                                colorScheme: 'var(--esquema-color, dark)',
                             }}
                         />
                     </label>
                 </div>
                 {errorProductos ? (
-                    <p data-ilp-error-productos style={{ color: ROJO, fontSize: '13px', margin: '12px 0 0' }}>
+                    <p data-ilp-error-productos style={{ color: tonoTexto(ROJO), fontSize: '13px', margin: '12px 0 0' }}>
                         {errorProductos}
                     </p>
                 ) : null}
@@ -788,7 +789,7 @@ export default function ImportarListaPrecios() {
             {plan ? (
                 <>
                     <section style={caja}>
-                        <h2 style={{ color: 'white', fontSize: '16px', fontWeight: 800, margin: '0 0 4px' }}>2. Cómo aplicar</h2>
+                        <h2 style={{ color: 'var(--label-primary)', fontSize: '16px', fontWeight: 800, margin: '0 0 4px' }}>2. Cómo aplicar</h2>
                         {interruptor(
                             'margen',
                             mantenerMargen,
@@ -816,7 +817,7 @@ export default function ImportarListaPrecios() {
                             : null}
                     </section>
 
-                    <h2 style={{ color: 'white', fontSize: '16px', fontWeight: 800, margin: '4px 0 -4px' }}>3. Revisa y marca</h2>
+                    <h2 style={{ color: 'var(--label-primary)', fontSize: '16px', fontWeight: 800, margin: '4px 0 -4px' }}>3. Revisa y marca</h2>
 
                     {plan.coincidencias.length === 0 ? (
                         <p data-ilp-sin-coincidencias style={{ ...caja, color: TENUE, fontSize: '13px', margin: 0 }}>
@@ -887,11 +888,11 @@ export default function ImportarListaPrecios() {
                                 style={{
                                     flex: 1,
                                     minWidth: '180px',
-                                    background: 'rgba(255,255,255,0.06)',
-                                    border: '1px solid rgba(255,255,255,0.12)',
+                                    background: tinta(0.06),
+                                    border: `1px solid ${tinta(0.12)}`,
                                     borderRadius: '10px',
                                     padding: '9px 12px',
-                                    color: 'white',
+                                    color: 'var(--label-primary)',
                                     fontSize: '14px',
                                     fontFamily: 'inherit',
                                     outline: 'none',
@@ -905,11 +906,11 @@ export default function ImportarListaPrecios() {
                                     setVisibles(POR_TANDA);
                                 }}
                                 style={{
-                                    background: '#1C1C1E',
-                                    border: '1px solid rgba(255,255,255,0.12)',
+                                    background: 'var(--bg-secondary)',
+                                    border: `1px solid ${tinta(0.12)}`,
                                     borderRadius: '10px',
                                     padding: '9px 10px',
-                                    color: 'white',
+                                    color: 'var(--label-primary)',
                                     fontSize: '13px',
                                     fontFamily: 'inherit',
                                     maxWidth: '100%',
@@ -964,7 +965,7 @@ export default function ImportarListaPrecios() {
                             <div
                                 key={f.n}
                                 data-ilp-nuevo={f.n}
-                                style={{ display: 'flex', gap: '12px', padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.05)', alignItems: 'flex-start' }}
+                                style={{ display: 'flex', gap: '12px', padding: '12px 16px', borderTop: `1px solid ${tinta(0.05)}`, alignItems: 'flex-start' }}
                             >
                                 <input
                                     type="checkbox"
@@ -977,9 +978,9 @@ export default function ImportarListaPrecios() {
                                 <Miniatura actual={null} zip={zip} entrada={entradas[f.foto]} usarNueva={llevaFotoNueva(null, f)} />
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-                                        <span style={{ color: 'white', fontSize: '14px', fontWeight: 700, overflowWrap: 'anywhere' }}>{f.modelo}</span>
+                                        <span style={{ color: 'var(--label-primary)', fontSize: '14px', fontWeight: 700, overflowWrap: 'anywhere' }}>{f.modelo}</span>
                                         <span style={{ color: TENUE, fontSize: '11px', fontWeight: 700 }}>{f.marca}</span>
-                                        <span style={{ color: VERDE, fontSize: '14px', fontWeight: 800 }}>{dinero(precioUsable(f))}</span>
+                                        <span style={{ color: tonoTexto(VERDE), fontSize: '14px', fontWeight: 800 }}>{dinero(precioUsable(f))}</span>
                                         <Estatus valor={f.estatus} />
                                     </div>
                                     <div
@@ -1004,11 +1005,11 @@ export default function ImportarListaPrecios() {
                                                 value={categoriaNuevo[f.n] ?? categoriaSugerida(f.seccion)}
                                                 onChange={(ev) => setCategoriaNuevo((prev) => ({ ...prev, [f.n]: ev.target.value }))}
                                                 style={{
-                                                    background: '#1C1C1E',
-                                                    border: '1px solid rgba(255,255,255,0.12)',
+                                                    background: 'var(--bg-secondary)',
+                                                    border: `1px solid ${tinta(0.12)}`,
                                                     borderRadius: '8px',
                                                     padding: '6px 8px',
-                                                    color: 'white',
+                                                    color: 'var(--label-primary)',
                                                     fontSize: '13px',
                                                     fontFamily: 'inherit',
                                                 }}
@@ -1037,18 +1038,18 @@ export default function ImportarListaPrecios() {
 
             {resultado ? (
                 <section data-ilp-resultado style={{ ...caja, borderColor: resultado.errores.length ? `${ROJO}66` : `${VERDE}66` }}>
-                    <h2 style={{ color: 'white', fontSize: '16px', fontWeight: 800, margin: '0 0 6px' }}>Listo</h2>
-                    <p style={{ color: 'white', fontSize: '14px', margin: 0, lineHeight: 1.5 }}>
+                    <h2 style={{ color: 'var(--label-primary)', fontSize: '16px', fontWeight: 800, margin: '0 0 6px' }}>Listo</h2>
+                    <p style={{ color: 'var(--label-primary)', fontSize: '14px', margin: 0, lineHeight: 1.5 }}>
                         {resultado.actualizados} producto{resultado.actualizados === 1 ? '' : 's'} actualizado
                         {resultado.actualizados === 1 ? '' : 's'}, {resultado.creados} agregado{resultado.creados === 1 ? '' : 's'}
                         {resultado.fotos > 0 ? `, ${resultado.fotos} con foto nueva` : ''}.
                     </p>
                     {resultado.errores.length > 0 ? (
                         <div data-ilp-errores style={{ marginTop: '10px' }}>
-                            <p style={{ color: ROJO, fontSize: '13px', fontWeight: 700, margin: '0 0 4px' }}>
+                            <p style={{ color: tonoTexto(ROJO), fontSize: '13px', fontWeight: 700, margin: '0 0 4px' }}>
                                 {resultado.errores.length} no se pudo:
                             </p>
-                            <ul style={{ color: ROJO, fontSize: '12px', margin: 0, paddingLeft: '18px', lineHeight: 1.5 }}>
+                            <ul style={{ color: tonoTexto(ROJO), fontSize: '12px', margin: 0, paddingLeft: '18px', lineHeight: 1.5 }}>
                                 {resultado.errores.slice(0, 20).map((t, i) => (
                                     <li key={i}>{t}</li>
                                 ))}
@@ -1067,7 +1068,7 @@ export default function ImportarListaPrecios() {
                         background: 'rgba(20,20,22,0.92)',
                         backdropFilter: 'blur(20px)',
                         WebkitBackdropFilter: 'blur(20px)',
-                        border: '1px solid rgba(255,255,255,0.12)',
+                        border: `1px solid ${tinta(0.12)}`,
                         borderRadius: '16px',
                         padding: '12px 14px',
                         display: 'flex',
@@ -1076,12 +1077,12 @@ export default function ImportarListaPrecios() {
                         flexWrap: 'wrap',
                     }}
                 >
-                    <div data-ilp-resumen style={{ flex: 1, minWidth: '180px', color: 'white', fontSize: '13px', lineHeight: 1.4 }}>
+                    <div data-ilp-resumen style={{ flex: 1, minWidth: '180px', color: 'var(--label-primary)', fontSize: '13px', lineHeight: 1.4 }}>
                         {progreso ? (
                             <span data-ilp-progreso>
                                 Guardando {progreso.hechos} de {progreso.total}…
                                 {progreso.total > 50 ? (
-                                    <span style={{ display: 'block', color: AMARILLO, fontSize: '12px' }}>
+                                    <span style={{ display: 'block', color: tonoTexto(AMARILLO), fontSize: '12px' }}>
                                         No cierres esta pantalla hasta que termine.
                                     </span>
                                 ) : null}
@@ -1116,7 +1117,7 @@ export default function ImportarListaPrecios() {
                             onClick={() => setConfirmar(true)}
                             style={{
                                 ...botonSecundario,
-                                background: totalCambios === 0 || progreso ? 'rgba(255,255,255,0.08)' : NARANJA,
+                                background: totalCambios === 0 || progreso ? tinta(0.08) : NARANJA,
                                 color: totalCambios === 0 || progreso ? TENUE : 'white',
                                 border: 'none',
                                 padding: '10px 16px',

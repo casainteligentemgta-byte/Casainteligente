@@ -20,7 +20,7 @@ export const CLAVE_TEMA = 'ci-tema';
 export const EVENTO_TEMA = 'ci-tema-cambio';
 
 /** Módulos ya revisados en claro y oscuro. Una ruta entra aquí cuando se ha visto en ambos. */
-export const RUTAS_CON_TEMA = ['/clientes'] as const;
+export const RUTAS_CON_TEMA = ['/clientes', '/productos'] as const;
 
 const ORDEN: PreferenciaTema[] = ['auto', 'claro', 'oscuro'];
 

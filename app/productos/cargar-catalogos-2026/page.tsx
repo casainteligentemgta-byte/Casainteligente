@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import CargarCatalogosDistribuidor2026 from '@/components/productos/CargarCatalogosDistribuidor2026';
+import { tinta } from '@/lib/tema/tinta';
 
 export default function CargarCatalogos2026Page() {
     return (
@@ -11,10 +12,10 @@ export default function CargarCatalogos2026Page() {
                     position: 'sticky',
                     top: 0,
                     zIndex: 50,
-                    background: 'rgba(0,0,0,0.65)',
+                    background: 'var(--barra-fondo)',
                     backdropFilter: 'blur(30px)',
                     WebkitBackdropFilter: 'blur(30px)',
-                    borderBottom: '1px solid rgba(255,255,255,0.07)',
+                    borderBottom: `1px solid ${tinta(0.07)}`,
                     padding: '16px 20px',
                     display: 'flex',
                     alignItems: 'center',
@@ -25,7 +26,7 @@ export default function CargarCatalogos2026Page() {
                     href="/productos"
                     aria-label="Volver al catálogo"
                     style={{
-                        background: 'rgba(255,255,255,0.08)',
+                        background: tinta(0.08),
                         borderRadius: '10px',
                         width: '34px',
                         height: '34px',
@@ -36,7 +37,7 @@ export default function CargarCatalogos2026Page() {
                     }}
                 >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                        <path d="M15 18l-6-6 6-6" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M15 18l-6-6 6-6" stroke="var(--label-primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                 </Link>
                 <div style={{ flex: 1 }}>
