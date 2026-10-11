@@ -18,7 +18,6 @@ const rutas: Record<string, { pathname: string; params: Record<string, string>; 
   'producto-nuevo': { pathname: '/productos/nuevo', params: {}, cargar: () => import('@/app/productos/nuevo/page') },
   'producto-editar': { pathname: '/productos/3/editar', params: { id: '3' }, cargar: () => import('@/app/productos/[id]/editar/page') },
   'importar-lista': { pathname: '/productos/importar-lista', params: {}, cargar: () => import('@/app/productos/importar-lista/page') },
-  'cargar-catalogos': { pathname: '/productos/cargar-catalogos-2026', params: {}, cargar: () => import('@/app/productos/cargar-catalogos-2026/page') },
 };
 const r = rutas[pantalla];
 (globalThis as any).__VISOR__ = { pathname: r.pathname, params: r.params, search: '' };

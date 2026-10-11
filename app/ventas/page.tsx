@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useCallback, useRef, Suspense } from 'rea
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { withTimeout } from '@/lib/http/withTimeout';
+import { avisoGuardarSinGanancia } from '@/lib/presupuesto/avisoMargen';
 import { createClient } from '@/lib/supabase/client';
 import ProductSearch, { Product } from '@/components/ventas/ProductSearch';
 import PresupuestoLineItems, {
@@ -398,6 +399,18 @@ function VentasContent() {
     const handleSaveBudget = async () => {
         if (!customerId) return alert('Selecciona un cliente de la lista (Clientes).');
         if (items.length === 0) return alert('El presupuesto está vacío');
+
+        // Renglones al costo o por debajo: se avisa y el operador decide.
+        const avisoMargen = avisoGuardarSinGanancia(
+            items.map((i) => ({
+                nombre: i.product.nombre,
+                cantidad: i.qty,
+                precioUnitario: i.unitPrice,
+                descuentoPct: i.discount,
+                costo: i.product.costo,
+            })),
+        );
+        if (avisoMargen && !window.confirm(avisoMargen)) return;
 
         setSaving(true);
         const supabase = createClient();

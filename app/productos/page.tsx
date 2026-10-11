@@ -558,22 +558,13 @@ export default function ProductosPage() {
 
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 18px', marginBottom: '14px' }}>
                     <Link
-                        href="/productos/cargar-catalogos-2026"
-                        data-productos-cargar-catalogos-2026
-                        style={{
-                            color: 'var(--tono-naranja)', fontSize: '13px', fontWeight: 700, textDecoration: 'none',
-                        }}
-                    >
-                        Cargar catálogos 2026 (Acceso-Alarma / Siemon) →
-                    </Link>
-                    <Link
                         href="/productos/importar-lista"
                         data-productos-importar-lista
                         style={{
                             color: 'var(--tono-naranja)', fontSize: '13px', fontWeight: 700, textDecoration: 'none',
                         }}
                     >
-                        Importar lista de precios del proveedor →
+                        Importar lista de precios del proveedor (PDF o CSV) →
                     </Link>
                 </div>
 

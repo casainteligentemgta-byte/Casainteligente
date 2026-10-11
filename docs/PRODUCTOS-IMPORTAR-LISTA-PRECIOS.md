@@ -8,6 +8,7 @@ Pone al día el costo, la disponibilidad y la foto de los productos a partir de 
 Este repositorio es **público** y la lista trae los precios de costo.
 
 - No subas a git la lista (PDF o CSV), las fotos, ni ningún `.sql`, `.json`, seed, test o captura con precios reales.
+- En octubre de 2026 llegaron a estar en el repositorio tres listas (JSON y SQL) y una pantalla «Cargar catálogos 2026» que las llevaba dentro del código del sitio. Se retiraron; `lib/supabase/sinListasDePreciosEnRepo.test.ts` falla si vuelve a entrar algo parecido. Siguen en el historial de git mientras el repositorio sea público.
 - No pegues precios en commits, PR ni comentarios.
 - En las pruebas, datos inventados (`MOD-PRUEBA-100` a `12.34`).
 
@@ -15,17 +16,30 @@ La lista la sube el dueño desde la pantalla, con su sesión. El archivo se lee 
 
 ## Cómo se usa
 
-1. **Sube la lista** (`.csv`) y, si quiere fotos, el `.zip`. Indica la fecha de la lista.
+1. **Sube la lista**: el **PDF** del proveedor o un `.csv`. Si quiere fotos, el `.zip`. Indica la fecha de la lista y, si el PDF no trae la marca, puede escribirla.
 2. **Cómo aplicar:**
-   - «Mantener mi margen» (apagado por defecto): mueve el precio de venta en la misma proporción que el costo. Apagado, el precio de venta no se toca.
+   - «Mantener mi margen» (apagado por defecto): para los productos con ganancia propia, mueve el precio de venta en la misma proporción que el costo. Apagado, su precio no se toca. Los productos cuyo precio es igual al costo (o no tienen precio) **siempre** siguen al costo.
    - «Poner la foto de la lista a los que no tienen» (encendido si hay ZIP). Las fotos propias se respetan salvo que marque «Reemplazar también…».
 3. **Revisa y marca.** La vista previa separa:
    - **Cambian de costo:** marcados.
    - **Hay que elegir:** el modelo se parece pero no es idéntico, o la lista lo trae con dos precios. No se tocan hasta que elija una opción.
    - **El proveedor no lo tiene:** el costo queda igual; solo se anota la disponibilidad.
    - **Sin cambio de costo:** se anota la disponibilidad.
-   - **No los tienes en tu catálogo:** sin marcar; con buscador, filtro por sección y «Solo disponibles». «Marcar los N a la vista» marca de una vez todo lo filtrado (toda la lista, si se quitan los filtros). Se crean sin precio de venta.
+   - **No los tienes en tu catálogo:** sin marcar; con buscador, filtro por sección y «Solo disponibles». «Marcar los N a la vista» marca de una vez todo lo filtrado (toda la lista, si se quitan los filtros). Se crean con el precio igual al costo.
 4. **Aplicar** pide confirmación, guarda de cuatro en cuatro y muestra un resumen con lo que no se pudo. Con listas grandes tarda unos minutos y pide a la pantalla que no se apague; si se interrumpe, basta volver a subir la lista: lo ya guardado no se repite.
+
+## Lista en PDF
+
+El PDF se lee en el navegador de quien lo sube (no se envía a ningún servidor) y pasa por la misma revisión que el CSV. Cómo se interpreta:
+
+- **Con encabezado** (lo normal): se busca la línea de títulos de la tabla (modelo / código / SKU, precio / USD / costo, descripción, estatus, marca) y cada celda se reparte en su columna por posición. Si hay varias columnas de precio, se toma la de instalador / distribuidor / costo antes que la de PVP o precio sugerido. La pantalla dice de qué columna salió el precio.
+- **Descripciones de varias líneas:** se pegan a su renglón, tanto si la tabla está alineada arriba como si viene de Excel con el modelo centrado en vertical.
+- **Títulos de sección** («CÁMARAS IP»): se guardan como sección de los renglones de abajo y sirven para sugerir la categoría.
+- **Sin encabezado:** de cada línea se toma lo que parece un modelo y el último precio; la pantalla lo avisa.
+- **Estatus:** «Disponible», «En stock», una cantidad mayor que cero → disponible; «Agotado», «Sin stock», «No disponible», 0 → no disponible; «En tránsito», «Próximamente» → en tránsito. Sin columna de estatus, lo que tiene precio se toma como disponible.
+- **PDF escaneado** (una foto, sin texto): no se puede leer; hay que pedir el PDF original o la lista en Excel.
+
+Cada proveedor arma su PDF a su manera. Si una lista se lee mal (modelos pegados a la descripción, precios de otra columna), no se aplica nada: se ajusta `lib/productos/leerListaPdf.ts` con ese caso y una prueba con datos inventados.
 
 ## Formato del CSV
 
@@ -48,11 +62,13 @@ UTF-8, separado por comas o punto y coma. Columnas (el orden no importa):
 - **Costo:** solo se usa el precio si el estatus es `disponible` o `en_transito`. Un `no_disponible` nunca cambia el costo, aunque traiga precio.
 - **Utilidad:** siempre `precio − costo`, como en el formulario de producto.
 - **Fotos:** se suben con `uploadProductImage` (`lib/supabase/product-media.ts`) y la dirección va a `imagen`. Una misma foto se sube una sola vez por importación.
-- **Productos nuevos:** `modelo` completo, `nombre` recortado de la descripción, categoría sugerida por la sección (editable), `cantidad` 0, sin precio de venta.
+- **Productos nuevos:** `modelo` completo, `nombre` recortado de la descripción, categoría sugerida por la sección (editable), `cantidad` 0, precio igual al costo (utilidad 0).
+- **Precio igual al costo:** si un producto tenía el precio igual al costo, o no tenía precio, al cambiar el costo el precio lo sigue. El margen se pone al armar cada presupuesto.
 
 ## Dónde está
 
 - `lib/productos/importarListaPrecios.ts`: lectura del CSV, cruce y cálculo de cambios (pura, con pruebas).
+- `lib/productos/leerListaPdf.ts`: de los trozos de texto del PDF a renglones de la lista (pura, con pruebas). `lib/productos/extraerTextoPdf.ts`: saca esos trozos con pdf.js en el navegador.
 - `lib/productos/leerZip.ts`: lector de ZIP para el navegador, sin librerías (con pruebas).
 - `components/productos/ImportarListaPrecios.tsx` y `app/productos/importar-lista/page.tsx`: la pantalla.
 - `supabase/migrations/332_products_disponibilidad_proveedor.sql`: columnas `disponibilidad_proveedor` y `lista_proveedor_fecha` en `products`.
@@ -69,7 +85,9 @@ margen empieza en **0 %** y el operador lo sube ahí mismo; el precio de cada re
 
 Ojo: en la mayoría de los productos cargados desde listas de distribuidor el precio es igual
 al costo. Con margen 0 % esos renglones se venden al costo; el resumen del presupuesto
-muestra la ganancia en rojo cuando no deja nada.
+muestra la ganancia en rojo cuando no deja nada, y **al guardar** se avisa qué renglones
+se venden al costo o por debajo (`lib/presupuesto/avisoMargen.ts`); el operador puede
+corregir o guardar de todos modos.
 
 ## Fichas por corregir
 

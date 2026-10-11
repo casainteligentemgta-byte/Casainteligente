@@ -45,10 +45,7 @@ export default function ImportarListaPreciosPage() {
                         Importar lista de precios
                     </h1>
                     <p style={{ fontSize: '12px', color: 'var(--label-secondary)', marginTop: '2px' }}>
-                        Costos, disponibilidad y fotos del proveedor.{' '}
-                        <Link href="/productos/cargar-catalogos-2026" style={{ color: 'var(--tono-naranja)', fontWeight: 700 }}>
-                            Listas 2026 ya armadas
-                        </Link>
+                        Costos, disponibilidad y fotos del proveedor, desde su PDF o un CSV.
                     </p>
                 </div>
             </div>
