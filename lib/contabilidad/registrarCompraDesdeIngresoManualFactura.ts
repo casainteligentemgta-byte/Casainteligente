@@ -53,11 +53,11 @@ async function cargarItemCodes(
 
   const { data } = await supabase
     .from('global_inventory')
-    .select('id, sku')
+    .select('id, sap_code')
     .in('id', ids);
 
   return new Map(
-    (data ?? []).map((r) => [String(r.id), String(r.sku ?? '').trim() || null]),
+    (data ?? []).map((r) => [String(r.id), String((r as { sap_code?: string | null }).sap_code ?? '').trim() || null]),
   );
 }
 

@@ -87,7 +87,7 @@ export async function resolverEtiquetaRolDestinatario(chatId: string | number): 
 
     const { data: nominaRows } = await supabase
       .from('ci_proyecto_nomina')
-      .select('rol, nombre, telegram_chat_id, empleado_telegram_chat_id, ci_empleados(nombre_completo)')
+      .select('rol, nombre, telegram_chat_id, ci_empleados(nombre_completo, telegram_chat_id)')
       .eq('activo', true)
       .limit(50);
 
@@ -95,14 +95,13 @@ export async function resolverEtiquetaRolDestinatario(chatId: string | number): 
       rol?: string | null;
       nombre?: string | null;
       telegram_chat_id?: number | null;
-      empleado_telegram_chat_id?: number | null;
-      ci_empleados?: { nombre_completo?: string | null } | null;
+      ci_empleados?: { nombre_completo?: string | null; telegram_chat_id?: number | null } | null;
     };
 
     for (const row of (nominaRows ?? []) as NominaRow[]) {
       const t1 = row.telegram_chat_id != null ? Number(row.telegram_chat_id) : null;
       const t2 =
-        row.empleado_telegram_chat_id != null ? Number(row.empleado_telegram_chat_id) : null;
+        row.ci_empleados?.telegram_chat_id != null ? Number(row.ci_empleados.telegram_chat_id) : null;
       if (t1 !== tid && t2 !== tid) continue;
       const nombre = corregirNombreDisplayTelegram(
         String(row.nombre ?? row.ci_empleados?.nombre_completo ?? '').trim() ||
@@ -115,16 +114,16 @@ export async function resolverEtiquetaRolDestinatario(chatId: string | number): 
 
     const { data: emp } = await supabase
       .from('ci_empleados')
-      .select('nombre_completo, oficio, telegram_chat_id')
+      .select('nombre_completo, cargo_nombre, cargo, telegram_chat_id')
       .eq('telegram_chat_id', tid)
       .maybeSingle();
 
     if (emp) {
-      const e = emp as { nombre_completo?: string | null; oficio?: string | null };
+      const e = emp as { nombre_completo?: string | null; cargo_nombre?: string | null; cargo?: string | null };
       const nombre = corregirNombreDisplayTelegram(
         String(e.nombre_completo ?? '').trim() || 'Empleado',
       );
-      const oficio = String(e.oficio ?? '').trim();
+      const oficio = String(e.cargo_nombre ?? e.cargo ?? '').trim();
       const label = oficio ? `${oficio} · ${nombre}` : nombre;
       ROL_CACHE.set(key, label);
       return label;

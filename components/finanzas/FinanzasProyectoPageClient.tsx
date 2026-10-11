@@ -42,7 +42,7 @@ export default function FinanzasProyectoPageClient({ proyectoId }: Props) {
         .maybeSingle(),
       supabase
         .from('ci_proyecto_abonos')
-        .select('monto_recibido, monto_usd, tasa_bcv, moneda')
+        .select('monto_recibido, monto_equivalente_usd, tasa_bcv_fecha, moneda')
         .eq('proyecto_id', proyectoId)
         .eq('moneda', 'VES')
         .order('fecha_abono', { ascending: false }),
@@ -63,10 +63,10 @@ export default function FinanzasProyectoPageClient({ proyectoId }: Props) {
     setAbonosVes(
       (abonos ?? []).map((a) => ({
         monto_recibido: Number((a as { monto_recibido?: unknown }).monto_recibido ?? 0),
-        monto_usd: Number((a as { monto_usd?: unknown }).monto_usd ?? 0),
+        monto_usd: Number((a as { monto_equivalente_usd?: unknown }).monto_equivalente_usd ?? 0),
         tasa_bcv:
-          (a as { tasa_bcv?: unknown }).tasa_bcv != null
-            ? Number((a as { tasa_bcv?: unknown }).tasa_bcv)
+          (a as { tasa_bcv_fecha?: unknown }).tasa_bcv_fecha != null
+            ? Number((a as { tasa_bcv_fecha?: unknown }).tasa_bcv_fecha)
             : null,
       })),
     );
