@@ -104,3 +104,5 @@ lista para editarlos uno por uno.
   los accesorios («soporte para cámara»), los grabadores ni los equipos de domótica que
   solo mencionan una cámara en su descripción (videoporteros, cerraduras, detectores).
 - Para quitar una categoría: pasar antes sus productos a otra y borrar la fila en la tabla.
+- **Subcategorías:** una categoría puede tener subcategorías (filas de `product_categories` con `parent_id`); el producto guarda la suya en `products.subcategoria`. C.C.T.V trae de fábrica «Cámaras IP», «Cámaras Análogas», «Otros dispositivos» y «Accesorios». Se crean más desde Productos (elegir la categoría → «+ Subcategoría») o desde el formulario del producto («+ Nueva subcategoría…»). El mismo nombre puede existir en dos categorías.
+- En Productos, al elegir una categoría aparece debajo la fila de subcategorías para filtrar; el presupuesto (modo botones) hace lo mismo. Al importar una lista, cada producto nuevo se puede poner en «Categoría › Subcategoría».

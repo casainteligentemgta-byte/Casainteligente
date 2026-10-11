@@ -403,14 +403,25 @@ export function nombreDesdeDescripcion(descripcion: string, modelo: string, max 
   return d.slice(0, hasta).replace(/[\s,.;:(-]+$/, '')
 }
 
+/** Categoría y subcategoría del catálogo que mejor le van a una sección de la lista. */
+export function ubicacionSugerida(seccion: string): { categoria: string; subcategoria: string } {
+  const s = sinAcentos(seccion)
+  if (/switch|router|access point|sfp|utp|metalmecanica|conector/.test(s)) return { categoria: 'Network', subcategoria: '' }
+  if (/video balun/.test(s)) return { categoria: 'C.C.T.V', subcategoria: 'Accesorios' }
+  if (/dvr|nvr|kit cctv|disco/.test(s)) return { categoria: 'C.C.T.V', subcategoria: 'Otros dispositivos' }
+  if (/camara.* ip|solucion ip|termica|kit solar|unifi/.test(s)) return { categoria: 'C.C.T.V', subcategoria: 'Cámaras IP' }
+  if (/turbo|colorvu|smart hybrid|serie iot|audio bidireccional/.test(s)) return { categoria: 'C.C.T.V', subcategoria: 'Cámaras Análogas' }
+  return { categoria: 'C.C.T.V', subcategoria: '' }
+}
+
 /** Categoría del catálogo que mejor le va a una sección de la lista. */
 export function categoriaSugerida(seccion: string): string {
-  const s = sinAcentos(seccion)
-  if (/switch|router|access point|sfp|utp|metalmecanica|conector/.test(s)) return 'Network'
-  if (/dvr|nvr|kit cctv|disco|video balun/.test(s)) return 'C.C.T.V'
-  if (/camara.* ip|solucion ip|termica|kit solar|unifi/.test(s)) return 'Cámaras IP'
-  if (/turbo|colorvu|smart hybrid|serie iot|audio bidireccional/.test(s)) return 'Cámaras Análogas'
-  return 'C.C.T.V'
+  return ubicacionSugerida(seccion).categoria
+}
+
+/** Subcategoría que mejor le va a una sección de la lista ('' si no hay una clara). */
+export function subcategoriaSugerida(seccion: string): string {
+  return ubicacionSugerida(seccion).subcategoria
 }
 
 /** Fila para crear en `products` un producto que no existía. */
@@ -419,12 +430,16 @@ export function productoNuevoDesdeFila(
   categoria: string,
   fechaLista: string,
   ahoraIso: string,
+  /** Solo cuenta si se indicó `categoria`; sin categoría se usa la pareja sugerida. */
+  subcategoria = '',
 ): Record<string, string | number | null> {
+  const sugerida = ubicacionSugerida(f.seccion)
   return {
     nombre: nombreDesdeDescripcion(f.descripcion, f.modelo),
     modelo: f.modelo,
     marca: f.marca || null,
-    categoria: categoria || categoriaSugerida(f.seccion),
+    categoria: categoria || sugerida.categoria,
+    subcategoria: (categoria ? subcategoria : sugerida.subcategoria) || null,
     descripcion: f.descripcion || null,
     costo: precioUsable(f),
     // El precio base arranca igual al costo (sin inventar margen): el margen se pone al

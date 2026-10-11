@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import {
   cambioParaProducto,
   categoriaSugerida,
+  subcategoriaSugerida,
+  ubicacionSugerida,
   efectoEnProducto,
   leerCsv,
   leerEstatus,
@@ -273,20 +275,28 @@ test('nombreDesdeDescripcion corta en un sitio decente', () => {
   assert.equal(n, 'CAMARA TIPO DOMO IP 2MP PoE INTEMPERIE IP67, IMAGEN A COLOR 24/7')
 })
 
-test('categoriaSugerida', () => {
-  assert.equal(categoriaSugerida('CAMARAS IP 4MP'), 'Cámaras IP')
-  assert.equal(categoriaSugerida('CAMARAS DOMO PTZ IP'), 'Cámaras IP')
-  assert.equal(categoriaSugerida('CAMARAS IP COLOR VU (IMAGEN A COLOR 24/7)'), 'Cámaras IP')
-  assert.equal(categoriaSugerida('UNIFI PROTECT'), 'Cámaras IP')
-  assert.equal(categoriaSugerida('CAMARAS TURBO HD 1080P'), 'Cámaras Análogas')
-  assert.equal(categoriaSugerida('SERIE COLORVU (IMAGEN A COLOR 24/7)'), 'Cámaras Análogas')
-  assert.equal(categoriaSugerida('DVRs HIKVISION TURBO HD'), 'C.C.T.V')
-  assert.equal(categoriaSugerida('NVRs HIKVISION'), 'C.C.T.V')
-  assert.equal(categoriaSugerida('DISCOS DUROS'), 'C.C.T.V')
-  assert.equal(categoriaSugerida('SWITCH / INYECTOR POE / REPETIDOR POE'), 'Network')
-  assert.equal(categoriaSugerida('CABLES UTP / COAXIAL'), 'Network')
-  assert.equal(categoriaSugerida('METALMECANICA'), 'Network')
-  assert.equal(categoriaSugerida('FUENTES'), 'C.C.T.V')
+test('categoría y subcategoría sugeridas: las cámaras van dentro de C.C.T.V', () => {
+  const u = (seccion: string) => {
+    const { categoria, subcategoria } = ubicacionSugerida(seccion)
+    return subcategoria ? `${categoria} › ${subcategoria}` : categoria
+  }
+  assert.equal(u('CAMARAS IP 4MP'), 'C.C.T.V › Cámaras IP')
+  assert.equal(u('CAMARAS DOMO PTZ IP'), 'C.C.T.V › Cámaras IP')
+  assert.equal(u('CAMARAS IP COLOR VU (IMAGEN A COLOR 24/7)'), 'C.C.T.V › Cámaras IP')
+  assert.equal(u('UNIFI PROTECT'), 'C.C.T.V › Cámaras IP')
+  assert.equal(u('CAMARAS TURBO HD 1080P'), 'C.C.T.V › Cámaras Análogas')
+  assert.equal(u('SERIE COLORVU (IMAGEN A COLOR 24/7)'), 'C.C.T.V › Cámaras Análogas')
+  assert.equal(u('DVRs HIKVISION TURBO HD'), 'C.C.T.V › Otros dispositivos')
+  assert.equal(u('NVRs HIKVISION'), 'C.C.T.V › Otros dispositivos')
+  assert.equal(u('DISCOS DUROS'), 'C.C.T.V › Otros dispositivos')
+  assert.equal(u('VIDEO BALUN'), 'C.C.T.V › Accesorios')
+  assert.equal(u('SWITCH / INYECTOR POE / REPETIDOR POE'), 'Network')
+  assert.equal(u('CABLES UTP / COAXIAL'), 'Network')
+  assert.equal(u('METALMECANICA'), 'Network')
+  assert.equal(u('FUENTES'), 'C.C.T.V')
+  assert.equal(categoriaSugerida('CAMARAS IP 4MP'), 'C.C.T.V')
+  assert.equal(subcategoriaSugerida('CAMARAS IP 4MP'), 'Cámaras IP')
+  assert.equal(subcategoriaSugerida('FUENTES'), '')
 })
 
 test('productoNuevoDesdeFila', () => {
@@ -295,7 +305,8 @@ test('productoNuevoDesdeFila', () => {
     nombre: 'DESCRIPCION MOD-PRUEBA-900 2.8MM',
     modelo: 'MOD-PRUEBA-900 2.8MM',
     marca: 'MARCA',
-    categoria: 'Cámaras IP',
+    categoria: 'C.C.T.V',
+    subcategoria: 'Cámaras IP',
     descripcion: 'DESCRIPCION MOD-PRUEBA-900 2.8MM',
     costo: 33,
     precio: 33,
@@ -311,4 +322,8 @@ test('productoNuevoDesdeFila', () => {
   assert.equal(agotado.precio, null)
   assert.equal(agotado.utilidad, null)
   assert.equal(productoNuevoDesdeFila(f, 'Network', 'F', 'A').categoria, 'Network')
+  // Con la categoría elegida a mano manda lo elegido, también la subcategoría (o ninguna).
+  assert.equal(productoNuevoDesdeFila(f, 'Network', 'F', 'A').subcategoria, null)
+  const elegido = productoNuevoDesdeFila(f, 'C.C.T.V', 'F', 'A', 'Accesorios')
+  assert.deepEqual([elegido.categoria, elegido.subcategoria], ['C.C.T.V', 'Accesorios'])
 })

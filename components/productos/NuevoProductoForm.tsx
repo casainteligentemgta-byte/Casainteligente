@@ -22,6 +22,7 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
     const [form, setForm] = useState({
         nombre: initialData?.nombre || '',
         categoria: initialData?.categoria || '',
+        subcategoria: (initialData?.subcategoria as string) || '',
         marca: initialData?.marca || '',
         modelo: initialData?.modelo || '',
         descripcion: initialData?.descripcion || '',
@@ -102,6 +103,8 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
         const productData = {
             nombre: form.nombre.trim(),
             categoria: form.categoria || null,
+            // Sin categoría no hay subcategoría.
+            subcategoria: form.categoria ? form.subcategoria || null : null,
             marca: form.marca || null,
             modelo: form.modelo || null,
             descripcion: form.descripcion || null,
@@ -332,7 +335,12 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
 
             <SelectorCategoriaProducto
                 value={form.categoria}
-                onChange={(nombre) => set('categoria', nombre)}
+                onChange={(nombre) =>
+                    // Al cambiar de categoría, la subcategoría anterior ya no aplica.
+                    setForm((prev) => (prev.categoria === nombre ? prev : { ...prev, categoria: nombre, subcategoria: '' }))
+                }
+                subcategoria={form.subcategoria}
+                onSubcategoriaChange={(nombre) => set('subcategoria', nombre)}
                 inputStyle={inputStyle}
                 fieldBox={fieldBox}
                 labelStyle={labelStyle}

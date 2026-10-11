@@ -30,7 +30,7 @@ for (const t of temas) {
     pag.on('pageerror', (e) => errores.push(String(e)));
     pag.on('console', (m) => m.type() === 'error' && errores.push(m.text()));
     const pantalla =
-      p === 'modal' ? 'lista' : p === 'producto-detalle' || p === 'productos-corregir' ? 'productos' : p === 'importar-pdf' ? 'importar-lista' : p;
+      p === 'modal' ? 'lista' : p === 'producto-detalle' || p === 'productos-corregir' || p === 'productos-sub' ? 'productos' : p === 'importar-pdf' ? 'importar-lista' : p;
     // «importar-pdf»: sube un PDF de prueba (VISOR_PDF) y espera a que se lea. El lector de PDF
     // pide su «worker» a internet; aquí se le entrega el archivo local.
     if (p === 'importar-pdf') {
@@ -43,6 +43,12 @@ for (const t of temas) {
     if (p === 'modal') { await pag.getByRole('button', { name: 'Ver' }).first().click(); await pag.waitForTimeout(600); }
     // «producto-detalle»: la hoja que se abre al tocar un producto. «productos-corregir»: filtro «Sin precio».
     if (p === 'producto-detalle') { await pag.getByText('Cerradura inteligente de ejemplo').first().click(); await pag.waitForTimeout(600); }
+    // «productos-sub»: categoría C.C.T.V elegida, una subcategoría activa y el formulario de crear otra.
+    if (p === 'productos-sub') {
+      await pag.getByRole('button', { name: 'C.C.T.V', exact: true }).click(); await pag.waitForTimeout(500);
+      await pag.locator('[data-subcategorias]').getByRole('button', { name: 'Cámaras IP', exact: true }).click(); await pag.waitForTimeout(500);
+      await pag.getByRole('button', { name: /Crear subcategoría/ }).click(); await pag.waitForTimeout(300);
+    }
     if (p === 'productos-corregir') { await pag.getByRole('button', { name: /Repetidos/ }).click(); await pag.waitForTimeout(400); }
     if (p === 'importar-pdf') {
       await pag.setInputFiles('[data-ilp-csv]', process.env.VISOR_PDF);

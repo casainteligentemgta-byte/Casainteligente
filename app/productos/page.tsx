@@ -7,7 +7,7 @@ import { Package } from 'lucide-react';
 import ModuloPageTitle from '@/components/ui/ModuloPageTitle';
 import BotonTema from '@/components/tema/BotonTema';
 import { createClient } from '@/lib/supabase/client';
-import { coloresCategoria } from '@/lib/productos/categoriasCatalogo';
+import { coloresCategoria, etiquetaCategoria, subcategoriasDe } from '@/lib/productos/categoriasCatalogo';
 import { useCategoriasCatalogo } from '@/lib/productos/useCategoriasCatalogo';
 import { tinta, tintaTexto, tonoTexto } from '@/lib/tema/tinta';
 import {
@@ -24,6 +24,7 @@ interface Product {
     id: number;
     nombre: string;
     categoria: string | null;
+    subcategoria?: string | null;
     modelo: string | null;
     marca: string | null;
     descripcion: string | null;
@@ -153,7 +154,7 @@ function ProductRow({
                                 borderRadius: '6px', background: colors.bg, color: tonoTexto(colors.text),
                                 textTransform: 'uppercase', letterSpacing: '0.5px'
                             }}>
-                                {cat}
+                                {etiquetaCategoria(cat, product.subcategoria)}
                             </span>
                             {product.marca && (
                                 <span style={{ fontSize: '10px', fontWeight: 700, color: tintaTexto(0.3), textTransform: 'uppercase' }}>
@@ -344,13 +345,25 @@ function ProductDetail({ product, onClose }: { product: Product; onClose: () => 
 export default function ProductosPage() {
     const supabase = useMemo(() => createClient(), []);
     const router = useRouter();
-    const { nombres: categoriasNombres, crear: crearCategoria } = useCategoriasCatalogo();
+    const { nombres: categoriasNombres, subcategorias: subcategoriasPorCategoria, crear: crearCategoria, crearSub: crearSubcategoria } = useCategoriasCatalogo();
     const categorias = useMemo(() => ['Todas', ...categoriasNombres], [categoriasNombres]);
     const [products, setProducts] = useState<Product[]>([]);
     const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
-    const [categoria, setCategoria] = useState('Todas');
+    const [categoria, setCategoriaElegida] = useState('Todas');
+    /** Subcategoría dentro de la categoría elegida ('' = todas). */
+    const [subcategoria, setSubcategoria] = useState('');
+    /** Qué se está creando con el formulario de abajo: una categoría o una subcategoría. */
+    const [creandoQue, setCreandoQue] = useState<'categoria' | 'subcategoria'>('categoria');
+    const setCategoria = useCallback((c: string) => {
+        setCategoriaElegida(c);
+        setSubcategoria('');
+    }, []);
+    const subcategoriasVisibles = useMemo(
+        () => (categoria === 'Todas' ? [] : subcategoriasDe({ subcategorias: subcategoriasPorCategoria }, categoria)),
+        [categoria, subcategoriasPorCategoria],
+    );
     const [selected, setSelected] = useState<Product | null>(null);
     const [cart, setCart] = useState<CartItem[]>([]);
     const [creandoCategoria, setCreandoCategoria] = useState(false);
@@ -413,8 +426,13 @@ export default function ProductosPage() {
         setGuardandoCategoria(true);
         setErrorCategoria(null);
         try {
-            const creada = await crearCategoria(nombreNuevaCategoria);
-            setCategoria(creada);
+            if (creandoQue === 'subcategoria' && categoria !== 'Todas') {
+                const creada = await crearSubcategoria(categoria, nombreNuevaCategoria);
+                setSubcategoria(creada);
+            } else {
+                const creada = await crearCategoria(nombreNuevaCategoria);
+                setCategoria(creada);
+            }
             setCreandoCategoria(false);
             setNombreNuevaCategoria('');
         } catch (err) {
@@ -422,7 +440,7 @@ export default function ProductosPage() {
         } finally {
             setGuardandoCategoria(false);
         }
-    }, [crearCategoria, nombreNuevaCategoria]);
+    }, [crearCategoria, crearSubcategoria, creandoQue, categoria, setCategoria, nombreNuevaCategoria]);
 
     const fetchProducts = useCallback(async () => {
         setLoading(true);
@@ -444,6 +462,7 @@ export default function ProductosPage() {
             }
             if (categoria !== 'Todas') {
                 query = query.eq('categoria', categoria);
+                if (subcategoria) query = query.eq('subcategoria', subcategoria);
             }
 
             const { data, error, count } = await query;
@@ -465,7 +484,7 @@ export default function ProductosPage() {
             setErrorCarga('No se pudo cargar el catálogo. Revisa la conexión e intenta de nuevo.');
         }
         setLoading(false);
-    }, [search, categoria, supabase]);
+    }, [search, categoria, subcategoria, supabase]);
 
     /** Los conteos «por corregir» solo tienen sentido con el catálogo completo a la vista. */
     const catalogoCompleto = categoria === 'Todas' && terminoBusquedaCatalogo(search).length < 2;
@@ -615,11 +634,12 @@ export default function ProductosPage() {
                             type="button"
                             aria-label="Crear categoría"
                             onClick={() => {
-                                setCreandoCategoria((v) => !v);
+                                setCreandoCategoria((v) => (creandoQue === 'categoria' ? !v : true));
+                                setCreandoQue('categoria');
                                 setErrorCategoria(null);
                             }}
                             style={{
-                                background: creandoCategoria ? 'rgba(255,149,0,0.15)' : 'transparent',
+                                background: creandoCategoria && creandoQue === 'categoria' ? 'rgba(255,149,0,0.15)' : 'transparent',
                                 color: 'var(--tono-naranja)',
                                 border: '1px dashed rgba(255,149,0,0.45)',
                                 borderRadius: '10px',
@@ -635,6 +655,82 @@ export default function ProductosPage() {
                             + Categoría
                         </button>
                     </div>
+                    {categoria !== 'Todas' ? (
+                        <div
+                            data-subcategorias
+                            style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '8px' }}
+                        >
+                            <div
+                                style={{
+                                    display: 'flex',
+                                    gap: '6px',
+                                    overflowX: 'auto',
+                                    WebkitOverflowScrolling: 'touch',
+                                    scrollbarWidth: 'thin',
+                                    alignItems: 'center',
+                                    flex: 1,
+                                    minWidth: 0,
+                                    paddingBottom: '2px',
+                                }}
+                            >
+                                {subcategoriasVisibles.length > 0 ? (
+                                    ['', ...subcategoriasVisibles].map((sub) => {
+                                        const activa = subcategoria === sub;
+                                        return (
+                                            <button
+                                                key={sub || '__todas__'}
+                                                type="button"
+                                                onClick={() => setSubcategoria(sub)}
+                                                style={{
+                                                    background: activa ? 'rgba(0,122,255,0.14)' : tinta(0.05),
+                                                    color: activa ? 'var(--tono-azul)' : tintaTexto(0.5),
+                                                    border: 'none',
+                                                    borderRadius: '999px',
+                                                    padding: '5px 12px',
+                                                    fontSize: '12px',
+                                                    fontWeight: 700,
+                                                    cursor: 'pointer',
+                                                    whiteSpace: 'nowrap',
+                                                    flexShrink: 0,
+                                                    fontFamily: 'inherit',
+                                                }}
+                                            >
+                                                {sub || `Todo ${categoria}`}
+                                            </button>
+                                        );
+                                    })
+                                ) : (
+                                    <span style={{ fontSize: '12px', color: tintaTexto(0.4), fontWeight: 600 }}>
+                                        {categoria} no tiene subcategorías.
+                                    </span>
+                                )}
+                            </div>
+                            <button
+                                type="button"
+                                aria-label={`Crear subcategoría en ${categoria}`}
+                                onClick={() => {
+                                    setCreandoCategoria((v) => (creandoQue === 'subcategoria' ? !v : true));
+                                    setCreandoQue('subcategoria');
+                                    setErrorCategoria(null);
+                                }}
+                                style={{
+                                    background: creandoCategoria && creandoQue === 'subcategoria' ? 'rgba(0,122,255,0.14)' : 'transparent',
+                                    color: 'var(--tono-azul)',
+                                    border: '1px dashed rgba(0,122,255,0.45)',
+                                    borderRadius: '999px',
+                                    padding: '5px 12px',
+                                    fontSize: '12px',
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    whiteSpace: 'nowrap',
+                                    flexShrink: 0,
+                                    fontFamily: 'inherit',
+                                }}
+                            >
+                                + Subcategoría
+                            </button>
+                        </div>
+                    ) : null}
                     {creandoCategoria ? (
                         <div
                             style={{
@@ -649,7 +745,11 @@ export default function ProductosPage() {
                                 type="text"
                                 value={nombreNuevaCategoria}
                                 onChange={(e) => setNombreNuevaCategoria(e.target.value)}
-                                placeholder="Nombre de la nueva categoría"
+                                placeholder={
+                                    creandoQue === 'subcategoria' && categoria !== 'Todas'
+                                        ? 'Nueva subcategoría'
+                                        : 'Nombre de la nueva categoría'
+                                }
                                 autoFocus
                                 disabled={guardandoCategoria}
                                 onKeyDown={(e) => {

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { colorHexCategoria } from '@/lib/productos/categoriasCatalogo';
+import { colorHexCategoria, subcategoriasDe } from '@/lib/productos/categoriasCatalogo';
 import { useCategoriasCatalogo } from '@/lib/productos/useCategoriasCatalogo';
 
 export interface Product {
@@ -10,6 +10,7 @@ export interface Product {
     external_id: number | null;
     nombre: string;
     categoria: string | null;
+    subcategoria?: string | null;
     modelo: string | null;
     marca: string | null;
     descripcion: string | null;
@@ -165,13 +166,16 @@ export default function ProductSearch({ onSelect, inBudgetQtyById }: ProductSear
     const [activeIndex, setActiveIndex] = useState(-1);
     const [modo, setModo] = useState<ModoSelectorProducto>('botones');
     const [tipoBoton, setTipoBoton] = useState<string | null>(null);
+    /** Subcategoría dentro del tipo elegido ('' = todo el tipo). */
+    const [subBoton, setSubBoton] = useState('');
     const [productosBoton, setProductosBoton] = useState<Product[]>([]);
     const [cargandoBoton, setCargandoBoton] = useState(false);
     const [filtroBoton, setFiltroBoton] = useState('');
     const inputRef = useRef<HTMLInputElement>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const supabase = createClient();
-    const { nombres: categoriasNombres } = useCategoriasCatalogo();
+    const { nombres: categoriasNombres, subcategorias: subcategoriasPorCategoria } = useCategoriasCatalogo();
+    const subsDelTipo = tipoBoton ? subcategoriasDe({ subcategorias: subcategoriasPorCategoria }, tipoBoton) : [];
     const categoriasLista = ['Todos', ...categoriasNombres];
     const categoriasBotones = categoriasNombres;
 
@@ -195,12 +199,14 @@ export default function ProductSearch({ onSelect, inBudgetQtyById }: ProductSear
         }
         let cancelado = false;
         setCargandoBoton(true);
-        void supabase
+        let consulta = supabase
             .from('products')
             .select(
-                'id, external_id, nombre, categoria, modelo, marca, descripcion, costo, precio, utilidad, imagen, manual_instrucciones, manual_documento_url',
+                'id, external_id, nombre, categoria, subcategoria, modelo, marca, descripcion, costo, precio, utilidad, imagen, manual_instrucciones, manual_documento_url',
             )
-            .eq('categoria', tipoBoton)
+            .eq('categoria', tipoBoton);
+        if (subBoton) consulta = consulta.eq('subcategoria', subBoton);
+        void consulta
             .order('nombre')
             .limit(200)
             .then(({ data, error }) => {
@@ -211,7 +217,7 @@ export default function ProductSearch({ onSelect, inBudgetQtyById }: ProductSear
         return () => {
             cancelado = true;
         };
-    }, [modo, tipoBoton, supabase]);
+    }, [modo, tipoBoton, subBoton, supabase]);
 
     const search = useCallback(async (q: string, cat: string) => {
         if (q.trim().length < 2 && cat === 'Todos') {
@@ -224,7 +230,7 @@ export default function ProductSearch({ onSelect, inBudgetQtyById }: ProductSear
         let queryBuilder = supabase
             .from('products')
             .select(
-                'id, external_id, nombre, categoria, modelo, marca, descripcion, costo, precio, utilidad, imagen, manual_instrucciones, manual_documento_url',
+                'id, external_id, nombre, categoria, subcategoria, modelo, marca, descripcion, costo, precio, utilidad, imagen, manual_instrucciones, manual_documento_url',
             );
 
         if (cat !== 'Todos') {
@@ -312,6 +318,7 @@ export default function ProductSearch({ onSelect, inBudgetQtyById }: ProductSear
                                 type="button"
                                 onClick={() => {
                                     setTipoBoton(null);
+                                    setSubBoton('');
                                     setFiltroBoton('');
                                 }}
                                 style={{
@@ -352,7 +359,10 @@ export default function ProductSearch({ onSelect, inBudgetQtyById }: ProductSear
                                     <button
                                         key={cat}
                                         type="button"
-                                        onClick={() => setTipoBoton(cat)}
+                                        onClick={() => {
+                                            setTipoBoton(cat);
+                                            setSubBoton('');
+                                        }}
                                         style={{
                                             minHeight: 56,
                                             padding: '12px 10px',
@@ -374,6 +384,39 @@ export default function ProductSearch({ onSelect, inBudgetQtyById }: ProductSear
                         </div>
                     ) : (
                         <>
+                            {subsDelTipo.length > 0 ? (
+                                <div
+                                    data-subcategorias
+                                    style={{ display: 'flex', gap: 6, overflowX: 'auto', marginBottom: 10, paddingBottom: 2 }}
+                                >
+                                    {['', ...subsDelTipo].map((sub) => {
+                                        const activa = subBoton === sub;
+                                        const color = colorCategoria(tipoBoton);
+                                        return (
+                                            <button
+                                                key={sub || '__todo__'}
+                                                type="button"
+                                                onClick={() => setSubBoton(sub)}
+                                                style={{
+                                                    background: activa ? `${color}30` : 'rgba(255,255,255,0.06)',
+                                                    color: activa ? color : 'rgba(255,255,255,0.65)',
+                                                    border: activa ? `1px solid ${color}88` : '1px solid rgba(255,255,255,0.12)',
+                                                    borderRadius: 999,
+                                                    padding: '7px 12px',
+                                                    fontSize: 12,
+                                                    fontWeight: 700,
+                                                    cursor: 'pointer',
+                                                    whiteSpace: 'nowrap',
+                                                    flexShrink: 0,
+                                                    fontFamily: 'inherit',
+                                                }}
+                                            >
+                                                {sub || 'Todo'}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            ) : null}
                             <input
                                 type="search"
                                 value={filtroBoton}
@@ -398,7 +441,7 @@ export default function ProductSearch({ onSelect, inBudgetQtyById }: ProductSear
                                 </p>
                             ) : productosFiltradosBoton.length === 0 ? (
                                 <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13, textAlign: 'center', padding: 24 }}>
-                                    No hay productos en {tipoBoton}.
+                                    No hay productos en {subBoton ? `${tipoBoton} › ${subBoton}` : tipoBoton}.
                                 </p>
                             ) : (
                                 <div
