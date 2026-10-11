@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { numeroWhatsapp } from '@/lib/clientes/presupuestosCliente';
 import type { CustomerListItem } from '@/types';
+import { tinta, tintaTexto } from '@/lib/tema/tinta';
 
 type ClienteStatus = 'activo' | 'inactivo' | 'pendiente';
 type ClienteTipo = 'V' | 'J' | 'E';
@@ -28,15 +29,15 @@ interface Cliente {
 }
 
 const statusConfig: Record<ClienteStatus, { label: string; dot: string; bg: string; text: string }> = {
-    activo: { label: 'Activo', dot: '#34C759', bg: 'rgba(52,199,89,0.10)', text: '#1A7F3C' },
-    inactivo: { label: 'Inactivo', dot: '#FF3B30', bg: 'rgba(255,59,48,0.10)', text: '#C0392B' },
-    pendiente: { label: 'Pendiente', dot: '#FF9500', bg: 'rgba(255,149,0,0.10)', text: '#B8620A' },
+    activo: { label: 'Activo', dot: '#34C759', bg: 'rgba(52,199,89,0.10)', text: 'var(--tono-verde)' },
+    inactivo: { label: 'Inactivo', dot: '#FF3B30', bg: 'rgba(255,59,48,0.10)', text: 'var(--tono-rojo)' },
+    pendiente: { label: 'Pendiente', dot: '#FF9500', bg: 'rgba(255,149,0,0.10)', text: 'var(--tono-naranja)' },
 };
 
 const tipoConfig: Record<ClienteTipo, { bg: string; text: string; border: string }> = {
-    V: { bg: 'rgba(0,122,255,0.10)', text: '#007AFF', border: 'rgba(0,122,255,0.25)' },
-    J: { bg: 'rgba(255,149,0,0.10)', text: '#B8620A', border: 'rgba(255,149,0,0.25)' },
-    E: { bg: 'rgba(52,199,89,0.10)', text: '#1A7F3C', border: 'rgba(52,199,89,0.25)' },
+    V: { bg: 'rgba(0,122,255,0.10)', text: 'var(--tono-azul)', border: 'rgba(0,122,255,0.25)' },
+    J: { bg: 'rgba(255,149,0,0.10)', text: 'var(--tono-naranja)', border: 'rgba(255,149,0,0.25)' },
+    E: { bg: 'rgba(52,199,89,0.10)', text: 'var(--tono-verde)', border: 'rgba(52,199,89,0.25)' },
 };
 
 const defaultTipoStyle = { bg: 'rgba(142,142,147,0.10)', text: '#8E8E93', border: 'rgba(142,142,147,0.25)' };
@@ -63,7 +64,7 @@ function AvatarCircle({ initials, color, categoria, imagen }: { initials: string
                         <rect x="9" y="12" width="4" height="4" rx="1" fill="white" />
                     </svg>
                 ) : (
-                    <span className="font-bold text-white" style={{ fontSize: '18px', letterSpacing: '-0.02em' }}>
+                    <span className="font-bold text-white sobre-color" style={{ fontSize: '18px', letterSpacing: '-0.02em' }}>
                         {initials}
                     </span>
                 )}
@@ -98,18 +99,18 @@ function ClienteModal({ cliente, onClose }: { cliente: Cliente; onClose: () => v
                 onClick={e => e.stopPropagation()}
                 style={{
                     width: '100%', maxWidth: '540px', margin: '0 auto',
-                    background: 'rgba(28,28,30,0.98)',
+                    background: 'var(--superficie-alta)',
                     backdropFilter: 'blur(40px)',
                     WebkitBackdropFilter: 'blur(40px)',
                     borderRadius: '28px 28px 0 0',
-                    border: '1px solid rgba(255,255,255,0.1)',
+                    border: `1px solid ${tinta(0.1)}`,
                     padding: '0 0 48px',
                     animation: 'slideUp 0.35s cubic-bezier(0.34,1.56,0.64,1)',
                 }}
             >
                 {/* Handle */}
                 <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 0' }}>
-                    <div style={{ width: '36px', height: '4px', borderRadius: '2px', background: 'rgba(255,255,255,0.2)' }} />
+                    <div style={{ width: '36px', height: '4px', borderRadius: '2px', background: tinta(0.2) }} />
                 </div>
 
                 {/* Header */}
@@ -125,27 +126,27 @@ function ClienteModal({ cliente, onClose }: { cliente: Cliente; onClose: () => v
                                 {status.label}
                             </span>
                         </div>
-                        <h2 style={{ color: 'white', fontSize: '18px', fontWeight: 700, lineHeight: 1.2 }}>{cliente.nombre}</h2>
+                        <h2 style={{ color: 'var(--label-primary)', fontSize: '18px', fontWeight: 700, lineHeight: 1.2 }}>{cliente.nombre}</h2>
                         {cliente.rif ? (
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
-                                    <rect x="2" y="5" width="20" height="14" rx="2.5" stroke="rgba(255,255,255,0.45)" strokeWidth="1.8" />
-                                    <circle cx="8.5" cy="11" r="2.2" stroke="rgba(255,255,255,0.45)" strokeWidth="1.5" />
-                                    <path d="M13.5 9.5h5M13.5 12.5h4M13.5 15.5h3" stroke="rgba(255,255,255,0.45)" strokeWidth="1.5" strokeLinecap="round" />
+                                    <rect x="2" y="5" width="20" height="14" rx="2.5" stroke={tinta(0.45)} strokeWidth="1.8" />
+                                    <circle cx="8.5" cy="11" r="2.2" stroke={tinta(0.45)} strokeWidth="1.5" />
+                                    <path d="M13.5 9.5h5M13.5 12.5h4M13.5 15.5h3" stroke={tinta(0.45)} strokeWidth="1.5" strokeLinecap="round" />
                                 </svg>
-                                <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '13px' }}>{cliente.rif}</p>
+                                <p style={{ color: tintaTexto(0.45), fontSize: '13px' }}>{cliente.rif}</p>
                             </div>
                         ) : null}
                     </div>
-                    <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <button onClick={onClose} style={{ background: tinta(0.1), border: 'none', borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                            <path d="M18 6L6 18M6 6l12 12" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
+                            <path d="M18 6L6 18M6 6l12 12" stroke="var(--label-primary)" strokeWidth="2.5" strokeLinecap="round" />
                         </svg>
                     </button>
                 </div>
 
                 {/* Divider */}
-                <div style={{ height: '1px', background: 'rgba(255,255,255,0.07)', margin: '20px 24px' }} />
+                <div style={{ height: '1px', background: tinta(0.07), margin: '20px 24px' }} />
 
                 {/* Fields */}
                 <div style={{ padding: '0 24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -157,8 +158,8 @@ function ClienteModal({ cliente, onClose }: { cliente: Cliente; onClose: () => v
                         <div key={f.label} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
                             <span style={{ fontSize: '18px', flexShrink: 0, marginTop: '1px' }}>{f.icon}</span>
                             <div>
-                                <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{f.label}</p>
-                                <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.85)', marginTop: '2px', lineHeight: 1.4 }}>{f.value}</p>
+                                <p style={{ fontSize: '11px', color: tintaTexto(0.35), fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{f.label}</p>
+                                <p style={{ fontSize: '14px', color: tintaTexto(0.85), marginTop: '2px', lineHeight: 1.4 }}>{f.value}</p>
                             </div>
                         </div>
                     ))}
@@ -169,11 +170,11 @@ function ClienteModal({ cliente, onClose }: { cliente: Cliente; onClose: () => v
                     <a href={`tel:${cliente.movil || cliente.telefono}`} style={{
                         flex: 1, padding: '12px', borderRadius: '14px', textDecoration: 'none',
                         background: 'rgba(52,199,89,0.12)', border: '1px solid rgba(52,199,89,0.25)',
-                        color: '#34C759', fontSize: '13px', fontWeight: 600,
+                        color: 'var(--tono-verde)', fontSize: '13px', fontWeight: 600,
                         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
                     }}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                            <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.8a19.79 19.79 0 01-3.07-8.63A2 2 0 012 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z" stroke="#34C759" strokeWidth="1.8" />
+                            <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.8a19.79 19.79 0 01-3.07-8.63A2 2 0 012 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z" stroke="currentColor" strokeWidth="1.8" />
                         </svg>
                         Llamar
                     </a>
@@ -185,7 +186,7 @@ function ClienteModal({ cliente, onClose }: { cliente: Cliente; onClose: () => v
                             style={{
                                 flex: 1, padding: '12px', borderRadius: '14px', textDecoration: 'none',
                                 background: 'rgba(37,211,102,0.12)', border: '1px solid rgba(37,211,102,0.3)',
-                                color: '#25D366', fontSize: '13px', fontWeight: 600,
+                                color: 'var(--tono-whatsapp)', fontSize: '13px', fontWeight: 600,
                                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
                             }}
                         >
@@ -195,12 +196,12 @@ function ClienteModal({ cliente, onClose }: { cliente: Cliente; onClose: () => v
                     <a href={`mailto:${cliente.email}`} style={{
                         flex: 1, padding: '12px', borderRadius: '14px', textDecoration: 'none',
                         background: 'rgba(0,122,255,0.12)', border: '1px solid rgba(0,122,255,0.25)',
-                        color: '#007AFF', fontSize: '13px', fontWeight: 600,
+                        color: 'var(--tono-azul)', fontSize: '13px', fontWeight: 600,
                         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
                     }}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" stroke="#007AFF" strokeWidth="1.8" />
-                            <path d="M22 6l-10 7L2 6" stroke="#007AFF" strokeWidth="1.8" strokeLinecap="round" />
+                            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" stroke="currentColor" strokeWidth="1.8" />
+                            <path d="M22 6l-10 7L2 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
                         </svg>
                         Email
                     </a>
@@ -233,21 +234,21 @@ export default function ClienteCard({ cliente, onDelete }: { cliente: Cliente; o
             <div
                 className="relative overflow-hidden"
                 style={{
-                    background: 'rgba(28,28,30,0.95)',
+                    background: 'var(--superficie)',
                     backdropFilter: 'blur(20px)',
                     WebkitBackdropFilter: 'blur(20px)',
                     borderRadius: '20px',
-                    border: '1px solid rgba(255,255,255,0.10)',
-                    boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+                    border: `1px solid ${tinta(0.10)}`,
+                    boxShadow: 'var(--sombra-tarjeta)',
                     transition: 'all 0.2s cubic-bezier(0.25,0.46,0.45,0.94)',
                 }}
                 onMouseEnter={e => {
                     (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)';
-                    (e.currentTarget as HTMLDivElement).style.boxShadow = '0 8px 32px rgba(0,0,0,0.45)';
+                    (e.currentTarget as HTMLDivElement).style.boxShadow = 'var(--sombra-tarjeta-alta)';
                 }}
                 onMouseLeave={e => {
                     (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)';
-                    (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 20px rgba(0,0,0,0.3)';
+                    (e.currentTarget as HTMLDivElement).style.boxShadow = 'var(--sombra-tarjeta)';
                 }}
             >
                 {/* Top accent line */}
@@ -312,7 +313,7 @@ export default function ClienteCard({ cliente, onDelete }: { cliente: Cliente; o
                                         className="flex items-center gap-1 px-2 py-0.5 rounded-full"
                                         style={{ background: 'rgba(90,200,250,0.12)', border: '1px solid rgba(90,200,250,0.25)' }}
                                     >
-                                        <span style={{ color: '#5AC8FA', fontSize: '10px', fontWeight: 700 }}>
+                                        <span style={{ color: 'var(--tono-celeste)', fontSize: '10px', fontWeight: 700 }}>
                                             {cliente.obraCount} obra{cliente.obraCount === 1 ? '' : 's'}
                                         </span>
                                     </div>
@@ -327,7 +328,7 @@ export default function ClienteCard({ cliente, onDelete }: { cliente: Cliente; o
                 </div>
 
                 {/* ── Action buttons row ── */}
-                <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+                <div style={{ borderTop: `1px solid ${tinta(0.07)}` }}>
 
                     {/* Presupuesto — botón destacado full width */}
                     <Link
@@ -336,9 +337,9 @@ export default function ClienteCard({ cliente, onDelete }: { cliente: Cliente; o
                             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
                             width: '100%', padding: '11px 0',
                             background: 'rgba(52,199,89,0.10)',
-                            borderBottom: '1px solid rgba(255,255,255,0.07)',
+                            borderBottom: `1px solid ${tinta(0.07)}`,
                             textDecoration: 'none',
-                            color: '#34C759', fontSize: '13px', fontWeight: 700,
+                            color: 'var(--tono-verde)', fontSize: '13px', fontWeight: 700,
                             transition: 'background 0.15s',
                             letterSpacing: '-0.01em',
                         }}
@@ -346,12 +347,12 @@ export default function ClienteCard({ cliente, onDelete }: { cliente: Cliente; o
                         onMouseLeave={e => (e.currentTarget.style.background = 'rgba(52,199,89,0.10)')}
                     >
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
-                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z" stroke="#34C759" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                            <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke="#34C759" strokeWidth="2" strokeLinecap="round" />
+                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                            <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                         </svg>
                         Crear Presupuesto
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                            <path d="M5 12h14M12 5l7 7-7 7" stroke="#34C759" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                            <path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
                     </Link>
 
@@ -363,17 +364,17 @@ export default function ClienteCard({ cliente, onDelete }: { cliente: Cliente; o
                             style={{
                                 flex: 1, padding: '9px 0',
                                 background: 'transparent', border: 'none',
-                                borderRight: '1px solid rgba(255,255,255,0.07)',
+                                borderRight: `1px solid ${tinta(0.07)}`,
                                 cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px',
-                                color: '#007AFF', fontSize: '11px', fontWeight: 600, fontFamily: 'inherit',
+                                color: 'var(--tono-azul)', fontSize: '11px', fontWeight: 600, fontFamily: 'inherit',
                                 transition: 'background 0.15s',
                             }}
                             onMouseEnter={e => (e.currentTarget.style.background = 'rgba(0,122,255,0.08)')}
                             onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                         >
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                                <circle cx="12" cy="12" r="3" stroke="#007AFF" strokeWidth="2" />
-                                <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z" stroke="#007AFF" strokeWidth="2" />
+                                <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" />
+                                <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z" stroke="currentColor" strokeWidth="2" />
                             </svg>
                             Ver
                         </button>
@@ -384,18 +385,18 @@ export default function ClienteCard({ cliente, onDelete }: { cliente: Cliente; o
                             style={{
                                 flex: 1, padding: '9px 0',
                                 background: 'transparent',
-                                borderRight: '1px solid rgba(255,255,255,0.07)',
+                                borderRight: `1px solid ${tinta(0.07)}`,
                                 textDecoration: 'none',
                                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px',
-                                color: '#5AC8FA', fontSize: '11px', fontWeight: 600,
+                                color: 'var(--tono-celeste)', fontSize: '11px', fontWeight: 600,
                                 transition: 'background 0.15s',
                             }}
                             onMouseEnter={e => (e.currentTarget.style.background = 'rgba(90,200,250,0.08)')}
                             onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                         >
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                                <path d="M4 19.5V4.5a1.5 1.5 0 011.5-1.5h8.4L20 9.1V19.5A1.5 1.5 0 0118.5 21h-13A1.5 1.5 0 014 19.5z" stroke="#5AC8FA" strokeWidth="2" />
-                                <path d="M14 3v6h6" stroke="#5AC8FA" strokeWidth="2" />
+                                <path d="M4 19.5V4.5a1.5 1.5 0 011.5-1.5h8.4L20 9.1V19.5A1.5 1.5 0 0118.5 21h-13A1.5 1.5 0 014 19.5z" stroke="currentColor" strokeWidth="2" />
+                                <path d="M14 3v6h6" stroke="currentColor" strokeWidth="2" />
                             </svg>
                             Ficha
                         </Link>
@@ -406,18 +407,18 @@ export default function ClienteCard({ cliente, onDelete }: { cliente: Cliente; o
                             style={{
                                 flex: 1, padding: '9px 0',
                                 background: 'transparent',
-                                borderRight: '1px solid rgba(255,255,255,0.07)',
+                                borderRight: `1px solid ${tinta(0.07)}`,
                                 textDecoration: 'none',
                                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px',
-                                color: '#FF9500', fontSize: '11px', fontWeight: 600,
+                                color: 'var(--tono-naranja)', fontSize: '11px', fontWeight: 600,
                                 transition: 'background 0.15s',
                             }}
                             onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,149,0,0.08)')}
                             onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                         >
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" stroke="#FF9500" strokeWidth="2" strokeLinecap="round" />
-                                <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" stroke="#FF9500" strokeWidth="2" strokeLinecap="round" />
+                                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                                <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                             </svg>
                             Editar
                         </Link>
@@ -430,16 +431,16 @@ export default function ClienteCard({ cliente, onDelete }: { cliente: Cliente; o
                                 background: confirmDelete ? 'rgba(255,59,48,0.10)' : 'transparent',
                                 border: 'none', cursor: 'pointer',
                                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px',
-                                color: '#FF3B30', fontSize: '11px', fontWeight: 600, fontFamily: 'inherit',
+                                color: 'var(--tono-rojo)', fontSize: '11px', fontWeight: 600, fontFamily: 'inherit',
                                 transition: 'background 0.15s',
                             }}
                             onMouseEnter={e => !confirmDelete && (e.currentTarget.style.background = 'rgba(255,59,48,0.06)')}
                             onMouseLeave={e => !confirmDelete && (e.currentTarget.style.background = 'transparent')}
                         >
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                                <polyline points="3 6 5 6 21 6" stroke="#FF3B30" strokeWidth="2" strokeLinecap="round" />
-                                <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" stroke="#FF3B30" strokeWidth="2" strokeLinecap="round" />
-                                <path d="M10 11v6M14 11v6" stroke="#FF3B30" strokeWidth="2" strokeLinecap="round" />
+                                <polyline points="3 6 5 6 21 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                                <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                                <path d="M10 11v6M14 11v6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                             </svg>
                             {confirmDelete ? '¿Confirmar?' : 'Eliminar'}
                         </button>

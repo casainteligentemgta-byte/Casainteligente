@@ -1,0 +1,146 @@
+/*
+ * Tema claro.
+ *
+ * Solo actúa cuando <html> tiene data-theme="light" Y la pantalla está dentro de «.ci-tema»
+ * (módulos ya revisados, ver lib/tema/tema.ts). En oscuro este archivo no cambia nada.
+ *
+ * Tiene dos partes:
+ *   1. Los colores base (variables) en su versión clara.
+ *   2. Una traducción de las clases de color pensadas para fondo negro (text-white,
+ *      text-zinc-300, border-white/10…) a su equivalente sobre fondo claro, para no tener
+ *      que reescribir cada pantalla.
+ *
+ * Texto blanco sobre un botón de color sólido: añadir la clase «sobre-color» para que
+ * siga blanco en claro.
+ */
+
+/* ── 1. Colores base ─────────────────────────────────────────────────────────── */
+
+html[data-theme="light"] .ci-tema {
+  color-scheme: light;
+
+  --bg-primary: #F2F2F7;
+  --bg-secondary: #FFFFFF;
+  --bg-tertiary: #E9E9EF;
+  --bg-grouped: #F2F2F7;
+
+  --label-primary: #111113;
+  --label-secondary: rgba(60, 60, 67, 0.82);
+  --label-tertiary: rgba(60, 60, 67, 0.62);
+  --label-quaternary: rgba(60, 60, 67, 0.36);
+
+  --separator: rgba(60, 60, 67, 0.22);
+  --separator-opaque: #C6C6C8;
+
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(0, 0, 0, 0.08);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.10);
+
+  --tinta: 0 0 0;
+  --tinta-realce: 1.4;
+  --superficie: #FFFFFF;
+  --superficie-alta: #FFFFFF;
+  --barra-fondo: rgba(242, 242, 247, 0.82);
+  --sombra-tarjeta: 0 1px 3px rgba(0, 0, 0, 0.06), 0 4px 14px rgba(0, 0, 0, 0.05);
+  --sombra-tarjeta-alta: 0 2px 6px rgba(0, 0, 0, 0.08), 0 10px 28px rgba(0, 0, 0, 0.10);
+  --tono-azul: #0068E0;
+  --tono-verde: #1A7F3C;
+  --tono-naranja: #B8620A;
+  --tono-rojo: #D70015;
+  --tono-celeste: #0071A4;
+  --tono-whatsapp: #128C4B;
+
+  background-color: var(--bg-primary);
+  color: var(--label-primary);
+}
+
+/* El fondo general (y el rebote al deslizar en el teléfono) también en claro. */
+html[data-theme="light"]:has(.ci-tema) body,
+html[data-theme="light"]:has(.ci-tema) .app-root-bg {
+  background-color: #F2F2F7 !important;
+  background-image: none;
+}
+
+/* ── 2. Clases de color para fondo negro → fondo claro ───────────────────────── */
+
+/* Texto neutro */
+html[data-theme="light"] .ci-tema :is(.text-white, .text-zinc-50, .text-zinc-100):not(.sobre-color) {
+  color: var(--label-primary);
+}
+html[data-theme="light"] .ci-tema :is(.text-zinc-200, .text-zinc-300, .hover\:text-zinc-200:hover) {
+  color: #2C2C2E;
+}
+html[data-theme="light"] .ci-tema :is(.text-zinc-400, .hover\:text-zinc-300:hover) {
+  color: #55555A;
+}
+html[data-theme="light"] .ci-tema .text-zinc-500 {
+  color: #6E6E73;
+}
+html[data-theme="light"] .ci-tema .text-zinc-600 {
+  color: #8E8E93;
+}
+
+/* Enlaces y acentos azules claros */
+html[data-theme="light"] .ci-tema :is(.text-\[\#7cb9ff\], .text-\[\#9fcbff\], .text-sky-200, .text-sky-300) {
+  color: var(--tono-azul);
+}
+
+/* Texto de color (los tonos pastel no se leen sobre blanco) */
+html[data-theme="light"] .ci-tema :is(.text-emerald-200, .text-emerald-300, .text-green-300) {
+  color: #047857;
+}
+html[data-theme="light"] .ci-tema :is(.text-amber-100, .text-amber-200, .text-amber-200\/80, .text-amber-300, .text-amber-300\/90, .text-amber-400) {
+  color: #92400E;
+}
+html[data-theme="light"] .ci-tema :is(.text-red-200, .text-red-300, .text-red-400) {
+  color: #B91C1C;
+}
+html[data-theme="light"] .ci-tema .text-orange-300 {
+  color: #C2410C;
+}
+html[data-theme="light"] .ci-tema .text-cyan-300 {
+  color: #0E7490;
+}
+html[data-theme="light"] .ci-tema .text-violet-400 {
+  color: #6D28D9;
+}
+
+/* Bordes */
+html[data-theme="light"] .ci-tema :is(.border-white\/10, .border-white\/15) {
+  border-color: rgba(0, 0, 0, 0.09);
+}
+html[data-theme="light"] .ci-tema :is(.border-white\/20, .hover\:border-white\/20:hover) {
+  border-color: rgba(0, 0, 0, 0.16);
+}
+html[data-theme="light"] .ci-tema .hover\:border-\[\#7cb9ff\]\/40:hover {
+  border-color: rgba(0, 104, 224, 0.45);
+}
+
+/* Fondos: tarjetas, pastillas y huecos */
+html[data-theme="light"] .ci-tema .bg-\[\#0A0A0F\] {
+  background-color: var(--bg-primary);
+}
+html[data-theme="light"] .ci-tema :is(.bg-white\/\[0\.02\], .bg-white\/\[0\.03\]) {
+  background-color: var(--superficie);
+}
+html[data-theme="light"] .ci-tema .bg-white\/\[0\.02\] {
+  background-color: rgba(0, 0, 0, 0.025);
+}
+html[data-theme="light"] .ci-tema .bg-white\/10 {
+  background-color: rgba(0, 0, 0, 0.07);
+}
+html[data-theme="light"] .ci-tema :is(.bg-black\/20, .bg-black\/30) {
+  background-color: rgba(0, 0, 0, 0.035);
+}
+html[data-theme="light"] .ci-tema .from-zinc-900.to-black {
+  background-image: none;
+  background-color: var(--superficie);
+}
+
+/* Fondos teñidos muy oscuros → tinte suave */
+html[data-theme="light"] .ci-tema :is(.bg-amber-950\/10, .bg-amber-950\/20) {
+  background-color: rgba(245, 158, 11, 0.10);
+}
+html[data-theme="light"] .ci-tema .bg-red-950\/20 {
+  background-color: rgba(239, 68, 68, 0.08);
+}
