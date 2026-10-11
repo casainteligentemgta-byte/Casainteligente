@@ -7,6 +7,8 @@ import {
   lineasDePagina,
   pareceTituloDeSeccion,
   resumenLecturaPdf,
+  tramosDeColumnas,
+  unirModelo,
   type PaginaPdf,
   type TrozoPdf,
 } from './leerListaPdf'
@@ -140,6 +142,129 @@ describe('lista como sale de Excel: modelo centrado y dos columnas de precio', (
       ],
     )
     assert.equal(leida.diagnostico.lineasSinUsar, 0)
+  })
+})
+
+describe('hoja de Excel impresa: títulos centrados, textos largos y filas numeradas', () => {
+  // Como la imprime Excel: letras de columna arriba, número de fila a la izquierda, el
+  // título «DESCRIPCION» centrado sobre un texto que empieza mucho más a la izquierda, el
+  // precio bajo un título que solo dice «INSTALADOR» y el modelo a media altura de su fila.
+  const P = 6 // alto de la letra de la tabla
+  const d = (str: string, y: number): TrozoPdf => ({ str, x: 147, y, w: 225, h: P })
+  const m = (str: string, y: number): TrozoPdf => ({ str, x: 71, y, w: str.length * 3.2, h: P })
+  const marca = (y: number): TrozoPdf => ({ str: 'MARCAX', x: 45, y, w: 17, h: P })
+  const pr = (str: string, y: number): TrozoPdf => ({ str, x: 497, y, w: 15, h: P })
+  const est = (str: string, y: number): TrozoPdf => ({ str, x: 523, y, w: str.length * 3.4, h: P })
+  const fila = (n: number, y: number): TrozoPdf => ({ str: String(n), x: 26, y, w: 5, h: 8.8 })
+  const trozos: TrozoPdf[] = [
+    ...['A', 'B', 'C', 'D', 'I', 'J'].map((l, i) => ({ str: l, x: [51, 106, 260, 418, 489, 540][i]!, y: 93, w: 5, h: 8.8 })),
+    { str: 'MARCA', x: 41, y: 118, w: 21, h: 7 }, { str: 'MODELO', x: 92, y: 118, w: 27, h: 7 }, { str: 'DESCRIPCION', x: 236, y: 118, w: 48, h: 7 },
+    { str: 'IMAGEN', x: 407, y: 118, w: 27, h: 7 }, { str: 'INSTALADOR', x: 467, y: 118, w: 45, h: 7 }, { str: 'ESTATUS', x: 525, y: 118, w: 30, h: 7 },
+    fila(1, 127),
+    // Rótulo grande de la marca, en su propia fila.
+    fila(2, 149), { str: 'MARCAX', x: 276, y: 141, w: 49, h: 17 },
+    // Fila 3: cinco líneas de descripción; modelo, precio y estatus en la del medio.
+    d('CAMARA DE PRUEBA UNO PARA INTERIOR,', 169), d('SEGUNDA LINEA DE LA UNO', 177),
+    marca(193), m('MOD-PRUEBA-400', 193), d('TERCERA LINEA DE LA UNO', 185 + 8), pr('12,34', 193), est('DISPONIBLE', 193),
+    d('CUARTA LINEA DE LA UNO', 201), d('MOVIMIENTO', 209),
+    fila(3, 219),
+    // Fila 4: el modelo no cabe y va partido en dos líneas, entre las de la descripción.
+    d('CAMARA DE PRUEBA DOS PARA EXTERIOR,', 240), d('SEGUNDA LINEA DE LA DOS', 248),
+    m('MOD-PRUEBA-401-', 252), marca(256), d('TERCERA LINEA DE LA DOS', 256), pr('1.234,50', 256), est('TRANSITO', 256), m('WKFL(4mm)', 260),
+    d('CUARTA LINEA DE LA DOS', 264),
+    fila(4, 272),
+    // Fila 5: el modelo es tan largo que llega a tocar la descripción; estatus en dos líneas.
+    d('KIT DE PRUEBA TRES CON BATERIA,', 290),
+    est('NO', 294),
+    marca(298), { str: 'MOD-PRUEBA-402(2K 4GA)-LARGO', x: 71, y: 298, w: 75.5, h: P }, d('SEGUNDA LINEA DE LA TRES', 298), pr('99,00', 298),
+    est('DISPONIBLE', 302),
+    d('TERCERA LINEA DE LA TRES', 306),
+    fila(5, 314),
+    // Fila 6: en tránsito y todavía sin precio.
+    d('PRODUCTO DE PRUEBA CUATRO', 330), marca(334), m('MOD-PRUEBA-403', 334), est('TRANSITO', 334), d('QUE VIENE EN CAMINO', 338),
+    fila(6, 346),
+    // Filas 7 y 8: el texto de la 7 no cabe y la 8 empieza pegada a ella (el paso entre líneas se rompe).
+    d('PRODUCTO DE PRUEBA CINCO, LINEA UNO', 360), d('LINEA DOS DE LA CINCO', 368),
+    marca(376), m('MOD-PRUEBA-404', 376), d('LINEA TRES DE LA CINCO', 376), pr('5,00', 376), est('DISPONIBLE', 376),
+    d('LINEA CUATRO DE LA CINCO', 384), d('LINEA CINCO DE LA CINCO', 392),
+    fila(7, 394),
+    d('SEIS', 397), d('PRODUCTO DE PRUEBA, LINEA DOS', 405),
+    marca(413), m('MOD-PRUEBA-405', 413), d('LINEA TRES DE LA SEIS', 413), pr('6,00', 413), est('DISPONIBLE', 413),
+    d('LINEA CUATRO DE LA SEIS', 421),
+    fila(8, 430),
+  ].map((tz) => ({ ...tz, y: tz.y - tz.h })) // arriba se escribió la línea base (el pie de la letra)
+  const leida = leerListaPdf([pagina(1, trozos)])
+
+  it('toma el precio de la columna «INSTALADOR» y lee cada fila con su modelo completo', () => {
+    assert.equal(leida.error, null)
+    assert.equal(leida.diagnostico.sinEncabezado, false)
+    assert.equal(leida.diagnostico.columnaPrecio, 'INSTALADOR')
+    assert.deepEqual(
+      leida.filas.map((f) => [f.modelo, f.precioUsd, f.estatus]),
+      [
+        ['MOD-PRUEBA-400', 12.34, 'disponible'],
+        ['MOD-PRUEBA-401-WKFL(4mm)', 1234.5, 'en_transito'],
+        ['MOD-PRUEBA-402(2K 4GA)-LARGO', 99, 'no_disponible'],
+        ['MOD-PRUEBA-403', null, 'en_transito'],
+        ['MOD-PRUEBA-404', 5, 'disponible'],
+        ['MOD-PRUEBA-405', 6, 'disponible'],
+      ],
+    )
+  })
+
+  it('el principio de la descripción no se va a la columna del modelo', () => {
+    assert.deepEqual(
+      leida.filas.map((f) => f.descripcion),
+      [
+        'CAMARA DE PRUEBA UNO PARA INTERIOR, SEGUNDA LINEA DE LA UNO TERCERA LINEA DE LA UNO CUARTA LINEA DE LA UNO MOVIMIENTO',
+        'CAMARA DE PRUEBA DOS PARA EXTERIOR, SEGUNDA LINEA DE LA DOS TERCERA LINEA DE LA DOS CUARTA LINEA DE LA DOS',
+        'KIT DE PRUEBA TRES CON BATERIA, SEGUNDA LINEA DE LA TRES TERCERA LINEA DE LA TRES',
+        'PRODUCTO DE PRUEBA CUATRO QUE VIENE EN CAMINO',
+        'PRODUCTO DE PRUEBA CINCO, LINEA UNO LINEA DOS DE LA CINCO LINEA TRES DE LA CINCO LINEA CUATRO DE LA CINCO LINEA CINCO DE LA CINCO',
+        'SEIS PRODUCTO DE PRUEBA, LINEA DOS LINEA TRES DE LA SEIS LINEA CUATRO DE LA SEIS',
+      ],
+    )
+  })
+
+  it('el rótulo grande es la sección; los números de fila de Excel no entran', () => {
+    assert.deepEqual(Array.from(new Set(leida.filas.map((f) => f.seccion))), ['MARCAX'])
+    assert.deepEqual(Array.from(new Set(leida.filas.map((f) => f.marca))), ['MARCAX'])
+    assert.ok(leida.filas.every((f) => !/^\d+ /.test(f.descripcion) && !/ \d$/.test(f.descripcion)))
+  })
+
+  it('el rótulo que Excel repite en cada hoja no se mete en la descripción que pisa', () => {
+    const hoja2 = trozos.map((tz) =>
+      tz.str === 'MARCAX' && tz.h === 17 ? { ...tz, y: 169 - 17 } : tz.str === '2' && tz.x === 26 ? { ...tz, str: '' } : tz,
+    )
+    const dos = leerListaPdf([pagina(1, hoja2)])
+    assert.equal(dos.filas[0]!.descripcion, leida.filas[0]!.descripcion)
+    assert.equal(dos.filas[0]!.seccion, 'MARCAX')
+  })
+})
+
+describe('piezas de la hoja de Excel', () => {
+  it('une el modelo partido en varias líneas', () => {
+    assert.equal(unirModelo(['MOD-PRUEBA-401-', 'WKFL(4mm)(US-', 'STD)(Mu)']), 'MOD-PRUEBA-401-WKFL(4mm)(US-STD)(Mu)')
+    assert.equal(unirModelo(['MOD-PRUEBA-500', '2.8MM']), 'MOD-PRUEBA-500 2.8MM')
+    assert.equal(unirModelo(['MOD-PRUEBA(3MP', 'Type-C)']), 'MOD-PRUEBA(3MP Type-C)')
+  })
+
+  it('mide las columnas sobre los datos y aparta los números de fila', () => {
+    const lineas = lineasDePagina([
+      { str: '7', x: 26, y: 100, w: 5, h: 8 }, { str: 'MOD-PRUEBA-600', x: 71, y: 100, w: 50, h: 6 }, { str: 'Texto que empieza a la izquierda', x: 147, y: 100, w: 200, h: 6 },
+      { str: '8', x: 26, y: 120, w: 5, h: 8 }, { str: 'MOD-PRUEBA-601', x: 71, y: 120, w: 50, h: 6 }, { str: 'Otro texto igual de largo que el de arriba', x: 147, y: 120, w: 200, h: 6 },
+      { str: '9', x: 26, y: 140, w: 5, h: 8 }, { str: 'MOD-PRUEBA-602', x: 71, y: 140, w: 50, h: 6 }, { str: 'Corto', x: 147, y: 140, w: 22, h: 6 },
+    ])
+    const { tramos, fuera } = tramosDeColumnas(lineas, [{ x: 92, fin: 119 }, { x: 236, fin: 284 }])
+    assert.deepEqual(tramos, [{ x: 71, fin: 121 }, { x: 147, fin: 347 }])
+    assert.deepEqual(fuera, [{ x: 26, fin: 31 }])
+  })
+
+  it('«instalador», «distribuidor» o «mayorista» anuncian la columna del precio', () => {
+    for (const titulo of ['INSTALADOR', 'Distribuidor', 'MAYORISTA', 'Integrador']) {
+      const [cab] = lineasDePagina([t('MODELO', 40, 10), t('DESCRIPCION', 150, 10), t(titulo, 400, 10)])
+      assert.deepEqual(encabezadoDeLinea(cab!)?.map((c) => c.tipo), ['modelo', 'descripcion', 'precio'], titulo)
+    }
   })
 })
 
