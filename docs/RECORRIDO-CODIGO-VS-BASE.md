@@ -24,7 +24,7 @@ La causa común: migraciones que están en el repositorio y nunca se ejecutaron 
 producción, o pantallas hechas para un esquema anterior. Hay que decidir, módulo por
 módulo, si se instala o se retira.
 
-| Módulo | Qué falta | Qué pasa hoy |
+| Módulo | Qué falta | Efecto esperado (deducido del código, no visto en pantalla) |
 | --- | --- | --- |
 | Cobros de presupuestos (abonos y cuotas) | Tablas `budget_abonos`, `budget_cuotas`; columnas `budgets.monto_pagado`, `saldo` (migración 318) | El cuadro de cobros avisa que falta la migración |
 | Rentabilidad (`/operaciones/rentabilidad`) | Vista `vw_analisis_rentabilidad` | Pantalla vacía |
@@ -40,7 +40,7 @@ módulo, si se instala o se retira.
 | Contrato de administración delegada | `contracts.pdf_url` (la tabla tiene `pdf_storage_url`) | No guarda el enlace del PDF |
 | Puntaje del cliente | `budgets.total`, `grand_total`; tabla `empresas_deprecated` | El puntaje ignora los presupuestos |
 | Alias de materiales (aprende nombres de facturas) | `ci_material_aliases` (migración 242) | Apagado en silencio |
-| Selector de personal y embudo de reclutamiento | `project_assignments.end_date` | Listas vacías |
+| Selector de personal y embudo de reclutamiento | `project_assignments.end_date` | Esas listas pueden salir vacías |
 
 ## Tolerado por el propio código (prueba una columna y, si falla, usa otra)
 
