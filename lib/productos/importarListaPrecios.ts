@@ -339,7 +339,14 @@ export function efectoEnProducto(p: ProductoActual, f: FilaLista, opciones: Opci
   const costo = costoLista != null ? costoLista : p.costo
   let precio = p.precio
   let cambiaPrecio = false
-  if (
+  // Precio base igual al costo (o sin precio): el precio sigue al costo siempre. Así se
+  // cargan las listas de distribuidor; el margen se pone al armar cada presupuesto.
+  const precioSigueAlCosto =
+    p.precio == null || p.precio <= 0 || (p.costo != null && Math.abs(p.precio - p.costo) < 0.005)
+  if (precioSigueAlCosto && costoLista != null) {
+    cambiaPrecio = p.precio == null || Math.abs(costoLista - p.precio) >= 0.005
+    precio = costoLista
+  } else if (
     opciones.mantenerMargen &&
     cambiaCosto &&
     costoLista != null &&
@@ -420,8 +427,10 @@ export function productoNuevoDesdeFila(
     categoria: categoria || categoriaSugerida(f.seccion),
     descripcion: f.descripcion || null,
     costo: precioUsable(f),
-    precio: null,
-    utilidad: null,
+    // El precio base arranca igual al costo (sin inventar margen): el margen se pone al
+    // armar cada presupuesto. Sin precio, el producto saldría en 0 en un presupuesto.
+    precio: precioUsable(f),
+    utilidad: precioUsable(f) == null ? null : 0,
     cantidad: 0,
     disponibilidad_proveedor: f.estatus,
     lista_proveedor_fecha: fechaLista,

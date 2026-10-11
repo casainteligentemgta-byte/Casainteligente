@@ -198,6 +198,21 @@ test('efecto: cambia el costo y deja el precio de venta quieto', () => {
   })
 })
 
+test('efecto: si el precio era igual al costo (o no había precio), el precio sigue al costo', () => {
+  // Precio base = costo: es como se cargan las listas de distribuidor.
+  const igual = efectoEnProducto(producto(1, 'M', 10, 10), fila(1, 'M', 12.34), { mantenerMargen: false })
+  assert.deepEqual([igual.costo, igual.precio, igual.utilidad, igual.cambiaPrecio, igual.vendeBajoCosto], [12.34, 12.34, 0, true, false])
+  // Sin precio de venta: se le pone el costo, para que no salga en 0 en un presupuesto.
+  const sinPrecio = efectoEnProducto(producto(1, 'M', 10, null), fila(1, 'M', 12.34), { mantenerMargen: false })
+  assert.deepEqual([sinPrecio.precio, sinPrecio.cambiaPrecio], [12.34, true])
+  // Con ganancia propia y el interruptor apagado, el precio no se toca.
+  const propio = efectoEnProducto(producto(1, 'M', 10, 15), fila(1, 'M', 12.34), { mantenerMargen: false })
+  assert.deepEqual([propio.precio, propio.cambiaPrecio], [15, false])
+  // Si el proveedor no lo tiene, no cambia ni el costo ni el precio.
+  const agotado = efectoEnProducto(producto(1, 'M', 10, 10), fila(1, 'M', 12.34, 'no_disponible'), { mantenerMargen: false })
+  assert.deepEqual([agotado.costo, agotado.precio, agotado.cambiaPrecio], [10, 10, false])
+})
+
 test('efecto: mantener el margen sube el precio en la misma proporción', () => {
   const e = efectoEnProducto(producto(1, 'M', 10, 20), fila(1, 'M', 12.5), { mantenerMargen: true })
   assert.equal(e.precio, 25)
@@ -283,13 +298,17 @@ test('productoNuevoDesdeFila', () => {
     categoria: 'Cámaras IP',
     descripcion: 'DESCRIPCION MOD-PRUEBA-900 2.8MM',
     costo: 33,
-    precio: null,
-    utilidad: null,
+    precio: 33,
+    utilidad: 0,
     cantidad: 0,
     disponibilidad_proveedor: 'disponible',
     lista_proveedor_fecha: '2026-09-20',
     modificado: 'AHORA',
   })
-  assert.equal(productoNuevoDesdeFila(fila(2, 'X-12345', 1, 'no_disponible'), 'Network', 'F', 'A').costo, null)
+  // Sin precio utilizable (el proveedor no lo tiene): ni costo ni precio.
+  const agotado = productoNuevoDesdeFila(fila(2, 'X-12345', 1, 'no_disponible'), 'Network', 'F', 'A')
+  assert.equal(agotado.costo, null)
+  assert.equal(agotado.precio, null)
+  assert.equal(agotado.utilidad, null)
   assert.equal(productoNuevoDesdeFila(f, 'Network', 'F', 'A').categoria, 'Network')
 })

@@ -18,6 +18,8 @@ import {
     type FilaLista,
     type ProductoActual,
 } from '@/lib/productos/importarListaPrecios';
+import { leerListaPdf, resumenLecturaPdf } from '@/lib/productos/leerListaPdf';
+import { extraerPaginasPdf } from '@/lib/productos/extraerTextoPdf';
 import { extraerDeZip, listarZip, nombreBase, tipoDeImagen, type EntradaZip } from '@/lib/productos/leerZip';
 import { tinta, tintaTexto, tonoTexto } from '@/lib/tema/tinta';
 
@@ -266,6 +268,10 @@ export default function ImportarListaPrecios() {
     const [nombreCsv, setNombreCsv] = useState('');
     const [filas, setFilas] = useState<FilaLista[] | null>(null);
     const [errorCsv, setErrorCsv] = useState<string | null>(null);
+    /** Solo para PDF: qué se leyó, el avance mientras se lee y la marca que el dueño indique. */
+    const [resumenPdf, setResumenPdf] = useState<string | null>(null);
+    const [leyendoPdf, setLeyendoPdf] = useState<string | null>(null);
+    const [marcaLista, setMarcaLista] = useState('');
 
     const [zip, setZip] = useState<File | null>(null);
     const [entradas, setEntradas] = useState<Record<string, EntradaZip>>({});
@@ -331,9 +337,16 @@ export default function ImportarListaPrecios() {
         setFechaLista((f) => f || hoyLocal());
     }, []);
 
+    /** Renglones con la marca que indicó el dueño, donde la lista no la trae (típico del PDF). */
+    const filasConMarca = useMemo(() => {
+        const marca = marcaLista.trim();
+        if (!filas || !marca) return filas;
+        return filas.map((f) => (f.marca ? f : { ...f, marca }));
+    }, [filas, marcaLista]);
+
     const plan = useMemo(
-        () => (filas && productos ? planificarImportacion(filas, productos) : null),
-        [filas, productos],
+        () => (filasConMarca && productos ? planificarImportacion(filasConMarca, productos) : null),
+        [filasConMarca, productos],
     );
 
     // Al llegar un plan nuevo: lo seguro queda marcado; lo dudoso espera al dueño.
@@ -349,15 +362,37 @@ export default function ImportarListaPrecios() {
 
     const alElegirCsv = useCallback(async (archivo: File | null) => {
         setResultado(null);
+        setResumenPdf(null);
         if (!archivo) return;
         setNombreCsv(archivo.name);
+        const esPdf = /\.pdf$/i.test(archivo.name) || archivo.type === 'application/pdf';
         try {
+            if (esPdf) {
+                // El PDF se lee aquí, en el navegador; no se sube a ningún sitio.
+                setErrorCsv(null);
+                setFilas(null);
+                setLeyendoPdf('Leyendo el PDF…');
+                const paginas = await extraerPaginasPdf(new Uint8Array(await archivo.arrayBuffer()), (n, total) =>
+                    setLeyendoPdf(`Leyendo el PDF… página ${n} de ${total}`),
+                );
+                const leida = leerListaPdf(paginas);
+                setErrorCsv(leida.error);
+                setFilas(leida.error ? null : leida.filas);
+                setResumenPdf(leida.error ? null : resumenLecturaPdf(leida.diagnostico, leida.filas.length));
+                return;
+            }
             const leida = leerListaCsv(await archivo.text());
             setErrorCsv(leida.error);
             setFilas(leida.error ? null : leida.filas);
         } catch {
-            setErrorCsv('No pude leer el archivo.');
+            setErrorCsv(
+                esPdf
+                    ? 'No pude abrir el PDF. Si está protegido con contraseña, pide una copia sin clave.'
+                    : 'No pude leer el archivo.',
+            );
             setFilas(null);
+        } finally {
+            setLeyendoPdf(null);
         }
     }, []);
 
@@ -712,18 +747,28 @@ export default function ImportarListaPrecios() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px' }}>
                     <label style={{ display: 'block' }}>
                         <span style={{ display: 'block', color: 'var(--label-primary)', fontSize: '13px', fontWeight: 700, marginBottom: '6px' }}>
-                            Lista de precios (archivo .csv)
+                            Lista de precios (PDF o CSV)
                         </span>
                         <input
                             type="file"
                             data-ilp-csv
-                            accept=".csv,text/csv"
+                            accept=".pdf,application/pdf,.csv,text/csv"
                             onChange={(ev) => void alElegirCsv(ev.target.files && ev.target.files[0] ? ev.target.files[0] : null)}
                             style={{ color: TENUE, fontSize: '13px', maxWidth: '100%' }}
                         />
+                        {leyendoPdf ? (
+                            <span data-ilp-pdf-leyendo style={{ display: 'block', color: TENUE, fontSize: '12px', marginTop: '6px' }}>
+                                {leyendoPdf}
+                            </span>
+                        ) : null}
                         {filas ? (
                             <span data-ilp-csv-ok style={{ display: 'block', color: tonoTexto(VERDE), fontSize: '12px', marginTop: '6px' }}>
                                 {nombreCsv}: {filas.length.toLocaleString('es')} renglones leídos.
+                            </span>
+                        ) : null}
+                        {filas && resumenPdf ? (
+                            <span data-ilp-pdf-resumen style={{ display: 'block', color: TENUE, fontSize: '12px', marginTop: '4px', lineHeight: 1.45 }}>
+                                Del PDF: {resumenPdf}. Revisa abajo que modelos y precios coincidan con la lista antes de aplicar.
                             </span>
                         ) : null}
                         {errorCsv ? (
@@ -775,6 +820,34 @@ export default function ImportarListaPrecios() {
                             }}
                         />
                     </label>
+                    {filas && filas.some((f) => !f.marca) ? (
+                        <label style={{ display: 'block' }}>
+                            <span style={{ display: 'block', color: 'var(--label-primary)', fontSize: '13px', fontWeight: 700, marginBottom: '6px' }}>
+                                Marca de esta lista (opcional)
+                            </span>
+                            <input
+                                type="text"
+                                data-ilp-marca
+                                value={marcaLista}
+                                onChange={(ev) => setMarcaLista(ev.target.value)}
+                                placeholder="Ej: Hikvision"
+                                style={{
+                                    background: tinta(0.06),
+                                    border: `1px solid ${tinta(0.12)}`,
+                                    borderRadius: '10px',
+                                    padding: '8px 10px',
+                                    color: 'var(--label-primary)',
+                                    fontSize: '14px',
+                                    fontFamily: 'inherit',
+                                    width: '100%',
+                                    maxWidth: '260px',
+                                }}
+                            />
+                            <span style={{ display: 'block', color: TENUE, fontSize: '12px', marginTop: '4px' }}>
+                                Se pone a los productos nuevos cuando la lista no trae la marca.
+                            </span>
+                        </label>
+                    ) : null}
                 </div>
                 {errorProductos ? (
                     <p data-ilp-error-productos style={{ color: tonoTexto(ROJO), fontSize: '13px', margin: '12px 0 0' }}>
@@ -795,7 +868,7 @@ export default function ImportarListaPrecios() {
                             mantenerMargen,
                             setMantenerMargen,
                             'Mantener mi margen',
-                            'Si el costo sube o baja, el precio de venta se mueve en la misma proporción. Apagado: el precio de venta no se toca.',
+                            'Para los productos que tienen ganancia propia: si el costo sube o baja, su precio se mueve en la misma proporción. Apagado: su precio no se toca. Los que tienen el precio igual al costo siempre siguen al costo.',
                         )}
                         {zip
                             ? interruptor(
@@ -872,7 +945,7 @@ export default function ImportarListaPrecios() {
                         id="nuevos"
                         titulo="No los tienes en tu catálogo"
                         cuenta={plan.nuevos.length}
-                        ayuda="Marca solo los que quieras agregar. Se crean sin precio de venta para que tú lo pongas."
+                        ayuda="Marca solo los que quieras agregar. Se crean con el precio igual al costo; el margen se pone al armar cada presupuesto."
                         abiertoInicial={plan.coincidencias.length === 0}
                     >
                         <div style={{ padding: '10px 16px', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -1065,7 +1138,8 @@ export default function ImportarListaPrecios() {
                         position: 'sticky',
                         bottom: '12px',
                         zIndex: 60,
-                        background: 'rgba(20,20,22,0.92)',
+                        background: 'var(--superficie-alta)',
+                        boxShadow: 'var(--sombra-tarjeta-alta)',
                         backdropFilter: 'blur(20px)',
                         WebkitBackdropFilter: 'blur(20px)',
                         border: `1px solid ${tinta(0.12)}`,
