@@ -17,7 +17,7 @@ const items: PresupuestoVista['items'] = [
   {
     nombre: 'nvr 8 canales',
     descripcion: 'grabación en red, acceso remoto',
-    categoria: 'C.C.T.V',
+    categoria: 'CCTV',
     qty: 1,
     unitPrice: 320,
     discount: 5,

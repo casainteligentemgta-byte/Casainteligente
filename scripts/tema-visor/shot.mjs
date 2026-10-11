@@ -56,9 +56,9 @@ for (const t of temas) {
     if (p === 'modal') { await pag.getByRole('button', { name: 'Ver' }).first().click(); await pag.waitForTimeout(600); }
     // «producto-detalle»: la hoja que se abre al tocar un producto. «productos-corregir»: filtro «Sin precio».
     if (p === 'producto-detalle') { await pag.getByText('Cerradura inteligente de ejemplo').first().click(); await pag.waitForTimeout(600); }
-    // «productos-sub»: categoría C.C.T.V elegida, una subcategoría activa y el formulario de crear otra.
+    // «productos-sub»: categoría CCTV elegida, una subcategoría activa y el formulario de crear otra.
     if (p === 'productos-sub') {
-      await pag.getByRole('button', { name: 'C.C.T.V', exact: true }).click(); await pag.waitForTimeout(500);
+      await pag.getByRole('button', { name: 'CCTV', exact: true }).click(); await pag.waitForTimeout(500);
       await pag.locator('[data-subcategorias]').getByRole('button', { name: 'Cámaras IP', exact: true }).click(); await pag.waitForTimeout(500);
       await pag.getByRole('button', { name: /Crear subcategoría/ }).click(); await pag.waitForTimeout(300);
     }

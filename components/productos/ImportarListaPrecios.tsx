@@ -289,7 +289,7 @@ function etiquetaSugerida(seccion: string): string {
 export default function ImportarListaPrecios() {
     const supabase = useMemo(() => createClient(), []);
     const { nombres: categoriasNombres, subcategorias: subcategoriasPorCategoria } = useCategoriasCatalogo();
-    /** Categorías y, debajo de cada una, sus subcategorías («C.C.T.V › Cámaras IP»). */
+    /** Categorías y, debajo de cada una, sus subcategorías («CCTV › Cámaras IP»). */
     const categorias = useMemo(
         () => opcionesCategoriaConSub({ categorias: categoriasNombres, subcategorias: subcategoriasPorCategoria }),
         [categoriasNombres, subcategoriasPorCategoria],

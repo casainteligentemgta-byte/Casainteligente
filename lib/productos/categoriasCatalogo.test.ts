@@ -7,6 +7,7 @@ import {
   categoriaExistenteEquivalente,
   categoriasAMostrar,
   claveNombreCategoria,
+  coloresCategoria,
   crearSubcategoriaCatalogo,
   etiquetaCategoria,
   mergeNombresCategoria,
@@ -55,7 +56,7 @@ describe('categorías del catálogo', () => {
 
 describe('subcategorías', () => {
   const FILAS: FilaCategoria[] = [
-    { id: 'c1', name: 'C.C.T.V', parent_id: null },
+    { id: 'c1', name: 'CCTV', parent_id: null },
     { id: 'c2', name: 'Domótica', parent_id: null },
     { id: 's1', name: 'Cámaras IP', parent_id: 'c1' },
     { id: 's2', name: 'Cámaras Análogas', parent_id: 'c1' },
@@ -64,17 +65,17 @@ describe('subcategorías', () => {
     { id: 's5', name: 'Huérfana', parent_id: 'no-existe' },
   ];
 
-  it('las cámaras ya no son categorías sueltas: viven dentro de C.C.T.V', () => {
+  it('las cámaras ya no son categorías sueltas: viven dentro de CCTV', () => {
     assert.ok(!(CATEGORIAS_CATALOGO_DEFAULT as readonly string[]).includes('Cámaras IP'));
     assert.ok(!(CATEGORIAS_CATALOGO_DEFAULT as readonly string[]).includes('Cámaras Análogas'));
-    assert.deepEqual(SUBCATEGORIAS_DEFAULT['C.C.T.V'], ['Cámaras IP', 'Cámaras Análogas', 'Otros dispositivos', 'Accesorios']);
+    assert.deepEqual(SUBCATEGORIAS_DEFAULT['CCTV'], ['Cámaras IP', 'Cámaras Análogas', 'Otros dispositivos', 'Accesorios']);
   });
 
   it('arma el árbol: las filas con madre son subcategorías y no aparecen como categorías', () => {
     const arbol = arbolDeFilas(FILAS);
-    assert.deepEqual(arbol.categorias, ['C.C.T.V', 'Domótica']);
+    assert.deepEqual(arbol.categorias, ['CCTV', 'Domótica']);
     assert.deepEqual(arbol.subcategorias, {
-      'C.C.T.V': ['Cámaras IP', 'Cámaras Análogas', 'Accesorios'],
+      'CCTV': ['Cámaras IP', 'Cámaras Análogas', 'Accesorios'],
       Domótica: ['Accesorios'],
     });
   });
@@ -88,28 +89,47 @@ describe('subcategorías', () => {
 
   it('a las guardadas se suman las de fábrica, sin repetir', () => {
     const arbol = arbolDeFilas(FILAS);
-    const mostradas = subcategoriasAMostrar(['C.C.T.V', 'Domótica', 'Network'], arbol.subcategorias);
-    assert.deepEqual(mostradas['C.C.T.V'], ['Cámaras IP', 'Cámaras Análogas', 'Otros dispositivos', 'Accesorios']);
+    const mostradas = subcategoriasAMostrar(['CCTV', 'Domótica', 'Network'], arbol.subcategorias);
+    assert.deepEqual(mostradas['CCTV'], ['Cámaras IP', 'Cámaras Análogas', 'Otros dispositivos', 'Accesorios']);
     assert.deepEqual(mostradas['Domótica'], ['Accesorios']);
     assert.equal(mostradas['Network'], undefined);
     // Sin tabla (sin conexión) quedan las de fábrica.
-    assert.deepEqual(subcategoriasAMostrar(['C.C.T.V'], null)['C.C.T.V']?.length, 4);
+    assert.deepEqual(subcategoriasAMostrar(['CCTV'], null)['CCTV']?.length, 4);
   });
 
   it('etiqueta «categoría › subcategoría» de ida y vuelta', () => {
-    assert.equal(etiquetaCategoria('C.C.T.V', 'Cámaras IP'), 'C.C.T.V › Cámaras IP');
+    assert.equal(etiquetaCategoria('CCTV', 'Cámaras IP'), 'CCTV › Cámaras IP');
     assert.equal(etiquetaCategoria('Network', null), 'Network');
     assert.equal(etiquetaCategoria(null, 'Cámaras IP'), '');
-    assert.deepEqual(separarEtiquetaCategoria('C.C.T.V › Cámaras IP'), { categoria: 'C.C.T.V', subcategoria: 'Cámaras IP' });
+    assert.deepEqual(separarEtiquetaCategoria('CCTV › Cámaras IP'), { categoria: 'CCTV', subcategoria: 'Cámaras IP' });
     assert.deepEqual(separarEtiquetaCategoria('Network'), { categoria: 'Network', subcategoria: '' });
     assert.deepEqual(separarEtiquetaCategoria(''), { categoria: '', subcategoria: '' });
   });
 
   it('las opciones del desplegable traen cada categoría y debajo sus subcategorías', () => {
     assert.deepEqual(
-      opcionesCategoriaConSub({ categorias: ['C.C.T.V', 'Network'], subcategorias: { 'C.C.T.V': ['Cámaras IP', 'Accesorios'] } }),
-      ['C.C.T.V', 'C.C.T.V › Cámaras IP', 'C.C.T.V › Accesorios', 'Network'],
+      opcionesCategoriaConSub({ categorias: ['CCTV', 'Network'], subcategorias: { 'CCTV': ['Cámaras IP', 'Accesorios'] } }),
+      ['CCTV', 'CCTV › Cámaras IP', 'CCTV › Accesorios', 'Network'],
     );
+  });
+});
+
+describe('«C.C.T.V» pasó a llamarse «CCTV»', () => {
+  it('los dos nombres son la misma categoría, y se muestra el nuevo', () => {
+    assert.equal(claveNombreCategoria('C.C.T.V'), claveNombreCategoria('CCTV'));
+    assert.equal(claveNombreCategoria('c.c.t.v.'), 'cctv');
+    assert.ok((CATEGORIAS_CATALOGO_DEFAULT as readonly string[]).includes('CCTV'));
+    assert.equal(categoriaExistenteEquivalente('C.C.T.V', CATEGORIAS_CATALOGO_DEFAULT), 'CCTV');
+    // Mientras la tabla aún trae el nombre viejo, no aparecen dos categorías.
+    const lista = categoriasAMostrar(['C.C.T.V', 'Network'], [], []);
+    assert.deepEqual(lista.filter((n) => claveNombreCategoria(n) === 'cctv'), ['CCTV']);
+    // Y sus subcategorías se encuentran con cualquiera de los dos nombres.
+    assert.deepEqual(subcategoriasDe({ subcategorias: { 'C.C.T.V': ['Cámaras IP'] } }, 'CCTV'), ['Cámaras IP']);
+    assert.equal(subcategoriasAMostrar(['CCTV'], { 'C.C.T.V': ['Servicios'] })['CCTV']?.includes('Servicios'), true);
+  });
+
+  it('el color es el mismo con el nombre de antes (presupuestos viejos)', () => {
+    assert.deepEqual(coloresCategoria('C.C.T.V'), coloresCategoria('CCTV'));
   });
 });
 
@@ -151,14 +171,14 @@ describe('crear una subcategoría', () => {
   }
 
   it('la guarda colgada de su categoría', async () => {
-    const base = baseFalsa([{ id: 'c1', name: 'C.C.T.V', parent_id: null }]);
-    assert.equal(await crearSubcategoriaCatalogo(base.supabase, 'C.C.T.V', '  Grabadores  '), 'Grabadores');
+    const base = baseFalsa([{ id: 'c1', name: 'CCTV', parent_id: null }]);
+    assert.equal(await crearSubcategoriaCatalogo(base.supabase, 'CCTV', '  Grabadores  '), 'Grabadores');
     assert.deepEqual(base.insertadas.map((f) => [f.name, f.parent_id]), [['Grabadores', 'c1']]);
   });
 
   it('si ya existe con otro acento, devuelve la que está y no crea otra', async () => {
     const base = baseFalsa([
-      { id: 'c1', name: 'C.C.T.V', parent_id: null },
+      { id: 'c1', name: 'CCTV', parent_id: null },
       { id: 's1', name: 'Cámaras IP', parent_id: 'c1' },
     ]);
     assert.equal(await crearSubcategoriaCatalogo(base.supabase, 'c.c.t.v', 'camaras ip'), 'Cámaras IP');
@@ -166,14 +186,14 @@ describe('crear una subcategoría', () => {
   });
 
   it('una de fábrica que aún no está guardada se guarda con su nombre de fábrica', async () => {
-    const base = baseFalsa([{ id: 'c1', name: 'C.C.T.V', parent_id: null }]);
-    assert.equal(await crearSubcategoriaCatalogo(base.supabase, 'C.C.T.V', 'accesorios'), 'Accesorios');
+    const base = baseFalsa([{ id: 'c1', name: 'CCTV', parent_id: null }]);
+    assert.equal(await crearSubcategoriaCatalogo(base.supabase, 'CCTV', 'accesorios'), 'Accesorios');
     assert.deepEqual(base.insertadas.map((f) => [f.name, f.parent_id]), [['Accesorios', 'c1']]);
   });
 
   it('el mismo nombre en otra categoría es otra subcategoría', async () => {
     const base = baseFalsa([
-      { id: 'c1', name: 'C.C.T.V', parent_id: null },
+      { id: 'c1', name: 'CCTV', parent_id: null },
       { id: 'c2', name: 'Domótica', parent_id: null },
       { id: 's1', name: 'Accesorios', parent_id: 'c1' },
     ]);
@@ -189,8 +209,8 @@ describe('crear una subcategoría', () => {
   });
 
   it('pide un nombre válido y una categoría', async () => {
-    const base = baseFalsa([{ id: 'c1', name: 'C.C.T.V', parent_id: null }]);
-    await assert.rejects(() => crearSubcategoriaCatalogo(base.supabase, 'C.C.T.V', 'x'), /mínimo 2/);
+    const base = baseFalsa([{ id: 'c1', name: 'CCTV', parent_id: null }]);
+    await assert.rejects(() => crearSubcategoriaCatalogo(base.supabase, 'CCTV', 'x'), /mínimo 2/);
     await assert.rejects(() => crearSubcategoriaCatalogo(base.supabase, '', 'Grabadores'), /categoría/);
   });
 });

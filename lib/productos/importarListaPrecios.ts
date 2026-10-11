@@ -407,11 +407,11 @@ export function nombreDesdeDescripcion(descripcion: string, modelo: string, max 
 export function ubicacionSugerida(seccion: string): { categoria: string; subcategoria: string } {
   const s = sinAcentos(seccion)
   if (/switch|router|access point|sfp|utp|metalmecanica|conector/.test(s)) return { categoria: 'Network', subcategoria: '' }
-  if (/video balun/.test(s)) return { categoria: 'C.C.T.V', subcategoria: 'Accesorios' }
-  if (/dvr|nvr|kit cctv|disco/.test(s)) return { categoria: 'C.C.T.V', subcategoria: 'Otros dispositivos' }
-  if (/camara.* ip|solucion ip|termica|kit solar|unifi/.test(s)) return { categoria: 'C.C.T.V', subcategoria: 'Cámaras IP' }
-  if (/turbo|colorvu|smart hybrid|serie iot|audio bidireccional/.test(s)) return { categoria: 'C.C.T.V', subcategoria: 'Cámaras Análogas' }
-  return { categoria: 'C.C.T.V', subcategoria: '' }
+  if (/video balun/.test(s)) return { categoria: 'CCTV', subcategoria: 'Accesorios' }
+  if (/dvr|nvr|kit cctv|disco/.test(s)) return { categoria: 'CCTV', subcategoria: 'Otros dispositivos' }
+  if (/camara.* ip|solucion ip|termica|kit solar|unifi/.test(s)) return { categoria: 'CCTV', subcategoria: 'Cámaras IP' }
+  if (/turbo|colorvu|smart hybrid|serie iot|audio bidireccional/.test(s)) return { categoria: 'CCTV', subcategoria: 'Cámaras Análogas' }
+  return { categoria: 'CCTV', subcategoria: '' }
 }
 
 /** Categoría del catálogo que mejor le va a una sección de la lista. */
