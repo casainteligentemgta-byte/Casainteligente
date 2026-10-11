@@ -20,7 +20,8 @@ import {
     type ProductoActual,
 } from '@/lib/productos/importarListaPrecios';
 import { leerListaPdf, resumenLecturaPdf } from '@/lib/productos/leerListaPdf';
-import { extraerPaginasPdf } from '@/lib/productos/extraerTextoPdf';
+import { extraerPaginasPdf, recortarFotosPdf } from '@/lib/productos/extraerTextoPdf';
+import { recortesDeFotos } from '@/lib/productos/fotosListaPdf';
 import { extraerDeZip, listarZip, nombreBase, tipoDeImagen, type EntradaZip } from '@/lib/productos/leerZip';
 import { tinta, tintaTexto, tonoTexto } from '@/lib/tema/tinta';
 
@@ -113,19 +114,39 @@ function useFotoDeZip(zip: Blob | null, entrada: EntradaZip | undefined): string
     return url;
 }
 
+/** Foto sacada del PDF (ya recortada): solo hay que mostrarla. */
+function useFotoDeBlob(blob: Blob | null | undefined): string | null {
+    const [url, setUrl] = useState<string | null>(null);
+    useEffect(() => {
+        if (!blob) {
+            setUrl(null);
+            return;
+        }
+        const creada = URL.createObjectURL(blob);
+        setUrl(creada);
+        return () => URL.revokeObjectURL(creada);
+    }, [blob]);
+    return url;
+}
+
 function Miniatura({
     actual,
     zip,
     entrada,
+    delPdf,
     usarNueva,
 }: {
     actual: string | null;
     zip: Blob | null;
     entrada: EntradaZip | undefined;
+    /** Foto del renglón sacada del PDF, si la hay. */
+    delPdf?: Blob | null;
     /** true si al aplicar se pondrá la foto de la lista. */
     usarNueva: boolean;
 }) {
-    const nueva = useFotoDeZip(usarNueva ? zip : null, usarNueva ? entrada : undefined);
+    const deZip = useFotoDeZip(usarNueva && !delPdf ? zip : null, usarNueva && !delPdf ? entrada : undefined);
+    const dePdf = useFotoDeBlob(usarNueva ? delPdf : null);
+    const nueva = dePdf ?? deZip;
     const [rota, setRota] = useState(false);
     const elegida = usarNueva && nueva ? nueva : actual;
     useEffect(() => setRota(false), [elegida]);
@@ -284,6 +305,11 @@ export default function ImportarListaPrecios() {
     const [resumenPdf, setResumenPdf] = useState<string | null>(null);
     const [leyendoPdf, setLeyendoPdf] = useState<string | null>(null);
     const [marcaLista, setMarcaLista] = useState('');
+    /** Fotos sacadas del propio PDF: nombre de la foto del renglón → imagen recortada. */
+    const [fotosPdf, setFotosPdf] = useState<Record<string, Blob>>({});
+    const [sacandoFotos, setSacandoFotos] = useState<string | null>(null);
+    /** Cambia con cada archivo elegido: lo que llegue tarde de un archivo anterior se descarta. */
+    const turnoArchivo = useRef(0);
 
     const [zip, setZip] = useState<File | null>(null);
     const [entradas, setEntradas] = useState<Record<string, EntradaZip>>({});
@@ -373,8 +399,12 @@ export default function ImportarListaPrecios() {
     }, [plan]);
 
     const alElegirCsv = useCallback(async (archivo: File | null) => {
+        const turno = (turnoArchivo.current += 1);
         setResultado(null);
         setResumenPdf(null);
+        setFotosPdf({});
+        setSacandoFotos(null);
+        fotosSubidas.current = {};
         if (!archivo) return;
         setNombreCsv(archivo.name);
         const esPdf = /\.pdf$/i.test(archivo.name) || archivo.type === 'application/pdf';
@@ -384,13 +414,31 @@ export default function ImportarListaPrecios() {
                 setErrorCsv(null);
                 setFilas(null);
                 setLeyendoPdf('Leyendo el PDF…');
-                const paginas = await extraerPaginasPdf(new Uint8Array(await archivo.arrayBuffer()), (n, total) =>
+                const datos = new Uint8Array(await archivo.arrayBuffer());
+                const paginas = await extraerPaginasPdf(datos, (n, total) =>
                     setLeyendoPdf(`Leyendo el PDF… página ${n} de ${total}`),
                 );
                 const leida = leerListaPdf(paginas);
+                // La foto de cada renglón, si el PDF la trae: se recorta aparte, sin frenar la revisión.
+                const recortes = leida.error ? [] : recortesDeFotos(paginas, leida.ubicaciones);
+                const fotoDeFila: Record<number, string> = {};
+                for (const r of recortes) fotoDeFila[r.n] = r.clave;
                 setErrorCsv(leida.error);
-                setFilas(leida.error ? null : leida.filas);
+                setFilas(leida.error ? null : leida.filas.map((f) => (fotoDeFila[f.n] ? { ...f, foto: fotoDeFila[f.n]! } : f)));
                 setResumenPdf(leida.error ? null : resumenLecturaPdf(leida.diagnostico, leida.filas.length));
+                if (recortes.length > 0) {
+                    setSacandoFotos('Sacando las fotos del PDF…');
+                    void recortarFotosPdf(datos, recortes, (hechas, total) => {
+                        if (turnoArchivo.current === turno) setSacandoFotos(`Sacando las fotos del PDF… página ${hechas} de ${total}`);
+                    })
+                        .then((fotos) => {
+                            if (turnoArchivo.current === turno) setFotosPdf(fotos);
+                        })
+                        .catch(() => undefined)
+                        .finally(() => {
+                            if (turnoArchivo.current === turno) setSacandoFotos(null);
+                        });
+                }
                 return;
             }
             const leida = leerListaCsv(await archivo.text());
@@ -451,11 +499,13 @@ export default function ImportarListaPrecios() {
     /** ¿Se le pondrá a este producto la foto de la lista? */
     const llevaFotoNueva = useCallback(
         (p: ProductoActual | null, f: FilaLista | null): boolean => {
-            if (!zip || !ponerFotos || !f || !f.foto || !entradas[f.foto]) return false;
+            if (!ponerFotos || !f || !f.foto) return false;
+            const hayFoto = Boolean(fotosPdf[f.foto]) || Boolean(zip && entradas[f.foto]);
+            if (!hayFoto) return false;
             if (p && p.imagen && p.imagen.trim() && !reemplazarFotos) return false;
             return true;
         },
-        [zip, ponerFotos, entradas, reemplazarFotos],
+        [zip, ponerFotos, entradas, fotosPdf, reemplazarFotos],
     );
 
     const grupos = useMemo(() => {
@@ -507,6 +557,18 @@ export default function ImportarListaPrecios() {
         (foto: string): Promise<string | null> => {
             const ya = fotosSubidas.current[foto];
             if (ya) return ya;
+            const delPdf = fotosPdf[foto];
+            if (delPdf) {
+                const subidaPdf = uploadProductImage(supabase, new File([delPdf], foto, { type: 'image/jpeg' })).then(({ url, error }) => {
+                    if (error || !url) throw new Error(error || 'No se pudo subir la foto.');
+                    return url;
+                });
+                fotosSubidas.current[foto] = subidaPdf;
+                subidaPdf.catch(() => {
+                    delete fotosSubidas.current[foto];
+                });
+                return subidaPdf;
+            }
             const entrada = entradas[foto];
             if (!zip || !entrada) return Promise.resolve(null);
             const tipo = tipoDeImagen(entrada.nombre);
@@ -523,7 +585,7 @@ export default function ImportarListaPrecios() {
             });
             return subida;
         },
-        [entradas, zip, supabase],
+        [entradas, zip, fotosPdf, supabase],
     );
 
     const aplicar = useCallback(async () => {
@@ -631,6 +693,7 @@ export default function ImportarListaPrecios() {
                     actual={c.producto.imagen}
                     zip={zip}
                     entrada={f ? entradas[f.foto] : undefined}
+                    delPdf={f ? fotosPdf[f.foto] : undefined}
                     usarNueva={llevaFotoNueva(c.producto, f)}
                 />
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -749,6 +812,8 @@ export default function ImportarListaPrecios() {
     );
 
     const cuentaFotos = Object.keys(entradas).length;
+    const cuentaFotosPdf = Object.keys(fotosPdf).length;
+    const hayFotosDeLista = Boolean(zip) || cuentaFotosPdf > 0;
 
     return (
         <div data-ilp style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '900px', margin: '0 auto' }}>
@@ -784,6 +849,16 @@ export default function ImportarListaPrecios() {
                                 Del PDF: {resumenPdf}. Revisa abajo que modelos y precios coincidan con la lista antes de aplicar.
                             </span>
                         ) : null}
+                        {filas && sacandoFotos ? (
+                            <span data-ilp-pdf-fotos-sacando style={{ display: 'block', color: TENUE, fontSize: '12px', marginTop: '4px' }}>
+                                {sacandoFotos}
+                            </span>
+                        ) : null}
+                        {filas && !sacandoFotos && cuentaFotosPdf > 0 ? (
+                            <span data-ilp-pdf-fotos style={{ display: 'block', color: tonoTexto(VERDE), fontSize: '12px', marginTop: '4px' }}>
+                                {cuentaFotosPdf === 1 ? '1 foto sacada del PDF.' : `${cuentaFotosPdf.toLocaleString('es')} fotos sacadas del PDF.`}
+                            </span>
+                        ) : null}
                         {errorCsv ? (
                             <span data-ilp-csv-error style={{ display: 'block', color: tonoTexto(ROJO), fontSize: '12px', marginTop: '6px' }}>
                                 {errorCsv}
@@ -792,7 +867,7 @@ export default function ImportarListaPrecios() {
                     </label>
                     <label style={{ display: 'block' }}>
                         <span style={{ display: 'block', color: 'var(--label-primary)', fontSize: '13px', fontWeight: 700, marginBottom: '6px' }}>
-                            Fotos (archivo .zip, opcional)
+                            Fotos (archivo .zip, opcional; del PDF salen solas)
                         </span>
                         <input
                             type="file"
@@ -883,7 +958,7 @@ export default function ImportarListaPrecios() {
                             'Mantener mi margen',
                             'Para los productos que tienen ganancia propia: si el costo sube o baja, su precio se mueve en la misma proporción. Apagado: su precio no se toca. Los que tienen el precio igual al costo siempre siguen al costo.',
                         )}
-                        {zip
+                        {hayFotosDeLista
                             ? interruptor(
                                   'fotos',
                                   ponerFotos,
@@ -892,7 +967,7 @@ export default function ImportarListaPrecios() {
                                   'Solo a productos sin foto. Las fotos que ya subiste se respetan.',
                               )
                             : null}
-                        {zip && ponerFotos
+                        {hayFotosDeLista && ponerFotos
                             ? interruptor(
                                   'reemplazar',
                                   reemplazarFotos,
@@ -1061,7 +1136,7 @@ export default function ImportarListaPrecios() {
                                     onChange={(ev) => setNuevosMarcados((prev) => ({ ...prev, [f.n]: ev.target.checked }))}
                                     style={{ width: '20px', height: '20px', marginTop: '16px', accentColor: NARANJA, flexShrink: 0 }}
                                 />
-                                <Miniatura actual={null} zip={zip} entrada={entradas[f.foto]} usarNueva={llevaFotoNueva(null, f)} />
+                                <Miniatura actual={null} zip={zip} entrada={entradas[f.foto]} delPdf={fotosPdf[f.foto]} usarNueva={llevaFotoNueva(null, f)} />
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
                                         <span style={{ color: 'var(--label-primary)', fontSize: '14px', fontWeight: 700, overflowWrap: 'anywhere' }}>{f.modelo}</span>
@@ -1091,6 +1166,9 @@ export default function ImportarListaPrecios() {
                                                 value={categoriaNuevo[f.n] ?? etiquetaSugerida(f.seccion)}
                                                 onChange={(ev) => setCategoriaNuevo((prev) => ({ ...prev, [f.n]: ev.target.value }))}
                                                 style={{
+                                                    flex: 1,
+                                                    minWidth: 0,
+                                                    maxWidth: '100%',
                                                     background: 'var(--bg-secondary)',
                                                     border: `1px solid ${tinta(0.12)}`,
                                                     borderRadius: '8px',
@@ -1200,7 +1278,7 @@ export default function ImportarListaPrecios() {
                         <button
                             type="button"
                             data-ilp-aplicar
-                            disabled={totalCambios === 0 || Boolean(progreso)}
+                            disabled={totalCambios === 0 || Boolean(progreso) || Boolean(sacandoFotos)}
                             onClick={() => setConfirmar(true)}
                             style={{
                                 ...botonSecundario,

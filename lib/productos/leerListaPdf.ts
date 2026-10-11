@@ -12,11 +12,19 @@
  * no parece un producto se cuenta aparte para que el dueño lo vea.
  */
 import { leerPrecio, type EstatusProveedor, type FilaLista, type ListaLeida } from './importarListaPrecios'
+import type { ImagenPdf, UbicacionFila } from './fotosListaPdf'
 
 /** Un trozo de texto del PDF. `y` crece hacia abajo; `x`,`w`,`h` en puntos de página. */
 export type TrozoPdf = { str: string; x: number; y: number; w: number; h: number }
 
-export type PaginaPdf = { numero: number; trozos: TrozoPdf[] }
+export type PaginaPdf = {
+  numero: number
+  trozos: TrozoPdf[]
+  /** Dónde está cada imagen de la página (para sacar la foto de cada producto). */
+  imagenes?: ImagenPdf[]
+  ancho?: number
+  alto?: number
+}
 
 export type DiagnosticoPdf = {
   paginas: number
@@ -30,7 +38,11 @@ export type DiagnosticoPdf = {
   esImagen: boolean
 }
 
-export type ListaPdfLeida = ListaLeida & { diagnostico: DiagnosticoPdf }
+export type ListaPdfLeida = ListaLeida & {
+  diagnostico: DiagnosticoPdf
+  /** A qué altura de su página quedó cada renglón (para darle su foto). */
+  ubicaciones: UbicacionFila[]
+}
 
 type Parte = { texto: string; x: number; fin: number }
 /** `partes`: los trozos del PDF que forman la celda, por si hay que volver a separarla. */
@@ -381,11 +393,13 @@ export function leerListaPdf(paginas: readonly PaginaPdf[]): ListaPdfLeida {
       error:
         'Este PDF no trae texto: es una foto o un escaneo. Pide al proveedor el PDF original (el que se puede copiar y pegar) o la lista en Excel.',
       diagnostico,
+      ubicaciones: [],
     }
   }
 
   const hayEncabezado = porPagina.some((p) => p.lineas.some((l) => encabezadoDeLinea(l)))
   const filas: FilaLista[] = []
+  const ubicaciones: UbicacionFila[] = []
   let columnas: ColumnaTabla[] | null = null
   let seccion = ''
 
@@ -621,6 +635,7 @@ export function leerListaPdf(paginas: readonly PaginaPdf[]): ListaPdfLeida {
         diagnostico.columnaPrecio = cols[iPrecio]?.titulo ?? ''
         const descripcion = (descripciones.get(ancla) ?? []).map((t) => t.texto).join(' ').replace(/\s+/g, ' ').trim()
         filas.push(filaDesde(filas.length + 1, pagina.numero, seccion, ancla.marca, modelo, descripcion, ancla.precio, ancla.estatus, iEstatus >= 0))
+        ubicaciones.push({ n: filas.length, pagina: pagina.numero, y: ancla.y - ancla.h / 2, yEncabezado: iCabecera >= 0 ? pagina.lineas[iCabecera]!.y : 0 })
       }
       // Una sección al final de la página vale para la siguiente.
       const ultimaSeccion = secciones[secciones.length - 1]
@@ -650,6 +665,7 @@ export function leerListaPdf(paginas: readonly PaginaPdf[]): ListaPdfLeida {
         filas.push(
           filaDesde(filas.length + 1, pagina.numero, '', '', celdas[iModelo]!.texto, descripcion, celdas[iPrecio]!.texto, estatusTexto, false),
         )
+        ubicaciones.push({ n: filas.length, pagina: pagina.numero, y: linea.y - linea.h / 2, yEncabezado: 0 })
       }
     }
   }
@@ -660,9 +676,10 @@ export function leerListaPdf(paginas: readonly PaginaPdf[]): ListaPdfLeida {
       error:
         'No encontré en el PDF una tabla con modelo y precio. Si la lista viene en otro formato, súbela como CSV o mándamela para ajustar la lectura.',
       diagnostico,
+      ubicaciones: [],
     }
   }
-  return { filas, error: null, diagnostico }
+  return { filas, error: null, diagnostico, ubicaciones }
 }
 
 /** Frase corta para la pantalla: qué se leyó del PDF. */
