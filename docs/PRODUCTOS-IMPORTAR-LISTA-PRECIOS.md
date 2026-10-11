@@ -76,3 +76,13 @@ muestra la ganancia en rojo cuando no deja nada.
 En el catálogo, con «Todas» y sin búsqueda, aparece la fila **Por corregir** con los
 productos sin precio, sin categoría o con el nombre repetido. Tocar una opción filtra la
 lista para editarlos uno por uno.
+
+## Categorías
+
+- La lista de categorías sale de la tabla `product_categories` más las de base del código.
+  Los nombres se comparan sin distinguir acentos ni mayúsculas.
+- Cámaras: lo que **es** una cámara (o un kit con cámaras) va en «Cámaras IP» o «Cámaras
+  Análogas» (Turbo HD, TVI, analógica). No van ahí los servicios («Reubicación de cámara»),
+  los accesorios («soporte para cámara»), los grabadores ni los equipos de domótica que
+  solo mencionan una cámara en su descripción (videoporteros, cerraduras, detectores).
+- Para quitar una categoría: pasar antes sus productos a otra y borrar la fila en la tabla.
