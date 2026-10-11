@@ -93,11 +93,11 @@ async function labelObra(
   try {
     const { data } = await supabase
       .from('ci_proyectos')
-      .select('nombre, codigo')
+      .select('nombre, codigo_lulo')
       .eq('id', proyectoId)
       .maybeSingle();
     const nombre = String((data as { nombre?: string } | null)?.nombre ?? '').trim();
-    const codigo = String((data as { codigo?: string } | null)?.codigo ?? '').trim();
+    const codigo = String((data as { codigo_lulo?: string } | null)?.codigo_lulo ?? '').trim();
     if (nombre) return codigo ? `${codigo} · ${nombre}` : nombre;
   } catch {
     /* ignore */

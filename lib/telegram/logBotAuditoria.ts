@@ -383,10 +383,10 @@ export async function resolverDetalleCallbackProcuraLog(
       try {
         const { data } = await supabase
           .from('global_inventory')
-          .select('nombre')
+          .select('name')
           .eq('id', matId)
           .maybeSingle();
-        const nombre = (data as { nombre?: string } | null)?.nombre?.trim();
+        const nombre = (data as { name?: string } | null)?.name?.trim();
         if (nombre) return nombre;
       } catch {
         /* ignore */
