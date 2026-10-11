@@ -5,44 +5,15 @@
 - **URL:** `/nexus` (shell propio; oculta la barra inferior del CRM clásico).
 - **Stack:** Next.js App Router, Tailwind, Radix UI, Framer Motion, Drizzle ORM + PostgreSQL.
 
-## Relación con CRM construcción (`customers`)
+## Clientes: un solo directorio (`customers`)
 
-**Decisión producto (Fase 3):** puente futuro `nexus_clients` → `customers`. **No implementado aún.**
+Desde octubre de 2026 la aplicación tiene **un solo directorio de clientes**: la tabla
+`customers`, en `/clientes`. El directorio propio de Nexus (`nexus_clients`, pantalla
+`/nexus/clientes`) se retiró: nunca tuvo registros. El enlace antiguo lleva a `/clientes`,
+igual que `/clientes/crm` y `/personas`.
 
-| Capa | Tabla / ruta | Uso hoy |
-|------|----------------|---------|
-| **Operativo construcción** | `customers` · `/clientes` | Obras, compras, Telegram, presupuestos reales |
-| **Nexus domótica** | `nexus_clients` · `/nexus/clientes` | Demo / vertical smart home; **aislado** de contabilidad |
-
-Nexus **no** alimenta `contabilidad_compras`, `ci_proyectos` ni recepción en campo. Si buscas el cliente de una obra (ej. Flamboyant / DIMAQUINAS), usa **`/clientes`**, no Nexus.
-
-### Puente planificado (fuera de alcance actual)
-
-Objetivo: al crear o actualizar un registro en `nexus_clients`, poder **vincular o replicar** en `customers` para unificar directorio comercial sin perder el módulo Nexus.
-
-**Mapeo de campos propuesto:**
-
-| `nexus_clients` | `customers` |
-|-----------------|-------------|
-| `type = person` | `customer_type = natural` |
-| `type = organization` | `customer_type = juridico` · `razon_social` |
-| `display_name` | `nombre` / `razon_social` (según tipo) |
-| `email` | `email` |
-| `phone` | `telefono` / `movil` |
-| `tax_id` | `rif` (normalizar prefijo V/J/E) |
-| `notes` | metadata futura o campo libre |
-
-**Cambios de esquema sugeridos (cuando se implemente):**
-
-- Columna `nexus_clients.customer_id uuid references customers(id)` (nullable, único).
-- Índice por `tax_id` / `email` para deduplicar antes de insertar en `customers`.
-- Script one-shot `scripts/sync-nexus-clients-to-customers.mjs` (modo dry-run + apply).
-- Helper de mapeo (sin sync): `lib/nexus/puenteCustomersFuturo.ts`.
-- RLS en `nexus_*` alineada con `authenticated`.
-
-**Fuera de alcance de la Fase 3:** sync automático, webhooks, unificación de `nexus_proposals` con `budgets`, ni borrado de tablas `nexus_*`.
-
-**CRM canónico hasta entonces:** solo `customers` + `ci_proyectos.customer_id`.
+Las tablas `nexus_clients` y `nexus_client_properties` siguen en la base, vacías, porque
+otras tablas `nexus_*` (propuestas, proyectos de instalación) apuntan a ellas. No se usan.
 
 ## Marca visual (Neon-Glass)
 
@@ -55,7 +26,7 @@ Objetivo: al crear o actualizar un registro en `nexus_clients`, poder **vincular
 | Ruta | Descripción |
 |------|-------------|
 | `/nexus` | Panel y accesos |
-| `/nexus/clientes` | Directorio + inmuebles (`nexus_client_properties`) |
+| `/clientes` | Directorio único de clientes (fuera del shell Nexus) |
 | `/nexus/catalogo` | Catálogo maestro hardware/servicio |
 | `/nexus/builder` | Nexus Builder (DnD + totales + margen) |
 | `/nexus/proyectos` | Obra + timeline (demo) |
@@ -77,7 +48,6 @@ Tablas con prefijo `nexus_*` para no chocar con `customers`, `budgets`, etc.
 
 ## Próximos pasos sugeridos
 
-- **Puente `nexus_clients` → `customers`** (ver sección arriba; decisión Luis: opción C).
 - Server Actions CRUD catálogo y clientes.
 - Persistir líneas del Builder en `nexus_proposals` / `nexus_proposal_lines`.
 - Tras firma, guardar en `nexus_signatures` y actualizar `nexus_proposals.status` → `contract_signed`.

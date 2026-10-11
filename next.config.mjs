@@ -84,6 +84,12 @@ const nextConfig = {
       { source: '/almacen/trazabilidad', destination: '/almacen?cuadro=trazabilidad', permanent: false },
       { source: '/almacen/procurement', destination: '/almacen/recepcion?tab=transito', permanent: true },
       { source: '/almacen/procurement/quality', destination: '/almacen/recepcion?tab=transito', permanent: true },
+      // Un solo directorio de clientes: /clientes. Las vistas antiguas llevan ahí.
+      { source: '/clientes/crm', destination: '/clientes', permanent: false },
+      { source: '/personas', destination: '/clientes', permanent: false },
+      { source: '/personas/:path*', destination: '/clientes', permanent: false },
+      { source: '/nexus/clientes', destination: '/clientes', permanent: false },
+      { source: '/nexus/clientes/:path*', destination: '/clientes', permanent: false },
     ];
   },
 

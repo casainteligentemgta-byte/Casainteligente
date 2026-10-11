@@ -743,11 +743,7 @@ export default function NuevoProyectoModuloPage() {
                   <Link href="/clientes" className="font-semibold text-sky-400 underline hover:text-sky-300">
                     Clientes
                   </Link>
-                  ). Si tus fichas están solo en{' '}
-                  <Link href="/personas" className="font-semibold text-sky-400 underline hover:text-sky-300">
-                    Personas
-                  </Link>
-                  , hay que dar de alta un cliente en Clientes para poder elegirlo aquí.
+                  ). Da de alta el cliente ahí para poder elegirlo aquí.
                 </p>
                 <p className="text-zinc-500">
                   Revisa <code className="rounded bg-white/10 px-1">NEXT_PUBLIC_SUPABASE_*</code> en{' '}

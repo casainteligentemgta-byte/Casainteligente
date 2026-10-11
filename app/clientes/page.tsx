@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, useCallback } from 'react';
 import ClienteCard from '@/components/clientes/ClienteCard';
+import { contarVinculosCliente, motivoNoBorrarCliente } from '@/lib/clientes/presupuestosCliente';
 import { withTimeout } from '@/lib/http/withTimeout';
 import { createClient } from '@/lib/supabase/client';
 import type { CustomerListItem } from '@/types';
@@ -210,6 +211,17 @@ export default function ClientesPage() {
             supabase = createClient();
         } catch {
             alert('No se pudo conectar a Supabase. Revisa .env.local.');
+            return;
+        }
+        // Un cliente con presupuestos u obras no se borra: sus documentos quedarían sin dueño.
+        const { vinculos, error: errVinculos } = await contarVinculosCliente(supabase, id);
+        if (errVinculos) {
+            alert('No se pudo comprobar si el cliente tiene presupuestos u obras. No se eliminó. ' + errVinculos);
+            return;
+        }
+        const motivo = motivoNoBorrarCliente(vinculos);
+        if (motivo) {
+            alert(motivo);
             return;
         }
         const { error } = await supabase.from('customers').delete().eq('id', id);

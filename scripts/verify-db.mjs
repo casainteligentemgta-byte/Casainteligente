@@ -96,7 +96,7 @@ async function main() {
       console.log('✅ Tablas presentes:', Array.from(new Set(okList)).join(', '));
       if (missingNexus.length > 0) {
         console.error('\n⚠️  Falta esquema Nexus Home:', missingNexus.join(', '));
-        console.error('   La ruta /nexus/clientes (Drizzle) fallará hasta ejecutar:');
+        console.error('   Las pantallas de Nexus (Drizzle) fallarán hasta ejecutar:');
         console.error('   supabase/migrations/011_nexus_home_schema.sql');
         console.error('   (Supabase → SQL Editor → pegar archivo completo → Run.)\n');
       }

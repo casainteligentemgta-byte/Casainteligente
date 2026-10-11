@@ -1,8 +1,8 @@
 /**
  * Registro de módulos core Nexus Home (rutas y descripción para navegación y docs).
  *
- * Clientes operativos de construcción: tabla `customers` (/clientes), no `nexus_clients`.
- * Puente futuro nexus → customers documentado en docs/NEXUS-HOME.md (sin sync implementado).
+ * Clientes: un solo directorio, la tabla `customers` (/clientes). El directorio propio de
+ * Nexus (`nexus_clients`, /nexus/clientes) se retiró; nunca tuvo registros.
  */
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -32,9 +32,9 @@ export const NEXUS_MODULES: NexusModule[] = [
     group: 'core',
   },
   {
-    href: '/nexus/clientes',
+    href: '/clientes',
     label: 'Clientes',
-    description: 'Directorio B2C / B2B e inmuebles',
+    description: 'Directorio único de clientes',
     icon: Building2,
     group: 'core',
   },
