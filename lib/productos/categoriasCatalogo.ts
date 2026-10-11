@@ -209,29 +209,35 @@ async function listarDesdeProductos(supabase: SupabaseClient): Promise<string[]>
     .filter(Boolean);
 }
 
-async function sincronizarExtrasEnTabla(
-  supabase: SupabaseClient,
-  extras: readonly string[],
-  actuales: readonly string[],
-): Promise<void> {
-  // Las categorías de base cuentan como existentes: si un navegador guardó «Domotica»,
-  // no se vuelve a crear al lado de «Domótica».
-  const have = new Set([...CATEGORIAS_CATALOGO_DEFAULT, ...actuales].map((n) => claveNombre(n)));
-  for (const extra of extras) {
-    const name = normalizarNombreCategoria(extra);
-    if (!name || have.has(claveNombre(name))) continue;
-    const { error } = await supabase.from('product_categories').insert({
-      name,
-      kind: 'personalizada',
-      sort_order: 500,
-      color: colorHexCategoria(name),
-    });
-    if (!error) have.add(claveNombre(name));
+/** Las categorías «extra» que algún navegador guardó antes de existir la tabla. */
+function olvidarCategoriasExtrasLocal(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem(CATEGORIAS_EXTRAS_LS_KEY);
+  } catch {
+    /* sin almacenamiento */
   }
 }
 
+/**
+ * Qué categorías se muestran.
+ *
+ * La tabla `product_categories` manda. Antes, cada navegador volvía a crear en la tabla
+ * las categorías que tenía guardadas en su memoria local, así que una categoría borrada
+ * («Opción 3») reaparecía sola. Ahora la memoria local solo se usa si la tabla no responde.
+ */
+export function categoriasAMostrar(
+  deTabla: readonly string[] | null,
+  deProductos: readonly string[],
+  extrasLocales: readonly string[],
+): string[] {
+  if (deTabla && deTabla.length > 0) {
+    return mergeNombresCategoria(CATEGORIAS_CATALOGO_DEFAULT, deTabla);
+  }
+  return mergeNombresCategoria(CATEGORIAS_CATALOGO_DEFAULT, deProductos, extrasLocales);
+}
+
 export async function listarCategoriasCatalogo(supabase: SupabaseClient): Promise<string[]> {
-  const extras = leerCategoriasExtrasLocal();
   let fromTable: string[] | null = null;
   try {
     fromTable = await listarDesdeTabla(supabase);
@@ -239,30 +245,18 @@ export async function listarCategoriasCatalogo(supabase: SupabaseClient): Promis
     fromTable = null;
   }
 
-  if (fromTable && extras.length > 0) {
-    try {
-      await sincronizarExtrasEnTabla(supabase, extras, fromTable);
-      fromTable = (await listarDesdeTabla(supabase)) ?? fromTable;
-    } catch {
-      /* ignore */
-    }
+  if (fromTable && fromTable.length > 0) {
+    olvidarCategoriasExtrasLocal();
+    return categoriasAMostrar(fromTable, [], []);
   }
 
   let fromProducts: string[] = [];
-  if (!fromTable || fromTable.length === 0) {
-    try {
-      fromProducts = await listarDesdeProductos(supabase);
-    } catch {
-      fromProducts = [];
-    }
+  try {
+    fromProducts = await listarDesdeProductos(supabase);
+  } catch {
+    fromProducts = [];
   }
-
-  return mergeNombresCategoria(
-    CATEGORIAS_CATALOGO_DEFAULT,
-    fromTable ?? [],
-    fromProducts,
-    extras,
-  );
+  return categoriasAMostrar(fromTable, fromProducts, leerCategoriasExtrasLocal());
 }
 
 export async function crearCategoriaCatalogo(
@@ -279,10 +273,7 @@ export async function crearCategoriaCatalogo(
       ...CATEGORIAS_CATALOGO_DEFAULT,
       ...enTabla,
     ]);
-    if (existenteNombre) {
-      guardarCategoriaExtraLocal(existenteNombre);
-      return existenteNombre;
-    }
+    if (existenteNombre) return existenteNombre;
 
     const { data, error } = await supabase
       .from('product_categories')
@@ -296,9 +287,7 @@ export async function crearCategoriaCatalogo(
       .single();
 
     if (!error && data?.name) {
-      const creado = normalizarNombreCategoria(String(data.name));
-      guardarCategoriaExtraLocal(creado);
-      return creado;
+      return normalizarNombreCategoria(String(data.name));
     }
 
     if (error && /duplicate|unique/i.test(error.message)) {
@@ -307,9 +296,7 @@ export async function crearCategoriaCatalogo(
         .select('name')
         .ilike('name', name)
         .maybeSingle();
-      const dupName = normalizarNombreCategoria(String(dup?.name ?? '')) || name;
-      guardarCategoriaExtraLocal(dupName);
-      return dupName;
+      return normalizarNombreCategoria(String(dup?.name ?? '')) || name;
     }
   } catch {
     /* tabla ausente o red: se guarda en local */
