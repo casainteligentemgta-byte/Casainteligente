@@ -59,3 +59,20 @@ UTF-8, separado por comas o punto y coma. Columnas (el orden no importa):
 - En el catálogo (`app/productos/page.tsx`) aparece la etiqueta «Proveedor: no disponible» o «en tránsito».
 
 Pruebas: `tsx --test lib/productos/*.test.ts`.
+
+
+## Precio del catálogo y margen del presupuesto
+
+El **precio** guardado en cada producto es la base. Al armar un presupuesto (`/ventas`) el
+margen empieza en **0 %** y el operador lo sube ahí mismo; el precio de cada renglón es
+`precio × (1 + margen)`. Hasta octubre de 2026 el margen arrancaba en 20 %.
+
+Ojo: en la mayoría de los productos cargados desde listas de distribuidor el precio es igual
+al costo. Con margen 0 % esos renglones se venden al costo; el resumen del presupuesto
+muestra la ganancia en rojo cuando no deja nada.
+
+## Fichas por corregir
+
+En el catálogo, con «Todas» y sin búsqueda, aparece la fila **Por corregir** con los
+productos sin precio, sin categoría o con el nombre repetido. Tocar una opción filtra la
+lista para editarlos uno por uno.

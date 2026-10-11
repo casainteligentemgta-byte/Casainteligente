@@ -57,6 +57,7 @@ function saveVentasCustomersToCache(rows: CustomerPickerRow[]) {
 }
 
 const MARGIN_PRESETS = [0, 10, 15, 20];
+const MARGEN_INICIAL_PRESUPUESTO = 0;
 
 function demoLineItems(): LineItem[] {
     const demoItem = (
@@ -101,7 +102,11 @@ function VentasContent() {
     const [items, setItems] = useState<LineItem[]>(() => (isDemo ? demoLineItems() : []));
     /** Con productos en la lista, el buscador se oculta hasta “Agregar producto”. */
     const [showProductSearch, setShowProductSearch] = useState(!isDemo);
-    const [globalMargin, setGlobalMargin] = useState(20);
+    /**
+     * Margen sobre el precio del catálogo. Empieza en 0 %: el operador lo sube al armar
+     * cada presupuesto (decisión del dueño, oct 2026). Antes arrancaba en 20 %.
+     */
+    const [globalMargin, setGlobalMargin] = useState(MARGEN_INICIAL_PRESUPUESTO);
     const [clientName, setClientName] = useState('');
     const [clientRif, setClientRif] = useState('');
     const [clientPhone, setClientPhone] = useState('');
@@ -1332,7 +1337,7 @@ function VentasContent() {
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '20px' }}>
                             {[
                                 { label: 'Costo Total', value: `$${formatUSD(totalCost)}`, color: '#FF3B30', icon: '📦' },
-                                { label: 'Ganancia', value: `$${formatUSD(totalProfit)}`, color: '#34C759', icon: '💰' },
+                                { label: 'Ganancia', value: `$${formatUSD(totalProfit)}`, color: totalProfit > 0 ? '#34C759' : '#FF3B30', icon: '💰' },
                                 { label: 'Margen', value: `${marginPct.toFixed(1)}%`, color: marginPct >= 20 ? '#34C759' : '#FF9500', icon: '📊' },
                             ].map(s => (
                                 <div key={s.label} style={{

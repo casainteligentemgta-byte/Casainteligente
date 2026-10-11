@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import ImportarListaPrecios from '@/components/productos/ImportarListaPrecios';
+import { tinta } from '@/lib/tema/tinta';
 
 export default function ImportarListaPreciosPage() {
     return (
@@ -11,10 +12,10 @@ export default function ImportarListaPreciosPage() {
                     position: 'sticky',
                     top: 0,
                     zIndex: 50,
-                    background: 'rgba(0,0,0,0.65)',
+                    background: 'var(--barra-fondo)',
                     backdropFilter: 'blur(30px)',
                     WebkitBackdropFilter: 'blur(30px)',
-                    borderBottom: '1px solid rgba(255,255,255,0.07)',
+                    borderBottom: `1px solid ${tinta(0.07)}`,
                     padding: '16px 20px',
                     display: 'flex',
                     alignItems: 'center',
@@ -25,7 +26,7 @@ export default function ImportarListaPreciosPage() {
                     href="/productos"
                     aria-label="Volver al catálogo"
                     style={{
-                        background: 'rgba(255,255,255,0.08)',
+                        background: tinta(0.08),
                         borderRadius: '10px',
                         width: '34px',
                         height: '34px',
@@ -36,7 +37,7 @@ export default function ImportarListaPreciosPage() {
                     }}
                 >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                        <path d="M15 18l-6-6 6-6" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M15 18l-6-6 6-6" stroke="var(--label-primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                 </Link>
                 <div style={{ flex: 1 }}>
@@ -45,7 +46,7 @@ export default function ImportarListaPreciosPage() {
                     </h1>
                     <p style={{ fontSize: '12px', color: 'var(--label-secondary)', marginTop: '2px' }}>
                         Costos, disponibilidad y fotos del proveedor.{' '}
-                        <Link href="/productos/cargar-catalogos-2026" style={{ color: '#FF9500', fontWeight: 700 }}>
+                        <Link href="/productos/cargar-catalogos-2026" style={{ color: 'var(--tono-naranja)', fontWeight: 700 }}>
                             Listas 2026 ya armadas
                         </Link>
                     </p>

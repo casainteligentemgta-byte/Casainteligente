@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useCategoriasCatalogo } from '@/lib/productos/useCategoriasCatalogo';
+import { tinta, tintaTexto } from '@/lib/tema/tinta';
 
 const NUEVA_OPCION = '__nueva_categoria__';
 
@@ -109,7 +110,7 @@ export default function SelectorCategoriaProducto({
                 borderRadius: '10px',
                 border: 'none',
                 background: 'rgba(52,199,89,0.2)',
-                color: '#34C759',
+                color: 'var(--tono-verde)',
                 fontSize: '13px',
                 fontWeight: 700,
                 cursor: creando ? 'not-allowed' : 'pointer',
@@ -128,9 +129,9 @@ export default function SelectorCategoriaProducto({
               style={{
                 padding: '8px 12px',
                 borderRadius: '10px',
-                border: '1px solid rgba(255,255,255,0.15)',
+                border: `1px solid ${tinta(0.15)}`,
                 background: 'transparent',
-                color: 'rgba(255,255,255,0.55)',
+                color: tintaTexto(0.55),
                 fontSize: '13px',
                 fontWeight: 600,
                 cursor: 'pointer',
@@ -143,7 +144,7 @@ export default function SelectorCategoriaProducto({
         </div>
       )}
       {error ? (
-        <p style={{ color: '#FF8A80', fontSize: '12px', fontWeight: 600, margin: '8px 0 0' }}>
+        <p style={{ color: 'var(--tono-coral)', fontSize: '12px', fontWeight: 600, margin: '8px 0 0' }}>
           {error}
         </p>
       ) : null}

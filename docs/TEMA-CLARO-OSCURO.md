@@ -10,6 +10,7 @@ que aún no están en la lista se siguen viendo en oscuro aunque el teléfono es
 | Módulo | Tema claro |
 |--------|------------|
 | Clientes (`/clientes`) | Sí |
+| Productos (`/productos`) | Sí |
 | Todo lo demás | Pendiente |
 
 ## Cómo funciona
@@ -33,8 +34,12 @@ que aún no están en la lista se siguen viendo en oscuro aunque el teléfono es
   (`lib/tema/tinta.ts`). En oscuro dan lo mismo que `rgba(255,255,255,…)`.
 - Colores de acento como texto o icono: `var(--tono-azul|verde|naranja|rojo|celeste)`.
   Como fondo sólido de un botón pueden seguir fijos (`#007AFF`).
+- Un color vivo cualquiera usado como texto sobre su propio tinte (etiquetas de categoría,
+  avisos): `tonoTexto('#FFD60A')`. En oscuro queda igual y en claro se oscurece.
 - Texto blanco sobre un botón de color sólido con clases Tailwind: añadir `sobre-color`
   para que siga blanco en claro.
+- Campos nativos de fecha u hora: `colorScheme: 'var(--esquema-color, dark)'`, para que el
+  icono del calendario se vea en los dos temas.
 
 ## Pasar un módulo a claro
 

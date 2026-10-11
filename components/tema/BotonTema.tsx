@@ -43,7 +43,7 @@ function Icono({ preferencia }: { preferencia: PreferenciaTema }) {
 /**
  * Botón de tema: cada toque pasa de automático (el del teléfono) a claro, a oscuro y de vuelta.
  */
-export default function BotonTema() {
+export default function BotonTema({ compacto = false }: { /** Solo el icono, para cabeceras con poco espacio. */ compacto?: boolean }) {
   const { preferencia, cambiar } = usePreferenciaTema();
   const siguiente = siguientePreferenciaTema(preferencia);
 
@@ -58,7 +58,9 @@ export default function BotonTema() {
         alignItems: 'center',
         gap: '6px',
         height: '36px',
-        padding: '0 12px',
+        width: compacto ? '36px' : undefined,
+        justifyContent: 'center',
+        padding: compacto ? 0 : '0 12px',
         borderRadius: '18px',
         border: `1px solid ${tinta(0.13)}`,
         background: tinta(0.07),
@@ -71,7 +73,7 @@ export default function BotonTema() {
       }}
     >
       <Icono preferencia={preferencia} />
-      <span suppressHydrationWarning>{etiquetaPreferenciaTema(preferencia)}</span>
+      {compacto ? null : <span suppressHydrationWarning>{etiquetaPreferenciaTema(preferencia)}</span>}
     </button>
   );
 }
