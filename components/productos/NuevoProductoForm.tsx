@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { uploadProductImage, uploadProductManualPdf } from '@/lib/supabase/product-media';
 import SelectorCategoriaProducto from '@/components/productos/SelectorCategoriaProducto';
+import { proveedoresAdmitidos, revisarEnlaceProveedor } from '@/lib/productos/precioProveedorWeb';
 import { tinta, tintaTexto } from '@/lib/tema/tinta';
 
 export default function NuevoProductoForm({ initialData, isEditing }: { initialData?: any; isEditing?: boolean }) {
@@ -32,7 +33,45 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
         imagen: (initialData?.imagen as string) || '',
         manual_instrucciones: (initialData?.manual_instrucciones as string) || '',
         manual_documento_url: (initialData?.manual_documento_url as string) || '',
+        proveedor_url: (initialData?.proveedor_url as string) || '',
     });
+    /** Precio leído de la web del proveedor con el botón «Leer precio». */
+    const [precioWeb, setPrecioWeb] = useState<{ precio: number | null; error: string | null; leyendo: boolean }>({
+        precio: null,
+        error: null,
+        leyendo: false,
+    });
+    const enlaceEscrito = form.proveedor_url.trim();
+    const enlaceRevisado = enlaceEscrito ? revisarEnlaceProveedor(enlaceEscrito) : null;
+
+    const leerPrecioWeb = async () => {
+        if (!enlaceRevisado || !enlaceRevisado.ok) return;
+        setPrecioWeb({ precio: null, error: null, leyendo: true });
+        try {
+            const res = await fetch('/api/productos/precio-proveedor', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ url: enlaceRevisado.url }),
+            });
+            const datos = (await res.json()) as { ok?: boolean; precio?: number; error?: string };
+            if (datos.ok && typeof datos.precio === 'number') setPrecioWeb({ precio: datos.precio, error: null, leyendo: false });
+            else setPrecioWeb({ precio: null, error: datos.error || 'No se pudo leer el precio.', leyendo: false });
+        } catch {
+            setPrecioWeb({ precio: null, error: 'No se pudo consultar. Revisa la conexión.', leyendo: false });
+        }
+    };
+
+    /** Pone el precio de la web como costo; el precio lo sigue si estaba igual al costo o vacío. */
+    const usarPrecioWeb = () => {
+        if (precioWeb.precio == null) return;
+        const nuevo = String(precioWeb.precio);
+        setForm((f) => {
+            const costoAntes = parseFloat(f.costo);
+            const precioAntes = parseFloat(f.precio);
+            const precioSigue = !f.precio || !(precioAntes > 0) || (Number.isFinite(costoAntes) && Math.abs(precioAntes - costoAntes) < 0.005);
+            return { ...f, costo: nuevo, precio: precioSigue ? nuevo : f.precio };
+        });
+    };
 
     const utilidad = form.costo && form.precio
         ? (parseFloat(form.precio) - parseFloat(form.costo)).toFixed(2)
@@ -92,6 +131,7 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
 
     const handleSave = async () => {
         if (!form.nombre.trim()) return alert('El nombre es obligatorio');
+        if (enlaceRevisado && !enlaceRevisado.ok) return alert(`Enlace del proveedor: ${enlaceRevisado.motivo}`);
         setSaving(true);
         setMediaError(null);
 
@@ -116,6 +156,7 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
             imagen: imagenVal,
             manual_instrucciones: form.manual_instrucciones.trim() || null,
             manual_documento_url: form.manual_documento_url.trim() || null,
+            proveedor_url: enlaceRevisado && enlaceRevisado.ok ? enlaceRevisado.url : null,
         };
 
         let error;
@@ -448,6 +489,54 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
                     )}
                 </div>
             )}
+
+            <div style={fieldBox} data-enlace-proveedor>
+                <label style={labelStyle}>Enlace en la web del proveedor (opcional)</label>
+                <input
+                    type="url"
+                    inputMode="url"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    value={form.proveedor_url}
+                    onChange={(e) => {
+                        set('proveedor_url', e.target.value);
+                        setPrecioWeb({ precio: null, error: null, leyendo: false });
+                    }}
+                    placeholder="https://electronica.com.ve/…/123-producto.html"
+                    style={{ ...inputStyle, fontSize: '14px' }}
+                />
+                {!enlaceEscrito ? (
+                    <p style={{ fontSize: '12px', color: tintaTexto(0.45), margin: '8px 0 0', lineHeight: 1.45 }}>
+                        Abre el producto en la web del proveedor y pega aquí su dirección. Con ella, «Actualizar costos del
+                        proveedor» lee su precio. Por ahora: {proveedoresAdmitidos()}.
+                    </p>
+                ) : enlaceRevisado && !enlaceRevisado.ok ? (
+                    <p data-enlace-error style={{ fontSize: '12px', color: 'var(--tono-coral)', fontWeight: 600, margin: '8px 0 0', lineHeight: 1.45 }}>
+                        {enlaceRevisado.motivo}
+                    </p>
+                ) : (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center', marginTop: '10px' }}>
+                        <button type="button" onClick={() => void leerPrecioWeb()} disabled={precioWeb.leyendo} style={btnSecondary}>
+                            {precioWeb.leyendo ? 'Leyendo…' : 'Leer precio de la web'}
+                        </button>
+                        {precioWeb.precio != null ? (
+                            <>
+                                <span data-precio-web style={{ fontSize: '14px', fontWeight: 700, color: 'var(--label-primary)' }}>
+                                    En la web: ${precioWeb.precio.toFixed(2)}
+                                </span>
+                                <button type="button" onClick={usarPrecioWeb} style={{ ...btnSecondary, color: 'var(--tono-verde)' }}>
+                                    Usar como costo
+                                </button>
+                            </>
+                        ) : null}
+                        {precioWeb.error ? (
+                            <span style={{ fontSize: '12px', color: 'var(--tono-coral)', fontWeight: 600, flexBasis: '100%' }}>
+                                {precioWeb.error}
+                            </span>
+                        ) : null}
+                    </div>
+                )}
+            </div>
 
             <div style={fieldBox}>
                 <label style={labelStyle}>Stock</label>
