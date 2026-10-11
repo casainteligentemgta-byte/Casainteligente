@@ -5,6 +5,8 @@ import {
   isPhoneAllowed,
   sendWhatsAppText,
 } from '@/lib/whatsapp/botApi';
+import { resolveSupabaseServiceRoleKey } from '@/lib/supabase/resolveServiceRoleKey';
+import { firmaMetaValida, secretoAppWhatsapp } from '@/lib/whatsapp/firmaMeta';
 import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
@@ -13,9 +15,7 @@ export const maxDuration = 180;
 
 function supabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+  const key = resolveSupabaseServiceRoleKey() || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
   if (!url || !key) throw new Error('Supabase no configurado');
   return createClient(url, key);
 }
@@ -52,7 +52,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'WHATSAPP_TOKEN no configurado' }, { status: 503 });
     }
 
-    const body = (await req.json()) as {
+    // Solo se atienden avisos firmados por Meta con el secreto de la app.
+    const crudo = await req.text();
+    if (!firmaMetaValida(crudo, req.headers.get('x-hub-signature-256'), secretoAppWhatsapp())) {
+      console.warn('[POST /api/webhooks/whatsapp] aviso sin firma válida; rechazado');
+      return NextResponse.json({ error: 'Firma no válida' }, { status: 401 });
+    }
+
+    let body: {
       entry?: Array<{
         changes?: Array<{
           value?: {
@@ -62,6 +69,11 @@ export async function POST(req: Request) {
         }>;
       }>;
     };
+    try {
+      body = JSON.parse(crudo) as typeof body;
+    } catch {
+      return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
+    }
 
     const messages: WaMessage[] = [];
     for (const entry of body.entry ?? []) {

@@ -92,12 +92,24 @@ variable existe). Sin ella rechazan toda llamada y no se ejecutan.
 «Administración» se resuelve en `lib/telegram/chatAdministracion.ts`: `TELEGRAM_CHAT_ID` →
 canal de administración de Configuración → Alertas → chat personal del administrador.
 
+### Webhooks con clave
+
+- `webhooks/vercel-deploy` solo acepta avisos con `VERCEL_DEPLOY_NOTIFY_SECRET`. Sin esa
+  variable rechaza todo (antes aceptaba todo).
+- `webhooks/whatsapp` comprueba la firma de Meta (`X-Hub-Signature-256`) con
+  `WHATSAPP_APP_SECRET` (`lib/whatsapp/firmaMeta.ts`). Sin esa variable rechaza todo.
+
+### Llaves en el repositorio
+
+El repositorio es público. Dieciocho archivos de pruebas traían escritas las llaves de
+Supabase, ocho de ellos la **llave de servicio**, que salta todos los permisos. Ya leen
+las llaves del entorno, y `lib/supabase/sinLlavesEnRepo.test.ts` falla si vuelve a
+aparecer una. La llave sigue en el historial de git: el arreglo real es dejarla sin
+efecto. Ver `docs/CAMBIAR-LLAVE-MAESTRA.md`.
+
 ### Lo que sigue pendiente
 
-- `webhooks/vercel-deploy` acepta avisos sin clave mientras no exista
-  `VERCEL_DEPLOY_NOTIFY_SECRET` (solo envía un aviso de despliegue por Telegram).
-- `webhooks/whatsapp` no comprueba la firma de Meta en los mensajes entrantes. Hoy no hay
-  credenciales de WhatsApp configuradas.
+- Dejar sin efecto la llave de servicio expuesta (`docs/CAMBIAR-LLAVE-MAESTRA.md`).
 - Las páginas `/nexus` y `/nexus/vision` no piden sesión (sus datos sí, por las rutas).
 
 ### Cómo comprobar

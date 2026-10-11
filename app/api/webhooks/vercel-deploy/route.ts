@@ -20,7 +20,9 @@ type VercelDeployPayload = {
 
 function validarSecreto(req: Request): boolean {
   const secret = process.env.VERCEL_DEPLOY_NOTIFY_SECRET?.trim();
-  if (!secret) return true;
+  // Sin clave configurada no se acepta ningún aviso: antes cualquiera podía hacer que el
+  // bot anunciara un despliegue que no ocurrió.
+  if (!secret) return false;
   const auth = req.headers.get('authorization')?.trim();
   if (auth === `Bearer ${secret}`) return true;
   const header = req.headers.get('x-deploy-notify-secret')?.trim();
@@ -97,6 +99,7 @@ export async function POST(req: Request) {
 export async function GET() {
   return NextResponse.json({
     ok: true,
-    hint: 'POST con payload de Vercel o Authorization: Bearer VERCEL_DEPLOY_NOTIFY_SECRET',
+    activo: Boolean(process.env.VERCEL_DEPLOY_NOTIFY_SECRET?.trim()),
+    hint: 'POST con payload de Vercel y Authorization: Bearer VERCEL_DEPLOY_NOTIFY_SECRET. Sin esa variable no se acepta ningún aviso.',
   });
 }

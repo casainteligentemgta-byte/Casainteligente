@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { resolveSupabaseServiceRoleKey } from '@/lib/supabase/resolveServiceRoleKey';
 
 let adminClient: SupabaseClient | null = null;
 
@@ -11,7 +12,7 @@ function getSupabaseUrl(): string {
 }
 
 function getServiceRoleKey(): string {
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  const key = resolveSupabaseServiceRoleKey();
   if (!key || key === 'TU_SERVICE_ROLE_KEY') {
     throw new Error('SUPABASE_SERVICE_ROLE_KEY no configurada.');
   }

@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { resolveSupabaseServiceRoleKey } from '@/lib/supabase/resolveServiceRoleKey';
 import { reclamarProcesamientoFacturaCanal } from '@/lib/canal/reservarFacturaCanalTelegram';
 import {
   buscarCompraContablePorFactura,
@@ -30,9 +31,7 @@ function baseUrlApp(): string {
 
 function supabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+  const key = resolveSupabaseServiceRoleKey() || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
   if (!url || !key) throw new Error('Supabase no configurado');
   return createClient(url, key);
 }

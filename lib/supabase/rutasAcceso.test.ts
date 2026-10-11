@@ -301,6 +301,7 @@ describe('toda ruta abierta del proyecto está revisada', () => {
       '/api/auth/permisos',
       '/api/auth/usuarios-roles',
       '/api/health',
+      '/api/health/llaves',
       '/api/health/local',
       '/api/health/supabase',
       '/api/pruebas/bot',
