@@ -87,7 +87,9 @@ npm run telegram:webhook
 
 ## WhatsApp (Meta Cloud API)
 
-1. Variables: `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_VERIFY_TOKEN`
+1. Variables: `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_VERIFY_TOKEN` y
+   `WHATSAPP_APP_SECRET` (el «App Secret» de la app de Meta: con él se comprueba la firma
+   de cada aviso; sin él el webhook rechaza todos los avisos)
 2. Webhook en Meta: `https://tu-dominio.com/api/webhooks/whatsapp`
 3. Verify token = mismo valor que `WHATSAPP_VERIFY_TOKEN`
 4. Opcional: `WHATSAPP_ALLOWED_PHONES=58412...,58424...`

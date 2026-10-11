@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { resolveSupabaseServiceRoleKey } from '@/lib/supabase/resolveServiceRoleKey';
 
 /**
  * Cliente de Supabase con service role para operaciones privilegiadas
@@ -6,7 +7,7 @@ import { createClient } from '@supabase/supabase-js';
  */
 export function createAdminClient() {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const serviceRoleKey = resolveSupabaseServiceRoleKey();
 
     if (!url || !serviceRoleKey) {
         throw new Error(
