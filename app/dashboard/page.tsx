@@ -52,9 +52,8 @@ async function contarDocumentosVencidosEnObra(): Promise<ResultadoConteo> {
 }
 
 export default async function DashboardPage() {
-  const [empresas, personas, productos, ventas, docsVencidosObra] = await Promise.all([
-    contar('empresas'),
-    contar('personas'),
+  const [clientes, productos, ventas, docsVencidosObra] = await Promise.all([
+    contar('customers'),
     contar('productos'),
     contar('ventas'),
     contarDocumentosVencidosEnObra(),
@@ -62,20 +61,12 @@ export default async function DashboardPage() {
 
   const stats = [
     {
-      label: 'Empresas',
-      value: empresas.total,
-      ok: empresas.ok,
-      error: empresas.error,
-      href: '/empresas',
-      hint: 'Clientes jurídicos',
-    },
-    {
-      label: 'Personas',
-      value: personas.total,
-      ok: personas.ok,
-      error: personas.error,
-      href: '/personas',
-      hint: 'Clientes físicos',
+      label: 'Clientes',
+      value: clientes.total,
+      ok: clientes.ok,
+      error: clientes.error,
+      href: '/clientes',
+      hint: 'Personas y empresas',
     },
     {
       label: 'Productos',
@@ -222,7 +213,7 @@ export default async function DashboardPage() {
             </li>
             <li>
               Comprueba en Supabase → <strong>Table Editor</strong> que existan las tablas:{' '}
-              <code>empresas</code>, <code>personas</code>, <code>productos</code>, <code>ventas</code>.
+              <code>customers</code>, <code>productos</code>, <code>ventas</code>.
             </li>
             <li>
               Si el error es <code>TypeError: fetch failed</code>, suele ser <strong>red o firewall</strong>, no

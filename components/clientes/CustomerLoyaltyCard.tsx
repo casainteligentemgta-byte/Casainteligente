@@ -61,7 +61,7 @@ export default function CustomerLoyaltyCard({ model }: Props) {
 
       {open ? (
         <div className="mt-3 space-y-1 rounded-xl border border-white/10 bg-black/30 p-3 text-xs text-zinc-300">
-          <p>Presupuestos aprobados: {model.breakdown.presupuestosAprobadosContribuyentes}</p>
+          <p>Presupuestos aceptados: {model.breakdown.presupuestosAprobadosContribuyentes}</p>
           <p>Proyectos vinculados: {model.breakdown.proyectosContribuyentes}</p>
           <p>Ventas vinculadas: {model.breakdown.ventasContribuyentes}</p>
           <p>Recurrencia (12m): {model.breakdown.recurrencia12m}</p>

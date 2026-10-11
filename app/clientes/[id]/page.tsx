@@ -16,7 +16,34 @@ import {
   hrefProyectoObra,
   montoObraUsd,
 } from '@/lib/clientes/proyectosClienteDisplay';
+import {
+  cargarPresupuestosCliente,
+  etiquetaEstadoPresupuesto,
+  resumenPresupuestosCliente,
+  tonoEstadoPresupuesto,
+  type PresupuestoCliente,
+  type TonoEstadoPresupuesto,
+} from '@/lib/clientes/presupuestosCliente';
 import { createClient } from '@/lib/supabase/client';
+
+const CLASES_TONO: Record<TonoEstadoPresupuesto, string> = {
+  verde: 'border-emerald-400/30 bg-emerald-500/15 text-emerald-200',
+  ambar: 'border-amber-400/30 bg-amber-500/15 text-amber-200',
+  azul: 'border-sky-400/30 bg-sky-500/15 text-sky-200',
+  rojo: 'border-red-400/30 bg-red-500/15 text-red-200',
+  gris: 'border-white/15 bg-white/10 text-zinc-300',
+};
+
+function usd(n: number): string {
+  return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function fechaCorta(iso: string | null): string {
+  if (!iso) return 'Sin fecha';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return 'Sin fecha';
+  return d.toLocaleDateString('es-VE', { dateStyle: 'medium', timeZone: 'America/Caracas' });
+}
 
 type ObraVinculada = {
   id: string;
@@ -38,7 +65,11 @@ export default function ClienteDetallePage() {
   const [cliente, setCliente] = useState<CustomerDetail | null>(null);
   const [obras, setObras] = useState<ObraVinculada[]>([]);
   const [obrasLoading, setObrasLoading] = useState(false);
+  const [presupuestos, setPresupuestos] = useState<PresupuestoCliente[]>([]);
+  const [presupuestosLoading, setPresupuestosLoading] = useState(false);
+  const [presupuestosError, setPresupuestosError] = useState<string | null>(null);
   const loyalty = useCustomerLoyaltyScore(id);
+  const resumenPresupuestos = useMemo(() => resumenPresupuestosCliente(presupuestos), [presupuestos]);
 
   const clienteDisplayNombre =
     cliente?.razon_social ?? cliente?.nombre ?? 'Cliente';
@@ -115,6 +146,23 @@ export default function ClienteDetallePage() {
     };
   }, [id, supabase]);
 
+  useEffect(() => {
+    if (!id) return;
+    let alive = true;
+    (async () => {
+      setPresupuestosLoading(true);
+      setPresupuestosError(null);
+      const res = await cargarPresupuestosCliente(supabase, id);
+      if (!alive) return;
+      setPresupuestosLoading(false);
+      setPresupuestosError(res.error);
+      setPresupuestos(res.presupuestos);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [id, supabase]);
+
   return (
     <div className="min-h-screen bg-[#0A0A0F] px-4 pb-28 pt-6">
       <div className="mx-auto max-w-3xl space-y-4">
@@ -168,6 +216,71 @@ export default function ClienteDetallePage() {
 
             <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
               <div className="flex items-center justify-between gap-3">
+                <h2 className="text-lg font-semibold text-white">Presupuestos</h2>
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-xs font-medium text-zinc-300">
+                    {presupuestos.length}
+                  </span>
+                  <Link
+                    href={`/ventas?customerId=${encodeURIComponent(id)}`}
+                    className="rounded-full border border-emerald-400/30 bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/25"
+                  >
+                    + Nuevo
+                  </Link>
+                </div>
+              </div>
+
+              {presupuestosLoading ? (
+                <p className="mt-4 text-sm text-zinc-500">Cargando presupuestos…</p>
+              ) : presupuestosError ? (
+                <p className="mt-4 text-sm text-red-300">No se pudieron cargar los presupuestos: {presupuestosError}</p>
+              ) : presupuestos.length === 0 ? (
+                <p className="mt-4 text-sm text-zinc-500">Este cliente todavía no tiene presupuestos.</p>
+              ) : (
+                <>
+                  <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
+                    <div className="rounded-lg border border-white/10 bg-white/[0.02] p-2">
+                      <p className="text-zinc-500">Aceptado</p>
+                      <p className="font-mono tabular-nums text-zinc-100">{usd(resumenPresupuestos.montoAceptadoUsd)}</p>
+                    </div>
+                    <div className="rounded-lg border border-white/10 bg-white/[0.02] p-2">
+                      <p className="text-zinc-500">Pagado</p>
+                      <p className="font-mono tabular-nums text-emerald-200">{usd(resumenPresupuestos.montoPagadoUsd)}</p>
+                    </div>
+                    <div className="rounded-lg border border-white/10 bg-white/[0.02] p-2">
+                      <p className="text-zinc-500">Por cobrar</p>
+                      <p className="font-mono tabular-nums text-amber-200">{usd(resumenPresupuestos.montoPorCobrarUsd)}</p>
+                    </div>
+                  </div>
+                  <ul className="mt-3 space-y-2">
+                    {presupuestos.map((p) => (
+                      <li key={p.id}>
+                        <Link
+                          href={`/ventas?id=${encodeURIComponent(p.id)}`}
+                          className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 p-3 transition-colors hover:border-[#7cb9ff]/40"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-white">{fechaCorta(p.created_at)}</p>
+                            <span
+                              className={`mt-1 inline-block rounded-full border px-2 py-0.5 text-[11px] font-semibold ${CLASES_TONO[tonoEstadoPresupuesto(p.status)]}`}
+                            >
+                              {etiquetaEstadoPresupuesto(p.status)}
+                            </span>
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <p className="font-mono text-sm font-semibold tabular-nums text-zinc-100">{usd(p.subtotal)}</p>
+                            <p className="mt-1 text-xs font-semibold text-[#7cb9ff]">Abrir →</p>
+                          </div>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+              <div className="flex items-center justify-between gap-3">
                 <h2 className="text-lg font-semibold text-white">Obras vinculadas</h2>
                 <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-xs font-medium text-zinc-300">
                   {obras.length}
@@ -177,7 +290,7 @@ export default function ClienteDetallePage() {
               {obrasLoading ? (
                 <p className="mt-4 text-sm text-zinc-500">Cargando obras…</p>
               ) : obras.length === 0 ? (
-                <p className="mt-4 text-sm text-zinc-500">Este cliente no tiene obras asignadas en ci_proyectos.</p>
+                <p className="mt-4 text-sm text-zinc-500">Este cliente no tiene obras asignadas.</p>
               ) : (
                 <ul className="mt-4 space-y-3">
                   {obras.map((obra) => (

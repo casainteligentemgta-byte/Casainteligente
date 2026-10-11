@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { numeroWhatsapp } from '@/lib/clientes/presupuestosCliente';
 import type { CustomerListItem } from '@/types';
 
 type ClienteStatus = 'activo' | 'inactivo' | 'pendiente';
@@ -80,6 +81,7 @@ function ClienteModal({ cliente, onClose }: { cliente: Cliente; onClose: () => v
     const status = statusConfig[cliente.status] ?? statusConfig.activo;
     const rifTipo = getRifTipo(cliente.rif);
     const accent = cliente.color ?? '#007AFF';
+    const whatsapp = numeroWhatsapp(cliente.movil || cliente.telefono);
     return (
         <div
             onClick={onClose}
@@ -175,6 +177,21 @@ function ClienteModal({ cliente, onClose }: { cliente: Cliente; onClose: () => v
                         </svg>
                         Llamar
                     </a>
+                    {whatsapp ? (
+                        <a
+                            href={`https://wa.me/${whatsapp}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                                flex: 1, padding: '12px', borderRadius: '14px', textDecoration: 'none',
+                                background: 'rgba(37,211,102,0.12)', border: '1px solid rgba(37,211,102,0.3)',
+                                color: '#25D366', fontSize: '13px', fontWeight: 600,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                            }}
+                        >
+                            WhatsApp
+                        </a>
+                    ) : null}
                     <a href={`mailto:${cliente.email}`} style={{
                         flex: 1, padding: '12px', borderRadius: '14px', textDecoration: 'none',
                         background: 'rgba(0,122,255,0.12)', border: '1px solid rgba(0,122,255,0.25)',

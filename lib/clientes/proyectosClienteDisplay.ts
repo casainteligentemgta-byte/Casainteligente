@@ -1,4 +1,4 @@
-/** Mapeo display CRM ↔ estados reales de ci_proyectos. */
+/** Cómo se muestran en la ficha del cliente las obras de ci_proyectos. */
 
 export type ProyectoClienteRow = {
   id: string;
@@ -11,16 +11,6 @@ export type ProyectoClienteRow = {
   ci_entidades?: { nombre?: string | null; rif?: string | null } | null;
 };
 
-export function tipoClienteCrm(customer: {
-  customer_type?: string | null;
-  tipo?: string | null;
-}): 'Empresa' | 'Residencial' {
-  if (customer.customer_type === 'juridico') return 'Empresa';
-  const t = String(customer.tipo ?? '').toLowerCase();
-  if (t.includes('empresa') || t.includes('jurid')) return 'Empresa';
-  return 'Residencial';
-}
-
 export function montoObraUsd(row: {
   monto_aproximado?: number | string | null;
   obra_precio_venta_usd?: number | string | null;
@@ -29,15 +19,6 @@ export function montoObraUsd(row: {
   if (Number.isFinite(venta) && venta > 0) return venta;
   const aprox = Number(row.monto_aproximado);
   return Number.isFinite(aprox) ? aprox : 0;
-}
-
-/** Etiquetas que entiende ClienteDrawer (CRM). */
-export function etiquetaEstadoObraCrm(estado: string): string {
-  const e = String(estado ?? '').toLowerCase();
-  if (e === 'cerrado' || e === 'entregado') return 'Finalizado';
-  if (e === 'ejecucion') return 'Ejecucion';
-  if (e === 'presupuestado' || e === 'levantamiento' || e === 'nuevo') return 'Cotizacion';
-  return estado || 'Cotizacion';
 }
 
 export function etiquetaEstadoObraLegible(estado: string): string {

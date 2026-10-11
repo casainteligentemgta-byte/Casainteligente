@@ -123,7 +123,7 @@ export async function GET() {
       const hint =
         rawLen > 0
           ? `Se leyeron ${rawLen} filas en customers pero ninguna produjo id/etiqueta válidos.`
-          : 'La tabla public.customers no tiene filas. Los proyectos del módulo enlazan clientes del CRM: crea al menos uno en /clientes. La lista “Personas” (/personas) es otra tabla y no sustituye a customers.';
+          : 'La tabla public.customers no tiene filas. Los proyectos del módulo enlazan clientes del CRM: crea al menos uno en /clientes.';
       return json({ items, hint });
     }
 
