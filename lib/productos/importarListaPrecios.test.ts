@@ -275,26 +275,26 @@ test('nombreDesdeDescripcion corta en un sitio decente', () => {
   assert.equal(n, 'CAMARA TIPO DOMO IP 2MP PoE INTEMPERIE IP67, IMAGEN A COLOR 24/7')
 })
 
-test('categoría y subcategoría sugeridas: las cámaras van dentro de C.C.T.V', () => {
+test('categoría y subcategoría sugeridas: las cámaras van dentro de CCTV', () => {
   const u = (seccion: string) => {
     const { categoria, subcategoria } = ubicacionSugerida(seccion)
     return subcategoria ? `${categoria} › ${subcategoria}` : categoria
   }
-  assert.equal(u('CAMARAS IP 4MP'), 'C.C.T.V › Cámaras IP')
-  assert.equal(u('CAMARAS DOMO PTZ IP'), 'C.C.T.V › Cámaras IP')
-  assert.equal(u('CAMARAS IP COLOR VU (IMAGEN A COLOR 24/7)'), 'C.C.T.V › Cámaras IP')
-  assert.equal(u('UNIFI PROTECT'), 'C.C.T.V › Cámaras IP')
-  assert.equal(u('CAMARAS TURBO HD 1080P'), 'C.C.T.V › Cámaras Análogas')
-  assert.equal(u('SERIE COLORVU (IMAGEN A COLOR 24/7)'), 'C.C.T.V › Cámaras Análogas')
-  assert.equal(u('DVRs HIKVISION TURBO HD'), 'C.C.T.V › Otros dispositivos')
-  assert.equal(u('NVRs HIKVISION'), 'C.C.T.V › Otros dispositivos')
-  assert.equal(u('DISCOS DUROS'), 'C.C.T.V › Otros dispositivos')
-  assert.equal(u('VIDEO BALUN'), 'C.C.T.V › Accesorios')
+  assert.equal(u('CAMARAS IP 4MP'), 'CCTV › Cámaras IP')
+  assert.equal(u('CAMARAS DOMO PTZ IP'), 'CCTV › Cámaras IP')
+  assert.equal(u('CAMARAS IP COLOR VU (IMAGEN A COLOR 24/7)'), 'CCTV › Cámaras IP')
+  assert.equal(u('UNIFI PROTECT'), 'CCTV › Cámaras IP')
+  assert.equal(u('CAMARAS TURBO HD 1080P'), 'CCTV › Cámaras Análogas')
+  assert.equal(u('SERIE COLORVU (IMAGEN A COLOR 24/7)'), 'CCTV › Cámaras Análogas')
+  assert.equal(u('DVRs HIKVISION TURBO HD'), 'CCTV › Otros dispositivos')
+  assert.equal(u('NVRs HIKVISION'), 'CCTV › Otros dispositivos')
+  assert.equal(u('DISCOS DUROS'), 'CCTV › Otros dispositivos')
+  assert.equal(u('VIDEO BALUN'), 'CCTV › Accesorios')
   assert.equal(u('SWITCH / INYECTOR POE / REPETIDOR POE'), 'Network')
   assert.equal(u('CABLES UTP / COAXIAL'), 'Network')
   assert.equal(u('METALMECANICA'), 'Network')
-  assert.equal(u('FUENTES'), 'C.C.T.V')
-  assert.equal(categoriaSugerida('CAMARAS IP 4MP'), 'C.C.T.V')
+  assert.equal(u('FUENTES'), 'CCTV')
+  assert.equal(categoriaSugerida('CAMARAS IP 4MP'), 'CCTV')
   assert.equal(subcategoriaSugerida('CAMARAS IP 4MP'), 'Cámaras IP')
   assert.equal(subcategoriaSugerida('FUENTES'), '')
 })
@@ -305,7 +305,7 @@ test('productoNuevoDesdeFila', () => {
     nombre: 'DESCRIPCION MOD-PRUEBA-900 2.8MM',
     modelo: 'MOD-PRUEBA-900 2.8MM',
     marca: 'MARCA',
-    categoria: 'C.C.T.V',
+    categoria: 'CCTV',
     subcategoria: 'Cámaras IP',
     descripcion: 'DESCRIPCION MOD-PRUEBA-900 2.8MM',
     costo: 33,
@@ -324,6 +324,6 @@ test('productoNuevoDesdeFila', () => {
   assert.equal(productoNuevoDesdeFila(f, 'Network', 'F', 'A').categoria, 'Network')
   // Con la categoría elegida a mano manda lo elegido, también la subcategoría (o ninguna).
   assert.equal(productoNuevoDesdeFila(f, 'Network', 'F', 'A').subcategoria, null)
-  const elegido = productoNuevoDesdeFila(f, 'C.C.T.V', 'F', 'A', 'Accesorios')
-  assert.deepEqual([elegido.categoria, elegido.subcategoria], ['C.C.T.V', 'Accesorios'])
+  const elegido = productoNuevoDesdeFila(f, 'CCTV', 'F', 'A', 'Accesorios')
+  assert.deepEqual([elegido.categoria, elegido.subcategoria], ['CCTV', 'Accesorios'])
 })

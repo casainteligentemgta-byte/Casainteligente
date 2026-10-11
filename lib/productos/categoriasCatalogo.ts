@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 /** Categoría que reúne cámaras, grabadores y sus accesorios. */
-export const CATEGORIA_CCTV = 'C.C.T.V';
+export const CATEGORIA_CCTV = 'CCTV';
 
 export const CATEGORIAS_COMERCIALES_DEFAULT = [
   CATEGORIA_CCTV,
@@ -26,7 +26,7 @@ export const CATEGORIAS_CATALOGO_DEFAULT = [
 
 /**
  * Subcategorías de fábrica. «Cámaras IP» y «Cámaras Análogas» eran categorías sueltas:
- * ahora viven dentro de C.C.T.V. El dueño puede crear más desde Productos.
+ * ahora viven dentro de CCTV. El dueño puede crear más desde Productos.
  */
 export const SUBCATEGORIAS_DEFAULT: Record<string, readonly string[]> = {
   [CATEGORIA_CCTV]: ['Cámaras IP', 'Cámaras Análogas', 'Otros dispositivos', 'Accesorios'],
@@ -42,6 +42,8 @@ export type ArbolCategorias = {
 export const CAT_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
   'Cámaras IP': { bg: 'rgba(0,122,255,0.12)', text: '#007AFF', dot: '#007AFF' },
   'Cámaras Análogas': { bg: 'rgba(88,86,214,0.12)', text: '#5856D6', dot: '#5856D6' },
+  CCTV: { bg: 'rgba(88,86,214,0.12)', text: '#5856D6', dot: '#5856D6' },
+  // Nombre anterior de CCTV: los presupuestos viejos lo guardan en sus renglones.
   'C.C.T.V': { bg: 'rgba(88,86,214,0.12)', text: '#5856D6', dot: '#5856D6' },
   Servicio: { bg: 'rgba(52,199,89,0.12)', text: '#34C759', dot: '#34C759' },
   'Cercos Eléctricos': { bg: 'rgba(255,149,0,0.12)', text: '#FF9500', dot: '#FF9500' },
@@ -102,13 +104,15 @@ export function coloresCategoria(nombre: string | null | undefined): {
 }
 
 /**
- * Clave para comparar nombres: sin mayúsculas, sin acentos y sin espacios de más.
- * «Domotica» y «Domótica» son la misma categoría.
+ * Clave para comparar nombres: sin mayúsculas, sin acentos, sin puntos y sin espacios de
+ * más. «Domotica» y «Domótica» son la misma categoría; «C.C.T.V» y «CCTV», también.
  */
 export function claveNombreCategoria(nombre: string): string {
   return nombre
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
+    // «C.C.T.V» y «CCTV» son la misma: los puntos de una sigla no cuentan.
+    .replace(/\./g, '')
     .trim()
     .replace(/\s+/g, ' ')
     .toLowerCase();
@@ -245,7 +249,7 @@ export function subcategoriasAMostrar(
   return salida;
 }
 
-/** «C.C.T.V › Cámaras IP», o solo la categoría si el producto no tiene subcategoría. */
+/** «CCTV › Cámaras IP», o solo la categoría si el producto no tiene subcategoría. */
 export function etiquetaCategoria(categoria: string | null | undefined, subcategoria: string | null | undefined): string {
   const c = normalizarNombreCategoria(categoria ?? '');
   const sub = normalizarNombreCategoria(subcategoria ?? '');
@@ -253,7 +257,7 @@ export function etiquetaCategoria(categoria: string | null | undefined, subcateg
   return sub ? `${c} › ${sub}` : c;
 }
 
-/** Lo contrario de `etiquetaCategoria`: de «C.C.T.V › Cámaras IP» a sus dos partes. */
+/** Lo contrario de `etiquetaCategoria`: de «CCTV › Cámaras IP» a sus dos partes. */
 export function separarEtiquetaCategoria(etiqueta: string | null | undefined): { categoria: string; subcategoria: string } {
   const texto = String(etiqueta ?? '');
   const corte = texto.indexOf(' › ');
