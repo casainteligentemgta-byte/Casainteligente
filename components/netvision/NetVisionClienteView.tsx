@@ -74,7 +74,7 @@ function loadClienteProject(id: string | null): NetVisionProject | null {
 }
 
 const MSG_SIN_PRESUPUESTO_VENTAS =
-  'Crea primero el presupuesto en Ventas (inspector Presupuestos) para incluirlo.'
+  'Crea primero el presupuesto (inspector Presupuestos) para incluirlo.'
 
 async function snapshotOfertaVentas(
   project: NetVisionProject,
@@ -85,7 +85,7 @@ async function snapshotOfertaVentas(
   }
   const leido = await cargarOfertaVentas(id)
   if (!leido.ok) {
-    return { ok: false, error: `No se pudo leer el presupuesto de Ventas: ${leido.error}` }
+    return { ok: false, error: `No se pudo leer el presupuesto: ${leido.error}` }
   }
   const snap = snapshotDesdeItemsVentas({
     items: leido.oferta.items,
@@ -97,7 +97,7 @@ async function snapshotOfertaVentas(
   if (!snap) {
     return {
       ok: false,
-      error: 'El presupuesto de Ventas no tiene renglones para mostrar al cliente.',
+      error: 'El presupuesto no tiene renglones para mostrar al cliente.',
     }
   }
   return { ok: true, snap }
@@ -656,7 +656,7 @@ export default function NetVisionClienteView() {
       setVistaCliente('inversion')
     }
     setCargandoOferta(true)
-    setShareMsg('Cargando el presupuesto de Ventas…')
+    setShareMsg('Cargando el presupuesto…')
     try {
       const leido = await snapshotOfertaVentas(project)
       if (!leido.ok) {
@@ -670,7 +670,7 @@ export default function NetVisionClienteView() {
       setIncluirPresupuesto(true)
       setVistaCliente('inversion')
       setShareMsg(
-        'Presupuesto incluido. Al compartir, el cliente verá esta oferta (precios de Ventas, sin costos).',
+        'Presupuesto incluido. Al compartir, el cliente verá esta oferta (precios del presupuesto, sin costos).',
       )
     } finally {
       setCargandoOferta(false)
@@ -910,7 +910,7 @@ export default function NetVisionClienteView() {
                 data-nv-incluir-presupuesto-on={incluirPresupuesto ? '' : undefined}
                 title={
                   project.ventasBudgetId
-                    ? 'Mostrar en esta vista la oferta de Ventas y enviarla al compartir'
+                    ? 'Mostrar en esta vista la oferta del presupuesto y enviarla al compartir'
                     : MSG_SIN_PRESUPUESTO_VENTAS
                 }
                 className={`inline-flex min-h-11 max-w-[16rem] cursor-pointer items-center gap-2 border px-2.5 text-[10px] font-semibold uppercase tracking-[0.1em] ${
@@ -960,7 +960,7 @@ export default function NetVisionClienteView() {
           <p className="text-[10px] text-[#a9e8c4]">
             {project.ventasBudgetId
               ? incluirPresupuesto
-                ? 'El cliente verá una oferta congelada (precios de Ventas, sin costos). El plano sí se actualiza al guardar.'
+                ? 'El cliente verá una oferta congelada (precios del presupuesto, sin costos). El plano sí se actualiza al guardar.'
                 : 'El enlace llevará solo el plano. Marca «Incluir presupuesto» para añadir la inversión.'
               : 'Para incluir precios, crea el presupuesto en el inspector Presupuestos.'}
           </p>

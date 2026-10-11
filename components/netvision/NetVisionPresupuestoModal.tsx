@@ -165,7 +165,7 @@ export default function NetVisionPresupuestoModal({
       data-nv-presupuesto-modal
       role="dialog"
       aria-modal="true"
-      aria-label="Crear presupuesto en Ventas"
+      aria-label="Crear presupuesto en Presupuestos"
       className="fixed inset-0 z-[80] flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-4"
       onClick={onClose}
     >
@@ -176,7 +176,7 @@ export default function NetVisionPresupuestoModal({
         <header className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
           <div className="min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--nexus-cyan)]">
-              NetVision → Ventas
+              NetVision → Presupuestos
             </p>
             <h2 className="truncate text-base font-bold">Crear presupuesto</h2>
           </div>
@@ -199,8 +199,8 @@ export default function NetVisionPresupuestoModal({
               className="rounded-lg border border-amber-400/40 bg-amber-400/10 p-3 text-amber-50"
             >
               {datos.error
-                ? `No se pudo conectar con Ventas: ${datos.error}`
-                : 'Inicia sesión para crear el presupuesto en Ventas.'}
+                ? `No se pudo conectar con Presupuestos: ${datos.error}`
+                : 'Inicia sesión para crear el presupuesto.'}
             </p>
           ) : creado ? (
             <div
@@ -214,7 +214,7 @@ export default function NetVisionPresupuestoModal({
               <p className="text-emerald-50/80">
                 {presupuesto.items.length} {presupuesto.items.length === 1 ? 'renglón' : 'renglones'} ·
                 subtotal ${presupuesto.subtotal.toFixed(2)}. Queda ligado al proyecto: al agregar o
-                quitar equipos se actualiza solo, mientras no lo envíes. Revísalo en Ventas antes de
+                quitar equipos se actualiza solo, mientras no lo envíes. Revísalo en Presupuestos antes de
                 enviarlo.
               </p>
               {!creado.enlacesGuardados ? (
@@ -227,7 +227,7 @@ export default function NetVisionPresupuestoModal({
                 href={`/ventas?id=${encodeURIComponent(creado.id)}`}
                 className="inline-flex min-h-11 items-center rounded-lg bg-[var(--nexus-cyan)] px-4 font-semibold text-black"
               >
-                Abrir en Ventas
+                Abrir en Presupuestos
               </Link>
             </div>
           ) : (
@@ -323,7 +323,7 @@ export default function NetVisionPresupuestoModal({
                   />
                   <span>%</span>
                   <span className="basis-full text-[11px] text-[var(--nexus-text-dim)]">
-                    Se suma al precio de cada renglón, igual que en Ventas (allí el valor habitual es{' '}
+                    Se suma al precio de cada renglón, igual que en Presupuestos (allí el valor habitual es{' '}
                     {MARGEN_VENTAS_DEFECTO} %). Un precio que escribas a mano no se recalcula.
                   </span>
                 </label>

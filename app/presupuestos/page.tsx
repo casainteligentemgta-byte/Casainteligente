@@ -7,7 +7,14 @@ import Link from 'next/link';
 import PresupuestosFiltrosModal from '@/components/presupuestos/PresupuestosFiltrosModal';
 import PresupuestoCobrosModal from '@/components/presupuestos/PresupuestoCobrosModal';
 import { fechaDocumentoDeBudget, formatFechaPresupuestoCorta } from '@/lib/presupuesto/fecha';
-import { saldoPresupuesto } from '@/lib/presupuesto/cobros';
+import {
+    ESTADOS_VENTA,
+    filtroDesdeParametro,
+    montoPagadoDe,
+    resumenLista,
+    saldoDe,
+    type FiltroLista,
+} from '@/lib/presupuesto/listaPresupuestos';
 
 interface Budget {
     id: string;
@@ -59,16 +66,6 @@ function clasificarPresupuesto(b: Budget): ClasificacionPresupuesto {
 
 function formatUSD(n: number) {
     return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function montoPagadoDe(b: Budget) {
-    if (b.monto_pagado != null && Number.isFinite(Number(b.monto_pagado))) return Number(b.monto_pagado);
-    return b.status === 'pagado' ? Number(b.subtotal) || 0 : 0;
-}
-
-function saldoDe(b: Budget) {
-    if (b.saldo != null && Number.isFinite(Number(b.saldo))) return Number(b.saldo);
-    return saldoPresupuesto(Number(b.subtotal) || 0, montoPagadoDe(b));
 }
 
 function formatFechaCorta(iso: string) {
@@ -452,7 +449,8 @@ export default function PresupuestosPage() {
     const router = useRouter();
     const [budgets, setBudgets] = useState<Budget[]>([]);
     const [loading, setLoading] = useState(true);
-    const [filter, setFilter] = useState<'todos' | ClasificacionPresupuesto>('todos');
+    /** «ventas» = presupuestos que el cliente ya aceptó. */
+    const [filter, setFilter] = useState<FiltroLista>('todos');
     const [sortBy, setSortBy] = useState<'fecha' | 'status' | 'nomenclatura'>('fecha');
     const [filtroNombre, setFiltroNombre] = useState('');
     const [filtroRif, setFiltroRif] = useState('');
@@ -482,7 +480,8 @@ export default function PresupuestosPage() {
         const supabase = createClient();
         let query = supabase.from('budgets').select('*');
 
-        if (filter !== 'todos') query = query.eq('status', filter);
+        if (filter === 'ventas') query = query.in('status', [...ESTADOS_VENTA]);
+        else if (filter !== 'todos') query = query.eq('status', filter);
         const nombre = filtroNombre.trim();
         const rif = filtroRif.trim();
         if (nombre) query = query.ilike('customer_name', `%${nombre}%`);
@@ -495,7 +494,11 @@ export default function PresupuestosPage() {
             const fallbackMap: Record<string, number> = {};
             const needsFallback = data.some((b) => b.numero_correlativo == null);
             if (needsFallback) {
-                const ordered = [...data].sort((a, b) => {
+                // El número se cuenta sobre TODOS los presupuestos, no sobre los que deja pasar el
+                // filtro: si no, el mismo presupuesto cambiaba de número al filtrar por estado.
+                const { data: todos } = await supabase.from('budgets').select('id, created_at');
+                const base = (todos && todos.length > 0 ? todos : data) as Array<{ id: string; created_at: string }>;
+                const ordered = [...base].sort((a, b) => {
                     const da = new Date(a.created_at).getTime();
                     const db = new Date(b.created_at).getTime();
                     if (da !== db) return da - db;
@@ -548,21 +551,12 @@ export default function PresupuestosPage() {
 
             setBudgets(sorted);
 
-            const sumSubtotal = (pred: (b: Budget) => boolean) =>
-                sorted.reduce((acc, b) => (pred(b) ? acc + (Number(b.subtotal) || 0) : acc), 0);
-
+            // «Por pagar» cuenta solo lo aceptado: un presupuesto enviado todavía no se debe.
+            const totales = resumenLista(sorted);
             const s = {
-                totalAprobado: sumSubtotal((b) =>
-                    b.status === 'aprobado' ||
-                    b.status === 'cobrado' ||
-                    b.status === 'parcialmente_pagado' ||
-                    b.status === 'pagado',
-                ),
-                totalPagado: sorted.reduce((acc, b) => acc + montoPagadoDe(b), 0),
-                totalPorPagar: sorted.reduce((acc, b) => {
-                    if (b.status === 'no_aprobado') return acc;
-                    return acc + saldoDe(b);
-                }, 0),
+                totalAprobado: totales.totalAprobado,
+                totalPagado: totales.totalPagado,
+                totalPorPagar: totales.totalPorPagar,
                 noEnviado: sorted.filter((b) => b.status === 'no_enviado').length,
                 enviado: sorted.filter((b) => b.status === 'enviado').length,
                 aprobados: sorted.filter((b) => b.status === 'aprobado').length,
@@ -578,6 +572,12 @@ export default function PresupuestosPage() {
     useEffect(() => {
         fetchBudgets();
     }, [filter, sortBy, filtroNombre, filtroRif, filtroNumero, filtroFechaDesde, filtroFechaHasta]);
+
+    // Enlaces como /presupuestos?ver=ventas abren la lista ya filtrada.
+    useEffect(() => {
+        const pedido = filtroDesdeParametro(new URLSearchParams(window.location.search).get('ver'));
+        if (pedido !== 'todos') setFilter(pedido);
+    }, []);
 
     const hayFiltrosActivos =
         filter !== 'todos' ||
@@ -668,7 +668,7 @@ export default function PresupuestosPage() {
                 maxWidth: '100%',
                 boxSizing: 'border-box',
             }}>
-                <h1 className="presupuestos-title" style={{ color: '#0F172A', fontSize: '22px', fontWeight: 800, margin: 0, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Presupuestos</h1>
+                <h1 className="presupuestos-title" style={{ color: '#0F172A', fontSize: '20px', fontWeight: 800, margin: 0, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Presupuestos</h1>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
                     <button
                         type="button"
@@ -701,10 +701,10 @@ export default function PresupuestosPage() {
                     <Link href="/ventas">
                         <button style={{
                             background: '#007AFF', color: 'white', border: 'none',
-                            borderRadius: '10px', padding: '8px 12px', fontWeight: 700,
-                            fontSize: '12px', cursor: 'pointer'
+                            borderRadius: '10px', padding: '8px 10px', fontWeight: 700,
+                            fontSize: '12px', cursor: 'pointer', whiteSpace: 'nowrap'
                         }}>
-                            + Nuevo
+                            + Nuevo presupuesto
                         </button>
                     </Link>
                 </div>
@@ -736,7 +736,7 @@ export default function PresupuestosPage() {
                     }}
                 >
                     {[
-                        { label: 'Aprobado', value: `$${formatUSD(stats.totalAprobado)}`, color: '#34C759' },
+                        { label: filter === 'ventas' ? 'Vendido' : 'Aprobado', value: `$${formatUSD(stats.totalAprobado)}`, color: '#34C759' },
                         { label: 'Por pagar', value: `$${formatUSD(stats.totalPorPagar)}`, color: '#F59E0B' },
                         { label: 'Pagado', value: `$${formatUSD(stats.totalPagado)}`, color: '#10B981' },
                     ].map((kpi, i) => (
@@ -787,8 +787,8 @@ export default function PresupuestosPage() {
                     }}
                 >
                     {([
-                        ['todos', 'no_enviado', 'enviado', 'aprobado'],
-                        ['no_aprobado', 'cobrado', 'parcialmente_pagado', 'pagado'],
+                        ['todos', 'ventas', 'no_enviado', 'enviado'],
+                        ['aprobado', 'no_aprobado', 'cobrado', 'parcialmente_pagado', 'pagado'],
                     ] as const).map((row, rowIdx) => (
                         <div
                             key={rowIdx}
@@ -803,32 +803,24 @@ export default function PresupuestosPage() {
                         >
                             {row.map((f) => {
                                 const active = filter === f;
-                                const label = f === 'todos' ? 'Todos' : CLASIFICACION_COLORS[f].short;
-                                const text =
-                                    f !== 'todos' && active
-                                        ? CLASIFICACION_COLORS[f].text
-                                        : active
-                                          ? '#007AFF'
-                                          : '#475569';
-                                const bg =
-                                    f !== 'todos' && active
-                                        ? CLASIFICACION_COLORS[f].bg
-                                        : active
-                                          ? '#DBEAFE'
-                                          : '#FFFFFF';
-                                const border =
-                                    f !== 'todos' && active
-                                        ? `1px solid ${CLASIFICACION_COLORS[f].text}55`
-                                        : active
-                                          ? '1px solid rgba(0,122,255,0.35)'
-                                          : '1px solid #E2E8F0';
+                                // «Todos» y «Ventas» no son un estado: llevan su propio color.
+                                const estilo =
+                                    f === 'todos'
+                                        ? { short: 'Todos', label: 'Todos', text: '#007AFF', bg: '#DBEAFE' }
+                                        : f === 'ventas'
+                                          ? { short: 'Ventas', label: 'Ventas: aprobados, por pagar y pagados', text: '#047857', bg: '#D1FAE5' }
+                                          : CLASIFICACION_COLORS[f];
+                                const label = estilo.short;
+                                const text = active ? estilo.text : '#475569';
+                                const bg = active ? estilo.bg : '#FFFFFF';
+                                const border = active ? `1px solid ${estilo.text}55` : '1px solid #E2E8F0';
                                 return (
                                     <button
                                         key={f}
                                         type="button"
                                         role="option"
                                         aria-selected={active}
-                                        aria-label={f === 'todos' ? 'Todos' : CLASIFICACION_COLORS[f].label}
+                                        aria-label={estilo.label}
                                         onClick={() => setFilter(f)}
                                         style={{
                                             display: 'inline-flex',

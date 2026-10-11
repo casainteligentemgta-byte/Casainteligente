@@ -18,6 +18,8 @@ const rutas: Record<string, { pathname: string; params: Record<string, string>; 
   'producto-nuevo': { pathname: '/productos/nuevo', params: {}, cargar: () => import('@/app/productos/nuevo/page') },
   'producto-editar': { pathname: '/productos/3/editar', params: { id: '3' }, cargar: () => import('@/app/productos/[id]/editar/page') },
   'importar-lista': { pathname: '/productos/importar-lista', params: {}, cargar: () => import('@/app/productos/importar-lista/page') },
+  presupuestos: { pathname: '/presupuestos', params: {}, cargar: () => import('@/app/presupuestos/page') },
+  'presupuesto-nuevo': { pathname: '/ventas', params: {}, cargar: () => import('@/app/ventas/page') },
   'costos-proveedor': { pathname: '/productos/costos-proveedor', params: {}, cargar: () => import('@/app/productos/costos-proveedor/page') },
 };
 const r = rutas[pantalla];

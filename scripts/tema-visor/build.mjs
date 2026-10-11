@@ -22,6 +22,9 @@ const STUBS = {
   'lucide-react': 'stubs/lucide.tsx',
   sonner: 'stubs/sonner.ts',
   '@/lib/supabase/client': 'stubs/supabase-client.ts',
+  '@dnd-kit/core': 'stubs/dnd-kit.tsx',
+  '@dnd-kit/sortable': 'stubs/dnd-kit.tsx',
+  '@dnd-kit/utilities': 'stubs/dnd-kit.tsx',
 };
 const EXT = ['', '.ts', '.tsx', '.js', '/index.ts', '/index.tsx'];
 const plugin = {
