@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import ClienteContextoObraPatrono from '@/components/clientes/ClienteContextoObraPatrono';
 import CustomerLoyaltyCard from '@/components/clientes/CustomerLoyaltyCard';
+import BotonTema from '@/components/tema/BotonTema';
 import { useCustomerLoyaltyScore } from '@/hooks/useCustomerLoyaltyScore';
 import {
   cargarClienteDetalle,
@@ -166,9 +167,12 @@ export default function ClienteDetallePage() {
   return (
     <div className="min-h-screen bg-[#0A0A0F] px-4 pb-28 pt-6">
       <div className="mx-auto max-w-3xl space-y-4">
-        <Link href="/clientes" className="text-sm font-medium text-[#7cb9ff] hover:underline">
-          ← Volver a clientes
-        </Link>
+        <div className="flex items-center justify-between gap-3">
+          <Link href="/clientes" className="text-sm font-medium text-[#7cb9ff] hover:underline">
+            ← Volver a clientes
+          </Link>
+          <BotonTema />
+        </div>
 
         {loading ? <p className="text-sm text-zinc-500">Cargando ficha del cliente...</p> : null}
         {error ? <p className="text-sm text-red-300">{error}</p> : null}

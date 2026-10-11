@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import AppChrome from "@/components/AppChrome";
+import { SCRIPT_TEMA_INICIAL } from "@/lib/tema/tema";
 import "./globals.css";
+import "./tema-claro.css";
 
 export const metadata: Metadata = {
     title: "Casa Inteligente — CRM",
@@ -17,6 +19,10 @@ export default function RootLayout({
 }>) {
     return (
         <html lang="es" suppressHydrationWarning>
+            <head>
+                {/* Fija claro u oscuro antes de pintar, para que la página no parpadee. */}
+                <script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA_INICIAL }} />
+            </head>
             <body className="font-sans antialiased text-[var(--label-primary)]" suppressHydrationWarning>
                 <div
                     className="min-h-screen app-root-bg"

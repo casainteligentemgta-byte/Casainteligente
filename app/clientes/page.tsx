@@ -4,10 +4,12 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, useCallback } from 'react';
 import ClienteCard from '@/components/clientes/ClienteCard';
+import BotonTema from '@/components/tema/BotonTema';
 import { contarVinculosCliente, motivoNoBorrarCliente } from '@/lib/clientes/presupuestosCliente';
 import { withTimeout } from '@/lib/http/withTimeout';
 import { createClient } from '@/lib/supabase/client';
 import type { CustomerListItem } from '@/types';
+import { tinta, tintaTexto } from '@/lib/tema/tinta';
 
 const CUSTOMERS_LOAD_TIMEOUT_MS = 22_000;
 
@@ -235,7 +237,7 @@ export default function ClientesPage() {
     if (loading) {
         return (
             <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', padding: '48px 20px', paddingBottom: '100px' }}>
-                <p style={{ color: 'rgba(255,255,255,0.6)', textAlign: 'center', fontSize: '15px' }}>Cargando clientes…</p>
+                <p style={{ color: tintaTexto(0.6), textAlign: 'center', fontSize: '15px' }}>Cargando clientes…</p>
             </div>
         );
     }
@@ -245,13 +247,13 @@ export default function ClientesPage() {
             <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', padding: '24px 20px 100px' }}>
                 <div style={{
                     maxWidth: '480px', margin: '0 auto', padding: '20px', borderRadius: '16px',
-                    background: 'rgba(255,59,48,0.12)', border: '1px solid rgba(255,59,48,0.35)', color: 'white',
+                    background: 'rgba(255,59,48,0.12)', border: '1px solid rgba(255,59,48,0.35)', color: 'var(--label-primary)',
                 }}>
                     <p style={{ fontWeight: 700, marginBottom: '8px' }}>No se pudo cargar clientes</p>
                     <p style={{ fontSize: '14px', opacity: 0.9, marginBottom: '12px' }}>{fetchError}</p>
                     <p style={{ fontSize: '13px', opacity: 0.75, lineHeight: 1.5 }}>
-                        Revisa que exista la tabla <code style={{ color: '#FF9500' }}>customers</code> en Supabase y que{' '}
-                        <code style={{ color: '#FF9500' }}>.env.local</code> tenga URL y anon key correctos.
+                        Revisa que exista la tabla <code style={{ color: 'var(--tono-naranja)' }}>customers</code> en Supabase y que{' '}
+                        <code style={{ color: 'var(--tono-naranja)' }}>.env.local</code> tenga URL y anon key correctos.
                     </p>
                     <button
                         type="button"
@@ -274,10 +276,10 @@ export default function ClientesPage() {
             {/* ── Header sticky ── */}
             <div style={{
                 position: 'sticky', top: 0, zIndex: 50,
-                background: 'rgba(0,0,0,0.75)',
+                background: 'var(--barra-fondo)',
                 backdropFilter: 'blur(30px)',
                 WebkitBackdropFilter: 'blur(30px)',
-                borderBottom: '1px solid rgba(255,255,255,0.08)',
+                borderBottom: `1px solid ${tinta(0.08)}`,
                 padding: '16px 20px 14px',
             }}>
                 {/* Title row */}
@@ -289,20 +291,22 @@ export default function ClientesPage() {
                             aria-label="Ir al menú de inicio"
                             style={{
                                 width: '38px', height: '38px', borderRadius: '11px',
-                                background: 'rgba(0,122,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                background: 'rgba(0,122,255,0.2)', color: 'var(--tono-azul)', display: 'flex', alignItems: 'center', justifyContent: 'center',
                                 border: 'none', padding: 0, cursor: 'pointer', flexShrink: 0,
                             }}
                         >
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
-                                <circle cx="9" cy="7" r="4" stroke="#007AFF" strokeWidth="1.8" />
-                                <path d="M2 21c0-4 3.1-7 7-7s7 3 7 7" stroke="#007AFF" strokeWidth="1.8" strokeLinecap="round" />
-                                <path d="M19 8v6M22 11h-6" stroke="#007AFF" strokeWidth="1.8" strokeLinecap="round" />
+                                <circle cx="9" cy="7" r="4" stroke="currentColor" strokeWidth="1.8" />
+                                <path d="M2 21c0-4 3.1-7 7-7s7 3 7 7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                                <path d="M19 8v6M22 11h-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
                             </svg>
                         </button>
                         <div>
-                            <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'white', lineHeight: 1 }}>Clientes</h1>
+                            <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--label-primary)', lineHeight: 1 }}>Clientes</h1>
                         </div>
                     </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <BotonTema />
                     <Link
                         href="/clientes/nuevo"
                         style={{
@@ -317,20 +321,21 @@ export default function ClientesPage() {
                             <path d="M8 2v12M2 8h12" stroke="white" strokeWidth="2" strokeLinecap="round" />
                         </svg>
                     </Link>
+                    </div>
                 </div>
 
                 {/* Search */}
                 <div style={{
                     display: 'flex', alignItems: 'center', gap: '10px',
-                    background: 'rgba(255,255,255,0.09)',
-                    border: `1px solid ${search ? 'rgba(0,122,255,0.5)' : 'rgba(255,255,255,0.13)'}`,
+                    background: tinta(0.09),
+                    border: `1px solid ${search ? 'rgba(0,122,255,0.5)' : tinta(0.13)}`,
                     borderRadius: '13px', padding: '10px 14px',
                     transition: 'border-color 0.2s',
                     boxShadow: search ? '0 0 0 3px rgba(0,122,255,0.08)' : 'none',
                 }}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
-                        <circle cx="11" cy="11" r="7" stroke={search ? '#007AFF' : 'rgba(255,255,255,0.4)'} strokeWidth="2" />
-                        <path d="M16.5 16.5L21 21" stroke={search ? '#007AFF' : 'rgba(255,255,255,0.4)'} strokeWidth="2" strokeLinecap="round" />
+                        <circle cx="11" cy="11" r="7" stroke={search ? '#007AFF' : tinta(0.4)} strokeWidth="2" />
+                        <path d="M16.5 16.5L21 21" stroke={search ? '#007AFF' : tinta(0.4)} strokeWidth="2" strokeLinecap="round" />
                     </svg>
                     <input
                         type="text"
@@ -339,14 +344,14 @@ export default function ClientesPage() {
                         placeholder="Buscar por nombre, RIF, email..."
                         style={{
                             flex: 1, background: 'transparent', border: 'none', outline: 'none',
-                            color: 'white', fontSize: '15px', fontFamily: 'inherit',
+                            color: 'var(--label-primary)', fontSize: '15px', fontFamily: 'inherit',
                         }}
                     />
                     {search && (
                         <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', flexShrink: 0 }}>
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                                <circle cx="12" cy="12" r="10" fill="rgba(255,255,255,0.15)" />
-                                <path d="M8 8l8 8M16 8l-8 8" stroke="white" strokeWidth="1.8" strokeLinecap="round" />
+                                <circle cx="12" cy="12" r="10" fill={tinta(0.15)} />
+                                <path d="M8 8l8 8M16 8l-8 8" stroke="var(--label-primary)" strokeWidth="1.8" strokeLinecap="round" />
                             </svg>
                         </button>
                     )}
@@ -364,9 +369,9 @@ export default function ClientesPage() {
                                     onClick={() => setFiltro(active ? '' : f)}
                                     style={{
                                         padding: '6px 13px', borderRadius: '20px', whiteSpace: 'nowrap',
-                                        border: active ? '1.5px solid #007AFF' : '1px solid rgba(255,255,255,0.1)',
-                                        background: active ? 'rgba(0,122,255,0.18)' : 'rgba(255,255,255,0.05)',
-                                        color: active ? '#007AFF' : 'rgba(255,255,255,0.45)',
+                                        border: active ? '1.5px solid #007AFF' : `1px solid ${tinta(0.1)}`,
+                                        background: active ? 'rgba(0,122,255,0.18)' : tinta(0.05),
+                                        color: active ? 'var(--tono-azul)' : tintaTexto(0.45),
                                         fontSize: '12px', fontWeight: active ? 700 : 500,
                                         cursor: 'pointer', fontFamily: 'inherit',
                                         transition: 'all 0.18s',
@@ -384,16 +389,16 @@ export default function ClientesPage() {
             {/* ── Stats ── */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', padding: '16px 16px 8px' }}>
                 {[
-                    { label: 'Total', value: lista.length, color: '#007AFF', bg: 'rgba(0,122,255,0.08)', border: 'rgba(0,122,255,0.15)' },
-                    { label: 'Empresas', value: empresasCount, color: '#FF9500', bg: 'rgba(255,149,0,0.08)', border: 'rgba(255,149,0,0.15)' },
-                    { label: 'Personas', value: personasCount, color: '#34C759', bg: 'rgba(52,199,89,0.08)', border: 'rgba(52,199,89,0.15)' },
+                    { label: 'Total', value: lista.length, color: 'var(--tono-azul)', bg: 'rgba(0,122,255,0.08)', border: 'rgba(0,122,255,0.15)' },
+                    { label: 'Empresas', value: empresasCount, color: 'var(--tono-naranja)', bg: 'rgba(255,149,0,0.08)', border: 'rgba(255,149,0,0.15)' },
+                    { label: 'Personas', value: personasCount, color: 'var(--tono-verde)', bg: 'rgba(52,199,89,0.08)', border: 'rgba(52,199,89,0.15)' },
                 ].map(s => (
                     <div key={s.label} style={{
                         background: s.bg, border: `1px solid ${s.border}`,
                         borderRadius: '16px', padding: '12px', textAlign: 'center',
                     }}>
                         <p style={{ fontSize: '22px', fontWeight: 800, color: s.color, lineHeight: 1 }}>{s.value}</p>
-                        <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginTop: '4px', fontWeight: 500 }}>{s.label}</p>
+                        <p style={{ fontSize: '11px', color: tintaTexto(0.4), marginTop: '4px', fontWeight: 500 }}>{s.label}</p>
                     </div>
                 ))}
             </div>
@@ -405,18 +410,18 @@ export default function ClientesPage() {
                         <div style={{ fontSize: '40px', marginBottom: '12px' }}>👥</div>
                         {lista.length === 0 ? (
                             <>
-                                <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '15px', fontWeight: 600 }}>
+                                <p style={{ color: tintaTexto(0.5), fontSize: '15px', fontWeight: 600 }}>
                                     No hay clientes en la base
                                 </p>
-                                <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '13px', marginTop: '8px', lineHeight: 1.5 }}>
-                                    Crea el primero con el botón <strong style={{ color: 'rgba(255,255,255,0.55)' }}>+</strong> arriba a la
+                                <p style={{ color: tintaTexto(0.35), fontSize: '13px', marginTop: '8px', lineHeight: 1.5 }}>
+                                    Crea el primero con el botón <strong style={{ color: tintaTexto(0.55) }}>+</strong> arriba a la
                                     derecha.
                                 </p>
                             </>
                         ) : (
                             <>
-                                <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '15px', fontWeight: 600 }}>Sin resultados</p>
-                                <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '13px', marginTop: '4px' }}>
+                                <p style={{ color: tintaTexto(0.5), fontSize: '15px', fontWeight: 600 }}>Sin resultados</p>
+                                <p style={{ color: tintaTexto(0.3), fontSize: '13px', marginTop: '4px' }}>
                                     Hay {lista.length} en total; prueba otro término o filtro.
                                 </p>
                                 {(search || filtro) && (
@@ -429,7 +434,7 @@ export default function ClientesPage() {
                                         style={{
                                             marginTop: '16px', padding: '10px 20px', borderRadius: '12px',
                                             background: 'rgba(0,122,255,0.15)', border: '1px solid rgba(0,122,255,0.3)',
-                                            color: '#007AFF', fontSize: '14px', fontWeight: 600,
+                                            color: 'var(--tono-azul)', fontSize: '14px', fontWeight: 600,
                                             cursor: 'pointer', fontFamily: 'inherit',
                                         }}
                                     >

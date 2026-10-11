@@ -53,6 +53,21 @@
     --glass-border: rgba(255, 255, 255, 0.10);
     --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.40);
 
+    /* Tema claro / oscuro (lib/tema): valores en oscuro; los de claro están en tema-claro.css */
+    --tinta: 255 255 255;
+    --tinta-realce: 1;
+    --superficie: rgba(28, 28, 30, 0.95);
+    --superficie-alta: rgba(28, 28, 30, 0.98);
+    --barra-fondo: rgba(0, 0, 0, 0.75);
+    --sombra-tarjeta: 0 4px 20px rgba(0, 0, 0, 0.3);
+    --sombra-tarjeta-alta: 0 8px 32px rgba(0, 0, 0, 0.45);
+    --tono-azul: #007AFF;
+    --tono-verde: #34C759;
+    --tono-naranja: #FF9500;
+    --tono-rojo: #FF3B30;
+    --tono-celeste: #5AC8FA;
+    --tono-whatsapp: #25D366;
+
     /* Radius */
     --radius-sm: 10px;
     --radius-md: 14px;

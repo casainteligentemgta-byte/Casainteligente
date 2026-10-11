@@ -5,6 +5,8 @@ import { Suspense } from 'react';
 import ReactQueryProvider from '@/components/providers/ReactQueryProvider';
 import ModulosRutaGuard from '@/components/auth/ModulosRutaGuard';
 import IOSNavBar from '@/components/IOSNavBar';
+import TemaSync from '@/components/tema/TemaSync';
+import { rutaConTema } from '@/lib/tema/tema';
 import { usePathname } from 'next/navigation';
 
 /** Sonner rompe el SSR en dev si se renderiza en servidor (componente interno undefined). */
@@ -47,10 +49,16 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
 
   return (
     <>
+      <TemaSync />
       <ReactQueryProvider>
         {!chromeMinimal ? <ModulosRutaGuard /> : null}
         {/* Dock inferior auto-oculto: poco padding; el menú no reserva espacio fijo */}
-        <div className={chromeMinimal ? 'min-h-screen' : 'min-h-screen pb-8'}>{children}</div>
+        {/* «ci-tema»: pantallas que ya tienen tema claro (lib/tema/tema.ts). */}
+        <div
+          className={`${chromeMinimal ? 'min-h-screen' : 'min-h-screen pb-8'}${rutaConTema(path) ? ' ci-tema' : ''}`}
+        >
+          {children}
+        </div>
       </ReactQueryProvider>
       {!chromeMinimal ? (
         <Suspense fallback={null}>
