@@ -38,6 +38,19 @@ for (const t of temas) {
         ruta.fulfill({ contentType: 'text/javascript', body: fs.readFileSync(WORKER_PDF) }),
       );
     }
+    // «costos-proveedor»: la web del proveedor es de mentira (precios inventados por enlace).
+    if (p === 'costos-proveedor') {
+      const precios = { '1-camara': 44.5, '2-switch': 60, '3-cerradura': 82 };
+      await pag.route('**/api/productos/precio-proveedor', async (ruta) => {
+        const { url } = JSON.parse(ruta.request().postData() ?? '{}');
+        const clave = Object.keys(precios).find((k) => String(url).includes(k));
+        await ruta.fulfill({
+          status: clave ? 200 : 422,
+          contentType: 'application/json',
+          body: JSON.stringify(clave ? { ok: true, url, precio: precios[clave], titulo: 'Producto de ejemplo' } : { ok: false, error: 'El proveedor ya no tiene esa página. Actualiza el enlace.' }),
+        });
+      });
+    }
     await pag.goto(`http://127.0.0.1:${puerto}/?p=${pantalla}&t=${t}${sufijo}`);
     await pag.waitForTimeout(900);
     if (p === 'modal') { await pag.getByRole('button', { name: 'Ver' }).first().click(); await pag.waitForTimeout(600); }
@@ -54,6 +67,11 @@ for (const t of temas) {
       await pag.setInputFiles('[data-ilp-csv]', process.env.VISOR_PDF);
       await pag.waitForSelector('[data-ilp-csv-ok], [data-ilp-csv-error]', { timeout: 20000 });
       await pag.waitForTimeout(700);
+    }
+    if (p === 'costos-proveedor') {
+      await pag.locator('[data-cpw-consultar]').click();
+      await pag.waitForSelector('[data-cpw-avance]', { state: 'detached', timeout: 30000 });
+      await pag.waitForTimeout(400);
     }
     const hoja = p === 'modal' || p === 'producto-detalle';
     await pag.screenshot({ path: path.join(destino, `${p}-${t}.png`), fullPage: !hoja });

@@ -585,6 +585,15 @@ export default function ProductosPage() {
                     >
                         Importar lista de precios del proveedor (PDF o CSV) →
                     </Link>
+                    <Link
+                        href="/productos/costos-proveedor"
+                        data-productos-costos-proveedor
+                        style={{
+                            color: 'var(--tono-naranja)', fontSize: '13px', fontWeight: 700, textDecoration: 'none',
+                        }}
+                    >
+                        Actualizar costos desde la web del proveedor →
+                    </Link>
                 </div>
 
                 <div style={{ marginBottom: '12px' }}>
