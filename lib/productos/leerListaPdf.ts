@@ -32,7 +32,9 @@ export type DiagnosticoPdf = {
 
 export type ListaPdfLeida = ListaLeida & { diagnostico: DiagnosticoPdf }
 
-type Celda = { texto: string; x: number; fin: number; h: number }
+type Parte = { texto: string; x: number; fin: number }
+/** `partes`: los trozos del PDF que forman la celda, por si hay que volver a separarla. */
+type Celda = { texto: string; x: number; fin: number; h: number; partes?: Parte[]; /** Alto de su letra más pequeña. */ hMin?: number }
 type Linea = { y: number; h: number; celdas: Celda[] }
 
 type Columna = 'modelo' | 'descripcion' | 'precio' | 'estatus' | 'marca' | 'otra'
@@ -45,22 +47,28 @@ function sinAcentos(s: string): string {
     .toLowerCase()
 }
 
-/** Junta los trozos en líneas (misma altura) y, dentro de la línea, en celdas (texto pegado). */
+/**
+ * Junta los trozos en líneas y, dentro de la línea, en celdas (texto pegado).
+ * Dos trozos están en la misma línea si comparten la línea base (el pie de la letra):
+ * así un modelo centrado entre dos líneas de descripción no se mezcla con ellas, y una
+ * letra suelta más alta (un superíndice, un título) no arrastra a las líneas vecinas.
+ */
 export function lineasDePagina(trozos: readonly TrozoPdf[]): Linea[] {
   const utiles = trozos
     .filter((t) => t.str.trim() !== '')
     .map((t) => ({ ...t, h: t.h > 0 ? t.h : 8 }))
-    .sort((a, b) => a.y - b.y || a.x - b.x)
+    .sort((a, b) => a.y + a.h - (b.y + b.h) || a.x - b.x)
 
-  const lineas: Array<{ y: number; h: number; trozos: TrozoPdf[] }> = []
+  const lineas: Array<{ base: number; h: number; trozos: TrozoPdf[] }> = []
   for (const t of utiles) {
+    const base = t.y + t.h
     const actual = lineas[lineas.length - 1]
-    // Misma línea si el centro vertical cae a menos de media altura.
-    if (actual && Math.abs(t.y + t.h / 2 - (actual.y + actual.h / 2)) <= Math.max(actual.h, t.h) * 0.5) {
+    if (actual && Math.abs(base - actual.base) <= Math.min(actual.h, t.h) * 0.3) {
       actual.trozos.push(t)
-      actual.h = Math.max(actual.h, t.h)
+      // La altura de la línea es la de su letra más común, no la del trozo más alto.
+      actual.h = Math.min(actual.h, t.h)
     } else {
-      lineas.push({ y: t.y, h: t.h, trozos: [t] })
+      lineas.push({ base, h: t.h, trozos: [t] })
     }
   }
 
@@ -72,16 +80,20 @@ export function lineasDePagina(trozos: readonly TrozoPdf[]): Linea[] {
       const hueco = previa ? t.x - previa.fin : Infinity
       // Un hueco como el de un espacio es la misma celda; mayor, puede ser otra columna
       // (las celdas de una misma columna se vuelven a juntar al repartirlas).
-      if (previa && hueco <= Math.max(previa.h, t.h) * 0.45) {
+      // Letras de tamaño muy distinto no son la misma celda (un rótulo grande que pisa la tabla).
+      const mismoTamano = previa ? Math.max(previa.h, t.h) <= Math.min(previa.hMin ?? previa.h, t.h) * 1.4 : false
+      if (previa && mismoTamano && hueco <= Math.max(previa.h, t.h) * 0.45) {
         previa.texto += (hueco > Math.max(previa.h, t.h) * 0.15 && !previa.texto.endsWith(' ') ? ' ' : '') + t.str
         previa.fin = Math.max(previa.fin, t.x + t.w)
         previa.h = Math.max(previa.h, t.h)
+        previa.hMin = Math.min(previa.hMin ?? t.h, t.h)
+        previa.partes!.push({ texto: t.str, x: t.x, fin: t.x + t.w })
       } else {
-        celdas.push({ texto: t.str, x: t.x, fin: t.x + t.w, h: t.h })
+        celdas.push({ texto: t.str, x: t.x, fin: t.x + t.w, h: t.h, hMin: t.h, partes: [{ texto: t.str, x: t.x, fin: t.x + t.w }] })
       }
     }
     return {
-      y: l.y,
+      y: l.base,
       h: l.h,
       celdas: celdas.map((c) => ({ ...c, texto: c.texto.replace(/\s+/g, ' ').trim() })).filter((c) => c.texto !== ''),
     }
@@ -94,10 +106,10 @@ function tipoDeTitulo(titulo: string): { tipo: Columna; prioridad: number } {
   if (/^(modelo|model|codigo|cod|sku|referencia|ref|parte|n ?de ?parte|no ?parte|numero de parte|part ?number|part ?no|p\/n|item|articulo)( .*)?$/.test(t)) {
     return { tipo: 'modelo', prioridad: /modelo|model|sku|parte|part|p\/n/.test(t) ? 2 : 1 }
   }
-  if (/(precio|price|usd|\$|costo|cost|pvp|tarifa|valor|importe|neto|lista)/.test(t)) {
+  if (/(precio|price|usd|\$|costo|cost|pvp|tarifa|valor|importe|neto|lista|instalador|distribuidor|mayorista|mayoreo|integrador|dealer|partner|reseller)/.test(t)) {
     // Lo que paga la empresa pesa más que el precio sugerido al público.
     if (/(pvp|publico|sugerido|venta|retail|msrp|final)/.test(t)) return { tipo: 'precio', prioridad: 1 }
-    if (/(instalador|distribuidor|mayor|integrador|costo|cost|neto|dealer|partner)/.test(t)) return { tipo: 'precio', prioridad: 3 }
+    if (/(instalador|distribuidor|mayor|integrador|costo|cost|neto|dealer|partner|reseller)/.test(t)) return { tipo: 'precio', prioridad: 3 }
     return { tipo: 'precio', prioridad: 2 }
   }
   if (/(descripcion|description|producto|nombre|detalle|caracteristica|especificacion)/.test(t)) {
@@ -140,8 +152,118 @@ function indiceColumna(celda: Celda, columnas: readonly { x: number; fin: number
   return mejor
 }
 
+type Tramo = { x: number; fin: number }
+
+/**
+ * Franjas verticales de la página donde hay texto, separadas por los «ríos» en blanco que
+ * deja la cuadrícula de la tabla. Se tolera que alguna línea suelta cruce un río (un título
+ * centrado, una nota al pie).
+ */
+function franjasConTexto(lineas: readonly Linea[]): Tramo[] {
+  // Se mide sobre los trozos sueltos: un modelo largo que llega hasta tocar la descripción
+  // forma una sola celda, pero entre sus dos trozos sigue estando el río.
+  const celdas: Tramo[] = lineas.flatMap((l) => l.celdas.flatMap((c) => (c.partes && c.partes.length > 0 ? c.partes : [c])))
+  if (celdas.length === 0) return []
+  const tolerancia = Math.max(1, Math.floor(lineas.length * 0.03))
+  const cortes = Array.from(new Set(celdas.flatMap((c) => [c.x, c.fin]))).sort((a, b) => a - b)
+  const franjas: Tramo[] = []
+  for (let i = 0; i + 1 < cortes.length; i++) {
+    const desde = cortes[i]!
+    const hasta = cortes[i + 1]!
+    const medio = (desde + hasta) / 2
+    const cubren = celdas.reduce((n, c) => (c.x <= medio && c.fin >= medio ? n + 1 : n), 0)
+    if (cubren <= tolerancia) continue
+    const previa = franjas[franjas.length - 1]
+    if (previa && desde - previa.fin < 1.5) previa.fin = hasta
+    else franjas.push({ x: desde, fin: hasta })
+  }
+  return franjas
+}
+
+/**
+ * Dónde cae de verdad cada columna. El título puede estar centrado y sus valores alineados
+ * a la izquierda («DESCRIPCION» en medio de una celda ancha): si se repartiera por el título,
+ * el principio de la descripción acabaría en la columna del modelo. Por eso cada columna
+ * toma la franja de texto que queda bajo su título; una franja sin título es de la columna
+ * vecina que todavía no tiene la suya.
+ *
+ * Devuelve también las franjas que quedan fuera de la tabla (los números de fila que Excel
+ * imprime a la izquierda).
+ */
+export function tramosDeColumnas(lineas: readonly Linea[], columnas: readonly Tramo[]): { tramos: Tramo[]; fuera: Tramo[] } {
+  const franjas = franjasConTexto(lineas)
+  const propias: Tramo[][] = columnas.map(() => [])
+  const sinTitulo: Tramo[] = []
+  for (const f of franjas) {
+    const debajo = columnas.map((c, i) => (Math.min(f.fin, c.fin) - Math.max(f.x, c.x) > 0 ? i : -1)).filter((i) => i >= 0)
+    if (debajo.length === 1) propias[debajo[0]!]!.push(f)
+    else if (debajo.length === 0) sinTitulo.push(f)
+    // Una franja bajo dos títulos no separa nada: esas columnas se reparten por el título.
+  }
+
+  const fuera: Tramo[] = []
+  const primerTitulo = Math.min(...columnas.map((c) => c.x))
+  const distancia = (f: Tramo, c: Tramo) => Math.max(c.x - f.fin, f.x - c.fin, 0)
+  for (const f of sinTitulo) {
+    if (f.fin <= primerTitulo) {
+      const textos = lineas.flatMap((l) => l.celdas.filter((c) => c.x >= f.x - 0.5 && c.fin <= f.fin + 0.5).map((c) => c.texto))
+      if (textos.length > 0 && textos.every((t) => /^\d{1,5}$/.test(t))) {
+        fuera.push(f)
+        continue
+      }
+    }
+    // Primero las columnas que aún no tienen franja; si todas tienen, la más cercana.
+    const libres = columnas.map((_, i) => i).filter((i) => propias[i]!.length === 0)
+    const candidatas = libres.length > 0 ? libres : columnas.map((_, i) => i)
+    const destino = candidatas.reduce((m, i) => (distancia(f, columnas[i]!) < distancia(f, columnas[m]!) ? i : m))
+    propias[destino]!.push(f)
+  }
+
+  const tramos = columnas.map((c, i) => {
+    const suyas = propias[i]!
+    if (suyas.length === 0) return { x: c.x, fin: c.fin }
+    return { x: Math.min(...suyas.map((f) => f.x)), fin: Math.max(...suyas.map((f) => f.fin)) }
+  })
+  return { tramos, fuera }
+}
+
+/**
+ * Un texto largo puede llegar hasta tocar la columna siguiente y quedar pegado a ella en una
+ * sola celda («CS-ABC(2K 4GA)» + «BIDIRECCIONAL, …»). Si uno de sus trozos empieza justo
+ * donde empieza otra columna, la celda se parte ahí.
+ */
+function separarPorColumnas(celdas: readonly Celda[], tramos: readonly Tramo[]): Celda[] {
+  const salida: Celda[] = []
+  for (const celda of celdas) {
+    const partes = celda.partes ?? []
+    if (partes.length < 2) {
+      salida.push(celda)
+      continue
+    }
+    let grupo: Parte[] = []
+    const cerrar = () => {
+      if (grupo.length === 0) return
+      let texto = ''
+      grupo.forEach((p, i) => {
+        const hueco = i > 0 ? p.x - grupo[i - 1]!.fin : 0
+        texto += (i > 0 && hueco > celda.h * 0.15 && !texto.endsWith(' ') ? ' ' : '') + p.texto
+      })
+      texto = texto.replace(/\s+/g, ' ').trim()
+      if (texto) salida.push({ texto, x: grupo[0]!.x, fin: Math.max(...grupo.map((p) => p.fin)), h: celda.h, hMin: celda.hMin, partes: grupo })
+      grupo = []
+    }
+    for (const parte of partes) {
+      const empiezaColumna = grupo.length > 0 && tramos.some((t) => Math.abs(parte.x - t.x) <= 1.5 && grupo[0]!.x < t.x - 2)
+      if (empiezaColumna) cerrar()
+      grupo.push(parte)
+    }
+    cerrar()
+  }
+  return salida
+}
+
 /** Reparte las celdas de una línea en las columnas del encabezado, por posición. */
-function repartir(linea: Linea, columnas: readonly ColumnaTabla[]): string[] {
+function repartir(linea: Linea, columnas: readonly Tramo[]): string[] {
   const valores = columnas.map(() => '')
   for (const celda of linea.celdas) {
     const i = indiceColumna(celda, columnas)
@@ -175,6 +297,23 @@ export function pareceTituloDeSeccion(texto: string): boolean {
   if (/[.,;:]$/.test(t)) return false
   if (/^\d+$/.test(t) || /p[aá]gina|page|\bde \d+$/i.test(t)) return false
   return /^[A-ZÁÉÍÓÚÑ0-9¿¡(]/.test(t)
+}
+
+/**
+ * Un modelo largo puede venir partido en dos o tres líneas dentro de su celda
+ * («CS-H8c-R100-» / «1J4WKFL(4mm)(US-» / «STD)(Mu)»). Se vuelve a unir: sin espacio si el
+ * corte fue en un guion o un paréntesis, con espacio si fue entre palabras.
+ */
+export function unirModelo(partes: readonly string[]): string {
+  let modelo = ''
+  for (const cruda of partes) {
+    const parte = cruda.trim()
+    if (!parte) continue
+    if (!modelo) modelo = parte
+    else if (/[-/(_]$/.test(modelo) || /^[)\-/_]/.test(parte)) modelo += parte
+    else modelo += ` ${parte}`
+  }
+  return modelo
 }
 
 /** ¿Parece un modelo de fábrica? Sin espacios raros, con algún número o guion, 3+ caracteres. */
@@ -252,206 +391,240 @@ export function leerListaPdf(paginas: readonly PaginaPdf[]): ListaPdfLeida {
 
   if (hayEncabezado) {
     for (const pagina of porPagina) {
-      type Renglon = { fila: FilaLista; y: number; h: number; propia: boolean }
-      type Suelta = { texto: string; y: number; h: number; unaCelda: boolean }
-      const renglones: Renglon[] = []
-      const sueltas: Suelta[] = []
-      /** Títulos de sección: se aplican a los renglones que quedan debajo. */
-      const secciones: Array<{ y: number; texto: string }> = []
-
       // Lo que está por encima del encabezado de la página es membrete (título, fecha…).
       const iCabecera = pagina.lineas.findIndex((l) => encabezadoDeLinea(l) != null)
-      for (let iLinea = 0; iLinea < pagina.lineas.length; iLinea++) {
-        const linea = pagina.lineas[iLinea]!
-        const cab = encabezadoDeLinea(linea)
-        if (cab) {
-          columnas = cab
-          continue
+      if (iCabecera >= 0) columnas = encabezadoDeLinea(pagina.lineas[iCabecera]!)
+      if (!columnas) {
+        diagnostico.lineasSinUsar += pagina.lineas.length
+        continue
+      }
+      const cols: ColumnaTabla[] = columnas
+      const mejor = (tipo: Columna): number => {
+        let idx = -1
+        cols.forEach((c, i) => {
+          if (c.tipo === tipo && (idx < 0 || c.prioridad > cols[idx]!.prioridad)) idx = i
+        })
+        return idx
+      }
+      const iModelo = mejor('modelo')
+      const iPrecio = mejor('precio')
+      const iDescr = mejor('descripcion')
+      const iEstatus = mejor('estatus')
+      const iMarca = mejor('marca')
+      const delCuerpo = pagina.lineas.filter((l, i) => i > iCabecera && !encabezadoDeLinea(l))
+      // Los números de fila que Excel imprime a la izquierda no son de la tabla.
+      const { tramos, fuera } = tramosDeColumnas(delCuerpo, cols)
+      const estaFuera = (c: Celda) => fuera.some((f) => c.x >= f.x - 0.5 && c.fin <= f.fin + 0.5)
+      // Un título de sección se distingue del resto: letra más grande que la de la tabla, o
+      // arranca en la primera columna y se mete en la de al lado.
+      const altos = delCuerpo.map((l) => l.h).sort((a, b) => a - b)
+      const altoMediano = altos.length > 0 ? altos[Math.floor(altos.length / 2)]! : 8
+      // La letra más grande de los renglones con precio o estatus: un título es mayor que esa.
+      const altoCuerpo = delCuerpo.reduce((max, l) => {
+        const celdas = l.celdas.filter((c) => !estaFuera(c))
+        if (!celdas.some((c) => parecePrecio(c.texto) || leerEstatusPdf(c.texto) != null)) return max
+        return Math.max(max, ...celdas.map((c) => c.hMin ?? c.h))
+      }, altoMediano)
+      const letraGrande = (c: Celda) => (c.hMin ?? c.h) >= altoCuerpo * 1.15
+      const inicios = tramos.map((t) => t.x).sort((a, b) => a - b)
+      const esTituloSuelto = (c: Celda): boolean => {
+        if (!pareceTituloDeSeccion(c.texto) || parecePrecio(c.texto) || leerEstatusPdf(c.texto) != null) return false
+        if (letraGrande(c)) return true
+        const pisadas = tramos.filter((t) => Math.min(c.fin, t.fin) - Math.max(c.x, t.x) >= 3).length
+        return inicios.length > 1 && c.x < inicios[1]! - 1 && pisadas >= 2
+      }
+      const titulos: Array<{ y: number; texto: string }> = []
+
+      /** Un renglón de la lista: la línea que trae el precio o el estatus. */
+      type Ancla = { y: number; h: number; precio: string; estatus: string; marca: string }
+      type Trozo = { y: number; h: number; texto: string; sola: boolean }
+      const anclas: Ancla[] = []
+      const trozosModelo: Trozo[] = []
+      const trozosDescr: Trozo[] = []
+      const trozosEstatus: Array<Trozo & { marca: string }> = []
+
+      pagina.lineas.forEach((lineaCompleta, iLinea) => {
+        if (iLinea <= iCabecera) {
+          if (iLinea < iCabecera) diagnostico.lineasSinUsar += 1
+          return
         }
-        if (!columnas || iLinea < iCabecera) {
-          diagnostico.lineasSinUsar += 1
-          continue
+        if (encabezadoDeLinea(lineaCompleta)) return
+        const delaTabla = separarPorColumnas(lineaCompleta.celdas.filter((c) => !estaFuera(c)), tramos)
+        if (delaTabla.length === 0) return
+        if (delaTabla.length === 1 && esTituloSuelto(delaTabla[0]!)) {
+          titulos.push({ y: lineaCompleta.y, texto: delaTabla[0]!.texto })
+          return
         }
-        const cols: ColumnaTabla[] = columnas
-        const valores = repartir(linea, cols)
-        const mejor = (tipo: Columna): number => {
-          let idx = -1
-          cols.forEach((c, i) => {
-            if (c.tipo === tipo && (idx < 0 || c.prioridad > cols[idx]!.prioridad)) idx = i
-          })
-          return idx
-        }
-        const iModelo = mejor('modelo')
-        const iPrecio = mejor('precio')
-        const iDescr = mejor('descripcion')
-        const iEstatus = mejor('estatus')
-        const iMarca = mejor('marca')
+        // Un rótulo en letra grande que cae a la altura de un renglón (el título que Excel
+        // repite en cada hoja) no es parte de ese renglón.
+        const rotulos = delaTabla.filter((c) => letraGrande(c) && esTituloSuelto(c))
+        for (const r of rotulos) titulos.push({ y: lineaCompleta.y, texto: r.texto })
+        const linea: Linea = { ...lineaCompleta, celdas: delaTabla.filter((c) => !rotulos.includes(c)) }
+        if (linea.celdas.length === 0) return
+        const valores = repartir(linea, tramos)
         const modelo = (valores[iModelo] ?? '').trim()
         const precioTexto = (valores[iPrecio] ?? '').trim()
         const estatusTexto = iEstatus >= 0 ? (valores[iEstatus] ?? '').trim() : ''
         const descripcion = iDescr >= 0 ? (valores[iDescr] ?? '').trim() : ''
-
-        const tienePrecio = leerPrecio(precioTexto.replace(/usd/gi, '')) != null
-        const tieneEstatus = leerEstatusPdf(estatusTexto) != null || leerEstatusPdf(precioTexto) != null
-        if (modelo && (tienePrecio || tieneEstatus || /^[-–—]+$/.test(precioTexto))) {
-          diagnostico.columnaPrecio = cols[iPrecio]?.titulo ?? ''
-          const fila = filaDesde(
-            0,
-            pagina.numero,
-            '',
-            iMarca >= 0 ? (valores[iMarca] ?? '').trim() : '',
-            modelo,
-            descripcion,
-            precioTexto,
-            estatusTexto,
-            iEstatus >= 0,
-          )
-          renglones.push({ fila, y: linea.y, h: linea.h, propia: descripcion !== '' })
-          continue
-        }
-
         const texto = linea.celdas.map((c) => c.texto).join(' ')
         const esPie = /^\d+$/.test(texto) || /p[aá]gina|page|\bde \d+$/i.test(texto)
-        // Solo texto en la columna de descripción: sigue (o empieza) la descripción de un renglón.
-        if (!modelo && !precioTexto && !estatusTexto && descripcion !== '' && !esPie) {
-          sueltas.push({ texto: descripcion, y: linea.y, h: linea.h, unaCelda: linea.celdas.length === 1 })
-          continue
+        if (esPie) {
+          diagnostico.lineasSinUsar += 1
+          return
         }
-        if (linea.celdas.length === 1 && pareceTituloDeSeccion(texto)) {
-          secciones.push({ y: linea.y, texto })
-          continue
+
+        const marca = iMarca >= 0 ? (valores[iMarca] ?? '').trim() : ''
+        const tienePrecio = leerPrecio(precioTexto.replace(/usd/gi, '')) != null
+        // «Agotado» o un guion escritos en la casilla del precio también marcan un renglón.
+        const esAncla = tienePrecio || (precioTexto !== '' && leerEstatusPdf(precioTexto) != null) || /^[-–—]+$/.test(precioTexto)
+        if (esAncla) anclas.push({ y: linea.y, h: linea.h, precio: precioTexto, estatus: '', marca })
+        const sola = linea.celdas.length === 1
+        if (modelo) trozosModelo.push({ y: linea.y, h: linea.h, texto: modelo, sola })
+        if (descripcion) trozosDescr.push({ y: linea.y, h: linea.h, texto: descripcion, sola })
+        if (estatusTexto) trozosEstatus.push({ y: linea.y, h: linea.h, texto: estatusTexto, sola, marca })
+        if (!esAncla && !modelo && !descripcion && !estatusTexto) diagnostico.lineasSinUsar += 1
+      })
+
+      // El estatus va con el precio de su misma línea; si se partió en dos («NO» / «DISPONIBLE»),
+      // sus mitades quedan justo encima y debajo. Un estatus sin precio cerca es un renglón sin
+      // precio (un producto «en tránsito» al que el proveedor aún no le puso precio).
+      trozosEstatus.sort((a, b) => a.y - b.y)
+      const conPrecio = [...anclas]
+      let sinPrecio: Ancla | null = null
+      for (const t of trozosEstatus) {
+        const cercana = conPrecio.reduce<Ancla | null>((m, a) => (m == null || Math.abs(a.y - t.y) < Math.abs(m.y - t.y) ? a : m), null)
+        if (cercana && Math.abs(cercana.y - t.y) <= Math.min(cercana.h, t.h)) {
+          cercana.estatus = cercana.estatus ? `${cercana.estatus} ${t.texto}` : t.texto
+        } else if (sinPrecio && t.y - sinPrecio.y <= t.h * 1.6) {
+          sinPrecio.estatus = `${sinPrecio.estatus} ${t.texto}`
+        } else if (leerEstatusPdf(t.texto) != null) {
+          sinPrecio = { y: t.y, h: t.h, precio: '', estatus: t.texto, marca: t.marca }
+          anclas.push(sinPrecio)
+        } else {
+          diagnostico.lineasSinUsar += 1
         }
-        diagnostico.lineasSinUsar += 1
       }
 
-      // ── Colgar las líneas sueltas de descripción de su renglón ──────────────────────
-      const altoTipico = renglones.length > 0 ? renglones.map((r) => r.h).sort((a, b) => a - b)[Math.floor(renglones.length / 2)]! : 8
-      /** Hasta dónde llega una línea que sigue a otra dentro de la misma celda. */
-      const alcance = altoTipico * 1.9
-      const antes = new Map<Renglon, string[]>()
-      const despues = new Map<Renglon, string[]>()
-      const colgar = (mapa: Map<Renglon, string[]>, r: Renglon, texto: string) => mapa.set(r, [...(mapa.get(r) ?? []), texto])
-      const tituloOSobra = (su: Suelta) => {
-        if (su.unaCelda && pareceTituloDeSeccion(su.texto)) secciones.push({ y: su.y, texto: su.texto })
-        else diagnostico.lineasSinUsar += 1
+      if (anclas.length === 0) {
+        diagnostico.lineasSinUsar += trozosModelo.length + trozosDescr.length
+        // Una página que solo trae el título de la sección: vale para la siguiente.
+        if (titulos.length > 0) seccion = titulos[titulos.length - 1]!.texto
+        continue
       }
+      anclas.sort((a, b) => a.y - b.y)
+      const altoTipico = anclas.map((a) => a.h).sort((a, b) => a - b)[Math.floor(anclas.length / 2)]!
+      const secciones: Array<{ y: number; texto: string }> = [...titulos]
 
-      // Un título con letra más grande que la de la tabla es una sección, esté donde esté.
-      const lineasSueltas: Suelta[] = []
-      for (const su of sueltas) {
-        if (su.unaCelda && su.h > altoTipico * 1.15) tituloOSobra(su)
-        else lineasSueltas.push(su)
-      }
-
-      type Pieza = { y: number; renglon?: Renglon; suelta?: Suelta }
-      const piezas: Pieza[] = [
-        ...renglones.map((r) => ({ y: r.y, renglon: r })),
-        ...lineasSueltas.map((su) => ({ y: su.y, suelta: su })),
-      ].sort((a, b) => a.y - b.y)
-
-      // ¿Tabla con el modelo centrado en vertical (como sale de Excel)? Entonces la descripción
-      // puede empezar una línea ANTES que el modelo. Se nota porque esa línea queda más cerca
-      // del renglón de abajo que de lo que tiene arriba, o porque el renglón no trae descripción propia.
-      let empiezanAntes = 0
-      for (let i = 0; i + 1 < piezas.length; i++) {
-        const p = piezas[i]!
-        const sig = piezas[i + 1]!
-        if (!p.suelta || !sig.renglon) continue
-        const haciaAbajo = sig.y - p.y
-        const haciaArriba = i > 0 ? p.y - piezas[i - 1]!.y : Infinity
-        if (haciaAbajo <= altoTipico * 1.5 && haciaAbajo < haciaArriba * 0.8) empiezanAntes += 1
-      }
-      const sinPropia = renglones.filter((r) => !r.propia).length
-      const centrada =
-        renglones.length > 0 &&
-        (sinPropia / renglones.length >= 0.3 || empiezanAntes >= Math.max(2, renglones.length * 0.08))
-
-      // Se recorre tramo a tramo: las líneas sueltas que hay entre un renglón y el siguiente.
-      const indicesRenglon = piezas.map((p, i) => (p.renglon ? i : -1)).filter((i) => i >= 0)
-      const tramo = (desde: number, hasta: number) => piezas.slice(desde + 1, hasta).map((p) => p.suelta!)
-
-      if (indicesRenglon.length === 0) {
-        for (const p of piezas) tituloOSobra(p.suelta!)
-      } else {
-        // Antes del primer renglón: solo en tabla centrada pueden ser el comienzo de su descripción.
-        const primero = piezas[indicesRenglon[0]!]!.renglon!
-        const previas = tramo(-1, indicesRenglon[0]!)
-        let tope = primero.y
-        const pegadas: Suelta[] = []
-        for (let k = previas.length - 1; k >= 0; k--) {
-          const su = previas[k]!
-          if (centrada && tope - su.y <= alcance) {
-            pegadas.unshift(su)
-            tope = su.y
-          } else tituloOSobra(su)
+      /**
+       * Cuelga cada trozo de texto de una columna del renglón (ancla) al que pertenece.
+       * Los trozos de una misma celda van seguidos, con el paso de una línea; entre una celda
+       * y la siguiente hay un hueco mayor. Cada grupo apretado es de la ancla que cae dentro.
+       */
+      const colgar = (trozos: Trozo[], esDescripcion: boolean): Map<Ancla, Trozo[]> => {
+        const mapa = new Map<Ancla, Trozo[]>()
+        const poner = (ancla: Ancla, t: Trozo) => mapa.set(ancla, [...(mapa.get(ancla) ?? []), t])
+        const orden = [...trozos].sort((a, b) => a.y - b.y)
+        const pasos: number[] = []
+        for (let i = 1; i < orden.length; i++) {
+          const d = orden[i]!.y - orden[i - 1]!.y
+          if (d > 0.5) pasos.push(d)
         }
-        for (const su of pegadas) colgar(antes, primero, su.texto)
+        pasos.sort((a, b) => a - b)
+        // Paso entre líneas de una misma celda: el más corto que se repite (cuartil bajo).
+        const paso = pasos.length > 0 ? pasos[Math.floor(pasos.length * 0.25)]! : altoTipico * 1.25
+        const corte = Math.max(paso * 1.6, altoTipico * 0.9)
 
-        for (let n = 0; n < indicesRenglon.length; n++) {
-          const actual = piezas[indicesRenglon[n]!]!.renglon!
-          const iSiguiente = indicesRenglon[n + 1]
-          const siguiente = iSiguiente !== undefined ? piezas[iSiguiente]!.renglon! : null
-          const entre = tramo(indicesRenglon[n]!, iSiguiente ?? piezas.length)
-          if (entre.length === 0) continue
+        const grupos: Trozo[][] = []
+        for (const t of orden) {
+          const grupo = grupos[grupos.length - 1]
+          const previo = grupo ? grupo[grupo.length - 1]! : null
+          if (grupo && previo && t.y - previo.y <= corte) grupo.push(t)
+          else grupos.push([t])
+        }
 
-          // En tabla centrada, el hueco más grande del tramo separa lo de arriba de lo de abajo.
-          let corte = entre.length
-          if (centrada && siguiente) {
-            const ys = [actual.y, ...entre.map((su) => su.y), siguiente.y]
-            let mayor = -1
-            for (let k = 0; k + 1 < ys.length; k++) {
-              const hueco = ys[k + 1]! - ys[k]!
-              if (hueco >= mayor) {
-                mayor = hueco
-                corte = k
-              }
-            }
+        // Dos celdas que se tocan (un texto que no cabía en su fila) forman un solo grupo con dos
+        // precios dentro. Las líneas de una misma celda van a paso parejo: donde el paso se
+        // rompe empieza la celda siguiente.
+        const anclasEn = (grupo: Trozo[]) =>
+          anclas.filter((a) => a.y >= grupo[0]!.y - paso * 0.75 && a.y <= grupo[grupo.length - 1]!.y + paso * 0.75).length
+        for (let g = 0; g < grupos.length; g++) {
+          const grupo = grupos[g]!
+          if (grupo.length < 3 || anclasEn(grupo) < 2) continue
+          const partes: Trozo[][] = [[grupo[0]!]]
+          for (let i = 1; i < grupo.length; i++) {
+            const d = grupo[i]!.y - grupo[i - 1]!.y
+            if (d > 0.5 && Math.abs(d - paso) > paso * 0.2) partes.push([grupo[i]!])
+            else partes[partes.length - 1]!.push(grupo[i]!)
           }
-          // Lo de arriba: sigue al renglón mientras cada línea quede pegada a la anterior.
-          let fondo = actual.y
-          let rota = false
-          entre.slice(0, corte).forEach((su) => {
-            if (!rota && su.y - fondo <= alcance) {
-              colgar(despues, actual, su.texto)
-              fondo = su.y
+          if (partes.length > 1) {
+            grupos.splice(g, 1, ...partes)
+            g += partes.length - 1
+          }
+        }
+
+        // ¿Tabla centrada en vertical (como sale de Excel)? El texto empieza antes de la línea del precio.
+        let empiezanAntes = 0
+        for (const grupo of grupos) {
+          const dentro = anclas.filter((a) => a.y >= grupo[0]!.y - paso * 0.75 && a.y <= grupo[grupo.length - 1]!.y + paso * 0.75)
+          if (dentro.length === 1 && dentro[0]!.y - grupo[0]!.y > paso * 0.4) empiezanAntes += 1
+        }
+        const centrada = empiezanAntes >= Math.max(2, anclas.length * 0.08)
+
+        for (const grupo of grupos) {
+          const arriba = grupo[0]!.y
+          const abajo = grupo[grupo.length - 1]!.y
+          const dentro = anclas.filter((a) => a.y >= arriba - paso * 0.75 && a.y <= abajo + paso * 0.75)
+          if (dentro.length === 1) {
+            for (const t of grupo) poner(dentro[0]!, t)
+            continue
+          }
+          if (dentro.length === 0) {
+            // Texto sin precio cerca: un título de sección, la cola de una celda, o nada.
+            const cercana = anclas.reduce((m, a) => (Math.min(Math.abs(a.y - arriba), Math.abs(a.y - abajo)) < Math.min(Math.abs(m.y - arriba), Math.abs(m.y - abajo)) ? a : m))
+            const distancia = Math.min(Math.abs(cercana.y - arriba), Math.abs(cercana.y - abajo))
+            if (esDescripcion && grupo.length === 1 && grupo[0]!.sola && pareceTituloDeSeccion(grupo[0]!.texto) && distancia > paso * 1.2) {
+              secciones.push({ y: arriba, texto: grupo[0]!.texto })
+            } else if (distancia <= corte * 1.4) {
+              for (const t of grupo) poner(cercana, t)
+            } else if (esDescripcion && grupo.length === 1 && grupo[0]!.sola && pareceTituloDeSeccion(grupo[0]!.texto)) {
+              secciones.push({ y: arriba, texto: grupo[0]!.texto })
             } else {
-              rota = true
-              tituloOSobra(su)
+              diagnostico.lineasSinUsar += grupo.length
             }
-          })
-          // Lo de abajo (solo tabla centrada): empieza la descripción del renglón siguiente.
-          if (siguiente) {
-            let techo = siguiente.y
-            const suyas: Suelta[] = []
-            const resto = entre.slice(corte)
-            for (let k = resto.length - 1; k >= 0; k--) {
-              const su = resto[k]!
-              if (techo - su.y <= alcance) {
-                suyas.unshift(su)
-                techo = su.y
-              } else tituloOSobra(su)
-            }
-            for (const su of suyas) colgar(antes, siguiente, su.texto)
+            continue
+          }
+          // Varios renglones pegados (tabla sin aire entre filas): se reparte trozo a trozo.
+          for (const t of grupo) {
+            const previa = [...dentro].reverse().find((a) => a.y <= t.y + paso * 0.4)
+            const siguiente = dentro.find((a) => a.y > t.y + paso * 0.4)
+            if (previa && (!centrada || !siguiente || t.y - previa.y <= siguiente.y - t.y)) poner(previa, t)
+            else if (siguiente && (centrada || !previa)) poner(siguiente, t)
+            else diagnostico.lineasSinUsar += 1
           }
         }
+        return mapa
       }
 
+      const modelos = colgar(trozosModelo, false)
+      const descripciones = colgar(trozosDescr, true)
       secciones.sort((a, b) => a.y - b.y)
-      for (const r of renglones) {
-        const titulo = [...secciones].reverse().find((sec) => sec.y <= r.y)
+
+      for (const ancla of anclas) {
+        const titulo = [...secciones].reverse().find((sec) => sec.y <= ancla.y)
         if (titulo) seccion = titulo.texto
-        r.fila.n = filas.length + 1
-        r.fila.seccion = seccion
-        r.fila.descripcion = [...(antes.get(r) ?? []), r.fila.descripcion, ...(despues.get(r) ?? [])]
-          .filter(Boolean)
-          .join(' ')
-          .trim()
-        filas.push(r.fila)
+        const modelo = unirModelo((modelos.get(ancla) ?? []).map((t) => t.texto))
+        if (!modelo) {
+          // Un precio sin modelo (un subtotal, una nota): no es un producto.
+          diagnostico.lineasSinUsar += 1
+          continue
+        }
+        diagnostico.columnaPrecio = cols[iPrecio]?.titulo ?? ''
+        const descripcion = (descripciones.get(ancla) ?? []).map((t) => t.texto).join(' ').replace(/\s+/g, ' ').trim()
+        filas.push(filaDesde(filas.length + 1, pagina.numero, seccion, ancla.marca, modelo, descripcion, ancla.precio, ancla.estatus, iEstatus >= 0))
       }
       // Una sección al final de la página vale para la siguiente.
       const ultimaSeccion = secciones[secciones.length - 1]
-      const ultimoRenglon = renglones[renglones.length - 1]
-      if (ultimaSeccion && (!ultimoRenglon || ultimaSeccion.y > ultimoRenglon.y)) seccion = ultimaSeccion.texto
+      if (ultimaSeccion && ultimaSeccion.y > anclas[anclas.length - 1]!.y) seccion = ultimaSeccion.texto
     }
   } else {
     // Sin encabezado: de cada línea, el modelo y el último precio; lo demás es la descripción.
