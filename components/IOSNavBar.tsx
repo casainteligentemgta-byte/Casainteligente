@@ -105,34 +105,6 @@ const navItems: NavItem[] = [
     ),
   },
   {
-    id: 'ventas',
-    href: '/ventas',
-    label: 'Ventas',
-    icon: (active: boolean) => (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-        <rect
-          x="2"
-          y="7"
-          width="20"
-          height="14"
-          rx="2"
-          stroke={active ? '#34C759' : '#8E8E93'}
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          fill={active ? 'rgba(52,199,89,0.1)' : 'none'}
-        />
-        <path
-          d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"
-          stroke={active ? '#34C759' : '#8E8E93'}
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    ),
-  },
-  {
     id: 'entidades',
     href: '/configuracion/entidades',
     label: 'Entidades',
@@ -378,6 +350,10 @@ function navItemActive(pathname: string, href: string, tabQuery?: string | null)
   if (href === '/nexus') {
     return pathname === '/nexus' || (pathname.startsWith('/nexus/') && !pathname.startsWith('/nexus/vision'));
   }
+  // Armar o editar un presupuesto (/ventas) es parte de Presupuestos.
+  if (href === '/presupuestos') {
+    return pathname.startsWith('/presupuestos') || pathname === '/ventas' || pathname.startsWith('/ventas/');
+  }
   if (href === '/contabilidad/cco') {
     return pathname === '/contabilidad/cco' || pathname.startsWith('/contabilidad/cco/');
   }
@@ -393,7 +369,6 @@ function colorActivo(label: string): string {
   if (label === 'Entidades') return '#A78BFA';
   if (label === 'Legal') return '#FBBF24';
   if (label === 'RRHH') return '#F472B6';
-  if (label === 'Ventas') return '#34C759';
   if (label === 'Flota') return '#F59E0B';
   return '#007AFF';
 }

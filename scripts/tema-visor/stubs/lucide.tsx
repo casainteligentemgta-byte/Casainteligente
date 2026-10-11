@@ -17,3 +17,5 @@ export const Moon = icono('Moon');
 export const SunMoon = icono('SunMoon');
 export const Monitor = icono('Monitor');
 export const Package = icono('Package');
+export const Banknote = icono('Banknote');
+export const X = icono('X');

@@ -13,13 +13,13 @@ const tablas = {
     { id: C4, nombre: 'Comercial Demostración, S.A.', razon_social: 'Comercial Demostración, S.A.', customer_type: 'juridico', tipo: 'J', rif: 'J-00000004-0', email: 'admin@demostracion.test', movil: '0212-0000004', direccion: 'Zona Industrial, galpón 7', status: 'inactivo', created_at: '2024-09-01T14:00:00Z' },
   ],
   budgets: [
-    { id: 'b1000000-0000-4000-8000-000000000001', customer_id: C1, subtotal: 8450.5, status: 'pagado', created_at: '2026-03-04T15:00:00Z', items: [{ product_id: 1, qty: 2, unit_price: 48 }] },
-    { id: 'b1000000-0000-4000-8000-000000000002', customer_id: C1, subtotal: 1200, status: 'cobrado', created_at: '2026-07-18T15:00:00Z' },
-    { id: 'b1000000-0000-4000-8000-000000000003', customer_id: C1, subtotal: 640, status: 'parcialmente_pagado', created_at: '2026-08-02T15:00:00Z' },
-    { id: 'b1000000-0000-4000-8000-000000000004', customer_id: C1, subtotal: 3100, status: 'enviado', created_at: '2026-09-21T15:00:00Z' },
-    { id: 'b1000000-0000-4000-8000-000000000005', customer_id: C1, subtotal: 950, status: 'no_aprobado', created_at: '2026-05-11T15:00:00Z' },
-    { id: 'b1000000-0000-4000-8000-000000000006', customer_id: C1, subtotal: 2000, status: 'aprobado', created_at: '2026-10-01T15:00:00Z' },
-    { id: 'b1000000-0000-4000-8000-000000000007', customer_id: C1, subtotal: 400, status: 'no_enviado', created_at: '2026-10-05T15:00:00Z' },
+    { id: 'b1000000-0000-4000-8000-000000000001', customer_id: C1, customer_name: 'Inversiones Ejemplo Uno, C.A.', customer_rif: 'J-00000001-0', subtotal: 8450.5, status: 'pagado', created_at: '2026-03-04T15:00:00Z', items: [{ product_id: 1, qty: 2, unit_price: 48 }] },
+    { id: 'b1000000-0000-4000-8000-000000000002', customer_id: C1, customer_name: 'Carlos Prueba', customer_rif: 'J-00000002-0', subtotal: 1200, status: 'cobrado', created_at: '2026-07-18T15:00:00Z' },
+    { id: 'b1000000-0000-4000-8000-000000000003', customer_id: C1, customer_name: 'Ana Muestra', customer_rif: 'J-00000003-0', subtotal: 640, status: 'parcialmente_pagado', created_at: '2026-08-02T15:00:00Z' },
+    { id: 'b1000000-0000-4000-8000-000000000004', customer_id: C1, customer_name: 'Comercial Demostración, S.A.', customer_rif: 'J-00000004-0', subtotal: 3100, status: 'enviado', created_at: '2026-09-21T15:00:00Z' },
+    { id: 'b1000000-0000-4000-8000-000000000005', customer_id: C1, customer_name: 'Inversiones Ejemplo Uno, C.A.', customer_rif: 'J-00000005-0', subtotal: 950, status: 'no_aprobado', created_at: '2026-05-11T15:00:00Z' },
+    { id: 'b1000000-0000-4000-8000-000000000006', customer_id: C1, customer_name: 'Carlos Prueba', customer_rif: 'J-00000006-0', subtotal: 2000, status: 'aprobado', created_at: '2026-10-01T15:00:00Z' },
+    { id: 'b1000000-0000-4000-8000-000000000007', customer_id: C1, customer_name: 'Ana Muestra', customer_rif: 'J-00000007-0', subtotal: 400, status: 'no_enviado', created_at: '2026-10-05T15:00:00Z' },
   ],
   ci_proyectos: [
     { id: 'a1000000-0000-4000-8000-000000000001', customer_id: C1, nombre: 'Obra de ejemplo · Torre A', estado: 'ejecucion', tipo_proyecto: 'talento', monto_aproximado: 25000, obra_precio_venta_usd: 0, entidad_id: 'e1', ci_entidades: { nombre: 'Patrono Demo, C.A.', rif: 'J-00000009-0' }, created_at: '2026-02-01T00:00:00Z' },
@@ -101,11 +101,14 @@ class Consulta implements PromiseLike<any> {
   }
 }
 
+// Un solo cliente, como el de verdad en el navegador: hay pantallas que lo usan como
+// dependencia de sus efectos.
+const cliente: any = {
+  from: (tabla: string) => new Consulta(tabla),
+  auth: { getUser: async () => ({ data: { user: null } }), getSession: async () => ({ data: { session: null } }) },
+  storage: { from: () => ({ upload: async () => ({ data: null, error: { message: 'visor' } }), getPublicUrl: () => ({ data: { publicUrl: '' } }) }) },
+};
 export function createClient(): any {
-  return {
-    from: (tabla: string) => new Consulta(tabla),
-    auth: { getUser: async () => ({ data: { user: null } }), getSession: async () => ({ data: { session: null } }) },
-    storage: { from: () => ({ upload: async () => ({ data: null, error: { message: 'visor' } }), getPublicUrl: () => ({ data: { publicUrl: '' } }) }) },
-  };
+  return cliente;
 }
 export const IDS = { C1, C2, C3, C4 };

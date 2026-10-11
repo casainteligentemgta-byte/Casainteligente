@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import SimularLiquidacionConstruccion from '@/components/dashboard/SimularLiquidacionConstruccion';
 import WidgetFirmasPendientes from '@/components/dashboard/WidgetFirmasPendientes';
+import { ESTADOS_VENTA } from '@/lib/presupuesto/listaPresupuestos';
 import { createClient } from '@/lib/supabase/server';
 
 type ResultadoConteo = {
@@ -19,6 +20,25 @@ async function contar(tabla: string): Promise<ResultadoConteo> {
       .from(tabla)
       .select('id', { count: 'exact', head: true });
 
+    if (error) {
+      return { ok: false, total: 0, error: error.message };
+    }
+    return { ok: true, total: count ?? 0 };
+  } catch (e) {
+    const msg =
+      e instanceof Error ? e.message : 'Error al conectar con Supabase';
+    return { ok: false, total: 0, error: msg };
+  }
+}
+
+/** Ventas = presupuestos que el cliente ya aceptó (no hay un registro de ventas aparte). */
+async function contarVentas(): Promise<ResultadoConteo> {
+  try {
+    const supabase = await createClient();
+    const { count, error } = await supabase
+      .from('budgets')
+      .select('id', { count: 'exact', head: true })
+      .in('status', [...ESTADOS_VENTA]);
     if (error) {
       return { ok: false, total: 0, error: error.message };
     }
@@ -55,7 +75,7 @@ export default async function DashboardPage() {
   const [clientes, productos, ventas, docsVencidosObra] = await Promise.all([
     contar('customers'),
     contar('products'),
-    contar('ventas'),
+    contarVentas(),
     contarDocumentosVencidosEnObra(),
   ]);
 
@@ -81,8 +101,8 @@ export default async function DashboardPage() {
       value: ventas.total,
       ok: ventas.ok,
       error: ventas.error,
-      href: '/ventas',
-      hint: 'Registro de ventas',
+      href: '/presupuestos?ver=ventas',
+      hint: 'Presupuestos aceptados',
     },
   ];
 
@@ -92,7 +112,7 @@ export default async function DashboardPage() {
   const accesos = [
     { label: 'Clientes', href: '/clientes', desc: 'Personas y empresas' },
     { label: 'Productos', href: '/productos', desc: 'Catálogo y precios' },
-    { label: 'Ventas', href: '/ventas', desc: 'Nuevas ventas y listado' },
+    { label: 'Presupuestos', href: '/presupuestos', desc: 'Lista, nuevos y ventas' },
     { label: 'Proyectos', href: '/proyectos/modulo', desc: 'Modulo integral con visitas' },
   ];
 

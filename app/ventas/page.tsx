@@ -126,6 +126,32 @@ function VentasContent() {
     const [notes, setNotes] = useState('');
     const [showZelle, setShowZelle] = useState(true);
     const [saving, setSaving] = useState(false);
+    /**
+     * Huella de lo que hay en pantalla, para saber si quedó algo sin guardar. `firmaGuardada`
+     * es la del último guardado (o la del presupuesto recién abierto).
+     */
+    const firma = useMemo(
+        () => JSON.stringify([customerId, fecha, notes, showZelle, items.map((i) => [i.product.id, i.qty, i.unitPrice, i.discount])]),
+        [customerId, fecha, notes, showZelle, items],
+    );
+    const [firmaGuardada, setFirmaGuardada] = useState(firma);
+    /** Sube cada vez que termina de cargarse un presupuesto guardado: ese es el punto de partida. */
+    const [cargas, setCargas] = useState(0);
+    const firmaRef = useRef(firma);
+    firmaRef.current = firma;
+    useEffect(() => {
+        if (cargas > 0) setFirmaGuardada(firmaRef.current);
+    }, [cargas]);
+    const hayCambiosSinGuardar = firma !== firmaGuardada;
+    useEffect(() => {
+        if (!hayCambiosSinGuardar) return;
+        const avisar = (e: BeforeUnloadEvent) => {
+            e.preventDefault();
+            e.returnValue = '';
+        };
+        window.addEventListener('beforeunload', avisar);
+        return () => window.removeEventListener('beforeunload', avisar);
+    }, [hayCambiosSinGuardar]);
     const headerRef = useRef<HTMLDivElement>(null);
     const [headerH, setHeaderH] = useState(72);
 
@@ -261,6 +287,11 @@ function VentasContent() {
         legacyParamsResolved.current = true;
     }, [customers, searchParams, applyCustomer]);
 
+    // El margen se lee por referencia: cambiarlo no debe volver a cargar el presupuesto desde
+    // la base (eso deshacía el margen recién aplicado y todo lo que estuviera sin guardar).
+    const margenRef = useRef(globalMargin);
+    margenRef.current = globalMargin;
+
     // Pre-cargar datos desde query params
     useEffect(() => {
         const id = searchParams.get('id');
@@ -332,6 +363,7 @@ function VentasContent() {
                         });
                         setItems(loadedItems);
                         if (loadedItems.length > 0) setShowProductSearch(false);
+                        setCargas((n) => n + 1);
                     }
                 });
         }
@@ -362,7 +394,7 @@ function VentasContent() {
                                 id: `${p.id}-${Math.random().toString(36).substr(2, 9)}`,
                                 product: p,
                                 qty: 1,
-                                unitPrice: parseFloat(((p.precio ?? 0) * (1 + globalMargin / 100)).toFixed(2)),
+                                unitPrice: parseFloat(((p.precio ?? 0) * (1 + margenRef.current / 100)).toFixed(2)),
                                 discount: 0,
                                 inventoryItemIds: [],
                                 serialNumbers: [],
@@ -376,7 +408,7 @@ function VentasContent() {
                     });
             }
         }
-    }, [searchParams, globalMargin, applyCustomer, isDemo]);
+    }, [searchParams, applyCustomer, isDemo]);
 
     const filteredCustomers = useMemo(() => {
         const q = customerQuery.trim().toLowerCase();
@@ -443,7 +475,13 @@ function VentasContent() {
 
         const persist = async (payload: Record<string, unknown>) => {
             if (budgetId) {
-                return supabase.from('budgets').update(payload).eq('id', budgetId);
+                // Con `select` se sabe si de verdad se guardó: si el presupuesto fue borrado o la
+                // sesión se cerró, no cambia ninguna fila y antes se decía «guardado» igual.
+                const hecho = await supabase.from('budgets').update(payload).eq('id', budgetId).select('id');
+                if (!hecho.error && (!hecho.data || hecho.data.length === 0)) {
+                    return { data: null, error: { message: 'no se cambió nada. El presupuesto ya no existe o tu sesión se cerró; vuelve a entrar e inténtalo.' } };
+                }
+                return { data: null, error: hecho.error };
             }
             return supabase.from('budgets').insert([{ ...payload, status: 'no_enviado' }]).select().single();
         };
@@ -464,6 +502,7 @@ function VentasContent() {
             if (!budgetId && res.data && typeof (res.data as { id?: unknown }).id === 'string') {
                 setBudgetId((res.data as { id: string }).id);
             }
+            setFirmaGuardada(firma);
             alert('✅ Presupuesto guardado correctamente');
         }
     };
@@ -656,19 +695,28 @@ function VentasContent() {
             >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', maxWidth: '900px', margin: '0 auto' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
-                        <div style={{
-                            width: '36px', height: '36px', borderRadius: '10px',
-                            background: 'rgba(52,199,89,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            flexShrink: 0,
-                        }}>
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                                <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" stroke="#34C759" strokeWidth="2" strokeLinecap="round" />
-                                <rect x="9" y="3" width="6" height="4" rx="1" stroke="#34C759" strokeWidth="2" />
-                                <path d="M9 12h6M9 16h4" stroke="#34C759" strokeWidth="1.8" strokeLinecap="round" />
+                        {/* Esta pantalla es parte de Presupuestos: se vuelve a la lista. */}
+                        <Link
+                            href="/presupuestos"
+                            aria-label="Volver a Presupuestos"
+                            data-volver-presupuestos
+                            onClick={(e) => {
+                                if (hayCambiosSinGuardar && !window.confirm('Hay cambios sin guardar. ¿Salir sin guardar?')) e.preventDefault();
+                            }}
+                            style={{
+                                width: '36px', height: '36px', borderRadius: '10px',
+                                background: 'rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                flexShrink: 0,
+                            }}
+                        >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                <path d="M15 18l-6-6 6-6" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                             </svg>
-                        </div>
+                        </Link>
                         <div style={{ minWidth: 0 }}>
-                            <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--label-primary)', lineHeight: 1 }}>Presupuesto</h1>
+                            <h1 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--label-primary)', lineHeight: 1.15 }}>
+                                {budgetId ? 'Editar presupuesto' : 'Nuevo presupuesto'}
+                            </h1>
                             <p style={{ fontSize: '12px', color: 'var(--label-secondary)', marginTop: '2px' }}>
                                 {items.length} producto{items.length !== 1 ? 's' : ''} · ${formatUSD(subtotal)}
                             </p>

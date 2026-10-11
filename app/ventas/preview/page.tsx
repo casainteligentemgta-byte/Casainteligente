@@ -320,7 +320,7 @@ export default function PreviewPage() {
                     <div style={{ fontSize: '48px', marginBottom: '16px' }}>📄</div>
                     <p style={{ fontSize: '16px', color: '#0F172A' }}>No hay presupuesto para mostrar.</p>
                     <p style={{ fontSize: '13px', marginTop: '10px', lineHeight: 1.5 }}>
-                        Esta pantalla necesita datos: o bien los envía <strong>Ventas</strong> al pulsar <strong>Vista previa</strong> (misma sesión del navegador), o bien abres un guardado con su enlace{' '}
+                        Esta pantalla necesita datos: o bien los envía la pantalla donde se arma el presupuesto al pulsar <strong>Vista previa</strong> (misma sesión del navegador), o bien abres un guardado con su enlace{' '}
                         <code style={{ fontSize: '11px', color: '#5AC8FA' }}>?id=…</code> desde <strong>Presupuestos</strong>.
                     </p>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '18px', alignItems: 'center' }}>
@@ -332,7 +332,7 @@ export default function PreviewPage() {
                                 color: 'white', fontSize: '14px', fontWeight: 700, textDecoration: 'none',
                             }}
                         >
-                            Ir a Ventas
+                            Nuevo presupuesto
                         </Link>
                         <Link
                             href="/presupuestos"
@@ -777,7 +777,7 @@ export default function PreviewPage() {
                                     NOTAS / CONDICIONES DEL PRESUPUESTO
                                 </p>
                                 {/* Pantalla (edición en vista previa): campo editable sin texto de ejemplo.
-                                    El ejemplo guía está en Ventas al crear el presupuesto.
+                                    El ejemplo guía aparece al crear el presupuesto.
                                     En PDF/impresión se usa .preview-notas-print (escrito o vacío). */}
                                 <textarea
                                     className="preview-notas-field no-print"

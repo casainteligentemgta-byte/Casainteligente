@@ -126,7 +126,7 @@ export default function BOMGenerator({
         const datos = await cargarDatosPresupuesto()
         if (!datos.autenticado) {
           setSyncEstado('error')
-          setSyncError(datos.error ?? 'Inicia sesión para actualizar el presupuesto en Ventas.')
+          setSyncError(datos.error ?? 'Inicia sesión para actualizar el presupuesto.')
           return
         }
         const armado = presupuestoDesdeBom(
@@ -378,7 +378,7 @@ export default function BOMGenerator({
             <p className="text-[var(--nexus-text-dim)]">
               {syncEstado === 'cerrado'
                 ? 'Ya no es borrador: no se actualiza solo. Puedes crear otro si el diseño cambió.'
-                : 'Al agregar o quitar equipos se actualiza el borrador en Ventas, mientras no lo envíes.'}
+                : 'Al agregar o quitar equipos se actualiza el borrador en Presupuestos, mientras no lo envíes.'}
             </p>
             {syncEstado === 'syncing' ? (
               <p data-nv-presupuesto-sync className="text-[var(--nexus-cyan)]">
@@ -399,7 +399,7 @@ export default function BOMGenerator({
               href={`/ventas?id=${encodeURIComponent(ventasBudgetId)}`}
               className="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-[var(--nexus-cyan)] px-4 text-[12px] font-semibold text-black"
             >
-              Abrir en Ventas
+              Abrir en Presupuestos
             </Link>
             {syncEstado === 'cerrado' ? (
               <Button
@@ -416,7 +416,7 @@ export default function BOMGenerator({
         ) : (
           <>
             <p className="text-[11px] text-[var(--nexus-text-dim)]">
-              El listado se arma solo al colocar equipos. El primer presupuesto en Ventas se crea
+              El listado se arma solo al colocar equipos. El primer presupuesto se crea
               aquí; después el borrador se actualiza con el plano.
             </p>
             <Button
@@ -425,7 +425,7 @@ export default function BOMGenerator({
               disabled={bom.lines.length === 0}
               onClick={() => setPresupuestoAbierto(true)}
             >
-              Crear presupuesto en Ventas
+              Crear presupuesto
             </Button>
           </>
         )}

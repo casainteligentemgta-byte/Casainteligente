@@ -26,8 +26,9 @@ const CLASIFICACION_LABELS: Record<ClasificacionPresupuesto, string> = {
 type Props = {
     open: boolean;
     onClose: () => void;
-    filter: 'todos' | ClasificacionPresupuesto;
-    onFilterChange: (f: 'todos' | ClasificacionPresupuesto) => void;
+    /** «ventas» = los que el cliente ya aceptó (aprobado, por pagar, parcial y pagado). */
+    filter: 'todos' | 'ventas' | ClasificacionPresupuesto;
+    onFilterChange: (f: 'todos' | 'ventas' | ClasificacionPresupuesto) => void;
     sortBy: SortBy;
     onSortByChange: (s: SortBy) => void;
     filtroNombre: string;
@@ -247,8 +248,8 @@ export default function PresupuestosFiltrosModal({
                     }}
                 >
                     {([
-                        ['todos', 'no_enviado', 'enviado', 'aprobado'],
-                        ['no_aprobado', 'cobrado', 'parcialmente_pagado', 'pagado'],
+                        ['todos', 'ventas', 'no_enviado', 'enviado'],
+                        ['aprobado', 'no_aprobado', 'cobrado', 'parcialmente_pagado', 'pagado'],
                     ] as const).map((row, rowIdx) => (
                         <div
                             key={rowIdx}
@@ -284,7 +285,7 @@ export default function PresupuestosFiltrosModal({
                                         wordBreak: 'break-word',
                                     }}
                                 >
-                                    {f === 'todos' ? 'Todos' : CLASIFICACION_LABELS[f]}
+                                    {f === 'todos' ? 'Todos' : f === 'ventas' ? 'Ventas' : CLASIFICACION_LABELS[f]}
                                 </button>
                             ))}
                         </div>

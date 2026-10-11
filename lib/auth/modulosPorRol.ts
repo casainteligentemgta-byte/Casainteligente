@@ -33,7 +33,6 @@ export const MODULOS_NAV: ModuloNavDef[] = [
   { id: 'clientes', href: '/clientes', label: 'Clientes' },
   { id: 'productos', href: '/productos', label: 'Productos' },
   { id: 'presupuestos', href: '/presupuestos', label: 'Presupuestos' },
-  { id: 'ventas', href: '/ventas', label: 'Ventas' },
   { id: 'entidades', href: '/configuracion/entidades', label: 'Entidades' },
   /** Equipo vive en cada proyecto (Control de obra → Equipo); el id se mantiene por roles. */
   { id: 'equipo', href: '/proyectos/modulo', label: 'Equipo' },
@@ -151,6 +150,8 @@ function esRutaCco(pathname: string): boolean {
 const GATES_POR_RUTA: Array<{ modulo: ModuloNavId; match: (pathname: string) => boolean }> = [
   { modulo: 'clientes', match: (p) => p === '/clientes' || p.startsWith('/clientes/') },
   { modulo: 'presupuestos', match: (p) => p === '/presupuestos' || p.startsWith('/presupuestos/') },
+  // /ventas es la pantalla de armar o editar un presupuesto (parte de Presupuestos). No tiene
+  // botón propio en el menú, pero conserva su permiso: solo la abre quien tenga «ventas».
   { modulo: 'ventas', match: (p) => p === '/ventas' || p.startsWith('/ventas/') },
   { modulo: 'productos', match: (p) => p === '/productos' || p.startsWith('/productos/') },
   {

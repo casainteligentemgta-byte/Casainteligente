@@ -70,7 +70,7 @@ export async function cargarDatosPresupuesto(): Promise<DatosPresupuesto> {
       enlaces: mapa,
     }
   } catch (e) {
-    return { ...vacio, error: e instanceof Error ? e.message : 'No se pudo consultar Ventas.' }
+    return { ...vacio, error: e instanceof Error ? e.message : 'No se pudo consultar Presupuestos.' }
   }
 }
 
@@ -153,7 +153,7 @@ export async function consultarEstadoBorrador(
       .eq('id', id)
       .maybeSingle()
     if (error) return { ok: false, error: error.message }
-    if (!data) return { ok: false, error: 'El presupuesto ya no está en Ventas.' }
+    if (!data) return { ok: false, error: 'El presupuesto ya no existe.' }
     return { ok: true, status: String((data as { status?: unknown }).status ?? '') }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'No se pudo consultar el presupuesto.' }
@@ -180,7 +180,7 @@ export async function actualizarBorradorPresupuesto(args: {
       .eq('id', args.id)
       .maybeSingle()
     if (errGet) return { ok: false, error: errGet.message }
-    if (!fila) return { ok: false, error: 'El presupuesto ya no está en Ventas.' }
+    if (!fila) return { ok: false, error: 'El presupuesto ya no existe.' }
     const status = String((fila as { status?: unknown }).status ?? '')
     if (status !== ESTADO_BORRADOR) {
       return {
@@ -232,7 +232,7 @@ export async function cargarOfertaVentas(id: string): Promise<
       .eq('id', id)
       .maybeSingle()
     if (error) return { ok: false, error: error.message }
-    if (!data) return { ok: false, error: 'No se encontró el presupuesto en Ventas.' }
+    if (!data) return { ok: false, error: 'No se encontró el presupuesto.' }
     const items = Array.isArray((data as { items?: unknown }).items)
       ? ((data as { items: unknown[] }).items)
       : []
