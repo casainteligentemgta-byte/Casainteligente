@@ -1,9 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+/** Categoría que reúne cámaras, grabadores y sus accesorios. */
+export const CATEGORIA_CCTV = 'C.C.T.V';
+
 export const CATEGORIAS_COMERCIALES_DEFAULT = [
-  'Cámaras IP',
-  'Cámaras Análogas',
-  'C.C.T.V',
+  CATEGORIA_CCTV,
   'Servicio',
   'Cercos Eléctricos',
   'Internet',
@@ -22,6 +23,21 @@ export const CATEGORIAS_CATALOGO_DEFAULT = [
   ...CATEGORIAS_COMERCIALES_DEFAULT,
   ...CATEGORIAS_INTERNAS_DEFAULT,
 ] as const;
+
+/**
+ * Subcategorías de fábrica. «Cámaras IP» y «Cámaras Análogas» eran categorías sueltas:
+ * ahora viven dentro de C.C.T.V. El dueño puede crear más desde Productos.
+ */
+export const SUBCATEGORIAS_DEFAULT: Record<string, readonly string[]> = {
+  [CATEGORIA_CCTV]: ['Cámaras IP', 'Cámaras Análogas', 'Otros dispositivos', 'Accesorios'],
+};
+
+export type ArbolCategorias = {
+  /** Categorías principales, en orden. */
+  categorias: string[];
+  /** Subcategorías de cada categoría (clave: nombre de la categoría tal como se muestra). */
+  subcategorias: Record<string, string[]>;
+};
 
 export const CAT_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
   'Cámaras IP': { bg: 'rgba(0,122,255,0.12)', text: '#007AFF', dot: '#007AFF' },
@@ -176,25 +192,104 @@ export function guardarCategoriaExtraLocal(nombre: string): void {
   }
 }
 
-function esTablaAusente(error: { code?: string; message?: string } | null | undefined): boolean {
-  const code = error?.code ?? '';
-  const msg = (error?.message ?? '').toLowerCase();
-  return code === '42P01' || msg.includes('schema cache') || msg.includes('does not exist');
+export type FilaCategoria = { id: string; name: string; parent_id: string | null };
+
+/**
+ * De las filas de `product_categories` al árbol: las que no tienen madre son categorías;
+ * las demás cuelgan de la suya. Una subcategoría cuya madre ya no existe no se muestra.
+ */
+export function arbolDeFilas(filas: readonly FilaCategoria[]): ArbolCategorias {
+  const nombrePorId: Record<string, string> = {};
+  const categorias: string[] = [];
+  for (const f of filas) {
+    const nombre = normalizarNombreCategoria(f.name);
+    if (!nombre || f.parent_id) continue;
+    nombrePorId[f.id] = nombre;
+    categorias.push(nombre);
+  }
+  const subcategorias: Record<string, string[]> = {};
+  for (const f of filas) {
+    const nombre = normalizarNombreCategoria(f.name);
+    const madre = f.parent_id ? nombrePorId[f.parent_id] : undefined;
+    if (!nombre || !madre) continue;
+    subcategorias[madre] = mergeNombresCategoria(subcategorias[madre] ?? [], [nombre]);
+  }
+  return { categorias: mergeNombresCategoria(categorias), subcategorias };
+}
+
+/** Subcategorías de una categoría (sin distinguir acentos ni mayúsculas en el nombre). */
+export function subcategoriasDe(arbol: Pick<ArbolCategorias, 'subcategorias'>, categoria: string | null | undefined): string[] {
+  const clave = claveNombreCategoria(categoria ?? '');
+  if (!clave) return [];
+  for (const nombre of Object.keys(arbol.subcategorias)) {
+    if (claveNombreCategoria(nombre) === clave) return arbol.subcategorias[nombre] ?? [];
+  }
+  return [];
+}
+
+/**
+ * Subcategorías que se muestran: las de fábrica más las de la tabla, cada una bajo el
+ * nombre de su categoría tal como aparece en `categorias`.
+ */
+export function subcategoriasAMostrar(
+  categorias: readonly string[],
+  deTabla: Readonly<Record<string, readonly string[]>> | null,
+): Record<string, string[]> {
+  const salida: Record<string, string[]> = {};
+  for (const categoria of categorias) {
+    const deFabrica = subcategoriasDe({ subcategorias: SUBCATEGORIAS_DEFAULT as Record<string, string[]> }, categoria);
+    const guardadas = deTabla ? subcategoriasDe({ subcategorias: deTabla as Record<string, string[]> }, categoria) : [];
+    const todas = mergeNombresCategoria(deFabrica, guardadas);
+    if (todas.length > 0) salida[categoria] = todas;
+  }
+  return salida;
+}
+
+/** «C.C.T.V › Cámaras IP», o solo la categoría si el producto no tiene subcategoría. */
+export function etiquetaCategoria(categoria: string | null | undefined, subcategoria: string | null | undefined): string {
+  const c = normalizarNombreCategoria(categoria ?? '');
+  const sub = normalizarNombreCategoria(subcategoria ?? '');
+  if (!c) return '';
+  return sub ? `${c} › ${sub}` : c;
+}
+
+/** Lo contrario de `etiquetaCategoria`: de «C.C.T.V › Cámaras IP» a sus dos partes. */
+export function separarEtiquetaCategoria(etiqueta: string | null | undefined): { categoria: string; subcategoria: string } {
+  const texto = String(etiqueta ?? '');
+  const corte = texto.indexOf(' › ');
+  if (corte < 0) return { categoria: normalizarNombreCategoria(texto), subcategoria: '' };
+  return {
+    categoria: normalizarNombreCategoria(texto.slice(0, corte)),
+    subcategoria: normalizarNombreCategoria(texto.slice(corte + 3)),
+  };
+}
+
+/** Opciones para un desplegable: cada categoría y, debajo, cada una de sus subcategorías. */
+export function opcionesCategoriaConSub(arbol: ArbolCategorias): string[] {
+  const salida: string[] = [];
+  for (const categoria of arbol.categorias) {
+    salida.push(categoria);
+    for (const sub of subcategoriasDe(arbol, categoria)) salida.push(etiquetaCategoria(categoria, sub));
+  }
+  return salida;
+}
+
+async function filasDeTabla(supabase: SupabaseClient): Promise<FilaCategoria[] | null> {
+  const { data, error } = await supabase
+    .from('product_categories')
+    .select('id, name, parent_id, sort_order, created_at')
+    .order('sort_order', { ascending: true })
+    .order('name', { ascending: true });
+  if (error) return null;
+  return (data ?? []).map((r) => {
+    const fila = r as { id?: string; name?: string; parent_id?: string | null };
+    return { id: String(fila.id ?? ''), name: String(fila.name ?? ''), parent_id: fila.parent_id ?? null };
+  });
 }
 
 async function listarDesdeTabla(supabase: SupabaseClient): Promise<string[] | null> {
-  const { data, error } = await supabase
-    .from('product_categories')
-    .select('name, sort_order, created_at')
-    .order('sort_order', { ascending: true })
-    .order('name', { ascending: true });
-  if (error) {
-    if (esTablaAusente(error)) return null;
-    return null;
-  }
-  return (data ?? [])
-    .map((r) => normalizarNombreCategoria(String((r as { name?: string }).name ?? '')))
-    .filter(Boolean);
+  const filas = await filasDeTabla(supabase);
+  return filas ? arbolDeFilas(filas).categorias : null;
 }
 
 async function listarDesdeProductos(supabase: SupabaseClient): Promise<string[]> {
@@ -235,6 +330,22 @@ export function categoriasAMostrar(
     return mergeNombresCategoria(CATEGORIAS_CATALOGO_DEFAULT, deTabla);
   }
   return mergeNombresCategoria(CATEGORIAS_CATALOGO_DEFAULT, deProductos, extrasLocales);
+}
+
+/** Categorías y subcategorías que se muestran en Productos y en el presupuesto. */
+export async function listarArbolCategorias(supabase: SupabaseClient): Promise<ArbolCategorias> {
+  let arbol: ArbolCategorias | null = null;
+  try {
+    const filas = await filasDeTabla(supabase);
+    arbol = filas ? arbolDeFilas(filas) : null;
+  } catch {
+    arbol = null;
+  }
+  const categorias =
+    arbol && arbol.categorias.length > 0
+      ? categoriasAMostrar(arbol.categorias, [], [])
+      : await listarCategoriasCatalogo(supabase);
+  return { categorias, subcategorias: subcategoriasAMostrar(categorias, arbol ? arbol.subcategorias : null) };
 }
 
 export async function listarCategoriasCatalogo(supabase: SupabaseClient): Promise<string[]> {
@@ -294,6 +405,7 @@ export async function crearCategoriaCatalogo(
       const { data: dup } = await supabase
         .from('product_categories')
         .select('name')
+        .is('parent_id', null)
         .ilike('name', name)
         .maybeSingle();
       return normalizarNombreCategoria(String(dup?.name ?? '')) || name;
@@ -304,4 +416,78 @@ export async function crearCategoriaCatalogo(
 
   guardarCategoriaExtraLocal(name);
   return name;
+}
+
+export function validarNombreSubcategoria(raw: string): string {
+  const name = normalizarNombreCategoria(raw);
+  if (name.length < 2) {
+    throw new Error('Indique un nombre de subcategoría válido (mínimo 2 caracteres).');
+  }
+  if (name.length > 60) {
+    throw new Error('El nombre no puede superar 60 caracteres.');
+  }
+  if (/^todas?$/i.test(name)) {
+    throw new Error('Ese nombre está reservado para el filtro general.');
+  }
+  return name;
+}
+
+/**
+ * Crea una subcategoría dentro de `categoria` y devuelve su nombre. Si ya existe con otro
+ * acento o mayúsculas, devuelve la que ya está. Si la categoría no está en la tabla
+ * (venía solo de fábrica), la crea primero.
+ */
+export async function crearSubcategoriaCatalogo(
+  supabase: SupabaseClient,
+  rawCategoria: string,
+  rawNombre: string,
+): Promise<string> {
+  const categoria = normalizarNombreCategoria(rawCategoria);
+  if (!categoria) throw new Error('Elija primero la categoría.');
+  const name = validarNombreSubcategoria(rawNombre);
+
+  const deFabrica = subcategoriasDe({ subcategorias: SUBCATEGORIAS_DEFAULT as Record<string, string[]> }, categoria);
+  const filas = (await filasDeTabla(supabase)) ?? [];
+  const arbol = arbolDeFilas(filas);
+  const existente = categoriaExistenteEquivalente(name, [...subcategoriasDe(arbol, categoria), ...deFabrica]);
+  const claveCategoria = claveNombreCategoria(categoria);
+  let madre = filas.find((f) => !f.parent_id && claveNombreCategoria(f.name) === claveCategoria);
+  // Ya está guardada bajo esta categoría: no hay nada que crear.
+  if (existente && madre && filas.some((f) => f.parent_id === madre!.id && claveNombreCategoria(f.name) === claveNombreCategoria(existente))) {
+    return existente;
+  }
+
+  if (!madre) {
+    const creada = await crearCategoriaCatalogo(supabase, categoria);
+    const { data } = await supabase
+      .from('product_categories')
+      .select('id, name, parent_id')
+      .is('parent_id', null)
+      .ilike('name', creada)
+      .maybeSingle();
+    if (!data?.id) throw new Error('No se pudo guardar la subcategoría: la categoría no está en la base de datos.');
+    madre = { id: String(data.id), name: String(data.name ?? creada), parent_id: null };
+  }
+
+  const nombreFinal = existente ?? name;
+  const { error } = await supabase.from('product_categories').insert({
+    name: nombreFinal,
+    kind: 'personalizada',
+    sort_order: 500,
+    parent_id: madre.id,
+  });
+  if (error) {
+    if (/duplicate|unique/i.test(error.message)) {
+      const { data: dup } = await supabase
+        .from('product_categories')
+        .select('name')
+        .eq('parent_id', madre.id)
+        .ilike('name', nombreFinal)
+        .maybeSingle();
+      if (dup?.name) return normalizarNombreCategoria(String(dup.name));
+      throw new Error(`Ya existe «${nombreFinal}» como categoría o dentro de otra categoría. Usa otro nombre.`);
+    }
+    throw new Error('No se pudo guardar la subcategoría. Revisa la conexión e intenta de nuevo.');
+  }
+  return nombreFinal;
 }

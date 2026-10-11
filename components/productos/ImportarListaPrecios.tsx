@@ -5,14 +5,15 @@ import type { CSSProperties, ReactNode } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { uploadProductImage } from '@/lib/supabase/product-media';
 import { useCategoriasCatalogo } from '@/lib/productos/useCategoriasCatalogo';
+import { etiquetaCategoria, opcionesCategoriaConSub, separarEtiquetaCategoria } from '@/lib/productos/categoriasCatalogo';
 import {
     cambioParaProducto,
-    categoriaSugerida,
     efectoEnProducto,
     leerListaCsv,
     planificarImportacion,
     precioUsable,
     productoNuevoDesdeFila,
+    ubicacionSugerida,
     type Coincidencia,
     type EstatusProveedor,
     type FilaLista,
@@ -258,9 +259,20 @@ async function pantallaEncendida(): Promise<Cerrojo | null> {
     }
 }
 
+/** Lo que se propone para un producto nuevo según la sección de la lista. */
+function etiquetaSugerida(seccion: string): string {
+    const { categoria, subcategoria } = ubicacionSugerida(seccion);
+    return etiquetaCategoria(categoria, subcategoria);
+}
+
 export default function ImportarListaPrecios() {
     const supabase = useMemo(() => createClient(), []);
-    const { nombres: categorias } = useCategoriasCatalogo();
+    const { nombres: categoriasNombres, subcategorias: subcategoriasPorCategoria } = useCategoriasCatalogo();
+    /** Categorías y, debajo de cada una, sus subcategorías («C.C.T.V › Cámaras IP»). */
+    const categorias = useMemo(
+        () => opcionesCategoriaConSub({ categorias: categoriasNombres, subcategorias: subcategoriasPorCategoria }),
+        [categoriasNombres, subcategoriasPorCategoria],
+    );
 
     const [productos, setProductos] = useState<ProductoActual[] | null>(null);
     const [errorProductos, setErrorProductos] = useState<string | null>(null);
@@ -558,7 +570,8 @@ export default function ImportarListaPrecios() {
             });
 
             await enParalelo<FilaLista>(aCrear, EN_PARALELO, async (f) => {
-                const fila = productoNuevoDesdeFila(f, categoriaNuevo[f.n] ?? '', fecha, new Date().toISOString());
+                const elegida = separarEtiquetaCategoria(categoriaNuevo[f.n] ?? '');
+                const fila = productoNuevoDesdeFila(f, elegida.categoria, fecha, new Date().toISOString(), elegida.subcategoria);
                 let conFoto = false;
                 if (llevaFotoNueva(null, f)) {
                     try {
@@ -1075,7 +1088,7 @@ export default function ImportarListaPrecios() {
                                             Categoría
                                             <select
                                                 data-ilp-categoria
-                                                value={categoriaNuevo[f.n] ?? categoriaSugerida(f.seccion)}
+                                                value={categoriaNuevo[f.n] ?? etiquetaSugerida(f.seccion)}
                                                 onChange={(ev) => setCategoriaNuevo((prev) => ({ ...prev, [f.n]: ev.target.value }))}
                                                 style={{
                                                     background: 'var(--bg-secondary)',
