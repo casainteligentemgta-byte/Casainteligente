@@ -48,6 +48,7 @@ import NetVisionPlanoLookControls from '@/components/netvision/NetVisionPlanoLoo
 import NetVisionPlanoSetupMenu from '@/components/netvision/NetVisionPlanoSetupMenu'
 import NetVisionRotateLayers from '@/components/netvision/NetVisionRotateLayers'
 import NetVisionCameraVisionToggles from '@/components/netvision/NetVisionCameraVisionToggles'
+import NetVisionOverlayBar from '@/components/netvision/NetVisionOverlayBar'
 import NetVisionCalibracionOkModal from '@/components/netvision/NetVisionCalibracionOkModal'
 import StructureDesigner from '@/components/netvision/StructureDesigner'
 import UndergroundCanalizationTool from '@/components/netvision/UndergroundCanalizationTool'
@@ -276,6 +277,25 @@ import {
   siguienteEtiquetaCamara,
 } from '@/lib/netvision/utils/seleccionMultiple'
 import {
+  ALL_SCENARIOS_ID,
+  PRINCIPAL_SCENARIO_ID,
+  addCameraScenario,
+  cameraScenarioId,
+  ensureCameraScenarios,
+  removeCameraScenario,
+} from '@/lib/netvision/utils/cameraScenarios'
+import {
+  isPlanDisciplineBranch,
+  overlaySystemFromBranch,
+  showOverlaySound,
+  showOverlayWifi,
+  visibleCameras,
+  visibleInfraDevices,
+  visibleNetworkNodes,
+  visiblePlanDevices,
+  type OverlayVista,
+} from '@/lib/netvision/utils/overlayVisibility'
+import {
   modeloPorDefectoDelProyecto,
   plantillaNuevaCamara,
 } from '@/lib/netvision/utils/nuevaCamara'
@@ -445,6 +465,8 @@ export default function NexusVisionArchitectClient() {
   const [planoAspect, setPlanoAspect] = useState<number | null>(null)
   const [planoDims, setPlanoDims] = useState<PlanoDimension[]>([])
   const [sideTab, setSideTab] = useState<NetVisionBranchId>('cctv')
+  const [overlayVista, setOverlayVista] = useState<OverlayVista>('solo')
+  const [activeScenarioId, setActiveScenarioId] = useState(PRINCIPAL_SCENARIO_ID)
   const [redFocusKind, setRedFocusKind] = useState<NetworkNodeKind>('switch')
   const [headerNavEl, setHeaderNavEl] = useState<HTMLElement | null>(null)
   /** Inspector de cámara/elemento: solo al pulsar Configurar. */
@@ -456,6 +478,7 @@ export default function NexusVisionArchitectClient() {
   >({
     sonido: defaultPlanDeviceId('sonido'),
     domotica: defaultPlanDeviceId('domotica'),
+    alarma: defaultPlanDeviceId('alarma'),
     electrico: defaultPlanDeviceId('electrico'),
   })
   const [planFocusKind, setPlanFocusKind] = useState<PlanDeviceKind>('speaker')
@@ -800,54 +823,88 @@ export default function NexusVisionArchitectClient() {
   ])
 
   const structures = project.structures ?? []
+  const planDevices = project.planDevices ?? []
+  const cameraScenarios = useMemo(
+    () => ensureCameraScenarios(project.cameraScenarios, project.cameras),
+    [project.cameraScenarios, project.cameras],
+  )
+  useEffect(() => {
+    if (activeScenarioId === ALL_SCENARIOS_ID) return
+    if (!cameraScenarios.some((s) => s.id === activeScenarioId)) {
+      setActiveScenarioId(PRINCIPAL_SCENARIO_ID)
+    }
+  }, [cameraScenarios, activeScenarioId])
+  const overlaySystem = overlaySystemFromBranch(sideTab)
+  const overlayOpts = useMemo(
+    () => ({
+      vista: overlayVista,
+      system: overlaySystem,
+      scenarioId: activeScenarioId,
+    }),
+    [overlayVista, overlaySystem, activeScenarioId],
+  )
+  const canvasCameras = useMemo(
+    () => visibleCameras(project.cameras, overlayOpts),
+    [project.cameras, overlayOpts],
+  )
+  const canvasPlanDevices = useMemo(
+    () => visiblePlanDevices(planDevices, overlayOpts),
+    [planDevices, overlayOpts],
+  )
+  const canvasNetworkNodes = useMemo(
+    () => visibleNetworkNodes(project.networkNodes, overlayOpts),
+    [project.networkNodes, overlayOpts],
+  )
+  const canvasInfraDevices = useMemo(
+    () => visibleInfraDevices(project.infraDevices ?? [], overlayOpts),
+    [project.infraDevices, overlayOpts],
+  )
 
   const sectors = useMemo(
     () =>
       buildCoverageSectors(
-        project.cameras,
+        canvasCameras,
         project.scale,
         nightMode ? 'night' : 'day',
         structures,
       ),
-    [project.cameras, project.scale, nightMode, structures],
+    [canvasCameras, project.scale, nightMode, structures],
   )
 
   const visionSpectrum = useMemo(
     () =>
       showFov
         ? buildVisionSpectrum(
-            project.cameras,
+            canvasCameras,
             project.scale,
             nightMode ? 'night' : 'day',
             structures,
           )
         : [],
-    [showFov, project.cameras, project.scale, nightMode, structures],
+    [showFov, canvasCameras, project.scale, nightMode, structures],
   )
 
   const wifiCircles = useMemo(
-    () => buildWifiCoverage(project.networkNodes, project.scale, structures),
-    [project.networkNodes, project.scale, structures],
+    () => buildWifiCoverage(canvasNetworkNodes, project.scale, structures),
+    [canvasNetworkNodes, project.scale, structures],
   )
 
   const wifiSpectrum = useMemo(
     () =>
-      showWifi ? buildWifiSpectrum(project.networkNodes, project.scale, structures) : [],
-    [showWifi, project.networkNodes, project.scale, structures],
+      showWifi ? buildWifiSpectrum(canvasNetworkNodes, project.scale, structures) : [],
+    [showWifi, canvasNetworkNodes, project.scale, structures],
   )
-
-  const planDevices = project.planDevices ?? []
 
   const soundSpectrum = useMemo(
     () =>
       showSound
         ? buildSoundSpectrum(
-            project.cameras,
+            canvasCameras,
             project.scale,
             structures,
             28,
             8,
-            planDevices
+            canvasPlanDevices
               .filter((d) => d.discipline === 'sonido')
               .map((d) => ({
                 x: d.x,
@@ -858,13 +915,24 @@ export default function NexusVisionArchitectClient() {
               })),
           )
         : [],
-    [showSound, project.cameras, project.scale, structures, planDevices],
+    [showSound, canvasCameras, project.scale, structures, canvasPlanDevices],
   )
 
   const planSectors = useMemo(() => {
-    if (sideTab === 'sonido' || sideTab === 'domotica' || sideTab === 'electrico') {
+    if (overlayVista === 'todas') {
+      return [
+        ...buildPlanDeviceSectors(canvasPlanDevices, project.scale, structures),
+        ...buildApCoverageSectors(
+          canvasNetworkNodes,
+          (n) => getNetworkModelOrDefault(n.modelId, 'ap').wifiRangeM || 12,
+          project.scale,
+          structures,
+        ),
+      ]
+    }
+    if (isPlanDisciplineBranch(sideTab)) {
       return buildPlanDeviceSectors(
-        planDevices,
+        canvasPlanDevices,
         project.scale,
         structures,
         sideTab,
@@ -872,31 +940,44 @@ export default function NexusVisionArchitectClient() {
     }
     if (sideTab === 'internet') {
       return buildApCoverageSectors(
-        project.networkNodes,
+        canvasNetworkNodes,
         (n) => getNetworkModelOrDefault(n.modelId, 'ap').wifiRangeM || 12,
         project.scale,
         structures,
       )
     }
     return []
-  }, [sideTab, planDevices, project.scale, project.networkNodes, structures])
+  }, [
+    overlayVista,
+    sideTab,
+    canvasPlanDevices,
+    canvasNetworkNodes,
+    project.scale,
+    structures,
+  ])
 
-  const cameraIds = useMemo(() => project.cameras.map((c) => c.id), [project.cameras])
+  const cameraIds = useMemo(() => canvasCameras.map((c) => c.id), [canvasCameras])
   const hiddenLive = useMemo(
     () => pruneHiddenCameraIds(hiddenCoverageIds, cameraIds),
     [hiddenCoverageIds, cameraIds],
   )
+  const cameraSectors = sectors.filter((s) => !hiddenLive.includes(s.cameraId))
   const activeSectors =
-    sideTab === 'cctv'
-      ? sectors.filter((s) => !hiddenLive.includes(s.cameraId))
-      : planSectors
+    overlayVista === 'todas'
+      ? [...cameraSectors, ...planSectors]
+      : overlaySystem === 'cctv' || overlaySystem === 'tool'
+        ? cameraSectors
+        : planSectors
   const showActiveCoverage =
-    sideTab === 'cctv'
+    overlayVista === 'todas'
       ? showFov
-      : sideTab === 'sonido' ||
-        sideTab === 'internet' ||
-        sideTab === 'domotica' ||
-        sideTab === 'electrico'
+      : overlaySystem === 'cctv'
+        ? showFov
+        : overlaySystem === 'sonido' ||
+          overlaySystem === 'internet' ||
+          overlaySystem === 'domotica' ||
+          overlaySystem === 'alarma' ||
+          overlaySystem === 'electrico'
 
   const linkAdvice = useMemo(
     () => adviseCameraLinks(project.cameras, project.networkNodes, project.scale),
@@ -1398,6 +1479,10 @@ export default function NexusVisionArchitectClient() {
       labelOffsetY: -0.09 - (Math.floor(project.cameras.length / 3) % 3) * 0.05,
       ...vision,
       ...(plantilla.conexion ? { conexion: plantilla.conexion } : {}),
+      ...(activeScenarioId !== ALL_SCENARIOS_ID &&
+      activeScenarioId !== PRINCIPAL_SCENARIO_ID
+        ? { scenarioId: activeScenarioId }
+        : {}),
     }
     setError(null)
     setProject((p) => ({ ...p, cameras: [...p.cameras, pin] }))
@@ -1422,6 +1507,30 @@ export default function NexusVisionArchitectClient() {
     addCameraAt(pos.x, pos.y)
   }
 
+  const focusCameraScenario = (id: string) => {
+    const cam = project.cameras.find((c) => c.id === id)
+    if (!cam) return
+    if (overlayVista === 'solo') setActiveScenarioId(cameraScenarioId(cam))
+  }
+
+  const addCctvScenario = () => {
+    const { scenarios, added } = addCameraScenario(cameraScenarios)
+    setProject((p) => ({ ...p, cameraScenarios: scenarios }))
+    setActiveScenarioId(added.id)
+    setOverlayVista('solo')
+    setSideTab('cctv')
+  }
+
+  const quitarCctvScenario = (id: string) => {
+    const { scenarios, cameras } = removeCameraScenario(
+      cameraScenarios,
+      project.cameras,
+      id,
+    )
+    setProject((p) => ({ ...p, cameraScenarios: scenarios, cameras }))
+    if (activeScenarioId === id) setActiveScenarioId(PRINCIPAL_SCENARIO_ID)
+  }
+
   /** Elige una cámara de la lista desplegable (plano + asas / ficha). */
   const selectCameraFromMenu = (id: string, openInspector = false) => {
     setSelectedId(id)
@@ -1430,6 +1539,7 @@ export default function NexusVisionArchitectClient() {
     setViewMode('plano')
     setCamerasMenuOpen(false)
     setInspectorOpen(openInspector)
+    focusCameraScenario(id)
   }
 
   const showAllCameraCoverage = () => {
@@ -1473,6 +1583,10 @@ export default function NexusVisionArchitectClient() {
       } else if (id === 'internet') {
         setViewMode('plano')
       } else if (id === 'domotica') {
+        setShowFov(true)
+        setViewMode('plano')
+        setPlanFocusKind('hub')
+      } else if (id === 'alarma') {
         setShowFov(true)
         setViewMode('plano')
         setPlanFocusKind('hub')
@@ -2724,7 +2838,7 @@ export default function NexusVisionArchitectClient() {
         </>
       )
     }
-    if (sideTab === 'sonido' || sideTab === 'domotica' || sideTab === 'electrico') {
+    if (isPlanDisciplineBranch(sideTab)) {
       const kinds = planDeviceKinds(sideTab)
       const focus =
         kinds.includes(planFocusKind) ? planFocusKind : kinds[0]!
@@ -3572,6 +3686,26 @@ export default function NexusVisionArchitectClient() {
         archivo={archivoMenu}
         tools={workLine}
         submenu={branchSubmenu}
+        overlay={
+          <NetVisionOverlayBar
+            vista={overlayVista}
+            onVista={setOverlayVista}
+            showScenarios={
+              overlaySystem === 'cctv' ||
+              overlayVista === 'todas' ||
+              cameraScenarios.length > 1
+            }
+            scenarios={cameraScenarios}
+            scenarioId={activeScenarioId}
+            onScenario={(id) => {
+              setActiveScenarioId(id)
+              setOverlayVista('solo')
+              setSideTab('cctv')
+            }}
+            onAddScenario={addCctvScenario}
+            onRemoveScenario={quitarCctvScenario}
+          />
+        }
       />,
       headerNavEl,
     )
@@ -3739,7 +3873,7 @@ export default function NexusVisionArchitectClient() {
               <p className="max-w-sm text-xs text-[var(--nexus-text-dim)]">
                 PDF vectorial (CAD): se detectan muros, puertas y ventanas al cargar.
                 Luego coloca equipos en el plano amplio y tócalos para configurarlos.
-                CCTV, sonido, internet, domótica y eléctrico.
+                CCTV, sonido, internet, domótica, alarma y eléctrico en el mismo PDF.
               </p>
             </button>
           ) : (
@@ -3769,10 +3903,10 @@ export default function NexusVisionArchitectClient() {
                       intensidadTrazos: clampIntensidad(project.planoIntensidad),
                     }}
                     wallStrokeGrosor={clampGrosorMuro(project.planoGrosorMuro)}
-                    cameras={project.cameras}
-                    networkNodes={project.networkNodes}
-                    planDevices={planDevices}
-                    infraDevices={project.infraDevices ?? []}
+                    cameras={canvasCameras}
+                    networkNodes={canvasNetworkNodes}
+                    planDevices={canvasPlanDevices}
+                    infraDevices={canvasInfraDevices}
                     structures={structures}
                     sectors={activeSectors}
                     coverageHiddenIds={hiddenLive}
@@ -3808,8 +3942,8 @@ export default function NexusVisionArchitectClient() {
                     draftLabel={draftLabel}
                     showFov={showActiveCoverage}
                     visionOpacity={visionOpacity}
-                    showWifi={showWifi && sideTab !== 'sonido' && sideTab !== 'domotica' && sideTab !== 'electrico'}
-                    showSound={showSound && sideTab === 'sonido'}
+                    showWifi={showWifi && showOverlayWifi(overlayOpts)}
+                    showSound={showSound && showOverlaySound(overlayOpts)}
                     showLinks={showLinks}
                     showCableRoutes={showCableRoutes}
                     showUnderground={showUnderground || sideTab === 'sub'}
@@ -3852,6 +3986,7 @@ export default function NexusVisionArchitectClient() {
                       if (multiMode) return
                       setSelectedId(id)
                       if (id && project.cameras.some((c) => c.id === id)) {
+                        focusCameraScenario(id)
                         setShowFov(true)
                         setSideTab('cctv')
                         setViewMode('plano')
@@ -4171,7 +4306,7 @@ export default function NexusVisionArchitectClient() {
                       </div>
                       <div className="min-w-0 flex-1">
                         <NetVisionCameraVisionToggles
-                          cameras={project.cameras}
+                          cameras={canvasCameras}
                           hiddenIds={hiddenLive}
                           compact
                           onShowAll={showAllCameraCoverage}
@@ -4660,7 +4795,7 @@ export default function NexusVisionArchitectClient() {
                 />
               </div>
             </div>
-          ) : sideTab === 'sonido' || sideTab === 'domotica' || sideTab === 'electrico' ? (
+          ) : isPlanDisciplineBranch(sideTab) ? (
             <div className="space-y-2">
               <h2 className="text-sm font-bold uppercase tracking-wide text-[var(--nexus-text-muted)]">
                 Plano {PLAN_DISCIPLINE_LABEL[sideTab]}
@@ -4751,9 +4886,9 @@ export default function NexusVisionArchitectClient() {
                 <Camera className="h-3.5 w-3.5" />
                 + Agregar cámara
               </button>
-              {project.cameras.length > 0 ? (
+              {canvasCameras.length > 0 ? (
                 <NetVisionCameraVisionToggles
-                  cameras={project.cameras}
+                  cameras={canvasCameras}
                   hiddenIds={hiddenLive}
                   onShowAll={showAllCameraCoverage}
                   onSolo={(id) => {

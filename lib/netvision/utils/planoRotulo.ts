@@ -8,6 +8,7 @@ export const PLANO_TIPO_POR_RAMA = {
   sonido: 'Sonido',
   internet: 'Internet',
   domotica: 'Domótica',
+  alarma: 'Alarma',
   electrico: 'Eléctrico',
   muros: 'Muros',
   cable: 'Cable',

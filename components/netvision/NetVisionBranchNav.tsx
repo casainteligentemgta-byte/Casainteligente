@@ -9,6 +9,7 @@ export const NETVISION_PLAN_BRANCHES = [
   { id: 'sonido', label: 'Sonido' },
   { id: 'internet', label: 'Internet' },
   { id: 'domotica', label: 'Domótica' },
+  { id: 'alarma', label: 'Alarma' },
   { id: 'electrico', label: 'Eléctrico' },
 ] as const
 
@@ -36,6 +37,7 @@ type Props = {
   archivo: ReactNode
   tools?: ReactNode
   submenu?: ReactNode
+  overlay?: ReactNode
 }
 
 function BranchChips({
@@ -126,6 +128,7 @@ export default function NetVisionBranchNav({
   archivo,
   tools,
   submenu,
+  overlay,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState<FoldId | null>(null)
@@ -197,6 +200,7 @@ export default function NetVisionBranchNav({
           {tools}
         </div>
       </div>
+      {overlay ? <div className="min-w-0">{overlay}</div> : null}
     </div>
   )
 }
