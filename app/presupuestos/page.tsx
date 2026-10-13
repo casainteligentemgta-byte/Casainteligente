@@ -6,7 +6,12 @@ import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 import PresupuestosFiltrosModal from '@/components/presupuestos/PresupuestosFiltrosModal';
 import PresupuestoCobrosModal from '@/components/presupuestos/PresupuestoCobrosModal';
-import { fechaDocumentoDeBudget, formatFechaPresupuestoCorta } from '@/lib/presupuesto/fecha';
+import {
+    fechaDocumentoDeBudget,
+    formatFechaHoraPresupuesto,
+    formatFechaPresupuestoCorta,
+} from '@/lib/presupuesto/fecha';
+import { correlativoDesdeValor, etiquetaNumeroPresupuesto } from '@/lib/presupuesto/numero';
 import {
     ESTADOS_VENTA,
     filtroDesdeParametro,
@@ -28,6 +33,7 @@ interface Budget {
     numero_correlativo?: number | string | null;
     fecha?: string | null;
     created_at: string;
+    updated_at?: string | null;
 }
 
 type ClasificacionPresupuesto =
@@ -73,28 +79,11 @@ function formatFechaCorta(iso: string) {
 }
 
 function getPresupuestoNumero(b: Budget, fallback?: number) {
-    const raw = b.numero_correlativo;
-    const n =
-        typeof raw === 'number'
-            ? raw
-            : typeof raw === 'string'
-                ? Number(raw)
-                : null;
-    if (n != null && !Number.isNaN(n)) return `P-${n}`;
-    if (fallback != null && !Number.isNaN(fallback)) return `P-${fallback}`;
-    return `P-${b.id.slice(0, 8).toUpperCase()}`;
+    return etiquetaNumeroPresupuesto(b, { fallback });
 }
 
 function getNumeroValor(b: Budget, fallbackById: Record<string, number>) {
-    const raw = b.numero_correlativo;
-    const n =
-        typeof raw === 'number'
-            ? raw
-            : typeof raw === 'string'
-                ? Number(raw)
-                : null;
-    if (n != null && !Number.isNaN(n)) return n;
-    return fallbackById[b.id] ?? 0;
+    return correlativoDesdeValor(b.numero_correlativo) ?? fallbackById[b.id] ?? 0;
 }
 
 function TarjetaPresupuesto({
@@ -190,6 +179,23 @@ function TarjetaPresupuesto({
                         {numero}
                         <span style={{ color: '#CBD5E1', margin: '0 6px' }}>·</span>
                         <span style={{ fontFamily: 'inherit', fontWeight: 500 }}>{fecha}</span>
+                    </p>
+                    <p
+                        style={{
+                            color: '#94A3B8',
+                            fontSize: '11px',
+                            fontWeight: 500,
+                            margin: '4px 0 0',
+                            lineHeight: 1.35,
+                        }}
+                    >
+                        Creado {formatFechaHoraPresupuesto(b.created_at)}
+                        {b.updated_at && b.updated_at !== b.created_at ? (
+                            <>
+                                <span style={{ color: '#CBD5E1', margin: '0 6px' }}>·</span>
+                                Mod. {formatFechaHoraPresupuesto(b.updated_at)}
+                            </>
+                        ) : null}
                     </p>
                 </div>
                 <span

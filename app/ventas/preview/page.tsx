@@ -60,8 +60,8 @@ function budgetRowToPreviewPayload(
             correlativoNum != null && !Number.isNaN(correlativoNum)
                 ? `P-${correlativoNum}`
                 : id
-                    ? `P-${id.slice(0, 4)}`
-                    : 'P-—',
+                    ? `P-${id.slice(0, 8).toUpperCase()}`
+                    : 'P—(borrador)',
         telefono: extra.telefono,
         email: extra.email,
         direccion: extra.direccion,

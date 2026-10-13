@@ -67,7 +67,22 @@ export function esErrorColumnaFecha(message: string | undefined | null): boolean
   return m.includes('fecha') && (m.includes('column') || m.includes('schema') || m.includes('could not find'));
 }
 
-/** Mediodía en Caracas para no correr el día al guardar en `created_at` (fallback). */
+/** Mediodía en Caracas para no correr el día al guardar en `created_at` (fallback legacy). */
 export function fechaACreatedAtMediodiaCaracas(fecha: string): string {
   return `${fecha}T12:00:00-04:00`;
+}
+
+/** Fecha/hora corta en zona Caracas para UI (creación / modificación). */
+export function formatFechaHoraPresupuesto(iso: string | null | undefined): string {
+  if (!iso || typeof iso !== 'string') return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleString('es-VE', {
+    timeZone: TZ_VE,
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }

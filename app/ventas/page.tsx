@@ -15,11 +15,14 @@ import PresupuestoLineItems, {
 import {
     esErrorColumnaFecha,
     esFechaIso,
-    fechaACreatedAtMediodiaCaracas,
     fechaDocumentoDeBudget,
+    formatFechaHoraPresupuesto,
     formatFechaPresupuestoLarga,
     hoyFechaPresupuesto,
 } from '@/lib/presupuesto/fecha';
+import { correlativoDesdeValor, etiquetaNumeroPresupuesto } from '@/lib/presupuesto/numero';
+import { saldoDe } from '@/lib/presupuesto/listaPresupuestos';
+import PresupuestoCobrosModal from '@/components/presupuestos/PresupuestoCobrosModal';
 
 /** Fila mínima de `customers` para el selector de presupuesto */
 interface CustomerPickerRow {
@@ -104,8 +107,8 @@ function VentasContent() {
     /** Con productos en la lista, el buscador se oculta hasta “Agregar producto”. */
     const [showProductSearch, setShowProductSearch] = useState(!isDemo);
     /**
-     * Margen sobre el precio del catálogo. Empieza en 0 %: el operador lo sube al armar
-     * cada presupuesto (decisión del dueño, oct 2026). Antes arrancaba en 20 %.
+     * Markup sobre el precio del catálogo al agregar/recalcular renglones. Empieza en 0 %.
+     * No es lo mismo que `margin_pct` guardado (utilidad = ganancia / total).
      */
     const [globalMargin, setGlobalMargin] = useState(MARGEN_INICIAL_PRESUPUESTO);
     const [clientName, setClientName] = useState('');
@@ -122,6 +125,12 @@ function VentasContent() {
     const customerInputRef = useRef<HTMLInputElement>(null);
     const legacyParamsResolved = useRef(false);
     const [budgetId, setBudgetId] = useState<string | null>(null);
+    /** Número fijo P-N asignado por la BD; null = borrador aún no guardado. */
+    const [numeroCorrelativo, setNumeroCorrelativo] = useState<number | null>(null);
+    const [createdAt, setCreatedAt] = useState<string | null>(null);
+    const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+    const [montoPagado, setMontoPagado] = useState(0);
+    const [cobrosOpen, setCobrosOpen] = useState(false);
     const [fecha, setFecha] = useState(hoyFechaPresupuesto);
     const [notes, setNotes] = useState('');
     const [showZelle, setShowZelle] = useState(true);
@@ -318,6 +327,16 @@ function VentasContent() {
                         setNotes(data.notes || '');
                         setFecha(fechaDocumentoDeBudget(data as { fecha?: unknown; created_at?: unknown }));
                         setShowZelle(data.show_zelle !== false); // Default to true if undefined
+                        setNumeroCorrelativo(correlativoDesdeValor(data.numero_correlativo));
+                        setCreatedAt(typeof data.created_at === 'string' ? data.created_at : null);
+                        setUpdatedAt(typeof data.updated_at === 'string' ? data.updated_at : null);
+                        setMontoPagado(
+                            data.monto_pagado != null && Number.isFinite(Number(data.monto_pagado))
+                                ? Number(data.monto_pagado)
+                                : 0,
+                        );
+                        // Markup de catálogo no se restaura: los precios unitarios ya vienen guardados.
+                        setGlobalMargin(MARGEN_INICIAL_PRESUPUESTO);
 
                         if (data.customer_id) {
                             supabase
@@ -473,34 +492,81 @@ function VentasContent() {
             fecha: fechaIso,
         };
 
+        const ahoraIso = new Date().toISOString();
+        const payloadUpdate = {
+            ...budgetDataBase,
+            updated_at: ahoraIso,
+            // Nunca reescribir número ni creación desde la app.
+        };
+
         const persist = async (payload: Record<string, unknown>) => {
             if (budgetId) {
                 // Con `select` se sabe si de verdad se guardó: si el presupuesto fue borrado o la
                 // sesión se cerró, no cambia ninguna fila y antes se decía «guardado» igual.
-                const hecho = await supabase.from('budgets').update(payload).eq('id', budgetId).select('id');
+                // No incluimos numero_correlativo ni created_at: son fijos.
+                const hecho = await supabase
+                    .from('budgets')
+                    .update(payload)
+                    .eq('id', budgetId)
+                    .select('*');
                 if (!hecho.error && (!hecho.data || hecho.data.length === 0)) {
                     return { data: null, error: { message: 'no se cambió nada. El presupuesto ya no existe o tu sesión se cerró; vuelve a entrar e inténtalo.' } };
                 }
-                return { data: null, error: hecho.error };
+                return { data: hecho.data?.[0] ?? null, error: hecho.error };
             }
-            return supabase.from('budgets').insert([{ ...payload, status: 'no_enviado' }]).select().single();
+            return supabase
+                .from('budgets')
+                .insert([{ ...payload, status: 'no_enviado' }])
+                .select('*')
+                .single();
         };
 
-        let res = await persist(budgetDataBase);
+        let res = await persist(budgetId ? payloadUpdate : budgetDataBase);
         if (res.error && esErrorColumnaFecha(res.error.message)) {
-            const { fecha: _omitFecha, ...sinFecha } = budgetDataBase;
-            res = await persist({
-                ...sinFecha,
-                created_at: fechaACreatedAtMediodiaCaracas(fechaIso),
-            });
+            // Sin columna `fecha` (migración 312): no tocar created_at (es la creación real).
+            const { fecha: _omitFecha, ...sinFecha } = budgetId ? payloadUpdate : budgetDataBase;
+            res = await persist(sinFecha);
+        }
+
+        if (!res.error && budgetId) {
+            // Si cambió el monto, recalcular saldo/status de abonos (migración 318).
+            try {
+                await supabase.rpc('ci_recalcular_cobro_presupuesto', { p_budget_id: budgetId });
+                const { data: cobro } = await supabase
+                    .from('budgets')
+                    .select('monto_pagado, saldo, updated_at')
+                    .eq('id', budgetId)
+                    .maybeSingle();
+                if (cobro) {
+                    if (cobro.monto_pagado != null) setMontoPagado(Number(cobro.monto_pagado) || 0);
+                    if (typeof cobro.updated_at === 'string') setUpdatedAt(cobro.updated_at);
+                }
+            } catch {
+                /* RPC ausente hasta aplicar 318 */
+            }
         }
 
         setSaving(false);
         if (res.error) {
             alert('Error al guardar presupuesto: ' + res.error.message);
         } else {
-            if (!budgetId && res.data && typeof (res.data as { id?: unknown }).id === 'string') {
-                setBudgetId((res.data as { id: string }).id);
+            const row = res.data as {
+                id?: string;
+                numero_correlativo?: unknown;
+                created_at?: string;
+                updated_at?: string;
+                monto_pagado?: number | null;
+            } | null;
+            if (row?.id) {
+                if (!budgetId) setBudgetId(row.id);
+                const n = correlativoDesdeValor(row.numero_correlativo);
+                if (n != null) setNumeroCorrelativo(n);
+                if (typeof row.created_at === 'string') setCreatedAt(row.created_at);
+                if (typeof row.updated_at === 'string') setUpdatedAt(row.updated_at);
+                else setUpdatedAt(ahoraIso);
+                if (row.monto_pagado != null) setMontoPagado(Number(row.monto_pagado) || 0);
+            } else if (budgetId) {
+                setUpdatedAt(ahoraIso);
             }
             setFirmaGuardada(firma);
             alert('✅ Presupuesto guardado correctamente');
@@ -718,11 +784,37 @@ function VentasContent() {
                                 {budgetId ? 'Editar presupuesto' : 'Nuevo presupuesto'}
                             </h1>
                             <p style={{ fontSize: '12px', color: 'var(--label-secondary)', marginTop: '2px' }}>
+                                <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontWeight: 700, color: 'var(--label-primary)' }}>
+                                    {etiquetaNumeroPresupuesto(
+                                        { numero_correlativo: numeroCorrelativo, id: budgetId },
+                                        { borrador: !budgetId },
+                                    )}
+                                </span>
+                                {' · '}
                                 {items.length} producto{items.length !== 1 ? 's' : ''} · ${formatUSD(subtotal)}
                             </p>
                         </div>
                     </div>
                     <div style={{ display: 'flex', gap: '8px', flexShrink: 0, marginLeft: '8px' }}>
+                        {budgetId ? (
+                            <button
+                                type="button"
+                                onClick={() => setCobrosOpen(true)}
+                                style={{
+                                    background: 'rgba(52,199,89,0.12)',
+                                    border: '1px solid rgba(52,199,89,0.28)',
+                                    borderRadius: '12px',
+                                    padding: '8px 14px',
+                                    color: '#34C759',
+                                    fontSize: '13px',
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    fontFamily: 'inherit',
+                                }}
+                            >
+                                Abono
+                            </button>
+                        ) : null}
                         <button
                             type="button"
                             onClick={handleSaveBudget}
@@ -777,13 +869,51 @@ function VentasContent() {
 
             <div style={{ padding: '20px', maxWidth: '900px', margin: '0 auto' }}>
 
-                {/* ── Fecha del documento (editable al crear y al editar) ── */}
+                {/* ── Número fijo + fechas (creación / modificación / documento) ── */}
                 <div style={{ ...glass, padding: '16px', marginBottom: '16px' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', marginBottom: '14px' }}>
+                        <div style={{ minWidth: '120px' }}>
+                            <p style={{ fontSize: '11px', fontWeight: 600, color: 'var(--label-secondary)', letterSpacing: '0.5px', textTransform: 'uppercase', margin: 0 }}>
+                                Número
+                            </p>
+                            <p style={{
+                                margin: '6px 0 0',
+                                fontSize: '18px',
+                                fontWeight: 800,
+                                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                                color: 'var(--label-primary)',
+                            }}>
+                                {etiquetaNumeroPresupuesto(
+                                    { numero_correlativo: numeroCorrelativo, id: budgetId },
+                                    { borrador: !budgetId },
+                                )}
+                            </p>
+                            <p style={{ fontSize: '11px', color: 'var(--label-secondary)', marginTop: '4px', opacity: 0.9 }}>
+                                Fijo: no se puede cambiar.
+                            </p>
+                        </div>
+                        <div style={{ minWidth: '140px' }}>
+                            <p style={{ fontSize: '11px', fontWeight: 600, color: 'var(--label-secondary)', letterSpacing: '0.5px', textTransform: 'uppercase', margin: 0 }}>
+                                Creación
+                            </p>
+                            <p style={{ margin: '6px 0 0', fontSize: '13px', fontWeight: 600, color: 'var(--label-primary)' }}>
+                                {budgetId ? formatFechaHoraPresupuesto(createdAt) : 'Al guardar'}
+                            </p>
+                        </div>
+                        <div style={{ minWidth: '140px' }}>
+                            <p style={{ fontSize: '11px', fontWeight: 600, color: 'var(--label-secondary)', letterSpacing: '0.5px', textTransform: 'uppercase', margin: 0 }}>
+                                Última modificación
+                            </p>
+                            <p style={{ margin: '6px 0 0', fontSize: '13px', fontWeight: 600, color: 'var(--label-primary)' }}>
+                                {budgetId ? formatFechaHoraPresupuesto(updatedAt || createdAt) : '—'}
+                            </p>
+                        </div>
+                    </div>
                     <label
                         htmlFor="presupuesto-fecha"
                         style={{ fontSize: '12px', fontWeight: 600, color: 'var(--label-secondary)', letterSpacing: '0.5px', textTransform: 'uppercase', display: 'block', marginBottom: '10px' }}
                     >
-                        Fecha del presupuesto
+                        Fecha del documento
                     </label>
                     <input
                         id="presupuesto-fecha"
@@ -791,7 +921,7 @@ function VentasContent() {
                         autoComplete="off"
                         value={fecha}
                         onChange={(e) => setFecha(e.target.value || hoyFechaPresupuesto())}
-                        aria-label="Fecha del presupuesto"
+                        aria-label="Fecha del documento del presupuesto"
                         style={{
                             width: '100%',
                             maxWidth: '280px',
@@ -807,7 +937,7 @@ function VentasContent() {
                         }}
                     />
                     <p style={{ fontSize: '11px', color: 'var(--label-secondary)', marginTop: '8px', lineHeight: 1.4, opacity: 0.9 }}>
-                        Esta fecha aparece en la vista previa, el PDF y el listado. Puedes cambiarla al editar un presupuesto guardado.
+                        Sale en la vista previa, el PDF y el listado. Es independiente de la fecha de creación.
                     </p>
                 </div>
 
@@ -1004,15 +1134,18 @@ function VentasContent() {
                     )}
                 </div>
 
-                {/* ── Márgenes (antes de agregar, o al ampliar buscador) ── */}
+                {/* ── Markup sobre catálogo (no confundir con utilidad % guardada) ── */}
                 {(items.length === 0 || showProductSearch) ? (
                     <div style={{ marginBottom: '20px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
                             <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--label-secondary)', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
-                                Margen Global
+                                Markup sobre catálogo
                             </label>
                             <span style={{ fontSize: '13px', color: '#34C759', fontWeight: 700 }}>{globalMargin}%</span>
                         </div>
+                        <p style={{ fontSize: '11px', color: 'var(--label-secondary)', marginBottom: '10px', lineHeight: 1.4, opacity: 0.9 }}>
+                            Aplica al precio de lista al agregar o recalcular renglones. La utilidad real (ganancia / total) se calcula y guarda en el resumen.
+                        </p>
                         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
                             {MARGIN_PRESETS.map(m => (
                                 <button
@@ -1394,12 +1527,12 @@ function VentasContent() {
                         Resumen del Presupuesto
                     </h3>
 
-                        {/* Stats grid */}
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '20px' }}>
+                        {/* Stats: ganancia y utilidad % se guardan en total_profit / margin_pct */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '12px' }}>
                             {[
-                                { label: 'Costo Total', value: `$${formatUSD(totalCost)}`, color: '#FF3B30', icon: '📦' },
-                                { label: 'Ganancia', value: `$${formatUSD(totalProfit)}`, color: totalProfit > 0 ? '#34C759' : '#FF3B30', icon: '💰' },
-                                { label: 'Margen', value: `${marginPct.toFixed(1)}%`, color: marginPct >= 20 ? '#34C759' : '#FF9500', icon: '📊' },
+                                { label: 'Costo total', value: `$${formatUSD(totalCost)}`, color: '#FF3B30' },
+                                { label: 'Ganancia', value: `$${formatUSD(totalProfit)}`, color: totalProfit > 0 ? '#34C759' : '#FF3B30' },
+                                { label: 'Utilidad %', value: `${marginPct.toFixed(1)}%`, color: marginPct >= 20 ? '#34C759' : '#FF9500' },
                             ].map(s => (
                                 <div key={s.label} style={{
                                     background: 'rgba(255,255,255,0.04)',
@@ -1408,12 +1541,27 @@ function VentasContent() {
                                     padding: '14px',
                                     textAlign: 'center',
                                 }}>
-                                    <div style={{ fontSize: '20px', marginBottom: '6px' }}>{s.icon}</div>
                                     <div style={{ color: s.color, fontSize: '16px', fontWeight: 700 }}>{s.value}</div>
-                                    <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', marginTop: '2px' }}>{s.label}</div>
+                                    <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', marginTop: '4px' }}>{s.label}</div>
                                 </div>
                             ))}
                         </div>
+                        <p style={{ fontSize: '11px', color: 'var(--label-secondary)', marginBottom: '16px', lineHeight: 1.4, opacity: 0.9 }}>
+                            Al guardar se persisten costo, ganancia y utilidad %. Al reabrir, los precios unitarios ya llevan el markup aplicado; el markup de catálogo vuelve a 0 % para no pisarlos.
+                        </p>
+                        {budgetId && montoPagado > 0 ? (
+                            <div style={{
+                                marginBottom: '16px',
+                                padding: '12px 14px',
+                                borderRadius: '12px',
+                                background: 'rgba(52,199,89,0.08)',
+                                border: '1px solid rgba(52,199,89,0.22)',
+                            }}>
+                                <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: '#34C759' }}>
+                                    Abonado ${formatUSD(montoPagado)} · Saldo ${formatUSD(saldoDe({ status: 'cobrado', subtotal, monto_pagado: montoPagado }))}
+                                </p>
+                            </div>
+                        ) : null}
 
                         {/* Line items summary */}
                         <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '16px', marginBottom: '16px' }}>
@@ -1472,7 +1620,10 @@ function VentasContent() {
                                         marginPct,
                                         showZelle,
                                         fecha: formatFechaPresupuestoLarga(fecha),
-                                        numero: budgetId ? `P-${budgetId.slice(0, 4)}` : `P-${Math.floor(Math.random() * 900) + 100}`,
+                                        numero: etiquetaNumeroPresupuesto(
+                                            { numero_correlativo: numeroCorrelativo, id: budgetId },
+                                            { borrador: !budgetId },
+                                        ),
                                     };
                                     localStorage.setItem('presupuesto_preview', JSON.stringify(presupuesto));
                                     const previewPath = budgetId
@@ -1535,6 +1686,26 @@ function VentasContent() {
                         ) : null}
                     </div>
             </div>
+
+            <PresupuestoCobrosModal
+                open={cobrosOpen}
+                budgetId={budgetId}
+                customerName={clientName}
+                onClose={() => setCobrosOpen(false)}
+                onChanged={async () => {
+                    if (!budgetId) return;
+                    const supabase = createClient();
+                    const { data } = await supabase
+                        .from('budgets')
+                        .select('monto_pagado, updated_at')
+                        .eq('id', budgetId)
+                        .maybeSingle();
+                    if (data) {
+                        if (data.monto_pagado != null) setMontoPagado(Number(data.monto_pagado) || 0);
+                        if (typeof data.updated_at === 'string') setUpdatedAt(data.updated_at);
+                    }
+                }}
+            />
 
             <style>{`
         @keyframes slideUp {
