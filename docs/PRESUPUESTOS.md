@@ -18,7 +18,15 @@ No hay un registro de ventas aparte. Una **venta** es un presupuesto que el clie
 
 El botón de la barra es el módulo `presupuestos`. La pantalla de armar (`/ventas`) conserva su permiso propio, `ventas` (hoy solo el rol administrador): quien tiene `presupuestos` sin `ventas` ve la lista pero no puede armar ni editar.
 
+## Número, fechas y abonos
+
+- **Número (`numero_correlativo`):** fijo al crear (`P-500`, `P-501`, …). No se edita en la app; la migración `354` lo protege en BD.
+- **Creación / modificación:** `created_at` (fijo) y `updated_at` (se actualiza al guardar o al abonar).
+- **Fecha del documento (`fecha`):** editable; sale en PDF/listado; independiente de creación.
+- **Abonos:** botón Abono en la lista y en el editor. Restan del `subtotal` vía `budget_abonos` / RPC `ci_registrar_abono_presupuesto`. Al editar el monto se llama `ci_recalcular_cobro_presupuesto`.
+- **Ganancia:** al guardar se persisten `total_cost`, `total_profit` y `margin_pct` (utilidad %). El «markup sobre catálogo» del editor solo afecta precios al agregar/recalcular renglones; no es el `margin_pct` guardado.
+
 ## Pendiente conocido
 
 - La tabla `ventas` (vacía) y su formulario de «venta sencilla» ya no se usan; el formulario se quitó.
-- Las migraciones `020` (número correlativo), `312` (fecha del documento) y `318` (abonos y cuotas) no están aplicadas en producción: mientras tanto el número se calcula por orden de creación.
+- Si en producción faltan las migraciones `020`, `312`, `318` o `354`, aplicarlas en el SQL Editor y `notify pgrst, 'reload schema'`. Sin `020` el número se estima por orden de creación (estable en la lista, no editable).
