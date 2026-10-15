@@ -372,6 +372,112 @@ export function catalogVisionDefaults(
   }
 }
 
+/** Diferencias menores a esto se consideran el valor de ficha (redondeos del arrastre). */
+const TOL_FOV_DEG = 0.5
+const TOL_RANGE_M = 0.05
+
+function numeroFinito(v: unknown): v is number {
+  return typeof v === 'number' && Number.isFinite(v)
+}
+
+/** Recorta una apertura (dos mitades) a un máximo, conservando la proporción izquierda/derecha. */
+function recortarApertura(
+  left: number,
+  right: number,
+  maxTotal: number,
+): { fovDeg: number; fovLeftDeg: number; fovRightDeg: number } {
+  const total = left + right
+  if (total <= maxTotal || total <= 0) {
+    const halves = resolveFovHalves({ fovLeftDeg: left, fovRightDeg: right }, total)
+    return { fovDeg: halves.total, fovLeftDeg: halves.left, fovRightDeg: halves.right }
+  }
+  const factor = maxTotal / total
+  const halves = resolveFovHalves(
+    { fovLeftDeg: left * factor, fovRightDeg: right * factor },
+    maxTotal,
+  )
+  return { fovDeg: halves.total, fovLeftDeg: halves.left, fovRightDeg: halves.right }
+}
+
+/**
+ * Visión al cambiar el modelo de una cámara ya ajustada en el plano.
+ *
+ * - Lo que el usuario no tocó (apertura o alcance iguales a la ficha del modelo anterior)
+ *   toma los valores de ficha del modelo nuevo, como antes.
+ * - Lo que sí ajustó a mano se conserva, recortado solo si el modelo nuevo no llega:
+ *   la apertura no pasa del ángulo de ficha del nuevo y el alcance no pasa de su alcance
+ *   de ficha (día o noche, según el modo).
+ * - Cámaras Dual: el ajuste de cada lente secundaria se conserva si el modelo nuevo tiene
+ *   una lente con el mismo id; si no, esa lente vuelve a seguir a la primaria.
+ * - La lente vuelve a la de ficha del modelo nuevo (otro código de compra).
+ */
+export function visionAlCambiarModelo(
+  cam: DesignCamera,
+  nuevoModelId: string,
+  mode: 'day' | 'night' = 'day',
+): ReturnType<typeof catalogVisionDefaults> {
+  const base = catalogVisionDefaults(nuevoModelId, mode)
+  if (!getCameraModel(cam.modelId)) return base
+
+  const fichaAntes = catalogVisionDefaults(cam.modelId, mode, cam.lensFocalMm)
+  const fichaAntesOtroModo = catalogVisionDefaults(
+    cam.modelId,
+    mode === 'night' ? 'day' : 'night',
+    cam.lensFocalMm,
+  )
+  const nuevo = getCameraModelOrDefault(nuevoModelId)
+  const nuevoDual = nuevo.lenses && nuevo.lenses.length >= 2 ? nuevo.lenses : null
+  const nuevoMaxFov = base.fovDeg
+  const nuevoMaxRange = base.rangeM
+
+  const result = { ...base }
+
+  // Apertura de la lente primaria.
+  const tieneMitades = numeroFinito(cam.fovLeftDeg) || numeroFinito(cam.fovRightDeg)
+  if (tieneMitades || numeroFinito(cam.fovDeg)) {
+    const actual = resolveFovHalves(cam, fichaAntes.fovDeg)
+    const aperturaAjustada =
+      Math.abs(actual.left - fichaAntes.fovLeftDeg) > TOL_FOV_DEG ||
+      Math.abs(actual.right - fichaAntes.fovRightDeg) > TOL_FOV_DEG
+    if (aperturaAjustada) {
+      Object.assign(result, recortarApertura(actual.left, actual.right, nuevoMaxFov))
+    }
+  }
+
+  // Alcance de la lente primaria (se acepta la ficha de día o de noche como "no tocado").
+  if (numeroFinito(cam.rangeM)) {
+    const alcanceAjustado =
+      Math.abs(cam.rangeM - fichaAntes.rangeM) > TOL_RANGE_M &&
+      Math.abs(cam.rangeM - fichaAntesOtroModo.rangeM) > TOL_RANGE_M
+    if (alcanceAjustado) result.rangeM = clampRange(Math.min(cam.rangeM, nuevoMaxRange))
+  }
+
+  // Lentes secundarias de cámaras Dual.
+  if (nuevoDual && cam.lensVision) {
+    const conservado: NonNullable<DesignCamera['lensVision']> = {}
+    nuevoDual.forEach((lens, index) => {
+      if (index === 0) return
+      const lensId = lens.id || `lens-${index}`
+      const own = cam.lensVision?.[lensId]
+      if (!own) return
+      const ajuste: LensVisionOverride = {}
+      if (numeroFinito(own.yawDeg)) ajuste.yawDeg = own.yawDeg
+      if (numeroFinito(own.fovLeftDeg) || numeroFinito(own.fovRightDeg) || numeroFinito(own.fovDeg)) {
+        const h = resolveFovHalves(own, lens.fovDeg)
+        Object.assign(ajuste, recortarApertura(h.left, h.right, clampFov(lens.fovDeg)))
+      }
+      if (numeroFinito(own.rangeM)) {
+        const max = mode === 'night' ? lens.rangeNightM : lens.rangeDayM
+        ajuste.rangeM = clampRange(Math.min(own.rangeM, max))
+      }
+      if (Object.keys(ajuste).length > 0) conservado[lensId] = ajuste
+    })
+    result.lensVision = Object.keys(conservado).length > 0 ? conservado : undefined
+  }
+
+  return result
+}
+
 /** Id de la lente primaria de una cámara Dual (la que usa los campos del pin), o null si no es Dual. */
 export function primaryLensId(modelId: string): string | null {
   const model = getCameraModel(modelId)
