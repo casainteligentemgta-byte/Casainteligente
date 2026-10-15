@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { requirePermisoWeb } from '@/lib/auth/requirePermisoRoute';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import { isValidProyectoUuid } from '@/lib/proyectos/validarProyectoUuid';
-import { obtenerTasaBcvVesPorUsd } from '@/lib/finanzas/bcvTasaPorFecha';
+import { esFuenteTasaBcvConfiable, obtenerTasaBcvVesPorUsd } from '@/lib/finanzas/bcvTasaPorFecha';
 
 type RouteCtx = { params: { proyectoId: string } };
 
@@ -16,6 +16,8 @@ type AbonoBody = {
   fecha_abono?: string;
   observaciones?: string;
   tasa_bcv?: number;
+  /** Fuente de la tasa en el navegador; se acepta solo si es confiable (no el valor fijo de respaldo). */
+  tasa_fuente?: string | null;
 };
 
 export async function POST(req: Request, { params }: RouteCtx) {
@@ -57,18 +59,23 @@ export async function POST(req: Request, { params }: RouteCtx) {
     return NextResponse.json({ error: 'Fecha de abono inválida.' }, { status: 400 });
   }
 
-  let tasa = body.tasa_bcv != null ? Number(body.tasa_bcv) : null;
-  let montoUsd: number;
-
-  if (moneda === 'USD') {
-    montoUsd = monto;
-  } else {
-    if (!tasa || tasa <= 0) {
-      const bcv = await obtenerTasaBcvVesPorUsd(fecha);
-      tasa = bcv.tasa_bcv_ves_por_usd;
+  // Todo ingreso de dinero a la obra es una inyección de capital (migración 359): el abono
+  // del cliente se registra ahí con origen «Cliente», así cuenta en el CCO y en los fondos.
+  // La tasa hace falta también en USD (equivalente en Bs).
+  let tasa =
+    body.tasa_bcv != null && esFuenteTasaBcvConfiable(body.tasa_fuente) ? Number(body.tasa_bcv) : 0;
+  if (!Number.isFinite(tasa) || tasa <= 0) {
+    const bcv = await obtenerTasaBcvVesPorUsd(fecha);
+    if (!esFuenteTasaBcvConfiable(bcv.fuente)) {
+      return NextResponse.json(
+        { error: 'No se pudo obtener la tasa BCV de esa fecha. Intente de nuevo en unos minutos.' },
+        { status: 503 },
+      );
     }
-    montoUsd = monto / tasa;
+    tasa = bcv.tasa_bcv_ves_por_usd;
   }
+
+  const origen = (observaciones ? `Cliente · ${observaciones}` : 'Cliente').slice(0, 250);
 
   const supabase = await createClient();
 
@@ -78,28 +85,25 @@ export async function POST(req: Request, { params }: RouteCtx) {
   // Mismo tipo que usan las funciones de lib/: acepta cualquier nombre de RPC.
   const servidor: SupabaseClient = admin.client;
 
-  const { data, error } = await servidor.rpc('ci_registrar_abono_cliente', {
+  const { data, error } = await servidor.rpc('ci_registrar_inyeccion_capital', {
     p_proyecto_id: proyectoId,
+    p_origen_fondo: origen,
     p_monto_recibido: monto,
     p_moneda: moneda,
-    p_monto_usd: Math.round(montoUsd * 100) / 100,
-    p_tasa_bcv: moneda === 'VES' ? tasa : null,
+    p_tasa_bcv: tasa,
+    p_tasa_aplicada: tasa,
+    p_tipo_tasa: 'BCV',
+    p_metodo_pago: 'TRANSFERENCIA',
     p_banco_origen: banco,
+    p_cuenta_destino: null,
     p_referencia: referencia,
-    p_fecha_abono: fecha,
-    p_observaciones: observaciones || null,
+    p_soporte_path: null,
+    p_seriales: [],
+    p_creado_por: auth.actor.email?.trim() || 'Finanzas del proyecto',
+    p_fecha_ingreso: fecha,
   });
 
   if (error) {
-    if (error.code === '42883' || /ci_registrar_abono_cliente/i.test(error.message ?? '')) {
-      return NextResponse.json(
-        {
-          error:
-            'Función ci_registrar_abono_cliente no disponible. Aplique migración 188 en Supabase.',
-        },
-        { status: 503 },
-      );
-    }
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
 
@@ -112,6 +116,7 @@ export async function POST(req: Request, { params }: RouteCtx) {
   return NextResponse.json({
     ok: true,
     abono_id: data,
+    inyeccion_id: data,
     fondos: fondos ?? null,
   });
 }
