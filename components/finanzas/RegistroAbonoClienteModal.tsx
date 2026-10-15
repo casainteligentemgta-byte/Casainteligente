@@ -35,7 +35,7 @@ export default function RegistroAbonoClienteModal({
   const [error, setError] = useState<string | null>(null);
   const { isSubmitting, runLocked } = useSyncSubmitLock();
 
-  const { tasa, loading: cargandoTasa } = useTasaBcvHoy(fecha || undefined);
+  const { tasa, fuente: fuenteTasa, loading: cargandoTasa } = useTasaBcvHoy(fecha || undefined);
 
   const reset = useCallback(() => {
     setMonto('');
@@ -87,7 +87,7 @@ export default function RegistroAbonoClienteModal({
       setError('Indique fecha del abono.');
       return;
     }
-    if (moneda === 'VES' && (!tasa || tasa <= 0)) {
+    if (!tasa || tasa <= 0) {
       setError('Espere la tasa BCV del día o seleccione otra fecha.');
       return;
     }
@@ -106,7 +106,8 @@ export default function RegistroAbonoClienteModal({
               referencia_transferencia: referencia.trim(),
               fecha_abono: fecha,
               observaciones: observaciones.trim() || null,
-              tasa_bcv: moneda === 'VES' ? tasa : null,
+              tasa_bcv: tasa,
+              tasa_fuente: fuenteTasa,
             }),
           },
         );
@@ -147,7 +148,7 @@ export default function RegistroAbonoClienteModal({
                 Abono del cliente
               </h2>
               <p className="mt-1 text-xs text-zinc-500">
-                {proyectoNombre?.trim() || 'Proyecto'} — registro bimonetario
+                {proyectoNombre?.trim() || 'Proyecto'} — se registra como inyección de capital (origen Cliente)
               </p>
             </div>
           </div>
