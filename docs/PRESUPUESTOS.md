@@ -42,7 +42,7 @@ No hay un registro de ventas aparte. Una **venta** es un presupuesto que el clie
 
 ## Permisos
 
-El botón de la barra es el módulo `presupuestos`. La pantalla de armar (`/ventas`) conserva su permiso propio, `ventas` (hoy solo el rol administrador): quien tiene `presupuestos` sin `ventas` ve la lista pero no puede armar ni editar.
+El botón de la barra es el módulo `presupuestos`. La pantalla de armar y la vista previa (`/ventas`) tienen su permiso propio, `ventas`, que tienen el administrador y el PM (`pm_obra`, desde el 15-oct-2026: arma, edita, imprime, cobra y ve costos y ganancia). Quien tiene `presupuestos` sin `ventas` ve la lista pero no puede armar, editar ni abrir la vista previa.
 
 ## Pendiente conocido
 
