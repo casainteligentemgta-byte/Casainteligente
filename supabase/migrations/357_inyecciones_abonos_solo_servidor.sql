@@ -1,3 +1,4 @@
+-- Aplicada en producción el 2026-10-15 (inyecciones tras desplegar #432; el abono junto con 358).
 -- APLICAR SOLO DESPUÉS de desplegar el cambio de código que hace que
 -- /api/contabilidad/inyecciones y /api/proyectos/[proyectoId]/abonos llamen a estas
 -- funciones con service_role (y exijan el permiso cco.editar). Si se aplica antes,
