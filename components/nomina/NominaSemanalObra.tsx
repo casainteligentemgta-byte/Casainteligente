@@ -11,6 +11,7 @@ import { previewItemsNomina, type PreviewItemNomina } from '@/lib/nomina/persist
 import {
   type ClasePagoObra,
   inferirClasePagoObra,
+  type RachaQuinta,
   semanaAdicionalFijaUsd,
   TASA_ANCLA_CESTA_BCV,
 } from '@/lib/nomina/reglasPagoObra';
@@ -66,6 +67,32 @@ type Props = {
   proyectoModuloId: string;
   nombreObra?: string | null;
 };
+
+/** Cl. SÉPTIMA del trabajador: racha de semanas seguidas y quintas acumuladas para el finiquito. */
+function QuintaSemanaEstado({ p, clase }: { p: PreviewItemNomina; clase: ClasePagoObra }) {
+  const monto = semanaAdicionalFijaUsd(clase);
+  const acumuladas = p.quintas_acumuladas ?? (p.toca_adelanto ? 1 : 0);
+  return (
+    <div data-nomina-quinta className="w-full text-[11px] leading-snug">
+      {p.toca_adelanto ? (
+        <div data-nomina-quinta-causa className="font-semibold text-amber-200">
+          Completó 4 semanas seguidas: se causa 1 quinta (USD {monto}).
+        </div>
+      ) : p.racha != null ? (
+        <div data-nomina-racha className="text-zinc-400">
+          {p.racha > 0
+            ? `Racha: ${p.racha} de 4 semanas seguidas (faltan ${p.faltan_para_quinta ?? 4 - (p.racha % 4)}).`
+            : 'Esta semana no cuenta (menos de 3 días): la racha vuelve a cero.'}
+        </div>
+      ) : null}
+      {acumuladas > 0 ? (
+        <div data-nomina-quintas-acumuladas className="text-emerald-300/90">
+          Quintas acumuladas: {acumuladas} · USD {(acumuladas * monto).toFixed(2)}, se pagan al finiquito.
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 function uuidEmpleado(id: string): string | null {
   if (id.startsWith('express-')) return null;
@@ -189,7 +216,11 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
           ),
           { credentials: 'include', cache: 'no-store' },
         );
-        const j = (await res.json().catch(() => ({}))) as { periodo?: PeriodoGuardado | null };
+        const j = (await res.json().catch(() => ({}))) as {
+          periodo?: PeriodoGuardado | null;
+          rachas?: Record<string, RachaQuinta>;
+        };
+        const rachas = res.ok ? j.rachas ?? {} : {};
         const periodo = res.ok ? j.periodo ?? null : null;
         if (periodo) {
           const items = periodo.ci_nomina_obra_items ?? [];
@@ -217,10 +248,14 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
             .filter((f) => porEmpleado[f.empleadoId]?.semanal?.snapshot)
             .map((f) => {
               const g = porEmpleado[f.empleadoId]!;
+              const r = rachas[f.empleadoId];
               return {
                 empleado_id: f.empleadoId,
-                semanas_trabajadas_previas: 0,
-                toca_adelanto: Boolean(g.adelanto),
+                semanas_trabajadas_previas: r && r.racha > 0 ? r.racha - 1 : 0,
+                toca_adelanto: r ? r.tocaEstaSemana : Boolean(g.adelanto),
+                racha: r?.racha,
+                faltan_para_quinta: r?.faltan,
+                quintas_acumuladas: r?.quintasAcumuladas,
                 semanal: g.semanal!.snapshot as ResultadoSemanaObra,
                 adelanto: (g.adelanto?.snapshot as ResultadoSemanaObra | undefined) ?? null,
               };
@@ -398,7 +433,8 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
           <h2 className="text-sm font-bold uppercase tracking-wide text-emerald-100">Nómina semanal</h2>
           <p className="mt-0.5 text-xs text-zinc-500">
             Cl. SEXTA: salario del oficio + cesta ticket + complemento de alimentación. Cl. SÉPTIMA:
-            cada 4 semanas nace una semana adicional (90 USD ayudante / 115 USD clasificado), que se paga al finiquito.
+            cada 4 semanas seguidas trabajadas nace una semana adicional (90 USD ayudante / 115 USD clasificado), y así
+            cada cuatro; se acumulan por trabajador y se pagan al finiquito. Una semana con menos de 3 días corta la racha.
           </p>
         </div>
       </div>
@@ -631,11 +667,7 @@ export default function NominaSemanalObra({ proyectoModuloId, nombreObra }: Prop
                           >
                             Patio
                           </Button>
-                          {p.toca_adelanto ? (
-                            <span className="text-[11px] text-amber-200/90">
-                              Se causó 1 semana adicional (USD {semanaAdicionalFijaUsd(f.clase)}). Se paga al finiquito.
-                            </span>
-                          ) : null}
+                          <QuintaSemanaEstado p={p} clase={f.clase} />
                         </div>
                       ) : (
                         <span className="text-xs text-zinc-600">Calcular</span>

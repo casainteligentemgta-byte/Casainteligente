@@ -115,3 +115,30 @@ test('un ítem histórico de semana adicional no se borra al volver a guardar', 
   await guardar(db, SEMANA(1), ['a'])
   assert.ok(tablas.ci_nomina_obra_items!.some((i) => i.id === 'hist-adelanto'))
 })
+
+test('al guardar, la quinta necesita 4 semanas seguidas y cuenta las de otra obra', async () => {
+  const { db } = baseFalsa()
+  const guardarEn = (obra: string, semana: string, dias: number) =>
+    guardarPeriodoNomina(db, {
+      proyectoId: obra,
+      semanaInicio: semana,
+      tasaBcvPago: 100,
+      tasaAnclaCestaBcv: 100,
+      items: [{ empleado_id: 'a', clase: 'ayudante', dias_laborados: dias }],
+    })
+  await guardarEn('obra-1', SEMANA(1), 5)
+  await guardarEn('obra-2', SEMANA(2), 5)
+  const floja = await guardarEn('obra-1', SEMANA(3), 2)
+  assert.equal(floja.previews[0]?.racha, 0)
+  await guardarEn('obra-1', SEMANA(4), 5)
+  await guardarEn('obra-2', SEMANA(5), 5)
+  await guardarEn('obra-1', SEMANA(6), 5)
+  const septima = await guardarEn('obra-2', SEMANA(7), 5)
+  assert.equal(septima.previews[0]?.racha, 4)
+  assert.equal(septima.previews[0]?.toca_adelanto, true)
+  assert.equal(septima.previews[0]?.quintas_acumuladas, 1)
+  // Volver a guardar la misma semana no la cuenta dos veces.
+  const otraVez = await guardarEn('obra-2', SEMANA(7), 5)
+  assert.equal(otraVez.previews[0]?.racha, 4)
+  assert.equal(otraVez.previews[0]?.quintas_acumuladas, 1)
+})
