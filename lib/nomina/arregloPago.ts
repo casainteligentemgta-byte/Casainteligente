@@ -8,7 +8,7 @@ import {
 /**
  * Arreglo de pago del trabajador: lo que se pacta antes del contrato.
  *  - semanal: lo que recibe cada semana (USD como moneda de cuenta; se paga en bolívares).
- *  - mensual: el pago adicional cada cuatro semanas trabajadas.
+ *  - mensual: el pago adicional cada cuatro semanas seguidas trabajadas.
  * Por defecto ambos montos son iguales y dependen de la clase (ayudante / clasificado).
  */
 export type ArregloPago = { semanalUsd: number; mensualUsd: number };

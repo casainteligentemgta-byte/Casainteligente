@@ -39,7 +39,7 @@ export type GenerarContratoTrabajoObreroInput = {
   bono_manual_usd?: number;
   /** Arreglo de pago semanal pactado con el trabajador (USD como moneda de cuenta). */
   arreglo_semanal_usd?: number | null;
-  /** Arreglo de pago mensual (cada cuatro semanas trabajadas). */
+  /** Arreglo de pago mensual (cada cuatro semanas seguidas trabajadas). */
   arreglo_mensual_usd?: number | null;
   entidad_patrono_id?: string | null;
   fecha_ingreso?: string | null;

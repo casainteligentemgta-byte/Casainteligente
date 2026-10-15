@@ -960,7 +960,7 @@ export type ContratoExpressManualInput = {
   bonoManualUsd?: number | null;
   /** Arreglo semanal histórico; la Cl. SEXTA ya no lo usa. El de la SÉPTIMA es `arregloMensualUsd`. */
   arregloSemanalUsd?: number | null;
-  /** Arreglo de pago mensual pactado (USD, cada cuatro semanas trabajadas). */
+  /** Arreglo de pago mensual pactado (USD, cada cuatro semanas seguidas trabajadas). */
   arregloMensualUsd?: number | null;
 };
 

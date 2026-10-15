@@ -130,7 +130,7 @@ export function ReciboNominaObraPdf({
         {esAdelanto ? (
           <Text style={styles.nota}>
             Semana adicional de monto fijo prevista en la Cláusula SÉPTIMA: el derecho nace cada
-            cuatro (4) semanas trabajadas y se paga al terminar la relación de trabajo (finiquito),
+            cuatro (4) semanas consecutivas trabajadas y se paga al terminar la relación de trabajo (finiquito),
             no en la nómina semanal. Se destina a prestaciones sociales, vacaciones, utilidades y
             demás conceptos; al sacar la cuenta es mayor que las alícuotas del Tabulador. Al
             finiquito se imputa a esos conceptos y el remanente, a complemento de alimentación.{'\n\n'}
