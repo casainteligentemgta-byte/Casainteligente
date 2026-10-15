@@ -69,6 +69,8 @@ const MODULOS_POR_ROL: Record<RolEmpresa, ModuloNavId[]> = {
     'inicio',
     'clientes',
     'presupuestos',
+    /** Decisión del dueño (15-oct-2026): el PM arma, edita, imprime y cobra presupuestos, con costos. */
+    'ventas',
     'proyectos',
     'domotica',
     'nexus',
