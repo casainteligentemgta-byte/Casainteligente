@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/server';
+import { requirePermisoWeb } from '@/lib/auth/requirePermisoRoute';
+import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import { isValidProyectoUuid } from '@/lib/proyectos/validarProyectoUuid';
 import { obtenerTasaBcvVesPorUsd } from '@/lib/finanzas/bcvTasaPorFecha';
 
@@ -20,6 +23,9 @@ export async function POST(req: Request, { params }: RouteCtx) {
   if (!isValidProyectoUuid(proyectoId)) {
     return NextResponse.json({ error: 'ID de proyecto inválido' }, { status: 400 });
   }
+
+  const auth = await requirePermisoWeb('cco.editar', { proyectoId });
+  if (!auth.ok) return auth.response;
 
   let body: AbonoBody;
   try {
@@ -66,7 +72,13 @@ export async function POST(req: Request, { params }: RouteCtx) {
 
   const supabase = await createClient();
 
-  const { data, error } = await supabase.rpc('ci_registrar_abono_cliente', {
+  // La función solo la puede ejecutar el servidor (migración 357); el permiso ya se verificó arriba.
+  const admin = supabaseAdminForRoute();
+  if (!admin.ok) return admin.response;
+  // Mismo tipo que usan las funciones de lib/: acepta cualquier nombre de RPC.
+  const servidor: SupabaseClient = admin.client;
+
+  const { data, error } = await servidor.rpc('ci_registrar_abono_cliente', {
     p_proyecto_id: proyectoId,
     p_monto_recibido: monto,
     p_moneda: moneda,
