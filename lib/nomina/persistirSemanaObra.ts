@@ -4,8 +4,10 @@ import {
   type ClasePagoObra,
   esClasePagoObra,
   SOLICITUD_ANTICIPO_SEPTIMA_TEXTO,
+  rachaQuintaSemana,
   semanaCuentaComoTrabajada,
-  tocaAdelantoTrasSemana,
+  SEMANAS_TRABAJADAS_PARA_ADELANTO,
+  type SemanaDelTrabajador,
 } from '@/lib/nomina/reglasPagoObra';
 import { domingoDeSemanaIso, esMigracionNomina333Pendiente, lunesDeSemanaIso } from '@/lib/nomina/semanaIsoNomina';
 
@@ -29,8 +31,16 @@ export const SEMANA_PAGADA_MSG =
 
 export type PreviewItemNomina = {
   empleado_id: string;
+  /** Semanas seguidas trabajadas antes de esta (la racha que trae). */
   semanas_trabajadas_previas: number;
+  /** Esta semana completa 4 seguidas: se causa una quinta (Cl. SÉPTIMA, se paga al finiquito). */
   toca_adelanto: boolean;
+  /** Semanas seguidas que lleva contando esta. */
+  racha?: number;
+  /** Semanas que le faltan para la próxima quinta. */
+  faltan_para_quinta?: number;
+  /** Quintas causadas hasta esta semana (incluida), pendientes de pago al finiquito. */
+  quintas_acumuladas?: number;
   semanal: ResultadoSemanaObra;
   adelanto: ResultadoSemanaObra | null;
 };
@@ -43,12 +53,15 @@ function errMigracion(e: { message?: string } | null): Error | null {
   return new Error(e.message);
 }
 
-export async function contarSemanasTrabajadasPrevias(
+/**
+ * Semanas ya guardadas de un trabajador en cualquier obra (para la racha de la Cl. SÉPTIMA).
+ * `excluir` deja fuera la semana que se está recalculando en esa obra: sus días vienen de la pantalla.
+ */
+export async function historialSemanasTrabajador(
   db: SupabaseClient,
-  proyectoId: string,
   empleadoId: string,
-  semanaInicio: string,
-): Promise<number> {
+  excluir: { proyectoId: string; semanaInicio: string } | null,
+): Promise<SemanaDelTrabajador[]> {
   const { data, error } = await db
     .from('ci_nomina_obra_items')
     .select('id, dias_laborados, tipo, periodo:ci_nomina_obra_periodos!inner(proyecto_id, semana_inicio)')
@@ -57,20 +70,42 @@ export async function contarSemanasTrabajadasPrevias(
   const mig = errMigracion(error);
   if (mig) throw mig;
   if (error) throw new Error(error.message);
-  let n = 0;
+  const out: SemanaDelTrabajador[] = [];
   for (const row of data ?? []) {
     const p = (row as { periodo?: { proyecto_id?: string; semana_inicio?: string } }).periodo;
-    if (p?.proyecto_id !== proyectoId) continue;
-    if ((p.semana_inicio ?? '') >= semanaInicio) continue;
-    const dias = Number((row as { dias_laborados?: number }).dias_laborados);
-    if (semanaCuentaComoTrabajada(dias)) n += 1;
+    const semana = String(p?.semana_inicio ?? '').slice(0, 10);
+    if (!semana) continue;
+    if (excluir && p?.proyecto_id === excluir.proyectoId && semana === lunesDeSemanaIso(excluir.semanaInicio)) continue;
+    out.push({ semanaInicio: semana, dias: Number((row as { dias_laborados?: number }).dias_laborados) || 0 });
   }
-  return n;
+  return out;
+}
+
+/** Historial de varios trabajadores; si falta la migración, sin historial (la racha arranca esta semana). */
+export async function historialesSemanas(
+  db: SupabaseClient,
+  empleadoIds: string[],
+  excluir: { proyectoId: string; semanaInicio: string } | null,
+): Promise<Record<string, SemanaDelTrabajador[]>> {
+  const out: Record<string, SemanaDelTrabajador[]> = {};
+  for (const id of empleadoIds) {
+    try {
+      out[id] = await historialSemanasTrabajador(db, id, excluir);
+    } catch (e) {
+      if (e instanceof Error && e.message.includes('Migración 333')) out[id] = [];
+      else throw e;
+    }
+  }
+  return out;
 }
 
 export function previewItemsNomina(args: {
   items: ItemEntradaNomina[];
-  previasPorEmpleado: Record<string, number>;
+  /** Sin historial: semanas seguidas trabajadas que trae cada uno antes de esta. */
+  previasPorEmpleado?: Record<string, number>;
+  /** Con historial (todas sus semanas guardadas) se calcula la racha real y lo acumulado. */
+  historialPorEmpleado?: Record<string, SemanaDelTrabajador[]>;
+  semanaInicio?: string;
   tasaBcvPago: number;
   tasaAnclaCestaBcv: number;
 }): PreviewItemNomina[] {
@@ -78,9 +113,21 @@ export function previewItemsNomina(args: {
     if (!esClasePagoObra(it.clase)) {
       throw new Error('Clase de pago inválida (ayudante o clasificado).');
     }
-    const prev = args.previasPorEmpleado[it.empleado_id] ?? 0;
     const cuenta = semanaCuentaComoTrabajada(it.dias_laborados);
-    const toca = tocaAdelantoTrasSemana(prev, cuenta);
+    const historial = args.historialPorEmpleado?.[it.empleado_id];
+    let racha: number;
+    let quintas: number;
+    if (historial && args.semanaInicio) {
+      const r = rachaQuintaSemana(historial, args.semanaInicio, it.dias_laborados);
+      racha = r.racha;
+      quintas = r.quintasAcumuladas;
+    } else {
+      const previas = Math.max(0, Math.floor(args.previasPorEmpleado?.[it.empleado_id] ?? 0));
+      racha = cuenta ? previas + 1 : 0;
+      quintas = Math.floor(racha / SEMANAS_TRABAJADAS_PARA_ADELANTO);
+    }
+    const prev = racha > 0 ? racha - 1 : 0;
+    const toca = racha > 0 && racha % SEMANAS_TRABAJADAS_PARA_ADELANTO === 0;
     const semanal = calcularSemanaObra({
       clase: it.clase,
       tipo: 'semanal',
@@ -98,6 +145,9 @@ export function previewItemsNomina(args: {
       empleado_id: it.empleado_id,
       semanas_trabajadas_previas: prev,
       toca_adelanto: toca,
+      racha,
+      faltan_para_quinta: SEMANAS_TRABAJADAS_PARA_ADELANTO - (racha % SEMANAS_TRABAJADAS_PARA_ADELANTO),
+      quintas_acumuladas: quintas,
       semanal,
       adelanto,
     };
@@ -147,18 +197,15 @@ export async function guardarPeriodoNomina(
   const lunes = lunesDeSemanaIso(args.semanaInicio);
   const domingo = domingoDeSemanaIso(lunes);
 
-  const previasPorEmpleado: Record<string, number> = {};
-  for (const it of args.items) {
-    previasPorEmpleado[it.empleado_id] = await contarSemanasTrabajadasPrevias(
-      db,
-      args.proyectoId,
-      it.empleado_id,
-      lunes,
-    );
-  }
+  const historialPorEmpleado = await historialesSemanas(
+    db,
+    args.items.map((it) => it.empleado_id),
+    { proyectoId: args.proyectoId, semanaInicio: lunes },
+  );
   const previews = previewItemsNomina({
     items: args.items,
-    previasPorEmpleado,
+    historialPorEmpleado,
+    semanaInicio: lunes,
     tasaBcvPago: args.tasaBcvPago,
     tasaAnclaCestaBcv: args.tasaAnclaCestaBcv,
   });

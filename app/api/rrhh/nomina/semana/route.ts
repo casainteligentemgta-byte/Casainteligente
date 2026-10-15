@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import { resolverTasaBcvVesPorUsd } from '@/lib/finanzas/bcvTasaPorFecha';
 import {
-  contarSemanasTrabajadasPrevias,
+  historialesSemanas,
   guardarPeriodoNomina,
   previewItemsNomina,
   SEMANA_PAGADA_MSG,
@@ -12,6 +12,8 @@ import {
 import {
   esClasePagoObra,
   type ClasePagoObra,
+  rachaQuintaSemana,
+  type RachaQuinta,
   TASA_ANCLA_CESTA_BCV,
 } from '@/lib/nomina/reglasPagoObra';
 import { domingoDeSemanaIso, esMigracionNomina333Pendiente, lunesDeSemanaIso } from '@/lib/nomina/semanaIsoNomina';
@@ -75,10 +77,28 @@ export async function GET(req: Request) {
   }
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
+  // Cl. SÉPTIMA: racha de semanas seguidas y quintas acumuladas de cada trabajador de la semana guardada.
+  const rachas: Record<string, RachaQuinta> = {};
+  const itemsGuardados = ((data as { ci_nomina_obra_items?: { empleado_id: string; tipo: string }[] } | null)
+    ?.ci_nomina_obra_items ?? []).filter((it) => it.tipo === 'semanal');
+  if (itemsGuardados.length > 0) {
+    try {
+      const historiales = await historialesSemanas(
+        db,
+        itemsGuardados.map((it) => String(it.empleado_id)),
+        null,
+      );
+      for (const id of Object.keys(historiales)) rachas[id] = rachaQuintaSemana(historiales[id]!, semana, null);
+    } catch {
+      /* sin racha: la semana se muestra igual */
+    }
+  }
+
   return NextResponse.json({
     semana_inicio: semana,
     semana_fin: domingoDeSemanaIso(semana),
     periodo: data ?? null,
+    rachas,
   });
 }
 
@@ -125,25 +145,15 @@ export async function POST(req: Request) {
 
   try {
     if (soloPreview) {
-      const previasPorEmpleado: Record<string, number> = {};
-      for (const it of items) {
-        try {
-          previasPorEmpleado[it.empleado_id] = await contarSemanasTrabajadasPrevias(
-            db,
-            proyectoId,
-            it.empleado_id,
-            semana,
-          );
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : '';
-          if (msg.includes('Migración 333')) {
-            previasPorEmpleado[it.empleado_id] = 0;
-          } else throw e;
-        }
-      }
+      const historialPorEmpleado = await historialesSemanas(
+        db,
+        items.map((it) => it.empleado_id),
+        { proyectoId, semanaInicio: semana },
+      );
       const previews = previewItemsNomina({
         items,
-        previasPorEmpleado,
+        historialPorEmpleado,
+        semanaInicio: semana,
         tasaBcvPago: tasaBcv,
         tasaAnclaCestaBcv: tasaAncla,
       });
