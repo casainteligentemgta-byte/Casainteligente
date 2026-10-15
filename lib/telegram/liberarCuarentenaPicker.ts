@@ -159,6 +159,11 @@ export async function manejarCallbackLiberarCuarentenaTelegram(
       .update({ status: 'RECHAZADO', inspected_at: new Date().toISOString() })
       .eq('id', inspectionId);
 
+    if (!error) {
+      const { revertirTransitoInspeccion } = await import('@/lib/almacen/stockTransitoCompra');
+      await revertirTransitoInspeccion(supabase, inspectionId, 'Cuarentena rechazada desde Telegram');
+    }
+
     if (!error && insp.invoice_id) {
       await finalizarLiberacionCuarentena(supabase, String(insp.invoice_id), {
         sincronizarInventario: false,

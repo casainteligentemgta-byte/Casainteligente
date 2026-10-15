@@ -4,6 +4,7 @@ import {
   formatApproveError,
 } from '@/lib/almacen/approveQualityInspection';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
+import { requirePermisoWeb } from '@/lib/auth/requirePermisoRoute';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,6 +23,9 @@ export async function POST(_req: Request, ctx: RouteCtx) {
     if (!id) {
       return NextResponse.json({ error: 'ID de inspección inválido.' }, { status: 400 });
     }
+
+    const auth = await requirePermisoWeb('almacen.cuarentena');
+    if (!auth.ok) return auth.response;
 
     const admin = supabaseAdminForRoute();
     if (!admin.ok) return admin.response;
