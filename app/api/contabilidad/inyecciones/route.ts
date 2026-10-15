@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { requireCcoAcceso } from '@/lib/auth/requireCcoRoute';
+import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import { obtenerTasaBcvVesPorUsd } from '@/lib/finanzas/bcvTasaPorFecha';
 import { isValidProyectoUuid } from '@/lib/proyectos/validarProyectoUuid';
 import { PROCUREMENT_DOCUMENTS_BUCKET } from '@/lib/almacen/procurementDocumentStorage';
@@ -75,6 +77,9 @@ function mapRow(
 }
 
 export async function GET() {
+  const acceso = await requireCcoAcceso('ver');
+  if (!acceso.ok) return acceso.response;
+
   const supabase = await createClient();
 
   const [{ data: obras, error: errObras }, { data: rows, error: errRows }] = await Promise.all([
@@ -123,6 +128,9 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const acceso = await requireCcoAcceso('editar');
+  if (!acceso.ok) return acceso.response;
+
   let body: InyeccionBody;
   try {
     body = (await req.json()) as InyeccionBody;
@@ -193,7 +201,11 @@ export async function POST(req: Request) {
     ? body.seriales_billetes.map((s) => String(s).trim()).filter(Boolean)
     : [];
 
-  const { data: id, error } = await supabase.rpc('ci_registrar_inyeccion_capital', {
+  // La función solo la puede ejecutar el servidor (migración 357); el permiso ya se verificó arriba.
+  const admin = supabaseAdminForRoute();
+  if (!admin.ok) return admin.response;
+
+  const { data: id, error } = await admin.client.rpc('ci_registrar_inyeccion_capital', {
     p_proyecto_id: proyectoId,
     p_origen_fondo: origen,
     p_monto_recibido: monto,
