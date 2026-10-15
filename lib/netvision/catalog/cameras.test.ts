@@ -19,7 +19,9 @@ import {
   lenteNoEstandar,
   opcionesLente,
   parcheLente,
+  visionAlCambiarModelo,
 } from './cameras'
+import type { DesignCamera } from '@/lib/netvision/types'
 
 describe('catálogo Aqara', () => {
   const aqara = camerasByBrand('Aqara')
@@ -242,5 +244,92 @@ describe('lentes intercambiables', () => {
     assert.equal(restaurar.fovDeg, 84)
     // Pedir la de ficha no deja el campo puesto.
     assert.equal(catalogVisionDefaults('hik-ds2cd2143', 'day', 2.8).lensFocalMm, undefined)
+  })
+})
+
+describe('cambiar de modelo conserva el cono ajustado', () => {
+  const pin = (over: Partial<DesignCamera> = {}): DesignCamera => ({
+    id: 'c1',
+    label: 'C1',
+    x: 0.5,
+    y: 0.5,
+    modelId: 'hik-ds2cd2143',
+    yawDeg: 45,
+    mountHeightM: 3,
+    ...catalogVisionDefaults('hik-ds2cd2143'),
+    ...over,
+  })
+
+  it('sin ajustes a mano toma la ficha del modelo nuevo', () => {
+    const v = visionAlCambiarModelo(pin(), 'hik-ds2cd2t47')
+    assert.deepEqual(v, catalogVisionDefaults('hik-ds2cd2t47'))
+  })
+
+  it('conserva apertura asimétrica y alcance ajustados si el modelo nuevo llega', () => {
+    const v = visionAlCambiarModelo(
+      pin({ fovDeg: 70, fovLeftDeg: 20, fovRightDeg: 50, rangeM: 18 }),
+      'hik-ds2cd2t47',
+    )
+    assert.equal(v.fovLeftDeg, 20)
+    assert.equal(v.fovRightDeg, 50)
+    assert.equal(v.fovDeg, 70)
+    assert.equal(v.rangeM, 18)
+  })
+
+  it('recorta la apertura al ángulo del modelo nuevo, en proporción', () => {
+    // ezviz-c6n: 75° de ficha
+    const v = visionAlCambiarModelo(pin({ fovDeg: 100, fovLeftDeg: 25, fovRightDeg: 75 }), 'ezviz-c6n')
+    assert.equal(v.fovDeg, 75)
+    assert.ok(Math.abs(v.fovLeftDeg - 18.75) < 0.01)
+    assert.ok(Math.abs(v.fovRightDeg - 56.25) < 0.01)
+  })
+
+  it('recorta el alcance al de ficha del modelo nuevo', () => {
+    // ezviz-c6n: 12 m de día
+    const v = visionAlCambiarModelo(pin({ rangeM: 20 }), 'ezviz-c6n')
+    assert.equal(v.rangeM, 12)
+    assert.equal(v.fovDeg, 75)
+  })
+
+  it('ajuste solo de alcance: la apertura toma la ficha nueva', () => {
+    const v = visionAlCambiarModelo(pin({ rangeM: 15 }), 'hik-ds2cd2t47')
+    assert.equal(v.fovDeg, 95)
+    assert.equal(v.rangeM, 15)
+  })
+
+  it('el alcance de ficha del otro modo (día/noche) no cuenta como ajuste', () => {
+    // hik-ds2cd2143: 25 m día / 30 m noche; la cámara se creó en noche y ahora se cambia en día.
+    const v = visionAlCambiarModelo(pin({ rangeM: 30 }), 'hik-ds2cd2t47', 'day')
+    assert.equal(v.rangeM, 40)
+  })
+
+  it('una lente distinta sin recorte manual no cuenta como ajuste y vuelve la lente de ficha', () => {
+    const cam = pin(parcheLente('hik-ds2cd2143', 4))
+    const v = visionAlCambiarModelo(cam, 'hik-ds2cd2t47')
+    assert.equal(v.lensFocalMm, undefined)
+    assert.equal(v.fovDeg, 95)
+  })
+
+  it('Dual → Dual conserva el cono propio de la tele (recortado a su lente)', () => {
+    const cam = pin({
+      modelId: 'aqara-g350',
+      ...catalogVisionDefaults('aqara-g350'),
+      lensVision: { tele: { yawDeg: 200, fovLeftDeg: 25, fovRightDeg: 25, rangeM: 25 } },
+    })
+    const v = visionAlCambiarModelo(cam, 'ezviz-h9c')
+    assert.equal(v.lensVision?.tele?.yawDeg, 200)
+    assert.equal(v.lensVision?.tele?.fovDeg, 50)
+    assert.equal(v.lensVision?.tele?.rangeM, 25)
+    // Primaria sin ajuste → ficha del modelo nuevo.
+    assert.equal(v.fovDeg, 108)
+  })
+
+  it('Dual → modelo simple descarta los ajustes de lentes secundarias', () => {
+    const cam = pin({
+      modelId: 'aqara-g350',
+      ...catalogVisionDefaults('aqara-g350'),
+      lensVision: { tele: { yawDeg: 200 } },
+    })
+    assert.equal(visionAlCambiarModelo(cam, 'hik-ds2cd2t47').lensVision, undefined)
   })
 })

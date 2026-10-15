@@ -14,7 +14,7 @@ import {
   cameraCatalogGrouped,
   cameraCatalogOptionLabel,
   cameraVisionSummary,
-  catalogVisionDefaults,
+  visionAlCambiarModelo,
   conexionCamara,
   conexionesModelo,
   getCameraModelOrDefault,
@@ -279,7 +279,8 @@ export default function NetVisionSelectedProps({
             value={camera.modelId}
             onChange={(e) => {
               const id = e.target.value
-              const vision = catalogVisionDefaults(id, nightMode ? 'night' : 'day')
+              // Conserva la apertura y el alcance ajustados a mano (recortados si el modelo nuevo no llega).
+              const vision = visionAlCambiarModelo(camera, id, nightMode ? 'night' : 'day')
               // Otro modelo: vuelve a la conexión de ficha de ese modelo.
               onPatchCamera({ modelId: id, ...vision, conexion: undefined })
             }}

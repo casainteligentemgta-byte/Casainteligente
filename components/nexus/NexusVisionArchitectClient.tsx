@@ -63,6 +63,7 @@ import {
   effectiveCameraLenses,
   effectiveCameraVision,
   catalogVisionDefaults,
+  visionAlCambiarModelo,
   cameraPatchForLens,
   getCameraModelOrDefault,
   lenteElegida,
@@ -2289,8 +2290,13 @@ export default function NexusVisionArchitectClient() {
 
   const cambiarModeloVarias = (modelId: string) => {
     if (!modelId || multiCamIds.length === 0) return
-    const vision = catalogVisionDefaults(modelId, nightMode ? 'night' : 'day')
-    for (const id of multiCamIds) patchCamera(id, { modelId, ...vision, conexion: undefined })
+    const mode = nightMode ? 'night' : 'day'
+    for (const id of multiCamIds) {
+      const cam = project.cameras.find((c) => c.id === id)
+      // Cada cámara conserva su propio cono (apertura y alcance ajustados a mano).
+      const vision = cam ? visionAlCambiarModelo(cam, modelId, mode) : catalogVisionDefaults(modelId, mode)
+      patchCamera(id, { modelId, ...vision, conexion: undefined })
+    }
     setInfo(
       `Modelo cambiado en ${multiCamIds.length} ${multiCamIds.length === 1 ? 'cámara' : 'cámaras'}.`,
     )
@@ -2639,7 +2645,7 @@ export default function NexusVisionArchitectClient() {
             onChange={(e) => {
               const id = e.target.value
               if (selectedCam) {
-                const vision = catalogVisionDefaults(id, nightMode ? 'night' : 'day')
+                const vision = visionAlCambiarModelo(selectedCam, id, nightMode ? 'night' : 'day')
                 updateSelectedCam({
                   modelId: id,
                   ...vision,
