@@ -27,3 +27,11 @@ describe('contrato obrero: nueve cláusulas vigentes', () => {
     assert.equal(esCuerpoContratoObreroObsoleto(viejo), true);
   });
 });
+
+it('la plantilla genérica vieja (SÉPTIMA: CONFIDENCIALIDAD) se reemplaza por la vigente', () => {
+  const vieja =
+    'CONTRATO INDIVIDUAL DE TRABAJO\n\nENTRE {{PATRON_NOMBRE}} ... '.padEnd(300, '.') +
+    '\n\nSÉPTIMA: CONFIDENCIALIDAD. EL TRABAJADOR guardará confidencialidad.'
+  assert.equal(esCuerpoContratoObreroObsoleto(vieja), true)
+  assert.equal(esCuerpoContratoObreroObsoleto(CONTRATO_OBRERO_CUERPO_DEFAULT), false)
+})

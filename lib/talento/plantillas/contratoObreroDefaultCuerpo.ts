@@ -10,6 +10,8 @@
 export function esCuerpoContratoObreroObsoleto(cuerpo: string | null | undefined): boolean {
   const t = String(cuerpo ?? '').trim();
   if (t.length <= 80) return true;
+  // Sin la Cl. SÉPTIMA de semanas adicionales (p. ej. la plantilla genérica con «SÉPTIMA: CONFIDENCIALIDAD»).
+  if (!/SÉPTIMA:\s*SEMANA ADICIONAL/i.test(t)) return true;
   return /INGRESO INTEGRAL INDEXADO|BONO ESPECIAL|COMPENSACI[ÓO]N POR CULMINACI[ÓO]N|ÉTICA Y CONFIDENCIALIDAD|ÉTICA, CONFIDENCIALIDAD|DÉCIMA:\s*DOMICILIO PROCESAL/i.test(
     t,
   );
