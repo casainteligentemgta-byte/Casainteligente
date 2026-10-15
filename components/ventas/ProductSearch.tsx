@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { colorHexCategoria, subcategoriasDe } from '@/lib/productos/categoriasCatalogo';
 import { useCategoriasCatalogo } from '@/lib/productos/useCategoriasCatalogo';
+import { tinta, tintaTexto } from '@/lib/tema/tinta';
 
 export interface Product {
     id: number;
@@ -126,7 +127,7 @@ function ToggleModo({
                     border: 'none',
                     borderRadius: 10,
                     background: active ? 'rgba(255,149,0,0.18)' : 'transparent',
-                    color: active ? '#FF9500' : 'rgba(255,255,255,0.45)',
+                    color: active ? 'var(--tono-naranja)' : tintaTexto(0.45),
                     fontSize: 13,
                     fontWeight: 700,
                     cursor: 'pointer',
@@ -147,8 +148,8 @@ function ToggleModo({
                 marginBottom: 12,
                 padding: 4,
                 borderRadius: 12,
-                background: 'rgba(255,255,255,0.06)',
-                border: '1px solid rgba(255,255,255,0.1)',
+                background: tinta(0.06),
+                border: `1px solid ${tinta(0.1)}`,
             }}
         >
             {btn('botones', 'Botones')}
@@ -322,9 +323,9 @@ export default function ProductSearch({ onSelect, inBudgetQtyById }: ProductSear
                                     setFiltroBoton('');
                                 }}
                                 style={{
-                                    background: 'rgba(255,255,255,0.06)',
-                                    border: '1px solid rgba(255,255,255,0.12)',
-                                    color: 'rgba(255,255,255,0.8)',
+                                    background: tinta(0.06),
+                                    border: `1px solid ${tinta(0.12)}`,
+                                    color: tintaTexto(0.8),
                                     borderRadius: 10,
                                     padding: '8px 12px',
                                     fontSize: 13,
@@ -340,7 +341,7 @@ export default function ProductSearch({ onSelect, inBudgetQtyById }: ProductSear
                             </span>
                         </div>
                     ) : (
-                        <p style={{ margin: '0 0 10px', fontSize: 12, color: 'rgba(255,255,255,0.4)', fontWeight: 600 }}>
+                        <p style={{ margin: '0 0 10px', fontSize: 12, color: tintaTexto(0.4), fontWeight: 600 }}>
                             Elija el tipo y luego toque el producto.
                         </p>
                     )}
@@ -398,9 +399,9 @@ export default function ProductSearch({ onSelect, inBudgetQtyById }: ProductSear
                                                 type="button"
                                                 onClick={() => setSubBoton(sub)}
                                                 style={{
-                                                    background: activa ? `${color}30` : 'rgba(255,255,255,0.06)',
-                                                    color: activa ? color : 'rgba(255,255,255,0.65)',
-                                                    border: activa ? `1px solid ${color}88` : '1px solid rgba(255,255,255,0.12)',
+                                                    background: activa ? `${color}30` : tinta(0.06),
+                                                    color: activa ? color : tintaTexto(0.65),
+                                                    border: activa ? `1px solid ${color}88` : `1px solid ${tinta(0.12)}`,
                                                     borderRadius: 999,
                                                     padding: '7px 12px',
                                                     fontSize: 12,
@@ -425,22 +426,22 @@ export default function ProductSearch({ onSelect, inBudgetQtyById }: ProductSear
                                 style={{
                                     width: '100%',
                                     marginBottom: 10,
-                                    background: 'rgba(255,255,255,0.08)',
-                                    border: '1px solid rgba(255,255,255,0.15)',
+                                    background: tinta(0.08),
+                                    border: `1px solid ${tinta(0.15)}`,
                                     borderRadius: 12,
                                     padding: '10px 12px',
-                                    color: 'white',
+                                    color: 'var(--label-primary)',
                                     outline: 'none',
                                     fontSize: 14,
                                     fontFamily: 'inherit',
                                 }}
                             />
                             {cargandoBoton ? (
-                                <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13, textAlign: 'center', padding: 24 }}>
+                                <p style={{ color: tintaTexto(0.4), fontSize: 13, textAlign: 'center', padding: 24 }}>
                                     Cargando productos…
                                 </p>
                             ) : productosFiltradosBoton.length === 0 ? (
-                                <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13, textAlign: 'center', padding: 24 }}>
+                                <p style={{ color: tintaTexto(0.4), fontSize: 13, textAlign: 'center', padding: 24 }}>
                                     No hay productos en {subBoton ? `${tipoBoton} › ${subBoton}` : tipoBoton}.
                                 </p>
                             ) : (
@@ -470,8 +471,8 @@ export default function ProductSearch({ onSelect, inBudgetQtyById }: ProductSear
                                                     minHeight: 96,
                                                     padding: 10,
                                                     borderRadius: 14,
-                                                    border: qty > 0 ? '1.5px solid #34C759' : '1.5px solid rgba(255,255,255,0.1)',
-                                                    background: qty > 0 ? 'rgba(52,199,89,0.12)' : 'rgba(255,255,255,0.04)',
+                                                    border: qty > 0 ? '1.5px solid #34C759' : `1.5px solid ${tinta(0.1)}`,
+                                                    background: qty > 0 ? 'rgba(52,199,89,0.12)' : tinta(0.04),
                                                     cursor: 'pointer',
                                                     textAlign: 'left',
                                                     fontFamily: 'inherit',
@@ -480,14 +481,14 @@ export default function ProductSearch({ onSelect, inBudgetQtyById }: ProductSear
                                                 <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', gap: 6 }}>
                                                     <ProductRowThumb imagen={p.imagen} categoryColor={color} size={44} />
                                                     {qty > 0 ? (
-                                                        <span style={{ color: '#34C759', fontSize: 11, fontWeight: 800 }}>
+                                                        <span style={{ color: 'var(--tono-verde)', fontSize: 11, fontWeight: 800 }}>
                                                             ×{qty}
                                                         </span>
                                                     ) : null}
                                                 </div>
                                                 <span
                                                     style={{
-                                                        color: 'white',
+                                                        color: 'var(--label-primary)',
                                                         fontSize: 13,
                                                         fontWeight: 700,
                                                         lineHeight: 1.25,
@@ -499,7 +500,7 @@ export default function ProductSearch({ onSelect, inBudgetQtyById }: ProductSear
                                                 >
                                                     {p.nombre}
                                                 </span>
-                                                <span style={{ color: '#34C759', fontSize: 13, fontWeight: 700 }}>
+                                                <span style={{ color: 'var(--tono-verde)', fontSize: 13, fontWeight: 700 }}>
                                                     ${p.precio?.toFixed(2) ?? '—'}
                                                 </span>
                                             </button>
@@ -531,9 +532,9 @@ export default function ProductSearch({ onSelect, inBudgetQtyById }: ProductSear
                             style={{
                                 padding: '6px 14px',
                                 borderRadius: '18px',
-                                background: active ? `${color}22` : 'rgba(255,255,255,0.05)',
-                                border: active ? `1.5px solid ${color}` : '1.5px solid rgba(255,255,255,0.08)',
-                                color: active ? color : 'rgba(255,255,255,0.4)',
+                                background: active ? `${color}22` : tinta(0.05),
+                                border: active ? `1.5px solid ${color}` : `1.5px solid ${tinta(0.08)}`,
+                                color: active ? color : tintaTexto(0.4),
                                 fontSize: '13px',
                                 fontWeight: 700,
                                 cursor: 'pointer',
@@ -553,23 +554,23 @@ export default function ProductSearch({ onSelect, inBudgetQtyById }: ProductSear
                 display: 'flex',
                 alignItems: 'center',
                 gap: '10px',
-                background: 'rgba(255,255,255,0.08)',
+                background: tinta(0.08),
                 backdropFilter: 'blur(20px)',
                 WebkitBackdropFilter: 'blur(20px)',
-                border: '1px solid rgba(255,255,255,0.15)',
+                border: `1px solid ${tinta(0.15)}`,
                 borderRadius: '14px',
                 padding: '12px 16px',
                 boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
             }}>
                 {loading ? (
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, animation: 'spin 1s linear infinite' }}>
-                        <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.3)" strokeWidth="2.5" />
-                        <path d="M12 2a10 10 0 0 1 10 10" stroke="#007AFF" strokeWidth="2.5" strokeLinecap="round" />
+                        <circle cx="12" cy="12" r="10" stroke={tinta(0.3)} strokeWidth="2.5" />
+                        <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
                     </svg>
                 ) : (
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
-                        <circle cx="11" cy="11" r="7" stroke="rgba(255,255,255,0.5)" strokeWidth="2" />
-                        <path d="M16.5 16.5L21 21" stroke="rgba(255,255,255,0.5)" strokeWidth="2" strokeLinecap="round" />
+                        <circle cx="11" cy="11" r="7" stroke={tinta(0.5)} strokeWidth="2" />
+                        <path d="M16.5 16.5L21 21" stroke={tinta(0.5)} strokeWidth="2" strokeLinecap="round" />
                     </svg>
                 )}
                 <input
@@ -603,11 +604,11 @@ export default function ProductSearch({ onSelect, inBudgetQtyById }: ProductSear
                             setOpen(false);
                             setActiveIndex(-1);
                         }}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'rgba(255,255,255,0.4)', display: 'flex' }}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: tintaTexto(0.4), display: 'flex' }}
                     >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                            <circle cx="12" cy="12" r="10" fill="rgba(255,255,255,0.15)" />
-                            <path d="M8 8l8 8M16 8l-8 8" stroke="white" strokeWidth="1.8" strokeLinecap="round" />
+                            <circle cx="12" cy="12" r="10" fill={tinta(0.15)} />
+                            <path d="M8 8l8 8M16 8l-8 8" stroke="var(--label-primary)" strokeWidth="1.8" strokeLinecap="round" />
                         </svg>
                     </button>
                 )}
@@ -623,10 +624,10 @@ export default function ProductSearch({ onSelect, inBudgetQtyById }: ProductSear
                         left: 0,
                         right: 0,
                         zIndex: 1000,
-                        background: 'rgba(28,28,30,0.95)',
+                        background: 'var(--superficie)',
                         backdropFilter: 'blur(30px)',
                         WebkitBackdropFilter: 'blur(30px)',
-                        border: '1px solid rgba(255,255,255,0.12)',
+                        border: `1px solid ${tinta(0.12)}`,
                         borderRadius: '16px',
                         overflow: 'hidden',
                         boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
@@ -634,8 +635,8 @@ export default function ProductSearch({ onSelect, inBudgetQtyById }: ProductSear
                         overflowY: 'auto',
                     }}
                 >
-                    <div style={{ padding: '8px 12px 6px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                        <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', fontWeight: 500 }}>
+                    <div style={{ padding: '8px 12px 6px', borderBottom: `1px solid ${tinta(0.06)}` }}>
+                        <span style={{ fontSize: '12px', color: tintaTexto(0.4), fontWeight: 500 }}>
                             {results.length} resultado{results.length !== 1 ? 's' : ''}
                         </span>
                     </div>
@@ -651,7 +652,7 @@ export default function ProductSearch({ onSelect, inBudgetQtyById }: ProductSear
                                 padding: '12px 14px',
                                 background: i === activeIndex ? 'rgba(0,122,255,0.15)' : 'transparent',
                                 border: 'none',
-                                borderBottom: i < results.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+                                borderBottom: i < results.length - 1 ? `1px solid ${tinta(0.05)}` : 'none',
                                 cursor: 'pointer',
                                 textAlign: 'left',
                                 transition: 'background 0.15s',
@@ -660,21 +661,21 @@ export default function ProductSearch({ onSelect, inBudgetQtyById }: ProductSear
                         >
                             <ProductRowThumb imagen={p.imagen} categoryColor={colorCategoria(p.categoria)} />
                             <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ color: 'white', fontSize: '14px', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                <div style={{ color: 'var(--label-primary)', fontSize: '14px', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                     {p.nombre}
                                 </div>
                                 <div style={{ display: 'flex', gap: '6px', marginTop: '2px', flexWrap: 'wrap' }}>
-                                    {p.marca && <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.45)' }}>{p.marca}</span>}
-                                    {p.modelo && <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)' }}>· {p.modelo}</span>}
+                                    {p.marca && <span style={{ fontSize: '11px', color: tintaTexto(0.45) }}>{p.marca}</span>}
+                                    {p.modelo && <span style={{ fontSize: '11px', color: tintaTexto(0.3) }}>· {p.modelo}</span>}
                                     {p.categoria && <span style={{ fontSize: '11px', color: colorCategoria(p.categoria), opacity: 0.8 }}>· {p.categoria}</span>}
                                 </div>
                             </div>
                             <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                                <div style={{ color: '#34C759', fontSize: '14px', fontWeight: 600 }}>
+                                <div style={{ color: 'var(--tono-verde)', fontSize: '14px', fontWeight: 600 }}>
                                     ${p.precio?.toFixed(2) ?? '—'}
                                 </div>
                                 {p.utilidad != null && (
-                                    <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)' }}>
+                                    <div style={{ fontSize: '11px', color: tintaTexto(0.35) }}>
                                         +${p.utilidad.toFixed(0)} margen
                                     </div>
                                 )}
@@ -691,16 +692,16 @@ export default function ProductSearch({ onSelect, inBudgetQtyById }: ProductSear
                     left: 0,
                     right: 0,
                     zIndex: 1000,
-                    background: 'rgba(28,28,30,0.95)',
+                    background: 'var(--superficie)',
                     backdropFilter: 'blur(30px)',
-                    border: '1px solid rgba(255,255,255,0.12)',
+                    border: `1px solid ${tinta(0.12)}`,
                     borderRadius: '16px',
                     padding: '24px',
                     textAlign: 'center',
                     boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
                 }}>
                     <div style={{ fontSize: '32px', marginBottom: '8px' }}>🔍</div>
-                    <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '14px' }}>Sin resultados para &ldquo;{query}&rdquo;</div>
+                    <div style={{ color: tintaTexto(0.5), fontSize: '14px' }}>Sin resultados para &ldquo;{query}&rdquo;</div>
                 </div>
             )}
             </>

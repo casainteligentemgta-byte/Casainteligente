@@ -16,8 +16,8 @@ function esUuid(id: string) {
 
 function hintMigracion() {
   return {
-    error: 'Aplique la migración 318_budgets_abonos_cuotas.sql y notify pgrst, \'reload schema\';',
-    hint: '318_budgets_abonos_cuotas.sql',
+    error: 'Aplique la migración 354_presupuestos_numero_fechas_abonos.sql',
+    hint: '354_presupuestos_numero_fechas_abonos.sql',
   };
 }
 
@@ -144,12 +144,24 @@ export async function DELETE(req: NextRequest, context: { params: { id: string }
   if (!esUuid(abonoId)) return NextResponse.json({ error: 'abono_id requerido' }, { status: 400 });
 
   const supabase = await createClient();
-  const { error } = await supabase.rpc('ci_eliminar_abono_presupuesto', { p_abono_id: abonoId });
+  // Se quita el abono de ESTE presupuesto y luego la base vuelve a repartir lo cobrado entre
+  // las cuotas y recalcula saldo y estado.
+  const { data: quitados, error } = await supabase
+    .from('budget_abonos')
+    .delete()
+    .eq('id', abonoId)
+    .eq('budget_id', id)
+    .select('id');
   if (error) {
     if (/does not exist|schema cache/i.test(error.message)) {
       return NextResponse.json(hintMigracion(), { status: 409 });
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+  if (!quitados || quitados.length === 0) {
+    return NextResponse.json({ error: 'Ese abono no está en este presupuesto (o tu sesión se cerró).' }, { status: 404 });
+  }
+  const { error: errRecalculo } = await supabase.rpc('ci_reaplicar_abonos_presupuesto', { p_budget_id: id });
+  if (errRecalculo) return NextResponse.json({ error: errRecalculo.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }

@@ -27,3 +27,11 @@ export function tintaTexto(opacidad: number): string {
 export function tonoTexto(color: string): string {
   return `color-mix(in srgb, ${color} var(--tono-mezcla, 100%), black)`;
 }
+
+/**
+ * Fondo suave de un color (pastillas de estado, botones tenues): el mismo tono con
+ * transparencia, que se ve bien sobre blanco y sobre negro.
+ */
+export function tonoFondo(color: string, porcentaje = 16): string {
+  return `color-mix(in srgb, ${color} ${porcentaje}%, transparent)`;
+}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, type CSSProperties } from 'react';
+import { tinta, tintaTexto, tonoFondo } from '@/lib/tema/tinta';
 
 type ClasificacionPresupuesto =
     | 'no_enviado'
@@ -90,7 +91,7 @@ export default function PresupuestosFiltrosModal({
                 position: 'fixed',
                 inset: 0,
                 zIndex: 200,
-                background: 'rgba(15,23,42,0.45)',
+                background: 'rgba(0,0,0,0.45)',
                 backdropFilter: 'blur(4px)',
                 display: 'flex',
                 alignItems: 'flex-end',
@@ -114,7 +115,7 @@ export default function PresupuestosFiltrosModal({
                 }}
             >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                    <h2 id="filtros-presupuestos-titulo" style={{ color: '#0F172A', fontSize: '18px', fontWeight: 800, margin: 0 }}>
+                    <h2 id="filtros-presupuestos-titulo" style={{ color: 'var(--label-primary)', fontSize: '18px', fontWeight: 800, margin: 0 }}>
                         Filtrar y ordenar
                     </h2>
                     <button
@@ -122,8 +123,8 @@ export default function PresupuestosFiltrosModal({
                         onClick={onClose}
                         aria-label="Cerrar filtros"
                         style={{
-                            background: '#F1F5F9',
-                            color: '#64748B',
+                            background: tinta(0.06),
+                            color: tintaTexto(0.55),
                             border: 'none',
                             borderRadius: '10px',
                             width: '36px',
@@ -222,9 +223,9 @@ export default function PresupuestosFiltrosModal({
                                 flex: '1 1 0',
                                 width: 0,
                                 minWidth: 0,
-                                background: sortBy === opt.id ? '#DBEAFE' : '#F8FAFC',
-                                color: sortBy === opt.id ? '#007AFF' : '#475569',
-                                border: sortBy === opt.id ? '1px solid rgba(0,122,255,0.35)' : '1px solid #E2E8F0',
+                                background: sortBy === opt.id ? tonoFondo('#007AFF') : tinta(0.04),
+                                color: sortBy === opt.id ? 'var(--tono-azul)' : tintaTexto(0.65),
+                                border: sortBy === opt.id ? `1px solid ${tonoFondo('var(--tono-azul)', 35)}` : `1px solid ${tinta(0.1)}`,
                                 borderRadius: '999px',
                                 padding: '8px 6px',
                                 fontSize: '12px',
@@ -271,9 +272,9 @@ export default function PresupuestosFiltrosModal({
                                         width: 0,
                                         minWidth: 0,
                                         boxSizing: 'border-box',
-                                        background: filter === f ? '#DBEAFE' : '#F8FAFC',
-                                        color: filter === f ? '#007AFF' : '#475569',
-                                        border: filter === f ? '1px solid rgba(0,122,255,0.35)' : '1px solid #E2E8F0',
+                                        background: filter === f ? tonoFondo('#007AFF') : tinta(0.04),
+                                        color: filter === f ? 'var(--tono-azul)' : tintaTexto(0.65),
+                                        border: filter === f ? `1px solid ${tonoFondo('var(--tono-azul)', 35)}` : `1px solid ${tinta(0.1)}`,
                                         borderRadius: '999px',
                                         padding: '8px 4px',
                                         fontSize: '11px',
@@ -299,9 +300,9 @@ export default function PresupuestosFiltrosModal({
                             onClick={onLimpiar}
                             style={{
                                 flex: 1,
-                                background: '#F8FAFC',
-                                color: '#475569',
-                                border: '1px solid #E2E8F0',
+                                background: tinta(0.04),
+                                color: tintaTexto(0.65),
+                                border: `1px solid ${tinta(0.1)}`,
                                 borderRadius: '12px',
                                 padding: '12px',
                                 fontSize: '14px',
@@ -317,7 +318,7 @@ export default function PresupuestosFiltrosModal({
                         onClick={onClose}
                         style={{
                             flex: 1,
-                            background: '#007AFF',
+                            background: 'var(--tono-azul)',
                             color: 'white',
                             border: 'none',
                             borderRadius: '12px',

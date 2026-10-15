@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { tinta, tintaTexto } from '@/lib/tema/tinta';
 
 export interface Customer {
     id: string;
@@ -123,7 +124,7 @@ export default function ClientSearch({ value, onChange, onSelect, placeholder }:
                     style={{
                         background: 'none', border: 'none', padding: '4px',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        color: 'rgba(255,255,255,0.3)', transition: 'transform 0.2s',
+                        color: tintaTexto(0.3), transition: 'transform 0.2s',
                         transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
                     }}
                 >
@@ -156,10 +157,10 @@ export default function ClientSearch({ value, onChange, onSelect, placeholder }:
                             width: '100%',
                             maxWidth: '500px',
                             maxHeight: '80vh',
-                            background: 'rgba(28,28,30,0.98)',
+                            background: 'var(--superficie-alta)',
                             backdropFilter: 'blur(40px)',
                             WebkitBackdropFilter: 'blur(40px)',
-                            border: '1px solid rgba(255,255,255,0.12)',
+                            border: `1px solid ${tinta(0.12)}`,
                             borderRadius: '24px',
                             overflow: 'hidden',
                             display: 'flex',
@@ -171,7 +172,7 @@ export default function ClientSearch({ value, onChange, onSelect, placeholder }:
                         {/* Header */}
                         <div style={{
                             padding: '16px 20px',
-                            borderBottom: '1px solid rgba(255,255,255,0.08)',
+                            borderBottom: `1px solid ${tinta(0.08)}`,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'space-between',
@@ -182,15 +183,15 @@ export default function ClientSearch({ value, onChange, onSelect, placeholder }:
                                     background: 'rgba(0,122,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center'
                                 }}>
                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                                        <circle cx="9" cy="7" r="4" stroke="#007AFF" strokeWidth="2" />
-                                        <path d="M2 21c0-4 3-7 7-7s7 3 7 7" stroke="#007AFF" strokeWidth="2" strokeLinecap="round" />
+                                        <circle cx="9" cy="7" r="4" stroke="currentColor" strokeWidth="2" />
+                                        <path d="M2 21c0-4 3-7 7-7s7 3 7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                                     </svg>
                                 </div>
-                                <span style={{ color: 'white', fontWeight: 700, fontSize: '15px' }}>Seleccionar Cliente</span>
+                                <span style={{ color: 'var(--label-primary)', fontWeight: 700, fontSize: '15px' }}>Seleccionar Cliente</span>
                             </div>
                             <button
                                 onClick={() => setOpen(false)}
-                                style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '50%', width: '28px', height: '28px', cursor: 'pointer', color: 'white' }}
+                                style={{ background: tinta(0.1), border: 'none', borderRadius: '50%', width: '28px', height: '28px', cursor: 'pointer', color: 'var(--label-primary)' }}
                             >
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
                                     <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
@@ -199,13 +200,13 @@ export default function ClientSearch({ value, onChange, onSelect, placeholder }:
                         </div>
 
                         {/* Search Input in Modal */}
-                        <div style={{ padding: '12px 16px', background: 'rgba(255,255,255,0.03)' }}>
+                        <div style={{ padding: '12px 16px', background: tinta(0.03) }}>
                             <div style={{
                                 display: 'flex', alignItems: 'center', gap: '10px',
-                                background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)',
+                                background: tinta(0.08), border: `1px solid ${tinta(0.1)}`,
                                 borderRadius: '12px', padding: '10px 14px'
                             }}>
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2.5" strokeLinecap="round">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={tinta(0.4)} strokeWidth="2.5" strokeLinecap="round">
                                     <circle cx="11" cy="11" r="7" />
                                     <path d="M21 21l-4.35-4.35" />
                                 </svg>
@@ -217,7 +218,7 @@ export default function ClientSearch({ value, onChange, onSelect, placeholder }:
                                     placeholder="Buscar por nombre o RIF..."
                                     style={{
                                         flex: 1, background: 'transparent', border: 'none', outline: 'none',
-                                        color: 'white', fontSize: '15px', fontFamily: 'inherit'
+                                        color: 'var(--label-primary)', fontSize: '15px', fontFamily: 'inherit'
                                     }}
                                 />
                             </div>
@@ -226,13 +227,13 @@ export default function ClientSearch({ value, onChange, onSelect, placeholder }:
                         {/* Results list */}
                         <div style={{ overflowY: 'auto', flex: 1 }}>
                             {loading ? (
-                                <div style={{ padding: '40px', textAlign: 'center', color: 'rgba(255,255,255,0.4)', fontSize: '14px' }}>
+                                <div style={{ padding: '40px', textAlign: 'center', color: tintaTexto(0.4), fontSize: '14px' }}>
                                     Buscando clientes...
                                 </div>
                             ) : results.length === 0 ? (
                                 <div style={{ padding: '40px', textAlign: 'center' }}>
                                     <div style={{ fontSize: '32px', marginBottom: '8px' }}>👤</div>
-                                    <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '14px' }}>No se encontraron resultados</p>
+                                    <p style={{ color: tintaTexto(0.4), fontSize: '14px' }}>No se encontraron resultados</p>
                                 </div>
                             ) : (
                                 results.map((c, i) => (
@@ -243,7 +244,7 @@ export default function ClientSearch({ value, onChange, onSelect, placeholder }:
                                             display: 'flex', alignItems: 'center', gap: '14px',
                                             width: '100%', padding: '14px 20px',
                                             background: i === activeIndex ? 'rgba(0,122,255,0.12)' : 'transparent',
-                                            border: 'none', borderBottom: '1px solid rgba(255,255,255,0.04)',
+                                            border: 'none', borderBottom: `1px solid ${tinta(0.04)}`,
                                             cursor: 'pointer', textAlign: 'left', transition: 'background 0.2s'
                                         }}
                                         onMouseEnter={() => setActiveIndex(i)}
@@ -252,15 +253,15 @@ export default function ClientSearch({ value, onChange, onSelect, placeholder }:
                                             width: '40px', height: '40px', borderRadius: '12px',
                                             background: 'rgba(52,199,89,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                                         }}>
-                                            <span style={{ color: '#34C759', fontWeight: 800, fontSize: '14px' }}>{c.nombre[0].toUpperCase()}</span>
+                                            <span style={{ color: 'var(--tono-verde)', fontWeight: 800, fontSize: '14px' }}>{c.nombre[0].toUpperCase()}</span>
                                         </div>
                                         <div style={{ flex: 1, minWidth: 0 }}>
-                                            <div style={{ color: 'white', fontSize: '15px', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                            <div style={{ color: 'var(--label-primary)', fontSize: '15px', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                 {c.nombre}
                                             </div>
                                             <div style={{ display: 'flex', gap: '8px', marginTop: '2px' }}>
-                                                {c.rif && <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)' }}>{c.rif}</span>}
-                                                {c.movil && <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.3)' }}>· {c.movil}</span>}
+                                                {c.rif && <span style={{ fontSize: '12px', color: tintaTexto(0.4) }}>{c.rif}</span>}
+                                                {c.movil && <span style={{ fontSize: '12px', color: tintaTexto(0.3) }}>· {c.movil}</span>}
                                             </div>
                                         </div>
                                     </button>

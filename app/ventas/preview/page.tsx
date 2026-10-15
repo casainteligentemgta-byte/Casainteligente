@@ -142,6 +142,13 @@ export default function PreviewPage() {
     const [data, setData] = useState<PresupuestoVista | null>(null);
     const [isDemo, setIsDemo] = useState(false);
     const [loading, setLoading] = useState(false);
+    /** Presupuesto guardado que se está viendo (para guardar las notas corregidas aquí). */
+    const [idGuardado, setIdGuardado] = useState<string | null>(null);
+    const [notasGuardadas, setNotasGuardadas] = useState('');
+    const [guardandoNotas, setGuardandoNotas] = useState(false);
+    const [avisoNotas, setAvisoNotas] = useState<string | null>(null);
+    /** Muestra lo que hay en la pantalla de armar, con cambios todavía sin guardar. */
+    const [esBorrador, setEsBorrador] = useState(false);
 
     /** Al imprimir / Guardar PDF: escala el documento a una sola hoja A4. */
     useEffect(() => {
@@ -176,6 +183,22 @@ export default function PreviewPage() {
             }
 
             const idParam = params.get('id')?.trim() ?? '';
+            // «borrador»: cambios sin guardar. Se muestra lo que dejó la pantalla de armar, no lo guardado.
+            if (params.get('borrador') === '1') {
+                const raw = localStorage.getItem('presupuesto_preview');
+                if (raw) {
+                    try {
+                        const parsed = JSON.parse(raw) as Record<string, unknown>;
+                        if (!cancelled) {
+                            setData(normalizePresupuestoVista(parsed));
+                            setEsBorrador(true);
+                        }
+                        return;
+                    } catch {
+                        /* sigue con lo guardado */
+                    }
+                }
+            }
             if (idParam && isBudgetUuid(idParam)) {
                 setLoading(true);
                 const supabase = createClient();
@@ -253,6 +276,8 @@ export default function PreviewPage() {
                     const vista = normalizePresupuestoVista(payload);
                     setData(vista);
                     setIsDemo(false);
+                    setIdGuardado(idParam);
+                    setNotasGuardadas(vista.notas ?? '');
                     try {
                         localStorage.setItem('presupuesto_preview', JSON.stringify(payload));
                     } catch {
@@ -295,6 +320,25 @@ export default function PreviewPage() {
             }
             return next;
         });
+    }
+
+    /** Guarda en el presupuesto las notas corregidas en esta vista. */
+    async function guardarNotas() {
+        if (!idGuardado || !data) return;
+        setGuardandoNotas(true);
+        setAvisoNotas(null);
+        const { data: filas, error } = await createClient()
+            .from('budgets')
+            .update({ notes: data.notas ?? '' })
+            .eq('id', idGuardado)
+            .select('id');
+        setGuardandoNotas(false);
+        if (error || !filas || filas.length === 0) {
+            setAvisoNotas(error ? `No se guardaron las notas: ${error.message}` : 'No se guardaron las notas: revisa que tu sesión siga abierta.');
+            return;
+        }
+        setNotasGuardadas(data.notas ?? '');
+        setAvisoNotas('Notas guardadas en el presupuesto.');
     }
 
     if (loading) {
@@ -433,6 +477,7 @@ export default function PreviewPage() {
                     )}
                     <span className="preview-toolbar-numero" style={{ color: '#64748B', fontSize: '13px', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         Presupuesto {data.numero}
+                        {esBorrador ? <strong style={{ color: '#B45309' }}> · cambios sin guardar</strong> : null}
                     </span>
                 </div>
                 <div className="preview-toolbar-actions" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end', flex: '0 1 auto', minWidth: 0 }}>
@@ -802,6 +847,35 @@ export default function PreviewPage() {
                                         outline: 'none',
                                     }}
                                 />
+                                {idGuardado && !esBorrador && (data.notas ?? '') !== notasGuardadas ? (
+                                    <div className="no-print" style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '6px', flexWrap: 'wrap' }}>
+                                        <button
+                                            type="button"
+                                            data-guardar-notas
+                                            disabled={guardandoNotas}
+                                            onClick={() => void guardarNotas()}
+                                            style={{
+                                                border: 'none',
+                                                borderRadius: '8px',
+                                                padding: '8px 12px',
+                                                background: '#047857',
+                                                color: '#fff',
+                                                fontSize: '12px',
+                                                fontWeight: 700,
+                                                cursor: 'pointer',
+                                                fontFamily: 'inherit',
+                                            }}
+                                        >
+                                            {guardandoNotas ? 'Guardando…' : 'Guardar notas en el presupuesto'}
+                                        </button>
+                                        <span style={{ fontSize: '11px', color: '#B45309' }}>Sin guardar: si cierras, se pierden.</span>
+                                    </div>
+                                ) : null}
+                                {avisoNotas ? (
+                                    <p className="no-print" style={{ fontSize: '11px', color: avisoNotas.startsWith('No') ? '#DC2626' : '#047857', margin: '6px 0 0' }}>
+                                        {avisoNotas}
+                                    </p>
+                                ) : null}
                                 {/* Impresión / PDF / previsualización de impresión: solo texto escrito, o vacío */}
                                 <p
                                     className="preview-notas-print"

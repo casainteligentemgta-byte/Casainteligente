@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { tinta, tintaTexto, tonoFondo } from '@/lib/tema/tinta';
 import { Banknote, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTasaBcvHoy } from '@/lib/contabilidad/useTasaBcvHoy';
@@ -18,6 +19,12 @@ import {
 } from '@/lib/presupuesto/cobros';
 
 type Tab = 'abono' | 'cuotas' | 'historial';
+
+/** Hoy en el teléfono (no en UTC: de noche en Venezuela, en UTC ya es mañana). */
+function hoyLocal(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 type Resumen = {
   id: string;
@@ -71,11 +78,11 @@ export default function PresupuestoCobrosModal({
     setMetodo('zelle');
     setBanco('');
     setReferencia('');
-    setFecha(new Date().toISOString().slice(0, 10));
+    setFecha(hoyLocal());
     setNotas('');
     setCuotaId('');
     setCantidadCuotas('3');
-    setPrimeraFecha(new Date().toISOString().slice(0, 10));
+    setPrimeraFecha(hoyLocal());
     setIntervalo('30');
     setError(null);
     setTab('abono');
@@ -221,9 +228,13 @@ export default function PresupuestoCobrosModal({
         credentials: 'include',
       });
       if (res.ok) {
+        toast.success('Abono eliminado.');
         await load();
         onChanged?.();
+        return;
       }
+      const json = await parseFetchJson<{ error?: string }>(res);
+      toast.error(formatApiErrorBody(json));
     });
   };
 
@@ -250,11 +261,11 @@ export default function PresupuestoCobrosModal({
     n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const input: CSSProperties = {
     width: '100%',
-    background: '#F8FAFC',
-    border: '1px solid #E2E8F0',
+    background: tinta(0.04),
+    border: `1px solid ${tinta(0.1)}`,
     borderRadius: '10px',
     padding: '10px 12px',
-    color: '#0F172A',
+    color: 'var(--label-primary)',
     fontSize: '14px',
     outline: 'none',
   };
@@ -264,7 +275,7 @@ export default function PresupuestoCobrosModal({
     fontWeight: 700,
     letterSpacing: '0.04em',
     textTransform: 'uppercase',
-    color: '#64748B',
+    color: tintaTexto(0.55),
     marginBottom: '6px',
   };
 
@@ -274,7 +285,7 @@ export default function PresupuestoCobrosModal({
         position: 'fixed',
         inset: 0,
         zIndex: 80,
-        background: 'rgba(15,23,42,0.45)',
+        background: 'rgba(0,0,0,0.45)',
         display: 'flex',
         alignItems: 'flex-end',
         justifyContent: 'center',
@@ -293,20 +304,20 @@ export default function PresupuestoCobrosModal({
           maxWidth: '520px',
           maxHeight: '92vh',
           overflowY: 'auto',
-          background: '#FFFFFF',
+          background: 'var(--superficie-alta)',
           borderRadius: '20px',
-          boxShadow: '0 20px 50px rgba(15,23,42,0.2)',
+          boxShadow: 'var(--sombra-tarjeta-alta)',
         }}
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '16px 18px 8px' }}>
           <div style={{ display: 'flex', gap: 10 }}>
-            <Banknote size={20} color="#047857" />
+            <Banknote size={20} color="var(--tono-verde)" />
             <div>
-              <h2 id="cobros-presupuesto-title" style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0F172A' }}>
+              <h2 id="cobros-presupuesto-title" style={{ margin: 0, fontSize: 16, fontWeight: 800, color: 'var(--label-primary)' }}>
                 Registrar abono
               </h2>
-              <p style={{ margin: '4px 0 0', fontSize: 12, color: '#64748B' }}>
+              <p style={{ margin: '4px 0 0', fontSize: 12, color: tintaTexto(0.55) }}>
                 {resumen?.customer_name || customerName || 'Presupuesto'}
               </p>
             </div>
@@ -315,7 +326,7 @@ export default function PresupuestoCobrosModal({
             type="button"
             onClick={onClose}
             aria-label="Cerrar"
-            style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#64748B' }}
+            style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: tintaTexto(0.55) }}
           >
             <X size={18} />
           </button>
@@ -327,9 +338,9 @@ export default function PresupuestoCobrosModal({
             { l: 'Abonado', v: resumen ? `$${fmt(resumen.monto_pagado)}` : '—' },
             { l: 'Saldo', v: resumen ? `$${fmt(resumen.saldo)}` : '—' },
           ].map((x) => (
-            <div key={x.l} style={{ background: '#F8FAFC', borderRadius: 12, padding: '10px 8px' }}>
-              <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase' }}>{x.l}</p>
-              <p style={{ margin: '4px 0 0', fontSize: 14, fontWeight: 800, color: '#0F172A' }}>{x.v}</p>
+            <div key={x.l} style={{ background: tinta(0.04), borderRadius: 12, padding: '10px 8px' }}>
+              <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: tintaTexto(0.4), textTransform: 'uppercase' }}>{x.l}</p>
+              <p style={{ margin: '4px 0 0', fontSize: 14, fontWeight: 800, color: 'var(--label-primary)' }}>{x.v}</p>
             </div>
           ))}
         </div>
@@ -351,9 +362,9 @@ export default function PresupuestoCobrosModal({
               }}
               style={{
                 flex: 1,
-                border: tab === k ? '1px solid #04785755' : '1px solid #E2E8F0',
-                background: tab === k ? '#D1FAE5' : '#FFFFFF',
-                color: tab === k ? '#047857' : '#475569',
+                border: tab === k ? `1px solid ${tonoFondo('var(--tono-verde)', 35)}` : `1px solid ${tinta(0.1)}`,
+                background: tab === k ? tonoFondo('var(--tono-verde)') : 'var(--superficie)',
+                color: tab === k ? 'var(--tono-verde)' : tintaTexto(0.65),
                 borderRadius: 999,
                 padding: '8px 6px',
                 fontSize: 12,
@@ -368,18 +379,59 @@ export default function PresupuestoCobrosModal({
 
         <div style={{ padding: '0 18px 20px' }}>
           {hint ? (
-            <p style={{ fontSize: 12, color: '#B45309', background: '#FEF3C7', padding: 10, borderRadius: 10 }}>
+            <p style={{ fontSize: 12, color: 'var(--tono-naranja)', background: tonoFondo('#FF9500'), padding: 10, borderRadius: 10 }}>
               Pendiente en producción: {hint}
             </p>
           ) : null}
-          {error ? <p style={{ fontSize: 13, color: '#DC2626', margin: '0 0 10px' }}>{error}</p> : null}
-          {loading ? <p style={{ fontSize: 13, color: '#94A3B8' }}>Cargando…</p> : null}
+          {error ? <p style={{ fontSize: 13, color: 'var(--tono-rojo)', margin: '0 0 10px' }}>{error}</p> : null}
+          {loading ? <p style={{ fontSize: 13, color: tintaTexto(0.4) }}>Cargando…</p> : null}
 
           {tab === 'abono' ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {resumen && !['aprobado', 'cobrado', 'parcialmente_pagado', 'pagado'].includes(resumen.status) ? (
+                <p data-abono-no-aceptado style={{ margin: 0, fontSize: 12, color: 'var(--tono-naranja)', background: tonoFondo('#FF9500'), padding: 10, borderRadius: 10 }}>
+                  Este presupuesto aún no está aprobado. Al registrar un abono pasa a «Pago parcial» (o «Pagado» si cubre el total).
+                </p>
+              ) : null}
+              {resumen && resumen.saldo <= 0 ? (
+                <p style={{ margin: 0, fontSize: 12, color: 'var(--tono-verde)', background: tonoFondo('var(--tono-verde)'), padding: 10, borderRadius: 10 }}>
+                  Este presupuesto ya está pagado completo.
+                </p>
+              ) : null}
               <div>
                 <label style={label}>Monto</label>
-                <input style={input} inputMode="decimal" value={monto} onChange={(e) => setMonto(e.target.value)} placeholder="0.00" />
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input style={input} inputMode="decimal" value={monto} onChange={(e) => setMonto(e.target.value)} placeholder="0.00" />
+                  {resumen && resumen.saldo > 0 ? (
+                    <button
+                      type="button"
+                      data-abono-saldo
+                      onClick={() => {
+                        setMoneda('USD');
+                        setMonto(resumen.saldo.toFixed(2));
+                      }}
+                      style={{
+                        flexShrink: 0,
+                        border: `1px solid ${tonoFondo('var(--tono-verde)', 35)}`,
+                        background: tonoFondo('var(--tono-verde)'),
+                        color: 'var(--tono-verde)',
+                        borderRadius: 10,
+                        padding: '0 12px',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      Todo el saldo
+                    </button>
+                  ) : null}
+                </div>
+                {resumen && equivalenteUsd != null && equivalenteUsd > resumen.saldo + 0.009 ? (
+                  <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--tono-rojo)' }}>
+                    Supera el saldo (${fmt(resumen.saldo)}).
+                  </p>
+                ) : null}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                 <div>
@@ -405,7 +457,7 @@ export default function PresupuestoCobrosModal({
                 </div>
               </div>
               {moneda === 'VES' ? (
-                <p style={{ margin: 0, fontSize: 12, color: '#64748B' }}>
+                <p style={{ margin: 0, fontSize: 12, color: tintaTexto(0.55) }}>
                   {cargandoTasa ? 'Cargando tasa BCV…' : tasa ? `≈ $${fmt(equivalenteUsd ?? 0)} (BCV ${tasa})` : 'Sin tasa BCV'}
                 </p>
               ) : null}
@@ -447,7 +499,7 @@ export default function PresupuestoCobrosModal({
                   border: 'none',
                   borderRadius: 12,
                   padding: '12px',
-                  background: '#047857',
+                  background: 'var(--tono-verde)',
                   color: '#fff',
                   fontWeight: 800,
                   fontSize: 14,
@@ -462,7 +514,7 @@ export default function PresupuestoCobrosModal({
 
           {tab === 'cuotas' ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <p style={{ margin: 0, fontSize: 13, color: '#64748B' }}>
+              <p style={{ margin: 0, fontSize: 13, color: tintaTexto(0.55) }}>
                 Parte el saldo en cuotas. Las ya abonadas se conservan.
               </p>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
@@ -488,7 +540,7 @@ export default function PresupuestoCobrosModal({
                   border: 'none',
                   borderRadius: 12,
                   padding: '12px',
-                  background: '#1D4ED8',
+                  background: 'var(--tono-azul)',
                   color: '#fff',
                   fontWeight: 800,
                   cursor: 'pointer',
@@ -507,14 +559,14 @@ export default function PresupuestoCobrosModal({
                         gap: 8,
                         padding: '10px 12px',
                         borderRadius: 12,
-                        background: '#F8FAFC',
+                        background: tinta(0.04),
                         fontSize: 13,
                       }}
                     >
                       <div>
                         <strong>Cuota {c.numero}</strong>
-                        <span style={{ color: '#64748B' }}> · {c.fecha_vencimiento}</span>
-                        <div style={{ color: '#475569', fontSize: 12 }}>
+                        <span style={{ color: tintaTexto(0.55) }}> · {c.fecha_vencimiento}</span>
+                        <div style={{ color: tintaTexto(0.65), fontSize: 12 }}>
                           ${fmt(c.monto_pagado)} / ${fmt(c.monto)} · {c.estado_ui ?? etiquetaEstadoCuota(c)}
                         </div>
                       </div>
@@ -522,7 +574,7 @@ export default function PresupuestoCobrosModal({
                         <button
                           type="button"
                           onClick={() => borrarCuota(c.id)}
-                          style={{ border: 'none', background: 'transparent', color: '#DC2626', fontWeight: 700, cursor: 'pointer' }}
+                          style={{ border: 'none', background: 'transparent', color: 'var(--tono-rojo)', fontWeight: 700, cursor: 'pointer' }}
                         >
                           Quitar
                         </button>
@@ -531,7 +583,7 @@ export default function PresupuestoCobrosModal({
                   ))}
                 </div>
               ) : (
-                <p style={{ fontSize: 13, color: '#94A3B8' }}>Sin cuotas planificadas.</p>
+                <p style={{ fontSize: 13, color: tintaTexto(0.4) }}>Sin cuotas planificadas.</p>
               )}
             </div>
           ) : null}
@@ -539,7 +591,7 @@ export default function PresupuestoCobrosModal({
           {tab === 'historial' ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {abonos.length === 0 ? (
-                <p style={{ fontSize: 13, color: '#94A3B8' }}>Aún no hay abonos.</p>
+                <p style={{ fontSize: 13, color: tintaTexto(0.4) }}>Aún no hay abonos.</p>
               ) : (
                 abonos.map((a) => (
                   <div
@@ -550,22 +602,22 @@ export default function PresupuestoCobrosModal({
                       gap: 8,
                       padding: '10px 12px',
                       borderRadius: 12,
-                      background: '#F8FAFC',
+                      background: tinta(0.04),
                       fontSize: 13,
                     }}
                   >
                     <div>
                       <strong>${fmt(Number(a.monto_usd))}</strong>
-                      <span style={{ color: '#64748B' }}>
+                      <span style={{ color: tintaTexto(0.55) }}>
                         {' '}
                         · {etiquetaMetodoAbono(a.metodo)} · {a.fecha_abono}
                       </span>
-                      {a.referencia ? <div style={{ color: '#64748B', fontSize: 12 }}>{a.referencia}</div> : null}
+                      {a.referencia ? <div style={{ color: tintaTexto(0.55), fontSize: 12 }}>{a.referencia}</div> : null}
                     </div>
                     <button
                       type="button"
                       onClick={() => borrarAbono(a.id)}
-                      style={{ border: 'none', background: 'transparent', color: '#DC2626', fontWeight: 700, cursor: 'pointer' }}
+                      style={{ border: 'none', background: 'transparent', color: 'var(--tono-rojo)', fontWeight: 700, cursor: 'pointer' }}
                     >
                       Borrar
                     </button>

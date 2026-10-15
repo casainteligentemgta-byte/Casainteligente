@@ -1,13 +1,16 @@
 'use client';
 
 import { useEffect, useState, type CSSProperties } from 'react';
+import { tinta, tintaTexto, tonoTexto, tonoFondo } from '@/lib/tema/tinta';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
+import BotonTema from '@/components/tema/BotonTema';
 import PresupuestosFiltrosModal from '@/components/presupuestos/PresupuestosFiltrosModal';
 import PresupuestoCobrosModal from '@/components/presupuestos/PresupuestoCobrosModal';
 import { fechaDocumentoDeBudget, formatFechaPresupuestoCorta } from '@/lib/presupuesto/fecha';
 import {
+    esVenta,
     ESTADOS_VENTA,
     filtroDesdeParametro,
     montoPagadoDe,
@@ -39,14 +42,19 @@ type ClasificacionPresupuesto =
     | 'parcialmente_pagado'
     | 'pagado';
 
-const CLASIFICACION_COLORS: Record<ClasificacionPresupuesto, { bg: string; text: string; label: string; short: string }> = {
-    no_enviado: { bg: '#F1F5F9', text: '#64748B', label: 'No enviado', short: 'Sin env.' },
-    enviado: { bg: '#DBEAFE', text: '#1D4ED8', label: 'Enviado', short: 'Enviado' },
-    aprobado: { bg: '#DCFCE7', text: '#15803D', label: 'Aprobado', short: 'Aprobado' },
-    no_aprobado: { bg: '#FEE2E2', text: '#B91C1C', label: 'No aprobado', short: 'Rechaz.' },
-    cobrado: { bg: '#FEF3C7', text: '#B45309', label: 'Por Pagar', short: 'Por pagar' },
-    parcialmente_pagado: { bg: '#FFEDD5', text: '#C2410C', label: 'Parcial', short: 'Parcial' },
-    pagado: { bg: '#D1FAE5', text: '#047857', label: 'Pagado', short: 'Pagado' },
+/** Pastilla de estado: el tono de iOS como fondo suave y como texto (se lee en claro y en oscuro). */
+function pastilla(tono: string, label: string, short: string) {
+    return { bg: tonoFondo(tono), text: tonoTexto(tono), borde: tonoFondo(tono, 30), label, short };
+}
+
+const CLASIFICACION_COLORS: Record<ClasificacionPresupuesto, { bg: string; text: string; borde: string; label: string; short: string }> = {
+    no_enviado: pastilla('#8E8E93', 'No enviado', 'Sin env.'),
+    enviado: pastilla('#007AFF', 'Enviado', 'Enviado'),
+    aprobado: pastilla('#34C759', 'Aprobado', 'Aprobado'),
+    no_aprobado: pastilla('#FF3B30', 'No aprobado', 'Rechaz.'),
+    cobrado: pastilla('#FF9500', 'Por Pagar', 'Por pagar'),
+    parcialmente_pagado: pastilla('#FF9F0A', 'Parcial', 'Parcial'),
+    pagado: pastilla('#30B158', 'Pagado', 'Pagado'),
 };
 
 /** Orden de status para ordenar la lista. */
@@ -165,7 +173,7 @@ function TarjetaPresupuesto({
                 <div style={{ flex: 1, minWidth: 0 }}>
                     <h3
                         style={{
-                            color: '#0F172A',
+                            color: 'var(--label-primary)',
                             fontSize: '16px',
                             fontWeight: 700,
                             margin: 0,
@@ -180,7 +188,7 @@ function TarjetaPresupuesto({
                     </h3>
                     <p
                         style={{
-                            color: '#64748B',
+                            color: tintaTexto(0.55),
                             fontSize: '12px',
                             fontWeight: 600,
                             margin: '5px 0 0',
@@ -188,14 +196,14 @@ function TarjetaPresupuesto({
                         }}
                     >
                         {numero}
-                        <span style={{ color: '#CBD5E1', margin: '0 6px' }}>·</span>
+                        <span style={{ color: tintaTexto(0.25), margin: '0 6px' }}>·</span>
                         <span style={{ fontFamily: 'inherit', fontWeight: 500 }}>{fecha}</span>
                     </p>
                 </div>
                 <span
                     className="presupuesto-tarjeta-monto"
                     style={{
-                        color: '#15803D',
+                        color: 'var(--tono-verde)',
                         fontSize: '17px',
                         fontWeight: 800,
                         lineHeight: 1.2,
@@ -213,7 +221,7 @@ function TarjetaPresupuesto({
                         style={{
                             height: '6px',
                             borderRadius: '999px',
-                            background: '#E2E8F0',
+                            background: tinta(0.1),
                             overflow: 'hidden',
                         }}
                     >
@@ -221,11 +229,11 @@ function TarjetaPresupuesto({
                             style={{
                                 width: `${Math.min(100, ((montoPagadoDe(b) / Math.max(Number(b.subtotal) || 1, 1)) * 100))}%`,
                                 height: '100%',
-                                background: saldoDe(b) <= 0 ? '#10B981' : '#F59E0B',
+                                background: saldoDe(b) <= 0 ? 'var(--tono-verde)' : 'var(--tono-naranja)',
                             }}
                         />
                     </div>
-                    <p style={{ margin: '6px 0 0', fontSize: '11px', fontWeight: 600, color: '#64748B' }}>
+                    <p style={{ margin: '6px 0 0', fontSize: '11px', fontWeight: 600, color: tintaTexto(0.55) }}>
                         Abonado ${formatUSD(montoPagadoDe(b))} · Saldo ${formatUSD(saldoDe(b))}
                     </p>
                 </div>
@@ -247,7 +255,7 @@ function TarjetaPresupuesto({
                         display: 'inline-flex',
                         alignItems: 'center',
                         background: clasifStyle.bg,
-                        border: `1px solid ${clasifStyle.text}44`,
+                        border: `1px solid ${clasifStyle.borde}`,
                         borderRadius: '999px',
                         padding: '5px 10px 5px 12px',
                         minWidth: 0,
@@ -291,8 +299,8 @@ function TarjetaPresupuesto({
                             fontSize: '12px',
                             fontWeight: 700,
                             cursor: 'pointer',
-                            background: '#D1FAE5',
-                            color: '#047857',
+                            background: tonoFondo('var(--tono-verde)'),
+                            color: 'var(--tono-verde)',
                         }}
                     >
                         Abono
@@ -307,8 +315,8 @@ function TarjetaPresupuesto({
                             fontSize: '12px',
                             fontWeight: 700,
                             cursor: 'pointer',
-                            background: '#DBEAFE',
-                            color: '#1D4ED8',
+                            background: tonoFondo('#007AFF'),
+                            color: 'var(--tono-azul)',
                         }}
                     >
                         Editar
@@ -320,15 +328,15 @@ function TarjetaPresupuesto({
                         aria-haspopup="menu"
                         aria-label="Más acciones"
                         style={{
-                            border: '1px solid #E2E8F0',
+                            border: `1px solid ${tinta(0.1)}`,
                             borderRadius: '10px',
                             width: '36px',
                             height: '36px',
                             fontSize: '16px',
                             fontWeight: 700,
                             cursor: 'pointer',
-                            background: '#FFFFFF',
-                            color: '#334155',
+                            background: 'var(--superficie)',
+                            color: tintaTexto(0.75),
                             lineHeight: 1,
                         }}
                     >
@@ -343,11 +351,11 @@ function TarjetaPresupuesto({
                                 bottom: 'calc(100% + 6px)',
                                 zIndex: 30,
                                 minWidth: '160px',
-                                background: '#FFFFFF',
-                                border: '1px solid #E2E8F0',
+                                background: 'var(--superficie-alta)',
+                                border: `1px solid ${tinta(0.1)}`,
                                 borderRadius: '12px',
                                 padding: '6px',
-                                boxShadow: '0 12px 28px rgba(15,23,42,0.12)',
+                                boxShadow: 'var(--sombra-tarjeta-alta)',
                                 display: 'flex',
                                 flexDirection: 'column',
                                 gap: '2px',
@@ -363,7 +371,7 @@ function TarjetaPresupuesto({
                                 style={{
                                     border: 'none',
                                     background: 'transparent',
-                                    color: '#047857',
+                                    color: 'var(--tono-verde)',
                                     textAlign: 'left',
                                     padding: '10px 12px',
                                     borderRadius: '8px',
@@ -384,7 +392,7 @@ function TarjetaPresupuesto({
                                 style={{
                                     border: 'none',
                                     background: 'transparent',
-                                    color: '#0F172A',
+                                    color: 'var(--label-primary)',
                                     textAlign: 'left',
                                     padding: '10px 12px',
                                     borderRadius: '8px',
@@ -405,7 +413,7 @@ function TarjetaPresupuesto({
                                 style={{
                                     border: 'none',
                                     background: 'transparent',
-                                    color: '#15803D',
+                                    color: 'var(--tono-verde)',
                                     textAlign: 'left',
                                     padding: '10px 12px',
                                     borderRadius: '8px',
@@ -426,7 +434,7 @@ function TarjetaPresupuesto({
                                 style={{
                                     border: 'none',
                                     background: 'transparent',
-                                    color: '#DC2626',
+                                    color: 'var(--tono-rojo)',
                                     textAlign: 'left',
                                     padding: '10px 12px',
                                     borderRadius: '8px',
@@ -598,17 +606,17 @@ export default function PresupuestosPage() {
 
     const inputFiltroStyle: CSSProperties = {
         width: '100%',
-        background: '#F8FAFC',
-        border: '1px solid #E2E8F0',
+        background: tinta(0.04),
+        border: `1px solid ${tinta(0.1)}`,
         borderRadius: '10px',
         padding: '10px 12px',
-        color: '#0F172A',
+        color: 'var(--label-primary)',
         fontSize: '13px',
         outline: 'none',
     };
 
     const labelFiltroStyle: CSSProperties = {
-        color: '#64748B',
+        color: tintaTexto(0.55),
         fontSize: '10px',
         fontWeight: 700,
         textTransform: 'uppercase',
@@ -616,17 +624,38 @@ export default function PresupuestosPage() {
         display: 'block',
     };
 
-    const updateStatus = async (id: string, status: ClasificacionPresupuesto) => {
+    const updateStatus = async (b: Budget, status: ClasificacionPresupuesto) => {
+        if (status === b.status) return;
+        const numero = getPresupuestoNumero(b, fallbackById[b.id]);
+        if (!confirm(`¿Cambiar ${numero} (${b.customer_name || 'sin cliente'}) de «${CLASIFICACION_COLORS[b.status].label}» a «${CLASIFICACION_COLORS[status].label}»?`)) {
+            // El desplegable vuelve a mostrar el estado guardado.
+            setBudgets((prev) => [...prev]);
+            return;
+        }
         const supabase = createClient();
-        const { error } = await supabase.from('budgets').update({ status }).eq('id', id);
-        if (!error) fetchBudgets();
+        const { data, error } = await supabase.from('budgets').update({ status }).eq('id', b.id).select('id');
+        if (error || !data || data.length === 0) {
+            alert(`No se cambió el estado de ${numero}: ${error ? error.message : 'revisa que tu sesión siga abierta.'}`);
+            setBudgets((prev) => [...prev]);
+            return;
+        }
+        fetchBudgets();
     };
 
-    const deleteBudget = async (id: string) => {
-        if (!confirm('¿Seguro que quieres eliminar este presupuesto?')) return;
+    const deleteBudget = async (b: Budget) => {
+        const numero = getPresupuestoNumero(b, fallbackById[b.id]);
+        if (esVenta(b.status)) {
+            alert(`${numero} no se puede eliminar: el cliente ya lo aceptó. Si se anuló, cámbialo a «No aprobado».`);
+            return;
+        }
+        if (!confirm(`¿Eliminar ${numero} (${b.customer_name || 'sin cliente'})? No se puede deshacer, y su número no se vuelve a usar.`)) return;
         const supabase = createClient();
-        const { error } = await supabase.from('budgets').delete().eq('id', id);
-        if (!error) fetchBudgets();
+        const { data, error } = await supabase.from('budgets').delete().eq('id', b.id).select('id');
+        if (error || !data || data.length === 0) {
+            alert(`No se eliminó ${numero}: ${error ? error.message : 'revisa que tu sesión siga abierta.'}`);
+            return;
+        }
+        fetchBudgets();
     };
 
     const handleShare = (b: Budget) => {
@@ -635,10 +664,10 @@ export default function PresupuestosPage() {
     };
 
     const glass = {
-        background: '#FFFFFF',
-        border: '1px solid #E2E8F0',
+        background: 'var(--superficie)',
+        border: `1px solid ${tinta(0.1)}`,
         borderRadius: '20px',
-        boxShadow: '0 8px 24px rgba(15,23,42,0.06)',
+        boxShadow: 'var(--sombra-tarjeta)',
     };
 
     return (
@@ -646,7 +675,7 @@ export default function PresupuestosPage() {
             className="presupuestos-page"
             style={{
                 minHeight: '100vh',
-                background: '#F3F4F6',
+                background: 'var(--bg-primary)',
                 paddingBottom: '110px',
                 width: '100%',
                 maxWidth: '100%',
@@ -658,8 +687,8 @@ export default function PresupuestosPage() {
                 className="presupuestos-header"
                 style={{
                 position: 'sticky', top: 0, zIndex: 50,
-                background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(20px)',
-                padding: '14px 16px', borderBottom: '1px solid #E2E8F0',
+                background: 'var(--barra-fondo)', backdropFilter: 'blur(20px)',
+                padding: '14px 16px', borderBottom: `1px solid ${tinta(0.1)}`,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
@@ -668,8 +697,9 @@ export default function PresupuestosPage() {
                 maxWidth: '100%',
                 boxSizing: 'border-box',
             }}>
-                <h1 className="presupuestos-title" style={{ color: '#0F172A', fontSize: '20px', fontWeight: 800, margin: 0, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Presupuestos</h1>
+                <h1 className="presupuestos-title" style={{ color: 'var(--label-primary)', fontSize: '20px', fontWeight: 800, margin: 0, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Presupuestos</h1>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                    <BotonTema compacto />
                     <button
                         type="button"
                         onClick={() => setFiltrosAbiertos(true)}
@@ -677,9 +707,9 @@ export default function PresupuestosPage() {
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: '5px',
-                            background: hayFiltrosActivos ? 'rgba(0,122,255,0.12)' : '#FFFFFF',
-                            color: hayFiltrosActivos ? '#007AFF' : '#334155',
-                            border: hayFiltrosActivos ? '1px solid rgba(0,122,255,0.35)' : '1px solid #E2E8F0',
+                            background: hayFiltrosActivos ? tonoFondo('var(--tono-azul)', 12) : 'var(--superficie)',
+                            color: hayFiltrosActivos ? 'var(--tono-azul)' : tintaTexto(0.75),
+                            border: hayFiltrosActivos ? `1px solid ${tonoFondo('var(--tono-azul)', 35)}` : `1px solid ${tinta(0.1)}`,
                             borderRadius: '10px',
                             padding: '8px 12px',
                             fontSize: '12px',
@@ -693,18 +723,18 @@ export default function PresupuestosPage() {
                                 width: '6px',
                                 height: '6px',
                                 borderRadius: '999px',
-                                background: '#007AFF',
+                                background: 'var(--tono-azul)',
                                 display: 'inline-block',
                             }} />
                         ) : null}
                     </button>
                     <Link href="/ventas">
                         <button style={{
-                            background: '#007AFF', color: 'white', border: 'none',
+                            background: 'var(--tono-azul)', color: 'white', border: 'none',
                             borderRadius: '10px', padding: '8px 10px', fontWeight: 700,
                             fontSize: '12px', cursor: 'pointer', whiteSpace: 'nowrap'
                         }}>
-                            + Nuevo presupuesto
+                            + Nuevo
                         </button>
                     </Link>
                 </div>
@@ -736,20 +766,20 @@ export default function PresupuestosPage() {
                     }}
                 >
                     {[
-                        { label: filter === 'ventas' ? 'Vendido' : 'Aprobado', value: `$${formatUSD(stats.totalAprobado)}`, color: '#34C759' },
-                        { label: 'Por pagar', value: `$${formatUSD(stats.totalPorPagar)}`, color: '#F59E0B' },
-                        { label: 'Pagado', value: `$${formatUSD(stats.totalPagado)}`, color: '#10B981' },
+                        { label: filter === 'ventas' ? 'Vendido' : 'Aprobado', value: `$${formatUSD(stats.totalAprobado)}`, color: 'var(--tono-verde)' },
+                        { label: 'Por pagar', value: `$${formatUSD(stats.totalPorPagar)}`, color: 'var(--tono-naranja)' },
+                        { label: 'Pagado', value: `$${formatUSD(stats.totalPagado)}`, color: 'var(--tono-verde)' },
                     ].map((kpi, i) => (
                         <div
                             key={kpi.label}
                             style={{
                                 padding: '0 10px',
                                 minWidth: 0,
-                                borderLeft: i === 0 ? 'none' : '1px solid #E2E8F0',
+                                borderLeft: i === 0 ? 'none' : `1px solid ${tinta(0.1)}`,
                             }}
                         >
                             <p style={{
-                                color: '#94A3B8',
+                                color: tintaTexto(0.4),
                                 fontSize: '10px',
                                 fontWeight: 700,
                                 textTransform: 'uppercase',
@@ -806,14 +836,14 @@ export default function PresupuestosPage() {
                                 // «Todos» y «Ventas» no son un estado: llevan su propio color.
                                 const estilo =
                                     f === 'todos'
-                                        ? { short: 'Todos', label: 'Todos', text: '#007AFF', bg: '#DBEAFE' }
+                                        ? pastilla('#007AFF', 'Todos', 'Todos')
                                         : f === 'ventas'
-                                          ? { short: 'Ventas', label: 'Ventas: aprobados, por pagar y pagados', text: '#047857', bg: '#D1FAE5' }
+                                          ? pastilla('#30B158', 'Ventas: aprobados, por pagar y pagados', 'Ventas')
                                           : CLASIFICACION_COLORS[f];
                                 const label = estilo.short;
-                                const text = active ? estilo.text : '#475569';
-                                const bg = active ? estilo.bg : '#FFFFFF';
-                                const border = active ? `1px solid ${estilo.text}55` : '1px solid #E2E8F0';
+                                const text = active ? estilo.text : tintaTexto(0.65);
+                                const bg = active ? estilo.bg : 'var(--superficie)';
+                                const border = active ? `1px solid ${estilo.borde}` : `1px solid ${tinta(0.1)}`;
                                 return (
                                     <button
                                         key={f}
@@ -877,10 +907,10 @@ export default function PresupuestosPage() {
                     labelStyle={labelFiltroStyle}
                 />
                 {loading ? (
-                    <p style={{ textAlign: 'center', color: '#94A3B8', marginTop: '40px' }}>Cargando...</p>
+                    <p style={{ textAlign: 'center', color: tintaTexto(0.4), marginTop: '40px' }}>Cargando...</p>
                 ) : budgets.length === 0 ? (
                     <div style={{ textAlign: 'center', marginTop: '60px' }}>
-                        <p style={{ color: '#64748B', fontSize: '15px', fontWeight: 600 }}>
+                        <p style={{ color: tintaTexto(0.55), fontSize: '15px', fontWeight: 600 }}>
                             {hayFiltrosActivos ? 'Ningún presupuesto coincide con los filtros' : 'No hay presupuestos'}
                         </p>
                     </div>
@@ -910,8 +940,8 @@ export default function PresupuestosPage() {
                                     )
                                 }
                                 onShare={() => handleShare(b)}
-                                onDelete={() => deleteBudget(b.id)}
-                                onUpdateStatus={(status) => updateStatus(b.id, status)}
+                                onDelete={() => deleteBudget(b)}
+                                onUpdateStatus={(status) => updateStatus(b, status)}
                                 onAbono={() => setCobroId(b.id)}
                             />
                         ))}
