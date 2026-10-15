@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { InyeccionCapitalRow } from '@/lib/contabilidad/inyeccionesCapitalTypes';
 import { useTasaBcvHoy } from '@/lib/contabilidad/useTasaBcvHoy';
@@ -196,6 +196,34 @@ export default function InyeccionesAvanzadasPage() {
   useEffect(() => {
     void cargarHistorial();
   }, [cargarHistorial]);
+
+  const [borrandoId, setBorrandoId] = useState<string | null>(null);
+
+  const borrarInyeccion = async (iny: InyeccionCapitalRow) => {
+    const resumen =
+      `${iny.proyecto_nombre ?? 'Obra'} · ${iny.origen_fondo}\n` +
+      `$${fmtUsd(iny.monto_usd)} (${iny.monto_recibido} ${iny.moneda_recibida}) · ` +
+      `ingreso ${iny.fecha_ingreso ?? '—'}`;
+    const ok = window.confirm(
+      `¿Borrar esta inyección de capital?\n\n${resumen}\n\n` +
+        'Deja de contar como ingreso en el CCO y en el saldo de la obra. No se puede deshacer.',
+    );
+    if (!ok) return;
+    setBorrandoId(iny.id);
+    try {
+      const res = await fetch(`/api/contabilidad/inyecciones/${encodeURIComponent(iny.id)}`, {
+        method: 'DELETE',
+      });
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(json.error || 'No se pudo borrar la inyección.');
+      toast.success('Inyección borrada y saldo de la obra recalculado.');
+      await cargarHistorial();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'No se pudo borrar la inyección.');
+    } finally {
+      setBorrandoId(null);
+    }
+  };
 
   const resetFormulario = () => {
     setObraSel('');
@@ -579,12 +607,15 @@ export default function InyeccionesAvanzadasPage() {
                   <th className="p-4">Origen / cuenta</th>
                   <th className="p-4 text-center">Tasas</th>
                   <th className="p-4 text-right">Monto neto</th>
+                  <th className="p-4 w-12">
+                    <span className="sr-only">Acciones</span>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/[0.02] text-xs text-zinc-300">
                 {inyecciones.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="p-8 text-center text-zinc-500">
+                    <td colSpan={5} className="p-8 text-center text-zinc-500">
                       Sin inyecciones registradas.
                     </td>
                   </tr>
@@ -631,6 +662,22 @@ export default function InyeccionesAvanzadasPage() {
                         <div className="text-zinc-500 text-[11px] mt-0.5">
                           Bs. {fmtBs(iny.monto_ves)}
                         </div>
+                      </td>
+                      <td className="p-4 text-right">
+                        <button
+                          type="button"
+                          onClick={() => void borrarInyeccion(iny)}
+                          disabled={borrandoId !== null}
+                          title="Borrar inyección"
+                          aria-label={`Borrar inyección de $${fmtUsd(iny.monto_usd)} del ${iny.fecha_ingreso ?? ''}`}
+                          className="inline-flex items-center justify-center rounded-lg p-2 text-zinc-500 hover:bg-red-500/10 hover:text-red-400 disabled:opacity-40"
+                        >
+                          {borrandoId === iny.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
+                        </button>
                       </td>
                     </tr>
                   ))
