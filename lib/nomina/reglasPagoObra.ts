@@ -52,7 +52,7 @@ export const CICLOS_CUATRO_SEMANAS_POR_ANIO = 13;
  * imputada a prestaciones sociales cuente como anticipo (art. 144 LOTTT exige la solicitud).
  */
 export const SOLICITUD_ANTICIPO_SEPTIMA_TEXTO =
-  'Declaro que la semana adicional de la Cláusula SÉPTIMA de mi contrato, causada por cada cuatro semanas trabajadas, se pagará al terminar la relación de trabajo e imputará a prestaciones sociales, vacaciones, utilidades y demás conceptos, conforme a la LOTTT y a la Convención Colectiva.';
+  'Declaro que la semana adicional de la Cláusula SÉPTIMA de mi contrato, causada por cada cuatro semanas consecutivas trabajadas, se pagará al terminar la relación de trabajo e imputará a prestaciones sociales, vacaciones, utilidades y demás conceptos, conforme a la LOTTT y a la Convención Colectiva.';
 
 export const CESTA_MENSUAL_VES_ACTA = ALIMENTACION_MENSUAL_VES_HOMOLOGADA_2026;
 export const FECHA_ANCLAJE_CESTA_ISO = FECHA_FIRMA_ACUERDO_2026;

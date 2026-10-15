@@ -98,10 +98,10 @@ const ETIQUETAS: Record<string, { etiqueta: string; ayuda: string }> = {
   },
   CONTRATO_SEMANA_ADICIONAL_USD: {
     etiqueta: 'Semana adicional (monto fijo USD)',
-    ayuda: 'Cl. SÉPTIMA: 90 USD ayudante / 115 USD clasificado. Nace cada 4 semanas y se paga al finiquito.',
+    ayuda: 'Cl. SÉPTIMA: 90 USD ayudante / 115 USD clasificado. Nace cada 4 semanas seguidas y se paga al finiquito.',
   },
   CONTRATO_ANTICIPO_CUATRO_SEMANAS_USD: {
-    etiqueta: 'Semana adicional cada cuatro semanas',
+    etiqueta: 'Semana adicional cada cuatro semanas seguidas',
     ayuda: 'Reservado. La Cl. SÉPTIMA usa CONTRATO_SEMANA_ADICIONAL_USD (90 o 115 USD al finiquito).',
   },
   CONTRATO_INGRESO_SEMANAL_USD_TOTAL: { etiqueta: 'Ingreso semanal total USD', ayuda: 'Reservado; el PDF usa salario + cesta + complemento.' },
