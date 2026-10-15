@@ -46,10 +46,8 @@ import {
 import {
   asegurarMaterialesLineasCompra,
   mensajeLineasSinMaterialSku,
-  resolverMaterialIdLineasCompra,
 } from '@/lib/almacen/resolverMaterialIdPorSku';
-import { crearCuarentenaDesdeFactura } from '@/lib/almacen/crearCuarentenaDesdeFactura';
-import { notificarCuarentenaParaInvoice } from '@/lib/almacen/notificarCuarentenaParaInvoice';
+import { encaminarMercanciaFactura } from '@/lib/compras/encaminarMercanciaFactura';
 
 export function linkConfirmarCompraTelegram(pendingId: string, baseUrl?: string): string {
   const base = (
@@ -160,22 +158,21 @@ async function retornarDesdeCompraExistente(
     })
     .eq('id', params.pendingId);
 
-  const resuelto = await resolverMaterialIdLineasCompra(supabase, params.compraId);
-  const cuarentena = await crearCuarentenaDesdeFactura(supabase, {
+  // Cuarentena + aviso al depositario + retiro para Logística (antes este camino no creaba retiro).
+  const mercancia = await encaminarMercanciaFactura(supabase, {
     purchaseInvoiceId: params.purchaseInvoiceId,
+    contabilidadCompraId: params.compraId,
+    proyectoId: params.proyectoId,
     ubicacionDestinoId: params.ubicacionDestinoId,
-    lineas: resuelto.lineas.map((l) => ({
-      material_id: l.material_id,
-      descripcion: l.descripcion,
-      cantidad: l.cantidad,
-      precio_unitario: l.precio_unitario,
-    })),
+    numeroFactura: params.extracted.invoice_number ?? null,
+    proveedorNombre: params.extracted.supplier_name ?? null,
   });
-  let notificado = false;
-  if (cuarentena.lineasCreadas > 0 || cuarentena.yaExistia) {
-    const notify = await notificarCuarentenaParaInvoice(supabase, params.purchaseInvoiceId);
-    notificado = Boolean(notify.ok && !notify.skipped);
-  }
+  if (mercancia.error) throw new Error(mercancia.error);
+  const cuarentena = {
+    lineasCreadas: mercancia.lineasCuarentena,
+    yaExistia: mercancia.cuarentenaYaExistia,
+  };
+  const notificado = mercancia.notificado;
   return {
     compraId: params.compraId,
     purchaseInvoiceId: params.purchaseInvoiceId,
@@ -592,9 +589,16 @@ async function confirmarCompraDesdeCanalInterno(
     };
   }
 
-  const cuarentena = await crearCuarentenaDesdeFactura(supabase, {
+  // Cuarentena + aviso al depositario + retiro para Logística.
+  const mercancia = await encaminarMercanciaFactura(supabase, {
     purchaseInvoiceId,
+    contabilidadCompraId: compraId,
+    procuraId: params.procuraId,
+    proyectoId,
     ubicacionDestinoId,
+    numeroFactura: extracted.invoice_number,
+    proveedorNombre: extracted.supplier_name,
+    solicitadoPorChatId: row.chat_id,
     lineas: lineasConMaterial.map((l) => ({
       material_id: l.material_id!,
       descripcion: l.descripcion,
@@ -604,27 +608,12 @@ async function confirmarCompraDesdeCanalInterno(
       unidad: l.unidad,
     })),
   });
-
-  let notificado = false;
-  if (cuarentena.lineasCreadas > 0 || cuarentena.yaExistia) {
-    const notify = await notificarCuarentenaParaInvoice(supabase, purchaseInvoiceId);
-    notificado = Boolean(notify.ok && !notify.skipped);
-  }
-
-  // Hay mercancía por recibir: avisar a quien la retira (no bloquea la confirmación).
-  if (cuarentena.lineasCreadas > 0) {
-    const { avisarRetiroCompraPendiente } = await import('@/lib/telegram/retiroCompraTelegram');
-    await avisarRetiroCompraPendiente(supabase, {
-      purchaseInvoiceId,
-      contabilidadCompraId: compraId,
-      procuraId: params.procuraId,
-      proyectoId,
-      ubicacionDestinoId,
-      numeroFactura: extracted.invoice_number,
-      proveedorNombre: extracted.supplier_name,
-      solicitadoPorChatId: row.chat_id,
-    });
-  }
+  if (mercancia.error) throw new Error(mercancia.error);
+  const cuarentena = {
+    lineasCreadas: mercancia.lineasCuarentena,
+    yaExistia: mercancia.cuarentenaYaExistia,
+  };
+  const notificado = mercancia.notificado;
 
   auditarCompraConfirmadaCanal({
     row,
