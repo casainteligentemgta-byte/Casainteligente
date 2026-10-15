@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/server';
 import { requireCcoAcceso } from '@/lib/auth/requireCcoRoute';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
@@ -204,8 +205,10 @@ export async function POST(req: Request) {
   // La función solo la puede ejecutar el servidor (migración 357); el permiso ya se verificó arriba.
   const admin = supabaseAdminForRoute();
   if (!admin.ok) return admin.response;
+  // Mismo tipo que usan las funciones de lib/: acepta cualquier nombre de RPC.
+  const servidor: SupabaseClient = admin.client;
 
-  const { data: id, error } = await admin.client.rpc('ci_registrar_inyeccion_capital', {
+  const { data: id, error } = await servidor.rpc('ci_registrar_inyeccion_capital', {
     p_proyecto_id: proyectoId,
     p_origen_fondo: origen,
     p_monto_recibido: monto,
