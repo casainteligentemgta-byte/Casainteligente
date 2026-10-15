@@ -24,6 +24,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import type { Product } from '@/components/ventas/ProductSearch';
 import { coloresCategoria } from '@/lib/productos/categoriasCatalogo';
+import { tinta, tintaTexto } from '@/lib/tema/tinta';
 
 export interface LineItem {
     id: string;
@@ -148,7 +149,7 @@ function LineItemProductThumb({ imagen }: { imagen?: string | null }) {
                 borderRadius: 12,
                 objectFit: 'cover',
                 flexShrink: 0,
-                border: '1px solid rgba(255,255,255,0.12)',
+                border: `1px solid ${tinta(0.12)}`,
                 background: 'rgba(0,0,0,0.35)',
             }}
         />
@@ -156,10 +157,10 @@ function LineItemProductThumb({ imagen }: { imagen?: string | null }) {
 }
 
 const glassCard: CSSProperties = {
-    background: 'rgba(255,255,255,0.06)',
+    background: tinta(0.06),
     backdropFilter: 'blur(20px)',
     WebkitBackdropFilter: 'blur(20px)',
-    border: '1px solid rgba(255,255,255,0.1)',
+    border: `1px solid ${tinta(0.1)}`,
     borderRadius: '20px',
 };
 
@@ -245,18 +246,18 @@ function LineItemCard({
                     flexShrink: 0,
                 }}>
                     <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" style={{ opacity: 0.45 }}>
-                        <circle cx="3" cy="3" r="1.15" fill="rgba(255,255,255,0.85)" />
-                        <circle cx="9" cy="3" r="1.15" fill="rgba(255,255,255,0.85)" />
-                        <circle cx="3" cy="6" r="1.15" fill="rgba(255,255,255,0.85)" />
-                        <circle cx="9" cy="6" r="1.15" fill="rgba(255,255,255,0.85)" />
-                        <circle cx="3" cy="9" r="1.15" fill="rgba(255,255,255,0.85)" />
-                        <circle cx="9" cy="9" r="1.15" fill="rgba(255,255,255,0.85)" />
+                        <circle cx="3" cy="3" r="1.15" fill={tinta(0.85)} />
+                        <circle cx="9" cy="3" r="1.15" fill={tinta(0.85)} />
+                        <circle cx="3" cy="6" r="1.15" fill={tinta(0.85)} />
+                        <circle cx="9" cy="6" r="1.15" fill={tinta(0.85)} />
+                        <circle cx="3" cy="9" r="1.15" fill={tinta(0.85)} />
+                        <circle cx="9" cy="9" r="1.15" fill={tinta(0.85)} />
                     </svg>
                     <div style={{
                         width: '28px', height: '28px', borderRadius: '8px',
                         background: 'rgba(0,122,255,0.15)', border: '1px solid rgba(0,122,255,0.25)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: '12px', fontWeight: 700, color: '#007AFF',
+                        fontSize: '12px', fontWeight: 700, color: 'var(--tono-azul)',
                     }}>
                         {idx + 1}
                     </div>
@@ -266,14 +267,14 @@ function LineItemCard({
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
                         <CategoryBadge cat={item.product.categoria} />
                         {item.product.marca && (
-                            <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)' }}>{item.product.marca}</span>
+                            <span style={{ fontSize: '11px', color: tintaTexto(0.4) }}>{item.product.marca}</span>
                         )}
                     </div>
                     <p style={{ color: 'var(--label-primary)', fontSize: '14px', fontWeight: 600, lineHeight: 1.3 }}>
                         {item.product.nombre}
                     </p>
                     {item.product.modelo && (
-                        <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '12px', marginTop: '2px' }}>
+                        <p style={{ color: tintaTexto(0.35), fontSize: '12px', marginTop: '2px' }}>
                             Modelo: {item.product.modelo}
                         </p>
                     )}
@@ -290,14 +291,14 @@ function LineItemCard({
                     }}
                 >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                        <path d="M18 6L6 18M6 6l12 12" stroke="#FF3B30" strokeWidth="2.5" strokeLinecap="round" />
+                        <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
                     </svg>
                 </button>
             </div>
 
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0', background: 'rgba(255,255,255,0.06)', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.1)', overflow: 'hidden' }}>
-                    <button type="button" onClick={() => onUpdateQty(item.id, item.qty - 1)} style={{ width: '34px', height: '34px', background: 'none', border: 'none', cursor: 'pointer', color: 'white', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0', background: tinta(0.06), borderRadius: '10px', border: `1px solid ${tinta(0.1)}`, overflow: 'hidden' }}>
+                    <button type="button" onClick={() => onUpdateQty(item.id, item.qty - 1)} style={{ width: '34px', height: '34px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--label-primary)', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
                     <EditableNumberInput
                         value={item.qty}
                         emptyFallback={1}
@@ -306,13 +307,13 @@ function LineItemCard({
                         inputMode="numeric"
                         onCommit={(n) => onUpdateQty(item.id, n)}
                         aria-label="Cantidad"
-                        style={{ width: '40px', background: 'transparent', border: 'none', outline: 'none', textAlign: 'center', color: 'white', fontSize: '14px', fontWeight: 700, fontFamily: 'inherit' }}
+                        style={{ width: '40px', background: 'transparent', border: 'none', outline: 'none', textAlign: 'center', color: 'var(--label-primary)', fontSize: '14px', fontWeight: 700, fontFamily: 'inherit' }}
                     />
-                    <button type="button" onClick={() => onUpdateQty(item.id, item.qty + 1)} style={{ width: '34px', height: '34px', background: 'none', border: 'none', cursor: 'pointer', color: '#007AFF', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
+                    <button type="button" onClick={() => onUpdateQty(item.id, item.qty + 1)} style={{ width: '34px', height: '34px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--tono-azul)', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(255,255,255,0.06)', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.1)', padding: '0 10px', height: '34px' }}>
-                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '13px' }}>$</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: tinta(0.06), borderRadius: '10px', border: `1px solid ${tinta(0.1)}`, padding: '0 10px', height: '34px' }}>
+                    <span style={{ color: tintaTexto(0.4), fontSize: '13px' }}>$</span>
                     <EditableNumberInput
                         value={item.unitPrice}
                         emptyFallback={0}
@@ -321,13 +322,13 @@ function LineItemCard({
                         inputMode="decimal"
                         onCommit={(n) => onUpdatePrice(item.id, n)}
                         aria-label="Precio unitario"
-                        style={{ width: '70px', background: 'transparent', border: 'none', outline: 'none', color: 'white', fontSize: '14px', fontWeight: 600, fontFamily: 'inherit' }}
+                        style={{ width: '70px', background: 'transparent', border: 'none', outline: 'none', color: 'var(--label-primary)', fontSize: '14px', fontWeight: 600, fontFamily: 'inherit' }}
                     />
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(255,149,0,0.08)', borderRadius: '10px', border: '1px solid rgba(255,149,0,0.2)', padding: '0 10px', height: '34px' }}>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                        <path d="M19 5L5 19M9 7a2 2 0 11-4 0 2 2 0 014 0zm10 10a2 2 0 11-4 0 2 2 0 014 0z" stroke="#FF9500" strokeWidth="2" strokeLinecap="round" />
+                        <path d="M19 5L5 19M9 7a2 2 0 11-4 0 2 2 0 014 0zm10 10a2 2 0 11-4 0 2 2 0 014 0z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                     </svg>
                     <EditableNumberInput
                         value={item.discount}
@@ -337,9 +338,9 @@ function LineItemCard({
                         inputMode="decimal"
                         onCommit={(n) => onUpdateDiscount(item.id, n)}
                         aria-label="Descuento"
-                        style={{ width: '36px', background: 'transparent', border: 'none', outline: 'none', color: '#FF9500', fontSize: '14px', fontWeight: 600, fontFamily: 'inherit' }}
+                        style={{ width: '36px', background: 'transparent', border: 'none', outline: 'none', color: 'var(--tono-naranja)', fontSize: '14px', fontWeight: 600, fontFamily: 'inherit' }}
                     />
-                    <span style={{ color: '#FF9500', fontSize: '13px' }}>%</span>
+                    <span style={{ color: 'var(--tono-naranja)', fontSize: '13px' }}>%</span>
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -350,7 +351,7 @@ function LineItemCard({
                         style={{
                             background: 'rgba(142,142,147,0.12)',
                             border: '1px solid rgba(142,142,147,0.25)',
-                            color: 'rgba(255,255,255,0.85)',
+                            color: tintaTexto(0.85),
                             borderRadius: '10px',
                             height: '34px',
                             padding: '0 12px',
@@ -362,13 +363,13 @@ function LineItemCard({
                     >
                         Seriales
                     </button>
-                    <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)' }}>
+                    <span style={{ fontSize: '11px', color: tintaTexto(0.35) }}>
                         {(item.inventoryItemIds ?? []).filter((x): x is string => Boolean(x)).length}/{item.qty}
                     </span>
                 </div>
 
                 <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
-                    <div style={{ color: '#34C759', fontSize: '16px', fontWeight: 700 }}>${formatUSD(total)}</div>
+                    <div style={{ color: 'var(--tono-verde)', fontSize: '16px', fontWeight: 700 }}>${formatUSD(total)}</div>
                     <div style={{ fontSize: '11px', color: profitPct >= 20 ? 'rgba(52,199,89,0.7)' : 'rgba(255,149,0,0.7)' }}>
                         Margen {profitPct.toFixed(0)}% · +${formatUSD(profit)}
                     </div>
@@ -460,7 +461,7 @@ export default function PresupuestoLineItems({
             {sortableEnabled ? (
                 <p style={{
                     fontSize: '11px',
-                    color: 'rgba(255,255,255,0.42)',
+                    color: tintaTexto(0.42),
                     margin: '0 2px 8px',
                     lineHeight: 1.4,
                 }}>

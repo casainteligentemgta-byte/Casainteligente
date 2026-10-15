@@ -1,12 +1,20 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback, useRef, Suspense } from 'react';
+import BotonTema from '@/components/tema/BotonTema';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { withTimeout } from '@/lib/http/withTimeout';
 import { avisoGuardarSinGanancia } from '@/lib/presupuesto/avisoMargen';
+import {
+    avisoEditarAceptado,
+    fechaHoraPresupuesto,
+    numeroPresupuesto,
+    rutaVistaPrevia,
+} from '@/lib/presupuesto/datosPresupuesto';
 import { createClient } from '@/lib/supabase/client';
 import ProductSearch, { Product } from '@/components/ventas/ProductSearch';
+import { tinta, tintaTexto } from '@/lib/tema/tinta';
 import PresupuestoLineItems, {
     EditableNumberInput,
     formatUSD,
@@ -122,6 +130,12 @@ function VentasContent() {
     const customerInputRef = useRef<HTMLInputElement>(null);
     const legacyParamsResolved = useRef(false);
     const [budgetId, setBudgetId] = useState<string | null>(null);
+    /** Lo que pone la base y no se cambia: número, alta y última modificación. */
+    const [numeroCorrelativo, setNumeroCorrelativo] = useState<number | null>(null);
+    const [creadoEl, setCreadoEl] = useState<string | null>(null);
+    const [modificadoEl, setModificadoEl] = useState<string | null>(null);
+    /** Estado del presupuesto guardado (para avisar si ya lo aceptó el cliente). */
+    const [estadoGuardado, setEstadoGuardado] = useState<string | null>(null);
     const [fecha, setFecha] = useState(hoyFechaPresupuesto);
     const [notes, setNotes] = useState('');
     const [showZelle, setShowZelle] = useState(true);
@@ -317,6 +331,10 @@ function VentasContent() {
                         setCustomerId(data.customer_id);
                         setNotes(data.notes || '');
                         setFecha(fechaDocumentoDeBudget(data as { fecha?: unknown; created_at?: unknown }));
+                        setNumeroCorrelativo(data.numero_correlativo != null ? Number(data.numero_correlativo) : null);
+                        setCreadoEl((data.created_at as string | null) ?? null);
+                        setModificadoEl((data.updated_at as string | null) ?? null);
+                        setEstadoGuardado((data.status as string | null) ?? null);
                         setShowZelle(data.show_zelle !== false); // Default to true if undefined
 
                         if (data.customer_id) {
@@ -444,6 +462,10 @@ function VentasContent() {
         );
         if (avisoMargen && !window.confirm(avisoMargen)) return;
 
+        // Ya aceptado por el cliente: guardar cambia lo que aceptó.
+        const avisoAceptado = budgetId ? avisoEditarAceptado(estadoGuardado, numeroCorrelativo) : null;
+        if (avisoAceptado && hayCambiosSinGuardar && !window.confirm(`${avisoAceptado}\n\n¿Guardar de todos modos?`)) return;
+
         setSaving(true);
         const supabase = createClient();
 
@@ -477,11 +499,11 @@ function VentasContent() {
             if (budgetId) {
                 // Con `select` se sabe si de verdad se guardó: si el presupuesto fue borrado o la
                 // sesión se cerró, no cambia ninguna fila y antes se decía «guardado» igual.
-                const hecho = await supabase.from('budgets').update(payload).eq('id', budgetId).select('id');
+                const hecho = await supabase.from('budgets').update(payload).eq('id', budgetId).select('id, updated_at');
                 if (!hecho.error && (!hecho.data || hecho.data.length === 0)) {
                     return { data: null, error: { message: 'no se cambió nada. El presupuesto ya no existe o tu sesión se cerró; vuelve a entrar e inténtalo.' } };
                 }
-                return { data: null, error: hecho.error };
+                return { data: hecho.data ? hecho.data[0] : null, error: hecho.error };
             }
             return supabase.from('budgets').insert([{ ...payload, status: 'no_enviado' }]).select().single();
         };
@@ -499,11 +521,20 @@ function VentasContent() {
         if (res.error) {
             alert('Error al guardar presupuesto: ' + res.error.message);
         } else {
-            if (!budgetId && res.data && typeof (res.data as { id?: unknown }).id === 'string') {
-                setBudgetId((res.data as { id: string }).id);
+            const fila = (res.data ?? null) as { id?: unknown; numero_correlativo?: unknown; created_at?: unknown; updated_at?: unknown } | null;
+            if (!budgetId && fila && typeof fila.id === 'string') {
+                setBudgetId(fila.id);
+                setEstadoGuardado('no_enviado');
+                if (fila.numero_correlativo != null) setNumeroCorrelativo(Number(fila.numero_correlativo));
+                if (typeof fila.created_at === 'string') setCreadoEl(fila.created_at);
             }
+            if (fila && typeof fila.updated_at === 'string') setModificadoEl(fila.updated_at);
             setFirmaGuardada(firma);
-            alert('✅ Presupuesto guardado correctamente');
+            alert(
+                fila && fila.numero_correlativo != null && !budgetId
+                    ? `✅ Presupuesto ${numeroPresupuesto(Number(fila.numero_correlativo))} guardado correctamente`
+                    : '✅ Presupuesto guardado correctamente',
+            );
         }
     };
 
@@ -662,10 +693,11 @@ function VentasContent() {
     const marginPct = subtotal > 0 ? (totalProfit / subtotal) * 100 : 0;
 
     const glass = {
-        background: 'rgba(255,255,255,0.06)',
+        background: 'var(--superficie)',
+        boxShadow: 'var(--sombra-tarjeta)',
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
-        border: '1px solid rgba(255,255,255,0.1)',
+        border: `1px solid ${tinta(0.1)}`,
         borderRadius: '20px',
     } as React.CSSProperties;
 
@@ -681,10 +713,10 @@ function VentasContent() {
                     left: 0,
                     right: 0,
                     zIndex: 80,
-                    background: 'rgba(0,0,0,0.82)',
+                    background: 'var(--barra-fondo)',
                     backdropFilter: 'blur(30px)',
                     WebkitBackdropFilter: 'blur(30px)',
-                    borderBottom: '1px solid rgba(255,255,255,0.08)',
+                    borderBottom: `1px solid ${tinta(0.08)}`,
                     paddingTop: 'max(12px, env(safe-area-inset-top))',
                     paddingLeft: '20px',
                     paddingRight: '20px',
@@ -694,7 +726,7 @@ function VentasContent() {
                 }}
             >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', maxWidth: '900px', margin: '0 auto' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
                         {/* Esta pantalla es parte de Presupuestos: se vuelve a la lista. */}
                         <Link
                             href="/presupuestos"
@@ -705,24 +737,25 @@ function VentasContent() {
                             }}
                             style={{
                                 width: '36px', height: '36px', borderRadius: '10px',
-                                background: 'rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                background: tinta(0.08), display: 'flex', alignItems: 'center', justifyContent: 'center',
                                 flexShrink: 0,
                             }}
                         >
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                                <path d="M15 18l-6-6 6-6" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                <path d="M15 18l-6-6 6-6" stroke="var(--label-primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                             </svg>
                         </Link>
                         <div style={{ minWidth: 0 }}>
-                            <h1 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--label-primary)', lineHeight: 1.15 }}>
-                                {budgetId ? 'Editar presupuesto' : 'Nuevo presupuesto'}
+                            <h1 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--label-primary)', lineHeight: 1.15, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {budgetId ? numeroPresupuesto(numeroCorrelativo) : 'Nuevo'}
                             </h1>
-                            <p style={{ fontSize: '12px', color: 'var(--label-secondary)', marginTop: '2px' }}>
-                                {items.length} producto{items.length !== 1 ? 's' : ''} · ${formatUSD(subtotal)}
+                            <p style={{ fontSize: '12px', color: 'var(--label-secondary)', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {items.length} {items.length === 1 ? 'ítem' : 'ítems'} · ${formatUSD(subtotal)}
                             </p>
                         </div>
                     </div>
-                    <div style={{ display: 'flex', gap: '8px', flexShrink: 0, marginLeft: '8px' }}>
+                    <div style={{ display: 'flex', gap: '8px', flexShrink: 0, marginLeft: '8px', alignItems: 'center' }}>
+                        <BotonTema compacto />
                         <button
                             type="button"
                             onClick={handleSaveBudget}
@@ -732,7 +765,7 @@ function VentasContent() {
                                 border: '1px solid rgba(52,199,89,0.3)',
                                 borderRadius: '12px',
                                 padding: '8px 14px',
-                                color: '#34C759',
+                                color: 'var(--tono-verde)',
                                 fontSize: '13px',
                                 fontWeight: 700,
                                 cursor: saving || items.length === 0 ? 'not-allowed' : 'pointer',
@@ -744,8 +777,8 @@ function VentasContent() {
                             }}
                         >
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                                <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" stroke="#34C759" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                                <polyline points="17 21 17 13 7 13 7 21" stroke="#34C759" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                                <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                                <polyline points="17 21 17 13 7 13 7 21" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
                             </svg>
                             {saving ? '...' : 'Guardar'}
                         </button>
@@ -757,19 +790,26 @@ function VentasContent() {
                                     block: 'start',
                                 });
                             }}
+                            aria-label="Ir al resumen"
+                            title="Resumen"
                             style={{
-                                background: 'rgba(255,255,255,0.08)',
-                                border: '1px solid rgba(255,255,255,0.12)',
+                                background: tinta(0.08),
+                                border: `1px solid ${tinta(0.12)}`,
                                 borderRadius: '12px',
-                                padding: '8px 14px',
-                                color: 'white',
-                                fontSize: '13px',
-                                fontWeight: 600,
+                                width: '36px',
+                                height: '36px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                color: 'var(--label-primary)',
                                 cursor: 'pointer',
-                                fontFamily: 'inherit',
+                                padding: 0,
                             }}
                         >
-                            Resumen
+                            {/* Icono de lista: baja al resumen y total */}
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+                                <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+                            </svg>
                         </button>
                     </div>
                 </div>
@@ -795,21 +835,47 @@ function VentasContent() {
                         style={{
                             width: '100%',
                             maxWidth: '280px',
-                            background: 'rgba(255,255,255,0.06)',
-                            border: '1px solid rgba(255,255,255,0.12)',
+                            background: tinta(0.06),
+                            border: `1px solid ${tinta(0.12)}`,
                             borderRadius: '12px',
                             padding: '12px 14px',
                             color: 'var(--label-primary)',
                             fontSize: '15px',
                             fontWeight: 600,
                             fontFamily: 'inherit',
-                            colorScheme: 'dark',
+                            colorScheme: 'var(--esquema-color, dark)',
                         }}
                     />
                     <p style={{ fontSize: '11px', color: 'var(--label-secondary)', marginTop: '8px', lineHeight: 1.4, opacity: 0.9 }}>
                         Esta fecha aparece en la vista previa, el PDF y el listado. Puedes cambiarla al editar un presupuesto guardado.
                     </p>
+                    {budgetId && (creadoEl || modificadoEl) ? (
+                        <p data-fechas-registro style={{ fontSize: '12px', color: 'var(--label-secondary)', marginTop: '8px', lineHeight: 1.5 }}>
+                            {numeroPresupuesto(numeroCorrelativo)}
+                            {creadoEl ? <> · Creado el {fechaHoraPresupuesto(creadoEl)}</> : null}
+                            {modificadoEl ? <> · Última modificación: {fechaHoraPresupuesto(modificadoEl)}</> : null}
+                        </p>
+                    ) : null}
                 </div>
+
+                {budgetId && avisoEditarAceptado(estadoGuardado, numeroCorrelativo) ? (
+                    <div
+                        data-aviso-aceptado
+                        style={{
+                            ...glass,
+                            padding: '12px 16px',
+                            marginBottom: '16px',
+                            border: '1px solid rgba(255,159,10,0.45)',
+                            background: 'rgba(255,159,10,0.10)',
+                            color: 'var(--label-primary)',
+                            fontSize: '13px',
+                            lineHeight: 1.5,
+                        }}
+                    >
+                        <strong style={{ color: 'var(--tono-naranja, #FF9F0A)' }}>Ojo: </strong>
+                        {avisoEditarAceptado(estadoGuardado, numeroCorrelativo)}
+                    </div>
+                ) : null}
 
                 {/* ── Cliente (solo desde tabla `customers`) ── */}
                 <div style={{ ...glass, padding: '16px', marginBottom: '16px' }}>
@@ -820,7 +886,7 @@ function VentasContent() {
                         {!customerId ? (
                             <Link
                                 href="/clientes"
-                                style={{ fontSize: '11px', fontWeight: 600, color: '#007AFF', textDecoration: 'none' }}
+                                style={{ fontSize: '11px', fontWeight: 600, color: 'var(--tono-azul)', textDecoration: 'none' }}
                             >
                                 Gestionar cliente
                             </Link>
@@ -840,13 +906,13 @@ function VentasContent() {
                                     background: 'rgba(52,199,89,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                                 }}>
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                                        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" stroke="#34C759" strokeWidth="2" strokeLinecap="round" />
-                                        <circle cx="12" cy="7" r="4" stroke="#34C759" strokeWidth="2" />
+                                        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                                        <circle cx="12" cy="7" r="4" stroke="currentColor" strokeWidth="2" />
                                     </svg>
                                 </div>
                                 <p
                                     style={{
-                                        color: '#34C759',
+                                        color: 'var(--tono-verde)',
                                         fontSize: '15px',
                                         fontWeight: 700,
                                         margin: 0,
@@ -864,7 +930,7 @@ function VentasContent() {
                                 style={{
                                     background: 'rgba(255,59,48,0.1)', border: '1px solid rgba(255,59,48,0.2)',
                                     borderRadius: '8px', padding: '6px 10px',
-                                    color: '#FF3B30', fontSize: '11px', fontWeight: 600,
+                                    color: 'var(--tono-rojo)', fontSize: '11px', fontWeight: 600,
                                     cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0,
                                 }}
                             >
@@ -903,8 +969,8 @@ function VentasContent() {
                                         boxSizing: 'border-box',
                                         padding: '10px 40px 10px 12px',
                                         borderRadius: '10px',
-                                        border: '1px solid rgba(255,255,255,0.12)',
-                                        background: 'rgba(255,255,255,0.05)',
+                                        border: `1px solid ${tinta(0.12)}`,
+                                        background: tinta(0.05),
                                         color: 'var(--label-primary)',
                                         fontSize: '14px',
                                         fontFamily: 'inherit',
@@ -935,8 +1001,8 @@ function VentasContent() {
                                         height: '34px',
                                         border: 'none',
                                         borderRadius: '8px',
-                                        background: 'rgba(255,255,255,0.08)',
-                                        color: 'rgba(255,255,255,0.75)',
+                                        background: tinta(0.08),
+                                        color: tintaTexto(0.75),
                                         cursor: customersLoading || customers.length === 0 ? 'not-allowed' : 'pointer',
                                         fontSize: '12px',
                                         lineHeight: 1,
@@ -953,7 +1019,7 @@ function VentasContent() {
                             ) : customers.length === 0 ? (
                                 <p style={{ fontSize: '13px', color: 'var(--label-secondary)' }}>
                                     No hay clientes.{' '}
-                                    <Link href="/clientes" style={{ color: '#34C759', fontWeight: 600 }}>Crear uno en Clientes</Link>
+                                    <Link href="/clientes" style={{ color: 'var(--tono-verde)', fontWeight: 600 }}>Crear uno en Clientes</Link>
                                 </p>
                             ) : customerDropdownOpen ? (
                                 <div
@@ -964,7 +1030,7 @@ function VentasContent() {
                                         maxHeight: '220px',
                                         overflowY: 'auto',
                                         borderRadius: '10px',
-                                        border: '1px solid rgba(255,255,255,0.08)',
+                                        border: `1px solid ${tinta(0.08)}`,
                                         marginBottom: '10px',
                                     }}
                                 >
@@ -983,7 +1049,7 @@ function VentasContent() {
                                                     textAlign: 'left',
                                                     padding: '10px 12px',
                                                     border: 'none',
-                                                    borderBottom: '1px solid rgba(255,255,255,0.06)',
+                                                    borderBottom: `1px solid ${tinta(0.06)}`,
                                                     background: 'transparent',
                                                     cursor: 'pointer',
                                                     fontFamily: 'inherit',
@@ -992,7 +1058,7 @@ function VentasContent() {
                                                 <span style={{ display: 'block', color: 'var(--label-primary)', fontSize: '14px', fontWeight: 600 }}>
                                                     {(c.nombre || '').trim() || 'Sin nombre'}
                                                 </span>
-                                                <span style={{ display: 'block', color: 'rgba(255,255,255,0.4)', fontSize: '11px', marginTop: '2px' }}>
+                                                <span style={{ display: 'block', color: tintaTexto(0.4), fontSize: '11px', marginTop: '2px' }}>
                                                     {[c.rif, c.movil, c.email].filter(Boolean).join(' · ') || 'Sin datos de contacto'}
                                                 </span>
                                             </button>
@@ -1011,7 +1077,7 @@ function VentasContent() {
                             <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--label-secondary)', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
                                 Margen Global
                             </label>
-                            <span style={{ fontSize: '13px', color: '#34C759', fontWeight: 700 }}>{globalMargin}%</span>
+                            <span style={{ fontSize: '13px', color: 'var(--tono-verde)', fontWeight: 700 }}>{globalMargin}%</span>
                         </div>
                         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
                             {MARGIN_PRESETS.map(m => (
@@ -1022,9 +1088,9 @@ function VentasContent() {
                                     style={{
                                         padding: '7px 14px',
                                         borderRadius: '10px',
-                                        border: globalMargin === m ? '1px solid #34C759' : '1px solid rgba(255,255,255,0.12)',
-                                        background: globalMargin === m ? 'rgba(52,199,89,0.15)' : 'rgba(255,255,255,0.05)',
-                                        color: globalMargin === m ? '#34C759' : 'var(--label-secondary)',
+                                        border: globalMargin === m ? '1px solid #34C759' : `1px solid ${tinta(0.12)}`,
+                                        background: globalMargin === m ? 'rgba(52,199,89,0.15)' : tinta(0.05),
+                                        color: globalMargin === m ? 'var(--tono-verde)' : 'var(--label-secondary)',
                                         fontSize: '13px',
                                         fontWeight: 600,
                                         cursor: 'pointer',
@@ -1042,10 +1108,10 @@ function VentasContent() {
                                     gap: '6px',
                                     background: !MARGIN_PRESETS.includes(globalMargin)
                                         ? 'rgba(52,199,89,0.12)'
-                                        : 'rgba(255,255,255,0.05)',
+                                        : tinta(0.05),
                                     border: !MARGIN_PRESETS.includes(globalMargin)
                                         ? '1px solid rgba(52,199,89,0.45)'
-                                        : '1px solid rgba(255,255,255,0.12)',
+                                        : `1px solid ${tinta(0.12)}`,
                                     borderRadius: '10px',
                                     padding: '4px 10px',
                                 }}
@@ -1064,7 +1130,7 @@ function VentasContent() {
                                         background: 'transparent',
                                         border: 'none',
                                         outline: 'none',
-                                        color: '#34C759',
+                                        color: 'var(--tono-verde)',
                                         fontSize: '13px',
                                         fontWeight: 700,
                                         fontFamily: 'inherit',
@@ -1091,7 +1157,7 @@ function VentasContent() {
                                     style={{
                                         background: 'transparent',
                                         border: 'none',
-                                        color: 'rgba(255,255,255,0.45)',
+                                        color: tintaTexto(0.45),
                                         fontSize: '12px',
                                         fontWeight: 600,
                                         cursor: 'pointer',
@@ -1117,8 +1183,8 @@ function VentasContent() {
                                 padding: '12px 14px',
                                 borderRadius: '12px',
                                 border: '1px dashed rgba(255,255,255,0.2)',
-                                background: 'rgba(255,255,255,0.04)',
-                                color: 'rgba(255,255,255,0.75)',
+                                background: tinta(0.04),
+                                color: tintaTexto(0.75),
                                 fontSize: '13px',
                                 fontWeight: 700,
                                 cursor: 'pointer',
@@ -1181,8 +1247,8 @@ function VentasContent() {
                         <div
                             style={{
                                 width: 'min(720px, 100%)',
-                                background: 'rgba(10,10,10,0.95)',
-                                border: '1px solid rgba(255,255,255,0.10)',
+                                background: 'var(--superficie-alta)',
+                                border: `1px solid ${tinta(0.10)}`,
                                 borderRadius: '18px',
                                 boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
                                 overflow: 'hidden',
@@ -1191,7 +1257,7 @@ function VentasContent() {
                             <div
                                 style={{
                                     padding: '14px 16px',
-                                    borderBottom: '1px solid rgba(255,255,255,0.08)',
+                                    borderBottom: `1px solid ${tinta(0.08)}`,
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'space-between',
@@ -1199,8 +1265,8 @@ function VentasContent() {
                                 }}
                             >
                                 <div>
-                                    <div style={{ fontSize: '14px', fontWeight: 900, color: 'white' }}>Asignar seriales</div>
-                                    <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.45)', marginTop: '2px' }}>
+                                    <div style={{ fontSize: '14px', fontWeight: 900, color: 'var(--label-primary)' }}>Asignar seriales</div>
+                                    <div style={{ fontSize: '11px', color: tintaTexto(0.45), marginTop: '2px' }}>
                                         Solo seriales con valor en inventario
                                     </div>
                                 </div>
@@ -1213,7 +1279,7 @@ function VentasContent() {
                                     style={{
                                         background: 'transparent',
                                         border: 'none',
-                                        color: 'rgba(255,255,255,0.8)',
+                                        color: tintaTexto(0.8),
                                         cursor: 'pointer',
                                         fontSize: '18px',
                                         lineHeight: 1,
@@ -1226,9 +1292,9 @@ function VentasContent() {
 
                             <div style={{ padding: '14px 16px', maxHeight: '55vh', overflow: 'auto' }}>
                                 {serialModalLoading ? (
-                                    <div style={{ color: 'rgba(255,255,255,0.5)', fontWeight: 700 }}>Cargando seriales…</div>
+                                    <div style={{ color: tintaTexto(0.5), fontWeight: 700 }}>Cargando seriales…</div>
                                 ) : serialCandidates.length === 0 ? (
-                                    <div style={{ color: 'rgba(255,255,255,0.5)', fontWeight: 700 }}>
+                                    <div style={{ color: tintaTexto(0.5), fontWeight: 700 }}>
                                         No se encontraron seriales para este producto en `global_inventory`.
                                     </div>
                                 ) : (
@@ -1244,7 +1310,7 @@ function VentasContent() {
                                                         gap: '10px',
                                                         padding: '12px',
                                                         borderRadius: '14px',
-                                                        border: '1px solid rgba(255,255,255,0.08)',
+                                                        border: `1px solid ${tinta(0.08)}`,
                                                         background: checked ? 'rgba(0,122,255,0.12)' : 'transparent',
                                                         cursor: 'pointer',
                                                     }}
@@ -1256,8 +1322,8 @@ function VentasContent() {
                                                         style={{ marginTop: '4px' }}
                                                     />
                                                     <div style={{ flex: 1, minWidth: 0 }}>
-                                                        <div style={{ color: 'white', fontWeight: 900, fontSize: '13px' }}>{c.serial_number}</div>
-                                                        <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px', marginTop: '2px' }}>
+                                                        <div style={{ color: 'var(--label-primary)', fontWeight: 900, fontSize: '13px' }}>{c.serial_number}</div>
+                                                        <div style={{ color: tintaTexto(0.45), fontSize: '11px', marginTop: '2px' }}>
                                                             {c.sap_code ? `SAP: ${c.sap_code} · ` : ''}
                                                             {c.location ? `Ubicación: ${c.location}` : 'Sin ubicación'}
                                                         </div>
@@ -1272,14 +1338,14 @@ function VentasContent() {
                             <div
                                 style={{
                                     padding: '14px 16px',
-                                    borderTop: '1px solid rgba(255,255,255,0.08)',
+                                    borderTop: `1px solid ${tinta(0.08)}`,
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'space-between',
                                     gap: '10px',
                                 }}
                             >
-                                <div style={{ color: 'rgba(255,255,255,0.55)', fontWeight: 800, fontSize: '12px' }}>
+                                <div style={{ color: tintaTexto(0.55), fontWeight: 800, fontSize: '12px' }}>
                                     Seleccionados: {serialSelectedIds.length}
                                 </div>
                                 <div style={{ display: 'flex', gap: '10px' }}>
@@ -1292,9 +1358,9 @@ function VentasContent() {
                                         style={{
                                             padding: '10px 14px',
                                             borderRadius: '12px',
-                                            background: 'rgba(255,255,255,0.06)',
-                                            border: '1px solid rgba(255,255,255,0.10)',
-                                            color: 'rgba(255,255,255,0.85)',
+                                            background: tinta(0.06),
+                                            border: `1px solid ${tinta(0.10)}`,
+                                            color: tintaTexto(0.85),
                                             cursor: 'pointer',
                                             fontWeight: 900,
                                         }}
@@ -1360,7 +1426,7 @@ function VentasContent() {
                                 width: '50px',
                                 height: '26px',
                                 borderRadius: '13px',
-                                background: showZelle ? '#34C759' : 'rgba(255,255,255,0.1)',
+                                background: showZelle ? '#34C759' : tinta(0.1),
                                 border: 'none',
                                 position: 'relative',
                                 cursor: 'pointer',
@@ -1386,7 +1452,6 @@ function VentasContent() {
                     style={{
                     ...glass,
                     padding: '20px',
-                    background: 'rgba(0,0,0,0.4)',
                     scrollMarginTop: headerH + 12,
                 }}
                 >
@@ -1397,37 +1462,37 @@ function VentasContent() {
                         {/* Stats grid */}
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '20px' }}>
                             {[
-                                { label: 'Costo Total', value: `$${formatUSD(totalCost)}`, color: '#FF3B30', icon: '📦' },
-                                { label: 'Ganancia', value: `$${formatUSD(totalProfit)}`, color: totalProfit > 0 ? '#34C759' : '#FF3B30', icon: '💰' },
-                                { label: 'Margen', value: `${marginPct.toFixed(1)}%`, color: marginPct >= 20 ? '#34C759' : '#FF9500', icon: '📊' },
+                                { label: 'Costo Total', value: `$${formatUSD(totalCost)}`, color: 'var(--tono-rojo)', icon: '📦' },
+                                { label: 'Ganancia', value: `$${formatUSD(totalProfit)}`, color: totalProfit > 0 ? 'var(--tono-verde)' : 'var(--tono-rojo)', icon: '💰' },
+                                { label: 'Margen', value: `${marginPct.toFixed(1)}%`, color: marginPct >= 20 ? 'var(--tono-verde)' : 'var(--tono-naranja)', icon: '📊' },
                             ].map(s => (
                                 <div key={s.label} style={{
-                                    background: 'rgba(255,255,255,0.04)',
-                                    border: '1px solid rgba(255,255,255,0.08)',
+                                    background: tinta(0.04),
+                                    border: `1px solid ${tinta(0.08)}`,
                                     borderRadius: '14px',
                                     padding: '14px',
                                     textAlign: 'center',
                                 }}>
                                     <div style={{ fontSize: '20px', marginBottom: '6px' }}>{s.icon}</div>
                                     <div style={{ color: s.color, fontSize: '16px', fontWeight: 700 }}>{s.value}</div>
-                                    <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', marginTop: '2px' }}>{s.label}</div>
+                                    <div style={{ color: tintaTexto(0.4), fontSize: '11px', marginTop: '2px' }}>{s.label}</div>
                                 </div>
                             ))}
                         </div>
 
                         {/* Line items summary */}
-                        <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '16px', marginBottom: '16px' }}>
+                        <div style={{ borderTop: `1px solid ${tinta(0.08)}`, paddingTop: '16px', marginBottom: '16px' }}>
                             {items.map(item => (
-                                <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                                <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: `1px solid ${tinta(0.04)}` }}>
                                     <div style={{ flex: 1, minWidth: 0 }}>
                                         <span style={{ color: 'var(--label-primary)', fontSize: '13px', fontWeight: 500 }}>
                                             {item.qty}× {item.product.nombre.length > 40 ? item.product.nombre.slice(0, 40) + '…' : item.product.nombre}
                                         </span>
                                         {item.discount > 0 && (
-                                            <span style={{ marginLeft: '6px', fontSize: '11px', color: '#FF9500' }}>(-{item.discount}%)</span>
+                                            <span style={{ marginLeft: '6px', fontSize: '11px', color: 'var(--tono-naranja)' }}>(-{item.discount}%)</span>
                                         )}
                                     </div>
-                                    <span style={{ color: '#34C759', fontSize: '13px', fontWeight: 600, flexShrink: 0, marginLeft: '12px' }}>
+                                    <span style={{ color: 'var(--tono-verde)', fontSize: '13px', fontWeight: 600, flexShrink: 0, marginLeft: '12px' }}>
                                         ${formatUSD(lineTotal(item))}
                                     </span>
                                 </div>
@@ -1435,9 +1500,9 @@ function VentasContent() {
                         </div>
 
                         {/* Total */}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderTop: '2px solid rgba(255,255,255,0.12)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderTop: `2px solid ${tinta(0.12)}` }}>
                             <span style={{ color: 'var(--label-primary)', fontSize: '18px', fontWeight: 700 }}>TOTAL</span>
-                            <span style={{ color: '#34C759', fontSize: '24px', fontWeight: 800 }}>${formatUSD(subtotal)}</span>
+                            <span style={{ color: 'var(--tono-verde)', fontSize: '24px', fontWeight: 800 }}>${formatUSD(subtotal)}</span>
                         </div>
 
                         {/* Actions: Guardar vive solo en el menú fijo de arriba */}
@@ -1472,12 +1537,13 @@ function VentasContent() {
                                         marginPct,
                                         showZelle,
                                         fecha: formatFechaPresupuestoLarga(fecha),
-                                        numero: budgetId ? `P-${budgetId.slice(0, 4)}` : `P-${Math.floor(Math.random() * 900) + 100}`,
+                                        // El número es el de la base; sin guardar, «Borrador» (nada de números inventados).
+                                        numero: numeroPresupuesto(numeroCorrelativo),
+                                        budgetId,
                                     };
                                     localStorage.setItem('presupuesto_preview', JSON.stringify(presupuesto));
-                                    const previewPath = budgetId
-                                        ? `/ventas/preview?id=${encodeURIComponent(budgetId)}`
-                                        : '/ventas/preview';
+                                    // Con cambios sin guardar se ve lo que hay en pantalla, no lo guardado.
+                                    const previewPath = rutaVistaPrevia(budgetId, hayCambiosSinGuardar);
                                     window.open(previewPath, '_blank', 'noopener,noreferrer');
                                 }}
                                 style={{
@@ -1523,7 +1589,7 @@ function VentasContent() {
                                     borderRadius: '12px',
                                     border: '1px solid rgba(255,59,48,0.2)',
                                     background: 'rgba(255,59,48,0.06)',
-                                    color: '#FF3B30',
+                                    color: 'var(--tono-rojo)',
                                     fontSize: '14px',
                                     fontWeight: 600,
                                     cursor: 'pointer',
@@ -1553,7 +1619,7 @@ export default function VentasPage() {
     return (
         <Suspense fallback={
             <div style={{ display: 'flex', justifyContent: 'center', padding: '80px 20px' }}>
-                <div style={{ width: '28px', height: '28px', border: '3px solid rgba(255,255,255,0.1)', borderTopColor: '#007AFF', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                <div style={{ width: '28px', height: '28px', border: `3px solid ${tinta(0.1)}`, borderTopColor: '#007AFF', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
             </div>
         }>
             <VentasContent />

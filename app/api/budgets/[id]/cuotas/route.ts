@@ -10,8 +10,8 @@ function esUuid(id: string) {
 
 function hintMigracion() {
   return {
-    error: 'Aplique la migración 318_budgets_abonos_cuotas.sql y notify pgrst, \'reload schema\';',
-    hint: '318_budgets_abonos_cuotas.sql',
+    error: 'Aplique la migración 354_presupuestos_numero_fechas_abonos.sql',
+    hint: '354_presupuestos_numero_fechas_abonos.sql',
   };
 }
 

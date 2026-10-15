@@ -42,16 +42,20 @@ describe('preferencia de tema', () => {
 });
 
 describe('módulos con tema claro', () => {
-  it('Clientes y Productos, con sus pantallas internas', () => {
-    for (const r of ['/clientes', '/clientes/nuevo', '/clientes/abc/editar', '/productos', '/productos/3/editar', '/productos/importar-lista']) {
+  it('Clientes, Productos y Presupuestos, con sus pantallas internas', () => {
+    for (const r of ['/clientes', '/clientes/nuevo', '/clientes/abc/editar', '/productos', '/productos/3/editar', '/productos/importar-lista', '/presupuestos', '/ventas']) {
       assert.equal(rutaConTema(r), true, r);
     }
   });
 
   it('los demás módulos siguen en oscuro hasta revisarlos', () => {
-    for (const r of ['/', '/clientes-viejos', '/productos-viejos', '/presupuestos', '/ventas', '', null, undefined]) {
+    for (const r of ['/', '/clientes-viejos', '/productos-viejos', '/presupuestosx', '/ventasx', '', null, undefined]) {
       assert.equal(rutaConTema(r), false, String(r));
     }
+  });
+
+  it('la vista previa del presupuesto es el documento: siempre en papel blanco', () => {
+    assert.equal(rutaConTema('/ventas/preview'), false);
   });
 });
 

@@ -20,7 +20,13 @@ export const CLAVE_TEMA = 'ci-tema';
 export const EVENTO_TEMA = 'ci-tema-cambio';
 
 /** Módulos ya revisados en claro y oscuro. Una ruta entra aquí cuando se ha visto en ambos. */
-export const RUTAS_CON_TEMA = ['/clientes', '/productos'] as const;
+export const RUTAS_CON_TEMA = ['/clientes', '/productos', '/presupuestos', '/ventas'] as const;
+
+/**
+ * Dentro de esos módulos, pantallas que conservan su propio aspecto: la vista previa del
+ * presupuesto es el documento que se imprime y se envía, siempre en papel blanco.
+ */
+export const RUTAS_SIN_TEMA = ['/ventas/preview'] as const;
 
 const ORDEN: PreferenciaTema[] = ['auto', 'claro', 'oscuro'];
 
@@ -48,7 +54,8 @@ export function etiquetaPreferenciaTema(preferencia: PreferenciaTema): string {
 /** ¿Esta pantalla ya tiene tema claro? */
 export function rutaConTema(pathname: string | null | undefined): boolean {
   const p = String(pathname ?? '');
-  return RUTAS_CON_TEMA.some((r) => p === r || p.startsWith(`${r}/`));
+  const bajo = (r: string) => p === r || p.startsWith(`${r}/`);
+  return RUTAS_CON_TEMA.some(bajo) && !RUTAS_SIN_TEMA.some(bajo);
 }
 
 /**
