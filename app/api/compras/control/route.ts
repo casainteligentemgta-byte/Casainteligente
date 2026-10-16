@@ -15,7 +15,7 @@ export async function GET(req: Request) {
   let q = supabase
     .from('ci_control_compras')
     .select(
-      'id,purchase_invoice_id,procura_id,proyecto_id,tipo,material_id,descripcion,unidad,cantidad_pedida,cantidad_facturada,cantidad_recibida,precio_unitario,moneda,monto_diferencia,estado,revisada_por,revisada_at,nota,created_at,purchase_invoices(invoice_number,supplier_name)',
+      'id,purchase_invoice_id,procura_id,proyecto_id,tipo,material_id,descripcion,unidad,cantidad_pedida,cantidad_facturada,cantidad_recibida,precio_unitario,precio_referencia,moneda,monto_diferencia,estado,revisada_por,revisada_at,nota,created_at,purchase_invoices(invoice_number,supplier_name)',
     )
     .order('created_at', { ascending: false })
     .limit(200);

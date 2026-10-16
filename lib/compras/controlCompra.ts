@@ -14,7 +14,7 @@ import { normalizarUnidadProcura } from '@/lib/procuras/unidadesProcura';
  * (facturado vs recibido). Cada diferencia se guarda una vez por factura y se avisa.
  */
 
-export type TipoDiferencia = 'facturado_mayor_pedido' | 'no_pedido' | 'recibido_menor_facturado';
+export type TipoDiferencia = 'facturado_mayor_pedido' | 'no_pedido' | 'recibido_menor_facturado' | 'precio_alto';
 
 export type LineaPedida = {
   procura_id: string;
@@ -44,6 +44,8 @@ export type Diferencia = {
   cantidad_recibida: number | null;
   precio_unitario: number;
   monto_diferencia: number;
+  /** Solo precio_alto: precio de referencia (USD por unidad). */
+  precio_referencia?: number | null;
 };
 
 /** Margen para no alertar por redondeos (2 %). */
@@ -189,6 +191,60 @@ export function compararPedidoFacturadoRecibido(p: {
   return out;
 }
 
+/** Se avisa si se pagó más de esto sobre el precio de referencia (15 %). */
+export const MARGEN_PRECIO_ALTO = 0.15;
+
+export type LineaFacturadaUsd = {
+  material_id: string;
+  descripcion: string;
+  unidad: string;
+  cantidad: number;
+  precio_usd: number;
+};
+
+/** Mediana: una compra rara (muy barata o muy cara) no mueve la referencia. */
+export function mediana(valores: number[]): number | null {
+  const v = valores.filter((x) => Number.isFinite(x) && x > 0).sort((a, b) => a - b);
+  if (!v.length) return null;
+  const m = Math.floor(v.length / 2);
+  return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
+}
+
+/**
+ * Precio pagado (USD/unidad) contra la referencia del material (mediana de compras
+ * anteriores, en USD: en bolívares el precio cambia solo por la tasa).
+ */
+export function compararPrecioReferencia(
+  lineas: LineaFacturadaUsd[],
+  referencias: Map<string, number>,
+  margen = MARGEN_PRECIO_ALTO,
+): Diferencia[] {
+  const out: Diferencia[] = [];
+  const vistos = new Set<string>();
+  for (const l of lineas) {
+    if (vistos.has(l.material_id)) continue;
+    const ref = referencias.get(l.material_id);
+    if (!ref || !(l.precio_usd > 0) || !(l.cantidad > 0)) continue;
+    if (l.precio_usd <= ref * (1 + margen)) continue;
+    vistos.add(l.material_id);
+    out.push({
+      tipo: 'precio_alto',
+      clave: `precio_alto:${l.material_id}`,
+      procura_id: null,
+      material_id: l.material_id,
+      descripcion: l.descripcion,
+      unidad: normalizarUnidadProcura(l.unidad),
+      cantidad_pedida: null,
+      cantidad_facturada: redondear(l.cantidad),
+      cantidad_recibida: null,
+      precio_unitario: redondear(l.precio_usd),
+      monto_diferencia: redondear((l.precio_usd - ref) * l.cantidad),
+      precio_referencia: redondear(ref),
+    });
+  }
+  return out;
+}
+
 /* ─────────────────────────── Base de datos ─────────────────────────── */
 
 type Fila = Record<string, unknown>;
@@ -241,11 +297,14 @@ export async function revisarControlCompra(
       }
     }
 
-    const diferencias = compararPedidoFacturadoRecibido({
-      pedidas: ctx.pedidas,
-      facturadas: ctx.facturadas,
-      recibidas,
-    });
+    const diferencias = [
+      ...compararPedidoFacturadoRecibido({
+        pedidas: ctx.pedidas,
+        facturadas: ctx.facturadas,
+        recibidas,
+      }),
+      ...compararPrecioReferencia(ctx.facturadasUsd, ctx.referenciasUsd),
+    ];
     if (!diferencias.length) return vacio;
 
     const { data: previas } = await supabase
@@ -269,8 +328,9 @@ export async function revisarControlCompra(
         cantidad_facturada: d.cantidad_facturada,
         cantidad_recibida: d.cantidad_recibida,
         precio_unitario: d.precio_unitario,
-        moneda: ctx.moneda,
+        moneda: d.tipo === 'precio_alto' ? 'USD' : ctx.moneda,
         monto_diferencia: d.monto_diferencia,
+        precio_referencia: d.precio_referencia ?? null,
         updated_at: ahora,
       })),
       { onConflict: 'purchase_invoice_id,clave' },
@@ -302,7 +362,63 @@ export type ContextoFactura = {
   obra: string | null;
   pedidas: LineaPedida[];
   facturadas: LineaFacturada[];
+  /** Líneas con material, con precio en USD (para comparar con el historial). */
+  facturadasUsd: LineaFacturadaUsd[];
+  /** material_id → precio de referencia USD (compras anteriores). */
+  referenciasUsd: Map<string, number>;
 };
+
+/** Precio por unidad en USD: directo si la compra fue en USD; si fue en Bs, con su tasa. */
+export function precioUnitarioUsd(precio: number, moneda: string, tasaVesPorUsd: number | null): number | null {
+  if (!(precio > 0)) return null;
+  const m = moneda.trim().toUpperCase();
+  if (m === 'USD' || m === 'US$') return precio;
+  return tasaVesPorUsd && tasaVesPorUsd > 0 ? precio / tasaVesPorUsd : null;
+}
+
+/** Referencia por material: mediana de las últimas 5 compras de los últimos 12 meses. */
+async function cargarReferenciasUsd(
+  supabase: SupabaseClient,
+  materialIds: string[],
+  excluirCompraIds: string[],
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (!materialIds.length) return out;
+  const { data: lineas } = await supabase
+    .from('contabilidad_compra_lineas')
+    .select('material_id,precio_unitario,compra_id,created_at')
+    .in('material_id', materialIds)
+    .order('created_at', { ascending: false })
+    .limit(500);
+  const filas = ((lineas ?? []) as Fila[]).filter((l) => !excluirCompraIds.includes(txt(l.compra_id)));
+  const compraIds = Array.from(new Set(filas.map((l) => txt(l.compra_id)).filter(Boolean)));
+  if (!compraIds.length) return out;
+
+  const { data: compras } = await supabase
+    .from('contabilidad_compras')
+    .select('id,moneda,tasa_bcv_ves_por_usd,fecha,cco_estado')
+    .in('id', compraIds);
+  const desde = new Date(Date.now() - 365 * 86_400_000).toISOString().slice(0, 10);
+  const porCompra = new Map(((compras ?? []) as Fila[]).map((c) => [txt(c.id), c]));
+
+  const precios = new Map<string, number[]>();
+  for (const l of filas) {
+    const c = porCompra.get(txt(l.compra_id));
+    if (!c || txt(c.cco_estado).toUpperCase() === 'ANULADO') continue;
+    if (txt(c.fecha) && txt(c.fecha) < desde) continue;
+    const usd = precioUnitarioUsd(Number(l.precio_unitario) || 0, txt(c.moneda) || 'VES', Number(c.tasa_bcv_ves_por_usd) || null);
+    if (usd == null) continue;
+    const id = txt(l.material_id);
+    const lista = precios.get(id) ?? [];
+    if (lista.length < 5) lista.push(usd);
+    precios.set(id, lista);
+  }
+  for (const [id, lista] of Array.from(precios.entries())) {
+    const m = mediana(lista);
+    if (m) out.set(id, m);
+  }
+  return out;
+}
 
 async function cargarContextoFactura(supabase: SupabaseClient, pi: string): Promise<ContextoFactura | null> {
   const { data: inv } = await supabase
@@ -315,7 +431,7 @@ async function cargarContextoFactura(supabase: SupabaseClient, pi: string): Prom
 
   const { data: compras } = await supabase
     .from('contabilidad_compras')
-    .select('id,procura_id,moneda,proyecto_id')
+    .select('id,procura_id,moneda,proyecto_id,tasa_bcv_ves_por_usd')
     .eq('purchase_invoice_id', pi);
   const filasCompra = (compras ?? []) as Fila[];
   const compraIds = filasCompra.map((c) => txt(c.id)).filter(Boolean);
@@ -358,6 +474,32 @@ async function cargarContextoFactura(supabase: SupabaseClient, pi: string): Prom
     });
   }
 
+  const monedaFactura = txt(factura.moneda) || filasCompra.map((c) => txt(c.moneda)).find(Boolean) || 'VES';
+  const tasa = filasCompra.map((c) => Number(c.tasa_bcv_ves_por_usd) || 0).find((t) => t > 0) || null;
+  const facturadasUsd: LineaFacturadaUsd[] = [];
+  for (const f of facturadas) {
+    if (!f.material_id) continue;
+    const usd = precioUnitarioUsd(f.precio_unitario, monedaFactura, tasa);
+    if (usd == null) continue;
+    facturadasUsd.push({
+      material_id: f.material_id,
+      descripcion: f.descripcion,
+      unidad: f.unidad,
+      cantidad: f.cantidad,
+      precio_usd: usd,
+    });
+  }
+  let referenciasUsd = new Map<string, number>();
+  try {
+    referenciasUsd = await cargarReferenciasUsd(
+      supabase,
+      Array.from(new Set(facturadasUsd.map((f) => f.material_id))),
+      compraIds,
+    );
+  } catch (e) {
+    console.warn('[controlCompra] referencias de precio:', e);
+  }
+
   const proyectoId =
     txt(factura.proyecto_id) || filasCompra.map((c) => txt(c.proyecto_id)).find(Boolean) || null;
   let obra: string | null = null;
@@ -375,6 +517,8 @@ async function cargarContextoFactura(supabase: SupabaseClient, pi: string): Prom
     obra,
     pedidas,
     facturadas,
+    facturadasUsd,
+    referenciasUsd,
   };
 }
 
@@ -397,6 +541,11 @@ export function lineaDiferencia(d: Diferencia, moneda: string): string {
       return `❓ ${desc}: facturado ${num(d.cantidad_facturada)} ${u} y nadie lo pidió${monto}`;
     case 'recibido_menor_facturado':
       return `📉 ${desc}: facturado ${num(d.cantidad_facturada)} ${u}, recibido ${num(d.cantidad_recibida)} ${u}${monto}`;
+    case 'precio_alto': {
+      const ref = d.precio_referencia ?? 0;
+      const pct = ref > 0 ? Math.round(((d.precio_unitario - ref) / ref) * 100) : 0;
+      return `💲 ${desc}: pagado ${num(d.precio_unitario)} USD/${u}, referencia ${num(ref)} USD/${u} (+${pct} %)${monto}`;
+    }
     default:
       return `⚠️ ${desc}`;
   }
@@ -407,7 +556,7 @@ export function mensajeDiferenciasCompra(ds: Diferencia[], c: ContextoFactura, b
     `⚠️ <b>Diferencias en la factura #${escHtml(c.numero)}</b>`,
     `🏢 ${escHtml(c.proveedor)}${c.obra ? ` · 🏗 ${escHtml(c.obra)}` : ''}`,
     '',
-    ...ds.map((d) => lineaDiferencia(d, c.moneda)),
+    ...ds.map((d) => lineaDiferencia(d, d.tipo === 'precio_alto' ? 'USD' : c.moneda)),
     '',
     'Revise antes de pagar o reclame al proveedor.',
     `<a href="${baseUrl}/compras/torre-control">Ver y marcar revisada</a>`,

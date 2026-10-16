@@ -16,6 +16,7 @@ const ENLACE_ETAPA: Record<ClaveEtapa, (it: ItemCuello) => string> = {
   transporte: () => '/almacen/retiros',
   cuarentena: () => '/almacen/recepcion?tab=transito',
   pedidos: () => '/almacen/pedidos',
+  stock: () => '/almacen/maestros',
 };
 
 function edad(horas: number): string {
@@ -207,7 +208,7 @@ export default function CuellosBotellaCentro() {
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-black text-white">{e.titulo}</span>
                       <span className="block truncate text-[11px] text-zinc-500">
-                        {e.responsable} · plazo {edad(e.umbralHoras)}
+                        {e.responsable} · {e.umbralHoras > 0 ? `plazo ${edad(e.umbralHoras)}` : 'aviso inmediato'}
                       </span>
                     </span>
                     <span className="text-right">

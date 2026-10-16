@@ -93,6 +93,10 @@ class Consulta implements PromiseLike<Resultado> {
     this.filtros.push((f) => String(f[col] ?? '') === String(v ?? ''));
     return this;
   }
+  neq(col: string, v: unknown): this {
+    this.filtros.push((f) => String(f[col] ?? '') !== String(v ?? ''));
+    return this;
+  }
   gt(col: string, v: number): this {
     this.filtros.push((f) => Number(f[col]) > v);
     return this;

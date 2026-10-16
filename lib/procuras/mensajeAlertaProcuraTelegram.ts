@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { bloqueGastoCapitulo, type GastoCapituloProcura } from '@/lib/procuras/gastoCapituloProcura';
 import type { AlertaProcuraAdminRow } from '@/lib/procuras/alertaAdminProcuraTelegram';
 import { bloqueFondosProcura, type ResumenFondosObra } from '@/lib/procuras/fondosObraProcura';
 import { etiquetaCapituloMaestro } from '@/lib/compras/capitulosMaestro';
@@ -141,6 +142,7 @@ export function construirMensajePmDecisionProcura(
   prioridad: string,
   stock?: ResumenStockProcuraTicket | null,
   informadoPorRol: 'contador' | 'supervisor' = 'contador',
+  gasto?: GastoCapituloProcura | null,
 ): string {
   const informante = row.viabilidad_informada_por?.trim() || (informadoPorRol === 'supervisor' ? 'Supervisor' : 'Contador');
   const rolLabel =
@@ -149,7 +151,9 @@ export function construirMensajePmDecisionProcura(
     '🏗️ <b>PROCURA — decisión Project Manager</b>\n\n' +
     cuerpoDetalleProcura(row, prioridad, stock) +
     `\n💰 <b>Disponibilidad presupuestaria:</b> ${escHtml(etiquetaViabilidad(row.viabilidad_presupuestaria))}\n` +
-    `👤 <b>Informó:</b> ${escHtml(informante)} (${rolLabel})\n\n` +
+    `👤 <b>Informó:</b> ${escHtml(informante)} (${rolLabel})` +
+    bloqueGastoCapitulo(gasto, row.monto_estimado_usd) +
+    '\n\n' +
     (procuraSinFondos(row) ? `${AVISO_PM_SIN_FONDOS}\n\n` : '') +
     (procuraSinFondos(row) ? '¿Aprueba la procura <b>a crédito</b>?\n' : '¿Aprueba la procura?\n') +
     '<i>Tras aprobar: orden de compra al comprador y/o verificación de almacén según stock.</i>'

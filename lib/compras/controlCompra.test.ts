@@ -4,6 +4,9 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { crearFakeSupabase } from '../telegram/testing/fakeSupabase'
 import {
   compararPedidoFacturadoRecibido,
+  compararPrecioReferencia,
+  mediana,
+  precioUnitarioUsd,
   lineaDiferencia,
   revisarControlCompra,
   type Diferencia,
@@ -162,5 +165,60 @@ describe('revisarControlCompra (guardado y aviso)', () => {
       avisar: async () => 0,
     })
     assert.equal(r.diferencias, 1, 'solo «facturó más de lo pedido»; lo recibido cuadra con el conteo')
+  })
+})
+
+describe('precio de referencia', () => {
+  it('mediana ignora una compra rara', () => {
+    assert.equal(mediana([10, 11, 50]), 11)
+    assert.equal(mediana([10, 12]), 11)
+    assert.equal(mediana([]), null)
+  })
+
+  it('USD directo; Bs con su tasa', () => {
+    assert.equal(precioUnitarioUsd(12, 'USD', null), 12)
+    assert.equal(precioUnitarioUsd(1200, 'VES', 100), 12)
+    assert.equal(precioUnitarioUsd(1200, 'VES', null), null)
+  })
+
+  it('avisa solo por encima del 15 %', () => {
+    const refs = new Map([['cem', 10]])
+    const l = (precio_usd: number) => [{ material_id: 'cem', descripcion: 'Cemento', unidad: 'SAC', cantidad: 10, precio_usd }]
+    assert.deepEqual(compararPrecioReferencia(l(11.4), refs), [])
+    const [d] = compararPrecioReferencia(l(12.5), refs)
+    assert.equal(d.tipo, 'precio_alto')
+    assert.equal(d.precio_referencia, 10)
+    assert.equal(d.monto_diferencia, 25)
+    assert.match(lineaDiferencia(d, 'USD'), /pagado 12,5 USD\/SAC, referencia 10 USD\/SAC \(\+25 %\)/)
+  })
+
+  it('sin historial no hay alarma', () => {
+    assert.deepEqual(
+      compararPrecioReferencia([{ material_id: 'x', descripcion: 'x', unidad: 'UND', cantidad: 1, precio_usd: 99 }], new Map()),
+      [],
+    )
+  })
+
+  it('con la base: compara con compras anteriores en USD aunque fueran en Bs', async () => {
+    const db = crearFakeSupabase({
+      purchase_invoices: [{ id: 'f2', invoice_number: 'B-2', supplier_name: 'Ferre', moneda: 'VES', proyecto_id: null }],
+      contabilidad_compras: [
+        { id: 'c0', purchase_invoice_id: 'f0', moneda: 'VES', tasa_bcv_ves_por_usd: 100, fecha: new Date().toISOString().slice(0, 10), cco_estado: null },
+        { id: 'c2', purchase_invoice_id: 'f2', moneda: 'VES', tasa_bcv_ves_por_usd: 200, procura_id: null, proyecto_id: null },
+      ],
+      contabilidad_compra_lineas: [
+        { compra_id: 'c0', material_id: 'cem', descripcion: 'Cemento', cantidad: 10, unidad: 'SAC', precio_unitario: 1000, created_at: '2026-09-01' },
+        { compra_id: 'c2', material_id: 'cem', descripcion: 'Cemento', cantidad: 10, unidad: 'SAC', precio_unitario: 2600, created_at: '2026-10-16' },
+      ],
+      ci_procuras: [],
+      ci_control_compras: [],
+    }) as unknown as SupabaseClient
+    const avisos: Diferencia[][] = []
+    const r = await revisarControlCompra(db, 'f2', { avisar: async (ds) => { avisos.push(ds); return 1 } })
+    // antes 1000 Bs a 100 = 10 USD; ahora 2600 Bs a 200 = 13 USD → +30 %
+    assert.equal(r.nuevas, 1)
+    assert.equal(avisos[0][0].tipo, 'precio_alto')
+    assert.equal(avisos[0][0].precio_referencia, 10)
+    assert.equal(avisos[0][0].precio_unitario, 13)
   })
 })

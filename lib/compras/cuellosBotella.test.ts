@@ -2,7 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { crearFakeSupabase } from '../telegram/testing/fakeSupabase'
-import { calcularCuellosBotella, enviarAvisosCuellosBotella, textoEdad } from './cuellosBotella'
+import { calcularCuellosBotella, enviarAvisosCuellosBotella, materialesBajoMinimo, textoEdad } from './cuellosBotella'
 
 const AHORA = new Date('2026-10-15T12:00:00Z')
 const haceHoras = (h: number) => new Date(AHORA.getTime() - h * 3_600_000).toISOString()
@@ -106,5 +106,75 @@ describe('cuellos de botella', () => {
     assert.equal(textoEdad(5), '5 h')
     assert.equal(textoEdad(24), '1 día')
     assert.equal(textoEdad(73), '3 días')
+  })
+})
+
+describe('stock bajo el mínimo y en cotización', () => {
+  const MAT_A = 'aaaaaaaa-0000-4000-8000-000000000001'
+  const MAT_B = 'aaaaaaaa-0000-4000-8000-000000000002'
+  const MAT_C = 'aaaaaaaa-0000-4000-8000-000000000003'
+  const UB = 'ub-rancho'
+  const sb = () =>
+    crearFakeSupabase({
+      ci_proyectos: [{ id: OBRA, nombre: 'RANCHO' }],
+      ci_procuras: [
+        // aprobada hace 3 días pero el comprador marcó «cotizando» hace 1 día: no detenida
+        { id: 'p1', ticket: 'PR-1', estado: 'aprobada', material_txt: 'Cemento', proyecto_id: OBRA, updated_at: haceHoras(72), cotizando_at: haceHoras(24), cotizando_por: 'Neo' },
+        // ya tiene procura abierta: no se avisa como stock bajo
+        { id: 'p2', ticket: 'PR-2', estado: 'solicitada', material_id: MAT_B, material_txt: 'Arena', proyecto_id: OBRA, updated_at: haceHoras(1) },
+      ],
+      ci_inventario_reorden_obra: [
+        { proyecto_id: OBRA, material_id: MAT_A, reorder_point: 10 },
+        { proyecto_id: OBRA, material_id: MAT_B, reorder_point: 10 },
+        { proyecto_id: OBRA, material_id: MAT_C, reorder_point: 5 },
+      ],
+      global_inventory: [
+        { id: MAT_A, name: 'Cabilla 1/2', unit: 'und', reorder_point: 0, is_active: true },
+        { id: MAT_B, name: 'Arena lavada', unit: 'm3', reorder_point: 0, is_active: true },
+        { id: MAT_C, name: 'Clavo 3"', unit: 'kg', reorder_point: 0, is_active: true },
+      ],
+      inv_ubicaciones: [{ id: UB, ci_proyecto_id: OBRA }],
+      inventario_stock: [
+        { material_id: MAT_A, ubicacion_id: UB, cantidad_disponible: 3, cantidad_en_transito_entrante: 2, updated_at: haceHoras(10) },
+        { material_id: MAT_B, ubicacion_id: UB, cantidad_disponible: 0, cantidad_en_transito_entrante: 0, updated_at: haceHoras(10) },
+        { material_id: MAT_C, ubicacion_id: UB, cantidad_disponible: 8, cantidad_en_transito_entrante: 0, updated_at: haceHoras(10) },
+      ],
+    }) as unknown as SupabaseClient
+
+  it('avisa lo que quedó bajo el mínimo sin procura abierta', async () => {
+    const r = await calcularCuellosBotella(sb(), { ahora: AHORA })
+    const stock = r.etapas.find((e) => e.clave === 'stock')!
+    assert.equal(stock.items.length, 1)
+    assert.equal(stock.items[0].referencia, 'Cabilla 1/2')
+    assert.match(stock.items[0].detalle, /quedan 3 und \(\+2 en camino\) · mínimo 10 und/)
+    assert.equal(stock.items[0].detenido, true)
+    assert.equal(stock.items[0].critico, false)
+  })
+
+  it('«en cotización» da más plazo y lo muestra', async () => {
+    const r = await calcularCuellosBotella(sb(), { ahora: AHORA })
+    const compra = r.etapas.find((e) => e.clave === 'compra')!
+    assert.equal(compra.items.length, 1)
+    assert.equal(compra.items[0].detenido, false)
+    assert.match(compra.items[0].detalle, /en cotización por Neo/)
+  })
+})
+
+describe('materialesBajoMinimo', () => {
+  it('agotado y mínimo global', () => {
+    const bajos = materialesBajoMinimo(
+      [{ materialId: 'm1', proyectoId: null, minimo: 4, nombre: 'X', unidad: 'und' }],
+      [
+        { materialId: 'm1', proyectoId: 'o1', disponible: 1, transito: 0, updatedAt: 'a' },
+        { materialId: 'm1', proyectoId: 'o2', disponible: 2, transito: 0, updatedAt: 'b' },
+      ],
+      [],
+    )
+    assert.equal(bajos.length, 1)
+    assert.equal(bajos[0].disponible, 3)
+    assert.equal(bajos[0].desde, 'b')
+    assert.equal(materialesBajoMinimo([{ materialId: 'm1', proyectoId: null, minimo: 3, nombre: '', unidad: '' }], [
+      { materialId: 'm1', proyectoId: 'o1', disponible: 3, transito: 0, updatedAt: '' },
+    ], []).length, 0)
   })
 })

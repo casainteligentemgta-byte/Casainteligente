@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { cargarGastoCapituloProcura } from '@/lib/procuras/gastoCapituloProcura';
 import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi';
 import { replicarAlertaPmProcuraEnLogBot } from '@/lib/telegram/espejoSalidaLogBot';
 import { isLogBotConfigured } from '@/lib/telegram/logBotApi';
@@ -98,7 +99,12 @@ export async function enviarAlertaPmTrasViabilidadAdmin(
   const prioridad = row.prioridad?.trim() || prioridadProcuraDesdeObs(row.observaciones, alertas);
   const stock = await construirResumenStockProcuraMensaje(supabase, row);
 
-  const texto = construirMensajePmDecisionProcura(row, prioridad, stock, opts?.informadoPorRol);
+  const gasto = await cargarGastoCapituloProcura(supabase, {
+    procuraId: row.id,
+    proyectoId: row.proyecto_id,
+    capituloId: row.capitulo_maestro_id,
+  });
+  const texto = construirMensajePmDecisionProcura(row, prioridad, stock, opts?.informadoPorRol, gasto);
   const replyMarkup = tecladoAprobacionDepartamento(row.id, { aCredito: procuraSinFondos(row) });
   const solicitanteChatId =
     row.solicitante_telegram_chat_id != null
