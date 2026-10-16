@@ -2,12 +2,16 @@ import { NextResponse } from 'next/server';
 import { createProcurementDocumentSignedUrl } from '@/lib/almacen/procurementDocumentStorage';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 type RouteCtx = { params: Promise<{ id: string }> };
 
 export async function GET(_req: Request, ctx: RouteCtx) {
+  const acceso = await requireAlgunPermisoWeb(['compra.registrar', 'compra.confirmar', 'cco.ver']);
+  if (!acceso.ok) return acceso.response;
+
   try {
     const { id } = await ctx.params;
     const admin = supabaseAdminForRoute();

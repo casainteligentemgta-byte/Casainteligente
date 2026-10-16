@@ -3,6 +3,7 @@ import { deleteCompraLineaRegistro } from '@/lib/contabilidad/deleteCompraLineaR
 import { updateCompraLineaRegistro } from '@/lib/contabilidad/updateCompraLineaRegistro';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const dynamic = 'force-dynamic';
 
 type RouteCtx = { params: { id: string; lineaId: string } | Promise<{ id: string; lineaId: string }> };
@@ -23,6 +24,9 @@ function rechazarCanal(compraId: string) {
 
 /** PATCH — modifica descripción, código, cantidad y precio unitario de una línea. */
 export async function PATCH(req: Request, ctx: RouteCtx) {
+  const acceso = await requireAlgunPermisoWeb(['compra.registrar']);
+  if (!acceso.ok) return acceso.response;
+
   try {
     const { id, lineaId } = await resolveParams(ctx.params);
     const canalErr = rechazarCanal(id);
@@ -53,6 +57,9 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
 
 /** DELETE — elimina una línea de contabilidad_compra_lineas (no la factura completa salvo que sea la única línea). */
 export async function DELETE(_req: Request, ctx: RouteCtx) {
+  const acceso = await requireAlgunPermisoWeb(['compra.registrar']);
+  if (!acceso.ok) return acceso.response;
+
   try {
     const { id, lineaId } = await resolveParams(ctx.params);
     const canalErr = rechazarCanal(id);

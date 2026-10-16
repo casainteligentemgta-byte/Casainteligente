@@ -14,6 +14,7 @@ import {
 import { alinearRolExamenConTipoVacante } from '@/lib/talento/rolesExamenCatalogo';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 /**
  * POST /api/talento/psique/recomendar
  * Body:
@@ -21,6 +22,9 @@ import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
  * - { cargo, tipo_personal: 'obrero'|'empleado', cargo_id?, usar_ia? }
  */
 export async function POST(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   const admin = supabaseAdminForRoute();
   if (!admin.ok) return admin.response;
 

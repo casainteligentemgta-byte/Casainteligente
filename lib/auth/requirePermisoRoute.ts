@@ -59,3 +59,46 @@ export async function requirePermisoWeb(
 
   return { ok: true, actor, supabase, userId: user.id };
 }
+
+/**
+ * Pasa si el usuario tiene AL MENOS UNO de los permisos (rutas que usan varios roles,
+ * p. ej. el canal de facturas lo atienden comprador y contador). Una sola lectura de sesión.
+ */
+export async function requireAlgunPermisoWeb(
+  permisos: readonly Permiso[],
+  ctx?: { proyectoId?: string | null; entidadId?: string | null },
+): Promise<RequirePermisoOk | RequirePermisoFail> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user?.id) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: 'Debe iniciar sesión' }, { status: 401 }),
+    };
+  }
+
+  const actor = await resolverActorWeb(supabase, user.id, user.email);
+  if (!permisosEnforcementActivo()) {
+    return { ok: true, actor, supabase, userId: user.id };
+  }
+
+  const { actorTienePermiso } = await import('@/lib/auth/permisos');
+  if (!permisos.some((p) => actorTienePermiso(actor, p, ctx))) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: 'No tiene permiso para esta acción',
+          permisos_aceptados: permisos,
+          roles_empresa: actor.rolesEmpresa,
+        },
+        { status: 403 },
+      ),
+    };
+  }
+
+  return { ok: true, actor, supabase, userId: user.id };
+}

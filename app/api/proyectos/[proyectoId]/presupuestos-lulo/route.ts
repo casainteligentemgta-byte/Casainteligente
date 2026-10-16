@@ -12,6 +12,8 @@ import {
 import { formatErrorMessage } from '@/lib/utils/formatErrorMessage';
 import { NextResponse } from 'next/server';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
+import { PERMISOS } from '@/lib/auth/permisosCatalogo';
 export const dynamic = 'force-dynamic';
 
 type RouteContext = { params: { proyectoId: string } };
@@ -20,6 +22,9 @@ const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export async function GET(_req: Request, { params }: RouteContext) {
+  const acceso = await requireAlgunPermisoWeb(PERMISOS);
+  if (!acceso.ok) return acceso.response;
+
   try {
     const proyectoId = params.proyectoId?.trim() ?? '';
     if (!isValidProyectoUuid(proyectoId)) {
@@ -34,6 +39,9 @@ export async function GET(_req: Request, { params }: RouteContext) {
 }
 
 export async function POST(req: Request, { params }: RouteContext) {
+  const acceso = await requireAlgunPermisoWeb(['procura.aprobar', 'admin.config']);
+  if (!acceso.ok) return acceso.response;
+
   try {
     const proyectoId = params.proyectoId?.trim() ?? '';
     if (!isValidProyectoUuid(proyectoId)) {
@@ -70,6 +78,9 @@ export async function POST(req: Request, { params }: RouteContext) {
 
 /** Borra una obra adicional Lulo (`?id=` o body `{ id }`). No permite borrar la principal. */
 export async function DELETE(req: Request, { params }: RouteContext) {
+  const acceso = await requireAlgunPermisoWeb(['procura.aprobar', 'admin.config']);
+  if (!acceso.ok) return acceso.response;
+
   try {
     const proyectoId = params.proyectoId?.trim() ?? '';
     if (!isValidProyectoUuid(proyectoId)) {

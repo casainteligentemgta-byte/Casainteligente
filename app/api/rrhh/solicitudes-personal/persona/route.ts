@@ -14,6 +14,7 @@ import {
   nuevoToken,
 } from '@/lib/rrhh/solicitudPersonalServer';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const dynamic = 'force-dynamic';
 
 /**
@@ -21,6 +22,9 @@ export const dynamic = 'force-dynamic';
  * El oficio y la obra los fija la solicitud. Si la cédula ya tiene expediente, se reutiliza.
  */
 export async function POST(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   const supabase = await createClient();
   const {
     data: { user },

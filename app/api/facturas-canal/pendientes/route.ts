@@ -8,9 +8,13 @@ import {
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import { formatErrorMessage } from '@/lib/utils/formatErrorMessage';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(['compra.registrar', 'compra.confirmar', 'cco.ver']);
+  if (!acceso.ok) return acceso.response;
+
   try {
     const { searchParams } = new URL(req.url);
     const estado = searchParams.get('estado');

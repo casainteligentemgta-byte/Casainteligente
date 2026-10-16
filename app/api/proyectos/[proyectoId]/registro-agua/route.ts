@@ -11,6 +11,8 @@ import {
 import { formatErrorMessage } from '@/lib/utils/formatErrorMessage';
 import { NextResponse } from 'next/server';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
+import { PERMISOS } from '@/lib/auth/permisosCatalogo';
 export const dynamic = 'force-dynamic';
 
 export type RegistroAguaRow = {
@@ -42,6 +44,9 @@ export async function GET(
   _req: Request,
   { params }: { params: { proyectoId: string } },
 ) {
+  const acceso = await requireAlgunPermisoWeb(PERMISOS);
+  if (!acceso.ok) return acceso.response;
+
   const proyectoId = params?.proyectoId?.trim() ?? '';
   if (!isValidProyectoUuid(proyectoId)) {
     return NextResponse.json(
@@ -79,6 +84,9 @@ export async function POST(
   req: Request,
   { params }: { params: { proyectoId: string } },
 ) {
+  const acceso = await requireAlgunPermisoWeb(['procura.solicitar', 'equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   const proyectoId = params?.proyectoId?.trim() ?? '';
   if (!isValidProyectoUuid(proyectoId)) {
     return NextResponse.json(
@@ -156,6 +164,9 @@ export async function PATCH(
   req: Request,
   { params }: { params: { proyectoId: string } },
 ) {
+  const acceso = await requireAlgunPermisoWeb(['procura.solicitar', 'equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   const proyectoId = params?.proyectoId?.trim() ?? '';
   if (!isValidProyectoUuid(proyectoId)) {
     return NextResponse.json(

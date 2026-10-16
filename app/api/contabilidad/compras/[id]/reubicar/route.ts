@@ -4,6 +4,7 @@ import { resolverEntidadIdDesdeProyecto } from '@/lib/contabilidad/resolverEntid
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import { formatErrorMessage } from '@/lib/utils/formatErrorMessage';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const dynamic = 'force-dynamic';
 
 type RouteCtx = { params: { id: string } | Promise<{ id: string }> };
@@ -16,6 +17,9 @@ async function resolveParams(
 
 /** Reasigna obra/almacén de una compra y traslada stock si ya estaba registrada en inventario. */
 export async function PATCH(req: Request, ctx: RouteCtx) {
+  const acceso = await requireAlgunPermisoWeb(['compra.registrar']);
+  if (!acceso.ok) return acceso.response;
+
   const admin = supabaseAdminForRoute();
   if (!admin.ok) return admin.response;
 

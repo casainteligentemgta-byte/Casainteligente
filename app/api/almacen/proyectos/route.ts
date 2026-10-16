@@ -3,10 +3,15 @@ import { createClient } from '@/lib/supabase/server';
 import { createSupabaseAdminOnlyClient } from '@/lib/supabase/adminOnlyClient';
 import { loadCatalogoProyectosApp } from '@/lib/proyectos/proyectosUnificados';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
+import { PERMISOS } from '@/lib/auth/permisosCatalogo';
 export const dynamic = 'force-dynamic';
 
 /** Catálogo de obras/proyectos para selects de almacén (despacho, compras, etc.). */
 export async function GET() {
+  const acceso = await requireAlgunPermisoWeb(PERMISOS);
+  if (!acceso.ok) return acceso.response;
+
   try {
     const supabase = createSupabaseAdminOnlyClient() ?? (await createClient());
     const { proyectos, error } = await loadCatalogoProyectosApp(supabase);

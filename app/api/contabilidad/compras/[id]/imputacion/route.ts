@@ -6,6 +6,7 @@ import {
 } from '@/lib/contabilidad/imputacionCompra';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const dynamic = 'force-dynamic';
 
 type RouteCtx = { params: { id: string } | Promise<{ id: string }> };
@@ -18,6 +19,9 @@ async function resolveParams(
 
 /** PATCH { imputacion: 'obra' | 'entidad' } — excluye o incluye la compra en valuación AD. */
 export async function PATCH(req: Request, ctx: RouteCtx) {
+  const acceso = await requireAlgunPermisoWeb(['cco.editar', 'compra.registrar']);
+  if (!acceso.ok) return acceso.response;
+
   try {
     const { id } = await resolveParams(ctx.params);
     if (id.startsWith('canal-')) {

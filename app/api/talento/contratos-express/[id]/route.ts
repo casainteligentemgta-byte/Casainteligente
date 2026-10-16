@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { BUCKET_CONTRATOS_OBREROS } from '@/lib/talento/contratoLaboralRegistroStorage';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const runtime = 'nodejs';
 
 type ExpressRowPaths = {
@@ -13,6 +14,9 @@ type ExpressRowPaths = {
  * DELETE — Elimina la fila en `ci_contratos_express` y los objetos asociados en Storage (borrador y firmado si existen).
  */
 export async function DELETE(_req: Request, context: { params: { id: string } }) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   const id = (context.params?.id ?? '').trim();
   if (!id) {
     return NextResponse.json({ error: 'id requerido' }, { status: 400 });

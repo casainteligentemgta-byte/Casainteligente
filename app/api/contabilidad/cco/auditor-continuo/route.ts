@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { ejecutarAuditorContinuoCco } from '@/lib/contabilidad/cco/auditorContinuo';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireCcoAcceso } from '@/lib/auth/requireCcoRoute';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
@@ -11,6 +12,9 @@ export const maxDuration = 300;
  * Por defecto: solo la obra indicada; si no hay proyecto_id, todas.
  */
 export async function POST(req: Request) {
+  const acceso = await requireCcoAcceso('editar');
+  if (!acceso.ok) return acceso.response;
+
   try {
     const admin = supabaseAdminForRoute();
     if (!admin.ok) return admin.response;
@@ -53,6 +57,9 @@ export async function POST(req: Request) {
 
 /** GET ?proyecto= — misma revisión (útil para pruebas). */
 export async function GET(req: Request) {
+  const acceso = await requireCcoAcceso('ver');
+  if (!acceso.ok) return acceso.response;
+
   try {
     const admin = supabaseAdminForRoute();
     if (!admin.ok) return admin.response;

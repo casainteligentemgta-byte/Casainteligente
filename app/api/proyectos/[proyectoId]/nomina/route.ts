@@ -16,6 +16,8 @@ import {
   mensajeProyectoIdInvalido,
 } from '@/lib/proyectos/validarProyectoUuid';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
+import { PERMISOS } from '@/lib/auth/permisosCatalogo';
 export const dynamic = 'force-dynamic';
 
 type RouteCtx = { params: { proyectoId: string } };
@@ -25,6 +27,9 @@ async function supabaseParaNomina() {
 }
 
 export async function GET(req: Request, { params }: RouteCtx) {
+  const acceso = await requireAlgunPermisoWeb(PERMISOS);
+  if (!acceso.ok) return acceso.response;
+
   const proyectoId = params.proyectoId?.trim() ?? '';
   if (!isValidProyectoUuid(proyectoId)) {
     return NextResponse.json(
@@ -62,6 +67,9 @@ export async function GET(req: Request, { params }: RouteCtx) {
 }
 
 export async function POST(req: Request, { params }: RouteCtx) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar', 'admin.config']);
+  if (!acceso.ok) return acceso.response;
+
   const proyectoId = params.proyectoId?.trim() ?? '';
   if (!isValidProyectoUuid(proyectoId)) {
     return NextResponse.json(

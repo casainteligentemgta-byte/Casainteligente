@@ -4,10 +4,14 @@ import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import { registrarAdelantoPrestaciones } from '@/lib/nomina/persistirSemanaObra';
 import { SOLICITUD_ANTICIPO_SEPTIMA_TEXTO } from '@/lib/nomina/reglasPagoObra';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 export async function POST(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   const supabase = await createClient();
   const {
     data: { user },

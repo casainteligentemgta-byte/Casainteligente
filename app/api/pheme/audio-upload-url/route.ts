@@ -11,6 +11,8 @@ import {
 import { friendlyStorageError } from '@/lib/supabase/friendlyStorageError';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
+import { PERMISOS } from '@/lib/auth/permisosCatalogo';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -23,6 +25,9 @@ export const dynamic = 'force-dynamic';
  * Body JSON: { file_name, mime_type?, file_size }
  */
 export async function POST(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(PERMISOS);
+  if (!acceso.ok) return acceso.response;
+
   let body: {
     file_name?: unknown;
     fileName?: unknown;

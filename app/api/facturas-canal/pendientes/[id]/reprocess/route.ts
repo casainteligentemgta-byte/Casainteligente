@@ -3,6 +3,7 @@ import { processInvoiceFromCanal } from '@/lib/canal/processInvoiceFromCanal';
 import { PROCUREMENT_DOCUMENTS_BUCKET } from '@/lib/almacen/procurementDocumentStorage';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 180;
 
@@ -31,6 +32,9 @@ type PendienteRow = {
 
 /** Reprocesa OCR de una sola factura pendiente existente (sin crear nuevo registro). */
 export async function POST(_req: Request, ctx: RouteCtx) {
+  const acceso = await requireAlgunPermisoWeb(['compra.registrar', 'compra.confirmar']);
+  if (!acceso.ok) return acceso.response;
+
   const admin = supabaseAdminForRoute();
   if (!admin.ok) return admin.response;
   const supabase = admin.client;

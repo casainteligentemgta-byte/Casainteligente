@@ -3,10 +3,15 @@ import { listarPartidasCapituloDespacho } from '@/lib/almacen/listarPartidasCapi
 import { createClient } from '@/lib/supabase/server';
 import { createSupabaseAdminOnlyClient } from '@/lib/supabase/adminOnlyClient';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
+import { PERMISOS } from '@/lib/auth/permisosCatalogo';
 export const dynamic = 'force-dynamic';
 
 /** Partidas de un capítulo para imputación opcional en despacho web. */
 export async function GET(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(PERMISOS);
+  if (!acceso.ok) return acceso.response;
+
   const url = new URL(req.url);
   const proyectoId = url.searchParams.get('proyecto_id')?.trim();
   const capituloId = url.searchParams.get('capitulo_id')?.trim();

@@ -3,6 +3,7 @@ import { BUCKET_CONTRATOS_OBREROS } from '@/lib/talento/contratoLaboralRegistroS
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import { createClient } from '@/lib/supabase/server';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const runtime = 'nodejs';
 
 const MAX_BYTES = 20 * 1024 * 1024;
@@ -36,6 +37,9 @@ async function haySesion(): Promise<boolean> {
  * GET — enlace temporal para ver el contrato firmado que se cargó.
  */
 export async function GET(_req: Request, context: { params: { id: string } }) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   if (!(await haySesion())) return NextResponse.json({ error: 'Inicia sesión.' }, { status: 401 });
   const id = (context.params?.id ?? '').trim();
   if (!id) return NextResponse.json({ error: 'id requerido' }, { status: 400 });
@@ -66,6 +70,9 @@ export async function GET(_req: Request, context: { params: { id: string } }) {
  * Cuerpo: `multipart/form-data` con campo `file`.
  */
 export async function POST(req: Request, context: { params: { id: string } }) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   if (!(await haySesion())) return NextResponse.json({ error: 'Inicia sesión.' }, { status: 401 });
   const id = (context.params?.id ?? '').trim();
   if (!id) {

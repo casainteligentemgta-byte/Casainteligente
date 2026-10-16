@@ -3,10 +3,15 @@ import { loadEntidades } from '@/lib/almacen/inventoryClasificacion';
 import { createClient } from '@/lib/supabase/server';
 import { createSupabaseAdminOnlyClient } from '@/lib/supabase/adminOnlyClient';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
+import { PERMISOS } from '@/lib/auth/permisosCatalogo';
 export const dynamic = 'force-dynamic';
 
 /** GET /api/almacen/entidades — entidades de trabajo para despacho inter-entidad. */
 export async function GET() {
+  const acceso = await requireAlgunPermisoWeb(PERMISOS);
+  if (!acceso.ok) return acceso.response;
+
   try {
     const supabase = createSupabaseAdminOnlyClient() ?? (await createClient());
     const entidades = await loadEntidades(supabase);

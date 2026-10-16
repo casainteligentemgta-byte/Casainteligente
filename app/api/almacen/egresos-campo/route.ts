@@ -1,10 +1,15 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseAdminOnlyClient } from '@/lib/supabase/adminOnlyClient';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
+import { PERMISOS } from '@/lib/auth/permisosCatalogo';
 export const dynamic = 'force-dynamic';
 
 /** GET /api/almacen/egresos-campo?proyecto_id=... — trazabilidad de egresos. */
 export async function GET(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(PERMISOS);
+  if (!acceso.ok) return acceso.response;
+
   const url = new URL(req.url);
   const proyectoId = url.searchParams.get('proyecto_id')?.trim();
   const limite = Math.min(Number(url.searchParams.get('limit') ?? 50) || 50, 200);

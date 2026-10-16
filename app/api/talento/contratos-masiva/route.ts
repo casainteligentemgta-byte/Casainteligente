@@ -7,6 +7,7 @@ import { payloadContratoDesdeCandidato } from '@/lib/talento/candidatosContratoM
 import { generarContratoTrabajoObrero } from '@/lib/talento/generarContratoTrabajoObrero';
 import { ARREGLO_PAGO_MAX_USD } from '@/lib/nomina/arregloPago';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const runtime = 'nodejs';
 export const maxDuration = 300;
 
@@ -36,6 +37,9 @@ const bodySchema = z.object({
  * POST — genera contratos de trabajo para obreros que ya llenaron el enlace.
  */
 export async function POST(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   const supabase = await createClient();
   const {
     data: { user },

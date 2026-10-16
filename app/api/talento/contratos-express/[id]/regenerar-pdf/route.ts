@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { regenerarYPersistirPdfContratoExpress } from '@/lib/rrhh/expressContratoPdfBuffer';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const runtime = 'nodejs';
 
 /**
@@ -9,6 +10,9 @@ export const runtime = 'nodejs';
  * y lo sobrescribe en Storage. No crea un contrato nuevo.
  */
 export async function POST(_req: Request, context: { params: { id: string } }) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   const id = (context.params?.id ?? '').trim();
   if (!id) {
     return NextResponse.json({ error: 'id requerido' }, { status: 400 });

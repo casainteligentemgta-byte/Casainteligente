@@ -8,6 +8,7 @@ import { hojaVidaDesdeRow, nombreCompletoDesde } from '@/lib/talento/hojaVidaObr
 import { resolvePlanillaPatronoParaEmpleado } from '@/lib/talento/resolvePlanillaPatronoPdf';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const runtime = 'nodejs';
 
 /**
@@ -17,6 +18,9 @@ export const runtime = 'nodejs';
  * Solo RRHH/sesión interna: el obrero no descarga su hoja de vida.
  */
 export async function GET(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   const supabaseAuth = await createClient();
   const {
     data: { user },

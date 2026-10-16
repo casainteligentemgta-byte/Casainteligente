@@ -2,12 +2,17 @@ import { NextResponse } from 'next/server';
 import { cargarAnalisisMetron } from '@/lib/metron/persistirAnalisis';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
+import { PERMISOS } from '@/lib/auth/permisosCatalogo';
 export const runtime = 'nodejs';
 
 type Ctx = { params: Promise<{ id: string }> };
 
 /** GET /api/metron/analisis/[id] */
 export async function GET(_req: Request, ctx: Ctx) {
+  const acceso = await requireAlgunPermisoWeb(PERMISOS);
+  if (!acceso.ok) return acceso.response;
+
   const admin = supabaseAdminForRoute();
   if (!admin.ok) return admin.response;
 
@@ -32,6 +37,9 @@ export async function GET(_req: Request, ctx: Ctx) {
 
 /** PATCH /api/metron/analisis/[id] — actualizar aprobación de cómputos o status */
 export async function PATCH(req: Request, ctx: Ctx) {
+  const acceso = await requireAlgunPermisoWeb(PERMISOS);
+  if (!acceso.ok) return acceso.response;
+
   const admin = supabaseAdminForRoute();
   if (!admin.ok) return admin.response;
 

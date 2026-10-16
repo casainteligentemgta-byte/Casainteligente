@@ -5,6 +5,7 @@ import {
 } from '@/lib/almacen/approveQualityInspection';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const dynamic = 'force-dynamic';
 
 type RouteCtx = { params: { invoiceId: string } | Promise<{ invoiceId: string }> };
@@ -19,6 +20,9 @@ async function resolveInvoiceId(
 
 /** Libera todas las líneas en cuarentena de una factura. */
 export async function POST(_req: Request, ctx: RouteCtx) {
+  const acceso = await requireAlgunPermisoWeb(['almacen.cuarentena']);
+  if (!acceso.ok) return acceso.response;
+
   try {
     const invoiceId = await resolveInvoiceId(ctx.params);
     if (!invoiceId) {

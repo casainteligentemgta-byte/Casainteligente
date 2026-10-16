@@ -2,10 +2,14 @@ import { NextResponse } from 'next/server';
 import { cargarResumenBalanceContabilidad } from '@/lib/contabilidad/resumenBalanceContabilidad';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireCcoAcceso } from '@/lib/auth/requireCcoRoute';
 export const dynamic = 'force-dynamic';
 
 /** GET balance mensual: ingresos (inyecciones de capital) por entidad y egresos (compras obra) por proyecto. */
 export async function GET(req: Request) {
+  const acceso = await requireCcoAcceso('ver');
+  if (!acceso.ok) return acceso.response;
+
   try {
     const admin = supabaseAdminForRoute();
     if (!admin.ok) return admin.response;

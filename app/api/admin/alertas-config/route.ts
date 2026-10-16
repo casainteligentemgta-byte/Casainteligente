@@ -8,6 +8,8 @@ import {
 import { createClient } from '@/lib/supabase/server';
 import { createSupabaseAdminOnlyClient } from '@/lib/supabase/adminOnlyClient';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
+import { PERMISOS } from '@/lib/auth/permisosCatalogo';
 export const dynamic = 'force-dynamic';
 
 function supabaseForApi() {
@@ -23,6 +25,9 @@ type PatchBody = {
 };
 
 export async function GET() {
+  const acceso = await requireAlgunPermisoWeb(PERMISOS);
+  if (!acceso.ok) return acceso.response;
+
   const admin = supabaseForApi();
   const supabase = admin ?? (await createClient());
 
@@ -36,6 +41,9 @@ export async function GET() {
 }
 
 export async function PATCH(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(['admin.config']);
+  if (!acceso.ok) return acceso.response;
+
   const body = (await req.json()) as PatchBody;
   const admin = supabaseForApi();
   const supabase = admin ?? (await createClient());

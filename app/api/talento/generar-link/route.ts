@@ -13,6 +13,7 @@ import {
 import { snapshotPsiqueRecomendacion } from '@/lib/talento/psique/snapshotRecomendacion';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 function trimBase(u: string): string {
   return u.trim().replace(/\/$/, '');
 }
@@ -37,6 +38,9 @@ function resolvePublicAppUrl(req: Request, bodyPublicBase?: string): string {
  * Opcional: TALENTO_GENERAR_LINK_SECRET → header Authorization: Bearer <secret>
  */
 export async function POST(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   const secret = process.env.TALENTO_GENERAR_LINK_SECRET?.trim();
   if (secret) {
     const auth = req.headers.get('authorization');

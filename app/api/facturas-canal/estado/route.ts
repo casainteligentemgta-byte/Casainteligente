@@ -2,9 +2,13 @@ import { NextResponse } from 'next/server';
 import { getTelegramBotToken } from '@/lib/telegram/botApi';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+  const acceso = await requireAlgunPermisoWeb(['compra.registrar', 'compra.confirmar', 'cco.ver']);
+  if (!acceso.ok) return acceso.response;
+
   try {
     const admin = supabaseAdminForRoute();
     const token = getTelegramBotToken();

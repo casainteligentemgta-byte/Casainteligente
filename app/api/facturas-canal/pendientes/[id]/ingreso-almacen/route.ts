@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { ingresoAlmacenDesdePendienteCanal } from '@/lib/contabilidad/ingresoAlmacenDesdePendienteCanal';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const dynamic = 'force-dynamic';
 
 type RouteCtx = { params: { id: string } | Promise<{ id: string }> };
@@ -18,6 +19,9 @@ function idFromParams(params: { id?: string }): string | null {
 }
 
 export async function POST(_req: Request, ctx: RouteCtx) {
+  const acceso = await requireAlgunPermisoWeb(['almacen.ingreso', 'compra.registrar', 'compra.confirmar']);
+  if (!acceso.ok) return acceso.response;
+
   try {
     const id = idFromParams(await resolveParams(ctx.params));
     if (!id) {

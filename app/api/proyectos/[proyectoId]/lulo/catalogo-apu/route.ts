@@ -30,6 +30,8 @@ import {
 import { formatErrorMessage } from '@/lib/utils/formatErrorMessage';
 import { NextResponse } from 'next/server';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
+import { PERMISOS } from '@/lib/auth/permisosCatalogo';
 export const dynamic = 'force-dynamic';
 
 const IN_BATCH = 80;
@@ -578,6 +580,9 @@ export async function GET(
   _req: Request,
   { params }: { params: { proyectoId: string } },
 ) {
+  const acceso = await requireAlgunPermisoWeb(PERMISOS);
+  if (!acceso.ok) return acceso.response;
+
   try {
     const proyectoId = params.proyectoId?.trim() ?? '';
     if (!isValidProyectoUuid(proyectoId)) {

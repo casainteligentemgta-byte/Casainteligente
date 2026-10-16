@@ -11,6 +11,8 @@ import { procesarReunionDesdeAudio } from '@/lib/pheme/procesarReunionDesdeAudio
 import { friendlyStorageError } from '@/lib/supabase/friendlyStorageError';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
+import { PERMISOS } from '@/lib/auth/permisosCatalogo';
 export const runtime = 'nodejs';
 /** Upload Gemini + PROCESSING + minuta + persist; Storage evita el 413 del body. */
 export const maxDuration = 300;
@@ -28,6 +30,9 @@ export const maxDuration = 300;
  *   { status, id_reunion, minuta, transcripcion }
  */
 export async function POST(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(PERMISOS);
+  if (!acceso.ok) return acceso.response;
+
   const contentType = req.headers.get('content-type') ?? '';
   let tmpHint = '';
   try {

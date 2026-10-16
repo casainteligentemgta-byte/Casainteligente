@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import { PROCUREMENT_DOCUMENTS_BUCKET } from '@/lib/almacen/procurementDocumentStorage';
 
+import { requireCcoAcceso } from '@/lib/auth/requireCcoRoute';
 export const dynamic = 'force-dynamic';
 
 /** GET — URL firmada del comprobante de una inyección de capital. */
@@ -9,6 +10,9 @@ export async function GET(
   _req: Request,
   ctx: { params: Promise<{ id: string }> | { id: string } },
 ) {
+  const acceso = await requireCcoAcceso('ver');
+  if (!acceso.ok) return acceso.response;
+
   try {
     const admin = supabaseAdminForRoute();
     if (!admin.ok) return admin.response;

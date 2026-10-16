@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { aceptarContratoPorAdminBypass } from '@/lib/contratos/rrhhContratoFlow';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const runtime = 'nodejs';
 
 function clientIp(req: Request): string | null {
@@ -25,6 +26,9 @@ function clientIp(req: Request): string | null {
  * Alternativa: `empleado_id` en lugar de `contrato_id` (último contrato del empleado).
  */
 export async function POST(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   const supabaseAuth = await createClient();
   const {
     data: { user },

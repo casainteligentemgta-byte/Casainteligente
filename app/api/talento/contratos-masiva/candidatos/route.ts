@@ -4,12 +4,16 @@ import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import { listarCandidatosContratoMasiva } from '@/lib/talento/listarCandidatosContratoMasiva';
 import { cargarFaltantesContratoObra } from '@/lib/talento/cargarFaltantesContratoObra';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const dynamic = 'force-dynamic';
 
 /**
  * GET ?proyecto_id= — obreros de la obra que ya llenaron el enlace (HV).
  */
 export async function GET(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   const supabase = await createClient();
   const {
     data: { user },

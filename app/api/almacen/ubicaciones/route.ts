@@ -9,6 +9,8 @@ import {
 } from '@/lib/almacen/ubicacionesInventario';
 import type { TipoUbicacion } from '@/types/inventario-obra';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
+import { PERMISOS } from '@/lib/auth/permisosCatalogo';
 export const dynamic = 'force-dynamic';
 
 const TIPOS: TipoUbicacion[] = [
@@ -31,6 +33,9 @@ function parseTipo(raw: string | null): TipoUbicacion | undefined {
  * Query: ?activo=false (incluir inactivas), ?tipo=obra
  */
 export async function GET(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(PERMISOS);
+  if (!acceso.ok) return acceso.response;
+
   const url = new URL(req.url);
   const soloActivas = url.searchParams.get('activo') !== 'false';
   const tipo = parseTipo(url.searchParams.get('tipo'));

@@ -6,6 +6,7 @@ import {
 } from '@/lib/proyectos/validarProyectoUuid';
 import { NextResponse } from 'next/server';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
@@ -25,6 +26,9 @@ type RouteContext = { params: { proyectoId: string } };
  * Usa SUPABASE_SERVICE_ROLE_KEY si está definida (recomendado para migración masiva).
  */
 export async function POST(req: Request, { params }: RouteContext) {
+  const acceso = await requireAlgunPermisoWeb(['admin.config']);
+  if (!acceso.ok) return acceso.response;
+
   const proyectoId = params.proyectoId?.trim();
   if (!proyectoId) {
     return NextResponse.json({ error: 'proyectoId requerido en la URL' }, { status: 400 });

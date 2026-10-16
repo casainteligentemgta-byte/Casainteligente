@@ -3,11 +3,15 @@ import { processInvoiceFromCanal } from '@/lib/canal/processInvoiceFromCanal';
 import { PROCUREMENT_DOCUMENTS_BUCKET } from '@/lib/almacen/procurementDocumentStorage';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 180;
 
 /** Reintenta OCR en facturas con estado error / pendiente / procesando (solo dev/admin). */
 export async function POST() {
+  const acceso = await requireAlgunPermisoWeb(['compra.registrar', 'compra.confirmar']);
+  if (!acceso.ok) return acceso.response;
+
   const admin = supabaseAdminForRoute();
   if (!admin.ok) return admin.response;
   const supabase = admin.client;

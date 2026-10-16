@@ -3,6 +3,7 @@ import { reintentarContabilidadRecepcionCampo } from '@/lib/contabilidad/contabi
 import { actualizarProcuraDesdeRecepcionCampo } from '@/lib/procuras/actualizarProcuraDesdeRecepcion';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const dynamic = 'force-dynamic';
 
 function isUuid(v: string): boolean {
@@ -14,6 +15,9 @@ export async function POST(
   _req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
+  const acceso = await requireAlgunPermisoWeb(['almacen.ingreso', 'compra.registrar']);
+  if (!acceso.ok) return acceso.response;
+
   const { id } = await ctx.params;
   const recepcionId = id?.trim() ?? '';
 

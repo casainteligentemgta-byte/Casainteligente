@@ -5,10 +5,14 @@ import { createClient } from '@/lib/supabase/server';
 import { createSupabaseAdminOnlyClient } from '@/lib/supabase/adminOnlyClient';
 import { formatErrorMessage } from '@/lib/utils/formatErrorMessage';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const dynamic = 'force-dynamic';
 
 /** GET — ratio nómina oficina / honorarios AD (candado descuentos Nexus). */
 export async function GET() {
+  const acceso = await requireAlgunPermisoWeb(['admin.config']);
+  if (!acceso.ok) return acceso.response;
+
   try {
     const supabase = createSupabaseAdminOnlyClient() ?? (await createClient());
     const tasaRes = await resolverTasaBcvVesPorUsd(new Date().toISOString().slice(0, 10));

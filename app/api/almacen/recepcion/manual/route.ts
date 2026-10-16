@@ -7,6 +7,7 @@ import { sincronizarContabilidadDesdeRecepcionCampo } from '@/lib/contabilidad/s
 import { actualizarProcuraDesdeRecepcionCampo } from '@/lib/procuras/actualizarProcuraDesdeRecepcion';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const dynamic = 'force-dynamic';
 
 const TIPOS_VALIDOS = new Set(['nota_entrega', 'emergencia', 'factura_canal']);
@@ -16,6 +17,9 @@ function isUuid(v: string): boolean {
 }
 
 export async function POST(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(['almacen.ingreso', 'compra.registrar']);
+  if (!acceso.ok) return acceso.response;
+
   let body: PayloadRecepcionManualApi;
   try {
     body = (await req.json()) as PayloadRecepcionManualApi;

@@ -9,6 +9,7 @@ import {
   nuevoToken,
 } from '@/lib/rrhh/solicitudPersonalServer';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const dynamic = 'force-dynamic';
 
 /**
@@ -18,6 +19,9 @@ export const dynamic = 'force-dynamic';
  *  - descartar / reactivar.
  */
 export async function POST(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   const supabase = await createClient();
   const {
     data: { user },

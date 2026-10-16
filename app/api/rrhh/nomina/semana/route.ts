@@ -19,6 +19,7 @@ import {
 import { domingoDeSemanaIso, esMigracionNomina333Pendiente, lunesDeSemanaIso } from '@/lib/nomina/semanaIsoNomina';
 import { cargarArreglosPagoPorEmpleado } from '@/lib/nomina/arreglosPagoContrato';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
@@ -52,6 +53,9 @@ function parseItems(raw: unknown): ItemEntradaNomina[] {
 }
 
 export async function GET(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   const user = await exigirSesion();
   if (!user) return NextResponse.json({ error: 'Inicia sesión.' }, { status: 401 });
 
@@ -103,6 +107,9 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   const user = await exigirSesion();
   if (!user) return NextResponse.json({ error: 'Inicia sesión.' }, { status: 401 });
 

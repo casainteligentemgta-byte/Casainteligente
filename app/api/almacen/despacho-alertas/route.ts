@@ -8,6 +8,8 @@ import {
 import { createClient } from '@/lib/supabase/server';
 import { createSupabaseAdminOnlyClient } from '@/lib/supabase/adminOnlyClient';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
+import { PERMISOS } from '@/lib/auth/permisosCatalogo';
 export const dynamic = 'force-dynamic';
 
 function supabaseForApi() {
@@ -15,6 +17,9 @@ function supabaseForApi() {
 }
 
 export async function GET(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(PERMISOS);
+  if (!acceso.ok) return acceso.response;
+
   const proyectoId = new URL(req.url).searchParams.get('proyecto_id')?.trim();
   if (!proyectoId) {
     return NextResponse.json({ error: 'proyecto_id es obligatorio.' }, { status: 400 });
@@ -42,6 +47,9 @@ export async function GET(req: Request) {
 }
 
 export async function PUT(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(['almacen.ingreso', 'almacen.despacho', 'almacen.cuarentena']);
+  if (!acceso.ok) return acceso.response;
+
   const body = (await req.json()) as {
     proyecto_id?: string;
     exceso_advertencia_pct?: number;
