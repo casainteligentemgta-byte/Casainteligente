@@ -1,8 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Download,
+  FileUp,
   HardHat,
   Loader2,
   Mail,
@@ -16,6 +18,7 @@ import {
 import { toast } from 'sonner';
 import { parseFetchJson } from '@/lib/utils/parseFetchJson';
 import type { FilaNominaProyecto, EmpleadoNominaOpcion } from '@/lib/proyectos/proyectoNomina';
+import { PLANTILLA_CSV_NOMINA } from '@/lib/proyectos/plantillaNominaCsv';
 import {
   etiquetaRolNomina,
   rolesSugeridosNomina,
@@ -93,6 +96,23 @@ function contactoTelegram(f: FilaNominaProyecto): string {
   return '—';
 }
 
+/** Con chat ID el bot ya la reconoce; con solo teléfono, falta que comparta su número. */
+function telegramVinculado(f: FilaNominaProyecto): boolean {
+  return f.telegram_chat_id != null || f.empleado_telegram_chat_id != null;
+}
+
+function descargarPlantillaCsv() {
+  const blob = new Blob(['\uFEFF' + PLANTILLA_CSV_NOMINA], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'plantilla-nomina-obra.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+type ResultadoImport = { creados: number; actualizados: number; errores: { linea: number; error: string }[] };
+
 function contactoEmail(f: FilaNominaProyecto): string {
   return f.email || f.empleado_email || '—';
 }
@@ -107,6 +127,9 @@ export default function ProyectoNominaRolesPanel({ proyectoId }: Props) {
   const [editando, setEditando] = useState<FilaNominaProyecto | null>(null);
   const [form, setForm] = useState<FormState>(formVacio('obrero'));
   const [guardando, setGuardando] = useState(false);
+  const [importando, setImportando] = useState(false);
+  const [resultadoImport, setResultadoImport] = useState<ResultadoImport | null>(null);
+  const inputCsv = useRef<HTMLInputElement>(null);
 
   const rolesOpts = useMemo(() => rolesSugeridosNomina(form.categoria), [form.categoria]);
 
@@ -138,6 +161,29 @@ export default function ProyectoNominaRolesPanel({ proyectoId }: Props) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const importarCsv = async (archivo: File) => {
+    setImportando(true);
+    setResultadoImport(null);
+    try {
+      const fd = new FormData();
+      fd.append('archivo', archivo);
+      const res = await fetch(`/api/proyectos/${encodeURIComponent(proyectoId)}/nomina/importar`, {
+        method: 'POST',
+        body: fd,
+      });
+      const json = await parseFetchJson<ResultadoImport & { error?: string }>(res);
+      if (!res.ok) throw new Error(json.error ?? 'No se pudo importar');
+      setResultadoImport(json);
+      toast.success(`Nómina: ${json.creados} nuevos, ${json.actualizados} actualizados`);
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'No se pudo importar');
+    } finally {
+      setImportando(false);
+      if (inputCsv.current) inputCsv.current.value = '';
+    }
+  };
 
   const abrirNuevo = () => {
     setEditando(null);
@@ -281,15 +327,68 @@ export default function ProyectoNominaRolesPanel({ proyectoId }: Props) {
               </p>
             </div>
           </div>
-          <Button
-            type="button"
-            onClick={abrirNuevo}
-            className="rounded-xl bg-[#FF9500] text-black hover:bg-[#FF9500]/90"
-          >
-            <Plus className="mr-1.5 h-4 w-4" />
-            Agregar
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <input
+              ref={inputCsv}
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void importarCsv(f);
+              }}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={descargarPlantillaCsv}
+              className="rounded-xl border-white/15 bg-transparent text-zinc-300 hover:bg-white/5"
+              title="Plantilla CSV: nombre;cedula;rol;categoria;telefono;email;chat_id;notas"
+            >
+              <Download className="mr-1.5 h-4 w-4" />
+              Plantilla
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={importando}
+              onClick={() => inputCsv.current?.click()}
+              className="rounded-xl border-white/15 bg-transparent text-zinc-200 hover:bg-white/5"
+            >
+              {importando ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <FileUp className="mr-1.5 h-4 w-4" />}
+              Importar CSV
+            </Button>
+            <Button
+              type="button"
+              onClick={abrirNuevo}
+              className="rounded-xl bg-[#FF9500] text-black hover:bg-[#FF9500]/90"
+            >
+              <Plus className="mr-1.5 h-4 w-4" />
+              Agregar
+            </Button>
+          </div>
         </div>
+
+        {resultadoImport ? (
+          <div className="mt-4 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm">
+            <p className="text-zinc-200">
+              Importación: <b>{resultadoImport.creados}</b> nuevos · <b>{resultadoImport.actualizados}</b>{' '}
+              actualizados
+              {resultadoImport.errores.length ? (
+                <> · <span className="text-red-300">{resultadoImport.errores.length} con error</span></>
+              ) : null}
+            </p>
+            {resultadoImport.errores.length ? (
+              <ul className="mt-2 space-y-0.5 text-xs text-red-300/90">
+                {resultadoImport.errores.slice(0, 20).map((er) => (
+                  <li key={`${er.linea}-${er.error}`}>
+                    Línea {er.linea}: {er.error}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
 
         <div className="mt-5 flex gap-2">
           <button
@@ -371,6 +470,18 @@ export default function ProyectoNominaRolesPanel({ proyectoId }: Props) {
                   <TableCell className="text-sm text-zinc-400">{contactoEmail(f)}</TableCell>
                   <TableCell className="font-mono text-sm text-zinc-400">
                     {contactoTelegram(f)}
+                    <div
+                      className={`font-sans text-[10px] font-bold uppercase tracking-wide ${
+                        telegramVinculado(f) ? 'text-emerald-400' : 'text-amber-400/80'
+                      }`}
+                      title={
+                        telegramVinculado(f)
+                          ? 'El bot ya reconoce a esta persona'
+                          : 'Pendiente: que abra el bot y toque «Compartir mi número» (el teléfono debe coincidir)'
+                      }
+                    >
+                      {telegramVinculado(f) ? 'Vinculado' : f.telegram_telefono || f.empleado_celular ? 'Por vincular' : 'Sin Telegram'}
+                    </div>
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="inline-flex gap-1">
