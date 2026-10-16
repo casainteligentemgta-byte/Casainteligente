@@ -468,10 +468,12 @@ async function registrarIngresoAlmacenDesdePendienteCanal(
     }
 
     if (pendientes > 0) {
+      // Retiro y procura se cierran más abajo con las cantidades contadas (cantidadesRecibidas).
       const { aprobadas } = await approveAllQualityInspectionsForInvoice(
         supabase,
         purchaseInvoiceId,
         null,
+        { cerrarCadena: false },
       );
 
       const { data: cf } = await supabase
@@ -480,7 +482,7 @@ async function registrarIngresoAlmacenDesdePendienteCanal(
         .eq('purchase_invoice_id', purchaseInvoiceId)
         .maybeSingle();
 
-      await finalizarLiberacionCuarentena(supabase, purchaseInvoiceId);
+      await finalizarLiberacionCuarentena(supabase, purchaseInvoiceId, { cerrarCadena: false });
       await sincronizarContabilidadTrasInventarioCompra(supabase, purchaseInvoiceId);
 
       return {
