@@ -133,11 +133,13 @@ describe('stock bajo el mínimo y en cotización', () => {
         { id: MAT_B, name: 'Arena lavada', unit: 'm3', reorder_point: 0, is_active: true },
         { id: MAT_C, name: 'Clavo 3"', unit: 'kg', reorder_point: 0, is_active: true },
       ],
-      inv_ubicaciones: [{ id: UB, ci_proyecto_id: OBRA }],
+      inv_ubicaciones: [{ id: UB, ci_proyecto_id: OBRA, tipo: 'almacen_central' }, { id: 'ub-frente', ci_proyecto_id: OBRA, tipo: 'obra' }],
       inventario_stock: [
         { material_id: MAT_A, ubicacion_id: UB, cantidad_disponible: 3, cantidad_en_transito_entrante: 2, updated_at: haceHoras(10) },
         { material_id: MAT_B, ubicacion_id: UB, cantidad_disponible: 0, cantidad_en_transito_entrante: 0, updated_at: haceHoras(10) },
         { material_id: MAT_C, ubicacion_id: UB, cantidad_disponible: 8, cantidad_en_transito_entrante: 0, updated_at: haceHoras(10) },
+        // ya despachado al frente de obra: no cuenta como disponible
+        { material_id: MAT_A, ubicacion_id: 'ub-frente', cantidad_disponible: 50, cantidad_en_transito_entrante: 0, updated_at: haceHoras(10) },
       ],
     }) as unknown as SupabaseClient
 

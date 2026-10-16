@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { esUbicacionAlmacenFisico } from '@/lib/almacen/inventarioFiltroUbicacion';
 import { listarAdministradoresSistemaTelegram } from '@/lib/compras/usuariosSistemaTelegram';
 import {
   encargadosAlmacenObra,
@@ -284,16 +285,18 @@ export async function calcularCuellosBotella(
           ids,
         ),
       ),
-      filas('inv_ubicaciones', desde(supabase, 'inv_ubicaciones', 'id,ci_proyecto_id')),
+      filas('inv_ubicaciones', desde(supabase, 'inv_ubicaciones', 'id,ci_proyecto_id,tipo')),
     ]);
     const mat = new Map(mats.map((m) => [txt(m.id), m]));
     const obraDe = new Map(ubic.map((u) => [txt(u.id), txt(u.ci_proyecto_id) || null]));
+    // Solo cuenta lo que está en almacén: lo despachado a la obra (tipo «obra») ya se usó.
+    const enAlmacen = new Set(ubic.filter((u) => esUbicacionAlmacenFisico(txt(u.tipo) || null)).map((u) => txt(u.id)));
     const vigentes = minimos
       .filter((m) => mat.has(m.materialId) && mat.get(m.materialId)!.is_active !== false)
       .map((m) => ({ ...m, nombre: txt(mat.get(m.materialId)!.name), unidad: txt(mat.get(m.materialId)!.unit) }));
     const bajos = materialesBajoMinimo(
       vigentes,
-      stockFilas.map((s) => ({
+      stockFilas.filter((s) => enAlmacen.has(txt(s.ubicacion_id))).map((s) => ({
         materialId: txt(s.material_id),
         proyectoId: obraDe.get(txt(s.ubicacion_id)) ?? null,
         disponible: Number(s.cantidad_disponible) || 0,

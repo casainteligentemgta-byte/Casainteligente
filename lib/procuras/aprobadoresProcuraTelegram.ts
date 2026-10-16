@@ -17,6 +17,7 @@ export function rolSistemaTelegramDesdeSlugApp(slug: string): RolComprasTelegram
   if (direct) return direct;
   const map: Record<string, RolComprasTelegram> = {
     pm_obra: 'Aprobador',
+    ingeniero_residente: 'Solicitante',
     admin: 'Administrador',
     comprador: 'Comprador',
     contador: 'Contador',
