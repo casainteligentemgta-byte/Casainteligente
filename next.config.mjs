@@ -61,6 +61,8 @@ const nextConfig = {
   // ─── Redirecciones ──────────────────────────────────────────────────────────────
   async redirects() {
     return [
+      // El centro de cuellos de botella pasó a llamarse Torre de Control (avisos viejos de Telegram).
+      { source: '/compras/cuellos-botella', destination: '/compras/torre-control', permanent: true },
       // Solo el dashboard legacy de staff → hub RRHH.
       // NO redirigir /reclutamiento ni /reclutamiento/*: ahí viven
       // postulación pública (?need=), onboarding y hoja de vida.

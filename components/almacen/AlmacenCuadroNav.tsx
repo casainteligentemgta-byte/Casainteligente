@@ -88,9 +88,9 @@ export default function AlmacenCuadroNav({
         <Truck size={14} className="shrink-0" aria-hidden />
         <span className="min-w-0 max-w-full break-words hyphens-auto">Retiros</span>
       </Link>
-      <Link href="/compras/cuellos-botella" className={`${linkBase} ${tabClass(false)}`}>
+      <Link href="/compras/torre-control" className={`${linkBase} ${tabClass(false)}`}>
         <Timer size={14} className="shrink-0" aria-hidden />
-        <span className="min-w-0 max-w-full break-words hyphens-auto">Cuellos de botella</span>
+        <span className="min-w-0 max-w-full break-words hyphens-auto">Torre de Control</span>
       </Link>
     </nav>
   );

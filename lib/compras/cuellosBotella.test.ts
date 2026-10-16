@@ -99,7 +99,7 @@ describe('cuellos de botella', () => {
     assert.match(de('202')[0].html, /Factura A-1/)
     // quien mandó la factura que se trabó
     assert.match(de('700')[0].html, /lectura trabada/)
-    assert.match(de('700')[0].html, /x\.test\/compras\/cuellos-botella/)
+    assert.match(de('700')[0].html, /x\.test\/compras\/torre-control/)
   })
 
   it('edad legible', () => {

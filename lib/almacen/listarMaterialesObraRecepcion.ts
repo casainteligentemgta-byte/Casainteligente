@@ -37,6 +37,8 @@ export async function listarMaterialesObraRecepcion(
     const { data: delEntidad, error: errEnt } = await supabase
       .from('global_inventory')
       .select('id,name,sap_code,unit,entidad_id')
+    // Los desactivados (pruebas, no son de obra) no se ofrecen.
+    .neq('is_active', false)
       .eq('entidad_id', entidadId)
       .order('name')
       .limit(800);
@@ -51,6 +53,8 @@ export async function listarMaterialesObraRecepcion(
   const { data: delProyecto, error: errProy } = await supabase
     .from('global_inventory')
     .select('id,name,sap_code,unit,entidad_id')
+    // Los desactivados (pruebas, no son de obra) no se ofrecen.
+    .neq('is_active', false)
     .eq('proyecto_id', pid)
     .order('name')
     .limit(500);
