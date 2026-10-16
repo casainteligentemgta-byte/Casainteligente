@@ -6,7 +6,7 @@ recorridos `compra_*`).
 
 | Paso | Quién | Qué pasa |
 | --- | --- | --- |
-| 1 | Ingeniero | `/procura`: material, cantidad, prioridad. |
+| 1 | Ingeniero | `/procura`: capítulo, material (del **catálogo por categoría** o escrito), cantidad, prioridad. Si el almacén de la obra ya lo tiene, la confirmación ofrece **pedirlo al almacén** en vez de comprarlo (o pedir lo que hay y comprar solo el resto). |
 | 2 | Contador | Dice si hay fondos. **No bloquea**: con o sin fondos pasa al PM. |
 | 3 | PM | Aprueba o rechaza. Sin fondos el botón es **«Aprobar a crédito»**. |
 | 4 | Depositario | Recibe la orden de verificación. Si hay material que sacar, **debe enviar la foto**; con ella sale el stock hacia la obra. |
@@ -35,6 +35,29 @@ recorridos `compra_*`).
   nadie de almacén (depositario fijo, grupo o rol Depositario en la nómina), sus avisos
   los recibe quien administra la obra y, si tampoco hay, los administradores del sistema.
   Deja de aplicar solo, al asignar un depositario en Proyecto → Nómina.
+
+- **Almacén primero** (`pedirAlAlmacenYComprarResto` en
+  `lib/compras/procuraDepartamentoTelegram.ts`). Con material del catálogo y existencia en
+  la misma unidad, la confirmación ofrece «Pedirlo al almacén» (requerimiento de salida,
+  sin contador, PM ni comprador) o «Pedir X y comprar Y». El stock se revisa de nuevo al
+  pulsar. Sin nadie de almacén con Telegram, avisa y deja comprar.
+- **Catálogo base de obra civil** (`lib/compras/catalogoBase.ts`, migración 361). ~300
+  ítems en 20 categorías (acero y cabillas, arena y piedra, cemento, bloques, tuberías,
+  ferretería, electricidad, sanitarios, puertas y ventanas, techos, pisos, pintura,
+  herramientas, EPP, equipos, combustibles, servicios…), **sin precios ni proveedores**.
+  Al elegir un ítem se busca o crea el material de la empresa de la obra y se enlaza
+  (`global_inventory.catalogo_base_id`). Al escribir, también sugiere ítems del catálogo
+  (📗). El texto libre sigue disponible (híbrido).
+
+## Pendientes
+
+- **Catálogo completo.** El catálogo base es un punto de partida. Falta: revisar nombres y
+  medidas con el personal de obra, agregar variantes (marcas, calibres, presentaciones),
+  una pantalla web para editarlo (hoy se cambia con una migración) y depurar el catálogo
+  de cada empresa (materiales creados solos desde facturas, incluidos los de prueba).
+- **Procura atada al presupuesto (meta, con cautela).** Hoy se elige el capítulo. Falta
+  la partida del presupuesto y mostrar al contador y al PM cuánto del capítulo/partida
+  se lleva gastado antes de aprobar.
 
 ## Chat de verificación
 

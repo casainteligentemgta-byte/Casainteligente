@@ -13,6 +13,8 @@ export type DisponibilidadMaterialProcura = {
   cantidad: number;
   unidad: string;
   almacenNombre: string | null;
+  /** Almacén con más existencia (de donde saldría un pedido de material). */
+  ubicacionId?: string | null;
 };
 
 export type AlmacenStockEntidad = {
@@ -22,16 +24,16 @@ export type AlmacenStockEntidad = {
 };
 
 function mejorAlmacenDesdeFilas(
-  filas: Array<{ ubicacion_nombre: string; cantidad_disponible: number; unidad?: string }>,
-): { cantidad: number; almacenNombre: string; unidad: string } | null {
-  let mejor: { cantidad: number; almacenNombre: string; unidad: string } | null = null;
+  filas: Array<{ ubicacion_nombre: string; cantidad_disponible: number; unidad?: string; ubicacion_id?: string }>,
+): { cantidad: number; almacenNombre: string; unidad: string; ubicacionId: string | null } | null {
+  let mejor: { cantidad: number; almacenNombre: string; unidad: string; ubicacionId: string | null } | null = null;
   for (const f of filas) {
     const qty = Number(f.cantidad_disponible ?? 0);
     if (qty <= 0) continue;
     const nombre = String(f.ubicacion_nombre ?? 'Almacén').trim() || 'Almacén';
     const unidad = String(f.unidad ?? 'UND').trim() || 'UND';
     if (!mejor || qty > mejor.cantidad) {
-      mejor = { cantidad: qty, almacenNombre: nombre, unidad };
+      mejor = { cantidad: qty, almacenNombre: nombre, unidad, ubicacionId: f.ubicacion_id ?? null };
     }
   }
   return mejor;
@@ -41,7 +43,7 @@ async function stockObraMaterial(
   supabase: SupabaseClient,
   proyectoId: string,
   materialId: string,
-): Promise<{ cantidad: number; almacenNombre: string; unidad: string } | null> {
+): Promise<{ cantidad: number; almacenNombre: string; unidad: string; ubicacionId: string | null } | null> {
   const filas = await getStockRealObra(supabase, proyectoId, {
     materialId,
     soloConStock: true,
@@ -53,6 +55,7 @@ async function stockObraMaterial(
       ubicacion_nombre: f.ubicacion_nombre,
       cantidad_disponible: f.cantidad_disponible,
       unidad: f.unidad,
+      ubicacion_id: f.ubicacion_id,
     })),
   );
 }
@@ -84,6 +87,7 @@ export async function consultarDisponibilidadMaterialProcura(
       cantidad: obra.cantidad,
       unidad: obra.unidad || unidadFallback,
       almacenNombre: obra.almacenNombre,
+      ubicacionId: obra.ubicacionId,
     };
   }
 

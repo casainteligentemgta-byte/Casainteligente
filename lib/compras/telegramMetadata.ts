@@ -82,6 +82,9 @@ export type MetadataProcuraDepartamentoParsed = {
   monto_estimado_usd?: number | null;
   observaciones?: string;
   ttl_pendiente?: boolean;
+  /** «Almacén primero»: almacén de la obra con existencia y cuánto hay (confirmación). */
+  almacen_ubicacion_id?: string;
+  almacen_cantidad?: number;
 };
 
 export function parseMetadataProcuraDepartamento(
@@ -108,6 +111,8 @@ export function parseMetadataProcuraDepartamento(
     monto_estimado_usd: monto === null ? null : num(monto),
     observaciones: str(m.observaciones),
     ttl_pendiente: bool(m.ttl_pendiente),
+    almacen_ubicacion_id: str(m.almacen_ubicacion_id),
+    almacen_cantidad: num(m.almacen_cantidad),
   };
 }
 
