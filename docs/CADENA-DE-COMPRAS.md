@@ -56,6 +56,25 @@ recorridos `compra_*`).
   **llegó menos de lo facturado**. Cada diferencia se guarda una vez, con su monto, y se
   avisa por Telegram al comprador y al contador de la obra y a administración. Se revisa y
   marca «revisada» en `/compras/torre-control` (Torre de Control) → Control de compras.
+  Desde la migración 364 también avisa el **precio alto**: un material pagado más de 15 %
+  sobre la mediana en USD de sus últimas 5 compras (12 meses).
+
+- **Proveedores** (`lib/compras/fichaProveedores.ts`). En la Torre de Control: compras,
+  monto en USD, diferencias, líneas rechazadas y días hasta recibir de cada proveedor en
+  los últimos 180 días, con un puntaje de 0 a 100.
+
+- **Stock bajo el mínimo** (`materialesBajoMinimo` en `lib/compras/cuellosBotella.ts`).
+  Etapa de la Torre de Control y del aviso diario: material cuyo disponible + en camino
+  quedó por debajo del mínimo de la obra (Almacén → Maestros) o del mínimo global, y que
+  no tiene una procura abierta. Avisa al comprador y a los depositarios; agotado = 🔴.
+
+- **«Estoy cotizando»**. Botón en la orden de compra que recibe el comprador. Guarda
+  `cotizando_at`/`cotizando_por` (migración 364); la Torre de Control le da 5 días en vez
+  de 2 antes de marcarla detenida y muestra «en cotización por …».
+
+- **Gasto del capítulo** (`lib/procuras/gastoCapituloProcura.ts`). El ticket del PM
+  muestra lo ya comprado en ese capítulo de la obra, lo aprobado sin comprar y el total
+  con esta procura. Solo informa; todavía no se compara contra un presupuesto.
 
 ## Pendientes
 
@@ -64,8 +83,8 @@ recorridos `compra_*`).
   una pantalla web para editarlo (hoy se cambia con una migración) y depurar el catálogo
   de cada empresa (materiales creados solos desde facturas, incluidos los de prueba).
 - **Procura atada al presupuesto (meta, con cautela).** Hoy se elige el capítulo. Falta
-  la partida del presupuesto y mostrar al contador y al PM cuánto del capítulo/partida
-  se lleva gastado antes de aprobar.
+  la partida del presupuesto y comparar el gasto del capítulo (que el PM ya ve) contra
+  lo presupuestado.
 
 ## Chat de verificación
 

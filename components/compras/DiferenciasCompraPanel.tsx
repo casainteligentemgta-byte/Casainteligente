@@ -6,7 +6,9 @@ import { apiUrl } from '@/lib/http/apiUrl';
 
 type Diferencia = {
   id: string;
-  tipo: 'facturado_mayor_pedido' | 'no_pedido' | 'recibido_menor_facturado';
+  tipo: 'facturado_mayor_pedido' | 'no_pedido' | 'recibido_menor_facturado' | 'precio_alto';
+  precio_unitario: number | null;
+  precio_referencia: number | null;
   descripcion: string;
   unidad: string | null;
   cantidad_pedida: number | null;
@@ -23,6 +25,7 @@ const ETIQUETA: Record<Diferencia['tipo'], string> = {
   facturado_mayor_pedido: 'Facturó más de lo pedido',
   no_pedido: 'Facturó algo que nadie pidió',
   recibido_menor_facturado: 'Llegó menos de lo facturado',
+  precio_alto: 'Precio por encima del historial',
 };
 
 const n = (v: number | null) => (v == null ? '—' : Number(v).toLocaleString('es-VE', { maximumFractionDigits: 2 }));
@@ -36,6 +39,8 @@ function detalle(d: Diferencia): string {
       return `Facturado ${n(d.cantidad_facturada)} ${u}`;
     case 'recibido_menor_facturado':
       return `Facturado ${n(d.cantidad_facturada)} ${u} · recibido ${n(d.cantidad_recibida)} ${u}`;
+    case 'precio_alto':
+      return `Pagado ${n(d.precio_unitario)} USD/${u} · referencia ${n(d.precio_referencia)} USD/${u} · ${n(d.cantidad_facturada)} ${u}`;
     default:
       return '';
   }

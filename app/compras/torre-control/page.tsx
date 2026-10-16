@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { ArrowLeft, Timer } from 'lucide-react';
 import CuellosBotellaCentro from '@/components/compras/CuellosBotellaCentro';
 import DiferenciasCompraPanel from '@/components/compras/DiferenciasCompraPanel';
+import ProveedoresPanel from '@/components/compras/ProveedoresPanel';
 
 export const metadata = { title: 'Torre de Control — Compras' };
 
@@ -29,6 +30,7 @@ export default function TorreControlPage() {
           </div>
         </div>
         <DiferenciasCompraPanel />
+        <ProveedoresPanel />
         <CuellosBotellaCentro />
       </div>
     </div>

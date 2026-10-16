@@ -22,7 +22,8 @@ export type ClaveEtapa =
   | 'transporte'
   | 'cuarentena'
   | 'pedidos'
-  | 'canal';
+  | 'canal'
+  | 'stock';
 
 export type RolResponsable = 'pm' | 'comprador' | 'logistica' | 'depositario' | 'remitente';
 
@@ -44,7 +45,55 @@ export const ETAPAS_CUELLO: DefinicionEtapa[] = [
   { clave: 'cuarentena', titulo: 'Cuarentena sin verificar', responsable: 'Depositario', umbralHoras: 48, roles: ['depositario'] },
   { clave: 'ingreso', titulo: 'Comprada sin recibir', responsable: 'Depositario / comprador', umbralHoras: 120, roles: ['depositario', 'comprador'] },
   { clave: 'pedidos', titulo: 'Pedido de material sin despachar', responsable: 'Depositario', umbralHoras: 24, roles: ['depositario'] },
+  { clave: 'stock', titulo: 'Bajo el mínimo sin procura', responsable: 'Comprador / depositario', umbralHoras: 0, roles: ['comprador', 'depositario'] },
 ];
+
+/** Plazo de «Aprobada sin comprar» cuando el comprador marcó «Estoy cotizando». */
+export const UMBRAL_COTIZANDO_HORAS = 120;
+
+const ESTADOS_PROCURA_ABIERTA = ['solicitada', 'pendiente_pm', 'aprobada', 'aprobada_directa', 'en_compra'];
+
+export type MinimoMaterial = { materialId: string; proyectoId: string | null; minimo: number; nombre: string; unidad: string };
+export type StockUbicacion = {
+  materialId: string;
+  proyectoId: string | null;
+  disponible: number;
+  transito: number;
+  updatedAt: string;
+};
+export type MaterialBajoMinimo = MinimoMaterial & { disponible: number; transito: number; desde: string };
+
+/**
+ * Materiales cuyo disponible + en tránsito quedó por debajo del mínimo y que no tienen
+ * una procura abierta. Mínimo por obra (proyectoId) cuenta solo los almacenes de esa obra;
+ * mínimo global (proyectoId null) cuenta todos.
+ */
+export function materialesBajoMinimo(
+  minimos: MinimoMaterial[],
+  stock: StockUbicacion[],
+  procurasAbiertas: { materialId: string; proyectoId: string | null }[],
+): MaterialBajoMinimo[] {
+  const conProcura = new Set(procurasAbiertas.map((p) => `${p.materialId}|${p.proyectoId ?? ''}`));
+  const conProcuraAlguna = new Set(procurasAbiertas.map((p) => p.materialId));
+  const out: MaterialBajoMinimo[] = [];
+  for (const m of minimos) {
+    if (!(m.minimo > 0)) continue;
+    if (m.proyectoId ? conProcura.has(`${m.materialId}|${m.proyectoId}`) : conProcuraAlguna.has(m.materialId)) continue;
+    let disponible = 0;
+    let transito = 0;
+    let ultimo = '';
+    for (const s of stock) {
+      if (s.materialId !== m.materialId) continue;
+      if (m.proyectoId && s.proyectoId !== m.proyectoId) continue;
+      disponible += s.disponible;
+      transito += s.transito;
+      if (s.updatedAt > ultimo) ultimo = s.updatedAt;
+    }
+    if (disponible + transito >= m.minimo) continue;
+    out.push({ ...m, disponible, transito, desde: ultimo });
+  }
+  return out;
+}
 
 export type ItemCuello = {
   id: string;
@@ -120,9 +169,10 @@ export async function calcularCuellosBotella(
   const agregar = (
     etapa: ClaveEtapa,
     base: Omit<ItemCuello, 'etapa' | 'horas' | 'detenido' | 'critico' | 'obra'>,
+    extra?: { umbralHoras?: number; critico?: boolean },
   ) => {
     if (soloObra && base.proyectoId !== soloObra) return;
-    const umbral = def.get(etapa)!.umbralHoras;
+    const umbral = extra?.umbralHoras ?? def.get(etapa)!.umbralHoras;
     const horas = horasDesde(base.desde, ahora);
     items.push({
       ...base,
@@ -130,17 +180,18 @@ export async function calcularCuellosBotella(
       obra: null,
       horas,
       detenido: horas >= umbral,
-      critico: horas >= umbral * 2,
+      critico: extra?.critico ?? horas >= umbral * 2,
     });
   };
 
-  const [procuras, cuarentena, retiros, pedidos, canal] = await Promise.all([
+  const [procuras, cuarentena, retiros, pedidos, canal, minimosObra, minimosGlobal] = await Promise.all([
     filas(
       'ci_procuras',
-      desde(supabase, 'ci_procuras', 'id,ticket,estado,material_txt,cantidad,unidad,proyecto_id,updated_at').in(
-        'estado',
-        ['solicitada', 'pendiente_pm', 'aprobada', 'aprobada_directa', 'en_compra'],
-      ),
+      desde(
+        supabase,
+        'ci_procuras',
+        'id,ticket,estado,material_id,material_txt,cantidad,unidad,proyecto_id,updated_at,cotizando_at,cotizando_por',
+      ).in('estado', ESTADOS_PROCURA_ABIERTA),
     ),
     filas(
       'quality_inspections',
@@ -174,6 +225,11 @@ export async function calcularCuellosBotella(
         'id,estado,chat_id,chat_label,proyecto_id,extracted,mensaje_error,created_at,updated_at',
       ).in('estado', ['recibido', 'procesando', 'extraido']),
     ),
+    filas('ci_inventario_reorden_obra', desde(supabase, 'ci_inventario_reorden_obra', 'proyecto_id,material_id,reorder_point').gt('reorder_point', 0)),
+    filas(
+      'global_inventory',
+      desde(supabase, 'global_inventory', 'id,name,unit,reorder_point').gt('reorder_point', 0).neq('is_active', false),
+    ),
   ]);
 
   for (const p of procuras) {
@@ -185,16 +241,85 @@ export async function calcularCuellosBotella(
           ? 'ingreso'
           : 'compra';
     const cant = Number(p.cantidad);
+    const cotizando = etapa === 'compra' && txt(p.cotizando_at) ? txt(p.cotizando_at) : '';
     agregar(etapa, {
       id: txt(p.id),
       referencia: txt(p.ticket) || 'Procura',
       detalle: [txt(p.material_txt), Number.isFinite(cant) && cant > 0 ? `${cant} ${txt(p.unidad)}`.trim() : '']
+        .concat(cotizando ? [`en cotización${txt(p.cotizando_por) ? ` por ${txt(p.cotizando_por)}` : ''}`] : [])
         .filter(Boolean)
         .join(' · '),
       proyectoId: txt(p.proyecto_id) || null,
-      desde: txt(p.updated_at),
+      desde: cotizando || txt(p.updated_at),
       chatOrigen: null,
-    });
+    }, cotizando ? { umbralHoras: UMBRAL_COTIZANDO_HORAS } : undefined);
+  }
+
+  // Stock bajo el mínimo (por obra o global) que nadie ha pedido todavía.
+  const minimos: MinimoMaterial[] = [];
+  const idsMinimos = new Set<string>();
+  for (const r of minimosObra) {
+    const mid = txt(r.material_id);
+    if (!mid) continue;
+    idsMinimos.add(mid);
+    minimos.push({ materialId: mid, proyectoId: txt(r.proyecto_id) || null, minimo: Number(r.reorder_point) || 0, nombre: '', unidad: '' });
+  }
+  const conMinimoObra = new Set(minimos.map((m) => m.materialId));
+  for (const g of minimosGlobal) {
+    const mid = txt(g.id);
+    idsMinimos.add(mid);
+    // Si ya tiene mínimo por obra, ese manda (no se duplica el aviso).
+    if (!conMinimoObra.has(mid)) {
+      minimos.push({ materialId: mid, proyectoId: null, minimo: Number(g.reorder_point) || 0, nombre: '', unidad: '' });
+    }
+  }
+  if (minimos.length) {
+    const ids = Array.from(idsMinimos);
+    const [mats, stockFilas, ubic] = await Promise.all([
+      filas('global_inventory', desde(supabase, 'global_inventory', 'id,name,unit,is_active').in('id', ids)),
+      filas(
+        'inventario_stock',
+        desde(supabase, 'inventario_stock', 'material_id,ubicacion_id,cantidad_disponible,cantidad_en_transito_entrante,updated_at').in(
+          'material_id',
+          ids,
+        ),
+      ),
+      filas('inv_ubicaciones', desde(supabase, 'inv_ubicaciones', 'id,ci_proyecto_id')),
+    ]);
+    const mat = new Map(mats.map((m) => [txt(m.id), m]));
+    const obraDe = new Map(ubic.map((u) => [txt(u.id), txt(u.ci_proyecto_id) || null]));
+    const vigentes = minimos
+      .filter((m) => mat.has(m.materialId) && mat.get(m.materialId)!.is_active !== false)
+      .map((m) => ({ ...m, nombre: txt(mat.get(m.materialId)!.name), unidad: txt(mat.get(m.materialId)!.unit) }));
+    const bajos = materialesBajoMinimo(
+      vigentes,
+      stockFilas.map((s) => ({
+        materialId: txt(s.material_id),
+        proyectoId: obraDe.get(txt(s.ubicacion_id)) ?? null,
+        disponible: Number(s.cantidad_disponible) || 0,
+        transito: Number(s.cantidad_en_transito_entrante) || 0,
+        updatedAt: txt(s.updated_at),
+      })),
+      procuras
+        .filter((p) => txt(p.material_id))
+        .map((p) => ({ materialId: txt(p.material_id), proyectoId: txt(p.proyecto_id) || null })),
+    );
+    for (const b of bajos) {
+      const u = b.unidad ? ` ${b.unidad}` : '';
+      agregar(
+        'stock',
+        {
+          id: `${b.materialId}|${b.proyectoId ?? ''}`,
+          referencia: b.nombre || 'Material',
+          detalle: `quedan ${b.disponible}${u}${b.transito ? ` (+${b.transito} en camino)` : ''} · mínimo ${b.minimo}${u}`,
+          proyectoId: b.proyectoId,
+          desde: b.desde || new Date(ahora).toISOString(),
+          chatOrigen: null,
+        },
+        // Agotado (nada disponible ni en camino) es crítico desde el primer día.
+        { critico: b.disponible + b.transito <= 0 },
+      );
+    }
   }
 
   // Cuarentena: una fila por factura (no por línea), con la línea más antigua.
@@ -426,7 +551,12 @@ export async function enviarAvisosCuellosBotella(
     for (const etapa of ETAPAS_CUELLO) {
       const lista = b.porEtapa.get(etapa.clave);
       if (!lista?.length) continue;
-      partes.push('', `<b>${escHtml(etapa.titulo)}</b> <i>(más de ${textoEdad(etapa.umbralHoras)})</i>`);
+      partes.push(
+        '',
+        etapa.umbralHoras > 0
+          ? `<b>${escHtml(etapa.titulo)}</b> <i>(más de ${textoEdad(etapa.umbralHoras)})</i>`
+          : `<b>${escHtml(etapa.titulo)}</b>`,
+      );
       for (const it of lista.slice(0, MAX_LINEAS_POR_ETAPA)) {
         const obra = it.obra ? ` · ${escHtml(it.obra)}` : '';
         const marca = it.critico ? '🔴' : '🟠';
