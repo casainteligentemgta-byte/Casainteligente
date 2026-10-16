@@ -94,3 +94,58 @@ export async function aplicarLiberacionTransitoADisponible(
     notas: 'Recepción física: tránsito → stock disponible',
   });
 }
+
+/**
+ * Cuarentena rechazada o compra eliminada antes de recibirla: la mercancía ya no viene,
+ * así que se descuenta el tránsito que se sumó al crear la cuarentena. Sin esto el
+ * material quedaba «en tránsito» para siempre.
+ *
+ * Llamar ANTES de borrar la inspección (necesita leerla). No lanza.
+ */
+export async function revertirTransitoInspeccion(
+  supabase: SupabaseClient,
+  inspectionId: string,
+  notas = 'Cuarentena rechazada: se descuenta el tránsito',
+): Promise<void> {
+  try {
+    const { data: insp } = await supabase
+      .from('quality_inspections')
+      .select('id, material_id, quantity, invoice_id, purchase_detail_id')
+      .eq('id', inspectionId.trim())
+      .maybeSingle();
+    const row = insp as {
+      material_id: string | null;
+      quantity: number | string | null;
+      invoice_id: string | null;
+      purchase_detail_id: string | null;
+    } | null;
+    const materialId = row?.material_id?.trim();
+    const cantidad = Number(row?.quantity);
+    if (!row?.invoice_id || !materialId || !Number.isFinite(cantidad) || cantidad <= 0) return;
+
+    const { data: inv } = await supabase
+      .from('purchase_invoices')
+      .select('ubicacion_destino_id')
+      .eq('id', row.invoice_id)
+      .maybeSingle();
+    const ubicacionId = String(inv?.ubicacion_destino_id ?? '').trim();
+    if (!ubicacionId) return;
+
+    // Los materiales de gasto inmediato nunca sumaron tránsito (ver crearCuarentenaDesdeFactura).
+    const { materialEsGastoInmediato } = await import('@/lib/almacen/esGastoInmediatoCompra');
+    if (await materialEsGastoInmediato(supabase, materialId)) return;
+
+    await aplicarDeltaStockInventario(supabase, {
+      ubicacionId,
+      materialId,
+      deltaTransitoEntrante: -cantidad,
+      tipoMovimiento: 'anulacion',
+      documentoId: row.invoice_id,
+      referenciaTipo: 'quality_inspection',
+      referenciaId: row.purchase_detail_id ?? null,
+      notas,
+    });
+  } catch (e) {
+    console.warn('[revertirTransitoInspeccion]', inspectionId, e);
+  }
+}

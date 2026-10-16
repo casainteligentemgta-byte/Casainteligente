@@ -16,6 +16,8 @@ import { registerCompraDesdeRecepcion } from '@/lib/contabilidad/registerCompraD
 import { rifParaGuardarCompra } from '@/lib/contabilidad/rifVenezolano';
 import { parseEstadoProcura } from '@/lib/procuras/procuraEstados';
 import { vincularProcurasFacturaContabilidad } from '@/lib/procuras/vincularProcurasFacturaContabilidad';
+import { encaminarMercanciaFactura, type EncaminarMercanciaResult } from '@/lib/compras/encaminarMercanciaFactura';
+import { limpiarDescripcionProcura } from '@/lib/compras/procuraMaterialTexto';
 
 const ESTADOS_VINCULO = new Set(['aprobada', 'aprobada_directa', 'recibida_parcial']);
 
@@ -37,6 +39,8 @@ export type ImportarFacturaArchivoResult = {
   vinculadas: Array<{ procuraId: string; ticket: string }>;
   errores?: string[];
   extracted?: ExtractedPurchaseInvoice;
+  /** Cuarentena + retiro creados para que la mercancía llegue al almacén. */
+  mercancia?: EncaminarMercanciaResult;
 };
 
 type ProcuraRow = {
@@ -47,6 +51,10 @@ type ProcuraRow = {
   entidad_id: string | null;
   ubicacion_destino_id: string | null;
   purchase_invoice_id: string | null;
+  material_id: string | null;
+  material_txt: string | null;
+  cantidad: number | string | null;
+  unidad: string | null;
 };
 
 function hoyIso(): string {
@@ -82,7 +90,9 @@ export async function importarFacturaArchivoYVincularProcuras(
 
   const { data: procuras, error: procErr } = await supabase
     .from('ci_procuras')
-    .select('id,ticket,estado,proyecto_id,entidad_id,ubicacion_destino_id,purchase_invoice_id')
+    .select(
+      'id,ticket,estado,proyecto_id,entidad_id,ubicacion_destino_id,purchase_invoice_id,material_id,material_txt,cantidad,unidad',
+    )
     .in('id', ids);
 
   if (procErr) throw new Error(procErr.message);
@@ -219,12 +229,14 @@ export async function importarFacturaArchivoYVincularProcuras(
             cantidad: Number(it.quantity) > 0 ? Number(it.quantity) : 1,
             precio_unitario: Number(it.unit_price) >= 0 ? Number(it.unit_price) : 0,
           }))
-      : found.map((p) => ({
-          descripcion: p.ticket,
+      : // Sin líneas legibles en la factura: se usa lo que pidió cada procura.
+        found.map((p) => ({
+          descripcion: limpiarDescripcionProcura(p.material_txt ?? '') || p.ticket,
           item_code: null as string | null,
-          unidad: 'UND',
-          cantidad: 1,
+          unidad: (p.unidad ?? '').trim() || 'UND',
+          cantidad: Number(p.cantidad) > 0 ? Number(p.cantidad) : 1,
           precio_unitario: 0,
+          ...(p.material_id?.trim() ? { material_id: p.material_id.trim() } : {}),
         }));
 
   const { compraId } = await registerCompraDesdeRecepcion(supabase, {
@@ -255,6 +267,17 @@ export async function importarFacturaArchivoYVincularProcuras(
     throw new Error(vinculo.errores.join('\n') || 'Factura creada pero no se pudo vincular.');
   }
 
+  // Igual que el canal de Telegram: cuarentena para el depositario y retiro para Logística.
+  const mercancia = await encaminarMercanciaFactura(supabase, {
+    purchaseInvoiceId,
+    contabilidadCompraId: compraId,
+    procuraId: found[0]?.id ?? null,
+    proyectoId,
+    ubicacionDestinoId: ubicacionId,
+    numeroFactura: invoiceNumber,
+    proveedorNombre: supplierName,
+  });
+
   return {
     ok: true,
     contabilidad_compra_id: compraId,
@@ -267,5 +290,6 @@ export async function importarFacturaArchivoYVincularProcuras(
     })),
     errores: vinculo.errores.length ? vinculo.errores : undefined,
     extracted,
+    mercancia,
   };
 }

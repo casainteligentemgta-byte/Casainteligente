@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { finalizarLiberacionCuarentena } from '@/lib/almacen/finalizarLiberacionCuarentena';
+import { revertirTransitoInspeccion } from '@/lib/almacen/stockTransitoCompra';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
+import { requirePermisoWeb } from '@/lib/auth/requirePermisoRoute';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,6 +30,9 @@ export async function POST(req: Request, ctx: RouteCtx) {
         { status: 400 },
       );
     }
+
+    const auth = await requirePermisoWeb('almacen.cuarentena');
+    if (!auth.ok) return auth.response;
 
     const admin = supabaseAdminForRoute();
     if (!admin.ok) return admin.response;
@@ -58,6 +63,8 @@ export async function POST(req: Request, ctx: RouteCtx) {
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
+
+    await revertirTransitoInspeccion(admin.client, id, `Cuarentena rechazada: ${motivo.slice(0, 200)}`);
 
     await finalizarLiberacionCuarentena(admin.client, insp.invoice_id, {
       sincronizarInventario: false,
