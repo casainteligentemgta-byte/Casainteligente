@@ -172,9 +172,10 @@ class Consulta implements PromiseLike<Resultado> {
       afectadas = nuevas;
     } else if (this.accion === 'upsert') {
       afectadas = [];
-      const clave = this.conflicto!;
+      // onConflict puede ser compuesto: «col_a,col_b».
+      const columnas = this.conflicto!.split(',').map((c) => c.trim()).filter(Boolean);
       for (const f of Array.isArray(this.carga) ? this.carga : [this.carga!]) {
-        const previa = filas.find((x) => String(x[clave]) === String(f[clave]));
+        const previa = filas.find((x) => columnas.every((c) => String(x[c]) === String(f[c])));
         if (previa) {
           Object.assign(previa, f);
           afectadas.push(previa);

@@ -49,6 +49,14 @@ recorridos `compra_*`).
   (`global_inventory.catalogo_base_id`). Al escribir, también sugiere ítems del catálogo
   (📗). El texto libre sigue disponible (híbrido).
 
+- **Control de compras** (`lib/compras/controlCompra.ts`, migración 362). Al confirmar la
+  factura se compara con lo pedido: **facturó más de lo pedido** (más de 2 %) o **trae algo
+  que nadie pidió** (solo si todas las procuras eran del catálogo). Al cerrar la recepción
+  se compara con lo recibido (lo aprobado en cuarentena o el conteo del depositario):
+  **llegó menos de lo facturado**. Cada diferencia se guarda una vez, con su monto, y se
+  avisa por Telegram al comprador y al contador de la obra y a administración. Se revisa y
+  marca «revisada» en `/compras/cuellos-botella` → Control de compras.
+
 ## Pendientes
 
 - **Catálogo completo.** El catálogo base es un punto de partida. Falta: revisar nombres y

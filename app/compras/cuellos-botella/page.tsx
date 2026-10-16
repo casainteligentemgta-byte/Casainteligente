@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ArrowLeft, Timer } from 'lucide-react';
 import CuellosBotellaCentro from '@/components/compras/CuellosBotellaCentro';
+import DiferenciasCompraPanel from '@/components/compras/DiferenciasCompraPanel';
 
 export const metadata = { title: 'Cuellos de botella — Compras' };
 
@@ -27,6 +28,7 @@ export default function CuellosBotellaPage() {
             </p>
           </div>
         </div>
+        <DiferenciasCompraPanel />
         <CuellosBotellaCentro />
       </div>
     </div>

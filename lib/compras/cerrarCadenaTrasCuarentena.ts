@@ -23,6 +23,8 @@ export type DepsCierre = {
   cerrarRetiro: (purchaseInvoiceId: string) => Promise<void>;
   cancelarRetiro: (purchaseInvoiceId: string) => Promise<void>;
   marcarProcuras: (purchaseInvoiceId: string, recibidas: CantidadRecibida[]) => Promise<number>;
+  /** Control facturado vs recibido (migración 362). */
+  controlar?: (purchaseInvoiceId: string) => Promise<void>;
 };
 
 export type ResultadoCierre =
@@ -62,6 +64,10 @@ async function depsReales(supabase: SupabaseClient): Promise<DepsCierre> {
       }
     },
     marcarProcuras: (pi, recibidas) => marcarProcurasRecibidasTrasIngreso(supabase, pi, recibidas),
+    controlar: async (pi) => {
+      const { revisarControlCompra } = await import('@/lib/compras/controlCompra');
+      await revisarControlCompra(supabase, pi, { recepcion: true });
+    },
   };
 }
 
@@ -86,10 +92,12 @@ export async function cerrarCadenaTrasCuarentena(
     const aprobadas = cantidadesAprobadas(filas);
     if (!aprobadas.length) {
       await d.cancelarRetiro(pi);
+      await d.controlar?.(pi);
       return { accion: 'rechazada' };
     }
     await d.cerrarRetiro(pi);
     const procuras = await d.marcarProcuras(pi, aprobadas);
+    await d.controlar?.(pi);
     return { accion: 'recibida', procuras };
   } catch (e) {
     console.warn('[cerrarCadenaTrasCuarentena]', pi, e);
