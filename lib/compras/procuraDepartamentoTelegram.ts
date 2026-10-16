@@ -639,9 +639,13 @@ export async function manejarComandoProcuraDepartamentoTelegram(
     return true;
   }
   if (!usuarioPuedeSolicitarProcura(auth.usuario)) {
-    await sendTelegramMessage(chatId, '⛔ No tienes permiso para solicitar procuras.', {
-      parse_mode: 'HTML',
-    });
+    await sendTelegramMessage(
+      chatId,
+      '⛔ No tienes permiso para solicitar procuras.\n\n' +
+        '<i>Pueden pedirlas el ingeniero, los administradores y el comprador. ' +
+        'Si necesitas material, pídeselo a uno de ellos.</i>',
+      { parse_mode: 'HTML' },
+    );
     return true;
   }
 

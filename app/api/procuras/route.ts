@@ -108,7 +108,8 @@ export async function POST(req: Request) {
       asignado_telegram_chat_id?: number | string | null;
     };
 
-    const auth = await requirePermisoWeb('procura.solicitar', {
+    // Crear: solo ingeniero, administradores y comprador (ver la lista sigue con procura.solicitar).
+    const auth = await requirePermisoWeb('procura.crear', {
       proyectoId: body.proyecto_id,
       entidadId: body.entidad_id,
     });

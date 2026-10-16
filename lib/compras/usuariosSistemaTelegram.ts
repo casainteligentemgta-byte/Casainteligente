@@ -77,8 +77,19 @@ export async function obtenerUsuarioSistemaTelegram(
   };
 }
 
+/**
+ * Quién puede pedir una procura (/procura): el ingeniero (rol Solicitante), los
+ * administradores y el comprador. El PM (Aprobador) y el Contador no piden: aprueban
+ * y revisan fondos. Decisión del dueño, 16-oct-2026.
+ */
+export const ROLES_PUEDEN_SOLICITAR_PROCURA: readonly RolComprasTelegram[] = [
+  'Solicitante',
+  'Administrador',
+  'Comprador',
+];
+
 export function usuarioPuedeSolicitarProcura(u: UsuarioSistemaTelegram): boolean {
-  return u.activo && ['Solicitante', 'Aprobador', 'Comprador', 'Contador', 'Administrador'].includes(u.rol);
+  return u.activo && ROLES_PUEDEN_SOLICITAR_PROCURA.includes(u.rol);
 }
 
 export function usuarioPuedeAprobarProcura(u: UsuarioSistemaTelegram): boolean {
