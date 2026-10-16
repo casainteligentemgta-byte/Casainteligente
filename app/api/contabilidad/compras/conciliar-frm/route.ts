@@ -3,6 +3,7 @@ import type { ExtractedCanalHeader } from '@/lib/contabilidad/extractedCanal';
 import { conciliarFrmConFacturaCanal } from '@/lib/contabilidad/conciliarFrmConFacturaCanal';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const dynamic = 'force-dynamic';
 
 function isUuid(v: string): boolean {
@@ -21,6 +22,9 @@ type ConciliarFrmBody = {
 };
 
 export async function POST(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(['compra.registrar']);
+  if (!acceso.ok) return acceso.response;
+
   let body: ConciliarFrmBody;
   try {
     body = (await req.json()) as ConciliarFrmBody;

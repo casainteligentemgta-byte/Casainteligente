@@ -3,6 +3,7 @@ import { buscarRecepcionesCampoPendientes } from '@/lib/almacen/buscarRecepcione
 import { resolverProveedorIdPorRifNombre } from '@/lib/almacen/resolverProveedorIdCompra';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const dynamic = 'force-dynamic';
 
 function isUuid(v: string): boolean {
@@ -10,6 +11,9 @@ function isUuid(v: string): boolean {
 }
 
 export async function GET(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(['almacen.ingreso', 'almacen.cuarentena', 'almacen.despacho', 'compra.registrar']);
+  if (!acceso.ok) return acceso.response;
+
   const url = new URL(req.url);
   const proyectoId = url.searchParams.get('proyecto_id')?.trim() ?? '';
   let proveedorId = url.searchParams.get('proveedor_id')?.trim() ?? '';

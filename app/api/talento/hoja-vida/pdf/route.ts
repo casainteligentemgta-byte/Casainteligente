@@ -6,6 +6,7 @@ import { hojaVidaDesdeRow, nombreCompletoDesde } from '@/lib/talento/hojaVidaObr
 import { firmaTrabajadorMetaDesdeRow, HojaDeVidaObreroLegalPdfDoc } from '@/lib/talento/hojaVidaPdfLegal';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const runtime = 'nodejs';
 
 /**
@@ -13,6 +14,9 @@ export const runtime = 'nodejs';
  * Solo sesión interna (RRHH). El obrero no descarga.
  */
 export async function GET(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   const supabaseAuth = await createClient();
   const {
     data: { user },

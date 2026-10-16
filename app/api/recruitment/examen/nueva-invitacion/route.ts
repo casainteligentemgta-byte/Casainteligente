@@ -10,6 +10,7 @@ import {
 import { hasSupabaseCeoSession } from '@/lib/recruitment/ceo-auth-server';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const dynamic = 'force-dynamic';
 
 /**
@@ -17,6 +18,9 @@ export const dynamic = 'force-dynamic';
  * Body: { empleadoId: uuid }
  */
 export async function POST(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   const cookieStore = await cookies();
   const authorized = verifyRecruitmentCeoAuthorized({
     req,

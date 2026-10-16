@@ -3,10 +3,15 @@ import { listarTareasCronogramaPartida } from '@/lib/almacen/listarTareasCronogr
 import { createSupabaseAdminOnlyClient } from '@/lib/supabase/adminOnlyClient';
 import { createClient } from '@/lib/supabase/server';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
+import { PERMISOS } from '@/lib/auth/permisosCatalogo';
 export const dynamic = 'force-dynamic';
 
 /** GET /api/almacen/tareas-cronograma?proyecto_id=&partida_id= — actividades Gantt. */
 export async function GET(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(PERMISOS);
+  if (!acceso.ok) return acceso.response;
+
   const url = new URL(req.url);
   const proyectoId = url.searchParams.get('proyecto_id')?.trim();
   const partidaId = url.searchParams.get('partida_id')?.trim() || undefined;

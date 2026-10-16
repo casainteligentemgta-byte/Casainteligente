@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { archivarContratoRrhh } from '@/lib/contratos/rrhhContratoFlow';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const runtime = 'nodejs';
 
 const MAX_BYTES = 15 * 1024 * 1024;
@@ -11,6 +12,9 @@ const MAX_BYTES = 15 * 1024 * 1024;
  * POST multipart — RRHH sube escaneo firmado + ubicación archivo físico + confirmación digital.
  */
 export async function POST(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   const supabaseAuth = await createClient();
   const {
     data: { user },

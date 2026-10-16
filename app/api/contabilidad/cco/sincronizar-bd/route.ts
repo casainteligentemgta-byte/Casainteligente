@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireCcoAcceso } from '@/lib/auth/requireCcoRoute';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
 
@@ -11,6 +12,9 @@ export const maxDuration = 120;
  * Body: { proyectoId: string }
  */
 export async function POST(request: Request) {
+  const acceso = await requireCcoAcceso('editar');
+  if (!acceso.ok) return acceso.response;
+
   try {
     const supabase = await createClient();
     const {

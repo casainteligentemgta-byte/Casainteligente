@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const runtime = 'nodejs';
 
 /**
@@ -9,6 +10,9 @@ export const runtime = 'nodejs';
  * Devuelve estado de conexión, conteo de filas y primer registro.
  */
 export async function GET() {
+  const acceso = await requireAlgunPermisoWeb(['admin.config']);
+  if (!acceso.ok) return acceso.response;
+
   const admin = supabaseAdminForRoute();
 
   if (!admin.ok) {

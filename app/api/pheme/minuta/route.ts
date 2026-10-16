@@ -4,6 +4,8 @@ import { persistirReunionPheme } from '@/lib/pheme/persistirReunion';
 import { procesarReunionDesdeAudio } from '@/lib/pheme/procesarReunionDesdeAudio';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
+import { PERMISOS } from '@/lib/auth/permisosCatalogo';
 export const runtime = 'nodejs';
 /** Audio + Files API puede tardar (upload + PROCESSING + 2 llamadas Gemini). */
 export const maxDuration = 120;
@@ -19,6 +21,9 @@ export const maxDuration = 120;
  *  - titulo_reunion, audio (File), duracion_minutos?
  */
 export async function POST(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(PERMISOS);
+  if (!acceso.ok) return acceso.response;
+
   const contentType = req.headers.get('content-type') ?? '';
 
   try {

@@ -2,6 +2,7 @@ import { randomBytes } from 'crypto';
 import { NextResponse } from 'next/server';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const runtime = 'nodejs';
 
 function trimBase(u: string) {
@@ -22,6 +23,9 @@ function publicBase(req: Request, bodyUrl?: string) {
  * Opcional: RECRUITMENT_CAPTACION_SECRET → Authorization: Bearer …
  */
 export async function POST(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   const secret = process.env.RECRUITMENT_CAPTACION_SECRET?.trim();
   if (secret) {
     const auth = req.headers.get('authorization');

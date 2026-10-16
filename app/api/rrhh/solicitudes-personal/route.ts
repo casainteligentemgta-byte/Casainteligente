@@ -4,6 +4,7 @@ import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import { cargoPorCodigo, tipoVacantePorNivel } from '@/lib/constants/cargosObreros';
 import { baseUrlPublica, enlacesAbiertosSolicitud } from '@/lib/rrhh/solicitudPersonalServer';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const dynamic = 'force-dynamic';
 
 async function exigirSesion() {
@@ -50,6 +51,9 @@ const EMP_SELECT =
  * y quiénes respondieron a cada una.
  */
 export async function GET(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   const user = await exigirSesion();
   if (!user) return NextResponse.json({ error: 'Inicia sesión.' }, { status: 401 });
   const admin = supabaseAdminForRoute();
@@ -145,6 +149,9 @@ export async function GET(req: Request) {
  * Si ya hay una solicitud abierta de ese oficio en la obra, le suma las plazas.
  */
 export async function POST(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   const user = await exigirSesion();
   if (!user) return NextResponse.json({ error: 'Inicia sesión.' }, { status: 401 });
   const admin = supabaseAdminForRoute();
@@ -229,6 +236,9 @@ export async function POST(req: Request) {
 
 /** PATCH { id, accion: 'cerrar' | 'reabrir' | 'plazas', plazas? } */
 export async function PATCH(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   const user = await exigirSesion();
   if (!user) return NextResponse.json({ error: 'Inicia sesión.' }, { status: 401 });
   const admin = supabaseAdminForRoute();
@@ -259,6 +269,9 @@ export async function PATCH(req: Request) {
 
 /** DELETE ?id= — solo si nadie respondió todavía; si ya hay registrados, se cierra en vez de borrar. */
 export async function DELETE(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   const user = await exigirSesion();
   if (!user) return NextResponse.json({ error: 'Inicia sesión.' }, { status: 401 });
   const admin = supabaseAdminForRoute();

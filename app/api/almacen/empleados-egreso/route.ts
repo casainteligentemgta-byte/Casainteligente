@@ -3,10 +3,15 @@ import { listarEmpleadosProyectoEgreso } from '@/lib/almacen/listarEmpleadosProy
 import { createSupabaseAdminOnlyClient } from '@/lib/supabase/adminOnlyClient';
 import { createClient } from '@/lib/supabase/server';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
+import { PERMISOS } from '@/lib/auth/permisosCatalogo';
 export const dynamic = 'force-dynamic';
 
 /** GET /api/almacen/empleados-egreso?proyecto_id= — obreros de nómina del proyecto. */
 export async function GET(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(PERMISOS);
+  if (!acceso.ok) return acceso.response;
+
   const proyectoId = new URL(req.url).searchParams.get('proyecto_id')?.trim();
   if (!proyectoId) {
     return NextResponse.json({ error: 'proyecto_id requerido' }, { status: 400 });

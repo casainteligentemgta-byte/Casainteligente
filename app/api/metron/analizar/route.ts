@@ -6,6 +6,8 @@ import { isValidProyectoUuid } from '@/lib/proyectos/validarProyectoUuid';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import type { MetronDisciplina } from '@/types/metron';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
+import { PERMISOS } from '@/lib/auth/permisosCatalogo';
 export const runtime = 'nodejs';
 export const maxDuration = 120;
 
@@ -16,6 +18,9 @@ export const maxDuration = 120;
  * JSON: { proyecto_id, plano_archivo_id, disciplina? } — descarga el PDF del plano registrado.
  */
 export async function POST(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(PERMISOS);
+  if (!acceso.ok) return acceso.response;
+
   const admin = supabaseAdminForRoute();
   if (!admin.ok) return admin.response;
 

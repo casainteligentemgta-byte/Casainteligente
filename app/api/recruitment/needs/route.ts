@@ -7,10 +7,14 @@ import {
   restRowExistsById,
 } from '@/lib/supabase/postgrest-server';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Lista necesidades recientes (dashboard CEO). */
 export async function GET() {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   if (!db) {
     return NextResponse.json(
       { error: 'database_unavailable', hint: 'Configura DATABASE_URL para registrar vacantes.' },
@@ -98,6 +102,9 @@ export async function GET() {
 
 /** Crea una necesidad de puesto y activa el protocolo (enlace ?need=). */
 export async function POST(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   const postgrestCreds = resolveSupabasePostgrestCreds();
   if (!postgrestCreds && !db) {
     return NextResponse.json(

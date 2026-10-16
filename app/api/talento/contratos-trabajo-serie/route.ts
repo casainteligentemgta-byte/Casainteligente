@@ -5,6 +5,7 @@ import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import { createClient } from '@/lib/supabase/server';
 import { CEDULA_VE_NORMALIZADA_REGEX, normCedulaToken } from '@/lib/talento/cedulaAuth';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const runtime = 'nodejs';
 /** PDF en serie es pesado; limitar por request para no saturar serverless. */
 export const maxDuration = 300;
@@ -60,6 +61,9 @@ const bodySchema = z.object({
  * (típicamente extraídas de Excel). Procesa de forma secuencial.
  */
 export async function POST(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   const admin = supabaseAdminForRoute();
   if (!admin.ok) return admin.response;
 

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { cargarResumenGastosEntidad } from '@/lib/contabilidad/resumenGastosEntidad';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireCcoAcceso } from '@/lib/auth/requireCcoRoute';
 export const dynamic = 'force-dynamic';
 
 function mesActualRango(): { desde: string; hasta: string } {
@@ -14,6 +15,9 @@ function mesActualRango(): { desde: string; hasta: string } {
 
 /** GET resumen de gastos imputados a entidad (OpEx patrono). */
 export async function GET(req: Request) {
+  const acceso = await requireCcoAcceso('ver');
+  if (!acceso.ok) return acceso.response;
+
   try {
     const admin = supabaseAdminForRoute();
     if (!admin.ok) return admin.response;

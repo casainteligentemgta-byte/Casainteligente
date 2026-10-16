@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { deleteCompraRegistro } from '@/lib/contabilidad/deleteCompraRegistro';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const dynamic = 'force-dynamic';
 
 function idFromParams(params: { id?: string }): string | null {
@@ -18,6 +19,9 @@ async function resolveParams(
 }
 
 export async function GET(_req: Request, ctx: RouteCtx) {
+  const acceso = await requireAlgunPermisoWeb(['compra.registrar', 'compra.confirmar', 'cco.ver']);
+  if (!acceso.ok) return acceso.response;
+
   try {
     const id = idFromParams(await resolveParams(ctx.params));
     if (!id) {
@@ -40,6 +44,9 @@ export async function GET(_req: Request, ctx: RouteCtx) {
 }
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+  const acceso = await requireAlgunPermisoWeb(['compra.registrar', 'compra.confirmar']);
+  if (!acceso.ok) return acceso.response;
+
   try {
     const id = idFromParams(params);
     if (!id) {
@@ -84,6 +91,9 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 }
 
 export async function DELETE(req: Request, ctx: RouteCtx) {
+  const acceso = await requireAlgunPermisoWeb(['compra.registrar', 'compra.confirmar']);
+  if (!acceso.ok) return acceso.response;
+
   try {
     const id = idFromParams(await resolveParams(ctx.params));
     if (!id) {

@@ -3,6 +3,8 @@ import { cargarLoComprado } from '@/lib/almacen/cargarLoComprado';
 import { createClient } from '@/lib/supabase/server';
 import { createSupabaseAdminOnlyClient } from '@/lib/supabase/adminOnlyClient';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
+import { PERMISOS } from '@/lib/auth/permisosCatalogo';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -14,6 +16,9 @@ export const dynamic = 'force-dynamic';
  * Query: proyecto_id, entidad_id, desde, hasta, q, categoria
  */
 export async function GET(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(PERMISOS);
+  if (!acceso.ok) return acceso.response;
+
   try {
     const url = new URL(req.url);
     const supabase = createSupabaseAdminOnlyClient() ?? (await createClient());

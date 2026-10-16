@@ -2,10 +2,14 @@ import { NextResponse } from 'next/server';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import { guardarPlantillaPorCodigo, obtenerPlantillaPorCodigo } from '@/lib/talento/plantillaContratoObreroRepo';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(_req: Request, context: { params: { codigo: string } }) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   const codigo = (context.params?.codigo ?? '').trim();
   if (!codigo) {
     return NextResponse.json({ error: 'codigo requerido' }, { status: 400 });
@@ -25,6 +29,9 @@ export async function GET(_req: Request, context: { params: { codigo: string } }
 }
 
 export async function PUT(req: Request, context: { params: { codigo: string } }) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   const codigo = (context.params?.codigo ?? '').trim();
   if (!codigo) {
     return NextResponse.json({ error: 'codigo requerido' }, { status: 400 });

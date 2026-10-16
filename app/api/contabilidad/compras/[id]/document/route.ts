@@ -21,12 +21,16 @@ import {
 } from '@/lib/contabilidad/syncDocumentoCompraRecepcion';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const runtime = 'nodejs';
 export const maxDuration = 180;
 
 type RouteCtx = { params: Promise<{ id: string }> };
 
 export async function GET(_req: Request, ctx: RouteCtx) {
+  const acceso = await requireAlgunPermisoWeb(['compra.registrar', 'cco.ver']);
+  if (!acceso.ok) return acceso.response;
+
   try {
     const { id } = await ctx.params;
     if (!id?.trim()) {
@@ -117,6 +121,9 @@ export async function GET(_req: Request, ctx: RouteCtx) {
  * Query `ocr=0` salta la extracción.
  */
 export async function POST(req: Request, ctx: RouteCtx) {
+  const acceso = await requireAlgunPermisoWeb(['compra.registrar']);
+  if (!acceso.ok) return acceso.response;
+
   try {
     const { id } = await ctx.params;
     if (!id?.trim()) {

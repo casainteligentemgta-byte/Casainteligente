@@ -3,6 +3,8 @@ import { createClient as createSupabaseJsClient, type SupabaseClient } from '@su
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import { coordsCliente, direccionCliente, etiquetaCliente } from '@/lib/clientes/etiquetaCliente';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
+import { PERMISOS } from '@/lib/auth/permisosCatalogo';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
@@ -70,6 +72,9 @@ function mapRow(raw: unknown): Item | null {
  * responde 200 con `items: []` y `hint`/`error` para que el fetch del navegador no dispare “Internal Server Error”.
  */
 export async function GET() {
+  const acceso = await requireAlgunPermisoWeb(PERMISOS);
+  if (!acceso.ok) return acceso.response;
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
   if (!url) {
     return json({

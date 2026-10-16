@@ -2,11 +2,15 @@ import { NextResponse } from 'next/server';
 import { notificarCuarentenaParaInvoice } from '@/lib/almacen/notificarCuarentenaParaInvoice';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const dynamic = 'force-dynamic';
 
 type Body = { purchaseInvoiceId?: string };
 
 export async function POST(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(['almacen.ingreso', 'almacen.cuarentena', 'compra.registrar']);
+  if (!acceso.ok) return acceso.response;
+
   try {
     const body = (await req.json().catch(() => ({}))) as Body;
     const purchaseInvoiceId = String(body.purchaseInvoiceId ?? '').trim();

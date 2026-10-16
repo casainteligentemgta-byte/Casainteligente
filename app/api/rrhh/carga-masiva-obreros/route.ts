@@ -8,6 +8,7 @@ import { nombresLegadoDesdeTextoLibre } from '@/lib/registro/ciEmpleadosNombresL
 import { cargoPorCodigo, tipoVacantePorNivel } from '@/lib/constants/cargosObreros';
 import { validarFilaCarga, type FilaCargaMasivaEntrada } from '@/lib/rrhh/cargaMasivaObreros';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const dynamic = 'force-dynamic';
 
 const MAX_FILAS = 300;
@@ -50,6 +51,9 @@ type ResultadoFila = {
  * Body: { proyecto_id, filas: [{ nombre, cedula, oficio, whatsapp }] }
  */
 export async function POST(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   const user = await exigirSesion();
   if (!user) return NextResponse.json({ error: 'Inicia sesión para cargar personal.' }, { status: 401 });
 
@@ -183,6 +187,9 @@ export async function POST(req: Request) {
 
 /** GET ?proyecto_id= → avance de los obreros de la obra (para el tablero de seguimiento). */
 export async function GET(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   const user = await exigirSesion();
   if (!user) return NextResponse.json({ error: 'Inicia sesión.' }, { status: 401 });
   const admin = supabaseAdminForRoute();
@@ -219,6 +226,9 @@ export async function GET(req: Request) {
  * Body: { empleado_id, oficio } con el código del tabulador («5.1» o «5,1»).
  */
 export async function PATCH(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   const user = await exigirSesion();
   if (!user) return NextResponse.json({ error: 'Inicia sesión.' }, { status: 401 });
   const admin = supabaseAdminForRoute();

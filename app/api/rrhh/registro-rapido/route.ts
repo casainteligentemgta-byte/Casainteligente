@@ -7,6 +7,7 @@ import { CEDULA_VE_NORMALIZADA_REGEX, normCedulaToken } from '@/lib/talento/cedu
 import { ESTADO_EVALUACION_EXPRESS_INICIAL } from '@/lib/talento/estadoEvaluacionExpress';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
@@ -15,6 +16,9 @@ export const runtime = 'nodejs';
  * Evita el INSERT directo desde el cliente con `estatus: pendiente` (viola el check de cuadrilla).
  */
 export async function POST(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   let supabaseAuth;
   try {
     supabaseAuth = await createClient();

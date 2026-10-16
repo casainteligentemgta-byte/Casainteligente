@@ -9,6 +9,7 @@ import {
 import { hasSupabaseCeoSession } from '@/lib/recruitment/ceo-auth-server';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const dynamic = 'force-dynamic';
 
 type Row = {
@@ -27,6 +28,9 @@ type Row = {
  * Requiere misma autenticación que el dashboard (cookie CEO, Supabase user o clave pública si no hay puerta).
  */
 export async function GET(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   try {
     const cookieStore = await cookies();
     const authorized = verifyRecruitmentCeoAuthorized({

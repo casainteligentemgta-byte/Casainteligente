@@ -6,6 +6,8 @@ import {
 import { createClient } from '@/lib/supabase/server';
 import { createSupabaseAdminOnlyClient } from '@/lib/supabase/adminOnlyClient';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
+import { PERMISOS } from '@/lib/auth/permisosCatalogo';
 export const dynamic = 'force-dynamic';
 
 function supabaseForApi() {
@@ -14,6 +16,9 @@ function supabaseForApi() {
 
 /** Umbrales públicos para UI cliente (compras, etc.). */
 export async function GET() {
+  const acceso = await requireAlgunPermisoWeb(PERMISOS);
+  if (!acceso.ok) return acceso.response;
+
   const admin = supabaseForApi();
   const supabase = admin ?? (await createClient());
 

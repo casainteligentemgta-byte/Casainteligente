@@ -6,6 +6,7 @@ import {
   eliminarTelegramWhitelist,
 } from '@/lib/telegram/chatWhitelist';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const dynamic = 'force-dynamic';
 
 const UUID_RE =
@@ -18,6 +19,9 @@ async function supabaseAdmin() {
 }
 
 export async function PATCH(req: Request, { params }: RouteCtx) {
+  const acceso = await requireAlgunPermisoWeb(['admin.config']);
+  if (!acceso.ok) return acceso.response;
+
   const id = params.id?.trim() ?? '';
   if (!UUID_RE.test(id)) {
     return NextResponse.json({ error: 'id inválido' }, { status: 400 });
@@ -48,6 +52,9 @@ export async function PATCH(req: Request, { params }: RouteCtx) {
 }
 
 export async function DELETE(_req: Request, { params }: RouteCtx) {
+  const acceso = await requireAlgunPermisoWeb(['admin.config']);
+  if (!acceso.ok) return acceso.response;
+
   const id = params.id?.trim() ?? '';
   if (!UUID_RE.test(id)) {
     return NextResponse.json({ error: 'id inválido' }, { status: 400 });

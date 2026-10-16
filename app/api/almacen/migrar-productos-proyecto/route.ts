@@ -3,9 +3,13 @@ import { migrarProductosAObra } from '@/lib/almacen/migrarProductosAObra';
 import { createClient } from '@/lib/supabase/server';
 import { createSupabaseAdminOnlyClient } from '@/lib/supabase/adminOnlyClient';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(['admin.config']);
+  if (!acceso.ok) return acceso.response;
+
   try {
     const body = (await req.json()) as {
       proyecto_id?: string;

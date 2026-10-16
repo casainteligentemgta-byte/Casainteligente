@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { ensureCiExamenInviteForEmpleado } from '@/lib/talento/ensureCiExamenInviteForEmpleado';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function normDoc(s: string): string {
@@ -29,6 +30,9 @@ function resolvePublicBase(req: Request): string {
  * Si envías `cedula`, debe coincidir con el expediente; si no, se usa la cédula guardada en BD.
  */
 export async function POST(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   const admin = supabaseAdminForRoute();
   if (!admin.ok) return admin.response;
 

@@ -4,10 +4,14 @@ import { resolverContratoPdfExpress } from '@/lib/rrhh/resolverContratoPdfServer
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const runtime = 'nodejs';
 
 /** GET — URL firmada temporal (`expires_sec`). `?doc=firmado` usa el archivo subido tras firma del obrero. */
 export async function GET(req: Request, context: { params: { id: string } }) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   const id = (context.params?.id ?? '').trim();
   if (!id) {
     return NextResponse.json({ error: 'id requerido' }, { status: 400 });

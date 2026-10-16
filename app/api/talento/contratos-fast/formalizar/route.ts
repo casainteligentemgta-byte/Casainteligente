@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { formalizarContratoExpressPorId } from '@/lib/talento/formalizarContratoExpress';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const runtime = 'nodejs';
 
 const bodySchema = z.object({
@@ -15,6 +16,9 @@ const bodySchema = z.object({
  * pero con cuerpo JSON como en plantillas legacy (`ci_contratos_fast` → en BD es `ci_contratos_express`).
  */
 export async function POST(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   const admin = supabaseAdminForRoute();
   if (!admin.ok) return admin.response;
 

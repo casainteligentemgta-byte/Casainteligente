@@ -11,6 +11,7 @@ import {
   mensajeProyectoIdInvalido,
 } from '@/lib/proyectos/validarProyectoUuid';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const dynamic = 'force-dynamic';
 
 const UUID_RE =
@@ -23,6 +24,9 @@ async function supabaseParaNomina() {
 }
 
 export async function PATCH(req: Request, { params }: RouteCtx) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar', 'admin.config']);
+  if (!acceso.ok) return acceso.response;
+
   const proyectoId = params.proyectoId?.trim() ?? '';
   const nominaId = params.nominaId?.trim() ?? '';
 
@@ -59,6 +63,9 @@ export async function PATCH(req: Request, { params }: RouteCtx) {
 }
 
 export async function DELETE(_req: Request, { params }: RouteCtx) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar', 'admin.config']);
+  if (!acceso.ok) return acceso.response;
+
   const proyectoId = params.proyectoId?.trim() ?? '';
   const nominaId = params.nominaId?.trim() ?? '';
 

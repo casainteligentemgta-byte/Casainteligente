@@ -8,6 +8,7 @@ import {
 import { formatErrorMessage } from '@/lib/utils/formatErrorMessage';
 import { NextResponse } from 'next/server';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
@@ -24,6 +25,9 @@ function esMdb(file: File): boolean {
  * Elimina presupuestos Lulo anteriores del proyecto e importa el MDB en cascada.
  */
 export async function POST(req: Request, { params }: RouteContext) {
+  const acceso = await requireAlgunPermisoWeb(['procura.aprobar', 'admin.config']);
+  if (!acceso.ok) return acceso.response;
+
   try {
     const proyectoId = params.proyectoId?.trim() ?? '';
     if (!isValidProyectoUuid(proyectoId)) {

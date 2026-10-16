@@ -3,6 +3,8 @@ import { listarRetirosCompra } from '@/lib/compras/listarRetirosCompra';
 import { createSupabaseAdminOnlyClient } from '@/lib/supabase/adminOnlyClient';
 import { createClient } from '@/lib/supabase/server';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
+import { PERMISOS } from '@/lib/auth/permisosCatalogo';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -14,6 +16,9 @@ export const dynamic = 'force-dynamic';
  * Query: activos=1 (deja fuera entregados y cancelados)
  */
 export async function GET(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(PERMISOS);
+  if (!acceso.ok) return acceso.response;
+
   try {
     const sesion = await createClient();
     const {

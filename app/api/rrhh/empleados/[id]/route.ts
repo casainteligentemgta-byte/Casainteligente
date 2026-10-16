@@ -3,6 +3,7 @@ import { eliminarEmpleado } from '@/lib/rrhh/eliminarEmpleado';
 import { createClient } from '@/lib/supabase/server';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -11,6 +12,9 @@ export const dynamic = 'force-dynamic';
  * Borra contratos/asignaciones hijas (RESTRICT) y luego `ci_empleados`.
  */
 export async function DELETE(_req: Request, context: { params: { id: string } }) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   const id = decodeURIComponent(context.params?.id ?? '').trim();
   if (!id) {
     return NextResponse.json({ error: 'id requerido' }, { status: 400 });

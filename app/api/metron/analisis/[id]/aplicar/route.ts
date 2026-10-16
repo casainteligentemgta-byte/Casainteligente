@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { aplicarAnalisisMetronAPresupuesto } from '@/lib/metron/aplicarPresupuesto';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
+import { PERMISOS } from '@/lib/auth/permisosCatalogo';
 export const runtime = 'nodejs';
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -11,6 +13,9 @@ type Ctx = { params: Promise<{ id: string }> };
  * Body opcional: { reemplazar_metron?: boolean }
  */
 export async function POST(req: Request, ctx: Ctx) {
+  const acceso = await requireAlgunPermisoWeb(PERMISOS);
+  if (!acceso.ok) return acceso.response;
+
   const admin = supabaseAdminForRoute();
   if (!admin.ok) return admin.response;
 

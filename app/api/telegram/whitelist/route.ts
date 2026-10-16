@@ -9,6 +9,7 @@ import {
 } from '@/lib/telegram/chatWhitelist';
 import { getTelegramAllowedChatIds } from '@/lib/telegram/botApi';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const dynamic = 'force-dynamic';
 
 async function supabaseAdmin() {
@@ -16,6 +17,9 @@ async function supabaseAdmin() {
 }
 
 export async function GET() {
+  const acceso = await requireAlgunPermisoWeb(['admin.config']);
+  if (!acceso.ok) return acceso.response;
+
   const supabase = await supabaseAdmin();
   try {
     const [filas, activa] = await Promise.all([
@@ -34,6 +38,9 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(['admin.config']);
+  if (!acceso.ok) return acceso.response;
+
   let body: CrearTelegramWhitelistInput;
   try {
     body = (await req.json()) as CrearTelegramWhitelistInput;

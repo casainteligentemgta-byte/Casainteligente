@@ -3,6 +3,7 @@ import { liquidarMaquinariaIntercompany } from '@/lib/maquinaria/liquidarMaquina
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import { formatErrorMessage } from '@/lib/utils/formatErrorMessage';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const dynamic = 'force-dynamic';
 
 type Body = {
@@ -14,6 +15,9 @@ type Body = {
 
 /** Cierra horas intercompany pendientes, agrupa por entidad propietaria y debita fondo del proyecto. */
 export async function POST(request: Request) {
+  const acceso = await requireAlgunPermisoWeb(['admin.config']);
+  if (!acceso.ok) return acceso.response;
+
   const admin = supabaseAdminForRoute();
   if (!admin.ok) return admin.response;
 

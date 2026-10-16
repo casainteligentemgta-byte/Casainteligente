@@ -9,6 +9,7 @@ import {
 import { hasSupabaseCeoSession } from '@/lib/recruitment/ceo-auth-server';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const dynamic = 'force-dynamic';
 
 type KanbanColumnId = 'invitados' | 'evaluando' | 'banca' | 'asignados';
@@ -33,6 +34,9 @@ function notasUrgentes(notes: string | null): boolean {
  * para el dashboard RRHH. Misma autenticación que `/api/recruitment/candidatos-examen`.
  */
 export async function GET(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   try {
     const cookieStore = await cookies();
     const authorized = verifyRecruitmentCeoAuthorized({

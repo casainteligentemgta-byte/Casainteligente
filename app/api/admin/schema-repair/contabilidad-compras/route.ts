@@ -7,10 +7,14 @@ import {
 } from '@/lib/supabase/connectPostgresFromEnv';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const dynamic = 'force-dynamic';
 
 /** POST — Repara columnas faltantes en contabilidad_compras (221, 229). Solo service role. */
 export async function POST() {
+  const acceso = await requireAlgunPermisoWeb(['admin.config']);
+  if (!acceso.ok) return acceso.response;
+
   const admin = supabaseAdminForRoute();
   if (!admin.ok) return admin.response;
 

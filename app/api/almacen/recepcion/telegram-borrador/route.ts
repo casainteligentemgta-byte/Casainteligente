@@ -2,9 +2,13 @@ import { NextResponse } from 'next/server';
 import { obtenerBorradorRecepcionPorToken } from '@/lib/almacen/recepcionBorradorTelegram';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(['almacen.ingreso', 'almacen.cuarentena', 'almacen.despacho', 'compra.registrar']);
+  if (!acceso.ok) return acceso.response;
+
   const token = new URL(req.url).searchParams.get('token')?.trim() ?? '';
   if (!token) {
     return NextResponse.json({ error: 'Falta token de borrador' }, { status: 400 });

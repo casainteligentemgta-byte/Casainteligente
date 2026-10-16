@@ -7,6 +7,7 @@ import {
 import { formatErrorMessage } from '@/lib/utils/formatErrorMessage';
 import { NextResponse } from 'next/server';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const dynamic = 'force-dynamic';
 
 type LineaUpdate = {
@@ -30,6 +31,9 @@ export async function PATCH(
   req: Request,
   { params }: { params: { proyectoId: string } },
 ) {
+  const acceso = await requireAlgunPermisoWeb(['procura.aprobar', 'admin.config']);
+  if (!acceso.ok) return acceso.response;
+
   try {
     const proyectoId = params.proyectoId?.trim() ?? '';
     if (!isValidProyectoUuid(proyectoId)) {

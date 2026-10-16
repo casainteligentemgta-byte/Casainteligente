@@ -8,12 +8,17 @@ import {
 import { aplicarAvanceCronograma } from '@/lib/proyectos/aplicarAvanceCronograma';
 import { formatErrorMessage } from '@/lib/utils/formatErrorMessage';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
+import { PERMISOS } from '@/lib/auth/permisosCatalogo';
 export const dynamic = 'force-dynamic';
 
 type RouteCtx = { params: { proyectoId: string } };
 
 /** Historial de avance diario (base para Curva S y reportes). */
 export async function GET(req: Request, { params }: RouteCtx) {
+  const acceso = await requireAlgunPermisoWeb(PERMISOS);
+  if (!acceso.ok) return acceso.response;
+
   const proyectoId = params.proyectoId?.trim() ?? '';
   if (!isValidProyectoUuid(proyectoId)) {
     return NextResponse.json(
@@ -51,6 +56,9 @@ export async function GET(req: Request, { params }: RouteCtx) {
 
 /** Registra avance diario de cronograma (endpoint de sincronización offline iPad). */
 export async function POST(req: Request, { params }: RouteCtx) {
+  const acceso = await requireAlgunPermisoWeb(['procura.solicitar', 'equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   const proyectoId = params.proyectoId?.trim() ?? '';
   if (!isValidProyectoUuid(proyectoId)) {
     return NextResponse.json(

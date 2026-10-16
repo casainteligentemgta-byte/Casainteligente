@@ -9,6 +9,7 @@ import {
 } from '@/lib/contabilidad/certificarFacturaAdjunta';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const runtime = 'nodejs';
 export const maxDuration = 120;
 
@@ -30,6 +31,9 @@ type Body = {
  * - usar_factura: actualiza cabecera/monto con la factura e importa ítems
  */
 export async function POST(req: Request, ctx: RouteCtx) {
+  const acceso = await requireAlgunPermisoWeb(['compra.confirmar', 'compra.verificar_fecha']);
+  if (!acceso.ok) return acceso.response;
+
   try {
     const { id } = await ctx.params;
     if (!id?.trim()) {

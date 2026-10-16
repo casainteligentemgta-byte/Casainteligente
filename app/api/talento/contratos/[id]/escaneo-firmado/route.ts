@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { BUCKET_CONTRATOS_OBREROS } from '@/lib/talento/contratoLaboralRegistroStorage';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const runtime = 'nodejs';
 
 const MAX_BYTES = 12 * 1024 * 1024;
@@ -12,6 +13,9 @@ const MAX_BYTES = 12 * 1024 * 1024;
  * Requiere sesión. Sube a Storage y registra ruta en `ci_contratos_empleado_obra`.
  */
 export async function POST(req: Request, context: { params: { id: string } }) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   const id = context.params.id?.trim();
   if (!id) {
     return NextResponse.json({ error: 'Falta id de contrato' }, { status: 400 });

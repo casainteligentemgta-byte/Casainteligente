@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server';
 import { CEDULA_VE_NORMALIZADA_REGEX, normCedulaToken } from '@/lib/talento/cedulaAuth';
 import { ARREGLO_PAGO_MAX_USD } from '@/lib/nomina/arregloPago';
 
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const runtime = 'nodejs';
 
 const postBodySchema = z.object({
@@ -59,6 +60,9 @@ const postBodySchema = z.object({
  * y registra en `ci_contratos_express` (compat. «contratos-fast» / express).
  */
 export async function POST(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   // Crea un contrato con la clave de servicio: solo personal con sesión.
   const sesion = await createClient();
   const {
