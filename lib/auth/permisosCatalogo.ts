@@ -5,6 +5,8 @@
 
 export const PERMISOS = [
   'procura.solicitar',
+  /** Crear una procura nueva (no verla): ingeniero, administradores y comprador. */
+  'procura.crear',
   'procura.aprobar',
   'procura.ejecutar_compra',
   'procura.usar_almacen',
@@ -87,6 +89,7 @@ const POR_ROL_EMPRESA: Record<RolEmpresa, Permiso[]> = {
   ],
   comprador: [
     'procura.solicitar',
+    'procura.crear',
     'procura.ejecutar_compra',
     'procura.usar_almacen',
     'compra.registrar',
@@ -110,7 +113,10 @@ const POR_ROL_EMPRESA: Record<RolEmpresa, Permiso[]> = {
 
 /** Roles de ci_proyecto_nomina.rol → permisos de campo / Telegram. */
 export const PERMISOS_POR_ROL_OBRA: Record<string, Permiso[]> = {
-  ingeniero_residente: ['procura.solicitar', 'almacen.despacho'],
+  ingeniero_residente: ['procura.solicitar', 'procura.crear', 'almacen.despacho'],
+  /** Administrador de la obra (nómina). */
+  admin: ['procura.solicitar', 'procura.crear'],
+  administrador: ['procura.solicitar', 'procura.crear'],
   depositario: [
     'procura.solicitar',
     'procura.usar_almacen',
