@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Check, FileImage, Link2, Loader2, RefreshCw, Trash2, X } from 'lucide-react';
+import { Check, FileImage, Link2, Loader2, RefreshCw, Timer, Trash2, X } from 'lucide-react';
 import { apiUrl } from '@/lib/http/apiUrl';
 import {
   COLOR_ESTADO_PROCURA,
@@ -323,14 +323,23 @@ export default function ProcurasPage() {
               Control unificado · pendientes, aprobadas y compradas
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => void cargar()}
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-white/[0.06] bg-white/[0.04] text-xs font-bold text-zinc-300"
-          >
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-            Actualizar
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/compras/cuellos-botella"
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-[#FF9500]/40 bg-[#FF9500]/10 text-xs font-bold text-[#FF9500]"
+            >
+              <Timer size={14} />
+              Cuellos de botella
+            </Link>
+            <button
+              type="button"
+              onClick={() => void cargar()}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-white/[0.06] bg-white/[0.04] text-xs font-bold text-zinc-300"
+            >
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+              Actualizar
+            </button>
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-2 p-1.5 rounded-2xl border border-white/[0.06] bg-white/[0.04]">

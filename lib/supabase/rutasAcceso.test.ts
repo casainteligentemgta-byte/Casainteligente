@@ -292,6 +292,7 @@ describe('toda ruta abierta del proyecto está revisada', () => {
       '/api/cron/avance-diario-campo',
       '/api/cron/cco-auditor-diario',
       '/api/cron/cco-snapshots-diarios',
+      '/api/cron/cuellos-botella',
       '/api/cron/permisologia-vencimientos',
       '/api/cron/weekly-report',
       // sesión y diagnóstico

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { mensajeChatNoAutorizado } from '@/lib/telegram/mensajeChatNoAutorizado';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   getTelegramBotToken,
@@ -927,7 +928,8 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
     if (!(await isChatAllowedAsync(chatId))) {
       await sendTelegramMessage(
         chatId,
-        '⛔ Chat no autorizado. Contacte al administrador.',
+        mensajeChatNoAutorizado(chatId),
+        { parse_mode: 'HTML' },
       );
       return NextResponse.json({ ok: true, denied: true });
     }

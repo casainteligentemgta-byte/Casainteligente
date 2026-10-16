@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { mensajeChatNoAutorizado } from '@/lib/telegram/mensajeChatNoAutorizado';
 import {
   getTelegramBotToken,
   sendTelegramMessage,
@@ -94,7 +95,7 @@ export async function handleTelegramWebhookRoutePost(req: Request) {
       : String(callback.from.id);
     if (!(await isChatAllowedAsync(chatId))) {
       try {
-        await sendTelegramMessage(chatId, '⛔ Chat no autorizado. Contacte al administrador.');
+        await sendTelegramMessage(chatId, mensajeChatNoAutorizado(chatId), { parse_mode: 'HTML' });
       } catch (err) {
         console.error('[telegram webhook] callback chat no autorizado', err);
       }
@@ -118,7 +119,8 @@ export async function handleTelegramWebhookRoutePost(req: Request) {
     try {
       await sendTelegramMessage(
         chatId,
-        '⛔ Chat no autorizado. Contacte al administrador.',
+        mensajeChatNoAutorizado(chatId),
+        { parse_mode: 'HTML' },
       );
     } catch (err) {
       console.error('[telegram webhook] chat no autorizado, sendMessage falló', err);

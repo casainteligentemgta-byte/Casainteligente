@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowLeftRight, ClipboardList, Package, Route, Truck } from 'lucide-react';
+import { ArrowLeftRight, ClipboardList, Package, Route, Timer, Truck } from 'lucide-react';
 
 export type CuadroAlmacen = 'inventario' | 'movimientos' | 'trazabilidad';
 
@@ -87,6 +87,10 @@ export default function AlmacenCuadroNav({
       <Link href="/almacen/retiros" className={`${linkBase} ${tabClass(retirosActivo)}`}>
         <Truck size={14} className="shrink-0" aria-hidden />
         <span className="min-w-0 max-w-full break-words hyphens-auto">Retiros</span>
+      </Link>
+      <Link href="/compras/cuellos-botella" className={`${linkBase} ${tabClass(false)}`}>
+        <Timer size={14} className="shrink-0" aria-hidden />
+        <span className="min-w-0 max-w-full break-words hyphens-auto">Cuellos de botella</span>
       </Link>
     </nav>
   );
