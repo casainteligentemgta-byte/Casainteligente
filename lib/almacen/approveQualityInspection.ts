@@ -305,6 +305,7 @@ export async function approveAllQualityInspectionsForInvoice(
   supabase: SupabaseClient,
   invoiceId: string,
   inspectorId?: string | null,
+  opts?: { cerrarCadena?: boolean },
 ): Promise<{ aprobadas: number }> {
   const { data: inspections, error } = await supabase
     .from('quality_inspections')
@@ -384,7 +385,7 @@ export async function approveAllQualityInspectionsForInvoice(
     await marcarInspeccionAprobada(supabase, inspection.id, inspectorId);
   }
 
-  await finalizarLiberacionCuarentena(supabase, invoiceId);
+  await finalizarLiberacionCuarentena(supabase, invoiceId, { cerrarCadena: opts?.cerrarCadena });
 
   return { aprobadas: inspections.length };
 }
