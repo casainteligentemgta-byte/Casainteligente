@@ -37,6 +37,8 @@ type NeedRow = {
   cantidad_requerida?: number | null;
   conteo_clics?: number | null;
   captacion_token?: string | null;
+  /** Enlace con datos básicos → evaluación → hoja de vida (solo si aprueba). */
+  examen_primero?: boolean | null;
 };
 
 function etiquetaCargo(row: NeedRow): string {
@@ -53,8 +55,16 @@ function urlRegistroConToken(row: NeedRow): string | null {
   return `${base}/registro/${encodeURIComponent(t)}`;
 }
 
-function mensajeCaptacionWhatsApp(cargo: string, nombreObra: string, link: string): string {
+function mensajeCaptacionWhatsApp(
+  cargo: string,
+  nombreObra: string,
+  link: string,
+  examenPrimero = false,
+): string {
   const obra = nombreObra.trim() || 'la obra vinculada al proyecto';
+  if (examenPrimero) {
+    return `Hola, Casa Inteligente te invita a postularte para ${cargo} en la obra ${obra}. Primero unos datos básicos y una evaluación corta (unos 20 minutos); si avanzas, completarás tu hoja de vida. Empieza aquí: ${link}`;
+  }
   return `Hola, Casa Inteligente te invita a postularte para ${cargo} en la obra ${obra}. Completa tu planilla aquí: ${link}`;
 }
 
@@ -95,6 +105,7 @@ export default function GestionRRHHLocal({
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [ordenId, setOrdenId] = useState<string | null>(null);
   /** Al volver a esta pestaña tras registrar vacantes en otra ruta, se vuelve a leer `recruitment_needs`. */
   const [viewportTick, setViewportTick] = useState(0);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -163,7 +174,7 @@ export default function GestionRRHHLocal({
       }
 
       const selFull =
-        'id,title,cargo_nombre,cargo_codigo,protocol_active,created_at,cantidad_requerida,conteo_clics,captacion_token' as const;
+        'id,title,cargo_nombre,cargo_codigo,protocol_active,created_at,cantidad_requerida,conteo_clics,captacion_token,examen_primero' as const;
       const full = await supabase.from('recruitment_needs').select(selFull).or(filtroProyectoModulo).order('created_at', { ascending: false });
 
       if (!alive) return;
@@ -254,7 +265,7 @@ export default function GestionRRHHLocal({
       }
       const cargo = etiquetaCargo(row);
       const obra = (nombreProyecto ?? '').trim();
-      const text = encodeURIComponent(mensajeCaptacionWhatsApp(cargo, obra, url));
+      const text = encodeURIComponent(mensajeCaptacionWhatsApp(cargo, obra, url, Boolean(row.examen_primero)));
       window.open(`https://wa.me/?text=${text}`, '_blank', 'noopener,noreferrer');
     },
     [nombreProyecto, showToast],
@@ -279,6 +290,34 @@ export default function GestionRRHHLocal({
         showToast('Enlace de planilla copiado al portapapeles.');
       } catch {
         showToast('No se pudo copiar. Copia manualmente el enlace.');
+      }
+    },
+    [showToast],
+  );
+
+  const cambiarExamenPrimero = useCallback(
+    async (row: NeedRow) => {
+      const nuevo = !row.examen_primero;
+      setOrdenId(row.id);
+      try {
+        const res = await fetch('/api/reclutamiento/examen-primero', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ recruitment_need_id: row.id, examen_primero: nuevo }),
+        });
+        const j = (await res.json().catch(() => ({}))) as { error?: string; hint?: string };
+        if (!res.ok) {
+          showToast(j.hint ?? j.error ?? 'No se pudo cambiar el orden del enlace.');
+          return;
+        }
+        setNeeds((prev) => prev.map((n) => (n.id === row.id ? { ...n, examen_primero: nuevo } : n)));
+        showToast(
+          nuevo
+            ? 'Enlace: datos básicos → evaluación → hoja de vida (solo si aprueba).'
+            : 'Enlace: hoja de vida → evaluación.',
+        );
+      } finally {
+        setOrdenId(null);
       }
     },
     [showToast],
@@ -386,13 +425,14 @@ export default function GestionRRHHLocal({
         </p>
       ) : (
         <div className="mt-4 overflow-x-auto rounded-xl border border-white/10 bg-white/[0.03] backdrop-blur-xl">
-          <table className="w-full min-w-[720px] text-left text-sm">
+          <table className="w-full min-w-[860px] text-left text-sm">
             <thead>
               <tr className="border-b border-white/10 text-[10px] font-bold uppercase tracking-wide text-zinc-500">
                 <th className="px-3 py-2.5">Cargo</th>
                 <th className="px-3 py-2.5">Plazas</th>
                 <th className="px-3 py-2.5">Interesados</th>
                 <th className="px-3 py-2.5">Estado</th>
+                <th className="px-3 py-2.5">Orden del enlace</th>
                 <th className="px-3 py-2.5 text-right">Acciones</th>
               </tr>
             </thead>
@@ -419,6 +459,26 @@ export default function GestionRRHHLocal({
                           Cerrada
                         </span>
                       )}
+                    </td>
+                    <td className="px-3 py-3">
+                      <button
+                        type="button"
+                        onClick={() => void cambiarExamenPrimero(row)}
+                        disabled={ordenId === row.id}
+                        aria-pressed={Boolean(row.examen_primero)}
+                        title={
+                          row.examen_primero
+                            ? 'El candidato llena datos básicos, presenta la evaluación y solo si aprueba completa la hoja de vida. Pulsa para cambiar.'
+                            : 'El candidato llena la hoja de vida y luego la evaluación. Pulsa para pedir primero la evaluación.'
+                        }
+                        className={`inline-flex rounded-full border px-2.5 py-0.5 text-[11px] font-semibold transition disabled:opacity-50 ${
+                          row.examen_primero
+                            ? 'border-sky-400/50 bg-sky-500/15 text-sky-200 hover:bg-sky-500/25'
+                            : 'border-white/10 bg-white/[0.06] text-zinc-400 hover:bg-white/10'
+                        }`}
+                      >
+                        {ordenId === row.id ? '…' : row.examen_primero ? 'Examen primero' : 'Hoja de vida primero'}
+                      </button>
                     </td>
                     <td className="px-3 py-3">
                       <div className="flex flex-wrap justify-end gap-2">

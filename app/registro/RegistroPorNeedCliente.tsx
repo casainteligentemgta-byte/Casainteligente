@@ -20,6 +20,7 @@ import {
 import { nombresLegadoDesdeGaceta } from '@/lib/registro/ciEmpleadosNombresLegado';
 import { uploadTalentoPublicFile } from '@/lib/registro/uploadTalentoPublic';
 import CampoFotoFrente from '@/components/registro/CampoFotoFrente';
+import RegistroExamenPrimero from '@/components/registro/RegistroExamenPrimero';
 import { uuidV4 } from '@/lib/registro/uuidCompat';
 import { apiUrl } from '@/lib/http/apiUrl';
 import { createClient } from '@/lib/supabase/client';
@@ -83,6 +84,8 @@ type NeedLoaded = {
   tipo_vacante: string | null;
   protocol_active: boolean | null;
   proyecto_modulo_id: string | null;
+  /** Vacante con «examen primero»: datos básicos → evaluación → hoja de vida. */
+  examen_primero?: boolean | null;
 };
 
 function parseOptionalInt(s: string): number | null {
@@ -585,6 +588,16 @@ export default function RegistroPorNeedCliente({
           </Link>
         </div>
       </div>
+    );
+  }
+
+  if (captacionMode && need?.examen_primero) {
+    return (
+      <RegistroExamenPrimero
+        captacionToken={captacionToken}
+        cargo={cargoEtiqueta}
+        proyectoNombre={proyectoNombre}
+      />
     );
   }
 

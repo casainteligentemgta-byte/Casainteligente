@@ -138,6 +138,8 @@ export const APIS_DEL_CANDIDATO = [
   '/api/reclutamiento/vacante',
   '/api/reclutamiento/captacion-meta',
   '/api/reclutamiento/captacion-completar',
+  // Vacantes con examen primero: datos básicos con el token de captación.
+  '/api/reclutamiento/captacion-iniciar',
   '/api/registro/finalizar',
   '/api/registro/subir-firma',
   // Entrevista guiada de la vacante
