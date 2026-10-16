@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server';
 import { mensajeChatNoAutorizado } from '@/lib/telegram/mensajeChatNoAutorizado';
+import {
+  mensajeResultadoVinculo,
+  tecladoCompartirNumero,
+  vincularChatPorTelefono,
+} from '@/lib/telegram/vincularTelefonoNomina';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   getTelegramBotToken,
@@ -259,6 +264,7 @@ export type TelegramUpdate = {
       file_name?: string;
     };
     caption?: string;
+    contact?: { phone_number: string; user_id?: number; first_name?: string };
   };
   callback_query?: {
     id: string;
@@ -904,6 +910,36 @@ export async function handleTelegramCallbackQuery(
   }
 }
 
+async function manejarContactoVinculoNomina(
+  chatId: string,
+  fromId: number | null,
+  contacto: { phone_number: string; user_id?: number; first_name?: string },
+): Promise<NextResponse | null> {
+  const admin = telegramSupabaseAdmin();
+  if (!admin.ok) return null;
+  const r = await vincularChatPorTelefono(admin.client, { chatId, fromId, contacto });
+  await sendTelegramMessage(chatId, mensajeResultadoVinculo(r), {
+    parse_mode: 'HTML',
+    reply_markup: { remove_keyboard: true },
+  });
+  if (r.estado === 'vinculado') {
+    // Aviso a administración: alguien se vinculó solo.
+    try {
+      const { listarAdministradoresSistemaTelegram } = await import('@/lib/compras/usuariosSistemaTelegram');
+      const texto =
+        `🔗 <b>${r.nombre.replace(/[<>&]/g, '')}</b> vinculó su Telegram compartiendo su número:\n` +
+        r.asignaciones.map((a) => `• ${a.rol} · ${a.obra}`.replace(/[<>&]/g, '')).join('\n');
+      for (const a of await listarAdministradoresSistemaTelegram(admin.client)) {
+        if (a.chatId === chatId) continue;
+        await sendTelegramMessage(a.chatId, texto, { parse_mode: 'HTML' }).catch(() => undefined);
+      }
+    } catch (e) {
+      console.warn('[telegram] aviso vínculo nómina', e);
+    }
+  }
+  return NextResponse.json({ ok: true, contacto: r.estado });
+}
+
 export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramUpdate) {
   let chatIdParaError: string | null = null;
 
@@ -925,11 +961,20 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
     const chatId = String(msg.chat.id);
     chatIdParaError = chatId;
 
+    // Autovínculo: comparte su número y, si está en la nómina de una obra, queda registrado.
+    if (msg.contact && msg.chat.type === 'private') {
+      const r = await manejarContactoVinculoNomina(chatId, msg.from?.id ?? null, msg.contact);
+      if (r) return r;
+    }
+
     if (!(await isChatAllowedAsync(chatId))) {
       await sendTelegramMessage(
         chatId,
-        mensajeChatNoAutorizado(chatId),
-        { parse_mode: 'HTML' },
+        mensajeChatNoAutorizado(chatId, { conBotonCompartir: msg.chat.type === 'private' }),
+        {
+          parse_mode: 'HTML',
+          ...(msg.chat.type === 'private' ? { reply_markup: tecladoCompartirNumero() } : {}),
+        },
       );
       return NextResponse.json({ ok: true, denied: true });
     }
