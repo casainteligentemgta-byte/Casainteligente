@@ -91,14 +91,15 @@ function txt(v: unknown): string {
 
 type FilaBruta = Record<string, unknown>;
 
-async function filas(
-  supabase: SupabaseClient,
-  tabla: string,
-  columnas: string,
-  filtro: (q: ReturnType<ReturnType<SupabaseClient['from']>['select']>) => unknown,
-): Promise<FilaBruta[]> {
-  const q = supabase.from(tabla).select(columnas);
-  const { data, error } = (await (filtro(q) as Promise<{ data: unknown; error: { message?: string; code?: string } | null }>));
+type RespuestaDb = { data: unknown; error: { message?: string } | null };
+
+/** Columnas como `string` (no literal): evita que supabase-js infiera el tipo de cada fila. */
+function desde(supabase: SupabaseClient, tabla: string, columnas: string) {
+  return supabase.from(tabla).select(columnas);
+}
+
+async function filas(tabla: string, consulta: PromiseLike<RespuestaDb>): Promise<FilaBruta[]> {
+  const { data, error } = await consulta;
   if (error) {
     // Una tabla ausente (migración pendiente) no debe tumbar el resto del tablero.
     console.warn(`[cuellosBotella] ${tabla}:`, error.message);
@@ -134,32 +135,44 @@ export async function calcularCuellosBotella(
   };
 
   const [procuras, cuarentena, retiros, pedidos, canal] = await Promise.all([
-    filas(supabase, 'ci_procuras', 'id,ticket,estado,material_txt,cantidad,unidad,proyecto_id,updated_at', (q) =>
-      q.in('estado', ['solicitada', 'pendiente_pm', 'aprobada', 'aprobada_directa', 'en_compra']),
+    filas(
+      'ci_procuras',
+      desde(supabase, 'ci_procuras', 'id,ticket,estado,material_txt,cantidad,unidad,proyecto_id,updated_at').in(
+        'estado',
+        ['solicitada', 'pendiente_pm', 'aprobada', 'aprobada_directa', 'en_compra'],
+      ),
     ),
     filas(
-      supabase,
       'quality_inspections',
-      'id,invoice_id,quantity,line_description,created_at,purchase_invoices(invoice_number,supplier_name,proyecto_id)',
-      (q) => q.eq('status', 'PENDIENTE'),
+      desde(
+        supabase,
+        'quality_inspections',
+        'id,invoice_id,quantity,line_description,created_at,purchase_invoices(invoice_number,supplier_name,proyecto_id)',
+      ).eq('status', 'PENDIENTE'),
     ),
     filas(
-      supabase,
       'ci_compras_retiros',
-      'id,estado,proyecto_id,numero_factura,proveedor_nombre,transportista_nombre,solicitado_por_chat_id,created_at,asignado_at,retirado_at',
-      (q) => q.in('estado', ['pendiente', 'asignado', 'en_camino']),
+      desde(
+        supabase,
+        'ci_compras_retiros',
+        'id,estado,proyecto_id,numero_factura,proveedor_nombre,transportista_nombre,solicitado_por_chat_id,created_at,asignado_at,retirado_at',
+      ).in('estado', ['pendiente', 'asignado', 'en_camino']),
     ),
     filas(
-      supabase,
       'inv_requerimientos_salida',
-      'id,codigo,estado,proyecto_id,material_nombre,cantidad,unidad,solicitante_nombre,created_at,tomado_at',
-      (q) => q.in('estado', ['solicitado', 'en_despacho']),
+      desde(
+        supabase,
+        'inv_requerimientos_salida',
+        'id,codigo,estado,proyecto_id,material_nombre,cantidad,unidad,solicitante_nombre,created_at,tomado_at',
+      ).in('estado', ['solicitado', 'en_despacho']),
     ),
     filas(
-      supabase,
       'ci_facturas_canal_pendientes',
-      'id,estado,chat_id,chat_label,proyecto_id,extracted,mensaje_error,created_at,updated_at',
-      (q) => q.in('estado', ['recibido', 'procesando', 'extraido']),
+      desde(
+        supabase,
+        'ci_facturas_canal_pendientes',
+        'id,estado,chat_id,chat_label,proyecto_id,extracted,mensaje_error,created_at,updated_at',
+      ).in('estado', ['recibido', 'procesando', 'extraido']),
     ),
   ]);
 
