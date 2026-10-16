@@ -109,5 +109,13 @@ export async function encaminarMercanciaFactura(
     console.warn('[encaminarMercanciaFactura]', input.purchaseInvoiceId, out.error);
   }
 
+  // Control: ¿la factura cobra más de lo pedido o trae algo que nadie pidió?
+  try {
+    const { revisarControlCompra } = await import('@/lib/compras/controlCompra');
+    await revisarControlCompra(supabase, input.purchaseInvoiceId);
+  } catch (e) {
+    console.warn('[encaminarMercanciaFactura] control', e);
+  }
+
   return out;
 }

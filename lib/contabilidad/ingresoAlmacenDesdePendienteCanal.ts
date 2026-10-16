@@ -286,6 +286,12 @@ export async function ingresoAlmacenDesdePendienteCanal(
     if (purchaseInvoiceId) {
       const { marcarProcurasRecibidasTrasIngreso } = await import('@/lib/procuras/procuraRecibidaTrasIngreso');
       await marcarProcurasRecibidasTrasIngreso(supabase, purchaseInvoiceId, opts?.cantidadesRecibidas);
+      // Control facturado vs recibido con lo que contó el depositario.
+      const { revisarControlCompra } = await import('@/lib/compras/controlCompra');
+      await revisarControlCompra(supabase, purchaseInvoiceId, {
+        recepcion: true,
+        cantidadesRecibidas: opts?.cantidadesRecibidas ?? null,
+      });
     }
   }
   return resultado;
