@@ -48,7 +48,8 @@ export async function buscarMaterialPorAlias(
   const { data: mats, error: matErr } = await supabase
     .from('global_inventory')
     .select('id,name,sap_code,unit')
-    .in('id', ids);
+    .in('id', ids)
+    .neq('is_active', false);
 
   if (matErr) throw new Error(matErr.message);
   return (mats ?? []).map((row) =>
@@ -108,7 +109,8 @@ export async function buscarMaterialPorAliasAproximado(
   const { data: mats, error: matErr } = await supabase
     .from('global_inventory')
     .select('id,name,sap_code,unit')
-    .in('id', ids);
+    .in('id', ids)
+    .neq('is_active', false);
 
   if (matErr) throw new Error(matErr.message);
 

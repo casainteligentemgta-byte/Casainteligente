@@ -325,11 +325,11 @@ export default function ProcurasPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Link
-              href="/compras/cuellos-botella"
+              href="/compras/torre-control"
               className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-[#FF9500]/40 bg-[#FF9500]/10 text-xs font-bold text-[#FF9500]"
             >
               <Timer size={14} />
-              Cuellos de botella
+              Torre de Control
             </Link>
             <button
               type="button"

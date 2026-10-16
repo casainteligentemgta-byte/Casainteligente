@@ -11,7 +11,7 @@ import {
  *
  * Cada etapa tiene un umbral: lo que pasa de ahí está «detenido» y se avisa a quien
  * le toca moverlo. Si lleva el doble del umbral se escala también a administración.
- * Lo usan el centro web (/compras/cuellos-botella) y el aviso diario por Telegram.
+ * Lo usan la Torre de Control (/compras/torre-control) y el aviso diario por Telegram.
  */
 
 export type ClaveEtapa =
@@ -414,7 +414,7 @@ export async function enviarAvisosCuellosBotella(
       const { sendTelegramMessage } = await import('@/lib/telegram/botApi');
       await sendTelegramMessage(chatId, html, {
         parse_mode: 'HTML',
-        contextoLogEspejo: '[Cuellos de botella · aviso diario]',
+        contextoLogEspejo: '[Torre de Control · aviso diario]',
       });
     });
 
@@ -436,7 +436,7 @@ export async function enviarAvisosCuellosBotella(
       }
       if (lista.length > MAX_LINEAS_POR_ETAPA) partes.push(`… y ${lista.length - MAX_LINEAS_POR_ETAPA} más`);
     }
-    partes.push('', `<a href="${base}/compras/cuellos-botella">Abrir centro de cuellos de botella</a>`);
+    partes.push('', `<a href="${base}/compras/torre-control">Abrir la Torre de Control</a>`);
     try {
       await enviar(chatId, partes.join('\n'));
       enviados += 1;

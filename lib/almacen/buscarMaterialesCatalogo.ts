@@ -76,6 +76,8 @@ async function listarPoolCatalogo(
   let query = supabase
     .from('global_inventory')
     .select('id,name,sap_code,unit')
+    // Los desactivados (pruebas, no son de obra) no se ofrecen.
+    .neq('is_active', false)
     .order('name')
     .limit(limit);
 
@@ -104,6 +106,8 @@ async function buscarIlikeCatalogo(
   let query = supabase
     .from('global_inventory')
     .select('id,name,sap_code,unit')
+    // Los desactivados (pruebas, no son de obra) no se ofrecen.
+    .neq('is_active', false)
     .or(`name.ilike.${pattern},sap_code.ilike.${pattern}`)
     .order('name')
     .limit(60);
@@ -191,6 +195,8 @@ export async function buscarMaterialesCatalogo(
   let query = supabase
     .from('global_inventory')
     .select('id,name,sap_code,unit')
+    // Los desactivados (pruebas, no son de obra) no se ofrecen.
+    .neq('is_active', false)
     .or(`name.ilike.%${t}%,sap_code.ilike.%${t}%`)
     .order('name')
     .limit(limit);
@@ -246,6 +252,8 @@ export async function buscarMaterialesPorPrefijo(
   let query = supabase
     .from('global_inventory')
     .select('id,name,sap_code,unit')
+    // Los desactivados (pruebas, no son de obra) no se ofrecen.
+    .neq('is_active', false)
     .or(`name.ilike.${prefix},sap_code.ilike.${prefix}`)
     .order('name')
     .limit(limit);

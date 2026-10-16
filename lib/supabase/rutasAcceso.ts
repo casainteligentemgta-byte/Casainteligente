@@ -34,7 +34,7 @@ export const RUTAS_PROTEGIDAS = [
   '/netvision',
   '/rrhh',
   '/procura',
-  // Centro de cuellos de botella de la cadena de compras.
+  // Torre de Control de la cadena de compras.
   '/compras',
   '/legal',
   '/agenda',

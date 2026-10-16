@@ -3,9 +3,9 @@ import { ArrowLeft, Timer } from 'lucide-react';
 import CuellosBotellaCentro from '@/components/compras/CuellosBotellaCentro';
 import DiferenciasCompraPanel from '@/components/compras/DiferenciasCompraPanel';
 
-export const metadata = { title: 'Cuellos de botella — Compras' };
+export const metadata = { title: 'Torre de Control — Compras' };
 
-export default function CuellosBotellaPage() {
+export default function TorreControlPage() {
   return (
     <div className="min-h-screen bg-[#0A0A0F] text-white">
       <div className="max-w-[100vw] overflow-x-hidden px-4 py-4 pb-28 sm:px-5 sm:pb-24 lg:px-6">
@@ -20,7 +20,7 @@ export default function CuellosBotellaPage() {
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <Timer className="h-5 w-5 shrink-0 text-[#FF9500]" />
-              <h1 className="text-lg font-black tracking-tight sm:text-xl">Cuellos de botella</h1>
+              <h1 className="text-lg font-black tracking-tight sm:text-xl">Torre de Control</h1>
             </div>
             <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-zinc-500">
               Dónde se está quedando la cadena procura → compra → retiro → almacén → salida: qué pasó su plazo,

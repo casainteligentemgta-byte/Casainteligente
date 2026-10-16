@@ -55,7 +55,7 @@ recorridos `compra_*`).
   se compara con lo recibido (lo aprobado en cuarentena o el conteo del depositario):
   **llegó menos de lo facturado**. Cada diferencia se guarda una vez, con su monto, y se
   avisa por Telegram al comprador y al contador de la obra y a administración. Se revisa y
-  marca «revisada» en `/compras/cuellos-botella` → Control de compras.
+  marca «revisada» en `/compras/torre-control` (Torre de Control) → Control de compras.
 
 ## Pendientes
 

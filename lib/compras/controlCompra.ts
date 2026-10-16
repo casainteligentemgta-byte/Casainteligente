@@ -410,7 +410,7 @@ export function mensajeDiferenciasCompra(ds: Diferencia[], c: ContextoFactura, b
     ...ds.map((d) => lineaDiferencia(d, c.moneda)),
     '',
     'Revise antes de pagar o reclame al proveedor.',
-    `<a href="${baseUrl}/compras/cuellos-botella">Ver y marcar revisada</a>`,
+    `<a href="${baseUrl}/compras/torre-control">Ver y marcar revisada</a>`,
   ].join('\n');
 }
 
