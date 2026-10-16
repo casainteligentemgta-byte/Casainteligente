@@ -4,6 +4,50 @@ import {
   type CategoriaNominaProyecto,
 } from '@/lib/proyectos/rolesProyectoNomina';
 import { sincronizarWhitelistDesdeNomina } from '@/lib/telegram/chatWhitelist';
+import { simulacionBotActiva } from '@/lib/telegram/simulacion/contexto';
+
+/** Rol de la nómina → rol del bot de compras (/procura). Otros roles no necesitan usuario del bot. */
+const ROL_BOT_DESDE_NOMINA: Record<string, string> = {
+  ingeniero_residente: 'Solicitante',
+  comprador: 'Comprador',
+  pm_obra: 'Aprobador',
+  admin: 'Administrador',
+  contador: 'Contador',
+};
+
+export function rolBotDesdeNomina(rol: string): string | null {
+  return ROL_BOT_DESDE_NOMINA[rol.trim()] ?? null;
+}
+
+/**
+ * Quien entra a la nómina con un rol que usa /procura (ingeniero, comprador, PM…) y ya
+ * tiene Telegram recibe su usuario del bot. Solo se crea si no existe: nunca se cambia
+ * el rol de un usuario ya registrado (un administrador no baja a solicitante).
+ */
+async function asegurarUsuarioBotDesdeNomina(supabase: SupabaseClient, fila: FilaNominaProyecto): Promise<void> {
+  const rolBot = rolBotDesdeNomina(fila.rol);
+  const chatId = fila.telegram_chat_id ?? fila.empleado_telegram_chat_id;
+  if (!rolBot || chatId == null || fila.activo === false || simulacionBotActiva()) return;
+  try {
+    const { data } = await supabase
+      .from('ci_usuarios_sistema_telegram')
+      .select('id')
+      .eq('telegram_id', chatId)
+      .maybeSingle();
+    if (data) return;
+    const { error } = await supabase.from('ci_usuarios_sistema_telegram').insert({
+      nombre: fila.nombre_display.slice(0, 150),
+      telegram_id: chatId,
+      rol: rolBot,
+      proyecto_id: fila.proyecto_id,
+      activo: true,
+      updated_at: new Date().toISOString(),
+    } as never);
+    if (error && error.code !== '42P01') console.warn('[nomina] usuario bot', error.message);
+  } catch (e) {
+    console.warn('[nomina] usuario bot', e);
+  }
+}
 
 export type FilaNominaProyecto = {
   id: string;
@@ -192,6 +236,7 @@ export async function crearFilaNominaProyecto(
     telegramChatId: fila.telegram_chat_id ?? fila.empleado_telegram_chat_id,
     activo: fila.activo,
   });
+  await asegurarUsuarioBotDesdeNomina(supabase, fila);
   return fila;
 }
 
@@ -244,6 +289,7 @@ export async function actualizarFilaNominaProyecto(
     telegramChatId: fila.telegram_chat_id ?? fila.empleado_telegram_chat_id,
     activo: fila.activo,
   });
+  await asegurarUsuarioBotDesdeNomina(supabase, fila);
   return fila;
 }
 
