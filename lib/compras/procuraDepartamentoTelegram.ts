@@ -24,7 +24,17 @@ import {
 import {
   exigirUsuarioSistemaTelegram,
   usuarioPuedeSolicitarProcura,
+  type UsuarioSistemaTelegram,
 } from '@/lib/compras/usuariosSistemaTelegram';
+import {
+  asegurarMaterialDesdeCatalogoBase,
+  buscarEnCatalogoBase,
+  categoriasDeCatalogo,
+  itemsDeCategoria,
+  listarCatalogoBase,
+  obtenerItemCatalogoBase,
+  type ItemCatalogoBase,
+} from '@/lib/compras/catalogoBase';
 import {
   inferirConsumibleYMontoProcura,
   limiteViaRapidaUsd,
@@ -91,6 +101,14 @@ const CB_OK = `${PREFIX}ok`;
 const CB_NO = `${PREFIX}no`;
 const CB_STATE_RESUME = `${PREFIX}state:resume`;
 const CB_STATE_RESET = `${PREFIX}state:reset`;
+/** Catálogo base de obra civil: categorías → ítems (migración 361). */
+const CB_CB_CATS = `${PREFIX}cb:cats`;
+const CB_CB_CAT = `${PREFIX}cbc:`;
+const CB_CB_ITEM = `${PREFIX}cbi:`;
+/** «Almacén primero» en la confirmación. */
+const CB_ALM_TODO = `${PREFIX}alm:todo`;
+const CB_ALM_PARTE = `${PREFIX}alm:parte`;
+const ITEMS_POR_PAGINA_CATALOGO = 8;
 const MIN_CHARS_BUSQUEDA_MATERIAL = 3;
 
 /** Umbral para mostrar «¿Quisiste decir…?» cuando el término no coincide exactamente. */
@@ -220,6 +238,7 @@ async function enviarListaCoincidenciasMaterial(
   chatId: string,
   term: string,
   resultados: Awaited<ReturnType<typeof buscarMaterialesInteligenteCatalogo>>,
+  delCatalogoBase: ItemCatalogoBase[] = [],
 ): Promise<void> {
   const t = term.trim();
   const materiales = resultados.map((r) => r.material);
@@ -250,15 +269,23 @@ async function enviarListaCoincidenciasMaterial(
     ]);
   }
 
+  // Sugerencias del catálogo base que la empresa todavía no tiene (📗).
+  const yaListados = new Set(materiales.map((m) => normalizarTextoMaterial(m.name)));
+  for (const item of delCatalogoBase) {
+    if (yaListados.has(normalizarTextoMaterial(item.nombre))) continue;
+    buttons.push([{ text: truncarBoton(`📗 ${item.nombre}`), callback_data: `${CB_CB_ITEM}${item.id}` }]);
+  }
+
   buttons.push([
     {
       text: 'Ingresa Material',
       callback_data: CB_MAT_TXT,
     },
   ]);
+  buttons.push([{ text: '📂 Ver catálogo por categoría', callback_data: CB_CB_CATS }]);
 
   const sinResultados =
-    materiales.length === 0
+    materiales.length === 0 && delCatalogoBase.length === 0
       ? '\n\n<i>No hay coincidencias en catálogo. Usa «Ingresa Material» para confirmar tu descripción.</i>'
       : '';
 
@@ -320,7 +347,13 @@ async function mostrarCoincidenciasMaterial(
     }
   }
 
-  await enviarListaCoincidenciasMaterial(chatId, t, resultados);
+  let delCatalogoBase: ItemCatalogoBase[] = [];
+  try {
+    delCatalogoBase = buscarEnCatalogoBase(await listarCatalogoBase(supabase), t, 5);
+  } catch {
+    /* sin catálogo base: solo el de la empresa */
+  }
+  await enviarListaCoincidenciasMaterial(chatId, t, resultados, delCatalogoBase);
 }
 
 function meta(estado: TelegramEstado): MetadataProcuraDepartamento {
@@ -679,9 +712,72 @@ async function pedirMaterial(chatId: string, cap: { codigo: string; nombre: stri
   await sendTelegramMessage(
     chatId,
     `📂 Capítulo: <b>${escHtml(etiquetaCapituloMaestro(cap))}</b>\n\n` +
-      `2️⃣ Escribe el <b>material</b> a solicitar.\n` +
-      `<i>(Mínimo ${MIN_CHARS_BUSQUEDA_MATERIAL} letras para buscar en catálogo.)</i>`,
-    { parse_mode: 'HTML' },
+      `2️⃣ Elige el <b>material</b> del catálogo o escríbelo.\n` +
+      `<i>(Para buscar escribiendo: mínimo ${MIN_CHARS_BUSQUEDA_MATERIAL} letras, ej. <code>cabilla 1/2</code>.)</i>`,
+    {
+      parse_mode: 'HTML',
+      reply_markup: {
+        inline_keyboard: [[{ text: '📂 Elegir del catálogo (por categoría)', callback_data: CB_CB_CATS }]],
+      },
+    },
+  );
+}
+
+async function enviarCategoriasCatalogoBase(supabase: SupabaseClient, chatId: string): Promise<void> {
+  const categorias = categoriasDeCatalogo(await listarCatalogoBase(supabase));
+  if (!categorias.length) {
+    await sendTelegramMessage(
+      chatId,
+      '📂 El catálogo todavía no está cargado. Escribe el material (ej. <code>cemento gris</code>).',
+      { parse_mode: 'HTML' },
+    );
+    return;
+  }
+  const filas: Array<Array<{ text: string; callback_data: string }>> = [];
+  for (let i = 0; i < categorias.length; i += 2) {
+    filas.push(
+      categorias.slice(i, i + 2).map((c) => ({
+        text: truncarBoton(c.nombre, 30),
+        callback_data: `${CB_CB_CAT}${c.orden}:0`,
+      })),
+    );
+  }
+  filas.push([{ text: '✏️ Mejor lo escribo', callback_data: `${CB_CB_CAT}escribir` }]);
+  await sendTelegramMessage(chatId, '📂 <b>Catálogo de obra</b> — elige la categoría:', {
+    parse_mode: 'HTML',
+    reply_markup: { inline_keyboard: filas },
+  });
+}
+
+async function enviarItemsCategoriaCatalogoBase(
+  supabase: SupabaseClient,
+  chatId: string,
+  orden: number,
+  pagina: number,
+): Promise<void> {
+  const items = itemsDeCategoria(await listarCatalogoBase(supabase), orden);
+  if (!items.length) {
+    await enviarCategoriasCatalogoBase(supabase, chatId);
+    return;
+  }
+  const paginas = Math.max(1, Math.ceil(items.length / ITEMS_POR_PAGINA_CATALOGO));
+  const p = Math.min(Math.max(0, pagina), paginas - 1);
+  const filas: Array<Array<{ text: string; callback_data: string }>> = items
+    .slice(p * ITEMS_POR_PAGINA_CATALOGO, (p + 1) * ITEMS_POR_PAGINA_CATALOGO)
+    .map((i) => [{ text: truncarBoton(i.nombre), callback_data: `${CB_CB_ITEM}${i.id}` }]);
+  if (paginas > 1) {
+    const nav: Array<{ text: string; callback_data: string }> = [];
+    if (p > 0) nav.push({ text: '◀', callback_data: `${CB_CB_CAT}${orden}:${p - 1}` });
+    nav.push({ text: `${p + 1}/${paginas}`, callback_data: `${CB_CB_CAT}${orden}:${p}` });
+    if (p < paginas - 1) nav.push({ text: '▶', callback_data: `${CB_CB_CAT}${orden}:${p + 1}` });
+    filas.push(nav);
+  }
+  filas.push([{ text: '↩️ Categorías', callback_data: CB_CB_CATS }]);
+  await sendTelegramMessage(
+    chatId,
+    `📂 <b>${escHtml(items[0].categoria)}</b>\n` +
+      '<i>¿No está? Vuelve atrás o escribe el material.</i>',
+    { parse_mode: 'HTML', reply_markup: { inline_keyboard: filas } },
   );
 }
 
@@ -771,32 +867,97 @@ async function enviarConfirmacion(
   });
   const lineaStock = lineaDisponibilidadMaterialProcura(disponibilidad, escHtml);
 
+  // «Almacén primero»: si la obra ya lo tiene (en la misma unidad), ofrecer pedirlo.
+  const cantidad = Number(m.cantidad ?? 0);
+  const delAlmacen = cantidadPedibleAlAlmacen({
+    hayStock: disponibilidad.hayStock,
+    ubicacionId: disponibilidad.ubicacionId ?? null,
+    materialId: m.material_id?.trim() || null,
+    stock: disponibilidad.cantidad,
+    unidadStock: disponibilidad.unidad,
+    cantidad,
+    unidad: m.unidad ?? 'UND',
+  });
+  {
+    const actual = await getTelegramEstado(supabase, chatId);
+    await patchMeta(supabase, chatId, actual, {
+      almacen_ubicacion_id: delAlmacen > 0 ? disponibilidad.ubicacionId ?? '' : '',
+      almacen_cantidad: delAlmacen > 0 ? disponibilidad.cantidad : undefined,
+    });
+  }
+
+  const unidadTxt = escHtml(unidadLabel);
+  let lineaAlmacen = '';
+  const filas: Array<Array<{ text: string; callback_data: string }>> = [];
+  if (delAlmacen >= cantidad && delAlmacen > 0) {
+    lineaAlmacen =
+      `\n\n💡 <b>El almacén de la obra ya lo tiene.</b> Puede pedirlo al almacén en vez de comprarlo.`;
+    filas.push([{ text: `📦 Pedirlo al almacén (no comprar)`, callback_data: CB_ALM_TODO }]);
+    filas.push([
+      { text: '🛒 Comprar igual', callback_data: CB_OK },
+      { text: '❌ Cancelar', callback_data: CB_NO },
+    ]);
+  } else if (delAlmacen > 0) {
+    const resto = Math.round((cantidad - delAlmacen) * 1e6) / 1e6;
+    lineaAlmacen =
+      `\n\n💡 <b>El almacén tiene ${delAlmacen.toLocaleString('es-VE')} ${unidadTxt}.</b> ` +
+      `Puede pedir eso al almacén y comprar solo ${resto.toLocaleString('es-VE')} ${unidadTxt}.`;
+    filas.push([
+      {
+        text: truncarBoton(`📦 Pedir ${delAlmacen.toLocaleString('es-VE')} y comprar ${resto.toLocaleString('es-VE')}`, 60),
+        callback_data: CB_ALM_PARTE,
+      },
+    ]);
+    filas.push([
+      { text: `🛒 Comprar todo`, callback_data: CB_OK },
+      { text: '❌ Cancelar', callback_data: CB_NO },
+    ]);
+  } else {
+    filas.push([
+      { text: '✅ CONFIRMAR', callback_data: CB_OK },
+      { text: '❌ Cancelar', callback_data: CB_NO },
+    ]);
+  }
+
   await sendTelegramMessage(
     chatId,
     `6️⃣ <b>CONFIRMACIÓN DE LA PROCURA</b>\n\n` +
       `👤 ${escHtml(m.usuario_nombre ?? '—')}\n` +
       `📂 ${escHtml(etiquetaCapituloMaestro({ codigo: m.capitulo_codigo ?? '', nombre: m.capitulo_nombre ?? '' }))}\n` +
       `📦 <b>${escHtml(nombreMaterial)}</b>\n` +
-      `🔢 ${m.cantidad ?? '—'} ${escHtml(unidadLabel)}\n` +
+      `🔢 ${m.cantidad ?? '—'} ${unidadTxt}\n` +
       `${lineaStock}\n` +
       `⚡ Prioridad: <b>${escHtml(m.prioridad ?? 'Media')}</b>\n` +
       (m.es_consumible ? '🧴 Consumible: sí (auto)\n' : '🧴 Consumible: no (auto)\n') +
       (m.monto_estimado_usd != null
         ? `💵 USD ~${m.monto_estimado_usd.toFixed(2)} (auto)\n`
         : '💵 USD: sin histórico (auto)\n') +
-      `\n${viaHint}`,
+      `\n${viaHint}${lineaAlmacen}`,
     {
       parse_mode: 'HTML',
-      reply_markup: {
-        inline_keyboard: [
-          [
-            { text: '✅ CONFIRMAR', callback_data: CB_OK },
-            { text: '❌ Cancelar', callback_data: CB_NO },
-          ],
-        ],
-      },
+      reply_markup: { inline_keyboard: filas },
     },
   );
+}
+
+/**
+ * Cuánto se puede pedir al almacén en vez de comprar: lo que hay, hasta lo pedido.
+ * 0 si no hay existencia, falta el almacén o el material, o las unidades no coinciden
+ * (no se comparan sacos con kilos).
+ */
+export function cantidadPedibleAlAlmacen(p: {
+  hayStock: boolean;
+  ubicacionId: string | null;
+  materialId: string | null;
+  stock: number;
+  unidadStock: string;
+  cantidad: number;
+  unidad: string;
+}): number {
+  if (!p.hayStock || !p.ubicacionId || !p.materialId) return 0;
+  if (!(p.stock > 0) || !(p.cantidad > 0)) return 0;
+  if (normalizarUnidadProcura(p.unidadStock) !== normalizarUnidadProcura(p.unidad)) return 0;
+  return Math.min(p.stock, p.cantidad);
 }
 
 export async function manejarTextoProcuraDepartamentoTelegram(
@@ -924,6 +1085,173 @@ export async function manejarTextoProcuraDepartamentoTelegram(
   return false;
 }
 
+/**
+ * Registra la procura confirmada (botón CONFIRMAR o el resto que falta tras pedir parte
+ * al almacén). `cantidad` reemplaza la de la sesión cuando solo se compra una parte.
+ */
+async function registrarProcuraConfirmada(
+  supabase: SupabaseClient,
+  chatId: string,
+  usuario: UsuarioSistemaTelegram,
+  fresh: TelegramEstado,
+  opts?: { cantidad?: number },
+): Promise<boolean> {
+  const m = meta(fresh);
+  const cantidad = opts?.cantidad ?? m.cantidad;
+
+  if (!m.capitulo_id || !m.material_txt || !cantidad || !m.unidad || !m.prioridad) {
+    await sendTelegramMessage(chatId, '❌ Datos incompletos. Use /procura de nuevo.', {
+      parse_mode: 'HTML',
+    });
+    return false;
+  }
+
+  const proyectoId = fresh.proyecto_id?.trim() || usuario.proyecto_id?.trim() || null;
+  if (!proyectoId) {
+    await sendTelegramMessage(chatId, '❌ Falta la obra. Use /procura y elija la obra al inicio.', {
+      parse_mode: 'HTML',
+    });
+    return false;
+  }
+
+  const { data, error } = await registrarProcuraDepartamento(supabase, {
+    usuario,
+    proyectoId,
+    capituloMaestroId: m.capitulo_id,
+    descripcionMaterial: m.material_txt,
+    cantidad,
+    unidad: m.unidad ?? 'UND',
+    prioridad: m.prioridad,
+    montoEstimadoUsd: m.monto_estimado_usd ?? null,
+    esConsumible: m.es_consumible ?? false,
+    materialId: m.material_id?.trim() || null,
+    porVerificar: Boolean(m.por_verificar),
+  });
+
+  if (!data && !error) {
+    await sendTelegramMessage(chatId, '⚠️ La solicitud ya se está registrando. Espere unos segundos.', {
+      parse_mode: 'HTML',
+    });
+    return false;
+  }
+
+  await setTelegramContexto(supabase, chatId, { contexto: 'menu', metadata: {} });
+
+  if (error || !data) {
+    await sendTelegramMessage(chatId, `❌ ${escHtml(error?.message ?? 'Error al registrar')}`, {
+      parse_mode: 'HTML',
+    });
+    return false;
+  }
+
+  await publicarTicketProcuraSolicitante(supabase, data.id);
+
+  if (data.necesitaAbastecimientoViaRapida) {
+    try {
+      const abas = await confirmarAbastecimientoProcura(supabase, {
+        procuraId: data.id,
+        autorNombre: 'Vía rápida',
+      });
+      if (abas.ok) {
+        await actualizarTicketProcuraSolicitante(supabase, data.id, {
+          ordenCompraEmitida: Boolean(abas.compraEmitida),
+          despachoCodigo: abas.despachoCodigo ?? null,
+        });
+      }
+    } catch (e) {
+      console.warn('[procuraDepartamento] vía rápida abastecimiento', e);
+    }
+  }
+  return true;
+}
+
+/**
+ * «Almacén primero»: pide al almacén de la obra lo que hay (requerimiento de salida) y,
+ * si no alcanza, registra la procura solo por lo que falta. Revisa el stock de nuevo al
+ * pulsar: pudo cambiar desde que se mostró la confirmación.
+ */
+async function pedirAlAlmacenYComprarResto(
+  supabase: SupabaseClient,
+  chatId: string,
+  usuario: UsuarioSistemaTelegram,
+): Promise<void> {
+  const fresh = await getTelegramEstado(supabase, chatId);
+  if (!esFlujoProcuraDepartamentoTelegram(fresh)) {
+    await sendTelegramMessage(chatId, '⚠️ La solicitud ya no está abierta. Use /procura.', { parse_mode: 'HTML' });
+    return;
+  }
+  const m = meta(fresh);
+  const proyectoId = fresh.proyecto_id?.trim() || usuario.proyecto_id?.trim() || null;
+  const materialId = m.material_id?.trim() || null;
+  const cantidad = Number(m.cantidad ?? 0);
+  if (!proyectoId || !materialId || !(cantidad > 0)) {
+    await sendTelegramMessage(chatId, '❌ Datos incompletos. Use /procura de nuevo.', { parse_mode: 'HTML' });
+    return;
+  }
+
+  const disp = await consultarDisponibilidadMaterialProcura(supabase, {
+    materialId,
+    proyectoId,
+    unidadFallback: m.unidad ?? 'UND',
+  });
+  if (!disp.hayStock || !disp.ubicacionId || !(disp.cantidad > 0)) {
+    await sendTelegramMessage(
+      chatId,
+      '⚠️ Ya no hay existencia en el almacén de la obra. Si lo necesita, pulse <b>Comprar</b>.',
+      { parse_mode: 'HTML' },
+    );
+    await enviarConfirmacion(supabase, chatId, fresh, m);
+    return;
+  }
+
+  const deAlmacen = Math.min(cantidad, disp.cantidad);
+  const resto = Math.round((cantidad - deAlmacen) * 1e6) / 1e6;
+  const unidad = m.unidad ?? disp.unidad ?? 'UND';
+  const nombreMaterial = await resolverNombreMaterialConfirmacion(supabase, m, proyectoId);
+
+  const { pedirAlAlmacenDesdeProcura } = await import('@/lib/telegram/requerimientoSalidaTelegram');
+  const pedido = await pedirAlAlmacenDesdeProcura(supabase, {
+    chatId,
+    proyectoId,
+    origenUbicacionId: disp.ubicacionId,
+    materialId,
+    materialNombre: nombreMaterial,
+    unidad,
+    cantidad: deAlmacen,
+    nombreTelegram: usuario.nombre,
+  });
+
+  if (!pedido.ok) {
+    await sendTelegramMessage(
+      chatId,
+      pedido.motivo === 'sin_almacen'
+        ? '⚠️ La obra no tiene a nadie de almacén con Telegram para despachar. ' +
+            'Asigne el rol <b>Depositario</b> en la nómina de la obra, o pulse <b>Comprar</b>.'
+        : `❌ No se pudo pedir al almacén. ${escHtml(pedido.error ?? '')}`,
+      { parse_mode: 'HTML' },
+    );
+    return;
+  }
+
+  const unidadLabel = etiquetaUnidadProcuraTelegram(unidad);
+  await sendTelegramMessage(
+    chatId,
+    `📦 <b>Pedido al almacén</b> 🎫 <b>${escHtml(pedido.codigo)}</b>\n` +
+      `${deAlmacen.toLocaleString('es-VE')} ${escHtml(unidadLabel)} · ${escHtml(nombreMaterial)}\n` +
+      (pedido.avisados > 0
+        ? 'Se avisó al almacén; le aviso cuando lo despachen.'
+        : '⚠️ No pude avisar al almacén por Telegram. Avíseles usted.') +
+      (resto > 0 ? `\n\n🛒 Registro la compra de lo que falta: <b>${resto.toLocaleString('es-VE')} ${escHtml(unidadLabel)}</b>.` : ''),
+    { parse_mode: 'HTML' },
+  );
+
+  if (resto > 0) {
+    await registrarProcuraConfirmada(supabase, chatId, usuario, fresh, { cantidad: resto });
+  } else {
+    await setTelegramContexto(supabase, chatId, { contexto: 'menu', metadata: {} });
+  }
+}
+
 export async function manejarCallbackProcuraDepartamentoTelegram(
   supabase: SupabaseClient,
   params: { chatId: string; callbackId: string; data: string; userId: string },
@@ -983,6 +1311,65 @@ export async function manejarCallbackProcuraDepartamentoTelegram(
     await answerCallbackQuery(params.callbackId, 'Cancelado');
     await setTelegramContexto(supabase, params.chatId, { contexto: 'menu', metadata: {} });
     await sendTelegramMessage(params.chatId, '↩️ Procura cancelada.', { parse_mode: 'HTML' });
+    return true;
+  }
+
+  if (params.data === CB_CB_CATS) {
+    await answerCallbackQuery(params.callbackId, 'Catálogo');
+    await enviarCategoriasCatalogoBase(supabase, params.chatId);
+    return true;
+  }
+
+  if (params.data.startsWith(CB_CB_CAT)) {
+    const resto = params.data.slice(CB_CB_CAT.length);
+    if (resto === 'escribir') {
+      await answerCallbackQuery(params.callbackId);
+      await sendTelegramMessage(
+        params.chatId,
+        `✏️ Escribe el <b>material</b> (mínimo ${MIN_CHARS_BUSQUEDA_MATERIAL} letras, ej. <code>bloque 15</code>).`,
+        { parse_mode: 'HTML' },
+      );
+      return true;
+    }
+    const [ordenTxt, paginaTxt] = resto.split(':');
+    const orden = Number(ordenTxt);
+    const pagina = Number(paginaTxt ?? 0);
+    if (!Number.isFinite(orden)) {
+      await answerCallbackQuery(params.callbackId, 'Categoría inválida', true);
+      return true;
+    }
+    await answerCallbackQuery(params.callbackId);
+    await enviarItemsCategoriaCatalogoBase(supabase, params.chatId, orden, Number.isFinite(pagina) ? pagina : 0);
+    return true;
+  }
+
+  if (params.data.startsWith(CB_CB_ITEM)) {
+    const itemId = params.data.slice(CB_CB_ITEM.length).trim();
+    if (!esUuidProcura(itemId)) {
+      await answerCallbackQuery(params.callbackId, 'Material inválido', true);
+      return true;
+    }
+    const item = await obtenerItemCatalogoBase(supabase, itemId);
+    if (!item) {
+      await answerCallbackQuery(params.callbackId, 'Material no encontrado', true);
+      return true;
+    }
+    const proyectoId = estado.proyecto_id?.trim() || auth.usuario.proyecto_id?.trim() || null;
+    const entidadId = await resolverEntidadIdCatalogo(supabase, { proyectoId });
+    const material = await asegurarMaterialDesdeCatalogoBase(supabase, item, { proyectoId, entidadId });
+    await answerCallbackQuery(params.callbackId, truncarBoton(item.nombre, 40));
+    if (material) {
+      await aplicarMaterialCatalogoEnProcura(supabase, params.chatId, estado, material, entidadId);
+    } else {
+      // Sin poder enlazarlo al catálogo de la empresa: sigue con el nombre del catálogo base.
+      await patchMeta(supabase, params.chatId, estado, {
+        paso: 'cantidad',
+        material_id: '',
+        material_txt: item.nombre.slice(0, 500),
+        por_verificar: false,
+      });
+      await pedirCantidadMaterial(params.chatId, item.nombre);
+    }
     return true;
   }
 
@@ -1195,82 +1582,16 @@ export async function manejarCallbackProcuraDepartamentoTelegram(
     return true;
   }
 
+  if (params.data === CB_ALM_TODO || params.data === CB_ALM_PARTE) {
+    await answerCallbackQuery(params.callbackId, 'Pidiendo al almacén…');
+    await pedirAlAlmacenYComprarResto(supabase, params.chatId, auth.usuario);
+    return true;
+  }
+
   if (params.data === CB_OK) {
     await answerCallbackQuery(params.callbackId, 'Registrando…');
     const fresh = await getTelegramEstado(supabase, params.chatId);
-    const m = meta(fresh);
-
-    if (!m.capitulo_id || !m.material_txt || !m.cantidad || !m.unidad || !m.prioridad) {
-      await sendTelegramMessage(params.chatId, '❌ Datos incompletos. Use /procura de nuevo.', {
-        parse_mode: 'HTML',
-      });
-      return true;
-    }
-
-    const proyectoId =
-      fresh.proyecto_id?.trim() || auth.usuario.proyecto_id?.trim() || null;
-    if (!proyectoId) {
-      await sendTelegramMessage(
-        params.chatId,
-        '❌ Falta la obra. Use /procura y elija la obra al inicio.',
-        { parse_mode: 'HTML' },
-      );
-      return true;
-    }
-
-    const { data, error } = await registrarProcuraDepartamento(supabase, {
-      usuario: auth.usuario,
-      proyectoId,
-      capituloMaestroId: m.capitulo_id,
-      descripcionMaterial: m.material_txt,
-      cantidad: m.cantidad,
-      unidad: m.unidad ?? 'UND',
-      prioridad: m.prioridad,
-      montoEstimadoUsd: m.monto_estimado_usd ?? null,
-      esConsumible: m.es_consumible ?? false,
-      materialId: m.material_id?.trim() || null,
-      porVerificar: Boolean(m.por_verificar),
-    });
-
-    if (!data && !error) {
-      await sendTelegramMessage(
-        params.chatId,
-        '⚠️ La solicitud ya se está registrando. Espere unos segundos.',
-        { parse_mode: 'HTML' },
-      );
-      return true;
-    }
-
-    await setTelegramContexto(supabase, params.chatId, { contexto: 'menu', metadata: {} });
-
-    if (error || !data) {
-      await sendTelegramMessage(
-        params.chatId,
-        `❌ ${escHtml(error?.message ?? 'Error al registrar')}`,
-        { parse_mode: 'HTML' },
-      );
-      return true;
-    }
-
-    await publicarTicketProcuraSolicitante(supabase, data.id);
-
-    if (data.necesitaAbastecimientoViaRapida) {
-      try {
-        const abas = await confirmarAbastecimientoProcura(supabase, {
-          procuraId: data.id,
-          autorNombre: 'Vía rápida',
-        });
-        if (abas.ok) {
-          await actualizarTicketProcuraSolicitante(supabase, data.id, {
-            ordenCompraEmitida: Boolean(abas.compraEmitida),
-            despachoCodigo: abas.despachoCodigo ?? null,
-          });
-        }
-      } catch (e) {
-        console.warn('[procuraDepartamento] vía rápida abastecimiento', e);
-      }
-    }
-
+    await registrarProcuraConfirmada(supabase, params.chatId, auth.usuario, fresh);
     return true;
   }
 

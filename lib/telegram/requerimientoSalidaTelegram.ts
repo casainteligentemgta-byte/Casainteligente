@@ -988,3 +988,52 @@ export async function manejarFotoRequerimientoSalida(params: {
   );
   return true;
 }
+
+export type PedidoDesdeProcuraResult =
+  | { ok: true; codigo: string; avisados: number }
+  | { ok: false; motivo: 'sin_almacen' | 'sin_migracion' | 'error'; error?: string };
+
+/**
+ * «Almacén primero» en /procura: si la obra ya tiene el material, se pide al almacén
+ * (requerimiento de salida, tipo uso) en vez de comprarlo. Mismo aviso al depositario
+ * que «/salida → Pedir material».
+ */
+export async function pedirAlAlmacenDesdeProcura(
+  supabase: SupabaseClient,
+  p: {
+    chatId: string;
+    proyectoId: string;
+    origenUbicacionId: string;
+    materialId: string;
+    materialNombre: string;
+    unidad: string;
+    cantidad: number;
+    nombreTelegram?: string | null;
+    motivo?: string | null;
+  },
+): Promise<PedidoDesdeProcuraResult> {
+  try {
+    const chats = await chatsAlmacen(supabase, p.proyectoId, p.origenUbicacionId, p.chatId);
+    if (!chats.length) return { ok: false, motivo: 'sin_almacen' };
+
+    const creado = await crearRequerimientoSalida(supabase, {
+      proyectoId: p.proyectoId,
+      origenUbicacionId: p.origenUbicacionId,
+      destinoUbicacionId: null,
+      tipo: 'uso',
+      materialId: p.materialId,
+      materialNombre: p.materialNombre,
+      unidad: p.unidad,
+      cantidad: p.cantidad,
+      motivo: p.motivo ?? 'Pedido desde /procura: había existencia en el almacén de la obra',
+      solicitanteChatId: p.chatId,
+      solicitanteNombre: await nombrePersona(supabase, p.chatId, p.nombreTelegram, p.proyectoId, 'Solicitante'),
+    });
+    if (!creado.ok) return { ok: false, motivo: creado.motivo, error: creado.error };
+
+    const avisados = await avisarAlAlmacen(supabase, creado.requerimiento, chats, '📝 <b>Pedido de material</b>');
+    return { ok: true, codigo: creado.requerimiento.codigo, avisados };
+  } catch (e) {
+    return { ok: false, motivo: 'error', error: e instanceof Error ? e.message : String(e) };
+  }
+}
