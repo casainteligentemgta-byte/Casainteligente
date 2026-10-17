@@ -11,6 +11,7 @@ import NetVisionPlanoCliente, {
   type PaletaCobertura,
 } from '@/components/netvision/NetVisionPlanoCliente'
 import NetVisionCameraVisionToggles from '@/components/netvision/NetVisionCameraVisionToggles'
+import NetVisionOverlayBar from '@/components/netvision/NetVisionOverlayBar'
 import {
   isolateHiddenCameraIds,
   pruneHiddenCameraIds,
@@ -45,6 +46,19 @@ import type {
   DesignCamera,
   NetVisionProject,
 } from '@/lib/netvision/types'
+import {
+  ALL_SCENARIOS_ID,
+  PRINCIPAL_SCENARIO_ID,
+  ensureCameraScenarios,
+} from '@/lib/netvision/utils/cameraScenarios'
+import {
+  overlaySystemFromBranch,
+  visibleCameras,
+  visibleNetworkNodes,
+  visiblePlanDevices,
+  type OverlayPlanSystem,
+  type OverlayVista,
+} from '@/lib/netvision/utils/overlayVisibility'
 import {
   agruparFichasPorModelo,
   buildClienteCameraCard,
@@ -418,6 +432,9 @@ export default function NetVisionClienteView() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   /** El cableado estorba al cliente: se muestra solo si lo pide. */
   const [verCables, setVerCables] = useState(false)
+  const [overlayVista, setOverlayVista] = useState<OverlayVista>('todas')
+  const [clienteSystem, setClienteSystem] = useState<OverlayPlanSystem>('cctv')
+  const [scenarioId, setScenarioId] = useState(PRINCIPAL_SCENARIO_ID)
   /** Cobertura en gama de verde o en semáforo; cada quien recuerda la suya. */
   const [paleta, setPaleta] = useState<PaletaCobertura>('tonos')
   useEffect(() => {
@@ -572,7 +589,31 @@ export default function NetVisionClienteView() {
     }
   }, [esCompartido, projectId])
 
-  const cameras: DesignCamera[] = project?.cameras ?? []
+  const camerasAll: DesignCamera[] = project?.cameras ?? []
+  const cameraScenarios = useMemo(
+    () => ensureCameraScenarios(project?.cameraScenarios, camerasAll),
+    [project?.cameraScenarios, camerasAll],
+  )
+  const overlayOpts = useMemo(
+    () => ({
+      vista: overlayVista,
+      system: overlaySystemFromBranch(clienteSystem),
+      scenarioId,
+    }),
+    [overlayVista, clienteSystem, scenarioId],
+  )
+  const cameras: DesignCamera[] = useMemo(
+    () => visibleCameras(camerasAll, overlayOpts),
+    [camerasAll, overlayOpts],
+  )
+  const planDevicesVisibles = useMemo(
+    () => visiblePlanDevices(project?.planDevices ?? [], overlayOpts),
+    [project?.planDevices, overlayOpts],
+  )
+  const networkNodesVisibles = useMemo(
+    () => visibleNetworkNodes(project?.networkNodes ?? [], overlayOpts),
+    [project?.networkNodes, overlayOpts],
+  )
   const cameraIds = useMemo(() => cameras.map((c) => c.id), [cameras])
   const hiddenLive = useMemo(
     () => pruneHiddenCameraIds(hiddenIds, cameraIds),
@@ -581,8 +622,8 @@ export default function NetVisionClienteView() {
 
   const sectors = useMemo(() => {
     if (!project) return []
-    return buildCoverageSectors(project.cameras, project.scale, 'day', project.structures ?? [])
-  }, [project])
+    return buildCoverageSectors(cameras, project.scale, 'day', project.structures ?? [])
+  }, [project, cameras])
 
   const cableRoutes = useMemo(() => {
     if (!project) return []
@@ -1132,6 +1173,46 @@ export default function NetVisionClienteView() {
         </div>
       ) : null}
 
+      {vistaCliente !== 'inversion' ? (
+        <div className="nv-no-print w-full min-w-0 shrink-0 print:hidden" data-nv-cliente-capas>
+          <NetVisionOverlayBar
+            variant="tactico"
+            vista={overlayVista}
+            onVista={(v) => {
+              setOverlayVista(v)
+              setHiddenIds([])
+            }}
+            showSystems
+            activeSystem={overlayVista === 'todas' ? 'todas' : clienteSystem}
+            onSystem={(id) => {
+              setHiddenIds([])
+              if (id === 'todas') {
+                setOverlayVista('todas')
+                return
+              }
+              setOverlayVista('solo')
+              setClienteSystem(id)
+              if (id === 'cctv' && scenarioId === ALL_SCENARIOS_ID) {
+                setScenarioId(PRINCIPAL_SCENARIO_ID)
+              }
+            }}
+            showScenarios={
+              clienteSystem === 'cctv' ||
+              overlayVista === 'todas' ||
+              cameraScenarios.length > 1
+            }
+            scenarios={cameraScenarios}
+            scenarioId={scenarioId}
+            onScenario={(id) => {
+              setScenarioId(id)
+              setClienteSystem('cctv')
+              setOverlayVista('solo')
+              setHiddenIds([])
+            }}
+          />
+        </div>
+      ) : null}
+
       {cameras.length > 0 && vistaCliente !== 'inversion' ? (
         <div className="nv-no-print w-full min-w-0 shrink-0 print:hidden" data-nv-cam-toggles>
           <NetVisionCameraVisionToggles
@@ -1145,7 +1226,7 @@ export default function NetVisionClienteView() {
             onSelect={setSelectedId}
           />
         </div>
-      ) : cameras.length === 0 ? (
+      ) : camerasAll.length === 0 && vistaCliente !== 'inversion' ? (
         <p className="nv-no-print text-[12px] text-[#a9e8c4] print:hidden">
           Este proyecto aún no tiene cámaras.
         </p>
@@ -1172,14 +1253,14 @@ export default function NetVisionClienteView() {
               variant="tactico"
               rotulo={buildPlanoRotulo({
                 projectName: project.name,
-                branch: 'cctv',
+                branch: overlayVista === 'todas' ? 'cctv' : clienteSystem,
               })}
             >
             <NetVisionPlanoCliente
               planoUrl={project.planoUrl}
               cameras={cameras}
-              networkNodes={project.networkNodes}
-              planDevices={project.planDevices}
+              networkNodes={networkNodesVisibles}
+              planDevices={planDevicesVisibles}
               structures={project.structures}
               sectors={sectors}
               cableRoutes={
