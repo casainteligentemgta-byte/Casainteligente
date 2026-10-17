@@ -1,114 +1,89 @@
 'use client';
 
 import Link from 'next/link';
-import {
-  Brain,
-  ClipboardList,
-  FileText,
-  HardHat,
-  ScrollText,
-  UserRound,
-  Users,
-  Wallet,
-} from 'lucide-react';
+import { usePathname, useSearchParams } from 'next/navigation';
+import { ClipboardList, FileText, UserRound, Wallet } from 'lucide-react';
 import { hrefListaContratosExpress } from '@/lib/talento/hrefListaContratosExpress';
 import { leerProyectoRrhhContexto } from '@/lib/rrhh/proyectoRrhhContexto';
-import {
-  hrefRrhhHub,
-  hrefSolicitudPersonalObrero,
-} from '@/lib/rrhh/hrefSolicitudPersonal';
+import { hrefRrhhHub, hrefSolicitudPersonalObrero } from '@/lib/rrhh/hrefSolicitudPersonal';
 
 type Props = {
   proyectoModuloId?: string | null;
   className?: string;
-  /** Acciones de obra (Nueva vacante, Ficha…) en la misma cuadrícula. */
-  accionesObra?: React.ReactNode;
 };
 
-/** Estilo uniforme para celdas del subnav RRHH (links y botones). */
 export const rrhhSubnavBtnClass =
-  'inline-flex w-full min-h-[2.5rem] items-center justify-center gap-1.5 rounded-xl border px-2.5 py-2 text-center text-[11px] font-semibold leading-tight sm:text-xs';
+  'inline-flex w-full min-h-[2.75rem] items-center justify-center gap-1.5 rounded-xl border px-3 py-2.5 text-center text-xs font-semibold leading-tight';
 
-/** Enlaces rápidos del RRHH unificado (menú inferior + obra). */
-export default function RrhhSubnavEnlaces({
-  proyectoModuloId = null,
-  className = '',
-  accionesObra,
-}: Props) {
+function btnActivo(activo: boolean, base: string, on: string) {
+  return `${rrhhSubnavBtnClass} ${activo ? on : base}`;
+}
+
+/** Cuatro acciones del flujo RRHH de obra. */
+export default function RrhhSubnavEnlaces({ proyectoModuloId = null, className = '' }: Props) {
+  const path = usePathname();
+  const search = useSearchParams();
   const mod = proyectoModuloId?.trim() || leerProyectoRrhhContexto() || null;
-  const hrefSolicitud = hrefSolicitudPersonalObrero({
-    proyectoModuloId: mod,
-  });
-  const hrefEquipoRec = `${hrefRrhhHub({ proyectoModuloId: mod })}#equipo-recomendado`;
-  const hrefExpress = hrefListaContratosExpress({ proyectoModuloId: mod });
+  const hrefSolicitar = hrefSolicitudPersonalObrero({ proyectoModuloId: mod });
+  const hrefCandidatos = hrefRrhhHub({ proyectoModuloId: mod, vista: 'candidatos' });
+  const hrefContratos = hrefListaContratosExpress({ proyectoModuloId: mod });
   const hrefNomina = mod
     ? `/rrhh/nomina?proyecto_modulo=${encodeURIComponent(mod)}`
     : '/rrhh/nomina';
 
+  const enHub = path.startsWith('/rrhh/hojas-vida') && !path.includes('/archivo');
+  const vista = (search.get('vista') ?? '').trim();
+  const activoSolicitar = path.startsWith('/rrhh/solicitud-personal');
+  const activoCandidatos = enHub && (vista === 'candidatos' || vista === '');
+  const activoContratos = path.startsWith('/rrhh/contrato-trabajo-obrero');
+  const activoNomina = path.startsWith('/rrhh/nomina');
+
   return (
-    <nav
-      className={`grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 ${className}`.trim()}
-      aria-label="Accesos RRHH"
-    >
+    <nav className={`grid grid-cols-2 gap-2 sm:grid-cols-4 ${className}`.trim()} aria-label="Acciones RRHH">
       <Link
-        href={hrefSolicitud}
-        className={`${rrhhSubnavBtnClass} border-violet-400/50 bg-violet-600/30 text-violet-50 hover:bg-violet-600/45`}
+        href={hrefSolicitar}
+        className={btnActivo(
+          activoSolicitar,
+          'border-violet-400/40 bg-violet-950/35 text-violet-100 hover:bg-violet-900/50',
+          'border-violet-300/70 bg-violet-600/45 text-white',
+        )}
       >
         <ClipboardList className="h-3.5 w-3.5 shrink-0" aria-hidden />
-        <span className="truncate">Solicitud de personal</span>
+        Solicitar
       </Link>
       <Link
-        href={hrefEquipoRec}
-        className={`${rrhhSubnavBtnClass} border-sky-500/40 bg-sky-950/45 text-sky-100 hover:bg-sky-900/55`}
-      >
-        <HardHat className="h-3.5 w-3.5 shrink-0" aria-hidden />
-        <span className="truncate">Equipo recomendado</span>
-      </Link>
-      <Link
-        href="/rrhh/trabajadores"
-        className={`${rrhhSubnavBtnClass} border-fuchsia-500/40 bg-fuchsia-950/45 text-fuchsia-100 hover:bg-fuchsia-900/55`}
-      >
-        <Users className="h-3.5 w-3.5 shrink-0" aria-hidden />
-        <span className="truncate">Trabajadores</span>
-      </Link>
-      <Link
-        href="/rrhh/hojas-vida/archivo"
-        className={`${rrhhSubnavBtnClass} border-sky-500/40 bg-sky-950/45 text-sky-100 hover:bg-sky-900/55`}
+        href={hrefCandidatos}
+        className={btnActivo(
+          activoCandidatos,
+          'border-sky-500/40 bg-sky-950/35 text-sky-100 hover:bg-sky-900/50',
+          'border-sky-300/70 bg-sky-600/40 text-white',
+        )}
       >
         <UserRound className="h-3.5 w-3.5 shrink-0" aria-hidden />
-        <span className="truncate">Banca de obreros</span>
+        Candidatos
       </Link>
       <Link
-        href="/rrhh/evaluaciones"
-        className={`${rrhhSubnavBtnClass} border-violet-500/40 bg-violet-950/45 text-violet-100 hover:bg-violet-900/55`}
-      >
-        <Brain className="h-3.5 w-3.5 shrink-0" aria-hidden />
-        <span className="truncate">Evaluaciones</span>
-      </Link>
-      <Link
-        href={hrefExpress}
-        title="Contratos de trabajo: arreglo de pago, generar, imprimir y cargar el firmado"
-        className={`${rrhhSubnavBtnClass} border-amber-500/40 bg-amber-950/45 text-amber-100 hover:bg-amber-900/55`}
+        href={hrefContratos}
+        className={btnActivo(
+          activoContratos,
+          'border-amber-500/40 bg-amber-950/35 text-amber-100 hover:bg-amber-900/50',
+          'border-amber-300/70 bg-amber-600/40 text-white',
+        )}
       >
         <FileText className="h-3.5 w-3.5 shrink-0" aria-hidden />
-        <span className="truncate">Contratos</span>
+        Contratos
       </Link>
       <Link
         href={hrefNomina}
-        title="Nómina: contratados activos del proyecto"
-        className={`${rrhhSubnavBtnClass} border-emerald-500/40 bg-emerald-950/45 text-emerald-100 hover:bg-emerald-900/55`}
+        className={btnActivo(
+          activoNomina,
+          'border-emerald-500/40 bg-emerald-950/35 text-emerald-100 hover:bg-emerald-900/50',
+          'border-emerald-300/70 bg-emerald-600/40 text-white',
+        )}
       >
         <Wallet className="h-3.5 w-3.5 shrink-0" aria-hidden />
-        <span className="truncate">Nómina</span>
+        Nómina
       </Link>
-      <Link
-        href="/rrhh/oficios-salarios"
-        className={`${rrhhSubnavBtnClass} border-emerald-500/30 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20`}
-      >
-        <ScrollText className="h-3.5 w-3.5 shrink-0" aria-hidden />
-        <span className="truncate">Oficios y salarios</span>
-      </Link>
-      {accionesObra}
     </nav>
   );
 }

@@ -3,12 +3,11 @@
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import ListaEmpleosHojasVida from '@/app/rrhh/hojas-vida/components/ListaEmpleosHojasVida';
-import ModalNuevaVacante from '@/app/proyectos/modulo/[id]/components/ModalNuevaVacante';
-import RrhhSubnavEnlaces, { rrhhSubnavBtnClass } from '@/components/rrhh/RrhhSubnavEnlaces';
-import ResumenObrerosProyectoModulo from '@/components/proyectos/ResumenObrerosProyectoModulo';
+import RrhhSubnavEnlaces from '@/components/rrhh/RrhhSubnavEnlaces';
+import ResumenObrerosProyectoModulo, {
+  type ListaVistaHub,
+} from '@/components/proyectos/ResumenObrerosProyectoModulo';
 import SugerenciaCuadrilla from '@/components/proyectos/SugerenciaCuadrilla';
-import CuadroNominaContratados from '@/components/nomina/CuadroNominaContratados';
 import {
   entidadIdPredominante,
   loadProyectosModuloIntegralPorEntidad,
@@ -40,8 +39,8 @@ export default function RrhhHojasVidaClient() {
   const [entidadIdAlcance, setEntidadIdAlcance] = useState<string | null>(null);
   const [entidadNombreAlcance, setEntidadNombreAlcance] = useState<string | null>(null);
   const [proyectoIdsEntidadTodos, setProyectoIdsEntidadTodos] = useState<string[]>([]);
-  const [vacanteOpen, setVacanteOpen] = useState(false);
   const [vacantesTick, setVacantesTick] = useState(0);
+  const vistaHub = (searchParams.get('vista') ?? '').trim();
 
   const mostrarOpcionTodos = proyectosModulo.length > 1;
 
@@ -175,46 +174,24 @@ export default function RrhhHojasVidaClient() {
   }, [supabase, proyectosModulo]);
 
   const resumenKey = proyectoModuloIdsActivos.join(',') || 'sin-proyecto';
-  const proyectoEmpleosId = alcanceObra || proyectoModuloIdPrincipal;
-  const mostrarListaEmpleos = Boolean(proyectoEmpleosId) && proyectoModuloIdsActivos.length <= 1;
   const obraUnicaId = alcanceObra || (proyectosModulo.length === 1 ? proyectoModuloIdPrincipal : '');
-  const puedeAccionesObra = Boolean(obraUnicaId);
+  const esCandidatos = vistaHub === 'candidatos' || vistaHub === '';
+  const listaInicial: ListaVistaHub = esCandidatos ? 'porContratar' : 'activos';
 
   return (
     <div className="mx-auto max-w-6xl px-4 pb-28 pt-6">
       <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Casa Inteligente</p>
       <h1 className="text-2xl font-bold tracking-tight text-white">RRHH</h1>
-      <p className="mt-1 text-sm text-zinc-500">
-        Personal de obra: vacantes, cuadro, reclutamiento y nómina del proyecto seleccionado.
-      </p>
+      <p className="mt-1 text-sm text-zinc-500">Solicitar · Candidatos · Contratos · Nómina</p>
 
       <header className="mb-6 mt-6">
-        <RrhhSubnavEnlaces
-          proyectoModuloId={
-            // Preferir la obra elegida en el selector; si está en «Todos», usar contexto guardado.
-            proyectoModuloIdFiltroEnlaces || null
-          }
-          accionesObra={
-            puedeAccionesObra ? (
-              <>
-                {obraSeleccionada ? (
-                  <Link
-                    href={`/proyectos/modulo/${encodeURIComponent(obraUnicaId)}`}
-                    className={`${rrhhSubnavBtnClass} border-white/15 bg-white/5 text-zinc-300 hover:bg-white/10`}
-                  >
-                    <span className="truncate">Ficha del proyecto</span>
-                  </Link>
-                ) : null}
-              </>
-            ) : null
-          }
-        />
+        <RrhhSubnavEnlaces proyectoModuloId={proyectoModuloIdFiltroEnlaces || null} />
       </header>
 
       {cargandoProyectos ? (
         <p className="mb-8 text-sm text-zinc-500">Cargando RRHH del proyecto…</p>
       ) : proyectoModuloIdsActivos.length > 0 ? (
-        <div className="mb-10 space-y-8">
+        <div className="mb-10 space-y-6">
           {errorProyectos ? (
             <p className="rounded-xl border border-amber-500/25 bg-amber-950/20 px-4 py-3 text-xs text-amber-100/90">
               {errorProyectos}
@@ -222,22 +199,13 @@ export default function RrhhHojasVidaClient() {
           ) : null}
           {!alcanceObra && entidadNombreAlcance ? (
             <p className="text-xs text-zinc-500">
-              «{etiquetaTodosSelector}» suma solicitados de todos los proyectos del módulo integral
-              vinculados a la entidad de trabajo{' '}
-              <span className="font-semibold text-zinc-300">{entidadNombreAlcance}</span>
-              {proyectoIdsEntidadTodos.length > proyectosModulo.length
-                ? ` (${proyectoIdsEntidadTodos.length} proyectos)`
-                : ''}
-              .
+              «{etiquetaTodosSelector}» suma las obras de{' '}
+              <span className="font-semibold text-zinc-300">{entidadNombreAlcance}</span>.
             </p>
           ) : null}
 
-          {mostrarListaEmpleos ? (
-            <ListaEmpleosHojasVida proyectoModuloId={proyectoEmpleosId} />
-          ) : null}
-
           <ResumenObrerosProyectoModulo
-            key={resumenKey}
+            key={`${resumenKey}:${listaInicial}`}
             proyectoModuloId={proyectoModuloIdPrincipal}
             proyectosModuloIds={
               proyectoModuloIdsActivos.length > 1 ? proyectoModuloIdsActivos : undefined
@@ -246,10 +214,13 @@ export default function RrhhHojasVidaClient() {
             entidadIdAlcance={!alcanceObra ? entidadIdAlcance : null}
             listaRefresco={vacantesTick}
             tabUrl="rrhh"
-            tituloSeccion="RRHH del proyecto"
+            tituloSeccion="Obra"
             subtituloSeccion={null}
             ocultarEnlaceHojasVida
             ocultarIngenieroResidente
+            variante="contadores"
+            listaInicial={listaInicial}
+            ayudaCandidatos={esCandidatos}
             selectorObra={{
               valor: alcanceObra,
               onChange: setAlcanceObra,
@@ -259,22 +230,19 @@ export default function RrhhHojasVidaClient() {
             }}
           />
 
-          {obraUnicaId && obraSeleccionada ? (
-            <>
-              <div id="nomina" className="scroll-mt-24">
-                <CuadroNominaContratados
-                  proyectoModuloId={obraUnicaId}
-                  titulo="Contratados activos"
-                />
-              </div>
-              <div id="equipo-recomendado" className="scroll-mt-24">
+          {esCandidatos && obraUnicaId && obraSeleccionada ? (
+            <details className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
+              <summary className="cursor-pointer text-sm font-semibold text-zinc-200">
+                Sugerir equipo (cascos DISC)
+              </summary>
+              <div className="mt-4">
                 <SugerenciaCuadrilla
                   nombreObra={obraSeleccionada.nombre}
                   ubicacionObra=""
                   proyectoModuloId={obraUnicaId}
                 />
               </div>
-            </>
+            </details>
           ) : null}
         </div>
       ) : (
@@ -287,16 +255,6 @@ export default function RrhhHojasVidaClient() {
           .
         </p>
       )}
-
-      {obraUnicaId ? (
-        <ModalNuevaVacante
-          open={vacanteOpen}
-          onClose={() => setVacanteOpen(false)}
-          proyectoModuloId={obraUnicaId}
-          proyectoNombre={obraSeleccionada?.nombre ?? null}
-          onVacanteCreada={() => setVacantesTick((n) => n + 1)}
-        />
-      ) : null}
     </div>
   );
 }
