@@ -3,7 +3,9 @@
 import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import FormularioEvaluacionUnificada from '@/components/talento/FormularioEvaluacionUnificada';
+import FormularioEvaluacionUnificada, {
+  type ResultadoEvaluacionUnificada,
+} from '@/components/talento/FormularioEvaluacionUnificada';
 
 function EvaluacionUnificadaInner() {
   const searchParams = useSearchParams();
@@ -19,6 +21,7 @@ function EvaluacionUnificadaInner() {
     rol: string;
   } | null>(null);
   const [listo, setListo] = useState(false);
+  const [resultado, setResultado] = useState<ResultadoEvaluacionUnificada | null>(null);
 
   useEffect(() => {
     if (!urlToken) {
@@ -92,6 +95,39 @@ function EvaluacionUnificadaInner() {
     );
   }
 
+  if (listo && resultado?.siguienteHvUrl) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-zinc-950 p-4 text-zinc-100">
+        <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-8 text-center">
+          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-500">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-8 w-8"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <h1 className="text-2xl font-bold">¡Avanzas al siguiente paso!</h1>
+          <p className="mt-2 text-sm text-zinc-400">
+            Gracias, {candidate?.nombre}. Ahora completa tu hoja de vida para terminar la postulación.
+          </p>
+          <a
+            href={resultado.siguienteHvUrl}
+            className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-amber-500 px-4 py-3 text-sm font-bold text-black hover:bg-amber-400"
+          >
+            Completar mi hoja de vida
+          </a>
+          <p className="mt-4 text-xs leading-relaxed text-zinc-500">
+            Si lo dejas para después, abre de nuevo el enlace de la vacante con tu misma cédula.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (listo) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-950 p-4 text-zinc-100">
@@ -129,7 +165,10 @@ function EvaluacionUnificadaInner() {
       cargo={candidate.cargo}
       codigoGoE={candidate.codigoGoE}
       rolExamen={candidate.rol}
-      onFinalizar={() => setListo(true)}
+      onFinalizar={(r) => {
+        setResultado(r);
+        setListo(true);
+      }}
     />
   );
 }

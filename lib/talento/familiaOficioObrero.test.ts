@@ -17,8 +17,13 @@ describe('familiaOficioDesdeCargo', () => {
   it('detecta vigilancia por rol_examen', () => {
     assert.equal(familiaOficioDesdeCargo({ cargo: 'Ayudante', rolExamen: 'vigilante' }), 'vigilancia');
   });
+  it('detecta chofer (antes caía en equipos)', () => {
+    assert.equal(familiaOficioDesdeCargo({ cargo: 'CHOFER DE 1ra. (DE 8 A 15 TONS)' }), 'chofer');
+    assert.equal(familiaOficioDesdeCargo({ cargo: 'Chofer personal / familiar' }), 'chofer');
+    assert.equal(familiaOficioDesdeCargo({ cargo: 'Conductor de seguridad' }), 'chofer');
+  });
   it('detecta equipos', () => {
-    assert.equal(familiaOficioDesdeCargo({ cargo: 'CHOFER DE 1ra. (DE 8 A 15 TONS)' }), 'equipos');
+    assert.equal(familiaOficioDesdeCargo({ cargo: 'OPERADOR DE RETROEXCAVADORA' }), 'equipos');
   });
   it('detecta estructuras', () => {
     assert.equal(familiaOficioDesdeCargo({ cargo: 'CABILLERO DE 1ra.' }), 'estructuras');
@@ -31,12 +36,12 @@ describe('familiaOficioDesdeCargo', () => {
     assert.equal(familiaOficioDesdeCargo({ codigoGoE: '2.8' }), 'ayudante');
   });
   it('chofer y vigilante no caen en ayudante', () => {
-    assert.equal(familiaOficioDesdeCargo({ cargo: 'CHOFER DE 4ta.', codigoGoE: '2.3' }), 'equipos');
+    assert.equal(familiaOficioDesdeCargo({ cargo: 'CHOFER DE 4ta.', codigoGoE: '2.3' }), 'chofer');
     assert.equal(familiaOficioDesdeCargo({ cargo: 'VIGILANTE', codigoGoE: '1.2' }), 'vigilancia');
   });
   it('infiere familia solo con código GOE del tabulador', () => {
     assert.equal(familiaOficioDesdeCargo({ codigoGoE: '5.5' }), 'electricidad');
-    assert.equal(familiaOficioDesdeCargo({ codigoGoE: '2.3' }), 'equipos');
+    assert.equal(familiaOficioDesdeCargo({ codigoGoE: '2.3' }), 'chofer');
   });
 });
 
