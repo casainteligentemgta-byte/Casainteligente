@@ -572,7 +572,9 @@ export async function procesarAbastecimientoProcuraAprobada(
       motivo:
         evaluacion.cantidadDespacho > 0
           ? `Orden de compra por saldo (${evaluacion.cantidadCompra} ${procura.unidad}) tras aprobación PM`
-          : 'Orden de compra — sin stock en almacén',
+          : procura.solo_compra
+            ? 'Solo compra: el solicitante eligió comprar (el almacén no despacha esta procura)'
+            : 'Orden de compra — sin stock en almacén',
       cantidadCompra: evaluacion.cantidadCompra,
       auditoriaSupervisor: params.auditoriaSupervisor,
     });
@@ -583,11 +585,11 @@ export async function procesarAbastecimientoProcuraAprobada(
     compradoresNotificados = oc.compradoresNotificados ?? 0;
   }
 
-  const verificacion = await enviarOrdenVerificacionDepositarioProcura(
-    supabase,
-    procura,
-    evaluacion,
-  );
+  // Solo compra: el solicitante ya decidió (pidió al almacén aparte o prefirió comprar);
+  // no hay nada que verificar ni despachar de esta procura.
+  const verificacion = procura.solo_compra
+    ? { enviado: false, destinos: 0 }
+    : await enviarOrdenVerificacionDepositarioProcura(supabase, procura, evaluacion);
 
   if (verificacion.enviado) {
     return {

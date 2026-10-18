@@ -50,6 +50,8 @@ export type ProcuraOrdenCompraRow = {
   proyecto_id?: string | null;
   entidad_id?: string | null;
   viabilidad_presupuestaria?: string | null;
+  /** Migración 365: el solicitante eligió comprar; el almacén no despacha esta procura. */
+  solo_compra?: boolean | null;
   ci_proyectos?: { nombre: string } | { nombre: string }[] | null;
   ci_entidades?: { nombre: string } | { nombre: string }[] | null;
   ci_compras_capitulos_maestro?: { codigo?: string; nombre?: string } | null;
@@ -79,7 +81,7 @@ export async function cargarProcuraOrdenCompra(
   const { data, error } = await supabase
     .from('ci_procuras')
     .select(
-      'id,ticket,estado,material_txt,material_id,cantidad,unidad,solicitante_nombre,solicitante_telegram_chat_id,prioridad,monto_estimado_usd,observaciones,proyecto_id,entidad_id,viabilidad_presupuestaria,ci_proyectos(nombre),ci_entidades(nombre),ci_compras_capitulos_maestro(codigo,nombre)',
+      'id,ticket,estado,material_txt,material_id,cantidad,unidad,solicitante_nombre,solicitante_telegram_chat_id,prioridad,monto_estimado_usd,observaciones,proyecto_id,entidad_id,viabilidad_presupuestaria,solo_compra,ci_proyectos(nombre),ci_entidades(nombre),ci_compras_capitulos_maestro(codigo,nombre)',
     )
     .eq('id', procuraId.trim())
     .maybeSingle();
@@ -278,13 +280,15 @@ export async function emitirOrdenCompraProcura(
     };
   }
 
-  const almacenesEntidad = procura.material_id?.trim()
-    ? await listarAlmacenesStockMaterialEntidad(supabase, {
-        materialId: procura.material_id,
-        entidadId: procura.entidad_id,
-        proyectoId: procura.proyecto_id,
-      })
-    : [];
+  // En una procura «solo compra» lo del almacén ya se decidió: no se le pide al comprador verificarlo.
+  const almacenesEntidad =
+    procura.material_id?.trim() && !procura.solo_compra
+      ? await listarAlmacenesStockMaterialEntidad(supabase, {
+          materialId: procura.material_id,
+          entidadId: procura.entidad_id,
+          proyectoId: procura.proyecto_id,
+        })
+      : [];
 
   const motivoOrden =
     params.motivo?.trim() ||
