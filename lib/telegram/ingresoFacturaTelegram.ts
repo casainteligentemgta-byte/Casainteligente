@@ -777,7 +777,8 @@ export async function manejarCallbackIngresoFacturaTelegram(
     }
 
     const cantidadesRecibidas = items
-      .filter((i) => i.material_id?.trim() && (i.cantidad_real ?? 0) > 0)
+      // El 0 también cuenta: «no llegó nada» no es lo mismo que «no se contó».
+      .filter((i) => i.material_id?.trim() && i.cantidad_real != null && (i.cantidad_real ?? 0) >= 0)
       .map((i) => ({
         material_id: i.material_id.trim(),
         cantidad: i.cantidad_real!,

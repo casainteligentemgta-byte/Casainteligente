@@ -421,15 +421,19 @@ async function registrarIngresoAlmacenDesdePendienteCanal(
     });
     const overrideCant = new Map(
       (opts?.cantidadesRecibidas ?? [])
-        .filter((c) => c.material_id?.trim() && Number(c.cantidad) > 0)
+        .filter((c) => c.material_id?.trim() && Number(c.cantidad) >= 0)
         .map((c) => [c.material_id.trim(), Number(c.cantidad)]),
     );
-    const lineasInventario = resuelto.lineas.map((l) => {
-      const id = String(l.material_id ?? '').trim();
-      const override = id ? overrideCant.get(id) : undefined;
-      if (override == null || !Number.isFinite(override)) return l;
-      return { ...l, cantidad: override };
-    });
+    const lineasInventario = resuelto.lineas
+      .map((l) => {
+        const id = String(l.material_id ?? '').trim();
+        const override = id ? overrideCant.get(id) : undefined;
+        if (override == null || !Number.isFinite(override)) return l;
+        return { ...l, cantidad: override };
+      })
+      // Lo que se contó en 0 no llegó: no entra al almacén.
+      .filter((l) => Number(l.cantidad) > 0);
+    const nadaLlego = resuelto.lineas.length > 0 && lineasInventario.length === 0 && overrideCant.size > 0;
 
     const avisos: string[] = [];
     if (resuelto.materialesCreados > 0) {
@@ -440,6 +444,16 @@ async function registrarIngresoAlmacenDesdePendienteCanal(
     const detalleSinMatch = mensajeLineasSinMaterialSku(resuelto.sinMatch);
     if (detalleSinMatch) {
       avisos.push(detalleSinMatch);
+    }
+
+    if (nadaLlego) {
+      // La factura no trajo nada al almacén. Si había cuarentena, se rechaza entera y su
+      // tránsito se descuenta; el control de compras deja la diferencia para reclamar.
+      if ((await contarPendientesCuarentena(supabase, purchaseInvoiceId)) > 0) {
+        await ajustarCuarentenaARecibido(supabase, purchaseInvoiceId, opts?.cantidadesRecibidas);
+        await finalizarLiberacionCuarentena(supabase, purchaseInvoiceId, { cerrarCadena: false });
+      }
+      return { success: true, yaExistia: false, viaCuarentena: true, aprobadas: 0, avisos: ['No llegó ninguna mercancía de esta factura.'] };
     }
 
     if (!lineasInventario.length) {

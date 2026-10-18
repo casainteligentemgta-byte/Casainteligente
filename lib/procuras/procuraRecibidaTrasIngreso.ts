@@ -124,6 +124,24 @@ export async function marcarProcurasRecibidasTrasIngreso(
       if (estadoActual !== 'en_compra' && estadoActual !== 'recibida_parcial') continue;
 
       const { estado, esperado, recibido } = estadoProcuraTrasIngreso(procura, recibidas);
+      if (recibido === 0) {
+        // No llegó nada: la solicitud sigue esperando la compra. Se avisa sin decir que hay material.
+        const chat0 = procura.solicitante_telegram_chat_id;
+        if (chat0 != null && String(chat0).trim() !== '') {
+          try {
+            await sendTelegramMessage(
+              String(chat0),
+              `⚠️ <b>No llegó su material</b>\n\n🎫 <b>${escHtml(procura.ticket)}</b>\n` +
+                `El almacén recibió la factura${numeroFactura ? ` #${escHtml(numeroFactura)}` : ''} pero no vino ` +
+                `${escHtml(nombreMaterialProcuraVisible(procura.material_txt))}. El comprador ya fue avisado.`,
+              { parse_mode: 'HTML', rolDestinatario: 'Solicitante', contextoLogEspejo: '[Procura · no llegó]' },
+            );
+          } catch (e) {
+            console.warn('[procuraRecibida] aviso no llegó', procura.ticket, e);
+          }
+        }
+        continue;
+      }
       try {
         if (estado !== estadoActual) {
           await ejecutarTransicionProcuraLote(supabase, {
