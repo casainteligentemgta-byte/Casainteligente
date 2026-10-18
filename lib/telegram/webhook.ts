@@ -136,6 +136,12 @@ import {
   manejarCallbackLiberarCuarentenaTelegram,
 } from '@/lib/telegram/liberarCuarentenaPicker';
 import { esComandoAgua } from '@/lib/telegram/parseComandoTelegram';
+import { MENSAJE_AYUDA_TELEGRAM, MENSAJE_MENU_TELEGRAM } from '@/lib/telegram/botCommands';
+import {
+  esChatDepositarioNomina,
+  rechazarProcuraDepositario,
+  textoMenuParaChat,
+} from '@/lib/telegram/menuDepositarioTelegram';
 import {
   esCallbackProcuraAdmin,
   manejarCallbackProcuraAdminTelegram,
@@ -357,6 +363,10 @@ async function aplicarComando(
   }
 
   if (cmd.comandoProcura) {
+    if (await esChatDepositarioNomina(supabase, chatId)) {
+      await rechazarProcuraDepositario(chatId);
+      return;
+    }
     const dept = await manejarComandoProcuraDepartamentoTelegram(supabase, chatId, userId ?? chatId);
     if (!dept) {
       await manejarComandoProcuraTelegram(supabase, chatId);
@@ -394,7 +404,13 @@ async function aplicarComando(
   }
 
   if (cmd.mensaje) {
-    await sendTelegramMessage(chatId, cmd.mensaje, { parse_mode: 'HTML' });
+    const esMenu = cmd.mensaje === MENSAJE_MENU_TELEGRAM;
+    const esAyuda = cmd.mensaje === MENSAJE_AYUDA_TELEGRAM;
+    const texto =
+      esMenu || esAyuda
+        ? await textoMenuParaChat(supabase, chatId, cmd.mensaje, esMenu)
+        : cmd.mensaje;
+    await sendTelegramMessage(chatId, texto, { parse_mode: 'HTML' });
   }
 
   if (cmd.mostrarPickerProyecto) {
