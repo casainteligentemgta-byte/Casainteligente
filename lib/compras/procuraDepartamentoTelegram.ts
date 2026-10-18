@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { medidaCompatible } from '@/lib/compras/medidasMaterial';
 import {
   answerCallbackQuery,
   sendTelegramMessage,
@@ -346,6 +347,9 @@ async function mostrarCoincidenciasMaterial(
       console.warn('[procuraDepartamento] correccion material:', e);
     }
   }
+
+  // «cabilla 1/2» no debe ofrecer «CABILLAS 3/8»: se descartan los de otra medida.
+  resultados = resultados.filter((r) => medidaCompatible(t, r.material.name));
 
   let delCatalogoBase: ItemCatalogoBase[] = [];
   try {
