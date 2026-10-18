@@ -236,6 +236,7 @@ import {
   manejarCallbackMenuIngresoTelegram,
   manejarCallbackMenuSalidaTelegram,
   manejarComandoIngresoTelegram,
+  MENSAJE_INGRESO_SOLO_PRECARGADO,
 } from '@/lib/telegram/menuIngresoSalidaTelegram';
 import {
   esCallbackStockConsultaTelegram,
@@ -325,6 +326,14 @@ async function aplicarComando(
   if (cmd.comandoAgua) {
     await manejarComandoAguaTelegram(supabase, chatId);
     return;
+  }
+
+  if (cmd.comandoEmergencia || cmd.comandoIngresoManual) {
+    // El depositario solo ingresa lo que el comprador ya precargó (manual o foto).
+    if (await esChatDepositarioNomina(supabase, chatId)) {
+      await sendTelegramMessage(chatId, MENSAJE_INGRESO_SOLO_PRECARGADO, { parse_mode: 'HTML' });
+      return;
+    }
   }
 
   if (cmd.comandoNotaEntrega) {
