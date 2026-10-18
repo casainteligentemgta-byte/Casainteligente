@@ -10,7 +10,6 @@ import {
   seleccionarFacturaPrecargadaTelegram,
 } from '@/lib/telegram/ingresoFacturaTelegram';
 import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi';
-import { esChatDepositarioNomina } from '@/lib/telegram/menuDepositarioTelegram';
 import {
   manejarComandoIngresoFacturaManualTelegram,
   manejarComandoIngresoFacturaOcrAutomaticoTelegram,
@@ -79,36 +78,23 @@ export async function manejarComandoIngresoTelegram(
   await enviarMenuIngresoTelegram(supabase, chatId);
 }
 
-/** Depositario: el ingreso solo se hace desde facturas que cargó el comprador (manual o foto). */
-export const MENSAJE_INGRESO_SOLO_PRECARGADO =
-  '📥 Los ingresos se hacen desde las <b>facturas precargadas por el comprador</b>.\n' +
-  'Use <code>/ingreso</code> y elija la factura de la lista.';
-
 export async function enviarMenuIngresoTelegram(
   supabase: SupabaseClient,
   chatId: string,
   pageProveedores = 0,
 ): Promise<void> {
   const facturas = await listarFacturasPendientesDeMisObras(supabase, chatId);
-  const depositario = await esChatDepositarioNomina(supabase, chatId);
 
-  const rows: Array<Array<{ text: string; callback_data: string }>> = depositario
-    ? [[{ text: '📄 Ingreso con nota de entrega', callback_data: callbackMenuIngreso('nota') }]]
-    : [
-        [{ text: '🧾 Ingreso manual de factura', callback_data: callbackMenuIngreso('factura') }],
-        [{ text: '🤖 Ingreso automático de factura', callback_data: callbackMenuIngreso('factauto') }],
-        [{ text: '📄 Ingreso con nota de entrega', callback_data: callbackMenuIngreso('nota') }],
-        [{ text: '📝 Ingreso sin nota', callback_data: callbackMenuIngreso('sinnota') }],
-      ];
+  const rows: Array<Array<{ text: string; callback_data: string }>> = [
+    [{ text: '🧾 Ingreso manual de factura', callback_data: callbackMenuIngreso('factura') }],
+    [{ text: '🤖 Ingreso automático de factura', callback_data: callbackMenuIngreso('factauto') }],
+    [{ text: '📄 Ingreso con nota de entrega', callback_data: callbackMenuIngreso('nota') }],
+    [{ text: '📝 Ingreso sin nota', callback_data: callbackMenuIngreso('sinnota') }],
+  ];
 
   const nIngreso = facturas.filter((f) => f.accion === 'ingreso_almacen').length;
   const nConfirmar = facturas.length - nIngreso;
-  let texto = depositario
-    ? '📥 <b>Ingreso a almacén</b>\n\nElija la factura que cargó el comprador:'
-    : '📥 <b>Ingreso a almacén</b>\n\nElige el tipo de ingreso:';
-  if (depositario && !facturas.length) {
-    texto += '\n\n⚠️ No hay facturas precargadas por el comprador para su obra.';
-  }
+  let texto = '📥 <b>Ingreso a almacén</b>\n\nElige el tipo de ingreso:';
 
   if (facturas.length) {
     const proveedores = agruparProveedoresFacturasPrecargadas(facturas);
@@ -416,13 +402,6 @@ export async function manejarCallbackMenuIngresoTelegram(
 
   const opcion = normalizarOpcionMenuIngreso(raw);
   if (!opcion) return false;
-
-  const opcionesDepositario: OpcionMenuIngreso[] = ['precargadas', 'nota'];
-  if (!opcionesDepositario.includes(opcion) && (await esChatDepositarioNomina(supabase, params.chatId))) {
-    await answerCallbackQuery(params.callbackId);
-    await sendTelegramMessage(params.chatId, MENSAJE_INGRESO_SOLO_PRECARGADO, { parse_mode: 'HTML' });
-    return true;
-  }
 
   await answerCallbackQuery(params.callbackId, ETIQUETA_INGRESO[opcion].slice(0, 40));
   try {
