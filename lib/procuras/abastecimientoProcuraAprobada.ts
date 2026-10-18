@@ -209,7 +209,12 @@ export async function enviarOrdenVerificacionDepositarioProcura(
 
   const depChat = config?.depositarioAsignado?.telegram_chat_id;
   let depNombre = config?.depositarioAsignado?.nombre ?? null;
-  if (depChat != null && Number.isFinite(depChat)) destinos.add(String(depChat));
+  /** Nombre de cada destinatario: con varios depositarios, cada uno ve el suyo al pie. */
+  const nombreDe = new Map<string, string | null>();
+  if (depChat != null && Number.isFinite(depChat)) {
+    destinos.add(String(depChat));
+    nombreDe.set(String(depChat), depNombre);
+  }
   const grupo = config?.telegramGrupoAlmacenId;
   if (grupo != null && Number.isFinite(grupo)) destinos.add(String(grupo));
 
@@ -217,6 +222,7 @@ export async function enviarOrdenVerificacionDepositarioProcura(
   // sin depositario fijo despachaba el almacén sola, sin que nadie lo verificara.
   for (const p of await depositariosNomina(supabase, proyectoId)) {
     destinos.add(p.chatId);
+    if (!nombreDe.get(p.chatId)) nombreDe.set(p.chatId, p.nombre);
     if (!depNombre) depNombre = p.nombre;
   }
 
@@ -279,7 +285,7 @@ export async function enviarOrdenVerificacionDepositarioProcura(
           : depositarioVirtual
             ? ROL_DEPOSITARIO_VIRTUAL
             : 'Depositario',
-        nombreDestinatario: esGrupo ? config?.proyectoNombre : depNombre,
+        nombreDestinatario: esGrupo ? config?.proyectoNombre : depositarioVirtual ? null : nombreDe.get(chatId) ?? depNombre,
         accionLogDestinatario: 'confirmar_almacen',
         contextoLogEspejo: '[Procura · verificación almacén]',
       });
@@ -309,7 +315,12 @@ export async function enviarOrdenDespachoDepositarioProcura(
 
   const depChat = config?.depositarioAsignado?.telegram_chat_id;
   let depNombre = config?.depositarioAsignado?.nombre ?? null;
-  if (depChat != null && Number.isFinite(depChat)) destinos.add(String(depChat));
+  /** Nombre de cada destinatario: con varios depositarios, cada uno ve el suyo al pie. */
+  const nombreDe = new Map<string, string | null>();
+  if (depChat != null && Number.isFinite(depChat)) {
+    destinos.add(String(depChat));
+    nombreDe.set(String(depChat), depNombre);
+  }
   const grupo = config?.telegramGrupoAlmacenId;
   if (grupo != null && Number.isFinite(grupo)) destinos.add(String(grupo));
 
@@ -317,6 +328,7 @@ export async function enviarOrdenDespachoDepositarioProcura(
   // sin depositario fijo despachaba el almacén sola, sin que nadie lo verificara.
   for (const p of await depositariosNomina(supabase, proyectoId)) {
     destinos.add(p.chatId);
+    if (!nombreDe.get(p.chatId)) nombreDe.set(p.chatId, p.nombre);
     if (!depNombre) depNombre = p.nombre;
   }
 
@@ -378,7 +390,7 @@ export async function enviarOrdenDespachoDepositarioProcura(
           : depositarioVirtual
             ? ROL_DEPOSITARIO_VIRTUAL
             : 'Depositario',
-        nombreDestinatario: esGrupo ? config?.proyectoNombre : depNombre,
+        nombreDestinatario: esGrupo ? config?.proyectoNombre : depositarioVirtual ? null : nombreDe.get(chatId) ?? depNombre,
         accionLogDestinatario: 'confirmar_almacen',
         contextoLogEspejo: '[Procura · despacho almacén]',
       });
