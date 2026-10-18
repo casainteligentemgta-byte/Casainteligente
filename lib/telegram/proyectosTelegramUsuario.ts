@@ -4,8 +4,11 @@ import {
 } from '@/lib/compras/usuariosSistemaTelegram';
 import type { ProyectoCatalogo } from '@/lib/proyectos/proyectosUnificados';
 
-/** Roles con obra asignada en ci_usuarios_sistema_telegram (ej. comprador Flamboyant). */
-const ROLES_OBRA_ASIGNADA = ['Comprador', 'Solicitante'] as const;
+/**
+ * Roles limitados a su obra asignada en ci_usuarios_sistema_telegram. El comprador y el
+ * administrador eligen cualquier obra (procura, facturas, ingresos).
+ */
+const ROLES_OBRA_ASIGNADA = ['Solicitante'] as const;
 
 export function modoTelegramUsaObraComprador(modo: string): boolean {
   return (
