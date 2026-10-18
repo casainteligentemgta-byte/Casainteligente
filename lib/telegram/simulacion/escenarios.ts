@@ -1008,6 +1008,56 @@ export const ESCENARIOS: Escenario[] = [
     },
   },
   {
+    id: 'compra_no_llego',
+    titulo: 'La factura se registró pero al almacén no llegó nada: el depositario cuenta 0',
+    async correr(ctx) {
+      const { bot, supabase } = ctx;
+      await procuraHastaAprobacion(ctx, 'parte');
+      await registrarFacturaManual(ctx, CANTIDAD_COMPRA, PRECIO_COMPRA);
+      ctx.exigir('el aviso de retiro le llega a Logística', bot.botonesVigentes('logi').some((b) => /la retiro yo/i.test(b.texto)), bot.textoUltimoPaso());
+      await bot.pulsar('logi', 'La retiro yo');
+      await bot.foto('logi');
+      await bot.escribir('depo', '/ingreso');
+      await bot.pulsar('depo', PROVEEDOR_ENSAYO);
+      await bot.escribir('depo', '0');
+      ctx.comprobar('(dato) qué responde al contar 0', true, sinSaltos(bot.textoUltimoPaso()));
+      if (/al menos una foto/i.test(bot.textoUltimoPaso())) {
+        await bot.foto('depo');
+        await bot.pulsar('depo', 'Listo con fotos');
+        ctx.comprobar('(dato) resumen antes de registrar', true, sinSaltos(bot.textoUltimoPaso()));
+        if (bot.botonesVigentes('depo').some((b) => /registrar ingreso/i.test(b.texto))) {
+          await bot.pulsar('depo', 'Registrar ingreso a almacén');
+          ctx.comprobar('(dato) resultado', true, sinSaltos(bot.textoUltimoPaso()));
+        }
+      }
+      ctx.comprobar(
+        `el almacén no sube: sigue en ${MATERIAL_ENSAYO_1.stockInicial}`,
+        (await stockDeEnsayo(supabase, ALMACEN_ENSAYO.id, MATERIAL_ENSAYO_1.id)) === MATERIAL_ENSAYO_1.stockInicial,
+        String(await stockDeEnsayo(supabase, ALMACEN_ENSAYO.id, MATERIAL_ENSAYO_1.id)),
+      );
+      const { data: transito } = await supabase
+        .from('inventario_stock')
+        .select('cantidad_en_transito_entrante')
+        .eq('ubicacion_id', ALMACEN_ENSAYO.id)
+        .eq('material_id', MATERIAL_ENSAYO_1.id)
+        .maybeSingle();
+      ctx.comprobar(
+        'no queda mercancía «en camino» colgada',
+        Number((transito as { cantidad_en_transito_entrante?: number } | null)?.cantidad_en_transito_entrante ?? 0) === 0,
+        JSON.stringify(transito),
+      );
+      const difs = await diferenciasDeEnsayo(ctx);
+      ctx.comprobar(
+        'el control registra que no llegó nada de lo facturado',
+        difs.some((d) => d.tipo === 'recibido_menor_facturado' && Number(d.cantidad_recibida) === 0),
+        JSON.stringify(difs),
+      );
+      const procura = await procuraDeEnsayo(ctx);
+      ctx.comprobar('la procura no queda como «recibida»', procura?.estado !== 'recibida', String(procura?.estado));
+      await comprobarKardex(ctx);
+    },
+  },
+  {
     id: 'compra_foto_factura_antes',
     titulo: 'Carga manual de factura: una foto enviada antes de tiempo no rompe la carga',
     async correr(ctx) {
