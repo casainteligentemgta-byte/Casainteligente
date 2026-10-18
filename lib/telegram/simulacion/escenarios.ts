@@ -1248,14 +1248,16 @@ export const ESCENARIOS: Escenario[] = [
     async correr(ctx) {
       const { bot, supabase } = ctx;
       bot.invitar('admin');
+      // El reloj de la Torre corre desde el último cambio de estado (historial): se atrasa ahí.
       const atrasar = async (dias: number) => {
         const hace = new Date(Date.now() - dias * 86_400_000).toISOString();
-        await supabase.from('ci_procuras').update({ updated_at: hace }).eq('proyecto_id', OBRA_ENSAYO.id);
+        const p = await procuraDeEnsayo(ctx);
+        if (p) {
+          await supabase.from('ci_procura_estados_historial').update({ created_at: hace }).eq('procura_id', String(p.id));
+          await supabase.from('ci_procuras').update({ created_at: hace }).eq('id', String(p.id));
+        }
         await supabase.from('inv_requerimientos_salida').update({ created_at: hace }).eq('proyecto_id', OBRA_ENSAYO.id);
       };
-
-      await bot.escribir('pm', '/detenidos');
-      ctx.comprobar('quien no es administración no puede usar /detenidos', /solo para administraci[oó]n/i.test(bot.textoUltimoPaso()), sinSaltos(bot.textoUltimoPaso()));
 
       await registrarProcura(ctx, 'parte');
       await atrasar(3);
@@ -1340,6 +1342,9 @@ export const ESCENARIOS: Escenario[] = [
         .maybeSingle();
       ctx.comprobar('la factura queda descartada', (trasCanal as { estado?: string } | null)?.estado === 'rechazado', JSON.stringify(trasCanal));
       ctx.comprobar('a quien la envió se le avisa', /fue descartada por administraci[oó]n/i.test(textoPara(ctx, 'compra')), sinSaltos(textoPara(ctx, 'compra')));
+
+      await bot.escribir('pm', '/detenidos');
+      ctx.comprobar('quien no es administración no puede usar /detenidos', /solo para administraci[oó]n/i.test(bot.textoUltimoPaso()), sinSaltos(bot.textoUltimoPaso()));
 
       await bot.escribir('admin', '/detenidos');
       ctx.comprobar(

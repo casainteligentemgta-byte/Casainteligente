@@ -191,7 +191,7 @@ export async function calcularCuellosBotella(
       desde(
         supabase,
         'ci_procuras',
-        'id,ticket,estado,material_id,material_txt,cantidad,unidad,proyecto_id,updated_at,cotizando_at,cotizando_por',
+        'id,ticket,estado,material_id,material_txt,cantidad,unidad,proyecto_id,created_at,updated_at,cotizando_at,cotizando_por',
       ).in('estado', ESTADOS_PROCURA_ABIERTA),
     ),
     filas(
@@ -233,6 +233,27 @@ export async function calcularCuellosBotella(
     ),
   ]);
 
+  // Desde cuándo está cada procura en su estado: el último cambio de estado del historial.
+  // updated_at no sirve: cualquier edición (el ticket del solicitante, «cotizando»…) lo mueve.
+  const enEstadoDesde = new Map<string, string>();
+  const idsProcuras = procuras.map((p) => txt(p.id)).filter(Boolean);
+  for (let i = 0; i < idsProcuras.length; i += 200) {
+    const hist = await filas(
+      'ci_procura_estados_historial',
+      desde(supabase, 'ci_procura_estados_historial', 'procura_id,estado_nuevo,created_at').in(
+        'procura_id',
+        idsProcuras.slice(i, i + 200),
+      ),
+    );
+    const estadoDe = new Map(procuras.map((p) => [txt(p.id), txt(p.estado)]));
+    for (const h of hist) {
+      const pid = txt(h.procura_id);
+      if (txt(h.estado_nuevo) !== estadoDe.get(pid)) continue;
+      const at = txt(h.created_at);
+      if (at > (enEstadoDesde.get(pid) ?? '')) enEstadoDesde.set(pid, at);
+    }
+  }
+
   for (const p of procuras) {
     const estado = txt(p.estado);
     const etapa: ClaveEtapa =
@@ -251,7 +272,7 @@ export async function calcularCuellosBotella(
         .filter(Boolean)
         .join(' · '),
       proyectoId: txt(p.proyecto_id) || null,
-      desde: cotizando || txt(p.updated_at),
+      desde: cotizando || enEstadoDesde.get(txt(p.id)) || txt(p.created_at) || txt(p.updated_at),
       chatOrigen: null,
     }, cotizando ? { umbralHoras: UMBRAL_COTIZANDO_HORAS } : undefined);
   }
