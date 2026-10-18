@@ -93,7 +93,7 @@ export async function enviarMenuIngresoTelegram(
   const depositario = await esChatDepositarioNomina(supabase, chatId);
 
   const rows: Array<Array<{ text: string; callback_data: string }>> = depositario
-    ? []
+    ? [[{ text: '📄 Ingreso con nota de entrega', callback_data: callbackMenuIngreso('nota') }]]
     : [
         [{ text: '🧾 Ingreso manual de factura', callback_data: callbackMenuIngreso('factura') }],
         [{ text: '🤖 Ingreso automático de factura', callback_data: callbackMenuIngreso('factauto') }],
@@ -417,7 +417,8 @@ export async function manejarCallbackMenuIngresoTelegram(
   const opcion = normalizarOpcionMenuIngreso(raw);
   if (!opcion) return false;
 
-  if (opcion !== 'precargadas' && (await esChatDepositarioNomina(supabase, params.chatId))) {
+  const opcionesDepositario: OpcionMenuIngreso[] = ['precargadas', 'nota'];
+  if (!opcionesDepositario.includes(opcion) && (await esChatDepositarioNomina(supabase, params.chatId))) {
     await answerCallbackQuery(params.callbackId);
     await sendTelegramMessage(params.chatId, MENSAJE_INGRESO_SOLO_PRECARGADO, { parse_mode: 'HTML' });
     return true;

@@ -328,7 +328,7 @@ async function aplicarComando(
     return;
   }
 
-  if (cmd.comandoNotaEntrega || cmd.comandoEmergencia || cmd.comandoIngresoManual) {
+  if (cmd.comandoEmergencia || cmd.comandoIngresoManual) {
     // El depositario solo ingresa lo que el comprador ya precargó (manual o foto).
     if (await esChatDepositarioNomina(supabase, chatId)) {
       await sendTelegramMessage(chatId, MENSAJE_INGRESO_SOLO_PRECARGADO, { parse_mode: 'HTML' });
