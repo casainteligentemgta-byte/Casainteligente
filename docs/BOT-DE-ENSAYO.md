@@ -52,6 +52,7 @@ quedó abierta.
 | `depo` | Depo Ensayo | Depositario | — |
 | `depo2` | Depo Dos Ensayo | Depositario (segundo) | — |
 | `nuevo` | Nuevo Ensayo | Ayudante, con teléfono y **sin** chat (para el vínculo por teléfono) | — |
+| `admin` | Admin Ensayo | Administrativo | Administrador, **solo** en los recorridos que lo invitan (`bot.invitar('admin')`) |
 
 Sus chats son números que no pueden existir en Telegram.
 
@@ -81,7 +82,7 @@ Nadie de la nómina de ensayo es `admin`, porque ese rol sí se copia como Admin
 | Traspaso | `traspaso`, `traspaso_foto_antes` |
 | Compras | `compra_completa`, `compra_todo_sin_almacen`, `compra_solo_almacen`, `compra_permisos`, `compra_catalogo`, `compra_rechazada`, `compra_con_diferencias`, `compra_no_llego`, `compra_foto_factura_antes`, `compra_a_credito` |
 | Varios depositarios | `pedido_dos_depositarios` |
-| Torre de Control | `torre_control` |
+| Torre de Control | `torre_control`, `torre_admin` |
 | Vínculo por teléfono | `vinculo_telefono` |
 
 `compra_completa` recorre toda la cadena con **almacén primero**: el ingeniero pide 150 con
@@ -103,6 +104,10 @@ queda nada en tránsito, la procura no pasa a «recibida» y al ingeniero se le 
 `torre_control` usa `calcularCuellosBotella` con el reloj adelantado (0, 2, 3 y 6 días):
 plazos de cada etapa, «Estoy cotizando», material bajo el mínimo y el aviso diario (que se
 captura, no se envía).
+
+`torre_admin`: el administrador usa `/detenidos` para revisar fondos, aprobar (procura
+detenida), recordarle al comprador, cancelar la procura, recordar el pedido a los dos
+depositarios y descartar una factura del canal. El reloj se atrasa en el historial de estados.
 
 `compra_a_credito`: el Contador dice que no hay fondos, el PM aprueba **a crédito**, la orden
 al comprador lo dice y la factura se registra a crédito sin preguntar contado o crédito.
