@@ -106,21 +106,16 @@ async function puedeActuarComoProjectManager(
     return { ok: true, nombre: pmNomina.nombre, telegramId: tid };
   }
 
-  // Administración destraba una procura detenida (más del plazo esperando al PM).
-  // En plazo, la decisión sigue siendo del PM: el Administrador también revisa fondos.
-  if (auth.ok && usuarioEsAdministradorProcura(auth.usuario) && procuraId?.trim()) {
-    const { procuraDetenidaEsperandoPm } = await import('@/lib/compras/procuraDetenida');
-    if (await procuraDetenidaEsperandoPm(supabase, procuraId.trim())) {
-      return { ok: true, nombre: auth.usuario.nombre, telegramId: auth.usuario.telegram_id };
-    }
+  // El administrador general puede aprobar o rechazar cualquier procura (también desde
+  // la Torre de Control, /detenidos). La revisión de fondos es del Contador.
+  if (auth.ok && usuarioEsAdministradorProcura(auth.usuario)) {
+    return { ok: true, nombre: auth.usuario.nombre, telegramId: auth.usuario.telegram_id };
   }
 
   if (auth.ok && usuarioPuedeInformarViabilidadProcura(auth.usuario)) {
     return {
       ok: false,
-      mensaje: usuarioEsAdministradorProcura(auth.usuario)
-        ? '⛔ La aprobación la hace el Project Manager. Administración puede aprobarla cuando lleve más de 24 h detenida (/detenidos).'
-        : '⛔ El Contador informa viabilidad presupuestaria; la aprobación la hace el Project Manager.',
+      mensaje: '⛔ El Contador informa viabilidad presupuestaria; la aprobación la hace el Project Manager.',
     };
   }
 
