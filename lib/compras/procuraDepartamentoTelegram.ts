@@ -702,21 +702,8 @@ export async function manejarComandoProcuraDepartamentoTelegram(
     if (ttl === 'interceptado') return true;
   }
 
-  // El comprador y el administrador eligen la obra en cada procura; el ingeniero
-  // (Solicitante) va directo a su obra asignada.
-  const puedeElegirObra = auth.usuario.rol !== 'Solicitante';
-  const proyectoId = puedeElegirObra
-    ? null
-    : auth.usuario.proyecto_id?.trim() || estadoPre.proyecto_id?.trim() || null;
-  if (!proyectoId) {
-    await enviarPickerProyectosTelegram(supabase, chatId, 'procura_departamento');
-    return true;
-  }
-
-  await continuarProcuraDepartamentoTrasObra(supabase, chatId, proyectoId, {
-    id: auth.usuario.id,
-    nombre: auth.usuario.nombre,
-  });
+  // Cada procura se hace para la obra que se elige: el ingeniero puede tener varias obras.
+  await enviarPickerProyectosTelegram(supabase, chatId, 'procura_departamento');
   return true;
 }
 
