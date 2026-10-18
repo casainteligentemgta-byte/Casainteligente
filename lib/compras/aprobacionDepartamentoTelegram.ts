@@ -20,6 +20,7 @@ import {
 } from '@/lib/compras/telegramMetadata';
 import {
   exigirUsuarioSistemaTelegram,
+  usuarioEsAdministradorProcura,
   usuarioEsProjectManagerProcura,
   usuarioPuedeInformarViabilidadProcura,
 } from '@/lib/compras/usuariosSistemaTelegram';
@@ -72,6 +73,7 @@ async function puedeActuarComoProjectManager(
   chatId: string,
   userId: string,
   proyectoId?: string | null,
+  procuraId?: string | null,
 ): Promise<
   | { ok: true; nombre: string; telegramId: number }
   | { ok: false; mensaje: string }
@@ -104,11 +106,21 @@ async function puedeActuarComoProjectManager(
     return { ok: true, nombre: pmNomina.nombre, telegramId: tid };
   }
 
+  // Administración destraba una procura detenida (más del plazo esperando al PM).
+  // En plazo, la decisión sigue siendo del PM: el Administrador también revisa fondos.
+  if (auth.ok && usuarioEsAdministradorProcura(auth.usuario) && procuraId?.trim()) {
+    const { procuraDetenidaEsperandoPm } = await import('@/lib/compras/procuraDetenida');
+    if (await procuraDetenidaEsperandoPm(supabase, procuraId.trim())) {
+      return { ok: true, nombre: auth.usuario.nombre, telegramId: auth.usuario.telegram_id };
+    }
+  }
+
   if (auth.ok && usuarioPuedeInformarViabilidadProcura(auth.usuario)) {
     return {
       ok: false,
-      mensaje:
-        '⛔ El Contador informa viabilidad presupuestaria; la aprobación la hace el Project Manager.',
+      mensaje: usuarioEsAdministradorProcura(auth.usuario)
+        ? '⛔ La aprobación la hace el Project Manager. Administración puede aprobarla cuando lleve más de 24 h detenida (/detenidos).'
+        : '⛔ El Contador informa viabilidad presupuestaria; la aprobación la hace el Project Manager.',
     };
   }
 
@@ -477,6 +489,7 @@ export async function manejarCallbackAprobacionDepartamentoCompras(
     params.chatId,
     params.userId,
     procuraPreview?.proyecto_id,
+    parsed.procuraId,
   );
   if (!perm.ok) {
     await answerCallbackQuery(params.callbackId, perm.mensaje.slice(0, 180), true);

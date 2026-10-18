@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 import { mensajeChatNoAutorizado } from '@/lib/telegram/mensajeChatNoAutorizado';
 import {
+  esCallbackTorreControl,
+  esComandoDetenidos,
+  manejarCallbackTorreControl,
+  manejarComandoDetenidos,
+} from '@/lib/telegram/torreControlTelegram';
+import {
   mensajeResultadoVinculo,
   tecladoCompartirNumero,
   vincularChatPorTelefono,
@@ -638,6 +644,11 @@ export async function handleTelegramCallbackQuery(
       }
     }
 
+    if (esCallbackTorreControl(cq.data)) {
+      await manejarCallbackTorreControl(admin.client, { chatId, callbackId: cq.id, data: cq.data });
+      return NextResponse.json({ ok: true, callback: 'torre_control' });
+    }
+
     if (esCallbackFacturaOrdenCompraProcura(cq.data)) {
       const handledOcFactura = await manejarCallbackFacturaOrdenCompraProcura(admin.client, {
         chatId,
@@ -995,6 +1006,12 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
     }
 
     const supabase = admin.client;
+
+    if (texto && esComandoDetenidos(texto)) {
+      await eliminarBotEstadoAgua(supabase, userId).catch(() => undefined);
+      await manejarComandoDetenidos(supabase, chatId);
+      return NextResponse.json({ ok: true, command: 'detenidos' });
+    }
 
     if (texto && CMD_FACTURAS.test(texto)) {
       await eliminarBotEstadoAgua(supabase, userId).catch(() => undefined);

@@ -180,3 +180,22 @@ describe('materialesBajoMinimo', () => {
     ], []).length, 0)
   })
 })
+
+describe('antigüedad de la procura', () => {
+  it('cuenta desde el último cambio de estado, no desde la última edición', async () => {
+    const sb = crearFakeSupabase({
+      ci_procuras: [
+        // editada hace 1 h (p. ej. el ticket del solicitante), aprobada hace 72 h
+        { id: 'p1', ticket: 'PR-1', estado: 'aprobada', material_txt: 'Cemento', proyecto_id: OBRA, created_at: haceHoras(100), updated_at: haceHoras(1) },
+      ],
+      ci_procura_estados_historial: [
+        { procura_id: 'p1', estado_nuevo: 'solicitada', created_at: haceHoras(100) },
+        { procura_id: 'p1', estado_nuevo: 'aprobada', created_at: haceHoras(72) },
+      ],
+    }) as unknown as SupabaseClient
+    const r = await calcularCuellosBotella(sb, { ahora: AHORA })
+    const it = r.etapas.find((e) => e.clave === 'compra')!.items[0]!
+    assert.equal(Math.round(it.horas), 72)
+    assert.equal(it.detenido, true)
+  })
+})

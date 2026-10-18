@@ -37,7 +37,7 @@ export const MATERIAL_ENSAYO_2 = {
   stockInicial: 50,
 } as const;
 
-export type ClavePersonaEnsayo = 'ing' | 'conta' | 'pm' | 'compra' | 'logi' | 'depo' | 'depo2' | 'nuevo';
+export type ClavePersonaEnsayo = 'ing' | 'conta' | 'pm' | 'compra' | 'logi' | 'depo' | 'depo2' | 'nuevo' | 'admin';
 
 export type PersonaEnsayo = {
   clave: ClavePersonaEnsayo;
@@ -55,6 +55,11 @@ export type PersonaEnsayo = {
    */
   vinculado?: false;
   telefono?: string;
+  /**
+   * Solo existe en el departamento de compras de los recorridos que lo invitan
+   * (`bot.invitar`). Así un administrador de ensayo no cambia lo que reciben los demás.
+   */
+  soloInvitado?: true;
 };
 
 /** Teléfono de la persona sin vincular (no puede coincidir con un celular real: 0414-999-07-07). */
@@ -132,13 +137,24 @@ export const PERSONAS_ENSAYO: Record<ClavePersonaEnsayo, PersonaEnsayo> = {
     vinculado: false,
     telefono: TELEFONO_ENSAYO_NUEVO,
   },
+  admin: {
+    clave: 'admin',
+    nombre: 'Admin Ensayo',
+    // En la nómina no es «admin»: ese rol se copia como Administrador global.
+    rol: 'administrativo',
+    rolSistema: 'Administrador',
+    nominaId: '00000000-0000-4000-a000-0000000000e9',
+    chatId: 9_990_000_000_009,
+    soloInvitado: true,
+  },
 };
 
 /** Las personas con rol en el departamento de compras, tal como las ve el bot en un ensayo. */
-export function usuariosSistemaDeEnsayo(): UsuarioSistemaSimulado[] {
+export function usuariosSistemaDeEnsayo(invitados?: ReadonlySet<ClavePersonaEnsayo>): UsuarioSistemaSimulado[] {
   const usuarios: UsuarioSistemaSimulado[] = [];
   for (const p of Object.values(PERSONAS_ENSAYO)) {
     if (!p.rolSistema) continue;
+    if (p.soloInvitado && !invitados?.has(p.clave)) continue;
     usuarios.push({
       id: p.nominaId,
       nombre: p.nombre,

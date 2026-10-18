@@ -75,6 +75,13 @@ recorridos `compra_*`).
   quedó por debajo del mínimo de la obra (Almacén → Maestros) o del mínimo global, y que
   no tiene una procura abierta. Avisa al comprador y a los depositarios; agotado = 🔴.
 
+- **Torre de Control por Telegram** (`lib/telegram/torreControlTelegram.ts`). `/detenidos`
+  (o `/torre`), solo para Administrador: lo detenido por etapa y, por cada pendiente, botones
+  para resolverlo — revisar fondos, aprobar o rechazar (si lleva más de 24 h esperando al
+  PM; en plazo sigue siendo del PM), cargar la factura, «La retiro yo», despachar o rechazar
+  un pedido, liberar la cuarentena, descartar una factura del canal, cancelar la procura
+  (con confirmación) o «Recordar al responsable». La antigüedad de una procura se mide
+  desde su último cambio de estado (historial), no desde su última edición.
 - **«Estoy cotizando»**. Botón en la orden de compra que recibe el comprador. Guarda
   `cotizando_at`/`cotizando_por` (migración 364); la Torre de Control le da 5 días en vez
   de 2 antes de marcarla detenida y muestra «en cotización por …».
