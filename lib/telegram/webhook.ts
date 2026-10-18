@@ -136,7 +136,11 @@ import {
   manejarCallbackLiberarCuarentenaTelegram,
 } from '@/lib/telegram/liberarCuarentenaPicker';
 import { esComandoAgua } from '@/lib/telegram/parseComandoTelegram';
-import { MENSAJE_AYUDA_TELEGRAM, MENSAJE_MENU_TELEGRAM } from '@/lib/telegram/botCommands';
+import {
+  MENSAJE_AYUDA_TELEGRAM,
+  MENSAJE_MENU_TELEGRAM,
+  MENSAJE_NO_DISPONIBLE_DEPOSITARIO,
+} from '@/lib/telegram/botCommands';
 import {
   esChatDepositarioNomina,
   rechazarProcuraDepositario,
@@ -322,6 +326,19 @@ async function aplicarComando(
   cmd: ReturnType<typeof procesarComandoTelegram>,
   userId?: string,
 ): Promise<void> {
+  const pideFuncionSoloNoDepositario =
+    Boolean(cmd.comandoAgua) ||
+    Boolean(cmd.comandoStockConsulta) ||
+    Boolean(cmd.stockKeyword) ||
+    Boolean(cmd.comandoAgenda) ||
+    Boolean(cmd.comandoLimpiarAgenda) ||
+    Boolean(cmd.comandoTecnico) ||
+    cmd.contexto === 'esperando_audio_bitacora';
+  if (pideFuncionSoloNoDepositario && (await esChatDepositarioNomina(supabase, chatId))) {
+    await sendTelegramMessage(chatId, MENSAJE_NO_DISPONIBLE_DEPOSITARIO, { parse_mode: 'HTML' });
+    return;
+  }
+
   if (cmd.comandoAgua) {
     await manejarComandoAguaTelegram(supabase, chatId);
     return;
