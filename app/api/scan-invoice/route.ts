@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
         const mimeType = file.type || 'image/jpeg';
 
         // Call Gemini 2.0 Flash (vision) — con retry para rate limit del tier gratuito
-        const MODEL = 'gemini-2.0-flash';
+        const MODEL = 'gemini-2.5-flash';
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${apiKey}`;
         const body = JSON.stringify({
             contents: [{
