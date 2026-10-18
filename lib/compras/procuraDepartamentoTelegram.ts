@@ -702,8 +702,12 @@ export async function manejarComandoProcuraDepartamentoTelegram(
     if (ttl === 'interceptado') return true;
   }
 
-  const proyectoId =
-    auth.usuario.proyecto_id?.trim() || estadoPre.proyecto_id?.trim() || null;
+  // El comprador y el administrador eligen la obra en cada procura; el ingeniero
+  // (Solicitante) va directo a su obra asignada.
+  const puedeElegirObra = auth.usuario.rol !== 'Solicitante';
+  const proyectoId = puedeElegirObra
+    ? null
+    : auth.usuario.proyecto_id?.trim() || estadoPre.proyecto_id?.trim() || null;
   if (!proyectoId) {
     await enviarPickerProyectosTelegram(supabase, chatId, 'procura_departamento');
     return true;
