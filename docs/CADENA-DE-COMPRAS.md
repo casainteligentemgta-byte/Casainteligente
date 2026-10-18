@@ -76,9 +76,10 @@ recorridos `compra_*`).
   no tiene una procura abierta. Avisa al comprador y a los depositarios; agotado = 🔴.
 
 - **Torre de Control por Telegram** (`lib/telegram/torreControlTelegram.ts`). `/detenidos`
-  (o `/torre`), solo para Administrador: lo detenido por etapa y, por cada pendiente, botones
-  para resolverlo — revisar fondos, aprobar o rechazar (si lleva más de 24 h esperando al
-  PM; en plazo sigue siendo del PM), cargar la factura, «La retiro yo», despachar o rechazar
+  (o `/torre`), solo para el **administrador general** (rol Administrador del bot; la
+  administración contable usa el rol Contador): lo detenido por etapa y, por cada pendiente,
+  botones para resolverlo — revisar fondos, aprobar o rechazar (el administrador general
+  puede aprobar cualquier procura), cargar la factura, «La retiro yo», despachar o rechazar
   un pedido, liberar la cuarentena, descartar una factura del canal, cancelar la procura
   (con confirmación) o «Recordar al responsable». La antigüedad de una procura se mide
   desde su último cambio de estado (historial), no desde su última edición.
