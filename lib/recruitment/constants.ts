@@ -17,4 +17,4 @@ export const FRAUD_WARN_THRESHOLD = 4;
 export const FRAUD_CLOSE_THRESHOLD = 8;
 
 /** Modelo Gemini (REST). */
-export const GEMINI_MODEL = 'gemini-2.0-flash';
+export const GEMINI_MODEL = 'gemini-2.5-flash';

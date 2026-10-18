@@ -15,7 +15,7 @@ import type {
   AgendaToolResult,
 } from '@/types/agenda';
 
-const DEFAULT_MODEL = 'gemini-2.0-flash';
+const DEFAULT_MODEL = 'gemini-2.5-flash';
 const MAX_TOOL_ROUNDS = 5;
 
 function getApiKey(): string {
