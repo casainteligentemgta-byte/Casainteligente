@@ -37,21 +37,43 @@ function lineasComprasMenuTelegram(): string {
   }).join('\n');
 }
 
-/** Comandos que puede ver un depositario: sin procura (solo facturas, ingreso, salida y consulta). */
-export const COMANDOS_DEPOSITARIO_OMITIDOS = new Set(['procura']);
+/**
+ * Comandos que ve y puede usar un depositario: solo facturas, ingreso y salida (más menú,
+ * ayuda y cancelar). Sin procura, campo, consultas, agenda ni técnico.
+ */
+export const COMANDOS_DEPOSITARIO_PERMITIDOS = new Set([
+  'menu',
+  'ayuda',
+  'facturas',
+  'ingreso',
+  'salida',
+  'cancelar',
+]);
 
-/** Menú nativo de Telegram (setMyCommands) para un depositario: sin los comandos omitidos. */
+/** Menú nativo de Telegram (setMyCommands) para un depositario. */
 export const TELEGRAM_BOT_COMMANDS_DEPOSITARIO: Array<{ command: string; description: string }> =
-  TELEGRAM_BOT_COMMANDS.filter((c) => !COMANDOS_DEPOSITARIO_OMITIDOS.has(c.command));
+  TELEGRAM_BOT_COMMANDS.filter((c) => COMANDOS_DEPOSITARIO_PERMITIDOS.has(c.command));
+
+export const MENSAJE_NO_DISPONIBLE_DEPOSITARIO =
+  '⛔ Esa función no está disponible para el depositario. Use /ingreso, /salida o /facturas.';
 
 /**
  * Texto HTML de /menu (una sola fuente para no divergir del menú nativo).
  * Para un depositario se omite la sección de procuras.
  */
 export function mensajeMenuTelegram(opts?: { depositario?: boolean }): string {
-  const compras = opts?.depositario
-    ? `<b>Facturas</b>\n• /facturas — foto o carga manual → Contabilidad + precarga almacén\n\n`
-    : `<b>${TITULO_COMPRAS_ABASTECIMIENTO_TELEGRAM}</b>\n${lineasComprasMenuTelegram()}\n\n`;
+  if (opts?.depositario) {
+    return (
+      '🏠 <b>Casa Inteligente</b>\n\n' +
+      '<b>Facturas</b>\n• /facturas — facturas precargadas por el comprador\n\n' +
+      '<b>Ingresos almacén</b>\n' +
+      '• /ingreso — manual · automático · nota · sin nota · precargadas\n\n' +
+      '<b>Salidas</b>\n' +
+      '• /salida — obrero en obra · despacho · traspaso\n\n' +
+      '• /cancelar — volver al menú'
+    );
+  }
+  const compras = `<b>${TITULO_COMPRAS_ABASTECIMIENTO_TELEGRAM}</b>\n${lineasComprasMenuTelegram()}\n\n`;
   return (
     '🏠 <b>Casa Inteligente</b>\n\n' +
     compras +
@@ -75,9 +97,16 @@ export function mensajeMenuTelegram(opts?: { depositario?: boolean }): string {
 
 /** Texto HTML de /ayuda. Para un depositario se omite la procura. */
 export function mensajeAyudaTelegram(opts?: { depositario?: boolean }): string {
-  const compras = opts?.depositario
-    ? '<b>Facturas</b>: /facturas\n\n'
-    : `<b>${TITULO_COMPRAS_ABASTECIMIENTO_TELEGRAM}</b>\n/procura /facturas\n\n`;
+  if (opts?.depositario) {
+    return (
+      '<b>Comandos Casa Inteligente</b>\n\n' +
+      '<b>Facturas</b>: /facturas\n' +
+      '<b>Ingresos</b>: /ingreso\n' +
+      '<b>Salidas</b>: /salida\n\n' +
+      '/menu — menú · /cancelar — reiniciar'
+    );
+  }
+  const compras = `<b>${TITULO_COMPRAS_ABASTECIMIENTO_TELEGRAM}</b>\n/procura /facturas\n\n`;
   return (
     '<b>Comandos Casa Inteligente</b>\n\n' +
     compras +

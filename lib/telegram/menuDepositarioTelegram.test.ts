@@ -10,11 +10,12 @@ import {
 } from '@/lib/telegram/botCommands';
 
 describe('menú del depositario (sin procuras)', () => {
-  it('el menú nativo del depositario no incluye /procura y sí conserva facturas, ingreso, salida y stock', () => {
-    const nombres = TELEGRAM_BOT_COMMANDS_DEPOSITARIO.map((c) => c.command);
-    assert.ok(!nombres.includes('procura'));
-    for (const c of ['facturas', 'ingreso', 'salida', 'stock']) assert.ok(nombres.includes(c), c);
-    assert.equal(TELEGRAM_BOT_COMMANDS.length - TELEGRAM_BOT_COMMANDS_DEPOSITARIO.length, 1);
+  it('el menú nativo del depositario solo incluye facturas, ingreso, salida, menú, ayuda y cancelar', () => {
+    const nombres = TELEGRAM_BOT_COMMANDS_DEPOSITARIO.map((c) => c.command).sort();
+    assert.deepEqual(nombres, ['ayuda', 'cancelar', 'facturas', 'ingreso', 'menu', 'salida']);
+    for (const c of ['procura', 'stock', 'agenda', 'tecnico', 'bitacora', 'agua', 'limpiar_agenda']) {
+      assert.ok(!nombres.includes(c), c);
+    }
   });
 
   it('/menu del depositario no muestra procuras; el general sí', () => {
@@ -23,12 +24,14 @@ describe('menú del depositario (sin procuras)', () => {
     assert.match(dep, /\/facturas/);
     assert.match(dep, /\/ingreso/);
     assert.match(dep, /\/salida/);
-    assert.match(dep, /\/stock/);
+    assert.ok(!/stock|bitacora|agua|agenda|tecnico|campo|consulta/i.test(dep));
     assert.match(mensajeMenuTelegram(), /\/procura/);
   });
 
-  it('/ayuda del depositario no muestra procuras; el general sí', () => {
-    assert.ok(!/procura/i.test(mensajeAyudaTelegram({ depositario: true })));
+  it('/ayuda del depositario no muestra procuras ni funciones de campo, consultas, agenda o técnico', () => {
+    const ayuda = mensajeAyudaTelegram({ depositario: true });
+    assert.ok(!/procura/i.test(ayuda));
+    assert.ok(!/stock|bitacora|agua|agenda|tecnico|campo|consulta/i.test(ayuda));
     assert.match(mensajeAyudaTelegram(), /\/procura/);
   });
 
