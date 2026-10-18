@@ -37,39 +37,66 @@ function lineasComprasMenuTelegram(): string {
   }).join('\n');
 }
 
-/** Texto HTML de /menu y /ayuda (una sola fuente para no divergir del menú nativo). */
-export const MENSAJE_MENU_TELEGRAM =
-  '🏠 <b>Casa Inteligente</b>\n\n' +
-  `<b>${TITULO_COMPRAS_ABASTECIMIENTO_TELEGRAM}</b>\n` +
-  `${lineasComprasMenuTelegram()}\n\n` +
-  '<b>Ingresos almacén</b>\n' +
-  '• /ingreso — manual · automático · nota · sin nota · precargadas\n\n' +
-  '<b>Salidas</b>\n' +
-  '• /salida — obrero en obra · despacho · traspaso\n\n' +
-  '<b>Campo</b>\n' +
-  '• /bitacora — nota de voz · /agua — camión, PPM, litros\n\n' +
-  '<b>Consultas</b>\n' +
-  '• /stock — guiado (entidad → obra → almacén)\n' +
-  '• /stock &lt;obra&gt; o /stock &lt;material&gt;\n\n' +
-  '<b>Agenda personal</b>\n' +
-  '• /agenda — guardar o consultar fechas especiales (IA)\n' +
-  '• /limpiar_agenda — borrar historial del chat\n\n' +
-  '<b>Técnico de dispositivos</b>\n' +
-  '• /tecnico &lt;pregunta&gt; — cámaras, grabadores, PoE y redes (IA)\n\n' +
-  '• /cancelar — volver al menú';
+/** Comandos que puede ver un depositario: sin procura (solo facturas, ingreso, salida y consulta). */
+export const COMANDOS_DEPOSITARIO_OMITIDOS = new Set(['procura']);
 
-export const MENSAJE_AYUDA_TELEGRAM =
-  '<b>Comandos Casa Inteligente</b>\n\n' +
-  `<b>${TITULO_COMPRAS_ABASTECIMIENTO_TELEGRAM}</b>\n` +
-  '/procura /facturas\n\n' +
-  '<b>Ingresos</b>: /ingreso\n' +
-  '<b>Salidas</b>: /salida\n' +
-  '<b>Campo</b>: /bitacora /agua\n' +
-  '<b>Agenda</b>: /agenda /limpiar_agenda\n' +
-  '<b>Técnico IA</b>: /tecnico ¿cuántos W consume la H9c?\n' +
-  '<b>Stock</b>: /stock · /stock rancho flamboyant · /stock cemento\n\n' +
-  '<b>Atajos</b> (sin menú): /nota /entrada /emergencia /ingresofactura /egreso\n\n' +
-  '/menu — menú · /cancelar — reiniciar';
+/** Menú nativo de Telegram (setMyCommands) para un depositario: sin los comandos omitidos. */
+export const TELEGRAM_BOT_COMMANDS_DEPOSITARIO: Array<{ command: string; description: string }> =
+  TELEGRAM_BOT_COMMANDS.filter((c) => !COMANDOS_DEPOSITARIO_OMITIDOS.has(c.command));
+
+/**
+ * Texto HTML de /menu (una sola fuente para no divergir del menú nativo).
+ * Para un depositario se omite la sección de procuras.
+ */
+export function mensajeMenuTelegram(opts?: { depositario?: boolean }): string {
+  const compras = opts?.depositario
+    ? `<b>Facturas</b>\n• /facturas — foto o carga manual → Contabilidad + precarga almacén\n\n`
+    : `<b>${TITULO_COMPRAS_ABASTECIMIENTO_TELEGRAM}</b>\n${lineasComprasMenuTelegram()}\n\n`;
+  return (
+    '🏠 <b>Casa Inteligente</b>\n\n' +
+    compras +
+    '<b>Ingresos almacén</b>\n' +
+    '• /ingreso — manual · automático · nota · sin nota · precargadas\n\n' +
+    '<b>Salidas</b>\n' +
+    '• /salida — obrero en obra · despacho · traspaso\n\n' +
+    '<b>Campo</b>\n' +
+    '• /bitacora — nota de voz · /agua — camión, PPM, litros\n\n' +
+    '<b>Consultas</b>\n' +
+    '• /stock — guiado (entidad → obra → almacén)\n' +
+    '• /stock &lt;obra&gt; o /stock &lt;material&gt;\n\n' +
+    '<b>Agenda personal</b>\n' +
+    '• /agenda — guardar o consultar fechas especiales (IA)\n' +
+    '• /limpiar_agenda — borrar historial del chat\n\n' +
+    '<b>Técnico de dispositivos</b>\n' +
+    '• /tecnico &lt;pregunta&gt; — cámaras, grabadores, PoE y redes (IA)\n\n' +
+    '• /cancelar — volver al menú'
+  );
+}
+
+/** Texto HTML de /ayuda. Para un depositario se omite la procura. */
+export function mensajeAyudaTelegram(opts?: { depositario?: boolean }): string {
+  const compras = opts?.depositario
+    ? '<b>Facturas</b>: /facturas\n\n'
+    : `<b>${TITULO_COMPRAS_ABASTECIMIENTO_TELEGRAM}</b>\n/procura /facturas\n\n`;
+  return (
+    '<b>Comandos Casa Inteligente</b>\n\n' +
+    compras +
+    '<b>Ingresos</b>: /ingreso\n' +
+    '<b>Salidas</b>: /salida\n' +
+    '<b>Campo</b>: /bitacora /agua\n' +
+    '<b>Agenda</b>: /agenda /limpiar_agenda\n' +
+    '<b>Técnico IA</b>: /tecnico ¿cuántos W consume la H9c?\n' +
+    '<b>Stock</b>: /stock · /stock rancho flamboyant · /stock cemento\n\n' +
+    '<b>Atajos</b> (sin menú): /nota /entrada /emergencia /ingresofactura /egreso\n\n' +
+    '/menu — menú · /cancelar — reiniciar'
+  );
+}
+
+export const MENSAJE_MENU_TELEGRAM = mensajeMenuTelegram();
+export const MENSAJE_AYUDA_TELEGRAM = mensajeAyudaTelegram();
+
+export const MENSAJE_PROCURA_SOLO_NO_DEPOSITARIO =
+  '⛔ Los depositarios no piden procuras. Usa /ingreso, /salida o /stock.';
 
 /** Comandos retirados del menú (responden con aviso, no ejecutan flujo). */
 export const TELEGRAM_COMANDOS_RETIRADOS = new Set([

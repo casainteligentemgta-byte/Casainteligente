@@ -9,6 +9,7 @@ import {
   modoPruebasTelegramActivo,
   resolverEtiquetaRolDestinatario,
 } from '@/lib/telegram/enrutamientoPruebasTelegram';
+import { resolverNombreObraPorChatTelegram } from '@/lib/procuras/resolverNombreTelegramObra';
 import {
   type AccionDestinatarioLog,
   pieDestinatarioLog,
@@ -16,6 +17,30 @@ import {
 } from '@/lib/telegram/pieDestinatarioLog';
 
 const MAX_TEXTO_LOG = 3800;
+
+const TTL_NOMBRE_DESTINO_MS = 5 * 60 * 1000;
+const NOMBRE_DESTINO_CACHE = new Map<string, { nombre: string | null; hasta: number }>();
+
+/**
+ * Nombre de la persona (nómina de obra) del chat destino, para la cabecera del log.
+ * Sin nombre (chat no registrado) se muestra el número del chat.
+ */
+async function resolverNombreDestinoLog(chatId: string): Promise<string | null> {
+  const cached = NOMBRE_DESTINO_CACHE.get(chatId);
+  if (cached && cached.hasta > Date.now()) return cached.nombre;
+  let nombre: string | null = null;
+  try {
+    const { supabaseAdminForRoute } = await import('@/lib/talento/supabase-admin');
+    const admin = supabaseAdminForRoute();
+    if (admin.ok) {
+      nombre = await resolverNombreObraPorChatTelegram(admin.client, Number(chatId));
+    }
+  } catch {
+    nombre = null;
+  }
+  NOMBRE_DESTINO_CACHE.set(chatId, { nombre, hasta: Date.now() + TTL_NOMBRE_DESTINO_MS });
+  return nombre;
+}
 
 /** Réplica de salida al chat de logs (opt-out con TELEGRAM_LOG_ESPEJO_SALIDA=false). */
 export function isLogEspejoSalidaActivo(): boolean {
@@ -74,7 +99,8 @@ export async function espejarSalidaTelegramLog(params: {
   if (contexto) {
     lineasCabecera.push(`<b>${escHtml(contexto)}</b>`);
   }
-  lineasCabecera.push(`<i>chat destino ${escHtml(destinoOriginal)}</i>`);
+  const nombreDestino = await resolverNombreDestinoLog(destinoOriginal);
+  lineasCabecera.push(`<i>chat destino ${escHtml(nombreDestino ?? destinoOriginal)}</i>`);
   if (modoPruebasTelegramActivo()) {
     lineasCabecera.push('<i>↪ redirigido en modo pruebas</i>');
   }
