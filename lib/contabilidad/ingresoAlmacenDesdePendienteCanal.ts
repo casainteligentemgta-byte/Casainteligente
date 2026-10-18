@@ -3,6 +3,7 @@ import { aplicarLiberacionTransitoADisponible } from '@/lib/almacen/stockTransit
 import { approveAllQualityInspectionsForInvoice } from '@/lib/almacen/approveQualityInspection';
 import { crearCuarentenaDesdeFactura } from '@/lib/almacen/crearCuarentenaDesdeFactura';
 import { finalizarLiberacionCuarentena } from '@/lib/almacen/finalizarLiberacionCuarentena';
+import { ajustarCuarentenaARecibido } from '@/lib/almacen/ajustarCuarentenaARecibido';
 import type { LineaCompraContabilidadInput } from '@/lib/contabilidad/registerCompraDesdeRecepcion';
 import {
   parseCondicionPagoExtracted,
@@ -471,6 +472,22 @@ async function registrarIngresoAlmacenDesdePendienteCanal(
         })),
       });
       pendientes = await contarPendientesCuarentena(supabase, purchaseInvoiceId);
+    }
+
+    // Se aprueba lo que contó el depositario, no lo facturado: el faltante sale del tránsito.
+    let faltanteTodo = false;
+    if (pendientes > 0 && opts?.cantidadesRecibidas?.length) {
+      await ajustarCuarentenaARecibido(supabase, purchaseInvoiceId, opts.cantidadesRecibidas);
+      const quedan = await contarPendientesCuarentena(supabase, purchaseInvoiceId);
+      faltanteTodo = quedan === 0;
+      pendientes = quedan;
+    }
+
+    if (faltanteTodo) {
+      // No llegó nada de lo facturado: todo quedó rechazado; no hay stock que ingresar.
+      await finalizarLiberacionCuarentena(supabase, purchaseInvoiceId, { cerrarCadena: false });
+      await sincronizarContabilidadTrasInventarioCompra(supabase, purchaseInvoiceId);
+      return { success: true, yaExistia: false, viaCuarentena: true, aprobadas: 0 };
     }
 
     if (pendientes > 0) {

@@ -987,7 +987,7 @@ export const ESCENARIOS: Escenario[] = [
       ctx.comprobar('la referencia guardada es 2,50 USD', Number(alto?.precio_referencia) === PRECIO_COMPRA, JSON.stringify(alto));
       const avisoConta = bot.mensajesPara('conta').slice(conta0).map((e) => sinFormato(e.texto)).join(' ');
       const avisoCompra = bot.mensajesPara('compra').slice(compra0).map((e) => sinFormato(e.texto)).join(' ');
-      ctx.comprobar('el aviso de diferencias le llega al Contador', /diferencia/i.test(avisoConta) && /USD\/u/.test(avisoConta), sinSaltos(avisoConta));
+      ctx.comprobar('el aviso de diferencias le llega al Contador', /diferencia/i.test(avisoConta) && /USD\/(u|und)\b/i.test(avisoConta), sinSaltos(avisoConta));
       ctx.comprobar('y al comprador', /diferencia/i.test(avisoCompra), sinSaltos(avisoCompra));
 
       await retirarYRecibir(ctx, 55);
