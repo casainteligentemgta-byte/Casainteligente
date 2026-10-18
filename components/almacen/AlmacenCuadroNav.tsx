@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowLeftRight, ClipboardList, Package, Route, Timer, Truck } from 'lucide-react';
+import { ArrowLeftRight, BarChart3, ClipboardList, Package, Route, Timer, Truck } from 'lucide-react';
 
 export type CuadroAlmacen = 'inventario' | 'movimientos' | 'trazabilidad';
 
@@ -91,6 +91,10 @@ export default function AlmacenCuadroNav({
       <Link href="/compras/torre-control" className={`${linkBase} ${tabClass(false)}`}>
         <Timer size={14} className="shrink-0" aria-hidden />
         <span className="min-w-0 max-w-full break-words hyphens-auto">Torre de Control</span>
+      </Link>
+      <Link href="/informes" className={`${linkBase} ${tabClass(false)}`}>
+        <BarChart3 size={14} className="shrink-0" aria-hidden />
+        <span className="min-w-0 max-w-full break-words hyphens-auto">Informes</span>
       </Link>
     </nav>
   );

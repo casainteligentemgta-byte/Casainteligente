@@ -193,6 +193,10 @@ const GATES_POR_RUTA: Array<{ modulo: ModuloNavId; match: (pathname: string) => 
   { modulo: 'flota', match: (p) => p === '/flota' || p.startsWith('/flota/') },
 ];
 
+function esRutaInformes(pathname: string): boolean {
+  return pathname === '/informes' || pathname.startsWith('/informes/');
+}
+
 /**
  * true = la ruta está permitida.
  * Rutas fuera del menú (admin, nexus, registro…) no se bloquean.
@@ -211,6 +215,11 @@ export function hrefPermitidoPorModulos(pathname: string, modulos: Set<ModuloNav
   // CCO: módulo dedicado o contabilidad completa.
   if (esRutaCco(pathname)) {
     return modulos.has('cco') || modulos.has('contabilidad');
+  }
+
+  // Informes: quien ve Conta o Almacén.
+  if (esRutaInformes(pathname)) {
+    return modulos.has('contabilidad') || modulos.has('almacen');
   }
 
   for (const gate of GATES_POR_RUTA) {
