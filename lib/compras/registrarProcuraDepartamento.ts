@@ -39,6 +39,11 @@ export type RegistrarProcuraDepartamentoInput = {
   observaciones?: string | null;
   materialId?: string | null;
   porVerificar?: boolean;
+  /**
+   * Solo compra: quien pide ya pidió al almacén lo que había (o decidió comprar todo).
+   * La procura no se reparte contra el almacén ni al registrarla ni al aprobarla.
+   */
+  soloCompra?: boolean;
 };
 
 export type RegistrarProcuraDepartamentoResult = {
@@ -108,10 +113,12 @@ export async function registrarProcuraDepartamento(
   }
   entidadId = await resolverEntidadIdDesdeProyecto(supabase, proyectoId);
 
+  const soloCompra = Boolean(input.soloCompra);
   const evalStock = await evaluarStockRegistroProcura(supabase, {
     proyecto_id: proyectoId,
     material_id: materialId,
     cantidad,
+    solo_compra: soloCompra,
   });
 
   if (evalStock.stockSuficiente) {
@@ -245,6 +252,7 @@ export async function registrarProcuraDepartamento(
     cantidad_despacho: evalStock.cantidadDespacho,
     cantidad_compra: cantidadCompra,
     stock_almacen_detectado: evalStock.stockDisponible,
+    ...(soloCompra ? { solo_compra: true } : {}),
   };
 
   if (proyectoId) row.proyecto_id = proyectoId;
@@ -274,6 +282,7 @@ export async function registrarProcuraDepartamento(
         proyecto_id: proyectoId,
         material_id: materialId,
         cantidad,
+        solo_compra: soloCompra,
       });
     } catch (e) {
       console.warn('[registrarProcuraDepartamento] stock registro', e);

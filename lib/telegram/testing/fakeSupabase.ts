@@ -111,6 +111,11 @@ class Consulta implements PromiseLike<Resultado> {
     return this;
   }
   not(col: string, op: string, v: unknown): this {
+    if (op === 'in' && typeof v === 'string') {
+      const fuera = new Set(v.replace(/^\(|\)$/g, '').split(',').map((x) => x.trim()));
+      this.filtros.push((f) => !fuera.has(String(f[col] ?? '')));
+      return this;
+    }
     if (op !== 'is' || v !== null) throw new Error(`fakeSupabase: not(${op}) no soportado`);
     this.filtros.push((f) => (f[col] ?? null) !== null);
     return this;

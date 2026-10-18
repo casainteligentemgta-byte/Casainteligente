@@ -40,7 +40,14 @@ recorridos `compra_*`).
   `lib/compras/procuraDepartamentoTelegram.ts`). Con material del catálogo y existencia en
   la misma unidad, la confirmación ofrece «Pedirlo al almacén» (requerimiento de salida,
   sin contador, PM ni comprador) o «Pedir X y comprar Y». El stock se revisa de nuevo al
-  pulsar. Sin nadie de almacén con Telegram, avisa y deja comprar.
+  pulsar. Sin nadie de almacén con Telegram, avisa y deja comprar. La procura que sale de
+  «Pedir X y comprar Y» o de «Comprar todo/igual» es **solo compra** (migración 365): no se
+  reparte contra el almacén ni al registrarla ni al aprobarla, el depositario no recibe
+  orden de verificación y al comprador no se le dice que verifique stock.
+- **Recepción por conteo** (`lib/almacen/ajustarCuarentenaARecibido.ts`). Al recibir por
+  `/ingreso`, la cuarentena (creada por lo facturado) se ajusta a lo que contó el
+  depositario antes de aprobarla; el faltante sale del tránsito. Conteo 0: no entra stock,
+  la procura no pasa a «recibida» y se avisa al solicitante que no llegó.
 - **Catálogo base de obra civil** (`lib/compras/catalogoBase.ts`, migración 361). ~300
   ítems en 20 categorías (acero y cabillas, arena y piedra, cemento, bloques, tuberías,
   ferretería, electricidad, sanitarios, puertas y ventanas, techos, pisos, pintura,

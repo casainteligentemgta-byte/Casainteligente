@@ -20,6 +20,7 @@ export async function evaluarStockRegistroProcura(
     proyecto_id: string | null;
     material_id: string | null;
     cantidad: number;
+    solo_compra?: boolean | null;
   },
 ): Promise<EvaluacionStockRegistroProcura> {
   const evaluacion = await evaluarAbastecimientoProcura(supabase, params);

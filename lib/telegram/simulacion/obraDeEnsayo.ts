@@ -37,7 +37,7 @@ export const MATERIAL_ENSAYO_2 = {
   stockInicial: 50,
 } as const;
 
-export type ClavePersonaEnsayo = 'ing' | 'conta' | 'pm' | 'compra' | 'logi' | 'depo';
+export type ClavePersonaEnsayo = 'ing' | 'conta' | 'pm' | 'compra' | 'logi' | 'depo' | 'depo2' | 'nuevo';
 
 export type PersonaEnsayo = {
   clave: ClavePersonaEnsayo;
@@ -49,7 +49,16 @@ export type PersonaEnsayo = {
   /** Fila fija en ci_proyecto_nomina. */
   nominaId: string;
   chatId: number;
+  /**
+   * Falso: la nómina tiene su teléfono pero no su chat, como alguien recién cargado que
+   * todavía no abrió el bot. Se vincula compartiendo su número.
+   */
+  vinculado?: false;
+  telefono?: string;
 };
+
+/** Teléfono de la persona sin vincular (no puede coincidir con un celular real: 0414-999-07-07). */
+export const TELEFONO_ENSAYO_NUEVO = '0414-9990707';
 
 /**
  * Personas del ensayo. Sus chats no pueden existir en Telegram (los reales van por
@@ -104,6 +113,24 @@ export const PERSONAS_ENSAYO: Record<ClavePersonaEnsayo, PersonaEnsayo> = {
     rolSistema: null,
     nominaId: '00000000-0000-4000-a000-0000000000e6',
     chatId: 9_990_000_000_006,
+  },
+  depo2: {
+    clave: 'depo2',
+    nombre: 'Depo Dos Ensayo',
+    rol: 'depositario',
+    rolSistema: null,
+    nominaId: '00000000-0000-4000-a000-0000000000e7',
+    chatId: 9_990_000_000_007,
+  },
+  nuevo: {
+    clave: 'nuevo',
+    nombre: 'Nuevo Ensayo',
+    rol: 'ayudante',
+    rolSistema: null,
+    nominaId: '00000000-0000-4000-a000-0000000000e8',
+    chatId: 9_990_000_000_008,
+    vinculado: false,
+    telefono: TELEFONO_ENSAYO_NUEVO,
   },
 };
 
@@ -240,7 +267,8 @@ export async function reiniciarObraDeEnsayo(
           categoria: 'empleado',
           rol: p.rol,
           nombre: p.nombre,
-          telegram_chat_id: p.chatId,
+          telegram_chat_id: p.vinculado === false ? null : p.chatId,
+          telegram_telefono: p.telefono ?? null,
           activo: true,
           notas: 'Persona ficticia de los ensayos del bot.',
         })),
@@ -259,7 +287,27 @@ export async function reiniciarObraDeEnsayo(
     ).error,
   );
 
+  // Filas de nómina que agregó un recorrido (las personas fijas se conservan).
+  anotar(
+    'ci_proyecto_nomina (agregadas en el ensayo)',
+    (
+      await supabase
+        .from('ci_proyecto_nomina')
+        .delete()
+        .in('proyecto_id', [...OBRAS])
+        .not('id', 'in', `(${Object.values(PERSONAS_ENSAYO).map((p) => p.nominaId).join(',')})`)
+    ).error,
+  );
+  // La lista blanca la sincroniza la nómina: un vínculo por teléfono deja aquí su chat.
+  anotar(
+    'ci_telegram_whitelist (chats de ensayo)',
+    (await supabase.from('ci_telegram_whitelist').delete().in('chat_id', CHATS.map(Number))).error,
+  );
   anotar('ci_telegram_estados', (await supabase.from('ci_telegram_estados').delete().in('chat_id', CHATS)).error);
+  anotar(
+    'ci_inventario_reorden_obra',
+    (await supabase.from('ci_inventario_reorden_obra').delete().in('proyecto_id', [...OBRAS])).error,
+  );
 
   // --- Cadena de compras (de lo más dependiente a lo menos) ---
   /** Carpetas y archivos sueltos de documentos de compra que subió el ensayo. */

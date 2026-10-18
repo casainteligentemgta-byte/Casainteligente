@@ -50,6 +50,8 @@ quedó abierta.
 | `compra` | Compra Ensayo | Comprador | Comprador |
 | `logi` | Logi Ensayo | Logística | — |
 | `depo` | Depo Ensayo | Depositario | — |
+| `depo2` | Depo Dos Ensayo | Depositario (segundo) | — |
+| `nuevo` | Nuevo Ensayo | Ayudante, con teléfono y **sin** chat (para el vínculo por teléfono) | — |
 
 Sus chats son números que no pueden existir en Telegram.
 
@@ -77,26 +79,47 @@ Nadie de la nómina de ensayo es `admin`, porque ese rol sí se copia como Admin
 | Salida a obrero | `salida_obrero`, `salida_obrero_foto_antes`, `salida_obrero_sin_foto` |
 | Pedir material al almacén | `pedido_uso`, `pedido_colocacion`, `pedido_traspaso`, `pedido_devolucion`, `pedido_deterioro`, `pedido_no_propio`, `pedido_rechazado`, `pedido_soltado`, `pedido_supera_stock` |
 | Traspaso | `traspaso`, `traspaso_foto_antes` |
-| Compras | `compra_completa`, `compra_foto_factura_antes`, `compra_despacho_con_foto`, `compra_a_credito` |
+| Compras | `compra_completa`, `compra_todo_sin_almacen`, `compra_solo_almacen`, `compra_permisos`, `compra_catalogo`, `compra_rechazada`, `compra_con_diferencias`, `compra_no_llego`, `compra_foto_factura_antes`, `compra_a_credito` |
+| Varios depositarios | `pedido_dos_depositarios` |
+| Torre de Control | `torre_control` |
+| Vínculo por teléfono | `vinculo_telefono` |
 
-`compra_completa` recorre toda la cadena: el ingeniero pide 150 con 100 en almacén → el
-Contador confirma fondos → el PM aprueba → el depositario despacha 100 **con foto** y el
-comprador recibe **una sola** orden por 50 → factura manual con foto, en dólares → Logística
-la retira con foto → el depositario la ingresa con foto, el almacén sube 50, la solicitud
-queda «recibida» y el ingeniero recibe el aviso. Comprueba además que el depositario solo
-ve las facturas de su obra y que el monto en bolívares sea dólares × tasa una sola vez.
+`compra_completa` recorre toda la cadena con **almacén primero**: el ingeniero pide 150 con
+100 en almacén y elige «Pedir 100 y comprar 50» → el pedido de 100 llega a los dos
+depositarios y uno lo despacha con foto → la procura (solo compra, 50) pasa por Contador y
+PM → el comprador recibe una sola orden por 50 → factura manual con foto, en dólares →
+Logística la retira → el depositario la ingresa con foto, el almacén sube 50, la solicitud
+queda «recibida» y el ingeniero recibe el aviso. Termina comprobando el **kardex**: en cada
+ubicación, stock = inicial + suma de movimientos.
+
+`compra_con_diferencias`: con una compra anterior a 2,50 USD sembrada, facturan 60 de 50
+pedidos a 4 USD y llegan 55. Comprueba las tres diferencias del control de compras
+(facturado de más, precio alto, recibido de menos), los avisos y que al almacén entre lo
+contado (55), no lo facturado.
+
+`compra_no_llego`: la factura se registra pero el depositario cuenta 0. No entra stock, no
+queda nada en tránsito, la procura no pasa a «recibida» y al ingeniero se le dice que no llegó.
+
+`torre_control` usa `calcularCuellosBotella` con el reloj adelantado (0, 2, 3 y 6 días):
+plazos de cada etapa, «Estoy cotizando», material bajo el mínimo y el aviso diario (que se
+captura, no se envía).
 
 `compra_a_credito`: el Contador dice que no hay fondos, el PM aprueba **a crédito**, la orden
 al comprador lo dice y la factura se registra a crédito sin preguntar contado o crédito.
 
 `?escenario=todos` los corre todos, uno tras otro (más de dos minutos). Con `&grupo=compra`
-(o `salida`, `pedido`, `traspaso`) corre solo ese grupo, que es lo práctico desde una herramienta
-con límite de tiempo por llamada.
+(o `salida`, `pedido`, `traspaso`, `torre`, `vinculo`) corre solo ese grupo. El grupo
+`compra` ya pasa del límite de una llamada: conviene correr sus recorridos uno a uno.
+Los ensayos comparten la obra de ensayo: no correr dos a la vez.
 
 ## Qué no cubre
 
 - La entrega real por Telegram (que el mensaje llegue al teléfono) ni cómo se ve.
-- La lectura automática de facturas por foto.
+- La lectura automática de facturas por foto (y por eso el canal de facturas por foto).
+- Elegir un ítem del catálogo base: crearía un material real en la empresa de la obra de
+  ensayo. `compra_catalogo` recorre categorías y búsqueda y se detiene antes de elegir.
+- La «orden de verificación» del depositario tras aprobar: el bot ya no la usa (almacén
+  primero); sigue para procuras creadas por la web.
 
 ## Datos
 

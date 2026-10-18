@@ -62,13 +62,14 @@ export async function cargarProcuraAbastecimiento(
       cantidad_compra?: number | null;
       cantidad_despacho?: number | null;
       abastecimiento_codigo_despacho?: string | null;
+      solo_compra?: boolean | null;
     })
   | null
 > {
   const { data, error } = await supabase
     .from('ci_procuras')
     .select(
-      'id,ticket,estado,material_txt,material_id,cantidad,unidad,solicitante_nombre,solicitante_telegram_chat_id,prioridad,monto_estimado_usd,observaciones,proyecto_id,capitulo_maestro_id,cantidad_despacho,cantidad_compra,stock_almacen_detectado,abastecimiento_codigo_despacho,viabilidad_presupuestaria,ci_proyectos(nombre),ci_entidades(nombre),ci_compras_capitulos_maestro(codigo,nombre)',
+      'id,ticket,estado,material_txt,material_id,cantidad,unidad,solicitante_nombre,solicitante_telegram_chat_id,prioridad,monto_estimado_usd,observaciones,proyecto_id,capitulo_maestro_id,cantidad_despacho,cantidad_compra,stock_almacen_detectado,abastecimiento_codigo_despacho,viabilidad_presupuestaria,solo_compra,ci_proyectos(nombre),ci_entidades(nombre),ci_compras_capitulos_maestro(codigo,nombre)',
     )
     .eq('id', procuraId.trim())
     .maybeSingle();
@@ -82,6 +83,7 @@ export async function cargarProcuraAbastecimiento(
     cantidad_compra?: number | null;
     cantidad_despacho?: number | null;
     abastecimiento_codigo_despacho?: string | null;
+    solo_compra?: boolean | null;
   };
 }
 
@@ -91,6 +93,8 @@ export async function evaluarAbastecimientoProcura(
     proyecto_id: string | null;
     material_id: string | null;
     cantidad: number;
+    /** Quien la pidió ya decidió comprarla (migración 365): el almacén no despacha parte. */
+    solo_compra?: boolean | null;
   },
 ): Promise<EvaluacionAbastecimientoProcura> {
   const cantidadSolicitada = Number(procura.cantidad);
@@ -128,7 +132,7 @@ export async function evaluarAbastecimientoProcura(
     }
   }
 
-  const cantidadDespacho = Math.min(cantidadSolicitada, stockTotal);
+  const cantidadDespacho = procura.solo_compra ? 0 : Math.min(cantidadSolicitada, stockTotal);
   const cantidadCompra = Math.max(0, cantidadSolicitada - cantidadDespacho);
 
   return {
@@ -149,6 +153,7 @@ export async function evaluarStockProcuraRegistro(
     proyecto_id: string | null;
     material_id: string | null;
     cantidad: number;
+    solo_compra?: boolean | null;
   },
 ): Promise<EvaluacionAbastecimientoProcura> {
   const evaluacion = await evaluarAbastecimientoProcura(supabase, params);
@@ -204,7 +209,12 @@ export async function enviarOrdenVerificacionDepositarioProcura(
 
   const depChat = config?.depositarioAsignado?.telegram_chat_id;
   let depNombre = config?.depositarioAsignado?.nombre ?? null;
-  if (depChat != null && Number.isFinite(depChat)) destinos.add(String(depChat));
+  /** Nombre de cada destinatario: con varios depositarios, cada uno ve el suyo al pie. */
+  const nombreDe = new Map<string, string | null>();
+  if (depChat != null && Number.isFinite(depChat)) {
+    destinos.add(String(depChat));
+    nombreDe.set(String(depChat), depNombre);
+  }
   const grupo = config?.telegramGrupoAlmacenId;
   if (grupo != null && Number.isFinite(grupo)) destinos.add(String(grupo));
 
@@ -212,6 +222,7 @@ export async function enviarOrdenVerificacionDepositarioProcura(
   // sin depositario fijo despachaba el almacén sola, sin que nadie lo verificara.
   for (const p of await depositariosNomina(supabase, proyectoId)) {
     destinos.add(p.chatId);
+    if (!nombreDe.get(p.chatId)) nombreDe.set(p.chatId, p.nombre);
     if (!depNombre) depNombre = p.nombre;
   }
 
@@ -274,7 +285,7 @@ export async function enviarOrdenVerificacionDepositarioProcura(
           : depositarioVirtual
             ? ROL_DEPOSITARIO_VIRTUAL
             : 'Depositario',
-        nombreDestinatario: esGrupo ? config?.proyectoNombre : depNombre,
+        nombreDestinatario: esGrupo ? config?.proyectoNombre : depositarioVirtual ? null : nombreDe.get(chatId) ?? depNombre,
         accionLogDestinatario: 'confirmar_almacen',
         contextoLogEspejo: '[Procura · verificación almacén]',
       });
@@ -304,7 +315,12 @@ export async function enviarOrdenDespachoDepositarioProcura(
 
   const depChat = config?.depositarioAsignado?.telegram_chat_id;
   let depNombre = config?.depositarioAsignado?.nombre ?? null;
-  if (depChat != null && Number.isFinite(depChat)) destinos.add(String(depChat));
+  /** Nombre de cada destinatario: con varios depositarios, cada uno ve el suyo al pie. */
+  const nombreDe = new Map<string, string | null>();
+  if (depChat != null && Number.isFinite(depChat)) {
+    destinos.add(String(depChat));
+    nombreDe.set(String(depChat), depNombre);
+  }
   const grupo = config?.telegramGrupoAlmacenId;
   if (grupo != null && Number.isFinite(grupo)) destinos.add(String(grupo));
 
@@ -312,6 +328,7 @@ export async function enviarOrdenDespachoDepositarioProcura(
   // sin depositario fijo despachaba el almacén sola, sin que nadie lo verificara.
   for (const p of await depositariosNomina(supabase, proyectoId)) {
     destinos.add(p.chatId);
+    if (!nombreDe.get(p.chatId)) nombreDe.set(p.chatId, p.nombre);
     if (!depNombre) depNombre = p.nombre;
   }
 
@@ -373,7 +390,7 @@ export async function enviarOrdenDespachoDepositarioProcura(
           : depositarioVirtual
             ? ROL_DEPOSITARIO_VIRTUAL
             : 'Depositario',
-        nombreDestinatario: esGrupo ? config?.proyectoNombre : depNombre,
+        nombreDestinatario: esGrupo ? config?.proyectoNombre : depositarioVirtual ? null : nombreDe.get(chatId) ?? depNombre,
         accionLogDestinatario: 'confirmar_almacen',
         contextoLogEspejo: '[Procura · despacho almacén]',
       });
@@ -567,7 +584,9 @@ export async function procesarAbastecimientoProcuraAprobada(
       motivo:
         evaluacion.cantidadDespacho > 0
           ? `Orden de compra por saldo (${evaluacion.cantidadCompra} ${procura.unidad}) tras aprobación PM`
-          : 'Orden de compra — sin stock en almacén',
+          : procura.solo_compra
+            ? 'Solo compra: el solicitante eligió comprar (el almacén no despacha esta procura)'
+            : 'Orden de compra — sin stock en almacén',
       cantidadCompra: evaluacion.cantidadCompra,
       auditoriaSupervisor: params.auditoriaSupervisor,
     });
@@ -578,11 +597,11 @@ export async function procesarAbastecimientoProcuraAprobada(
     compradoresNotificados = oc.compradoresNotificados ?? 0;
   }
 
-  const verificacion = await enviarOrdenVerificacionDepositarioProcura(
-    supabase,
-    procura,
-    evaluacion,
-  );
+  // Solo compra: el solicitante ya decidió (pidió al almacén aparte o prefirió comprar);
+  // no hay nada que verificar ni despachar de esta procura.
+  const verificacion = procura.solo_compra
+    ? { enviado: false, destinos: 0 }
+    : await enviarOrdenVerificacionDepositarioProcura(supabase, procura, evaluacion);
 
   if (verificacion.enviado) {
     return {

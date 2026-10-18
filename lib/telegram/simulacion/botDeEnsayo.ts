@@ -258,6 +258,26 @@ export class BotDeEnsayo {
     });
   }
 
+  /**
+   * Comparte un contacto con el bot. Por defecto el propio (el botón «Compartir mi número»);
+   * `de` indica de quién es el contacto si se reenvía el de otra persona.
+   */
+  async contacto(clave: ClavePersonaEnsayo, telefono: string, de?: ClavePersonaEnsayo): Promise<ResultadoPaso> {
+    const p = this.persona(clave);
+    const dueno = this.persona(de ?? clave);
+    this.secuencia += 1;
+    return this.actualizar(p, de && de !== clave ? `reenvía el contacto de ${dueno.nombre}` : 'comparte su número', {
+      update_id: 900_000_000 + this.secuencia,
+      message: {
+        message_id: 700_000 + this.secuencia,
+        from: this.remitente(p),
+        chat: { id: p.chatId, type: 'private', first_name: p.nombre },
+        date: Math.floor(Date.now() / 1000),
+        contact: { phone_number: telefono, user_id: dueno.chatId, first_name: dueno.nombre },
+      },
+    });
+  }
+
   /** Pulsa un botón por su dato interno. */
   async pulsarDato(clave: ClavePersonaEnsayo, data: string, etiqueta?: string): Promise<ResultadoPaso> {
     const p = this.persona(clave);

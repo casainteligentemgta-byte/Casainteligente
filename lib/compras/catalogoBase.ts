@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { normalizarMedidas } from '@/lib/compras/medidasMaterial';
 import { normalizarTextoMaterial } from '@/lib/almacen/normalizarTextoMaterial';
 
 /**
@@ -79,7 +80,7 @@ export function itemsDeCategoria(items: ItemCatalogoBase[], orden: number): Item
  */
 /** Las medidas en fracción (1/2", 3/4") se buscan enteras: «1/2» no debe encontrar «1/4». */
 function normalizarBusqueda(texto: string): string {
-  return normalizarTextoMaterial(texto.replace(/(\d+)\s*\/\s*(\d+)/g, '$1de$2'));
+  return normalizarTextoMaterial(normalizarMedidas(texto));
 }
 
 export function buscarEnCatalogoBase(
