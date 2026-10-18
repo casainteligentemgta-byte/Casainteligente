@@ -1098,7 +1098,7 @@ async function registrarProcuraConfirmada(
   chatId: string,
   usuario: UsuarioSistemaTelegram,
   fresh: TelegramEstado,
-  opts?: { cantidad?: number },
+  opts?: { cantidad?: number; soloCompra?: boolean },
 ): Promise<boolean> {
   const m = meta(fresh);
   const cantidad = opts?.cantidad ?? m.cantidad;
@@ -1130,6 +1130,7 @@ async function registrarProcuraConfirmada(
     esConsumible: m.es_consumible ?? false,
     materialId: m.material_id?.trim() || null,
     porVerificar: Boolean(m.por_verificar),
+    soloCompra: Boolean(opts?.soloCompra),
   });
 
   if (!data && !error) {
@@ -1250,7 +1251,8 @@ async function pedirAlAlmacenYComprarResto(
   );
 
   if (resto > 0) {
-    await registrarProcuraConfirmada(supabase, chatId, usuario, fresh, { cantidad: resto });
+    // Lo del almacén ya va en el pedido: la procura es solo por lo que falta comprar.
+    await registrarProcuraConfirmada(supabase, chatId, usuario, fresh, { cantidad: resto, soloCompra: true });
   } else {
     await setTelegramContexto(supabase, chatId, { contexto: 'menu', metadata: {} });
   }
@@ -1595,7 +1597,9 @@ export async function manejarCallbackProcuraDepartamentoTelegram(
   if (params.data === CB_OK) {
     await answerCallbackQuery(params.callbackId, 'Registrando…');
     const fresh = await getTelegramEstado(supabase, params.chatId);
-    await registrarProcuraConfirmada(supabase, params.chatId, auth.usuario, fresh);
+    // Si se le mostró stock en el almacén y eligió «Comprar», compra todo: el almacén no despacha.
+    const vioStock = Number(meta(fresh).almacen_cantidad ?? 0) > 0;
+    await registrarProcuraConfirmada(supabase, params.chatId, auth.usuario, fresh, { soloCompra: vioStock });
     return true;
   }
 

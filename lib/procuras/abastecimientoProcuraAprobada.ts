@@ -62,13 +62,14 @@ export async function cargarProcuraAbastecimiento(
       cantidad_compra?: number | null;
       cantidad_despacho?: number | null;
       abastecimiento_codigo_despacho?: string | null;
+      solo_compra?: boolean | null;
     })
   | null
 > {
   const { data, error } = await supabase
     .from('ci_procuras')
     .select(
-      'id,ticket,estado,material_txt,material_id,cantidad,unidad,solicitante_nombre,solicitante_telegram_chat_id,prioridad,monto_estimado_usd,observaciones,proyecto_id,capitulo_maestro_id,cantidad_despacho,cantidad_compra,stock_almacen_detectado,abastecimiento_codigo_despacho,viabilidad_presupuestaria,ci_proyectos(nombre),ci_entidades(nombre),ci_compras_capitulos_maestro(codigo,nombre)',
+      'id,ticket,estado,material_txt,material_id,cantidad,unidad,solicitante_nombre,solicitante_telegram_chat_id,prioridad,monto_estimado_usd,observaciones,proyecto_id,capitulo_maestro_id,cantidad_despacho,cantidad_compra,stock_almacen_detectado,abastecimiento_codigo_despacho,viabilidad_presupuestaria,solo_compra,ci_proyectos(nombre),ci_entidades(nombre),ci_compras_capitulos_maestro(codigo,nombre)',
     )
     .eq('id', procuraId.trim())
     .maybeSingle();
@@ -82,6 +83,7 @@ export async function cargarProcuraAbastecimiento(
     cantidad_compra?: number | null;
     cantidad_despacho?: number | null;
     abastecimiento_codigo_despacho?: string | null;
+    solo_compra?: boolean | null;
   };
 }
 
@@ -91,6 +93,8 @@ export async function evaluarAbastecimientoProcura(
     proyecto_id: string | null;
     material_id: string | null;
     cantidad: number;
+    /** Quien la pidió ya decidió comprarla (migración 365): el almacén no despacha parte. */
+    solo_compra?: boolean | null;
   },
 ): Promise<EvaluacionAbastecimientoProcura> {
   const cantidadSolicitada = Number(procura.cantidad);
@@ -128,7 +132,7 @@ export async function evaluarAbastecimientoProcura(
     }
   }
 
-  const cantidadDespacho = Math.min(cantidadSolicitada, stockTotal);
+  const cantidadDespacho = procura.solo_compra ? 0 : Math.min(cantidadSolicitada, stockTotal);
   const cantidadCompra = Math.max(0, cantidadSolicitada - cantidadDespacho);
 
   return {
@@ -149,6 +153,7 @@ export async function evaluarStockProcuraRegistro(
     proyecto_id: string | null;
     material_id: string | null;
     cantidad: number;
+    solo_compra?: boolean | null;
   },
 ): Promise<EvaluacionAbastecimientoProcura> {
   const evaluacion = await evaluarAbastecimientoProcura(supabase, params);
