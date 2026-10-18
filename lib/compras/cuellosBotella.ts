@@ -448,6 +448,10 @@ function escHtml(s: string): string {
 type Destinatario = { chatId: string; nombre: string | null };
 
 /** A quién avisar por cada ítem detenido (con caché por obra). */
+export async function crearResolutorResponsables(supabase: SupabaseClient) {
+  return crearResolutor(supabase);
+}
+
 async function crearResolutor(supabase: SupabaseClient) {
   const cache = new Map<string, Promise<PersonaNominaTelegram[]>>();
   const memo = (k: string, f: () => Promise<PersonaNominaTelegram[]>) => {
@@ -546,6 +550,9 @@ export async function enviarAvisosCuellosBotella(
       });
     });
 
+  // A administración se le indica que puede destrabarlos desde el mismo Telegram.
+  const admins = new Set((await listarAdministradoresSistemaTelegram(supabase).catch(() => [])).map((a) => String(a.chatId)));
+
   let enviados = 0;
   let errores = 0;
   for (const [chatId, b] of Array.from(bandejas.entries())) {
@@ -569,6 +576,7 @@ export async function enviarAvisosCuellosBotella(
       }
       if (lista.length > MAX_LINEAS_POR_ETAPA) partes.push(`… y ${lista.length - MAX_LINEAS_POR_ETAPA} más`);
     }
+    if (admins.has(chatId)) partes.push('', '🛠 Para resolverlos desde aquí: /detenidos');
     partes.push('', `<a href="${base}/compras/torre-control">Abrir la Torre de Control</a>`);
     try {
       await enviar(chatId, partes.join('\n'));

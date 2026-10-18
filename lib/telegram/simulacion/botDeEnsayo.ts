@@ -103,7 +103,13 @@ export class BotDeEnsayo {
   readonly pasos: ResultadoPaso[] = [];
   /** Todo lo que el bot ha enviado en esta corrida, en orden. */
   readonly envios: EnvioSimulado[] = [];
+  /** Personas «solo invitadas» que participan en este recorrido (p. ej. el administrador). */
+  readonly invitados = new Set<ClavePersonaEnsayo>();
   private secuencia = 0;
+
+  invitar(clave: ClavePersonaEnsayo): void {
+    this.invitados.add(clave);
+  }
 
   constructor(
     private readonly supabase: SupabaseClient,
@@ -179,7 +185,7 @@ export class BotDeEnsayo {
 
     try {
       const { resultado, envios } = await enSimulacionBot(() => this.despachar(update), {
-        usuariosSistema: usuariosSistemaDeEnsayo(),
+        usuariosSistema: usuariosSistemaDeEnsayo(this.invitados),
       });
       paso.ruta = resultado;
       paso.respuestas = envios.map(resumirEnvio);

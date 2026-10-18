@@ -1243,6 +1243,113 @@ export const ESCENARIOS: Escenario[] = [
     },
   },
   {
+    id: 'torre_admin',
+    titulo: 'El administrador resuelve los detenidos desde Telegram con /detenidos',
+    async correr(ctx) {
+      const { bot, supabase } = ctx;
+      bot.invitar('admin');
+      const atrasar = async (dias: number) => {
+        const hace = new Date(Date.now() - dias * 86_400_000).toISOString();
+        await supabase.from('ci_procuras').update({ updated_at: hace }).eq('proyecto_id', OBRA_ENSAYO.id);
+        await supabase.from('inv_requerimientos_salida').update({ created_at: hace }).eq('proyecto_id', OBRA_ENSAYO.id);
+      };
+
+      await bot.escribir('pm', '/detenidos');
+      ctx.comprobar('quien no es administración no puede usar /detenidos', /solo para administraci[oó]n/i.test(bot.textoUltimoPaso()), sinSaltos(bot.textoUltimoPaso()));
+
+      await registrarProcura(ctx, 'parte');
+      await atrasar(3);
+      // Una factura del canal leída hace 2 días y sin confirmar.
+      const { data: canal, error: eCanal } = await supabase
+        .from('ci_facturas_canal_pendientes')
+        .insert({
+          chat_id: String(PERSONAS_ENSAYO.compra.chatId),
+          estado: 'extraido',
+          proyecto_id: OBRA_ENSAYO.id,
+          extracted: { invoice_number: 'F-ENSAYO-CANAL', supplier_name: PROVEEDOR_ENSAYO },
+          created_at: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+          updated_at: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+        } as never)
+        .select('id')
+        .single();
+      ctx.exigir('se siembra una factura del canal sin confirmar', !eCanal && Boolean(canal), eCanal?.message);
+
+      await bot.escribir('admin', '/detenidos');
+      const resumen = bot.textoUltimoPaso();
+      ctx.exigir('el resumen muestra la procura por aprobar', /procura por aprobar: 1/i.test(resumen), sinSaltos(resumen));
+      ctx.comprobar('y el pedido sin despachar', /pedido de material sin despachar: 1/i.test(resumen), sinSaltos(resumen));
+      ctx.comprobar('y la factura sin confirmar', /factura sin confirmar: 1/i.test(resumen), sinSaltos(resumen));
+      ctx.comprobar('en un ensayo solo ve la obra de ensayo: 3 detenidos en total', /— 3 detenidos/.test(resumen), sinSaltos(resumen));
+
+      // 1) Revisa los fondos en lugar del Contador.
+      await bot.pulsar('admin', 'Procura por aprobar');
+      await bot.pulsar('admin', 'Hay disponibilidad');
+      ctx.exigir(
+        'al confirmar fondos desde la Torre, la decisión pasa al PM',
+        bot.botonesVigentes('pm').some((b) => /aprobar/i.test(b.texto)),
+        sinSaltos(bot.textoUltimoPaso()),
+      );
+
+      // 2) Aprueba en lugar del PM.
+      await atrasar(3);
+      await bot.escribir('admin', '/detenidos');
+      await bot.pulsar('admin', 'Procura por aprobar');
+      await bot.pulsar('admin', 'Aprobar');
+      ctx.exigir('al aprobar desde la Torre, la orden le llega al comprador', ordenesDeCompraRecibidas(ctx) === 1, sinSaltos(bot.textoUltimoPaso()));
+
+      // 3) Le recuerda al comprador y luego cancela.
+      await atrasar(3);
+      await bot.escribir('admin', '/detenidos');
+      await bot.pulsar('admin', 'Aprobada sin comprar');
+      await bot.pulsar('admin', 'Recordar al responsable');
+      ctx.comprobar(
+        'el comprador recibe el recordatorio de administración',
+        /recordatorio de admin ensayo/i.test(textoPara(ctx, 'compra')) && /aprobada sin comprar/i.test(textoPara(ctx, 'compra')),
+        sinSaltos(textoPara(ctx, 'compra')),
+      );
+      ctx.comprobar('al administrador se le dice a quién se le recordó', /enviado a compra ensayo/i.test(textoPara(ctx, 'admin')), sinSaltos(textoPara(ctx, 'admin')));
+      await bot.pulsar('admin', 'Cancelar procura');
+      ctx.exigir('pide confirmar antes de cancelar', /¿cancelar esta procura/i.test(bot.textoUltimoPaso()), sinSaltos(bot.textoUltimoPaso()));
+      await bot.pulsar('admin', 'Sí, hacerlo');
+      ctx.comprobar('la procura queda «cancelada»', (await procuraDeEnsayo(ctx))?.estado === 'cancelada', String((await procuraDeEnsayo(ctx))?.estado));
+      ctx.comprobar(
+        'al ingeniero se le avisa que se canceló',
+        bot.mensajesPara('ing').some((e) => /cancelada/i.test(sinFormato(e.texto)) && /administraci[oó]n/i.test(sinFormato(e.texto))),
+        sinSaltos(textoPara(ctx, 'ing')),
+      );
+
+      // 4) Recuerda el pedido a los dos depositarios.
+      await bot.escribir('admin', '/detenidos');
+      await bot.pulsar('admin', 'Pedido de material sin despachar');
+      await bot.pulsar('admin', 'Recordar al responsable');
+      ctx.comprobar(
+        'los dos depositarios reciben el recordatorio del pedido',
+        /recordatorio de admin ensayo/i.test(textoPara(ctx, 'depo')) && /recordatorio de admin ensayo/i.test(textoPara(ctx, 'depo2')),
+        `${sinSaltos(textoPara(ctx, 'depo'))} || ${sinSaltos(textoPara(ctx, 'depo2'))}`,
+      );
+
+      // 5) Descarta la factura del canal.
+      await bot.escribir('admin', '/detenidos');
+      await bot.pulsar('admin', 'Factura sin confirmar');
+      await bot.pulsar('admin', 'Descartar factura');
+      await bot.pulsar('admin', 'Sí, hacerlo');
+      const { data: trasCanal } = await supabase
+        .from('ci_facturas_canal_pendientes')
+        .select('estado')
+        .eq('id', (canal as { id: string }).id)
+        .maybeSingle();
+      ctx.comprobar('la factura queda descartada', (trasCanal as { estado?: string } | null)?.estado === 'rechazado', JSON.stringify(trasCanal));
+      ctx.comprobar('a quien la envió se le avisa', /fue descartada por administraci[oó]n/i.test(textoPara(ctx, 'compra')), sinSaltos(textoPara(ctx, 'compra')));
+
+      await bot.escribir('admin', '/detenidos');
+      ctx.comprobar(
+        'al final solo queda el pedido (los otros ya se resolvieron)',
+        /— 1 detenido\b/.test(bot.textoUltimoPaso()) && /pedido de material sin despachar: 1/i.test(bot.textoUltimoPaso()),
+        sinSaltos(bot.textoUltimoPaso()),
+      );
+    },
+  },
+  {
     id: 'vinculo_telefono',
     titulo: 'Vincular Telegram compartiendo el número: el propio entra, el ajeno no, y no se pisa un vínculo',
     async correr(ctx) {
