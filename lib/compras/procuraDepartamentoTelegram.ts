@@ -705,12 +705,6 @@ export async function manejarComandoProcuraDepartamentoTelegram(
   // Cada procura se hace para la obra que se elige: el ingeniero puede tener varias obras.
   await enviarPickerProyectosTelegram(supabase, chatId, 'procura_departamento');
   return true;
-
-  await continuarProcuraDepartamentoTrasObra(supabase, chatId, proyectoId, {
-    id: auth.usuario.id,
-    nombre: auth.usuario.nombre,
-  });
-  return true;
 }
 
 async function pedirMaterial(chatId: string, cap: { codigo: string; nombre: string }): Promise<void> {
