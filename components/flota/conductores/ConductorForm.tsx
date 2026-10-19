@@ -15,6 +15,7 @@ export type ConductorFormValues = {
   fecha_vencimiento_licencia: string;
   fecha_vencimiento_salud: string;
   telefono: string;
+  telegram_chat_id: string;
   email: string;
   tipo_licencia: string;
   licencia_numero: string;
@@ -31,6 +32,7 @@ export function conductorAValores(c?: FlotaConductor | null): ConductorFormValue
     fecha_vencimiento_licencia: c?.fecha_vencimiento_licencia ?? c?.licencia_vence ?? '',
     fecha_vencimiento_salud: c?.fecha_vencimiento_salud ?? c?.certificado_medico_vence ?? '',
     telefono: c?.telefono ?? '',
+    telegram_chat_id: c?.telegram_chat_id != null ? String(c.telegram_chat_id) : '',
     email: c?.email ?? '',
     tipo_licencia: c?.tipo_licencia ?? '',
     licencia_numero: c?.licencia_numero ?? '',
@@ -152,6 +154,17 @@ export function ConductorForm({
       <div>
         <label className={FLOTA_LABEL}>Teléfono</label>
         <input className={FLOTA_INPUT} value={formData.telefono} onChange={(e) => set('telefono', e.target.value)} />
+      </div>
+      <div>
+        <label className={FLOTA_LABEL}>Chat ID de Telegram</label>
+        <input
+          className={FLOTA_INPUT}
+          inputMode="numeric"
+          placeholder="Ej. 8684897057"
+          value={formData.telegram_chat_id}
+          onChange={(e) => set('telegram_chat_id', e.target.value)}
+        />
+        <p className="mt-1 text-xs text-zinc-500">Sin este dato el chofer no recibe retiros de mercancía.</p>
       </div>
       <div>
         <label className={FLOTA_LABEL}>Correo</label>
