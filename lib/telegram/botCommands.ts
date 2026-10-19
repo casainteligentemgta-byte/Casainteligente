@@ -38,21 +38,24 @@ function lineasComprasMenuTelegram(): string {
 }
 
 /**
- * Comandos que ve y puede usar un depositario: solo facturas, ingreso y salida (más menú,
- * ayuda y cancelar). Sin procura, campo, consultas, agenda ni técnico.
+ * Comandos que ve y puede usar un depositario: facturas, nota de entrega, ingreso y salida
+ * (más menú, ayuda y cancelar). Sin procura, campo, consultas, agenda ni técnico.
  */
 export const COMANDOS_DEPOSITARIO_PERMITIDOS = new Set([
   'menu',
   'ayuda',
   'facturas',
+  'nota',
   'ingreso',
   'salida',
   'cancelar',
 ]);
 
 /** Menú nativo de Telegram (setMyCommands) para un depositario. */
-export const TELEGRAM_BOT_COMMANDS_DEPOSITARIO: Array<{ command: string; description: string }> =
-  TELEGRAM_BOT_COMMANDS.filter((c) => COMANDOS_DEPOSITARIO_PERMITIDOS.has(c.command));
+export const TELEGRAM_BOT_COMMANDS_DEPOSITARIO: Array<{ command: string; description: string }> = [
+  ...TELEGRAM_BOT_COMMANDS.filter((c) => COMANDOS_DEPOSITARIO_PERMITIDOS.has(c.command)),
+  { command: 'nota', description: 'Cargar nota de entrega (foto o manual)' },
+].sort((a, b) => a.command.localeCompare(b.command));
 
 export const MENSAJE_NO_DISPONIBLE_DEPOSITARIO =
   '⛔ Esa función no está disponible para el depositario. Use /ingreso, /salida o /facturas.';
@@ -65,7 +68,9 @@ export function mensajeMenuTelegram(opts?: { depositario?: boolean }): string {
   if (opts?.depositario) {
     return (
       '🏠 <b>Casa Inteligente</b>\n\n' +
-      '<b>Facturas</b>\n• /facturas — facturas precargadas por el comprador\n\n' +
+      '<b>Facturas y notas</b>\n' +
+      '• /facturas — facturas precargadas por el comprador\n' +
+      '• /nota — cargar nota de entrega (foto o manual)\n\n' +
       '<b>Ingresos almacén</b>\n' +
       '• /ingreso — manual · automático · nota · sin nota · precargadas\n\n' +
       '<b>Salidas</b>\n' +
@@ -101,6 +106,7 @@ export function mensajeAyudaTelegram(opts?: { depositario?: boolean }): string {
     return (
       '<b>Comandos Casa Inteligente</b>\n\n' +
       '<b>Facturas</b>: /facturas\n' +
+      '<b>Notas de entrega</b>: /nota\n' +
       '<b>Ingresos</b>: /ingreso\n' +
       '<b>Salidas</b>: /salida\n\n' +
       '/menu — menú · /cancelar — reiniciar'

@@ -12,7 +12,7 @@ import {
 describe('menú del depositario (sin procuras)', () => {
   it('el menú nativo del depositario solo incluye facturas, ingreso, salida, menú, ayuda y cancelar', () => {
     const nombres = TELEGRAM_BOT_COMMANDS_DEPOSITARIO.map((c) => c.command).sort();
-    assert.deepEqual(nombres, ['ayuda', 'cancelar', 'facturas', 'ingreso', 'menu', 'salida']);
+    assert.deepEqual(nombres, ['ayuda', 'cancelar', 'facturas', 'ingreso', 'menu', 'nota', 'salida']);
     for (const c of ['procura', 'stock', 'agenda', 'tecnico', 'bitacora', 'agua', 'limpiar_agenda']) {
       assert.ok(!nombres.includes(c), c);
     }
@@ -22,6 +22,7 @@ describe('menú del depositario (sin procuras)', () => {
     const dep = mensajeMenuTelegram({ depositario: true });
     assert.ok(!/procura/i.test(dep));
     assert.match(dep, /\/facturas/);
+    assert.match(dep, /\/nota/);
     assert.match(dep, /\/ingreso/);
     assert.match(dep, /\/salida/);
     assert.ok(!/stock|bitacora|agua|agenda|tecnico|campo|consulta/i.test(dep));
@@ -31,6 +32,7 @@ describe('menú del depositario (sin procuras)', () => {
   it('/ayuda del depositario no muestra procuras ni funciones de campo, consultas, agenda o técnico', () => {
     const ayuda = mensajeAyudaTelegram({ depositario: true });
     assert.ok(!/procura/i.test(ayuda));
+    assert.match(ayuda, /\/nota/);
     assert.ok(!/stock|bitacora|agua|agenda|tecnico|campo|consulta/i.test(ayuda));
     assert.match(mensajeAyudaTelegram(), /\/procura/);
   });
