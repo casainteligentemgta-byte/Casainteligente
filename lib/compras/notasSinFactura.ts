@@ -52,7 +52,7 @@ export function construirMensajeNotasSinFactura(
     const clave = n.obra?.trim() || 'Sin obra';
     porObra.set(clave, [...(porObra.get(clave) ?? []), n]);
   }
-  for (const [obra, lista] of porObra) {
+  for (const [obra, lista] of Array.from(porObra.entries())) {
     partes.push('', `<b>${escHtml(obra)}</b>`);
     for (const n of lista) {
       const doc = n.num_doc?.trim() ? escHtml(n.num_doc.trim()) : 'Nota sin número';
