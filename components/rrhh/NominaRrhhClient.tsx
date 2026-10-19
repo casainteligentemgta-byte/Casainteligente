@@ -11,6 +11,7 @@ import {
   type ProyectoModuloIntegral,
 } from '@/lib/proyectos/proyectosUnificados';
 import { hrefRrhhHub } from '@/lib/rrhh/hrefSolicitudPersonal';
+import RrhhSubnavEnlaces from '@/components/rrhh/RrhhSubnavEnlaces';
 import {
   esUuidProyectoModulo,
   guardarProyectoRrhhContexto,
@@ -110,6 +111,9 @@ export default function NominaRrhhClient() {
               Contratados activos del proyecto y nómina semanal (recibo legal y de patio).
             </p>
           </div>
+        </div>
+        <div className="mt-4">
+          <RrhhSubnavEnlaces proyectoModuloId={proyectoId || null} />
         </div>
 
         <label className="mt-4 block max-w-md space-y-1.5">
