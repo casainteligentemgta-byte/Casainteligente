@@ -12,6 +12,7 @@ import {
 import { calcularRiesgoObrero } from '@/lib/talento/calcularRiesgoObrero';
 import { evaluarSemaforoObrero } from '@/lib/talento/evaluarSemaforoObrero';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
+import { apruebaParaHojaVida, urlHojaVidaExamenPrimero } from '@/lib/reclutamiento/examenPrimero';
 
 /**
  * POST — Evaluación única de ingreso (color + lógica + honestidad + ABC oficio).
@@ -66,7 +67,7 @@ export async function POST(req: Request) {
 
   const { data: emp, error: empErr } = await admin.client
     .from('ci_empleados')
-    .select('id, rol_examen, rol_buscado, cargo, cargo_codigo')
+    .select('id, rol_examen, rol_buscado, cargo, cargo_codigo, recruitment_need_id, estado_proceso')
     .eq('id', invR.empleado_id)
     .maybeSingle();
 
@@ -79,6 +80,8 @@ export async function POST(req: Request) {
     rol_buscado?: string | null;
     cargo?: string | null;
     cargo_codigo?: string | null;
+    recruitment_need_id?: string | null;
+    estado_proceso?: string | null;
   };
   const empRol = (empRow.rol_examen ?? '').trim().toLowerCase() || 'obrero';
   if (empRol !== 'obrero' && empRol !== 'vigilante') {
@@ -154,6 +157,18 @@ export async function POST(req: Request) {
   const abcResult = evaluarSemaforoObrero(abc);
   const ahora = new Date().toISOString();
 
+  // Vacante con «examen primero»: la hoja de vida viene después y solo si no sale en rojo.
+  let examenPrimero = false;
+  const needId = (empRow.recruitment_need_id ?? '').trim();
+  if (needId && empRow.estado_proceso !== 'cv_completado') {
+    const { data: needRow } = await admin.client
+      .from('recruitment_needs')
+      .select('examen_primero')
+      .eq('id', needId)
+      .maybeSingle();
+    examenPrimero = Boolean((needRow as { examen_primero?: boolean | null } | null)?.examen_primero);
+  }
+
   const { error: upErr } = await admin.client
     .from('ci_empleados')
     .update({
@@ -189,6 +204,7 @@ export async function POST(req: Request) {
       estado: abcResult.estado,
       examen_completado_at: ahora,
       updated_at: ahora,
+      ...(examenPrimero ? { estado_proceso: 'examen_completado' } : {}),
     } as never)
     .eq('id', invR.empleado_id);
 
@@ -217,5 +233,14 @@ export async function POST(req: Request) {
     // Resultados no se muestran al obrero; se devuelven por si RRHH/debug.
     perfil_color,
     semaforo: abcResult.semaforo,
+    ...(examenPrimero
+      ? {
+          examen_primero: true,
+          // Solo se ofrece la hoja de vida si aprobó (verde o amarillo).
+          ...(apruebaParaHojaVida(abcResult.semaforo)
+            ? { siguiente_hv_url: urlHojaVidaExamenPrimero(token, baseUrlPublica(req)) }
+            : {}),
+        }
+      : {}),
   });
 }

@@ -15,6 +15,7 @@ export const FAMILIAS_OFICIO_OBRERO = [
   'estructuras',
   'equipos',
   'vigilancia',
+  'chofer',
 ] as const;
 
 /** Track de la evaluación unificada: ayudante vs oficio clasificado (1ª / 2ª / maestro). */
@@ -52,7 +53,9 @@ export function etiquetaFamiliaOficio(familia: FamiliaOficioObrero): string {
     case 'estructuras':
       return 'Estructuras / cabillas / soldadura';
     case 'equipos':
-      return 'Equipos / choferes / operadores';
+      return 'Equipos / operadores';
+    case 'chofer':
+      return 'Chofer / conducción';
     case 'vigilancia':
       return 'Vigilancia';
     default:
@@ -131,6 +134,11 @@ export function familiaOficioDesdeCargo(opts: {
   const n = norm(raw);
   if (!n) return 'general';
 
+  // Chofer primero: «chofer de seguridad» o «conductor escolta» siguen siendo choferes.
+  if (n.includes('chofer') || n.includes('conductor')) {
+    return 'chofer';
+  }
+
   if (
     n.includes('vigilante') ||
     n.includes('seguridad') ||
@@ -174,7 +182,6 @@ export function familiaOficioDesdeCargo(opts: {
   }
 
   if (
-    n.includes('chofer') ||
     n.includes('operador') ||
     n.includes('maquinista') ||
     n.includes('mecanico') ||

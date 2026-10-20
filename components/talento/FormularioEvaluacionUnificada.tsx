@@ -2,10 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { ArrowLeft, ArrowRight, CheckCircle2, Loader2 } from 'lucide-react';
-import {
-  bancoEvaluacionUnificadaObrero,
-  TOTAL_EVALUACION_UNIFICADA,
-} from '@/lib/talento/bancoEvaluacionUnificadaObrero';
+import { bancoEvaluacionUnificadaObrero } from '@/lib/talento/bancoEvaluacionUnificadaObrero';
 import {
   esColorPerfilObrero,
   opcionesDiscVisibles,
@@ -24,7 +21,13 @@ type Props = {
   cargo?: string;
   codigoGoE?: string;
   rolExamen?: string;
-  onFinalizar: () => void;
+  /** `siguienteHvUrl` llega solo en vacantes con examen primero y evaluación aprobada. */
+  onFinalizar: (resultado: ResultadoEvaluacionUnificada) => void;
+};
+
+export type ResultadoEvaluacionUnificada = {
+  examenPrimero: boolean;
+  siguienteHvUrl?: string;
 };
 
 export default function FormularioEvaluacionUnificada({
@@ -67,14 +70,21 @@ export default function FormularioEvaluacionUnificada({
   const paso = pasos[i]!;
   const progreso = Math.round(((i + 1) / total) * 100);
 
+  const esChofer = banco.familia === 'chofer';
   const seccionLabel =
     paso.tipo === 'disc'
-      ? 'Cómo eres en la obra'
+      ? esChofer
+        ? 'Cómo eres en el trabajo'
+        : 'Cómo eres en la obra'
       : paso.tipo === 'logica'
-        ? 'Preguntas de obra'
+        ? esChofer
+          ? 'Razonamiento'
+          : 'Preguntas de obra'
         : paso.tipo === 'conf'
           ? 'Honestidad'
-          : banco.track === 'ayudante'
+          : esChofer
+            ? 'Al volante'
+            : banco.track === 'ayudante'
             ? 'En la obra · Ayudante'
             : banco.etiquetaFamilia
               ? `En la obra · ${banco.etiquetaFamilia}`
@@ -110,9 +120,16 @@ export default function FormularioEvaluacionUnificada({
           tiempo_respuesta: Math.round((Date.now() - inicio) / 1000),
         }),
       });
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        examen_primero?: boolean;
+        siguiente_hv_url?: string;
+      };
       if (!res.ok) throw new Error(data.error || 'No se pudo guardar la evaluación');
-      onFinalizar();
+      onFinalizar({
+        examenPrimero: Boolean(data.examen_primero),
+        siguienteHvUrl: data.siguiente_hv_url || undefined,
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al enviar');
     } finally {
@@ -126,7 +143,7 @@ export default function FormularioEvaluacionUnificada({
         <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-500">Evaluación</p>
         <p className="mt-1 text-sm text-zinc-400">Hola, {nombre}</p>
         <p className="mt-1 text-[11px] text-zinc-600">
-          {TOTAL_EVALUACION_UNIFICADA} preguntas · {banco.etiquetaTrack}
+          {banco.total} preguntas · {esChofer ? banco.etiquetaFamilia : banco.etiquetaTrack}
         </p>
         <div className="mt-4 flex items-center justify-between text-xs text-zinc-500">
           <span>{seccionLabel}</span>

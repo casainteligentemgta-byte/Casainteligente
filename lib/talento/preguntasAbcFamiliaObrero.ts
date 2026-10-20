@@ -387,6 +387,105 @@ const VIGILANCIA: BloqueFamiliaAbc = [
   ),
 ];
 
+/** Chofer: seguridad vial, pasajeros y cuidado del vehículo (A segura · B pasiva · C riesgosa). */
+const CHOFER: BloqueFamiliaAbc = [
+  q(
+    'obr_16',
+    'oficio',
+    'Te acercas a un semáforo y cambia a amarillo. ¿Qué haces?',
+    'Freno si puedo hacerlo sin peligro.',
+    'Paso si no viene nadie.',
+    'Acelero para pasar antes del rojo.',
+  ),
+  q(
+    'obr_17',
+    'oficio',
+    'En autopista, un pasajero o un niño se suelta el cinturón. ¿Qué haces?',
+    'Le pido que se lo ponga; si no puede, me orillo en un lugar seguro y lo ayudo.',
+    'Se lo digo y sigo manejando.',
+    'Me volteo a abrochárselo mientras manejo.',
+  ),
+  q(
+    'obr_18',
+    'oficio',
+    'Te escriben al celular mientras manejas. ¿Qué haces?',
+    'Respondo solo cuando me detengo en un lugar seguro.',
+    'Lo leo rápido en el semáforo.',
+    'Contesto manejando.',
+  ),
+  q(
+    'obr_19',
+    'oficio',
+    'Llevas horas manejando en carretera y te da sueño. ¿Qué haces?',
+    'Me detengo en un lugar seguro, descanso y aviso que llegaré más tarde.',
+    'Abro la ventana, subo la música y sigo.',
+    'Acelero para llegar rápido.',
+  ),
+  q(
+    'obr_20',
+    'oficio',
+    'El vehículo empieza a recalentarse. ¿Qué haces?',
+    'Me detengo en un lugar seguro, apago y aviso. No abro el radiador caliente.',
+    'Sigo despacio hasta llegar.',
+    'Le echo agua fría con el motor prendido.',
+  ),
+];
+
+/**
+ * Preguntas adicionales solo para chofer (se suman al bloque de oficio completo).
+ * Claves `chf_*` para no chocar con `obr_*`.
+ */
+export const CHOFER_EXTRA: readonly PreguntaAbcObrero[] = [
+  q(
+    'chf_01',
+    'oficio',
+    'Antes de salir con el vehículo cada día, ¿qué revisas?',
+    'Cauchos, luces, frenos, niveles y combustible.',
+    'Solo el combustible.',
+    'Nada; si ayer funcionó, hoy también.',
+  ),
+  q(
+    'chf_02',
+    'oficio',
+    'Empieza a llover fuerte. ¿Qué haces?',
+    'Bajo la velocidad, dejo más distancia y enciendo las luces bajas.',
+    'Sigo igual, con un poco más de cuidado.',
+    'Pongo las luces de emergencia y sigo rápido.',
+  ),
+  q(
+    'chf_03',
+    'oficio',
+    'Otro conductor te cierra el paso y te insulta. ¿Qué haces?',
+    'Lo dejo pasar, mantengo la distancia y sigo con calma.',
+    'Le toco la corneta para que aprenda.',
+    'Lo sigo para reclamarle en el próximo semáforo.',
+  ),
+  q(
+    'chf_04',
+    'oficio',
+    'Vas tarde a un compromiso y hay mucho tráfico. ¿Qué haces?',
+    'Aviso cuánto me voy a retrasar y busco una ruta alterna segura.',
+    'No digo nada y espero.',
+    'Me meto por el hombrillo para adelantar.',
+  ),
+  q(
+    'chf_05',
+    'oficio',
+    'Notas que un vehículo te sigue varias cuadras y llevas pasajeros. ¿Qué haces?',
+    'Voy a un lugar concurrido o seguro y aviso de inmediato.',
+    'Sigo mi ruta normal hasta llegar.',
+    'Me paro a enfrentar al otro conductor.',
+  ),
+  q(
+    'chf_06',
+    'oficio',
+    'En una calle residencial sale una pelota entre dos carros estacionados. ¿Qué haces?',
+    'Bajo la velocidad y me preparo para frenar: puede salir un niño.',
+    'Toco la corneta y sigo.',
+    'Sigo igual; es solo una pelota.',
+  ),
+];
+
 const BLOQUES: Record<FamiliaOficioObrero, BloqueFamiliaAbc> = {
   ayudante: AYUDANTE,
   general: GENERAL,
@@ -396,6 +495,7 @@ const BLOQUES: Record<FamiliaOficioObrero, BloqueFamiliaAbc> = {
   estructuras: ESTRUCTURAS,
   equipos: EQUIPOS,
   vigilancia: VIGILANCIA,
+  chofer: CHOFER,
 };
 
 export function bloqueAbcPorFamilia(familia: FamiliaOficioObrero): BloqueFamiliaAbc {
