@@ -138,6 +138,11 @@ export type DesignCamera = {
    * Cada cono puede mirar a otro lugar. La lente primaria usa yawDeg / fov* / rangeM de arriba.
    */
   lensVision?: Record<string, LensVisionOverride>
+  /**
+   * Escenario CCTV en el mismo PDF (p. ej. perímetro vs interior).
+   * Sin valor = escenario Principal.
+   */
+  scenarioId?: string
 }
 
 export type ScaleCalibration = {
@@ -156,7 +161,7 @@ export type ScaleCalibration = {
 export type NetworkNodeKind = 'switch' | 'ap' | 'nvr' | 'injector'
 
 /** Planos de especialidad (además de CCTV / Internet). */
-export type PlanDiscipline = 'sonido' | 'domotica' | 'electrico'
+export type PlanDiscipline = 'sonido' | 'domotica' | 'alarma' | 'electrico'
 
 export type PlanDeviceKind =
   | 'speaker'
@@ -166,10 +171,17 @@ export type PlanDeviceKind =
   | 'sensor'
   | 'relay'
   | 'keypad'
+  | 'contact'
   | 'panel'
   | 'outlet'
   | 'light'
   | 'transformer'
+
+/** Grupo de cámaras en el mismo plano PDF (se ven una a una o todas). */
+export type CameraScenario = {
+  id: string
+  name: string
+}
 
 export type PlanDeviceModel = {
   id: string
@@ -390,6 +402,8 @@ export type NetVisionProject = {
   /** Intensidad del espectro (semáforo) de las cámaras, 0–100 (36 = la de siempre). */
   coberturaIntensidad?: number
   cameras: DesignCamera[]
+  /** Escenarios CCTV del mismo PDF. Siempre hay al menos «Principal». */
+  cameraScenarios: CameraScenario[]
   networkNodes: DesignNetworkNode[]
   /** Pantalla, disco, UPS y rack de la sala técnica CCTV. */
   infraDevices: DesignInfraDevice[]

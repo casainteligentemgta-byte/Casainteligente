@@ -39,8 +39,13 @@ import { DEFAULT_STRUCTURE_MATERIAL_ID } from '@/lib/netvision/catalog/materials
 import { defaultModelIdForKind } from '@/lib/netvision/catalog/network'
 import {
   defaultPlanDeviceId,
+  getPlanDeviceModel,
   getPlanDeviceModelOrDefault,
 } from '@/lib/netvision/catalog/planDevices'
+import {
+  PRINCIPAL_SCENARIO_ID,
+  ensureCameraScenarios,
+} from '@/lib/netvision/utils/cameraScenarios'
 import {
   clampNetworkPlanSize,
   defaultNetworkPlanSize,
@@ -104,6 +109,7 @@ export function emptyProject(partial?: {
     planoIntensidad: 0,
     coberturaIntensidad: COBERTURA_INTENSIDAD_DEFECTO,
     cameras: [],
+    cameraScenarios: ensureCameraScenarios(undefined),
     networkNodes: [],
     infraDevices: [],
     planDevices: [],
@@ -575,6 +581,10 @@ function normalizeProject(
     planoIntensidad: clampIntensidad(p.planoIntensidad, 0),
     coberturaIntensidad: clampIntensidad(p.coberturaIntensidad, COBERTURA_INTENSIDAD_DEFECTO),
     cameras: Array.isArray(p.cameras) ? p.cameras.map(normalizeCamera) : [],
+    cameraScenarios: ensureCameraScenarios(
+      p.cameraScenarios,
+      Array.isArray(p.cameras) ? p.cameras : [],
+    ),
     networkNodes: Array.isArray(p.networkNodes)
       ? p.networkNodes.map(normalizeNetworkNode)
       : [],
@@ -698,6 +708,11 @@ function normalizeCamera(c: Partial<DesignCamera> & { label?: string }): DesignC
       : {}),
     ...(c.conexion === 'cable' || c.conexion === 'wifi' ? { conexion: c.conexion } : {}),
     ...normalizeLensVision(c.lensVision),
+    ...(typeof c.scenarioId === 'string' &&
+    c.scenarioId.trim() &&
+    c.scenarioId.trim() !== PRINCIPAL_SCENARIO_ID
+      ? { scenarioId: c.scenarioId.trim().slice(0, 40) }
+      : {}),
   }
 }
 
@@ -723,7 +738,12 @@ function normalizeLensVision(raw: unknown): Pick<DesignCamera, 'lensVision'> | R
   return Object.keys(out).length ? { lensVision: out } : {}
 }
 
-const PLAN_DISCIPLINES: PlanDiscipline[] = ['sonido', 'domotica', 'electrico']
+const PLAN_DISCIPLINES: PlanDiscipline[] = [
+  'sonido',
+  'domotica',
+  'alarma',
+  'electrico',
+]
 const PLAN_KINDS: PlanDeviceKind[] = [
   'speaker',
   'siren',
@@ -732,6 +752,7 @@ const PLAN_KINDS: PlanDeviceKind[] = [
   'sensor',
   'relay',
   'keypad',
+  'contact',
   'panel',
   'outlet',
   'light',
@@ -739,12 +760,18 @@ const PLAN_KINDS: PlanDeviceKind[] = [
 ]
 
 function normalizePlanDevice(d: Partial<DesignPlanDevice>): DesignPlanDevice {
-  const discipline = PLAN_DISCIPLINES.includes(d.discipline as PlanDiscipline)
-    ? (d.discipline as PlanDiscipline)
-    : 'sonido'
-  const kind = PLAN_KINDS.includes(d.kind as PlanDeviceKind)
-    ? (d.kind as PlanDeviceKind)
-    : getPlanDeviceModelOrDefault(d.modelId ?? '', discipline).kind
+  const catalog = getPlanDeviceModel(d.modelId ?? '')
+  let discipline: PlanDiscipline = catalog?.discipline
+    ? catalog.discipline
+    : PLAN_DISCIPLINES.includes(d.discipline as PlanDiscipline)
+      ? (d.discipline as PlanDiscipline)
+      : 'sonido'
+  let kind: PlanDeviceKind = catalog?.kind
+    ? catalog.kind
+    : PLAN_KINDS.includes(d.kind as PlanDeviceKind)
+      ? (d.kind as PlanDeviceKind)
+      : getPlanDeviceModelOrDefault(d.modelId ?? '', discipline).kind
+  if (kind === 'siren') discipline = 'alarma'
   const looksPercent = (d.x ?? 0) > 1 || (d.y ?? 0) > 1
   const model = getPlanDeviceModelOrDefault(d.modelId ?? '', discipline)
   const rangeM =

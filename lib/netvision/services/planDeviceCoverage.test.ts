@@ -68,11 +68,11 @@ describe('buildApCoverageSectors', () => {
 })
 
 describe('catálogo de dispositivos · Ezviz T9C', () => {
-  it('está en sonido como sirena y requiere el gateway A3', () => {
+  it('está en alarma como sirena y requiere el gateway A3', () => {
     const t9c = getPlanDeviceModel('snd-ezviz-t9c')
     assert.ok(t9c)
     assert.equal(t9c.brand, 'Ezviz')
-    assert.equal(t9c.discipline, 'sonido')
+    assert.equal(t9c.discipline, 'alarma')
     assert.equal(t9c.kind, 'siren')
     assert.equal(t9c.fovDeg, 360)
     assert.equal(t9c.rangeM, 12)
