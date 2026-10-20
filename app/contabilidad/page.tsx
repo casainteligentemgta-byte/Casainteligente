@@ -334,11 +334,11 @@ export default function ContabilidadPage() {
         },
         {
             title: 'Reportes',
-            description: 'Análisis financiero detallado',
+            description: 'Compras, procura, stock y rentabilidad (Centro de informes)',
             icon: '📊',
-            href: '#',
+            href: '/informes',
             color: '#5AC8FA',
-            active: false,
+            active: true,
         },
     ];
 
