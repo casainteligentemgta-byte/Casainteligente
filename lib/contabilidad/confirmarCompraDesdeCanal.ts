@@ -123,6 +123,7 @@ function lineasDesdeExtracted(ex: ExtractedCanalHeader): LineaCompraContabilidad
         unidad: String(it.unit ?? 'UND').trim() || 'UND',
         cantidad,
         precio_unitario: precio,
+        ...(String(it.material_id ?? '').trim() ? { material_id: String(it.material_id).trim() } : {}),
       };
     });
 }

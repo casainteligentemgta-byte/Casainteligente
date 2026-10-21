@@ -7,6 +7,9 @@ export type ExtractedCanalItem = {
   unit?: string;
   quantity?: number;
   unit_price?: number;
+  /** Material ya vinculado por el comprador al cargar la factura. */
+  material_id?: string;
+  material_nombre?: string;
 };
 
 export function normalizarMonedaExtracted(moneda?: string | null): MonedaOrigen {
