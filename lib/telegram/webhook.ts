@@ -141,6 +141,7 @@ import {
   MENSAJE_MENU_TELEGRAM,
   MENSAJE_NO_DISPONIBLE_DEPOSITARIO,
 } from '@/lib/telegram/botCommands';
+import { COMANDOS_SOLO_NO_COMPRADOR, MENSAJE_NO_DISPONIBLE_COMPRADOR, esChatComprador } from '@/lib/telegram/compradorRestricciones';
 import {
   esChatDepositarioNomina,
   rechazarProcuraDepositario,
@@ -336,6 +337,12 @@ async function aplicarComando(
     cmd.contexto === 'esperando_audio_bitacora';
   if (pideFuncionSoloNoDepositario && (await esChatDepositarioNomina(supabase, chatId))) {
     await sendTelegramMessage(chatId, MENSAJE_NO_DISPONIBLE_DEPOSITARIO, { parse_mode: 'HTML' });
+    return;
+  }
+
+  const pideMovimientoAlmacen = COMANDOS_SOLO_NO_COMPRADOR.some((k) => Boolean(cmd[k as keyof typeof cmd]));
+  if (pideMovimientoAlmacen && (await esChatComprador(supabase, chatId))) {
+    await sendTelegramMessage(chatId, MENSAJE_NO_DISPONIBLE_COMPRADOR, { parse_mode: 'HTML' });
     return;
   }
 
