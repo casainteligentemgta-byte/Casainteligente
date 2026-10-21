@@ -8,11 +8,9 @@ import {
   type LineaPrecarga,
 } from '@/lib/almacen/notasPrecargadas';
 import { resolverMaterialParaLineaCompra } from '@/lib/almacen/resolverMaterialParaCompra';
-import {
-  chatIdsDesdeDestinatarios,
-  resolverDestinatariosCuarentenaTelegram,
-} from '@/lib/almacen/resolverDestinatariosCuarentenaTelegram';
 import { downloadTelegramFile, mimeFromTelegramPath, sendTelegramMessage } from '@/lib/telegram/botApi';
+import { avisarDepositariosNotaPrecargada } from '@/lib/telegram/notaPrecargaAvisos';
+import { iniciarResolverLineasPrecarga } from '@/lib/telegram/resolverLineasPrecargaTelegram';
 import type { TelegramPhotoSize } from '@/lib/telegram/aguaRegistro';
 import { fileIdFotoTelegramMaxResolucion } from '@/lib/telegram/aguaRegistro';
 import { getTelegramEstado, setTelegramContexto, type TelegramEstado } from '@/lib/telegram/estados';
@@ -49,23 +47,6 @@ export async function prepararPrecargaNotaComprador(
       'no suma stock hasta que él la ingrese en el almacén.\n\n<code>/cancelar</code> para salir.',
     { parse_mode: 'HTML' },
   );
-}
-
-async function avisarDepositariosNotaPrecargada(
-  supabase: SupabaseClient,
-  proyectoId: string,
-  chatIdEmisor: string,
-  texto: string,
-): Promise<void> {
-  const res = await resolverDestinatariosCuarentenaTelegram(supabase, { proyectoId });
-  for (const chatId of chatIdsDesdeDestinatarios(res.destinatarios)) {
-    if (chatId === chatIdEmisor) continue;
-    try {
-      await sendTelegramMessage(chatId, texto, { parse_mode: 'HTML' });
-    } catch (err) {
-      console.warn('[nota precargada] aviso depositario', chatId, err);
-    }
-  }
 }
 
 export async function manejarFotoNotaPrecarga(params: {
@@ -178,19 +159,24 @@ export async function manejarFotoNotaPrecarga(params: {
   }
 
   const { conMaterial, sinMaterial } = separarLineasPrecarga(lineas);
-  const avisoSin =
-    sinMaterial.length > 0
-      ? `\n⚠️ ${sinMaterial.length} artículo(s) sin vincular al catálogo: el depositario los agregará a mano.`
-      : '';
 
   await sendTelegramMessage(
     chatId,
     `✅ <b>Nota precargada</b>\n${proveedor} · #${numDoc}\n` +
-      `${lineas.length} artículo(s), ${conMaterial.length} vinculado(s) al catálogo.` +
-      avisoSin +
-      '\n\nEl depositario de la obra la ingresará cuando esté en el almacén.',
+      `${lineas.length} artículo(s), ${conMaterial.length} vinculado(s) al catálogo.`,
     { parse_mode: 'HTML' },
   );
+
+  if (sinMaterial.length > 0) {
+    // Quien carga la nota resuelve las líneas sin material; el aviso al depositario sale al cerrar.
+    await sendTelegramMessage(
+      chatId,
+      `Revisemos las ${sinMaterial.length} sin material. Puede vincularlas, crear el material (con confirmación) o dejarlas para el depositario.`,
+      { parse_mode: 'HTML' },
+    );
+    const iniciada = await iniciarResolverLineasPrecarga(supabase, chatId, creada.id);
+    if (iniciada) return;
+  }
 
   await avisarDepositariosNotaPrecargada(
     supabase,

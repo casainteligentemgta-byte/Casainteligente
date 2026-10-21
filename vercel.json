@@ -31,6 +31,10 @@
     {
       "path": "/api/cron/notas-sin-factura",
       "schedule": "0 12 * * 1"
+    },
+    {
+      "path": "/api/cron/recordatorio-compradores",
+      "schedule": "0 13,14,15,17,18,19 * * 1-5"
     }
   ]
 }

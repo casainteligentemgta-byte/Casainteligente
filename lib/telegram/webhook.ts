@@ -144,6 +144,11 @@ import {
 import { COMANDOS_SOLO_NO_COMPRADOR, MENSAJE_NO_DISPONIBLE_COMPRADOR, esChatComprador } from '@/lib/telegram/compradorRestricciones';
 import { esFlujoNotaPrecarga, manejarFotoNotaPrecarga } from '@/lib/telegram/notaPrecargaTelegram';
 import {
+  esCallbackResolverLineas,
+  manejarCallbackResolverLineas,
+  manejarTextoResolverLineas,
+} from '@/lib/telegram/resolverLineasPrecargaTelegram';
+import {
   esChatDepositarioNomina,
   rechazarProcuraDepositario,
   textoMenuParaChat,
@@ -647,6 +652,17 @@ export async function handleTelegramCallbackQuery(
       });
       if (handledIngresoManual) {
         return NextResponse.json({ ok: true, callback: 'ingreso_manual' });
+      }
+    }
+
+    if (esCallbackResolverLineas(cq.data)) {
+      const handledResolver = await manejarCallbackResolverLineas(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+      });
+      if (handledResolver) {
+        return NextResponse.json({ ok: true, callback: 'resolver_lineas' });
       }
     }
 
@@ -1156,6 +1172,11 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
       const textoProcura = await manejarTextoProcuraTelegram(supabase, chatId, texto);
       if (textoProcura) {
         return NextResponse.json({ ok: true, procura_texto: true });
+      }
+
+      const textoResolverLineas = await manejarTextoResolverLineas(supabase, chatId, texto);
+      if (textoResolverLineas) {
+        return NextResponse.json({ ok: true, resolver_lineas_texto: true });
       }
 
       const textoIngresoManual = await manejarTextoIngresoManual(
