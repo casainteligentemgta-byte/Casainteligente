@@ -8,6 +8,14 @@ import { listarMaterialesObraRecepcion } from '@/lib/almacen/listarMaterialesObr
 import { listarProveedoresSugeridosIngreso } from '@/lib/almacen/listarProveedoresSugeridosIngreso';
 import { normalizarCodigoUnidad, UNIDADES_MEDIDA_DEFAULT } from '@/lib/almacen/unidadesMedidaDefault';
 import {
+  listarNotasPrecargadasPendientes,
+  marcarNotaPrecargadaIngresada,
+  obtenerNotaPrecargada,
+  separarLineasPrecarga,
+} from '@/lib/almacen/notasPrecargadas';
+import { esChatComprador } from '@/lib/telegram/compradorRestricciones';
+import { prepararPrecargaNotaComprador } from '@/lib/telegram/notaPrecargaTelegram';
+import {
   crearMaterialParaLineaCompra,
   actualizarMaterialExistenteCompra,
   resolverMaterialParaLineaCompra,
@@ -145,6 +153,8 @@ export type MetadataIngresoManual = {
   /** Token opcional para sincronizar borrador con la app (sin redirigir al usuario). */
   /** UUID para precargar /almacen/recepcion?borrador=… */
   recepcion_campo_token?: string;
+  /** Nota precargada por compras que el depositario está ingresando (ci_notas_precargadas). */
+  precarga_id?: string;
   recepcion_campo_registrada_id?: string;
   /** /ingreso → ingreso automático: OCR de factura tras elegir almacén. */
   ingreso_ocr_auto?: boolean;
@@ -566,6 +576,16 @@ export async function manejarComandoNotaEntregaTelegram(
   supabase: SupabaseClient,
   chatId: string,
 ): Promise<void> {
+  // Comprador: solo precarga la nota por foto; el ingreso al almacén lo hace el depositario.
+  if (await esChatComprador(supabase, chatId)) {
+    await sendTelegramMessage(
+      chatId,
+      '📄 <b>Nota de entrega</b>\n\nElija la obra. Luego envíe la foto de la nota.',
+      { parse_mode: 'HTML' },
+    );
+    await enviarPickerProyectosTelegram(supabase, chatId, 'nota_entrega');
+    return;
+  }
   await iniciarFlujoRecepcionCampo(supabase, chatId, FLUJO_NOTA_ENTREGA, 'nota_entrega');
 }
 
@@ -608,7 +628,90 @@ export async function prepararNotaEntregaIngresoTrasObra(
   chatId: string,
   proyectoId: string,
 ): Promise<void> {
+  if (await esChatComprador(supabase, chatId)) {
+    await prepararPrecargaNotaComprador(supabase, chatId, proyectoId);
+    return;
+  }
+
+  // Notas que compras ya precargó para esta obra (el depositario elige una o sigue manual).
+  const pendientes = await listarNotasPrecargadasPendientes(supabase, proyectoId);
+  if (pendientes.length) {
+    const rows = pendientes.map((n) => [
+      {
+        text: `📥 ${n.proveedor_nombre || 'Proveedor'} · #${n.num_doc} (${n.lineas.length})`,
+        callback_data: `${PREFIX}np:${n.id}`,
+      },
+    ]);
+    await sendTelegramMessage(
+      chatId,
+      '📋 <b>Notas precargadas por compras</b> para esta obra:',
+      { parse_mode: 'HTML', reply_markup: { inline_keyboard: rows } },
+    );
+  }
+
   await prepararIngresoManualTrasObra(supabase, chatId, proyectoId, FLUJO_NOTA_ENTREGA);
+}
+
+/** Carga una nota precargada en el flujo del depositario: el stock solo sube al confirmar. */
+async function cargarNotaPrecargadaEnFlujo(
+  supabase: SupabaseClient,
+  chatId: string,
+  estado: TelegramEstado,
+  notaId: string,
+): Promise<void> {
+  const nota = await obtenerNotaPrecargada(supabase, notaId);
+  if (!nota || nota.estado !== 'pendiente' || nota.proyecto_id !== estado.proyecto_id) {
+    await sendTelegramMessage(chatId, '⚠️ Esa nota ya no está pendiente.', { parse_mode: 'HTML' });
+    return;
+  }
+
+  const { conMaterial, sinMaterial } = separarLineasPrecarga(nota.lineas);
+  if (!conMaterial.length) {
+    await sendTelegramMessage(
+      chatId,
+      '⚠️ Ninguna línea de esa nota tiene material vinculado. Regístrela a mano.',
+      { parse_mode: 'HTML' },
+    );
+    return;
+  }
+
+  const lineas: LineaIngresoManualDraft[] = conMaterial.map((l) => ({
+    material_id: l.material_id as string,
+    material_nombre: l.material_nombre ?? l.descripcion,
+    unidad: l.unidad,
+    cantidad: Number(l.cantidad),
+    forma_ingreso: 'con_nota',
+  }));
+
+  await patchMeta(supabase, chatId, estado, {
+    precarga_id: nota.id,
+    proveedor_nombre: nota.proveedor_nombre,
+    num_doc: nota.num_doc,
+    lineas,
+    observaciones: sinMaterial.length
+      ? `Sin vincular en la precarga: ${sinMaterial.map((l) => l.descripcion).join('; ')}`
+      : undefined,
+  });
+
+  const aviso =
+    sinMaterial.length > 0
+      ? `\n⚠️ ${sinMaterial.length} línea(s) sin vincular: regístrelas a mano en la app.`
+      : '';
+  await sendTelegramMessage(
+    chatId,
+    `📥 Precarga cargada: <b>${escHtml(nota.proveedor_nombre)}</b> · #${escHtml(nota.num_doc)} ` +
+      `(${lineas.length} línea(s)).${aviso}\n\nElija el <b>almacén</b> donde entró la mercancía:`,
+    { parse_mode: 'HTML' },
+  );
+  const nombreObra = (await nombreProyectoTelegram(supabase, nota.proyecto_id)) ?? 'Obra';
+  await enviarPickerAlmacenIngresoManual(
+    supabase,
+    chatId,
+    nota.proyecto_id,
+    nombreObra,
+    0,
+    meta(estado).entidad_nombre,
+  );
 }
 
 export async function prepararEmergenciaIngresoTrasObra(
@@ -1536,6 +1639,12 @@ export async function manejarCallbackIngresoManual(
   const data = params.data.slice(PREFIX.length);
   const nombreObra = (await nombreProyectoTelegram(supabase, proyectoId)) ?? 'Obra';
 
+  if (data.startsWith('np:')) {
+    await answerCallbackQuery(params.callbackId);
+    await cargarNotaPrecargadaEnFlujo(supabase, params.chatId, estado, data.slice(3));
+    return true;
+  }
+
   if (data.startsWith('ubp:')) {
     const page = Number(data.slice(4));
     await answerCallbackQuery(params.callbackId);
@@ -1565,6 +1674,16 @@ export async function manejarCallbackIngresoManual(
     const flujoNorm = normalizarFlujoRecepcionCampo(m.flujo);
     if (flujoNorm && flujoNorm !== m.flujo) {
       await patchMeta(supabase, params.chatId, estado, { flujo: flujoNorm });
+    }
+    if (m.precarga_id) {
+      // Nota precargada: ya trae proveedor, nº y líneas; solo falta el almacén → confirmar.
+      await patchMeta(supabase, params.chatId, estado, {
+        ubicacion_id: ubicacionId,
+        ubicacion_nombre: String(ubi.nombre),
+      });
+      const fresco = await getTelegramEstado(supabase, params.chatId);
+      await enviarConfirmacion(supabase, params.chatId, fresco);
+      return true;
     }
     if (flujoUsaHandoffWebTrasAlmacen(flujoNorm ?? m.flujo)) {
       await enviarHandoffRecepcionWebTrasAlmacen(
@@ -1940,6 +2059,14 @@ export async function manejarCallbackIngresoManual(
     } else {
       avisoContabilidad =
         '\n\n📋 Contabilidad provisional registrada (conciliación fiscal posterior).';
+    }
+
+    if (fm.precarga_id) {
+      try {
+        await marcarNotaPrecargadaIngresada(supabase, fm.precarga_id, resultado.recepcionId);
+      } catch {
+        /* el stock ya quedó registrado; no bloquear */
+      }
     }
 
     const borradorToken = fm.recepcion_campo_token?.trim();

@@ -142,6 +142,7 @@ import {
   MENSAJE_NO_DISPONIBLE_DEPOSITARIO,
 } from '@/lib/telegram/botCommands';
 import { COMANDOS_SOLO_NO_COMPRADOR, MENSAJE_NO_DISPONIBLE_COMPRADOR, esChatComprador } from '@/lib/telegram/compradorRestricciones';
+import { esFlujoNotaPrecarga, manejarFotoNotaPrecarga } from '@/lib/telegram/notaPrecargaTelegram';
 import {
   esChatDepositarioNomina,
   rechazarProcuraDepositario,
@@ -1411,6 +1412,25 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
           { parse_mode: 'HTML' },
         );
         return NextResponse.json({ ok: true, requerimiento_salida_foto_ignorada: true });
+      }
+
+      const fotoNotaPrecarga = await (async () => {
+        const photos = msg.photo;
+        if (!photos?.length) return false;
+        const estadoNp = await getTelegramEstado(supabase, chatId);
+        if (!esFlujoNotaPrecarga(estadoNp)) return false;
+        try {
+          await manejarFotoNotaPrecarga({ supabase, chatId, chatLabel: label, photo: photos });
+        } catch (err) {
+          console.error('[telegram nota precargada foto]', err);
+          await sendTelegramMessage(chatId, '❌ No se pudo procesar la nota. Intente de nuevo.', {
+            parse_mode: 'HTML',
+          });
+        }
+        return true;
+      })();
+      if (fotoNotaPrecarga) {
+        return NextResponse.json({ ok: true, nota_precargada_foto: true });
       }
 
       const fotoFacturaManual = await (async () => {
