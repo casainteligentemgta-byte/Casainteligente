@@ -141,6 +141,13 @@ import {
   MENSAJE_MENU_TELEGRAM,
   MENSAJE_NO_DISPONIBLE_DEPOSITARIO,
 } from '@/lib/telegram/botCommands';
+import { COMANDOS_SOLO_NO_COMPRADOR, MENSAJE_NO_DISPONIBLE_COMPRADOR, esChatComprador } from '@/lib/telegram/compradorRestricciones';
+import { esFlujoNotaPrecarga, manejarFotoNotaPrecarga } from '@/lib/telegram/notaPrecargaTelegram';
+import {
+  esCallbackResolverLineas,
+  manejarCallbackResolverLineas,
+  manejarTextoResolverLineas,
+} from '@/lib/telegram/resolverLineasPrecargaTelegram';
 import {
   esChatDepositarioNomina,
   rechazarProcuraDepositario,
@@ -336,6 +343,12 @@ async function aplicarComando(
     cmd.contexto === 'esperando_audio_bitacora';
   if (pideFuncionSoloNoDepositario && (await esChatDepositarioNomina(supabase, chatId))) {
     await sendTelegramMessage(chatId, MENSAJE_NO_DISPONIBLE_DEPOSITARIO, { parse_mode: 'HTML' });
+    return;
+  }
+
+  const pideMovimientoAlmacen = COMANDOS_SOLO_NO_COMPRADOR.some((k) => Boolean(cmd[k as keyof typeof cmd]));
+  if (pideMovimientoAlmacen && (await esChatComprador(supabase, chatId))) {
+    await sendTelegramMessage(chatId, MENSAJE_NO_DISPONIBLE_COMPRADOR, { parse_mode: 'HTML' });
     return;
   }
 
@@ -639,6 +652,17 @@ export async function handleTelegramCallbackQuery(
       });
       if (handledIngresoManual) {
         return NextResponse.json({ ok: true, callback: 'ingreso_manual' });
+      }
+    }
+
+    if (esCallbackResolverLineas(cq.data)) {
+      const handledResolver = await manejarCallbackResolverLineas(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+      });
+      if (handledResolver) {
+        return NextResponse.json({ ok: true, callback: 'resolver_lineas' });
       }
     }
 
@@ -1150,6 +1174,11 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
         return NextResponse.json({ ok: true, procura_texto: true });
       }
 
+      const textoResolverLineas = await manejarTextoResolverLineas(supabase, chatId, texto);
+      if (textoResolverLineas) {
+        return NextResponse.json({ ok: true, resolver_lineas_texto: true });
+      }
+
       const textoIngresoManual = await manejarTextoIngresoManual(
         supabase,
         chatId,
@@ -1404,6 +1433,25 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
           { parse_mode: 'HTML' },
         );
         return NextResponse.json({ ok: true, requerimiento_salida_foto_ignorada: true });
+      }
+
+      const fotoNotaPrecarga = await (async () => {
+        const photos = msg.photo;
+        if (!photos?.length) return false;
+        const estadoNp = await getTelegramEstado(supabase, chatId);
+        if (!esFlujoNotaPrecarga(estadoNp)) return false;
+        try {
+          await manejarFotoNotaPrecarga({ supabase, chatId, chatLabel: label, photo: photos });
+        } catch (err) {
+          console.error('[telegram nota precargada foto]', err);
+          await sendTelegramMessage(chatId, '❌ No se pudo procesar la nota. Intente de nuevo.', {
+            parse_mode: 'HTML',
+          });
+        }
+        return true;
+      })();
+      if (fotoNotaPrecarga) {
+        return NextResponse.json({ ok: true, nota_precargada_foto: true });
       }
 
       const fotoFacturaManual = await (async () => {

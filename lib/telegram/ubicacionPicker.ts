@@ -16,6 +16,7 @@ import {
   tecladoFacturaRegistradaOk,
 } from '@/lib/telegram/mensajesFactura';
 import { procuraIdDesdeMetadataFactura } from '@/lib/telegram/facturaCompradorManualTelegram';
+import { iniciarResolverLineasFactura } from '@/lib/telegram/resolverLineasPrecargaTelegram';
 import {
   esNotaEntregaExtracted,
   mensajeNotaEntregaFinalizada,
@@ -224,6 +225,18 @@ export async function manejarCallbackUbicacionTelegram(
   }
 
   let textoFinal = resumenFacturaCompradorHtml(extracted);
+
+  if (proyectoId) {
+    // Líneas sin material: se pregunta antes de crear nada, y luego se confirma.
+    const estadoRes = await getTelegramEstado(supabase, params.chatId);
+    const procuraIdRes = procuraIdDesdeMetadataFactura(estadoRes);
+    const enRevision = await iniciarResolverLineasFactura(supabase, params.chatId, pendingId, {
+      proyectoId,
+      ubicacionDestinoId: parsed.ubicacionId,
+      procuraId: procuraIdRes,
+    });
+    if (enRevision) return true;
+  }
 
   if (proyectoId) {
     try {

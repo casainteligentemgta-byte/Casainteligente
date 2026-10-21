@@ -7,6 +7,8 @@ export type TelegramContexto =
   | 'gasto_obra'
   | 'esperando_audio_bitacora'
   | 'entrada_obra'
+  | 'nota_precarga'
+  | 'resolver_lineas'
   | 'salida_obra'
   | 'avance_campo'
   | 'avance_campo_cantidad'
@@ -36,6 +38,8 @@ const CONTEXTOS: TelegramContexto[] = [
   'gasto_obra',
   'esperando_audio_bitacora',
   'entrada_obra',
+  'nota_precarga',
+  'resolver_lineas',
   'salida_obra',
   'avance_campo',
   'avance_campo_cantidad',
