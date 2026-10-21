@@ -107,7 +107,7 @@ export async function listarNotasPrecargadasPendientes(
     .order('created_at', { ascending: true })
     .limit(20);
   if (error) throw new Error(error.message);
-  return (data ?? []).map((r) => aNota(r as Record<string, unknown>));
+  return (data ?? []).map((r: Record<string, unknown>) => aNota(r));
 }
 
 export async function obtenerNotaPrecargada(
