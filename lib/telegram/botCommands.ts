@@ -64,7 +64,32 @@ export const MENSAJE_NO_DISPONIBLE_DEPOSITARIO =
  * Texto HTML de /menu (una sola fuente para no divergir del menú nativo).
  * Para un depositario se omite la sección de procuras.
  */
-export function mensajeMenuTelegram(opts?: { depositario?: boolean }): string {
+export const COMANDOS_COMPRADOR_OMITIDOS = new Set(['procura', 'bitacora', 'ingreso', 'salida']);
+
+/** Menú nativo de Telegram para el comprador: sin procura, bitácora, ingreso ni salida. */
+export const TELEGRAM_BOT_COMMANDS_COMPRADOR: Array<{ command: string; description: string }> = [
+  ...TELEGRAM_BOT_COMMANDS.filter((c) => !COMANDOS_COMPRADOR_OMITIDOS.has(c.command)),
+  { command: 'nota', description: 'Cargar nota de entrega (foto o manual)' },
+].sort((a, b) => a.command.localeCompare(b.command));
+
+export function mensajeMenuTelegram(opts?: { depositario?: boolean; comprador?: boolean }): string {
+  if (opts?.comprador) {
+    return (
+      '🏠 <b>Casa Inteligente</b>\n\n' +
+      '<b>Facturas y notas</b>\n' +
+      '• /facturas — foto de la factura\n' +
+      '• /nota — foto de la nota de entrega\n\n' +
+      '<b>Campo</b>\n' +
+      '• /agua — camión, PPM, litros\n\n' +
+      '<b>Consultas</b>\n' +
+      '• /stock — guiado (entidad → obra → almacén)\n\n' +
+      '<b>Agenda personal</b>\n' +
+      '• /agenda — guardar o consultar fechas especiales (IA)\n\n' +
+      '<b>Técnico de dispositivos</b>\n' +
+      '• /tecnico &lt;pregunta&gt; — cámaras, grabadores, PoE y redes (IA)\n\n' +
+      '• /cancelar — volver al menú'
+    );
+  }
   if (opts?.depositario) {
     return (
       '🏠 <b>Casa Inteligente</b>\n\n' +
@@ -101,7 +126,19 @@ export function mensajeMenuTelegram(opts?: { depositario?: boolean }): string {
 }
 
 /** Texto HTML de /ayuda. Para un depositario se omite la procura. */
-export function mensajeAyudaTelegram(opts?: { depositario?: boolean }): string {
+export function mensajeAyudaTelegram(opts?: { depositario?: boolean; comprador?: boolean }): string {
+  if (opts?.comprador) {
+    return (
+      '<b>Comandos Casa Inteligente</b>\n\n' +
+      '<b>Facturas</b>: /facturas (foto)\n' +
+      '<b>Notas de entrega</b>: /nota (foto)\n' +
+      '<b>Campo</b>: /agua\n' +
+      '<b>Agenda</b>: /agenda /limpiar_agenda\n' +
+      '<b>Técnico IA</b>: /tecnico\n' +
+      '<b>Stock</b>: /stock\n\n' +
+      '/menu — menú · /cancelar — reiniciar'
+    );
+  }
   if (opts?.depositario) {
     return (
       '<b>Comandos Casa Inteligente</b>\n\n' +

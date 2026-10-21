@@ -20,3 +20,17 @@ describe('comprador: sin ingreso ni salida de almacén', () => {
     assert.match(MENSAJE_NO_DISPONIBLE_COMPRADOR, /\/nota/);
   });
 });
+
+import { mensajeMenuTelegram, TELEGRAM_BOT_COMMANDS_COMPRADOR } from '@/lib/telegram/botCommands';
+
+describe('menú del comprador', () => {
+  it('no muestra procura, bitácora, ingreso ni salida', () => {
+    const nombres = TELEGRAM_BOT_COMMANDS_COMPRADOR.map((c) => c.command);
+    for (const c of ['procura', 'bitacora', 'ingreso', 'salida']) assert.ok(!nombres.includes(c), c);
+    assert.ok(nombres.includes('facturas') && nombres.includes('nota'));
+    const texto = mensajeMenuTelegram({ comprador: true });
+    assert.ok(!/procura|bitacora|\/ingreso|\/salida/i.test(texto));
+    assert.match(texto, /\/facturas/);
+    assert.match(texto, /\/nota/);
+  });
+});

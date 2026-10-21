@@ -1,7 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { telegramApi, sendTelegramMessage } from '@/lib/telegram/botApi';
+import { esChatComprador } from '@/lib/telegram/compradorRestricciones';
 import {
   MENSAJE_PROCURA_SOLO_NO_DEPOSITARIO,
+  TELEGRAM_BOT_COMMANDS_COMPRADOR,
   TELEGRAM_BOT_COMMANDS_DEPOSITARIO,
   mensajeAyudaTelegram,
   mensajeMenuTelegram,
@@ -53,10 +55,26 @@ export async function textoMenuParaChat(
   mensaje: string,
   esMenu: boolean,
 ): Promise<string> {
+  if (await esChatComprador(supabase, chatId)) {
+    await publicarMenuComprador(chatId);
+    return esMenu ? mensajeMenuTelegram({ comprador: true }) : mensajeAyudaTelegram({ comprador: true });
+  }
   const depositario = await esChatDepositarioNomina(supabase, chatId);
   if (!depositario) return mensaje;
   await publicarMenuDepositario(chatId);
   return esMenu ? mensajeMenuTelegram({ depositario: true }) : mensajeAyudaTelegram({ depositario: true });
+}
+
+/** Menú nativo (botón «/») del comprador: sin procura, bitácora, ingreso ni salida. */
+export async function publicarMenuComprador(chatId: string | number): Promise<void> {
+  try {
+    await telegramApi('setMyCommands', {
+      commands: TELEGRAM_BOT_COMMANDS_COMPRADOR,
+      scope: { type: 'chat', chat_id: Number(chatId) },
+    });
+  } catch (err) {
+    console.error('[telegram menu comprador]', err);
+  }
 }
 
 /** Responde a /procura de un depositario con el aviso, sin abrir el flujo. */
