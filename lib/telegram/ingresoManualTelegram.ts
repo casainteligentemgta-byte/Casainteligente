@@ -13,7 +13,7 @@ import {
   obtenerNotaPrecargada,
   separarLineasPrecarga,
 } from '@/lib/almacen/notasPrecargadas';
-import { esChatComprador } from '@/lib/telegram/compradorRestricciones';
+import { esChatCargaComprador } from '@/lib/telegram/compradorRestricciones';
 import { prepararPrecargaNotaComprador } from '@/lib/telegram/notaPrecargaTelegram';
 import {
   crearMaterialParaLineaCompra,
@@ -629,7 +629,7 @@ export async function manejarComandoNotaEntregaTelegram(
   chatId: string,
 ): Promise<void> {
   // Comprador: solo precarga la nota por foto; el ingreso al almacén lo hace el depositario.
-  if (await esChatComprador(supabase, chatId)) {
+  if (await esChatCargaComprador(supabase, chatId)) {
     await sendTelegramMessage(
       chatId,
       '📄 <b>Nota de entrega</b>\n\nElija la obra. Luego envíe la foto de la nota.',
@@ -877,7 +877,7 @@ export async function prepararNotaEntregaIngresoTrasObra(
   chatId: string,
   proyectoId: string,
 ): Promise<void> {
-  if (await esChatComprador(supabase, chatId)) {
+  if (await esChatCargaComprador(supabase, chatId)) {
     await prepararPrecargaNotaComprador(supabase, chatId, proyectoId);
     return;
   }
