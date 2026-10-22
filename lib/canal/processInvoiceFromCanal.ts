@@ -237,11 +237,16 @@ async function processInvoiceFromCanalCore(
     null;
 
   if (purchaseInvoiceIdExistente) {
+    // Solo se confirma si la compra ya existe en contabilidad (con su obra y almacén).
+    // Un duplicado que apunta a otra factura pendiente no tiene destino: queda extraída
+    // para que el comprador elija obra y almacén, sin crear una compra nueva.
+    const yaEnContabilidad = Boolean(dupCompra?.purchase_invoice_id?.trim());
+
     await supabase
       .from('ci_facturas_canal_pendientes')
       .update({
-        estado: 'confirmado',
-        purchase_invoice_id: purchaseInvoiceIdExistente,
+        estado: yaEnContabilidad ? 'confirmado' : 'extraido',
+        purchase_invoice_id: yaEnContabilidad ? purchaseInvoiceIdExistente : null,
         mensaje_error: null,
         updated_at: new Date().toISOString(),
       })
@@ -249,13 +254,18 @@ async function processInvoiceFromCanalCore(
 
     await prog?.reportar(100, 'Completado');
 
-    const msgDuplicada =
-      `ℹ️ <b>Factura ya registrada en Contabilidad</b>\n\n` +
-      `Nº: ${facturaNum}\n` +
-      `Proveedor: ${datosOcr.supplier_name ?? '—'}\n` +
-      `RIF: ${datosOcr.supplier_rif ?? '—'}\n\n` +
-      `No se creó un registro duplicado.\n` +
-      `El depositario puede ingresar físicamente con <code>/ingreso</code> → ingreso manual de factura.`;
+    const msgDuplicada = yaEnContabilidad
+      ? `ℹ️ <b>Factura ya registrada en Contabilidad</b>\n\n` +
+        `Nº: ${facturaNum}\n` +
+        `Proveedor: ${datosOcr.supplier_name ?? '—'}\n` +
+        `RIF: ${datosOcr.supplier_rif ?? '—'}\n\n` +
+        `No se creó un registro duplicado.\n` +
+        `El depositario puede ingresar físicamente con <code>/ingreso</code> → ingreso manual de factura.`
+      : `⚠️ <b>Factura parecida a otra pendiente de ingreso</b>\n\n` +
+        `Nº: ${facturaNum}\n` +
+        `Proveedor: ${datosOcr.supplier_name ?? '—'}\n` +
+        `RIF: ${datosOcr.supplier_rif ?? '—'}\n\n` +
+        `No se creó un registro nuevo. Revísela en <code>/factura</code> y elija obra y almacén.`;
 
     if (prog) {
       await prog.ok('');
