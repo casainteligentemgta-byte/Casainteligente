@@ -33,16 +33,26 @@ export type RelacionSemanal = {
 export function calcularRelacionSemanal(params: {
   desde: string;
   hasta: string;
-  gastos: Array<{ fecha: string; monto_usd: number }>;
+  /** Compras registradas. honorarios_usd = administración ya cobrada en esa compra (no se repite). */
+  gastos: Array<{ fecha: string; monto_usd: number; honorarios_usd?: number | null }>;
+  /** Abonos del propietario (ci_proyecto_abonos). */
   fondos: Array<{ fecha: string; monto_usd: number }>;
   tramos: TramoPorcentaje[];
 }): RelacionSemanal {
   const enRango = (f: string) => f >= params.desde && f <= params.hasta;
-  const gastos = params.gastos.filter((g) => enRango(g.fecha)).reduce((s, g) => s + (Number(g.monto_usd) || 0), 0);
+  const enSemana = params.gastos.filter((g) => enRango(g.fecha));
+  const gastos = enSemana.reduce((s, g) => s + (Number(g.monto_usd) || 0), 0);
   const fondos = params.fondos.filter((f) => enRango(f.fecha)).reduce((s, f) => s + (Number(f.monto_usd) || 0), 0);
   // El % se toma del último día de la semana: es el que estaba vigente al cerrarla.
   const porcentaje = porcentajeVigente(params.tramos, params.hasta);
-  const admin = porcentaje == null ? 0 : (gastos * porcentaje) / 100;
+  // Compras con honorarios ya traen su administración; el resto se calcula con el %.
+  const conHonorarios = enSemana.filter((g) => g.honorarios_usd != null && Number(g.honorarios_usd) > 0);
+  const adminYaCobrada = conHonorarios.reduce((s, g) => s + Number(g.honorarios_usd), 0);
+  const baseSinHonorarios = enSemana
+    .filter((g) => !(g.honorarios_usd != null && Number(g.honorarios_usd) > 0))
+    .reduce((s, g) => s + (Number(g.monto_usd) || 0), 0);
+  const adminCalculada = porcentaje == null ? 0 : (baseSinHonorarios * porcentaje) / 100;
+  const admin = adminYaCobrada + adminCalculada;
   const total = gastos + admin;
   return {
     desde: params.desde,

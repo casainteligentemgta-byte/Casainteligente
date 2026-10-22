@@ -48,4 +48,19 @@ describe('calcularRelacionSemanal', () => {
     assert.equal(r.porcentaje, 12);
     assert.equal(r.administracion_usd, 12);
   });
+
+  it('no cobra administración doble: si la compra ya trae honorarios, usa esos', () => {
+    const r = calcularRelacionSemanal({
+      desde: '2026-10-05',
+      hasta: '2026-10-11',
+      gastos: [
+        { fecha: '2026-10-06', monto_usd: 560, honorarios_usd: 84 },
+        { fecha: '2026-10-07', monto_usd: 100 },
+      ],
+      fondos: [],
+      tramos: [{ porcentaje: 15, vigente_desde: '2026-01-01' }],
+    });
+    assert.equal(r.gastos_usd, 660);
+    assert.equal(r.administracion_usd, 84 + 15); // 84 ya cobrados + 15 % solo de la compra sin honorarios
+  });
 });
