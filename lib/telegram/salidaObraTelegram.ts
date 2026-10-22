@@ -15,6 +15,7 @@ import {
 import { listarStockUbicacionEgreso } from '@/lib/almacen/registrarEgresoCampo';
 import { registrarDespachoWeb } from '@/lib/almacen/registrarDespachoWeb';
 import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi';
+import { tecladoVerMovimientosDepositario } from '@/lib/telegram/movimientosDepositarioBoton';
 import type { TelegramEstado } from '@/lib/telegram/estados';
 import {
   ALERTA_FOTO_OBLIGATORIA,
@@ -126,16 +127,6 @@ export function esFlujoSalidaObraTelegram(estado: TelegramEstado): boolean {
 
 export function esCallbackSalidaObraTelegram(data: string): boolean {
   return data.startsWith(PREFIX);
-}
-
-function baseUrlApp(): string {
-  return (
-    process.env.NEXT_PUBLIC_BASE_URL ??
-    process.env.NEXT_PUBLIC_APP_URL ??
-    'https://casainteligente.company'
-  )
-    .trim()
-    .replace(/\/$/, '');
 }
 
 async function patchMeta(
@@ -1150,7 +1141,7 @@ export async function manejarCallbackSalidaObraTelegram(
     }
 
     const codigos = resultado.codigos.join(', ') || '—';
-    const link = `${baseUrlApp()}/almacen`;
+    const verMov = await tecladoVerMovimientosDepositario(supabase, params.chatId);
     await sendTelegramMessage(
       params.chatId,
       `✅ <b>Salida registrada</b>\n\n` +
@@ -1158,8 +1149,8 @@ export async function manejarCallbackSalidaObraTelegram(
         `👷 ${fm.obrero_nombre}\n` +
         `📦 ${lineas.length} material(es)\n` +
         `🔖 ${codigos}\n\n` +
-        `<a href="${link}">Ver movimientos</a>`,
-      { parse_mode: 'HTML' },
+        `Use <b>Ver movimientos</b> para revisar la obra.`,
+      { parse_mode: 'HTML', ...(verMov ? { reply_markup: verMov } : {}) },
     );
     return true;
   }

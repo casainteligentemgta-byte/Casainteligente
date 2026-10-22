@@ -9,6 +9,7 @@ import {
   type LineaEgresoCampoInput,
 } from '@/lib/almacen/registrarEgresoCampo';
 import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi';
+import { tecladoVerMovimientosDepositario } from '@/lib/telegram/movimientosDepositarioBoton';
 import type { TelegramEstado } from '@/lib/telegram/estados';
 import {
   ALERTA_FOTO_OBLIGATORIA,
@@ -94,16 +95,6 @@ export function esFlujoEgresoV2(estado: TelegramEstado): boolean {
 
 export function esCallbackSalidaEgreso(data: string): boolean {
   return data.startsWith(PREFIX);
-}
-
-function baseUrlApp(): string {
-  return (
-    process.env.NEXT_PUBLIC_BASE_URL ??
-    process.env.NEXT_PUBLIC_APP_URL ??
-    'https://casainteligente.company'
-  )
-    .trim()
-    .replace(/\/$/, '');
 }
 
 async function patchMeta(
@@ -815,7 +806,7 @@ export async function manejarCallbackSalidaEgreso(
       return true;
     }
 
-    const link = `${baseUrlApp()}/almacen`;
+    const verMov = await tecladoVerMovimientosDepositario(supabase, params.chatId);
     await sendTelegramMessage(
       params.chatId,
       `✅ <b>Egreso registrado</b>\n\n` +
@@ -823,8 +814,8 @@ export async function manejarCallbackSalidaEgreso(
         `👷 ${fm.obrero_nombre}\n` +
         `📋 ${resultado.nLineas} material(es)\n` +
         `✅ Stock descontado\n\n` +
-        `<a href="${link}">Ver movimientos</a>`,
-      { parse_mode: 'HTML' },
+        `Use <b>Ver movimientos</b> para revisar la obra.`,
+      { parse_mode: 'HTML', ...(verMov ? { reply_markup: verMov } : {}) },
     );
     return true;
   }
