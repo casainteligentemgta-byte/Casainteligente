@@ -65,11 +65,12 @@ export async function POST(req: Request, ctx: RouteCtx) {
     if (!admin.ok) return admin.response;
 
     if (!gastoEntidad && proyectoId && body.confirmar_propietario !== true) {
-      const { data: pen } = await admin.client
+      const { data: penRaw } = await admin.client
         .from('ci_facturas_canal_pendientes')
         .select('extracted')
         .eq('id', id)
         .maybeSingle();
+      const pen = penRaw as { extracted?: unknown } | null;
       const ext = (body.extracted ?? pen?.extracted ?? {}) as Record<string, unknown>;
       const propietario = await buscarPropietarioObra(admin.client, proyectoId);
       const aviso = propietario ? textoAvisoPropietario(ext, propietario) : null;
