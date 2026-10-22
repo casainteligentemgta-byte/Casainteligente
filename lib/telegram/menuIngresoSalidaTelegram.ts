@@ -75,7 +75,8 @@ export async function manejarComandoIngresoTelegram(
   supabase: SupabaseClient,
   chatId: string,
 ): Promise<void> {
-  await enviarMenuIngresoTelegram(supabase, chatId);
+  const { enviarMenuCarga } = await import('@/lib/telegram/menuCargaTelegram');
+  await enviarMenuCarga(supabase, chatId);
 }
 
 export async function enviarMenuIngresoTelegram(
@@ -106,7 +107,7 @@ export async function enviarMenuIngresoTelegram(
     );
 
     texto +=
-      `\n\n<b>Facturas precargadas</b> — elige <b>proveedor</b> (${facturas.length})` +
+      `\n\n<b>Facturas pendientes de ingreso</b> — elige <b>proveedor</b> (${facturas.length})` +
       (nIngreso ? `\n📥 ${nIngreso} para ingreso` : '') +
       (nConfirmar ? `\n⏳ ${nConfirmar} pend. confirmar compra` : '') +
       '\n<i>Luego verás las facturas por número.</i>';
@@ -304,7 +305,7 @@ const ETIQUETA_INGRESO: Record<OpcionMenuIngreso, string> = {
   factauto: 'Ingreso automático de factura',
   nota: 'Ingreso con nota de entrega',
   sinnota: 'Ingreso sin nota',
-  precargadas: 'Facturas precargadas',
+  precargadas: 'Facturas pendientes de ingreso',
 };
 
 const ETIQUETA_SALIDA: Record<OpcionMenuSalida, string> = {

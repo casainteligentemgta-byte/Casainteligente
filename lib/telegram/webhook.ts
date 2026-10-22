@@ -486,7 +486,8 @@ async function manejarComandoFacturasDirecto(
   warn?: string;
 }> {
   try {
-    await enviarMenuFacturasCompradorTelegram(supabase, chatId);
+    const { enviarMenuCarga } = await import('@/lib/telegram/menuCargaTelegram');
+    await enviarMenuCarga(supabase, chatId);
   } catch (err) {
     console.error('[telegram /facturas menu]', err);
     return { ok: true, warn: 'menu' };
@@ -801,6 +802,17 @@ export async function handleTelegramCallbackQuery(
       });
       if (handledProp) {
         return NextResponse.json({ ok: true, callback: 'propietario_obra' });
+      }
+    }
+    if (cq.data?.startsWith('cg:')) {
+      const { manejarCallbackCarga } = await import('@/lib/telegram/menuCargaTelegram');
+      const handledCarga = await manejarCallbackCarga(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+      });
+      if (handledCarga) {
+        return NextResponse.json({ ok: true, callback: 'menu_carga' });
       }
     }
     if (cq.data?.startsWith('fd:')) {

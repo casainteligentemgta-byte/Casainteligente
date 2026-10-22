@@ -161,6 +161,8 @@ export type MetadataIngresoManual = {
   ingreso_ocr_auto?: boolean;
   /** Ingreso manual de factura: foto recibida antes de obra y almacén. */
   foto_inicial?: boolean;
+  /** Ingreso manual de factura sin IA: sin foto al inicio. */
+  sin_ia?: boolean;
   /** Líneas detectadas por OCR pendientes de categoría/cantidad en bot. */
   ocr_lineas_pendientes?: OcrLineaPendienteIngreso[];
   ocr_aviso_sin_resolver?: string;
@@ -519,7 +521,7 @@ async function iniciarFlujoRecepcionCampo(
   pickerModo: PickerModoRecepcionCampo,
   extraMeta?: Partial<MetadataIngresoManual>,
 ): Promise<void> {
-  if (flujo === FLUJO_INGRESO_FACTURA_MANUAL && !extraMeta?.ingreso_ocr_auto) {
+  if (flujo === FLUJO_INGRESO_FACTURA_MANUAL && !extraMeta?.ingreso_ocr_auto && !extraMeta?.sin_ia) {
     await aplicarMetadataFlujoRecepcionCampo(supabase, chatId, {
       flujo,
       proyectoId: null,
@@ -579,6 +581,20 @@ export async function manejarComandoIngresoFacturaManualTelegram(
 }
 
 /** Ingreso sin nota: mismo flujo guiado en Telegram que factura manual (tipo emergencia en stock). */
+/** Factura manual sin IA: sin foto; se escriben proveedor, número y materiales. */
+export async function manejarComandoIngresoFacturaSinIaTelegram(
+  supabase: SupabaseClient,
+  chatId: string,
+): Promise<void> {
+  await iniciarFlujoRecepcionCampo(
+    supabase,
+    chatId,
+    FLUJO_INGRESO_FACTURA_MANUAL,
+    'ingreso_factura_manual',
+    { sin_ia: true },
+  );
+}
+
 export async function manejarComandoIngresoSinNotaTelegram(
   supabase: SupabaseClient,
   chatId: string,
@@ -807,26 +823,27 @@ export async function prepararIngresoManualTrasObra(
         ? { ingreso_ocr_auto: true }
         : undefined,
   });
-  if (fotoInicial) {
-    // Con foto primero: si la obra tiene un solo almacén, se usa sin preguntar.
-    const almacenes = await listarUbicacionesParaSelector(supabase, {
+  // Una sola ubicación de almacén en la obra: se usa sin preguntar, en cualquier flujo.
+  const almacenes = await listarUbicacionesParaSelector(supabase, {
+    proyectoId,
+    soloAlmacenes: true,
+  });
+  if (almacenes.length === 1) {
+    const unico = almacenes[0];
+    await sendTelegramMessage(
+      chatId,
+      `✅ Almacén: <b>${escHtml(String(unico.nombre))}</b> (único de la obra)`,
+      { parse_mode: 'HTML' },
+    );
+    await continuarTrasAlmacenIngreso(
+      supabase,
+      chatId,
+      await getTelegramEstado(supabase, chatId),
       proyectoId,
-      soloAlmacenes: true,
-    });
-    if (almacenes.length === 1) {
-      const unico = almacenes[0];
-      await patchMeta(supabase, chatId, await getTelegramEstado(supabase, chatId), {
-        ubicacion_id: unico.id,
-        ubicacion_nombre: String(unico.nombre),
-      });
-      await sendTelegramMessage(
-        chatId,
-        `✅ Almacén: <b>${escHtml(String(unico.nombre))}</b>`,
-        { parse_mode: 'HTML' },
-      );
-      await leerFotoInicialIngreso(supabase, chatId, await getTelegramEstado(supabase, chatId));
-      return;
-    }
+      unico.id,
+      String(unico.nombre),
+    );
+    return;
   }
   await enviarPickerAlmacenIngresoManual(supabase, chatId, proyectoId, nombre, 0, entidad_nombre);
 }
@@ -1843,6 +1860,72 @@ async function registrarIngresoManual(
   return { ok: true, recepcionId: id };
 }
 
+/** Tras elegir almacén (manual o automático por ser el único de la obra). */
+async function continuarTrasAlmacenIngreso(
+  supabase: SupabaseClient,
+  chatId: string,
+  estado: TelegramEstado,
+  proyectoId: string,
+  ubicacionId: string,
+  ubicacionNombre: string,
+): Promise<void> {
+  const m = meta(estado);
+  const flujoNorm = normalizarFlujoRecepcionCampo(m.flujo);
+  if (flujoNorm && flujoNorm !== m.flujo) {
+    await patchMeta(supabase, chatId, estado, { flujo: flujoNorm });
+  }
+  if (m.precarga_id) {
+    // Nota precargada: ya trae proveedor, nº y líneas; solo falta el almacén → confirmar.
+    await patchMeta(supabase, chatId, estado, {
+      ubicacion_id: ubicacionId,
+      ubicacion_nombre: ubicacionNombre,
+    });
+    const fresco = await getTelegramEstado(supabase, chatId);
+    await enviarConfirmacion(supabase, chatId, fresco);
+    return;
+  }
+  if (m.foto_inicial && (flujoNorm ?? m.flujo) === FLUJO_INGRESO_FACTURA_MANUAL) {
+    await patchMeta(supabase, chatId, estado, {
+      ubicacion_id: ubicacionId,
+      ubicacion_nombre: ubicacionNombre,
+    });
+    await leerFotoInicialIngreso(supabase, chatId, await getTelegramEstado(supabase, chatId));
+    return;
+  }
+  if (flujoUsaHandoffWebTrasAlmacen(flujoNorm ?? m.flujo)) {
+    await enviarHandoffRecepcionWebTrasAlmacen(
+      supabase,
+      chatId,
+      estado,
+      ubicacionId,
+      ubicacionNombre,
+    );
+  } else {
+    await patchMeta(supabase, chatId, estado, {
+      paso: 'proveedor',
+      ubicacion_id: ubicacionId,
+      ubicacion_nombre: ubicacionNombre,
+      ...(flujoNorm ? { flujo: flujoNorm } : {}),
+    });
+    if (flujoTelegramCompletoEnBot(flujoNorm ?? m.flujo)) {
+      await enviarPickerProveedorIngresoManual(
+        supabase,
+        chatId,
+        proyectoId,
+        ubicacionNombre,
+      );
+    } else {
+      await sendTelegramMessage(
+        chatId,
+        `✅ Almacén: <b>${escHtml(ubicacionNombre)}</b>\n\n` +
+          '✏️ Escribe el <b>nombre del proveedor</b>:',
+        { parse_mode: 'HTML' },
+      );
+    }
+  }
+  return;
+}
+
 export async function manejarCallbackIngresoManual(
   supabase: SupabaseClient,
   params: { chatId: string; callbackId: string; data: string },
@@ -1894,59 +1977,7 @@ export async function manejarCallbackIngresoManual(
       return true;
     }
     await answerCallbackQuery(params.callbackId, String(ubi.nombre));
-    const flujoNorm = normalizarFlujoRecepcionCampo(m.flujo);
-    if (flujoNorm && flujoNorm !== m.flujo) {
-      await patchMeta(supabase, params.chatId, estado, { flujo: flujoNorm });
-    }
-    if (m.precarga_id) {
-      // Nota precargada: ya trae proveedor, nº y líneas; solo falta el almacén → confirmar.
-      await patchMeta(supabase, params.chatId, estado, {
-        ubicacion_id: ubicacionId,
-        ubicacion_nombre: String(ubi.nombre),
-      });
-      const fresco = await getTelegramEstado(supabase, params.chatId);
-      await enviarConfirmacion(supabase, params.chatId, fresco);
-      return true;
-    }
-    if (m.foto_inicial && (flujoNorm ?? m.flujo) === FLUJO_INGRESO_FACTURA_MANUAL) {
-      await patchMeta(supabase, params.chatId, estado, {
-        ubicacion_id: ubicacionId,
-        ubicacion_nombre: String(ubi.nombre),
-      });
-      await leerFotoInicialIngreso(supabase, params.chatId, await getTelegramEstado(supabase, params.chatId));
-      return true;
-    }
-    if (flujoUsaHandoffWebTrasAlmacen(flujoNorm ?? m.flujo)) {
-      await enviarHandoffRecepcionWebTrasAlmacen(
-        supabase,
-        params.chatId,
-        estado,
-        ubicacionId,
-        String(ubi.nombre),
-      );
-    } else {
-      await patchMeta(supabase, params.chatId, estado, {
-        paso: 'proveedor',
-        ubicacion_id: ubicacionId,
-        ubicacion_nombre: String(ubi.nombre),
-        ...(flujoNorm ? { flujo: flujoNorm } : {}),
-      });
-      if (flujoTelegramCompletoEnBot(flujoNorm ?? m.flujo)) {
-        await enviarPickerProveedorIngresoManual(
-          supabase,
-          params.chatId,
-          proyectoId,
-          String(ubi.nombre),
-        );
-      } else {
-        await sendTelegramMessage(
-          params.chatId,
-          `✅ Almacén: <b>${escHtml(String(ubi.nombre))}</b>\n\n` +
-            '✏️ Escribe el <b>nombre del proveedor</b>:',
-          { parse_mode: 'HTML' },
-        );
-      }
-    }
+    await continuarTrasAlmacenIngreso(supabase, params.chatId, estado, proyectoId, ubicacionId, String(ubi.nombre));
     return true;
   }
 
