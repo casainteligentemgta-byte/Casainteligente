@@ -1,0 +1,23 @@
+name: Recordatorio a compradores
+
+# Cada hora de oficina (Caracas, L–V): 9, 10, 11, 13, 14 y 15 h = 13, 14, 15, 17, 18 y 19 UTC.
+# La ruta vuelve a verificar la hora de Caracas, así que un retraso de GitHub no envía fuera de horario.
+on:
+  schedule:
+    - cron: '0 13,14,15,17,18,19 * * 1-5'
+  workflow_dispatch:
+
+jobs:
+  recordatorio:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Llamar a la ruta del recordatorio
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "Falta el secreto CRON_SECRET en GitHub (Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
+          curl -fsS -H "Authorization: Bearer $CRON_SECRET" \
+            "https://casainteligente.company/api/cron/recordatorio-compradores"
