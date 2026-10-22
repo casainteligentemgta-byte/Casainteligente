@@ -17,6 +17,7 @@ import {
 } from '@/lib/telegram/mensajesFactura';
 import { procuraIdDesdeMetadataFactura } from '@/lib/telegram/facturaCompradorManualTelegram';
 import { iniciarResolverLineasFactura } from '@/lib/telegram/resolverLineasPrecargaTelegram';
+import { buscarPropietarioObra, textoAvisoPropietario } from '@/lib/telegram/propietarioAvisoTelegram';
 import {
   esNotaEntregaExtracted,
   mensajeNotaEntregaFinalizada,
@@ -224,31 +225,75 @@ export async function manejarCallbackUbicacionTelegram(
     return true;
   }
 
+  if (proyectoId) {
+    const propietario = await buscarPropietarioObra(supabase, proyectoId);
+    const aviso = propietario ? textoAvisoPropietario(extracted, propietario) : null;
+    if (aviso) {
+      await sendTelegramMessage(params.chatId, aviso, {
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '✅ Sí, es esta obra', callback_data: `pc:ok:${pendingId}` },
+              { text: '↩ Cambiar obra', callback_data: `pc:no:${pendingId}` },
+            ],
+          ],
+        },
+      });
+      return true;
+    }
+  }
+
+  await continuarFacturaTrasUbicacion(supabase, {
+    chatId: params.chatId,
+    pendingId,
+    proyectoId,
+    ubicacionId: parsed.ubicacionId,
+    extracted,
+  });
+  return true;
+}
+
+/**
+ * Tras elegir la obra (y confirmar el propietario): resuelve líneas sin material
+ * y registra la factura en Contabilidad.
+ */
+export async function continuarFacturaTrasUbicacion(
+  supabase: SupabaseClient,
+  params: {
+    chatId: string;
+    pendingId: string;
+    proyectoId: string;
+    ubicacionId: string;
+    extracted: Record<string, unknown>;
+  },
+): Promise<void> {
+  const { chatId, pendingId, proyectoId, ubicacionId, extracted } = params;
   let textoFinal = resumenFacturaCompradorHtml(extracted);
 
   if (proyectoId) {
     // Líneas sin material: se pregunta antes de crear nada, y luego se confirma.
-    const estadoRes = await getTelegramEstado(supabase, params.chatId);
+    const estadoRes = await getTelegramEstado(supabase, chatId);
     const procuraIdRes = procuraIdDesdeMetadataFactura(estadoRes);
-    const enRevision = await iniciarResolverLineasFactura(supabase, params.chatId, pendingId, {
+    const enRevision = await iniciarResolverLineasFactura(supabase, chatId, pendingId, {
       proyectoId,
-      ubicacionDestinoId: parsed.ubicacionId,
+      ubicacionDestinoId: ubicacionId,
       procuraId: procuraIdRes,
     });
-    if (enRevision) return true;
+    if (enRevision) return;
   }
 
   if (proyectoId) {
     try {
-      const estadoPrev = await getTelegramEstado(supabase, params.chatId);
+      const estadoPrev = await getTelegramEstado(supabase, chatId);
       const procuraId = procuraIdDesdeMetadataFactura(estadoPrev);
       await confirmarCompraDesdeCanal(supabase, {
         pendingId,
         proyectoId,
-        ubicacionDestinoId: parsed.ubicacionId,
+        ubicacionDestinoId: ubicacionId,
         procuraId,
       });
-      await setTelegramContexto(supabase, params.chatId, {
+      await setTelegramContexto(supabase, chatId, {
         contexto: 'menu',
         pending_factura_id: null,
         metadata: {},
@@ -262,13 +307,73 @@ export async function manejarCallbackUbicacionTelegram(
     }
   }
 
-  await sendTelegramMessage(params.chatId, textoFinal, {
+  await sendTelegramMessage(chatId, textoFinal, {
     parse_mode: 'HTML',
     reply_markup: tecladoFacturaRegistradaOk('obra'),
   });
-  return true;
 }
+
 
 export function esCallbackUbicacion(data: string): boolean {
   return data.startsWith(PREFIX_SEL) || data.startsWith(PREFIX_PAGE);
 }
+
+export function esCallbackPropietario(data: string): boolean {
+  return data.startsWith('pc:ok:') || data.startsWith('pc:no:');
+}
+
+/** Confirmación del propietario: «Sí, es esta obra» continúa; «Cambiar obra» vuelve al selector. */
+export async function manejarCallbackPropietarioTelegram(
+  supabase: SupabaseClient,
+  params: { chatId: string; callbackId: string; data: string },
+): Promise<boolean> {
+  const m = /^pc:(ok|no):(.+)$/.exec(params.data);
+  if (!m) return false;
+  const confirma = m[1] === 'ok';
+  const pendingId = m[2];
+
+  const { data: pendiente } = await supabase
+    .from('ci_facturas_canal_pendientes')
+    .select('extracted, proyecto_id, ubicacion_destino_id')
+    .eq('id', pendingId)
+    .maybeSingle();
+  if (!pendiente) {
+    await answerCallbackQuery(params.callbackId, 'Factura no encontrada', true);
+    return true;
+  }
+
+  const proyectoId = String(pendiente.proyecto_id ?? '');
+  const extracted = (pendiente.extracted ?? {}) as Record<string, unknown>;
+
+  if (!confirma) {
+    await answerCallbackQuery(params.callbackId, 'Elija otra obra');
+    await supabase
+      .from('ci_facturas_canal_pendientes')
+      .update({ ubicacion_destino_id: null, updated_at: new Date().toISOString() })
+      .eq('id', pendingId);
+    const estado = await getTelegramEstado(supabase, params.chatId);
+    const nombreObra = String(estado.metadata?.factura_picker_nombre_obra ?? 'Obra');
+    await enviarPickerUbicacionesTelegram(supabase, params.chatId, {
+      pendingId,
+      proyectoId: proyectoId || String(estado.metadata?.factura_picker_proyecto_id ?? ''),
+      nombreObra,
+    });
+    return true;
+  }
+
+  const ubicacionId = String(pendiente.ubicacion_destino_id ?? '');
+  if (!ubicacionId || !proyectoId) {
+    await answerCallbackQuery(params.callbackId, 'Elija la obra otra vez', true);
+    return true;
+  }
+  await answerCallbackQuery(params.callbackId, 'Confirmado');
+  await continuarFacturaTrasUbicacion(supabase, {
+    chatId: params.chatId,
+    pendingId,
+    proyectoId,
+    ubicacionId,
+    extracted,
+  });
+  return true;
+}
+

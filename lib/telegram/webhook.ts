@@ -189,6 +189,8 @@ import {
 import { manejarStartVinculoTelegram } from '@/lib/telegram/telegramVinculo';
 import {
   esCallbackUbicacion,
+  esCallbackPropietario,
+  manejarCallbackPropietarioTelegram,
   manejarCallbackUbicacionTelegram,
 } from '@/lib/telegram/ubicacionPicker';
 import {
@@ -794,6 +796,16 @@ export async function handleTelegramCallbackQuery(
       }
     }
 
+    if (esCallbackPropietario(cq.data)) {
+      const handledProp = await manejarCallbackPropietarioTelegram(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+      });
+      if (handledProp) {
+        return NextResponse.json({ ok: true, callback: 'propietario_obra' });
+      }
+    }
     if (esCallbackUbicacion(cq.data)) {
       const handledUb = await manejarCallbackUbicacionTelegram(admin.client, {
         chatId,
