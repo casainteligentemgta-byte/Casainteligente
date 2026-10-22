@@ -262,10 +262,6 @@ import {
 
 const CMD_FACTURAS = /^\/facturas?(@\S+)?\s*$/i;
 
-const MENSAJE_FOTO_FACTURA_MANUAL_ANTES_DE_TIEMPO =
-  '📷 <b>Todavía no toca la foto de la factura</b>; esta no se guardó.\n\n' +
-  'Termine primero de cargar los datos (proveedor, número, materiales) y envíela cuando el bot la pida.';
-
 export type TelegramUpdate = {
   message?: {
     message_id: number;
@@ -1472,21 +1468,19 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
         const estadoFcm = await getTelegramEstado(supabase, chatId);
         if (!esFlujoFacturaCompradorManual(estadoFcm)) return false;
         const paso = (estadoFcm.metadata as { paso?: string })?.paso;
-        if (paso === 'proveedor') {
-          // Carga manual sin datos todavía: la foto se lee primero (reconocimiento), como en /facturas.
+        if (paso !== 'foto') {
+          // Foto en cualquier paso: primero se lee la factura, como en /facturas; la carga manual se reinicia.
           await setTelegramContexto(supabase, chatId, {
             contexto: 'factura',
             metadata: {},
             reemplazarMetadata: true,
           });
+          await sendTelegramMessage(
+            chatId,
+            '📷 Leo la foto primero. Se reinició la carga manual; luego complete lo que falte.',
+            { parse_mode: 'HTML' },
+          );
           return false;
-        }
-        if (paso !== 'foto') {
-          // Foto antes de tiempo: se avisa, en vez de mandarla a la lectura automática.
-          await sendTelegramMessage(chatId, MENSAJE_FOTO_FACTURA_MANUAL_ANTES_DE_TIEMPO, {
-            parse_mode: 'HTML',
-          });
-          return true;
         }
         const fileId = photos[photos.length - 1]?.file_id;
         if (!fileId) return false;
@@ -1519,7 +1513,7 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
         const estadoIngreso = await getTelegramEstado(supabase, chatId);
         if (!esFlujoIngresoManual(estadoIngreso)) return false;
         const paso = (estadoIngreso.metadata as { paso?: string })?.paso;
-        if (paso !== 'foto' && paso !== 'observacion') return false;
+        if (paso !== 'foto' && paso !== 'observacion' && paso !== 'foto_inicial') return false;
         const fileId = photos[photos.length - 1]?.file_id;
         if (!fileId) return false;
         try {
@@ -1719,14 +1713,11 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
 
     switch (estado.contexto) {
       case 'factura': {
-        if (esFlujoFacturaCompradorManual(estado)) {
-          // PDF u otro archivo como soporte de la carga manual del comprador.
-          if ((estado.metadata as { paso?: string })?.paso !== 'foto') {
-            await sendTelegramMessage(chatId, MENSAJE_FOTO_FACTURA_MANUAL_ANTES_DE_TIEMPO, {
-              parse_mode: 'HTML',
-            });
-            return NextResponse.json({ ok: true, factura_comprador_manual_archivo_antes: true });
-          }
+        if (
+          esFlujoFacturaCompradorManual(estado) &&
+          (estado.metadata as { paso?: string })?.paso === 'foto'
+        ) {
+          // PDF u otro archivo como soporte de la carga manual del comprador (paso foto).
           const { downloadTelegramFile, mimeFromTelegramPath } = await import('@/lib/telegram/botApi');
           const { buffer, filePath } = await downloadTelegramFile(archivo.fileId);
           await manejarFotoFacturaCompradorManual({
@@ -1739,6 +1730,19 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
             chatLabel: label,
           });
           return NextResponse.json({ ok: true, factura_comprador_manual_archivo: true });
+        }
+        if (esFlujoFacturaCompradorManual(estado)) {
+          // Documento antes de tiempo: primero se lee, como en /facturas; la carga manual se reinicia.
+          await setTelegramContexto(supabase, chatId, {
+            contexto: 'factura',
+            metadata: {},
+            reemplazarMetadata: true,
+          });
+          await sendTelegramMessage(
+            chatId,
+            '📄 Leo el documento primero. Se reinició la carga manual; luego complete lo que falte.',
+            { parse_mode: 'HTML' },
+          );
         }
         const factura = await manejarFacturaTelegram({
           supabase,
