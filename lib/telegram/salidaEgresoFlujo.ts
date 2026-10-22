@@ -9,6 +9,7 @@ import {
   type LineaEgresoCampoInput,
 } from '@/lib/almacen/registrarEgresoCampo';
 import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi';
+import { tecladoVerMovimientosDepositario } from '@/lib/telegram/movimientosDepositarioBoton';
 import type { TelegramEstado } from '@/lib/telegram/estados';
 import {
   ALERTA_FOTO_OBLIGATORIA,
@@ -23,7 +24,7 @@ import {
 } from '@/lib/telegram/observacionRapida';
 import { nombreProyectoTelegram } from '@/lib/telegram/proyectoPicker';
 import { MENSAJE_INICIO_SALIDA_OBRA } from '@/lib/telegram/mensajesSalidaTelegram';
-import { enviarPickerOrigenSalidaTelegram } from '@/lib/telegram/salidaOrigenPicker';
+import { almacenOrigenObra } from '@/lib/telegram/salidaOrigenPicker';
 
 export const FLUJO_EGRESO_V2 = 'egreso_v2';
 
@@ -96,16 +97,6 @@ export function esCallbackSalidaEgreso(data: string): boolean {
   return data.startsWith(PREFIX);
 }
 
-function baseUrlApp(): string {
-  return (
-    process.env.NEXT_PUBLIC_BASE_URL ??
-    process.env.NEXT_PUBLIC_APP_URL ??
-    'https://casainteligente.company'
-  )
-    .trim()
-    .replace(/\/$/, '');
-}
-
 async function patchMeta(
   supabase: SupabaseClient,
   chatId: string,
@@ -137,25 +128,33 @@ export async function iniciarSalidaEgresoTrasObra(
   proyectoId: string,
 ): Promise<void> {
   const nombre = (await nombreProyectoTelegram(supabase, proyectoId)) ?? 'Obra';
+  const origen = await almacenOrigenObra(supabase, proyectoId);
+  if (!origen) {
+    await sendTelegramMessage(
+      chatId,
+      `⚠️ La obra <b>${nombre}</b> no tiene almacén configurado. Avise al administrador.`,
+      { parse_mode: 'HTML' },
+    );
+    return;
+  }
+  // Sin elegir almacén: el material sale del almacén de la obra.
   await setTelegramContexto(supabase, chatId, {
     contexto: 'salida_obra',
     proyecto_id: proyectoId,
     metadata: {
       flujo: FLUJO_EGRESO_V2,
-      paso: 'origen',
+      paso: 'obrero',
       lineas: [],
+      origen_ubicacion_id: origen.id,
+      origen_nombre: origen.nombre,
     },
   });
   await sendTelegramMessage(
     chatId,
-    `📤 Obra: <b>${nombre}</b>\n\nElige el <b>almacén</b> de donde sale el material:`,
+    `📤 Obra: <b>${nombre}</b>\n\n👷 ¿Quién recibe el material?`,
     { parse_mode: 'HTML' },
   );
-  await enviarPickerOrigenSalidaTelegram(supabase, chatId, {
-    proyectoId,
-    nombreObra: nombre,
-    nMateriales: 0,
-  });
+  await enviarPickerObrero(supabase, chatId, proyectoId);
 }
 
 async function enviarPickerObrero(
@@ -815,7 +814,7 @@ export async function manejarCallbackSalidaEgreso(
       return true;
     }
 
-    const link = `${baseUrlApp()}/almacen`;
+    const verMov = await tecladoVerMovimientosDepositario(supabase, params.chatId);
     await sendTelegramMessage(
       params.chatId,
       `✅ <b>Egreso registrado</b>\n\n` +
@@ -823,8 +822,8 @@ export async function manejarCallbackSalidaEgreso(
         `👷 ${fm.obrero_nombre}\n` +
         `📋 ${resultado.nLineas} material(es)\n` +
         `✅ Stock descontado\n\n` +
-        `<a href="${link}">Ver movimientos</a>`,
-      { parse_mode: 'HTML' },
+        `Use <b>Ver movimientos</b> para revisar la obra.`,
+      { parse_mode: 'HTML', ...(verMov ? { reply_markup: verMov } : {}) },
     );
     return true;
   }
@@ -891,10 +890,10 @@ export async function manejarTextoSalidaEgreso(
         return true;
       }
     }
-    await patchMeta(supabase, chatId, estado, { paso: 'partida', draft_cantidad: qty });
-    if (estado.proyecto_id && m.draft_material_id) {
-      await enviarPickerPartida(supabase, chatId, estado.proyecto_id, m.draft_material_id);
-    }
+    // Sin partidas: la cantidad cierra la línea.
+    await patchMeta(supabase, chatId, estado, { draft_cantidad: qty });
+    const fresco = await getTelegramEstado(supabase, chatId);
+    await finalizarLineaDraft(supabase, chatId, fresco, null, null, { sinPartida: true });
     return true;
   }
 

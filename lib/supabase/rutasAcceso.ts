@@ -19,6 +19,8 @@ export const RUTAS_PUBLICAS = [
   '/abogado',
   // Vista previa del presupuesto: su demostración (?demo=1) no usa datos reales.
   '/ventas/preview',
+  // Mini App del depositario: valida la firma de Telegram (no pide sesión).
+  '/movimientos-deposito',
 ];
 
 /** Piden sesión: sin ella se redirige a /login. */
@@ -93,6 +95,8 @@ export function esRutaProtegida(pathname: string): boolean {
  * propio control (clave, token o enlace) o no entrega datos:
  */
 export const APIS_SIN_SESION = [
+  // Mini App del depositario: valida la firma de Telegram (initData) y solo entrega sus obras.
+  '/api/telegram/movimientos-deposito',
   // Telegram y WhatsApp llaman aquí; los protege su clave (lib/telegram/claveWebhook.ts).
   '/api/webhooks',
   '/api/webhook-logs',

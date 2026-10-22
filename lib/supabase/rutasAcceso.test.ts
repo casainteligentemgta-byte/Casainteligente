@@ -109,6 +109,7 @@ describe('quién puede usar el bot', () => {
     assert.equal(apiRequiereSesion('/api/telegram/whitelist/abc'), true)
     assert.equal(apiRequiereSesion('/api/telegram'), false)
     assert.equal(apiRequiereSesion('/api/telegram/registrar-webhook'), false)
+    assert.equal(apiRequiereSesion('/api/telegram/movimientos-deposito'), false)
     assert.equal(apiRequiereSesion('/api/webhooks/telegram'), false)
     assert.equal(apiRequiereSesion('/api/webhook-logs'), false)
   })
@@ -286,6 +287,8 @@ describe('toda ruta abierta del proyecto está revisada', () => {
       '/api/webhook-logs',
       '/api/telegram',
       '/api/telegram/registrar-webhook',
+      // Mini App del depositario: valida la firma de Telegram (initData) antes de entregar nada
+      '/api/telegram/movimientos-deposito',
       '/api/alerts/telegram-exception',
       '/api/proyectos/tours/worker-callback',
       '/api/cron/agenda-reminders',
@@ -295,6 +298,8 @@ describe('toda ruta abierta del proyecto está revisada', () => {
       '/api/cron/cuellos-botella',
       '/api/cron/permisologia-vencimientos',
       '/api/cron/weekly-report',
+      '/api/cron/notas-sin-factura',
+      '/api/cron/recordatorio-compradores',
       // sesión y diagnóstico
       '/api/auth/cambiar-password',
       '/api/auth/invitar',

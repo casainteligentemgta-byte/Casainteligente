@@ -85,6 +85,8 @@ export async function confirmarCompraCanal(
     imputacion_entidad?: boolean;
     clasificacion_gasto_entidad?: string | null;
     extracted?: ExtractedCanalHeader;
+    /** Confirmación explícita de propietario (se pide al usuario si no coincide). */
+    confirmar_propietario?: boolean;
     /** Fast-track: liberar cuarentena al confirmar (omitir en flujo normal). */
     ingreso_almacen_automatico?: boolean;
   },
@@ -133,7 +135,13 @@ export async function confirmarCompraCanal(
       error?: string;
     } | null;
     error?: string;
+    codigo?: string;
   };
+  if (res.status === 409 && data.codigo === 'propietario_no_coincide') {
+    const ok = typeof window !== 'undefined' && window.confirm(`${data.error ?? ''}\n\n¿Confirmar de todas formas?`);
+    if (!ok) throw new Error('Confirmación cancelada: la factura no es del propietario de la obra elegida');
+    return confirmarCompraCanal(rawId, { ...body, confirmar_propietario: true });
+  }
   if (!res.ok) throw new Error(data.error || 'No se pudo registrar la compra');
   if (!data.compraId) throw new Error('Respuesta incompleta del servidor');
   return {
