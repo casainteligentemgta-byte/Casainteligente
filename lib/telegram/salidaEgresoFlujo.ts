@@ -24,7 +24,7 @@ import {
 } from '@/lib/telegram/observacionRapida';
 import { nombreProyectoTelegram } from '@/lib/telegram/proyectoPicker';
 import { MENSAJE_INICIO_SALIDA_OBRA } from '@/lib/telegram/mensajesSalidaTelegram';
-import { enviarPickerOrigenSalidaTelegram } from '@/lib/telegram/salidaOrigenPicker';
+import { almacenOrigenObra } from '@/lib/telegram/salidaOrigenPicker';
 
 export const FLUJO_EGRESO_V2 = 'egreso_v2';
 
@@ -128,25 +128,33 @@ export async function iniciarSalidaEgresoTrasObra(
   proyectoId: string,
 ): Promise<void> {
   const nombre = (await nombreProyectoTelegram(supabase, proyectoId)) ?? 'Obra';
+  const origen = await almacenOrigenObra(supabase, proyectoId);
+  if (!origen) {
+    await sendTelegramMessage(
+      chatId,
+      `⚠️ La obra <b>${nombre}</b> no tiene almacén configurado. Avise al administrador.`,
+      { parse_mode: 'HTML' },
+    );
+    return;
+  }
+  // Sin elegir almacén: el material sale del almacén de la obra.
   await setTelegramContexto(supabase, chatId, {
     contexto: 'salida_obra',
     proyecto_id: proyectoId,
     metadata: {
       flujo: FLUJO_EGRESO_V2,
-      paso: 'origen',
+      paso: 'obrero',
       lineas: [],
+      origen_ubicacion_id: origen.id,
+      origen_nombre: origen.nombre,
     },
   });
   await sendTelegramMessage(
     chatId,
-    `📤 Obra: <b>${nombre}</b>\n\nElige el <b>almacén</b> de donde sale el material:`,
+    `📤 Obra: <b>${nombre}</b>\n\n👷 ¿Quién recibe el material?`,
     { parse_mode: 'HTML' },
   );
-  await enviarPickerOrigenSalidaTelegram(supabase, chatId, {
-    proyectoId,
-    nombreObra: nombre,
-    nMateriales: 0,
-  });
+  await enviarPickerObrero(supabase, chatId, proyectoId);
 }
 
 async function enviarPickerObrero(
@@ -882,10 +890,10 @@ export async function manejarTextoSalidaEgreso(
         return true;
       }
     }
-    await patchMeta(supabase, chatId, estado, { paso: 'partida', draft_cantidad: qty });
-    if (estado.proyecto_id && m.draft_material_id) {
-      await enviarPickerPartida(supabase, chatId, estado.proyecto_id, m.draft_material_id);
-    }
+    // Sin partidas: la cantidad cierra la línea.
+    await patchMeta(supabase, chatId, estado, { draft_cantidad: qty });
+    const fresco = await getTelegramEstado(supabase, chatId);
+    await finalizarLineaDraft(supabase, chatId, fresco, null, null, { sinPartida: true });
     return true;
   }
 
