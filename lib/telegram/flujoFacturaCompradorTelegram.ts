@@ -19,8 +19,13 @@ import {
   enviarPickerCondicionPagoTelegram,
   enviarPreguntaDiasCreditoFacturaTelegram,
 } from '@/lib/telegram/condicionPagoPicker';
+import {
+  campoFaltanteFactura,
+  enviarPreguntaDatoFaltanteFactura,
+} from '@/lib/telegram/faltantesFacturaTelegram';
 
 export type PasoFlujoFacturaComprador =
+  | 'dato_faltante'
   | 'fecha'
   | 'moneda'
   | 'condicion'
@@ -39,6 +44,8 @@ export function siguientePasoFlujoFacturaComprador(
   extracted: ExtractedCanalHeader,
   row?: Pick<FilaPendienteFlujo, 'proyecto_id' | 'entidad_id' | 'ubicacion_destino_id'> | null,
 ): PasoFlujoFacturaComprador {
+  // El OCR no leyó número o total: el comprador los escribe antes de seguir.
+  if (campoFaltanteFactura(extracted)) return 'dato_faltante';
   const fecha = String(extracted.date ?? '').slice(0, 10);
   if (
     fecha &&
@@ -147,6 +154,11 @@ export async function avanzarFlujoFacturaCompradorTelegram(
 
   try {
     switch (paso) {
+      case 'dato_faltante': {
+        const campo = campoFaltanteFactura(extracted);
+        if (campo) await enviarPreguntaDatoFaltanteFactura(supabase, chatId, pendingId, campo);
+        break;
+      }
       case 'fecha':
         await enviarConfirmacionFechaFacturaTelegram(supabase, chatId, pendingId);
         break;
