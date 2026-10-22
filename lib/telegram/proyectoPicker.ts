@@ -14,6 +14,7 @@ import {
   filtrarProyectosCatalogoParaChatTelegram,
   modoTelegramUsaObraComprador,
 } from '@/lib/telegram/proyectosTelegramUsuario';
+import { obrasVisiblesParaChat } from '@/lib/telegram/facturasPendientesDeMisObras';
 
 /** Contextos en los que el usuario puede elegir proyecto desde Telegram. */
 export type ProyectoPickerModo =
@@ -386,7 +387,14 @@ export async function enviarPickerProyectosTelegram(
     return;
   }
 
-  const permitidos = await filtrarProyectosCatalogoParaChatTelegram(supabase, chatId, proyectos);
+  let permitidos = await filtrarProyectosCatalogoParaChatTelegram(supabase, chatId, proyectos);
+  if (modo === 'salida_obra') {
+    // Salida a obrero: el depositario solo ve sus obras (administradores ven todas).
+    const visibles = await obrasVisiblesParaChat(supabase, chatId);
+    if (visibles !== 'todas') {
+      permitidos = permitidos.filter((p) => visibles.has(p.id));
+    }
+  }
   if (permitidos.length === 0) {
     await sendTelegramMessage(
       chatId,
@@ -396,7 +404,7 @@ export async function enviarPickerProyectosTelegram(
     return;
   }
 
-  if (permitidos.length === 1 && modoTelegramUsaObraComprador(modo)) {
+  if (permitidos.length === 1 && (modoTelegramUsaObraComprador(modo) || modo === 'salida_obra')) {
     const unico = permitidos[0]!;
     await sendTelegramMessage(
       chatId,
