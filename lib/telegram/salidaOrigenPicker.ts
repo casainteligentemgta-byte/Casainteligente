@@ -86,6 +86,18 @@ async function listarAlmacenesOrigen(
   );
 }
 
+/**
+ * Almacén de origen de la obra sin preguntar al depositario: el único que tenga la obra,
+ * o el primero de la lista si hay varios.
+ */
+export async function almacenOrigenObra(
+  supabase: SupabaseClient,
+  proyectoId: string,
+): Promise<UbicacionInventario | null> {
+  const list = await listarAlmacenesOrigen(supabase, proyectoId);
+  return list[0] ?? null;
+}
+
 export async function hayAlmacenesOrigenSalida(
   supabase: SupabaseClient,
   proyectoId: string,
