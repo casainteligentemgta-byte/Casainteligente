@@ -17,6 +17,9 @@ export type ExtractedPurchaseInvoice = {
   invoice_number: string;
   supplier_rif: string;
   supplier_name: string;
+  /** Receptor (a nombre de quién está la factura), si figura en el documento. */
+  receptor_nombre?: string;
+  receptor_rif?: string;
   date: string;
   total_amount: number | null;
   items: ExtractedInvoiceItem[];
@@ -53,6 +56,7 @@ OBLIGATORIO — Tabla de detalle (cuerpo de la factura):
 
 Encabezado:
 - invoice_number, supplier_name, supplier_rif (emisor, no el cliente), date (YYYY-MM-DD), total_amount (total en Bs, con IVA si así figura en el documento).
+- receptor_nombre y receptor_rif: el cliente o comprador a nombre de quien está la factura (bloque "Cliente", "Razón social del comprador", "Señores"). Si no figura, "".
 
 El proveedor es quien EMITE la factura, no el comprador.`;
 
@@ -77,6 +81,14 @@ const RESPONSE_SCHEMA = {
     supplier_name: {
       type: 'string',
       description: 'Razón social o nombre del proveedor emisor',
+    },
+    receptor_nombre: {
+      type: 'string',
+      description: 'Cliente o comprador a nombre de quien está la factura (no el emisor); "" si no figura',
+    },
+    receptor_rif: {
+      type: 'string',
+      description: 'RIF del cliente o comprador a nombre de quien está la factura; "" si no figura',
     },
     date: {
       type: 'string',
@@ -508,10 +520,15 @@ export function parseExtractedPurchaseInvoice(text: string): ExtractedPurchaseIn
   const confidenceRaw =
     flat.confidence_score ?? flat.confidenceScore ?? flat.ocr_confidence;
 
+  const receptor_nombre = pickString(flat, ['receptor_nombre', 'cliente_nombre', 'comprador_nombre']);
+  const receptor_rif = pickString(flat, ['receptor_rif', 'cliente_rif', 'comprador_rif']);
+
   const base = {
     invoice_number,
     supplier_rif,
     supplier_name,
+    ...(receptor_nombre ? { receptor_nombre } : {}),
+    ...(receptor_rif ? { receptor_rif } : {}),
     date: normalizeDate(dateRaw),
     total_amount:
       totalRaw != null && totalRaw !== '' ? toNumber(totalRaw, 0) : null,
