@@ -391,7 +391,7 @@ export async function enviarPickerProyectosTelegram(
   if (modo === 'salida_obra') {
     // Salida a obrero: el depositario solo ve sus obras (administradores ven todas).
     const visibles = await obrasVisiblesParaChat(supabase, chatId);
-    if (visibles !== 'todas' && visibles.size > 0) {
+    if (visibles !== 'todas') {
       permitidos = permitidos.filter((p) => visibles.has(p.id));
     }
   }
