@@ -4,6 +4,7 @@ import { evaluarFastTrackFactura } from '@/lib/canal/evaluarFastTrackFactura';
 import { asegurarUbicacionObra } from '@/lib/almacen/ubicacionesInventario';
 import { registrarCompraInventario } from '@/lib/almacen/registrarCompraInventario';
 import { confirmarCompraDesdeCanal } from '@/lib/contabilidad/confirmarCompraDesdeCanal';
+import { buscarPropietarioObra, textoAvisoPropietario } from '@/lib/telegram/propietarioAvisoTelegram';
 import type { LineaCompraContabilidadInput } from '@/lib/contabilidad/registerCompraDesdeRecepcion';
 import { normSkuCodigo } from '@/lib/almacen/resolverMaterialIdPorSku';
 
@@ -51,6 +52,17 @@ export async function ejecutarFastTrackFacturaCanal(
     return {
       aplicado: false,
       motivo: 'Sin proyecto asignado — requiere selección manual',
+      confidenceScore: evaluacion.confidenceScore,
+    };
+  }
+
+  // Si la factura no está a nombre del propietario de la obra, no se confirma sola.
+  const propietario = await buscarPropietarioObra(supabase, proyectoId);
+  const aviso = propietario ? textoAvisoPropietario(extracted as unknown as Record<string, unknown>, propietario) : null;
+  if (aviso) {
+    return {
+      aplicado: false,
+      motivo: 'La factura no está a nombre del propietario de la obra: requiere confirmación manual',
       confidenceScore: evaluacion.confidenceScore,
     };
   }

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { parseClasificacionGastoEntidad } from '@/lib/contabilidad/clasificacionGastoEntidad';
 import type { ExtractedCanalHeader } from '@/lib/contabilidad/extractedCanal';
 import { confirmarCompraDesdeCanal } from '@/lib/contabilidad/confirmarCompraDesdeCanal';
+import { buscarPropietarioObra, textoAvisoPropietario } from '@/lib/telegram/propietarioAvisoTelegram';
 import { encolarIngresoAlmacenFallback } from '@/lib/contabilidad/encolarIngresoAlmacenFallback';
 import { ingresoAlmacenDesdePendienteCanal } from '@/lib/contabilidad/ingresoAlmacenDesdePendienteCanal';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
@@ -39,6 +40,8 @@ export async function POST(req: Request, ctx: RouteCtx) {
       imputacion_entidad?: boolean;
       clasificacion_gasto_entidad?: string | null;
       extracted?: ExtractedCanalHeader;
+      /** Confirmación explícita de que la obra es la correcta aunque el propietario no coincida. */
+      confirmar_propietario?: boolean;
       /** Si true, intenta ingreso directo (fast-track vía cuarentena). Por defecto false. */
       ingreso_almacen_automatico?: boolean;
     };
@@ -60,6 +63,23 @@ export async function POST(req: Request, ctx: RouteCtx) {
 
     const admin = supabaseAdminForRoute();
     if (!admin.ok) return admin.response;
+
+    if (!gastoEntidad && proyectoId && body.confirmar_propietario !== true) {
+      const { data: pen } = await admin.client
+        .from('ci_facturas_canal_pendientes')
+        .select('extracted')
+        .eq('id', id)
+        .maybeSingle();
+      const ext = (body.extracted ?? pen?.extracted ?? {}) as Record<string, unknown>;
+      const propietario = await buscarPropietarioObra(admin.client, proyectoId);
+      const aviso = propietario ? textoAvisoPropietario(ext, propietario) : null;
+      if (aviso) {
+        return NextResponse.json(
+          { codigo: 'propietario_no_coincide', error: aviso.replace(/<[^>]+>/g, '') },
+          { status: 409 },
+        );
+      }
+    }
 
     const result = await confirmarCompraDesdeCanal(admin.client, {
       pendingId: id,
