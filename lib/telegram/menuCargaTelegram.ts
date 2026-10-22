@@ -1,6 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi';
-import { esChatComprador } from '@/lib/telegram/compradorRestricciones';
 import { iniciarFacturaCompradorManualTelegram } from '@/lib/telegram/facturaCompradorManualTelegram';
 import { manejarComandoIngresoFacturaTelegram } from '@/lib/telegram/ingresoFacturaTelegram';
 import {
@@ -9,43 +8,50 @@ import {
   manejarComandoNotaEntregaTelegram,
 } from '@/lib/telegram/ingresoManualTelegram';
 import { iniciarModoCargaFacturasTelegram } from '@/lib/telegram/mensajesFactura';
+import { enviarPickerProyectosTelegram } from '@/lib/telegram/proyectoPicker';
 
-/** Menú único de carga (/facturas e /ingreso). Mismo menú para todos los roles; el destino cambia. */
+/**
+ * /factura: carga (precarga) de facturas y notas. Igual para todos los roles;
+ * lo cargado queda pendiente de ingreso en el almacén de la obra.
+ * /ingreso: lo que el depositario ingresa (pendientes) y el ingreso directo con factura.
+ */
 export const PREFIX_CARGA = 'cg:';
 
-export type RolCarga = 'comprador' | 'depositario';
-
-/** Comprador, administrador general y project manager cargan con flujo de comprador (eligen destino). */
-export async function rolDeCarga(supabase: SupabaseClient, chatId: string): Promise<RolCarga> {
-  if (await esChatComprador(supabase, chatId)) return 'comprador';
-  const { data } = await supabase
-    .from('ci_usuarios_sistema_telegram')
-    .select('id')
-    .eq('telegram_id', Number(chatId))
-    .in('rol', ['Administrador', 'Project Manager'])
-    .eq('activo', true)
-    .limit(1);
-  if (data?.length) return 'comprador';
-  return 'depositario';
-}
-
-export async function enviarMenuCarga(supabase: SupabaseClient, chatId: string): Promise<void> {
-  const rol = await rolDeCarga(supabase, chatId);
-  const rows: Array<Array<{ text: string; callback_data: string }>> = [
-    [{ text: '📷 Factura con foto (IA)', callback_data: `${PREFIX_CARGA}factura_ia` }],
-    [{ text: '✍️ Factura manual (sin IA)', callback_data: `${PREFIX_CARGA}factura_manual` }],
-    [{ text: '📄 Nota de entrega', callback_data: `${PREFIX_CARGA}nota` }],
-  ];
-  if (rol === 'depositario') {
-    rows.push([{ text: '📝 Sin nota ni factura', callback_data: `${PREFIX_CARGA}sin_nota` }]);
-    rows.push([{ text: '📥 Pendientes de ingreso', callback_data: `${PREFIX_CARGA}pendientes` }]);
-  }
+export async function enviarMenuCarga(_supabase: SupabaseClient, chatId: string): Promise<void> {
   await sendTelegramMessage(
     chatId,
-    '🧾 <b>Cargar</b>\n\nElija cómo cargar:\n' +
+    '🧾 <b>Cargar factura o nota</b>\n\n' +
+      'Lo que cargue queda <b>pendiente de ingreso</b> en el almacén de la obra.\n' +
       '• <b>Con foto (IA):</b> la IA lee la factura y solo se piden los datos que falten.\n' +
       '• <b>Manual:</b> se escriben todos los datos.',
-    { parse_mode: 'HTML', reply_markup: { inline_keyboard: rows } },
+    {
+      parse_mode: 'HTML',
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '📷 Factura con foto (IA)', callback_data: `${PREFIX_CARGA}factura_ia` }],
+          [{ text: '✍️ Factura manual', callback_data: `${PREFIX_CARGA}factura_manual` }],
+          [{ text: '📄 Nota de entrega (foto)', callback_data: `${PREFIX_CARGA}nota` }],
+        ],
+      },
+    },
+  );
+}
+
+export async function enviarMenuIngreso(_supabase: SupabaseClient, chatId: string): Promise<void> {
+  await sendTelegramMessage(
+    chatId,
+    '📥 <b>Ingreso a almacén</b>\n\nElija:',
+    {
+      parse_mode: 'HTML',
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '📥 Facturas pendientes de ingreso', callback_data: `${PREFIX_CARGA}pendientes` }],
+          [{ text: '📄 Notas pendientes de ingreso', callback_data: `${PREFIX_CARGA}notas_pendientes` }],
+          [{ text: '🧾 Ingreso con factura · con foto (IA)', callback_data: `${PREFIX_CARGA}ingreso_ia` }],
+          [{ text: '🧾 Ingreso con factura · manual', callback_data: `${PREFIX_CARGA}ingreso_manual` }],
+        ],
+      },
+    },
   );
 }
 
@@ -59,34 +65,34 @@ export async function manejarCallbackCarga(
 ): Promise<boolean> {
   if (!esCallbackCarga(params.data)) return false;
   const accion = params.data.slice(PREFIX_CARGA.length);
-  const rol = await rolDeCarga(supabase, params.chatId);
   await answerCallbackQuery(params.callbackId);
 
   switch (accion) {
     case 'factura_ia':
-      if (rol === 'comprador') await iniciarModoCargaFacturasTelegram(supabase, params.chatId);
-      else await manejarComandoIngresoFacturaManualTelegram(supabase, params.chatId);
+      await iniciarModoCargaFacturasTelegram(supabase, params.chatId);
       return true;
     case 'factura_manual':
-      if (rol === 'comprador') await iniciarFacturaCompradorManualTelegram(supabase, params.chatId);
-      else await manejarComandoIngresoFacturaSinIaTelegram(supabase, params.chatId);
+      await iniciarFacturaCompradorManualTelegram(supabase, params.chatId);
       return true;
     case 'nota':
-      await manejarComandoNotaEntregaTelegram(supabase, params.chatId);
-      return true;
-    case 'sin_nota':
-      if (rol === 'comprador') {
-        await sendTelegramMessage(
-          params.chatId,
-          'La carga sin nota ni factura la registra el depositario en almacén.',
-          { parse_mode: 'HTML' },
-        );
-        return true;
-      }
-      await manejarComandoIngresoFacturaTelegram(supabase, params.chatId);
+      await sendTelegramMessage(
+        params.chatId,
+        '📄 <b>Nota de entrega</b>\n\nElija la obra. Luego envíe la foto de la nota.',
+        { parse_mode: 'HTML' },
+      );
+      await enviarPickerProyectosTelegram(supabase, params.chatId, 'nota_entrega');
       return true;
     case 'pendientes':
       await manejarComandoIngresoFacturaTelegram(supabase, params.chatId);
+      return true;
+    case 'notas_pendientes':
+      await manejarComandoNotaEntregaTelegram(supabase, params.chatId);
+      return true;
+    case 'ingreso_ia':
+      await manejarComandoIngresoFacturaManualTelegram(supabase, params.chatId);
+      return true;
+    case 'ingreso_manual':
+      await manejarComandoIngresoFacturaSinIaTelegram(supabase, params.chatId);
       return true;
     default:
       return false;

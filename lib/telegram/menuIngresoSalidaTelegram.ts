@@ -75,8 +75,8 @@ export async function manejarComandoIngresoTelegram(
   supabase: SupabaseClient,
   chatId: string,
 ): Promise<void> {
-  const { enviarMenuCarga } = await import('@/lib/telegram/menuCargaTelegram');
-  await enviarMenuCarga(supabase, chatId);
+  const { enviarMenuIngreso } = await import('@/lib/telegram/menuCargaTelegram');
+  await enviarMenuIngreso(supabase, chatId);
 }
 
 export async function enviarMenuIngresoTelegram(
