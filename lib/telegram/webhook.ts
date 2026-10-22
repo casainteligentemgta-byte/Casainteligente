@@ -1472,6 +1472,15 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
         const estadoFcm = await getTelegramEstado(supabase, chatId);
         if (!esFlujoFacturaCompradorManual(estadoFcm)) return false;
         const paso = (estadoFcm.metadata as { paso?: string })?.paso;
+        if (paso === 'proveedor') {
+          // Carga manual sin datos todavía: la foto se lee primero (reconocimiento), como en /facturas.
+          await setTelegramContexto(supabase, chatId, {
+            contexto: 'factura',
+            metadata: {},
+            reemplazarMetadata: true,
+          });
+          return false;
+        }
         if (paso !== 'foto') {
           // Foto antes de tiempo: se avisa, en vez de mandarla a la lectura automática.
           await sendTelegramMessage(chatId, MENSAJE_FOTO_FACTURA_MANUAL_ANTES_DE_TIEMPO, {
