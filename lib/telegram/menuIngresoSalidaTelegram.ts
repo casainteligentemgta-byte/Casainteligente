@@ -107,7 +107,7 @@ export async function enviarMenuIngresoTelegram(
     );
 
     texto +=
-      `\n\n<b>Facturas pendientes de ingreso</b> — elige <b>proveedor</b> (${facturas.length})` +
+      `\n\n<b>Facturas precargadas</b> (pendientes de ingreso) — elige <b>proveedor</b> (${facturas.length})` +
       (nIngreso ? `\n📥 ${nIngreso} para ingreso` : '') +
       (nConfirmar ? `\n⏳ ${nConfirmar} pend. confirmar compra` : '') +
       '\n<i>Luego verás las facturas por número.</i>';
@@ -305,7 +305,7 @@ const ETIQUETA_INGRESO: Record<OpcionMenuIngreso, string> = {
   factauto: 'Ingreso automático de factura',
   nota: 'Ingreso con nota de entrega',
   sinnota: 'Ingreso sin nota',
-  precargadas: 'Facturas pendientes de ingreso',
+  precargadas: 'Facturas precargadas',
 };
 
 const ETIQUETA_SALIDA: Record<OpcionMenuSalida, string> = {
