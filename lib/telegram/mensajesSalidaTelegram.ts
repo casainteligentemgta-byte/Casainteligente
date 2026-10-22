@@ -7,22 +7,19 @@ const REQUISITO_FOTO = etiquetaRequisitoFoto();
 export const MENU_SALIDA_TEXTO =
   '📤 <b>Salida de material</b>\n\n' +
   'Elige el tipo. Las tres primeras las registra el almacén y descuentan stock al confirmar.\n\n' +
-  '🏗 <b>A un obrero en obra</b> — quién recibe, partida y actividad.\n' +
+  '🏗 <b>A un obrero en obra</b> — quién recibe y qué material.\n' +
   '🏭 <b>Despacho</b> — a obra u otro almacén (igual que en la app).\n' +
   '🔄 <b>Traspaso / préstamo</b> — mueve stock entre almacenes.\n' +
   '📝 <b>Pedir material al almacén</b> — usted pide y dice para qué; el almacén despacha con foto.\n\n' +
   '<code>/cancelar</code> para abortar.';
 
 export const FLUJO_PASOS_SALIDA_OBRA =
-  '1️⃣ Elige la <b>obra</b>.\n' +
-  '2️⃣ Elige el <b>almacén de origen</b>.\n' +
-  '3️⃣ ¿<b>Quién recibe</b>? (nómina o nombre).\n' +
-  '4️⃣ <b>Material</b> con stock y <b>cantidad</b>.\n' +
-  '5️⃣ <b>Partida</b> presupuestaria (opcional).\n' +
-  '6️⃣ <b>Actividad Gantt</b> (opcional).\n' +
-  '7️⃣ ¿<b>Agregar más materiales</b>?\n' +
-  `8️⃣ <b>Foto</b> ${REQUISITO_FOTO} y <b>observaciones</b>.\n` +
-  '9️⃣ <b>Confirmar</b> — descuenta stock y deja trazabilidad.\n\n' +
+  '1️⃣ Se toma la <b>obra</b> y su almacén (sin elegir).\n' +
+  '2️⃣ ¿<b>Quién recibe</b>? Elija el obrero de la obra.\n' +
+  '3️⃣ <b>Material</b> con stock y <b>cantidad</b>.\n' +
+  '4️⃣ ¿<b>Agregar más materiales</b>?\n' +
+  `5️⃣ <b>Foto</b> ${REQUISITO_FOTO} y <b>observaciones</b>.\n` +
+  '6️⃣ <b>Confirmar</b> — descuenta stock y deja trazabilidad.\n\n' +
   '<code>/cancelar</code> para abortar.';
 
 export const FLUJO_PASOS_SALIDA_DESPACHO =
