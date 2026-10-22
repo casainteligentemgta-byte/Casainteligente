@@ -5,6 +5,7 @@ import { manejarComandoIngresoFacturaTelegram } from '@/lib/telegram/ingresoFact
 import {
   manejarComandoIngresoFacturaManualTelegram,
   manejarComandoIngresoFacturaSinIaTelegram,
+  manejarComandoNotaEntregaIaTelegram,
   manejarComandoNotaEntregaTelegram,
 } from '@/lib/telegram/ingresoManualTelegram';
 import { iniciarModoCargaFacturasTelegram } from '@/lib/telegram/mensajesFactura';
@@ -49,6 +50,8 @@ export async function enviarMenuIngreso(_supabase: SupabaseClient, chatId: strin
           [{ text: '📄 Notas precargadas (pendientes de ingreso)', callback_data: `${PREFIX_CARGA}notas_pendientes` }],
           [{ text: '🧾 Ingreso con factura · con foto (IA)', callback_data: `${PREFIX_CARGA}ingreso_ia` }],
           [{ text: '🧾 Ingreso con factura · manual', callback_data: `${PREFIX_CARGA}ingreso_manual` }],
+          [{ text: '📄 Nota de entrega · con foto (IA)', callback_data: `${PREFIX_CARGA}nota_ingreso_ia` }],
+          [{ text: '📄 Nota de entrega · manual', callback_data: `${PREFIX_CARGA}nota_ingreso_manual` }],
         ],
       },
     },
@@ -90,6 +93,12 @@ export async function manejarCallbackCarga(
       return true;
     case 'ingreso_ia':
       await manejarComandoIngresoFacturaManualTelegram(supabase, params.chatId);
+      return true;
+    case 'nota_ingreso_ia':
+      await manejarComandoNotaEntregaIaTelegram(supabase, params.chatId);
+      return true;
+    case 'nota_ingreso_manual':
+      await manejarComandoNotaEntregaTelegram(supabase, params.chatId);
       return true;
     case 'ingreso_manual':
       await manejarComandoIngresoFacturaSinIaTelegram(supabase, params.chatId);

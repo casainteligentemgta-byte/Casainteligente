@@ -163,6 +163,8 @@ export type MetadataIngresoManual = {
   foto_inicial?: boolean;
   /** Ingreso manual de factura sin IA: sin foto al inicio. */
   sin_ia?: boolean;
+  /** Nota de entrega con IA: foto primero (depositario). */
+  con_ia?: boolean;
   /** Líneas detectadas por OCR pendientes de categoría/cantidad en bot. */
   ocr_lineas_pendientes?: OcrLineaPendienteIngreso[];
   ocr_aviso_sin_resolver?: string;
@@ -521,7 +523,10 @@ async function iniciarFlujoRecepcionCampo(
   pickerModo: PickerModoRecepcionCampo,
   extraMeta?: Partial<MetadataIngresoManual>,
 ): Promise<void> {
-  if (flujo === FLUJO_INGRESO_FACTURA_MANUAL && !extraMeta?.ingreso_ocr_auto && !extraMeta?.sin_ia) {
+  const fotoPrimero =
+    (flujo === FLUJO_INGRESO_FACTURA_MANUAL && !extraMeta?.ingreso_ocr_auto && !extraMeta?.sin_ia) ||
+    (flujo === FLUJO_NOTA_ENTREGA && extraMeta?.con_ia === true);
+  if (fotoPrimero) {
     await aplicarMetadataFlujoRecepcionCampo(supabase, chatId, {
       flujo,
       proyectoId: null,
@@ -530,7 +535,13 @@ async function iniciarFlujoRecepcionCampo(
     await patchMeta(supabase, chatId, await getTelegramEstado(supabase, chatId), {
       paso: 'foto_inicial',
     });
-    await sendTelegramMessage(chatId, '🧾 <b>Ingreso manual de factura</b>\n\n📷 Envíe <b>primero la foto</b> de la factura. La IA leerá proveedor, número y artículos; después elige obra y almacén.\n\n<code>/cancelar</code> para salir.', { parse_mode: 'HTML' });
+    await sendTelegramMessage(
+      chatId,
+      flujo === FLUJO_NOTA_ENTREGA
+        ? '📄 <b>Nota de entrega con IA</b>\n\n📷 Envíe <b>primero la foto</b> de la nota. La IA leerá proveedor, número y artículos; después elige obra y almacén.\n\n<code>/cancelar</code> para salir.'
+        : '🧾 <b>Ingreso manual de factura</b>\n\n📷 Envíe <b>primero la foto</b> de la factura. La IA leerá proveedor, número y artículos; después elige obra y almacén.\n\n<code>/cancelar</code> para salir.',
+      { parse_mode: 'HTML' },
+    );
     return;
   }
   await aplicarMetadataFlujoRecepcionCampo(supabase, chatId, {
@@ -603,6 +614,16 @@ export async function manejarComandoIngresoSinNotaTelegram(
 }
 
 /** Nota de entrega sin factura: mismo flujo estructurado con registro de stock inmediato. */
+/** Nota de entrega con IA (depositario): foto primero, luego obra, almacén y líneas. */
+export async function manejarComandoNotaEntregaIaTelegram(
+  supabase: SupabaseClient,
+  chatId: string,
+): Promise<void> {
+  await iniciarFlujoRecepcionCampo(supabase, chatId, FLUJO_NOTA_ENTREGA, 'nota_entrega', {
+    con_ia: true,
+  });
+}
+
 export async function manejarComandoNotaEntregaTelegram(
   supabase: SupabaseClient,
   chatId: string,
@@ -663,7 +684,8 @@ async function recibirFotoInicialIngreso(params: {
     '📷 Foto recibida. Ahora elija la <b>obra</b> de la factura.',
     { parse_mode: 'HTML' },
   );
-  await enviarPickerProyectosTelegram(params.supabase, params.chatId, 'ingreso_factura_manual');
+  const modoObra = meta(estado).flujo === FLUJO_NOTA_ENTREGA ? 'nota_entrega' : 'ingreso_factura_manual';
+  await enviarPickerProyectosTelegram(params.supabase, params.chatId, modoObra);
   return true;
 }
 
@@ -801,7 +823,9 @@ export async function prepararIngresoManualTrasObra(
   const estadoPrev = await getTelegramEstado(supabase, chatId);
   const prevMeta = meta(estadoPrev);
   const { entidad_id, entidad_nombre } = await resolverEntidadMetadataProyecto(supabase, proyectoId);
-  const fotoInicial = flujo === FLUJO_INGRESO_FACTURA_MANUAL && prevMeta.foto_inicial === true;
+  const fotoInicial =
+    (flujo === FLUJO_INGRESO_FACTURA_MANUAL || flujo === FLUJO_NOTA_ENTREGA) &&
+    prevMeta.foto_inicial === true;
   await aplicarMetadataFlujoRecepcionCampo(supabase, chatId, {
     flujo,
     proyectoId,
@@ -1059,7 +1083,7 @@ async function avanzarTrasProveedor(
 ): Promise<void> {
   const flujo = flujoActivo(estado);
   const m = meta(estado);
-  if (m.foto_inicial && flujo === FLUJO_INGRESO_FACTURA_MANUAL) {
+  if (m.foto_inicial && (flujo === FLUJO_INGRESO_FACTURA_MANUAL || flujo === FLUJO_NOTA_ENTREGA)) {
     await patchMeta(supabase, chatId, estado, {
       proveedor_nombre: params.proveedorNombre.trim(),
       proveedor_id: params.proveedorId?.trim() || undefined,
@@ -1884,7 +1908,7 @@ async function continuarTrasAlmacenIngreso(
     await enviarConfirmacion(supabase, chatId, fresco);
     return;
   }
-  if (m.foto_inicial && (flujoNorm ?? m.flujo) === FLUJO_INGRESO_FACTURA_MANUAL) {
+  if (m.foto_inicial && [FLUJO_INGRESO_FACTURA_MANUAL, FLUJO_NOTA_ENTREGA].includes(String(flujoNorm ?? m.flujo))) {
     await patchMeta(supabase, chatId, estado, {
       ubicacion_id: ubicacionId,
       ubicacion_nombre: ubicacionNombre,
