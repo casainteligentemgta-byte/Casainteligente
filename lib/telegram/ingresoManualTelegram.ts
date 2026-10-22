@@ -13,7 +13,7 @@ import {
   obtenerNotaPrecargada,
   separarLineasPrecarga,
 } from '@/lib/almacen/notasPrecargadas';
-import { esChatComprador } from '@/lib/telegram/compradorRestricciones';
+import { esChatCargaComprador } from '@/lib/telegram/compradorRestricciones';
 import { prepararPrecargaNotaComprador } from '@/lib/telegram/notaPrecargaTelegram';
 import {
   crearMaterialParaLineaCompra,
@@ -92,6 +92,7 @@ const FLUJOS_RECEPCION_CAMPO = new Set<string>([
 export type PasoIngresoManual =
   | 'almacen'
   | 'web'
+  | 'foto_inicial'
   | 'ocr_factura'
   | 'proveedor'
   | 'num_doc'
@@ -158,6 +159,12 @@ export type MetadataIngresoManual = {
   recepcion_campo_registrada_id?: string;
   /** /ingreso → ingreso automático: OCR de factura tras elegir almacén. */
   ingreso_ocr_auto?: boolean;
+  /** Ingreso manual de factura: foto recibida antes de obra y almacén. */
+  foto_inicial?: boolean;
+  /** Ingreso manual de factura sin IA: sin foto al inicio. */
+  sin_ia?: boolean;
+  /** Nota de entrega con IA: foto primero (depositario). */
+  con_ia?: boolean;
   /** Líneas detectadas por OCR pendientes de categoría/cantidad en bot. */
   ocr_lineas_pendientes?: OcrLineaPendienteIngreso[];
   ocr_aviso_sin_resolver?: string;
@@ -516,6 +523,27 @@ async function iniciarFlujoRecepcionCampo(
   pickerModo: PickerModoRecepcionCampo,
   extraMeta?: Partial<MetadataIngresoManual>,
 ): Promise<void> {
+  const fotoPrimero =
+    (flujo === FLUJO_INGRESO_FACTURA_MANUAL && !extraMeta?.ingreso_ocr_auto && !extraMeta?.sin_ia) ||
+    (flujo === FLUJO_NOTA_ENTREGA && extraMeta?.con_ia === true);
+  if (fotoPrimero) {
+    await aplicarMetadataFlujoRecepcionCampo(supabase, chatId, {
+      flujo,
+      proyectoId: null,
+      extra: { foto_inicial: true },
+    });
+    await patchMeta(supabase, chatId, await getTelegramEstado(supabase, chatId), {
+      paso: 'foto_inicial',
+    });
+    await sendTelegramMessage(
+      chatId,
+      flujo === FLUJO_NOTA_ENTREGA
+        ? '📄 <b>Nota de entrega con IA</b>\n\n📷 Envíe <b>primero la foto</b> de la nota. La IA leerá proveedor, número y artículos; después elige obra y almacén.\n\n<code>/cancelar</code> para salir.'
+        : '🧾 <b>Ingreso manual de factura</b>\n\n📷 Envíe <b>primero la foto</b> de la factura. La IA leerá proveedor, número y artículos; después elige obra y almacén.\n\n<code>/cancelar</code> para salir.',
+      { parse_mode: 'HTML' },
+    );
+    return;
+  }
   await aplicarMetadataFlujoRecepcionCampo(supabase, chatId, {
     flujo,
     proyectoId: null,
@@ -564,6 +592,20 @@ export async function manejarComandoIngresoFacturaManualTelegram(
 }
 
 /** Ingreso sin nota: mismo flujo guiado en Telegram que factura manual (tipo emergencia en stock). */
+/** Factura manual sin IA: sin foto; se escriben proveedor, número y materiales. */
+export async function manejarComandoIngresoFacturaSinIaTelegram(
+  supabase: SupabaseClient,
+  chatId: string,
+): Promise<void> {
+  await iniciarFlujoRecepcionCampo(
+    supabase,
+    chatId,
+    FLUJO_INGRESO_FACTURA_MANUAL,
+    'ingreso_factura_manual',
+    { sin_ia: true },
+  );
+}
+
 export async function manejarComandoIngresoSinNotaTelegram(
   supabase: SupabaseClient,
   chatId: string,
@@ -572,12 +614,22 @@ export async function manejarComandoIngresoSinNotaTelegram(
 }
 
 /** Nota de entrega sin factura: mismo flujo estructurado con registro de stock inmediato. */
+/** Nota de entrega con IA (depositario): foto primero, luego obra, almacén y líneas. */
+export async function manejarComandoNotaEntregaIaTelegram(
+  supabase: SupabaseClient,
+  chatId: string,
+): Promise<void> {
+  await iniciarFlujoRecepcionCampo(supabase, chatId, FLUJO_NOTA_ENTREGA, 'nota_entrega', {
+    con_ia: true,
+  });
+}
+
 export async function manejarComandoNotaEntregaTelegram(
   supabase: SupabaseClient,
   chatId: string,
 ): Promise<void> {
   // Comprador: solo precarga la nota por foto; el ingreso al almacén lo hace el depositario.
-  if (await esChatComprador(supabase, chatId)) {
+  if (await esChatCargaComprador(supabase, chatId)) {
     await sendTelegramMessage(
       chatId,
       '📄 <b>Nota de entrega</b>\n\nElija la obra. Luego envíe la foto de la nota.',
@@ -597,6 +649,169 @@ export async function manejarComandoEmergenciaTelegram(
   await iniciarFlujoRecepcionCampo(supabase, chatId, FLUJO_EMERGENCIA, 'emergencia');
 }
 
+/** Ingreso manual de factura: primero se recibe la foto; la lectura IA ocurre tras elegir obra y almacén. */
+async function recibirFotoInicialIngreso(params: {
+  supabase: SupabaseClient;
+  chatId: string;
+  userId: string;
+  username?: string | null;
+  buffer: Buffer;
+  mimeType: string;
+  ext: string;
+  fileName?: string;
+}): Promise<boolean> {
+  const storagePath = `recepciones-campo/telegram-factura-inicial-${params.chatId}/${Date.now()}.${params.ext}`;
+  const { error: upErr } = await params.supabase.storage
+    .from(PROCUREMENT_DOCUMENTS_BUCKET)
+    .upload(storagePath, params.buffer, { contentType: params.mimeType, upsert: false });
+  if (upErr) {
+    await sendTelegramMessage(params.chatId, '❌ No se pudo guardar la foto.', { parse_mode: 'HTML' });
+    return true;
+  }
+  const estado = await getTelegramEstado(params.supabase, params.chatId);
+  await patchMeta(params.supabase, params.chatId, estado, {
+    paso: 'almacen',
+    foto_inicial: true,
+    soporte_storage_path: storagePath,
+    soporte_file_name: params.fileName ?? `factura.${params.ext}`,
+    soporte_mime_type: params.mimeType,
+    fotos_storage_paths: [storagePath],
+    telegram_user_id: params.userId,
+    telegram_username: params.username ?? null,
+  });
+  await sendTelegramMessage(
+    params.chatId,
+    '📷 Foto recibida. Ahora elija la <b>obra</b> de la factura.',
+    { parse_mode: 'HTML' },
+  );
+  const modoObra = meta(estado).flujo === FLUJO_NOTA_ENTREGA ? 'nota_entrega' : 'ingreso_factura_manual';
+  await enviarPickerProyectosTelegram(params.supabase, params.chatId, modoObra);
+  return true;
+}
+
+/** Lee la foto guardada (proveedor, número y artículos) y continúa con lo que falte. */
+async function leerFotoInicialIngreso(
+  supabase: SupabaseClient,
+  chatId: string,
+  estado: TelegramEstado,
+): Promise<void> {
+  const m = meta(estado);
+  const storagePath = m.soporte_storage_path;
+  const proyectoId = estado.proyecto_id;
+  if (!storagePath || !proyectoId) {
+    await sendTelegramMessage(
+      chatId,
+      '⚠️ Falta la foto o la obra. Use <code>/cancelar</code> y vuelva a empezar.',
+      { parse_mode: 'HTML' },
+    );
+    return;
+  }
+
+  await sendTelegramMessage(chatId, '🤖 Leyendo la factura…', { parse_mode: 'HTML' });
+
+  let proveedorOcr = '';
+  let numDoc: string | undefined;
+  const lineasOcr: OcrLineaPendienteIngreso[] = [];
+  let avisoSinResolver: string | undefined;
+  try {
+    const { data: blob, error: dlErr } = await supabase.storage
+      .from(PROCUREMENT_DOCUMENTS_BUCKET)
+      .download(storagePath);
+    if (dlErr || !blob) throw new Error(dlErr?.message ?? 'No se pudo abrir la foto');
+    const buffer = Buffer.from(await blob.arrayBuffer());
+    const { data: extracted } = await extractPurchaseInvoiceFromFile({
+      buffer,
+      mimeType: m.soporte_mime_type ?? 'image/jpeg',
+      fileName: m.soporte_file_name ?? 'factura.jpg',
+    });
+    proveedorOcr = String(extracted.supplier_name ?? '').trim();
+    const numLeido = String(extracted.invoice_number ?? '').trim();
+    numDoc = numLeido && numLeido.toUpperCase() !== 'S/N' ? numLeido : undefined;
+    let sinResolver = 0;
+    for (const item of extracted.items ?? []) {
+      const descripcion = String(item.description ?? '').trim();
+      if (!descripcion) continue;
+      const cantidad = Number(item.quantity) > 0 ? Number(item.quantity) : 1;
+      const unidad = normalizarCodigoUnidad(String(item.unit ?? 'UND'));
+      const resuelto = await resolverMaterialParaLineaCompra(supabase, {
+        description: descripcion,
+        item_code: String(item.item_code ?? '').trim() || undefined,
+        proyectoId,
+      });
+      if (!resuelto?.id) {
+        sinResolver += 1;
+        continue;
+      }
+      lineasOcr.push({
+        material_id: resuelto.id,
+        material_nombre: resuelto.name || descripcion,
+        unidad,
+        cantidad,
+      });
+    }
+    avisoSinResolver =
+      sinResolver > 0
+        ? `${sinResolver} artículo(s) no se vincularon al catálogo; podrá agregarlos manualmente.`
+        : undefined;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Error OCR';
+    await sendTelegramMessage(
+      chatId,
+      `❌ No se pudo leer la factura.\n${escHtml(msg)}\n\nSe continúa con carga manual.`,
+      { parse_mode: 'HTML' },
+    );
+  }
+
+  await patchMeta(supabase, chatId, estado, {
+    ...(m.proveedor_nombre?.trim() || !proveedorOcr ? {} : { proveedor_nombre: proveedorOcr }),
+    ...(numDoc ? { num_doc: numDoc } : {}),
+    ocr_lineas_pendientes: lineasOcr,
+    ocr_aviso_sin_resolver: avisoSinResolver,
+  });
+
+  const fresco = await getTelegramEstado(supabase, chatId);
+  const mf = meta(fresco);
+  if (numDoc || lineasOcr.length) {
+    await sendTelegramMessage(
+      chatId,
+      '✅ <b>Factura leída</b>' +
+        (numDoc ? `\n📄 Nº <code>${escHtml(numDoc)}</code>` : '') +
+        (lineasOcr.length ? `\n📦 ${lineasOcr.length} artículo(s) detectado(s).` : ''),
+      { parse_mode: 'HTML' },
+    );
+  }
+
+  if (!mf.proveedor_nombre?.trim()) {
+    await enviarPickerProveedorIngresoManual(
+      supabase,
+      chatId,
+      proyectoId,
+      mf.ubicacion_nombre ?? 'Almacén',
+    );
+    return;
+  }
+  await continuarTrasProveedorFotoInicial(supabase, chatId, fresco);
+}
+
+/** Tras proveedor en el flujo con foto: pide Nº solo si la IA no lo leyó; luego las líneas. */
+async function continuarTrasProveedorFotoInicial(
+  supabase: SupabaseClient,
+  chatId: string,
+  estado: TelegramEstado,
+): Promise<void> {
+  const m = meta(estado);
+  if (m.num_doc?.trim()) {
+    await iniciarSiguienteLineaOcrPendiente(supabase, chatId, estado);
+    return;
+  }
+  await patchMeta(supabase, chatId, estado, { paso: 'num_doc' });
+  await sendTelegramMessage(
+    chatId,
+    `🏢 Proveedor: <b>${escHtml(m.proveedor_nombre ?? '')}</b>\n\n📄 Escribe el <b>número de factura</b> (<code>S/N</code> si no hay):`,
+    { parse_mode: 'HTML' },
+  );
+}
+
 export async function prepararIngresoManualTrasObra(
   supabase: SupabaseClient,
   chatId: string,
@@ -608,18 +823,52 @@ export async function prepararIngresoManualTrasObra(
   const estadoPrev = await getTelegramEstado(supabase, chatId);
   const prevMeta = meta(estadoPrev);
   const { entidad_id, entidad_nombre } = await resolverEntidadMetadataProyecto(supabase, proyectoId);
+  const fotoInicial =
+    (flujo === FLUJO_INGRESO_FACTURA_MANUAL || flujo === FLUJO_NOTA_ENTREGA) &&
+    prevMeta.foto_inicial === true;
   await aplicarMetadataFlujoRecepcionCampo(supabase, chatId, {
     flujo,
     proyectoId,
     entidad_id,
     entidad_nombre,
-    extra:
-      flujo === FLUJO_INGRESO_FACTURA_MANUAL &&
-      prevMeta.flujo === FLUJO_INGRESO_FACTURA_MANUAL &&
-      prevMeta.ingreso_ocr_auto
+    extra: fotoInicial
+      ? {
+          foto_inicial: true,
+          soporte_storage_path: prevMeta.soporte_storage_path,
+          soporte_file_name: prevMeta.soporte_file_name,
+          soporte_mime_type: prevMeta.soporte_mime_type,
+          fotos_storage_paths: prevMeta.fotos_storage_paths ?? [],
+          telegram_user_id: prevMeta.telegram_user_id,
+          telegram_username: prevMeta.telegram_username ?? null,
+        }
+      : flujo === FLUJO_INGRESO_FACTURA_MANUAL &&
+          prevMeta.flujo === FLUJO_INGRESO_FACTURA_MANUAL &&
+          prevMeta.ingreso_ocr_auto
         ? { ingreso_ocr_auto: true }
         : undefined,
   });
+  // Una sola ubicación de almacén en la obra: se usa sin preguntar, en cualquier flujo.
+  const almacenes = await listarUbicacionesParaSelector(supabase, {
+    proyectoId,
+    soloAlmacenes: true,
+  });
+  if (almacenes.length === 1) {
+    const unico = almacenes[0];
+    await sendTelegramMessage(
+      chatId,
+      `✅ Almacén: <b>${escHtml(String(unico.nombre))}</b> (único de la obra)`,
+      { parse_mode: 'HTML' },
+    );
+    await continuarTrasAlmacenIngreso(
+      supabase,
+      chatId,
+      await getTelegramEstado(supabase, chatId),
+      proyectoId,
+      unico.id,
+      String(unico.nombre),
+    );
+    return;
+  }
   await enviarPickerAlmacenIngresoManual(supabase, chatId, proyectoId, nombre, 0, entidad_nombre);
 }
 
@@ -628,7 +877,7 @@ export async function prepararNotaEntregaIngresoTrasObra(
   chatId: string,
   proyectoId: string,
 ): Promise<void> {
-  if (await esChatComprador(supabase, chatId)) {
+  if (await esChatCargaComprador(supabase, chatId)) {
     await prepararPrecargaNotaComprador(supabase, chatId, proyectoId);
     return;
   }
@@ -834,6 +1083,16 @@ async function avanzarTrasProveedor(
 ): Promise<void> {
   const flujo = flujoActivo(estado);
   const m = meta(estado);
+  if (m.foto_inicial && (flujo === FLUJO_INGRESO_FACTURA_MANUAL || flujo === FLUJO_NOTA_ENTREGA)) {
+    await patchMeta(supabase, chatId, estado, {
+      proveedor_nombre: params.proveedorNombre.trim(),
+      proveedor_id: params.proveedorId?.trim() || undefined,
+      telegram_user_id: params.telegramUserId,
+      telegram_username: params.telegramUsername ?? null,
+    });
+    await continuarTrasProveedorFotoInicial(supabase, chatId, await getTelegramEstado(supabase, chatId));
+    return;
+  }
   const pasoSiguiente =
     m.ingreso_ocr_auto && flujo === FLUJO_INGRESO_FACTURA_MANUAL ? 'ocr_factura' : 'num_doc';
 
@@ -939,6 +1198,11 @@ async function continuarTrasNumDocIngreso(
   estado: TelegramEstado,
   numDoc: string,
 ): Promise<void> {
+  if (meta(estado).foto_inicial) {
+    await patchMeta(supabase, chatId, estado, { num_doc: numDoc });
+    await iniciarSiguienteLineaOcrPendiente(supabase, chatId, await getTelegramEstado(supabase, chatId));
+    return;
+  }
   await patchMeta(supabase, chatId, estado, { paso: 'material', num_doc: numDoc });
   const flujoMat = flujoActivo(estado);
   const etiquetaDoc =
@@ -1620,6 +1884,72 @@ async function registrarIngresoManual(
   return { ok: true, recepcionId: id };
 }
 
+/** Tras elegir almacén (manual o automático por ser el único de la obra). */
+async function continuarTrasAlmacenIngreso(
+  supabase: SupabaseClient,
+  chatId: string,
+  estado: TelegramEstado,
+  proyectoId: string,
+  ubicacionId: string,
+  ubicacionNombre: string,
+): Promise<void> {
+  const m = meta(estado);
+  const flujoNorm = normalizarFlujoRecepcionCampo(m.flujo);
+  if (flujoNorm && flujoNorm !== m.flujo) {
+    await patchMeta(supabase, chatId, estado, { flujo: flujoNorm });
+  }
+  if (m.precarga_id) {
+    // Nota precargada: ya trae proveedor, nº y líneas; solo falta el almacén → confirmar.
+    await patchMeta(supabase, chatId, estado, {
+      ubicacion_id: ubicacionId,
+      ubicacion_nombre: ubicacionNombre,
+    });
+    const fresco = await getTelegramEstado(supabase, chatId);
+    await enviarConfirmacion(supabase, chatId, fresco);
+    return;
+  }
+  if (m.foto_inicial && [FLUJO_INGRESO_FACTURA_MANUAL, FLUJO_NOTA_ENTREGA].includes(String(flujoNorm ?? m.flujo))) {
+    await patchMeta(supabase, chatId, estado, {
+      ubicacion_id: ubicacionId,
+      ubicacion_nombre: ubicacionNombre,
+    });
+    await leerFotoInicialIngreso(supabase, chatId, await getTelegramEstado(supabase, chatId));
+    return;
+  }
+  if (flujoUsaHandoffWebTrasAlmacen(flujoNorm ?? m.flujo)) {
+    await enviarHandoffRecepcionWebTrasAlmacen(
+      supabase,
+      chatId,
+      estado,
+      ubicacionId,
+      ubicacionNombre,
+    );
+  } else {
+    await patchMeta(supabase, chatId, estado, {
+      paso: 'proveedor',
+      ubicacion_id: ubicacionId,
+      ubicacion_nombre: ubicacionNombre,
+      ...(flujoNorm ? { flujo: flujoNorm } : {}),
+    });
+    if (flujoTelegramCompletoEnBot(flujoNorm ?? m.flujo)) {
+      await enviarPickerProveedorIngresoManual(
+        supabase,
+        chatId,
+        proyectoId,
+        ubicacionNombre,
+      );
+    } else {
+      await sendTelegramMessage(
+        chatId,
+        `✅ Almacén: <b>${escHtml(ubicacionNombre)}</b>\n\n` +
+          '✏️ Escribe el <b>nombre del proveedor</b>:',
+        { parse_mode: 'HTML' },
+      );
+    }
+  }
+  return;
+}
+
 export async function manejarCallbackIngresoManual(
   supabase: SupabaseClient,
   params: { chatId: string; callbackId: string; data: string },
@@ -1671,51 +2001,7 @@ export async function manejarCallbackIngresoManual(
       return true;
     }
     await answerCallbackQuery(params.callbackId, String(ubi.nombre));
-    const flujoNorm = normalizarFlujoRecepcionCampo(m.flujo);
-    if (flujoNorm && flujoNorm !== m.flujo) {
-      await patchMeta(supabase, params.chatId, estado, { flujo: flujoNorm });
-    }
-    if (m.precarga_id) {
-      // Nota precargada: ya trae proveedor, nº y líneas; solo falta el almacén → confirmar.
-      await patchMeta(supabase, params.chatId, estado, {
-        ubicacion_id: ubicacionId,
-        ubicacion_nombre: String(ubi.nombre),
-      });
-      const fresco = await getTelegramEstado(supabase, params.chatId);
-      await enviarConfirmacion(supabase, params.chatId, fresco);
-      return true;
-    }
-    if (flujoUsaHandoffWebTrasAlmacen(flujoNorm ?? m.flujo)) {
-      await enviarHandoffRecepcionWebTrasAlmacen(
-        supabase,
-        params.chatId,
-        estado,
-        ubicacionId,
-        String(ubi.nombre),
-      );
-    } else {
-      await patchMeta(supabase, params.chatId, estado, {
-        paso: 'proveedor',
-        ubicacion_id: ubicacionId,
-        ubicacion_nombre: String(ubi.nombre),
-        ...(flujoNorm ? { flujo: flujoNorm } : {}),
-      });
-      if (flujoTelegramCompletoEnBot(flujoNorm ?? m.flujo)) {
-        await enviarPickerProveedorIngresoManual(
-          supabase,
-          params.chatId,
-          proyectoId,
-          String(ubi.nombre),
-        );
-      } else {
-        await sendTelegramMessage(
-          params.chatId,
-          `✅ Almacén: <b>${escHtml(String(ubi.nombre))}</b>\n\n` +
-            '✏️ Escribe el <b>nombre del proveedor</b>:',
-          { parse_mode: 'HTML' },
-        );
-      }
-    }
+    await continuarTrasAlmacenIngreso(supabase, params.chatId, estado, proyectoId, ubicacionId, String(ubi.nombre));
     return true;
   }
 
@@ -2120,6 +2406,11 @@ export async function manejarTextoIngresoManual(
   const paso = m.paso;
   const trimmed = texto.trim();
 
+  if (paso === 'foto_inicial') {
+    await sendTelegramMessage(chatId, '📷 Primero envíe la <b>foto</b> de la factura.', { parse_mode: 'HTML' });
+    return true;
+  }
+
   if (paso === 'web') {
     const link = urlRecepcionDesdeMetadata(m);
     await sendTelegramMessage(
@@ -2310,6 +2601,7 @@ export async function manejarFotoIngresoManual(params: {
   if (!esFlujoIngresoManual(estado)) return false;
 
   const paso = meta(estado).paso;
+  if (paso === 'foto_inicial') return recibirFotoInicialIngreso(params);
   if (paso === 'ocr_factura') {
     if (!estado.proyecto_id) return false;
     try {

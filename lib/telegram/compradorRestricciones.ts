@@ -47,3 +47,28 @@ export async function esChatComprador(
     return false;
   }
 }
+
+/**
+ * Quien carga facturas y notas con flujo de comprador (eligen obra y destino):
+ * comprador, administrador o project manager. No bloquea movimientos de almacén.
+ */
+export async function esChatCargaComprador(
+  supabase: SupabaseClient,
+  chatId: string | number,
+): Promise<boolean> {
+  if (await esChatComprador(supabase, chatId)) return true;
+  try {
+    const chat = Number(String(chatId));
+    const { data, error } = await supabase
+      .from('ci_usuarios_sistema_telegram')
+      .select('id, rol, es_project_manager')
+      .eq('telegram_id', chat)
+      .eq('activo', true)
+      .limit(1);
+    if (error || !data?.length) return false;
+    const u = data[0] as { rol?: string | null; es_project_manager?: boolean | null };
+    return u.rol === 'Administrador' || u.es_project_manager === true;
+  } catch {
+    return false;
+  }
+}

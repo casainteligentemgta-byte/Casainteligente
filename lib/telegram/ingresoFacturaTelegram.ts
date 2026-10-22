@@ -448,7 +448,7 @@ async function enviarListaProveedores(
     await setTelegramContexto(supabase, chatId, { contexto: 'menu', metadata: {} });
     await sendTelegramMessage(
       chatId,
-      '✅ No hay facturas precargadas pendientes (ni ingreso ni confirmación de compra).',
+      '✅ No hay facturas precargadas pendientes de ingreso (ni ingreso ni confirmación de compra).',
       { parse_mode: 'HTML' },
     );
     return;
