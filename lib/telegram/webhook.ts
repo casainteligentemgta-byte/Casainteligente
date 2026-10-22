@@ -187,6 +187,7 @@ import {
   manejarTextoAvanceCampo,
 } from '@/lib/telegram/avanceCampo';
 import { manejarStartVinculoTelegram } from '@/lib/telegram/telegramVinculo';
+import { manejarCallbackObraSugeridaCompra } from '@/lib/telegram/flujoFacturaCompradorTelegram';
 import {
   esCallbackUbicacion,
   esCallbackPropietario,
@@ -800,6 +801,16 @@ export async function handleTelegramCallbackQuery(
       });
       if (handledProp) {
         return NextResponse.json({ ok: true, callback: 'propietario_obra' });
+      }
+    }
+    if (cq.data?.startsWith('fd:')) {
+      const handledFd = await manejarCallbackObraSugeridaCompra(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+      });
+      if (handledFd) {
+        return NextResponse.json({ ok: true, callback: 'obra_sugerida_compra' });
       }
     }
     if (esCallbackUbicacion(cq.data)) {
