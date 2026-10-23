@@ -43,12 +43,12 @@ import {
 } from '@/lib/telegram/memoriaObra';
 import {
   esCallbackFacturaOk,
-  iniciarModoCargaFacturasTelegram,
   manejarCallbackFacturaOkTelegram,
 } from '@/lib/telegram/mensajesFactura';
 import {
   esCallbackMenuFacturasComprador,
   manejarCallbackMenuFacturasCompradorTelegram,
+  enviarMenuFacturasCompradorTelegram,
 } from '@/lib/telegram/menuFacturasCompradorTelegram';
 import {
   esCallbackFacturaOrdenCompraProcura,
@@ -489,8 +489,7 @@ async function manejarComandoFacturasDirecto(
   warn?: string;
 }> {
   try {
-    // /factura pide la foto de inmediato; el menú foto/manual ya no se muestra.
-    await iniciarModoCargaFacturasTelegram(supabase, chatId);
+    await enviarMenuFacturasCompradorTelegram(supabase, chatId);
   } catch (err) {
     console.error('[telegram /facturas menu]', err);
     return { ok: true, warn: 'menu' };
