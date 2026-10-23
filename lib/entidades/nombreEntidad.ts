@@ -6,6 +6,9 @@ export type EntidadConNombre = {
   nombre?: string | null;
   customer_id?: string | null;
   customers?: { nombre?: string | null } | { nombre?: string | null }[] | null;
+  /** Otras columnas de ci_entidades que cada consulta añade (id, rif, etc.). */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [columna: string]: any;
 };
 
 /** Columnas para un select de ci_entidades que necesita el nombre. */
