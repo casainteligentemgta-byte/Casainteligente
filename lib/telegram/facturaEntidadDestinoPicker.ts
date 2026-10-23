@@ -17,6 +17,11 @@ import {
   tecladoFacturaRegistradaOk,
 } from '@/lib/telegram/mensajesFactura';
 import { procuraIdDesdeMetadataFactura } from '@/lib/telegram/facturaCompradorManualTelegram';
+import {
+  EntidadConNombre,
+  SELECT_NOMBRE_ENTIDAD,
+  nombreEntidad,
+} from '@/lib/entidades/nombreEntidad';
 
 export const FLUJO_FACTURA_ENTIDAD = 'factura_compra_entidad';
 
@@ -78,16 +83,17 @@ async function listarEntidadesActivas(
 
   const { data: entidades, error: eErr } = await supabase
     .from('ci_entidades')
-    .select('id, nombre')
-    .in('id', ids.slice(0, 200))
-    .order('nombre');
+    .select(SELECT_NOMBRE_ENTIDAD)
+    .in('id', ids.slice(0, 200));
   if (eErr?.code === '42P01') return [];
   if (eErr) throw new Error(eErr.message);
 
-  return (entidades ?? []).map((e) => ({
-    id: String(e.id),
-    nombre: String(e.nombre ?? 'Sin nombre').trim() || 'Sin nombre',
-  }));
+  return (entidades ?? [])
+    .map((e) => ({
+      id: String(e.id),
+      nombre: nombreEntidad(e as EntidadConNombre, 'Sin nombre'),
+    }))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
 }
 
 export async function enviarPickerEntidadesFacturaTelegram(

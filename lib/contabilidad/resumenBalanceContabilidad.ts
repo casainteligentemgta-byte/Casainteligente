@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { IMPUTACION_ENTIDAD } from '@/lib/contabilidad/imputacionCompra';
+import { EntidadConNombre, SELECT_NOMBRE_ENTIDAD, nombreEntidad } from '@/lib/entidades/nombreEntidad';
 
 export type FilaEgresoObra = {
   proyecto_id: string;
@@ -236,12 +237,12 @@ export async function cargarResumenBalanceContabilidad(
   if (entidadIds.length) {
     const { data: entRows } = await supabase
       .from('ci_entidades')
-      .select('id,nombre')
+      .select(SELECT_NOMBRE_ENTIDAD)
       .in('id', entidadIds.slice(0, 100));
     for (const e of entRows ?? []) {
       const id = String((e as { id: string }).id);
       const fila = ingresosMap.get(id);
-      if (fila) fila.entidad_nombre = String((e as { nombre?: string }).nombre ?? 'Entidad').trim();
+      if (fila) fila.entidad_nombre = nombreEntidad(e as EntidadConNombre, 'Entidad');
     }
   }
 
