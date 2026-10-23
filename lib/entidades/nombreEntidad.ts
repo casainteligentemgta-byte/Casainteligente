@@ -18,3 +18,22 @@ export function nombreEntidad(entidad: EntidadConNombre | null | undefined, fall
   const nombre = String(cliente ?? entidad.nombre ?? '').trim();
   return nombre || fallback;
 }
+
+/**
+ * Aplica el nombre resuelto a cada fila y ordena por nombre.
+ * Úsalo después de un select que incluya SELECT_NOMBRE_ENTIDAD.
+ */
+export function conNombreEntidad<T extends EntidadConNombre>(
+  rows: T[] | null | undefined,
+  fallback = 'Entidad',
+): Array<T & { nombre: string }> {
+  return (rows ?? [])
+    .map((r) => ({ ...r, nombre: nombreEntidad(r, fallback) }))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+}
+
+/** Aplica el nombre resuelto a una sola fila (maybeSingle). */
+export function conNombreFila<T extends EntidadConNombre>(row: T | null | undefined): (T & { nombre: string }) | null {
+  if (!row) return null;
+  return { ...row, nombre: nombreEntidad(row) };
+}

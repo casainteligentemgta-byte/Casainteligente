@@ -20,6 +20,7 @@ import {
 import { calcularCompensacionDiaria, formatoVES } from '@/lib/nomina/compensacionDiaria';
 import { parseClientesApiResponse } from '@/lib/proyectos/parseClientesApiResponse';
 import { moduloProyectosPageShell, moduloProyectosStickyHeader } from '@/lib/ui/moduloProyectosTheme';
+import { EntidadConNombre, SELECT_NOMBRE_ENTIDAD, conNombreEntidad, conNombreFila, nombreEntidad } from '@/lib/entidades/nombreEntidad';
 
 type InsertResult = {
   id: string;
@@ -196,7 +197,7 @@ function ProyectoNuevoPageContent() {
     let cancelled = false;
     void (async () => {
       try {
-        const { data, error: entErr } = await supabase.from('ci_entidades').select('id,nombre,rif').order('nombre');
+        const { data: entRows, error: entErr } = await supabase.from('ci_entidades').select(`${SELECT_NOMBRE_ENTIDAD}, rif`);
         if (cancelled) return;
         if (entErr) {
           setEntidades([]);
@@ -204,7 +205,7 @@ function ProyectoNuevoPageContent() {
           return;
         }
         setEntidadesHint(null);
-        setEntidades((data ?? []) as EntidadOpt[]);
+        setEntidades(conNombreEntidad((entRows ?? []) as EntidadConNombre[]) as EntidadOpt[]);
       } catch {
         if (!cancelled) {
           setEntidades([]);

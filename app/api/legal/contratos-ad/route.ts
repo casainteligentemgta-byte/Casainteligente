@@ -5,6 +5,7 @@ import {
   TIPO_CONTRATO_AD,
   type ContratoAdResumen,
 } from '@/lib/proyectos/contratoAdministracionDelegada';
+import { EntidadConNombre, SELECT_NOMBRE_ENTIDAD, conNombreEntidad, conNombreFila, nombreEntidad } from '@/lib/entidades/nombreEntidad';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -58,10 +59,10 @@ export async function GET() {
   if (entidadIds.length > 0) {
     const { data: ents } = await gate.admin
       .from('ci_entidades')
-      .select('id, nombre')
+      .select(SELECT_NOMBRE_ENTIDAD)
       .in('id', entidadIds);
     for (const e of ents ?? []) {
-      entidadNombreById.set(String(e.id), String(e.nombre ?? 'Entidad'));
+      entidadNombreById.set(String(e.id), nombreEntidad(e as EntidadConNombre));
     }
   }
 

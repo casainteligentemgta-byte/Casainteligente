@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import type { CiEntidad } from '@/types/ci-entidad';
+import { EntidadConNombre, conNombreEntidad, conNombreFila } from '@/lib/entidades/nombreEntidad';
 
 export default function EditarEntidadPage() {
   const params = useParams();
@@ -23,13 +24,13 @@ export default function EditarEntidadPage() {
     if (!id) return;
     setLoading(true);
     setError(null);
-    const { data, error: qErr } = await supabase.from('ci_entidades').select('*').eq('id', id).maybeSingle();
+    const { data, error: qErr } = await supabase.from('ci_entidades').select('*, customer_id, customers(nombre)').eq('id', id).maybeSingle();
     setLoading(false);
     if (qErr || !data) {
       setError(qErr?.message ?? 'Entidad no encontrada.');
       return;
     }
-    const r = data as CiEntidad;
+    const r = conNombreFila(data as EntidadConNombre) as CiEntidad;
     setNombre(r.nombre);
     setRif(r.rif ?? '');
     setNotas(r.notas ?? '');
@@ -45,10 +46,11 @@ export default function EditarEntidadPage() {
     if (!n || !id) return;
     setSaving(true);
     setError(null);
+    const { data: cur } = await supabase.from('ci_entidades').select('customer_id').eq('id', id).maybeSingle();
     const { error: upErr } = await supabase
       .from('ci_entidades')
       .update({
-        nombre: n,
+        ...(cur?.customer_id ? {} : { nombre: n }),
         rif: rif.trim() || null,
         notas: notas.trim() || null,
         updated_at: new Date().toISOString(),

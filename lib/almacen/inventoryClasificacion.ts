@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { EntidadConNombre, SELECT_NOMBRE_ENTIDAD, conNombreEntidad, conNombreFila, nombreEntidad } from '@/lib/entidades/nombreEntidad';
 
 export type EntidadRow = { id: string; nombre: string; rif: string | null };
 export type ProyectoRow = {
@@ -24,10 +25,9 @@ export type InventarioClasificacionValue = {
 export async function loadEntidades(supabase: SupabaseClient): Promise<EntidadRow[]> {
   const { data, error } = await supabase
     .from('ci_entidades')
-    .select('id,nombre,rif')
-    .order('nombre');
+    .select(`${SELECT_NOMBRE_ENTIDAD}, rif`);
   if (error) throw error;
-  return (data ?? []) as EntidadRow[];
+  return conNombreEntidad((data ?? []) as EntidadConNombre[]) as EntidadRow[];
 }
 
 export async function loadProyectos(supabase: SupabaseClient): Promise<ProyectoRow[]> {
