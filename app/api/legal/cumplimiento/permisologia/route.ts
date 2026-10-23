@@ -23,7 +23,12 @@ export async function GET() {
   }
 
   const items: PermisologiaVencimientoItem[] = [];
-  const entidades = conNombreEntidad(data as EntidadConNombre[] | null).map((row) => {
+  type FilaEntidadPermisos = EntidadConNombre & {
+    id: string;
+    rif: string | null;
+    permisologia: Parameters<typeof extraerVencimientosEntidad>[0]['permisologia'];
+  };
+  const entidades = conNombreEntidad(data as FilaEntidadPermisos[] | null).map((row) => {
     const vencimientos = extraerVencimientosEntidad({
       id: String(row.id),
       nombre: row.nombre,
