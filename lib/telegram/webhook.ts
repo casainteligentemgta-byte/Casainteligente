@@ -486,6 +486,12 @@ async function manejarComandoFacturasDirecto(
   warn?: string;
 }> {
   try {
+    // Limpia cualquier carga manual a medias: la siguiente foto se lee con IA.
+    await setTelegramContexto(supabase, chatId, {
+      contexto: 'factura',
+      metadata: {},
+      reemplazarMetadata: true,
+    });
     await enviarMenuFacturasCompradorTelegram(supabase, chatId);
   } catch (err) {
     console.error('[telegram /facturas menu]', err);
