@@ -15,6 +15,7 @@ export default function EditarEntidadPage() {
 
   const [loading, setLoading] = useState(true);
   const [nombre, setNombre] = useState('');
+  const [entidadVinculada, setEntidadVinculada] = useState(false);
   const [rif, setRif] = useState('');
   const [notas, setNotas] = useState('');
   const [saving, setSaving] = useState(false);
@@ -31,6 +32,7 @@ export default function EditarEntidadPage() {
       return;
     }
     const r = conNombreFila(data as EntidadConNombre) as CiEntidad;
+    setEntidadVinculada(Boolean((data as { customer_id?: string | null }).customer_id));
     setNombre(r.nombre);
     setRif(r.rif ?? '');
     setNotas(r.notas ?? '');
@@ -102,7 +104,18 @@ export default function EditarEntidadPage() {
         <form onSubmit={(e) => void onSubmit(e)} className="mt-6 space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <label className="block">
             <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Nombre o razón social *</span>
-            <input className={inp} value={nombre} onChange={(e) => setNombre(e.target.value)} required />
+            <input
+              className={inp}
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              disabled={Boolean(entidadVinculada)}
+              required
+            />
+            {entidadVinculada ? (
+              <span className="mt-1 block text-xs text-slate-500">
+                Nombre tomado del cliente vinculado. Para cambiarlo, edite el cliente.
+              </span>
+            ) : null}
           </label>
           <label className="block">
             <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">RIF</span>
