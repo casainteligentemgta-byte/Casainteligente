@@ -9,6 +9,7 @@ import {
   parseTelegramChatIdInput,
 } from '@/lib/telegram/chatWhitelist';
 import { rolSistemaTelegramDesdeSlugApp } from '@/lib/procuras/aprobadoresProcuraTelegram';
+import { EntidadConNombre, SELECT_NOMBRE_ENTIDAD, conNombreEntidad, conNombreFila, nombreEntidad } from '@/lib/entidades/nombreEntidad';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -118,13 +119,14 @@ export async function POST(req: Request) {
     );
   }
 
-  const { data: entidad, error: entErr } = await admin
+  const { data: entidadRaw, error: entErr } = await admin
     .from('ci_entidades')
-    .select('id,nombre')
+    .select(SELECT_NOMBRE_ENTIDAD)
     .eq('id', entidadId)
     .maybeSingle();
   if (entErr) return NextResponse.json({ error: entErr.message }, { status: 500 });
-  if (!entidad) return NextResponse.json({ error: 'Entidad no encontrada' }, { status: 404 });
+  if (!entidadRaw) return NextResponse.json({ error: 'Entidad no encontrada' }, { status: 404 });
+  const entidad = conNombreFila(entidadRaw);
 
   let userId: string | null = null;
   let inviteEnviado = false;

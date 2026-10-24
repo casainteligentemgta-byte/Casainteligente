@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { CompraListaUnificada } from '@/lib/contabilidad/mapCanalPendienteCompra';
 import { nombreDisplayCustomer } from '@/lib/clientes/proyectosClienteDisplay';
+import { EntidadConNombre, SELECT_NOMBRE_ENTIDAD, nombreEntidad } from '@/lib/entidades/nombreEntidad';
 
 function compraYaIngresoAlmacen(c: CompraListaUnificada): boolean {
   return Boolean(c.ingresado_almacen_at?.trim() || c.compra_factura_id?.trim());
@@ -135,10 +136,10 @@ export async function enriquecerComprasConDestino(
   if (entidadIds.size) {
     const { data } = await supabase
       .from('ci_entidades')
-      .select('id, nombre')
+      .select(SELECT_NOMBRE_ENTIDAD)
       .in('id', Array.from(entidadIds).slice(0, 200));
     for (const e of data ?? []) {
-      entidadesMap.set(String(e.id), String(e.nombre ?? '').trim() || 'Entidad');
+      entidadesMap.set(String(e.id), nombreEntidad(e as EntidadConNombre, 'Entidad'));
     }
   }
 

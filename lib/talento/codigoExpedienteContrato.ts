@@ -7,6 +7,7 @@
  * - NN: correlativo del mes en esa obra
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { EntidadConNombre, SELECT_NOMBRE_ENTIDAD, conNombreEntidad, conNombreFila, nombreEntidad } from '@/lib/entidades/nombreEntidad';
 
 export function slugParteCodigoContrato(raw: string | null | undefined, maxLen = 16): string {
   const t = String(raw ?? '')
@@ -120,12 +121,12 @@ export async function resolverCodigoExpedienteContrato(
   if (entidadId) {
     const { data: ent } = await supabase
       .from('ci_entidades')
-      .select('nombre,nombre_abreviado')
+      .select('nombre,nombre_abreviado,customer_id,customers(nombre)')
       .eq('id', entidadId)
       .maybeSingle();
     const e = (ent ?? null) as { nombre?: string | null; nombre_abreviado?: string | null } | null;
     entidadAbreviado = e?.nombre_abreviado ?? null;
-    entidadNombre = e?.nombre ?? null;
+    entidadNombre = e ? nombreEntidad(e as EntidadConNombre, '') || null : null;
   }
 
   let correlativo = 1;

@@ -23,6 +23,11 @@ import {
   campoFaltanteFactura,
   enviarPreguntaDatoFaltanteFactura,
 } from '@/lib/telegram/faltantesFacturaTelegram';
+import {
+  EntidadConNombre,
+  SELECT_NOMBRE_ENTIDAD,
+  nombreEntidad,
+} from '@/lib/entidades/nombreEntidad';
 
 export type PasoFlujoFacturaComprador =
   | 'dato_faltante'
@@ -101,14 +106,14 @@ async function enviarPasoDestinoFacturaComprador(
   if (entidadId) {
     const { data: ent } = await supabase
       .from('ci_entidades')
-      .select('nombre')
+      .select(SELECT_NOMBRE_ENTIDAD)
       .eq('id', entidadId)
       .maybeSingle();
     await enviarPickerDestinoFacturaTelegram(
       supabase,
       chatId,
       entidadId,
-      String(ent?.nombre ?? 'Entidad').trim() || 'Entidad',
+      nombreEntidad(ent as EntidadConNombre | null),
     );
     return;
   }
