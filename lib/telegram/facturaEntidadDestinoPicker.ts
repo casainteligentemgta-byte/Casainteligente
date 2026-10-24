@@ -64,27 +64,10 @@ export function esCallbackFacturaEntidadDestino(data: string): boolean {
 async function listarEntidadesActivas(
   supabase: SupabaseClient,
 ): Promise<EntidadOption[]> {
-  const { data: proys, error: pErr } = await supabase
-    .from('ci_proyectos')
-    .select('entidad_id')
-    .not('entidad_id', 'is', null)
-    .limit(500);
-  if (pErr?.code === '42P01') return [];
-  if (pErr) throw new Error(pErr.message);
-
-  const ids = Array.from(
-    new Set(
-      (proys ?? [])
-        .map((r) => String((r as { entidad_id?: string }).entidad_id ?? '').trim())
-        .filter(Boolean),
-    ),
-  );
-  if (!ids.length) return [];
-
+  // Todas las entidades: también las que no tienen obras (gasto de entidad, p. ej. Tecnología).
   const { data: entidades, error: eErr } = await supabase
     .from('ci_entidades')
-    .select(SELECT_NOMBRE_ENTIDAD)
-    .in('id', ids.slice(0, 200));
+    .select(SELECT_NOMBRE_ENTIDAD);
   if (eErr?.code === '42P01') return [];
   if (eErr) throw new Error(eErr.message);
 
@@ -120,7 +103,7 @@ export async function enviarPickerEntidadesFacturaTelegram(
   if (!entidades.length) {
     await sendTelegramMessage(
       chatId,
-      '⚠️ No hay entidades con obras configuradas.',
+      '⚠️ No hay entidades registradas.',
       { parse_mode: 'HTML' },
     );
     return;
