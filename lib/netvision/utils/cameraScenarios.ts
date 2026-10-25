@@ -65,7 +65,7 @@ export function ensureCameraScenarios(
     byId.set(id, { id, name: nombreEscenario(id, 'Escenario') })
   }
   const ordered: CameraScenario[] = [byId.get(PRINCIPAL_SCENARIO_ID)!]
-  for (const row of byId.values()) {
+  for (const row of Array.from(byId.values())) {
     if (row.id === PRINCIPAL_SCENARIO_ID) continue
     ordered.push(row)
   }
