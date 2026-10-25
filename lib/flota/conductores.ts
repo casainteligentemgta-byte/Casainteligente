@@ -35,6 +35,7 @@ export type FlotaConductor = {
   cedula: string | null;
   numero_cedula: string | null;
   telefono: string | null;
+  telegram_chat_id: number | null;
   email: string | null;
   tipo_licencia: string | null;
   licencia_numero: string | null;
@@ -59,6 +60,7 @@ export type CrearConductorInput = {
   fecha_vencimiento_salud?: string;
   empleado_id?: string;
   telefono?: string;
+  telegram_chat_id?: string | number | null;
   email?: string;
   tipo_licencia?: string;
   vehiculo_asignado_id?: string;
@@ -68,7 +70,7 @@ export type CrearConductorInput = {
 };
 
 const CONDUCTOR_SELECT =
-  'id, empleado_id, entidad_id, proyecto_id, vehiculo_asignado_id, nombre_completo, nombres, apellidos, cedula, numero_cedula, telefono, email, tipo_licencia, licencia_numero, fecha_vencimiento_licencia, fecha_vencimiento_salud, licencia_vence, certificado_medico_vence, activo, notas, created_at, updated_at';
+  'id, empleado_id, entidad_id, proyecto_id, vehiculo_asignado_id, nombre_completo, nombres, apellidos, cedula, numero_cedula, telefono, telegram_chat_id, email, tipo_licencia, licencia_numero, fecha_vencimiento_licencia, fecha_vencimiento_salud, licencia_vence, certificado_medico_vence, activo, notas, created_at, updated_at';
 
 const CONDUCTOR_LIST_SELECT = `${CONDUCTOR_SELECT}, vehiculo:ci_flota_vehiculos!vehiculo_asignado_id (id, placa, marca, modelo)`;
 
@@ -95,6 +97,7 @@ function sinColumnasNuevas(row: Record<string, unknown>): Record<string, unknown
   delete legacy.numero_cedula;
   delete legacy.fecha_vencimiento_licencia;
   delete legacy.fecha_vencimiento_salud;
+  delete legacy.telegram_chat_id;
   return legacy;
 }
 
@@ -143,6 +146,10 @@ function payloadConductor(body: Record<string, unknown>, partial = false): Recor
     out.numero_cedula = String(body.numero_cedula ?? cedula ?? '').trim() || cedula;
   }
   if (!partial || body.telefono !== undefined) out.telefono = String(body.telefono ?? '').trim() || null;
+  if (!partial || body.telegram_chat_id !== undefined) {
+    const digitos = String(body.telegram_chat_id ?? '').replace(/\D/g, '');
+    out.telegram_chat_id = digitos ? Number(digitos) : null;
+  }
   if (!partial || body.email !== undefined) out.email = String(body.email ?? '').trim() || null;
   if (!partial || body.tipo_licencia !== undefined) out.tipo_licencia = tipoOk;
   if (!partial || body.licencia_numero !== undefined) {
