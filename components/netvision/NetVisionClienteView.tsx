@@ -794,7 +794,7 @@ export default function NetVisionClienteView() {
       }
       if (!leido.ok) {
         if (!hayOfertaCliente(project)) setIncluirPresupuesto(false)
-        setShareMsg(leido.error)
+        setShareMsg('error' in leido ? leido.error : 'No se pudo leer el presupuesto de Ventas.')
         return
       }
       aplicarOferta(leido.snap, {
