@@ -188,6 +188,7 @@ import {
   manejarTextoAvanceCampo,
 } from '@/lib/telegram/avanceCampo';
 import { manejarStartVinculoTelegram } from '@/lib/telegram/telegramVinculo';
+import { manejarCallbackObraSugeridaCompra } from '@/lib/telegram/flujoFacturaCompradorTelegram';
 import {
   esCallbackUbicacion,
   esCallbackPropietario,
@@ -492,7 +493,8 @@ async function manejarComandoFacturasDirecto(
       metadata: {},
       reemplazarMetadata: true,
     });
-    await enviarMenuFacturasCompradorTelegram(supabase, chatId);
+    const { enviarMenuCarga } = await import('@/lib/telegram/menuCargaTelegram');
+    await enviarMenuCarga(supabase, chatId);
   } catch (err) {
     console.error('[telegram /facturas menu]', err);
     return { ok: true, warn: 'menu' };
@@ -807,6 +809,27 @@ export async function handleTelegramCallbackQuery(
       });
       if (handledProp) {
         return NextResponse.json({ ok: true, callback: 'propietario_obra' });
+      }
+    }
+    if (cq.data?.startsWith('cg:')) {
+      const { manejarCallbackCarga } = await import('@/lib/telegram/menuCargaTelegram');
+      const handledCarga = await manejarCallbackCarga(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+      });
+      if (handledCarga) {
+        return NextResponse.json({ ok: true, callback: 'menu_carga' });
+      }
+    }
+    if (cq.data?.startsWith('fd:')) {
+      const handledFd = await manejarCallbackObraSugeridaCompra(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+      });
+      if (handledFd) {
+        return NextResponse.json({ ok: true, callback: 'obra_sugerida_compra' });
       }
     }
     if (esCallbackUbicacion(cq.data)) {
@@ -1487,19 +1510,19 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
         const estadoFcm = await getTelegramEstado(supabase, chatId);
         if (!esFlujoFacturaCompradorManual(estadoFcm)) return false;
         const paso = (estadoFcm.metadata as { paso?: string })?.paso;
-        if (paso === 'proveedor') {
-          // Carga manual sin datos todavía: la foto se lee primero (reconocimiento), como en /facturas.
+        if (paso !== 'foto') {
+          // Foto en cualquier paso: primero se lee la factura, como en /facturas; la carga manual se reinicia.
           await setTelegramContexto(supabase, chatId, {
             contexto: 'factura',
             metadata: {},
             reemplazarMetadata: true,
           });
+          await sendTelegramMessage(
+            chatId,
+            '📷 Leo la foto primero. Se reinició la carga manual; luego complete lo que falte.',
+            { parse_mode: 'HTML' },
+          );
           return false;
-        }
-        if (paso !== 'foto') {
-          // Foto antes de tiempo: se avisa, en vez de mandarla a la lectura automática.
-          await recordarPasoFacturaCompradorManual(supabase, chatId);
-          return true;
         }
         const fileId = photos[photos.length - 1]?.file_id;
         if (!fileId) return false;
@@ -1532,7 +1555,7 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
         const estadoIngreso = await getTelegramEstado(supabase, chatId);
         if (!esFlujoIngresoManual(estadoIngreso)) return false;
         const paso = (estadoIngreso.metadata as { paso?: string })?.paso;
-        if (paso !== 'foto' && paso !== 'observacion') return false;
+        if (paso !== 'foto' && paso !== 'observacion' && paso !== 'foto_inicial') return false;
         const fileId = photos[photos.length - 1]?.file_id;
         if (!fileId) return false;
         try {
@@ -1727,17 +1750,47 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
       return NextResponse.json({ ok: true, hint: 'no_media' });
     }
 
+    // PDF o archivo en el ingreso manual del depositario: se lee igual que una foto.
+    if (msg.document) {
+      const estadoIngresoDoc = await getTelegramEstado(supabase, chatId);
+      const pasoIngresoDoc = (estadoIngresoDoc.metadata as { paso?: string })?.paso;
+      if (
+        esFlujoIngresoManual(estadoIngresoDoc) &&
+        (pasoIngresoDoc === 'foto' || pasoIngresoDoc === 'observacion' || pasoIngresoDoc === 'foto_inicial')
+      ) {
+        try {
+          const { downloadTelegramFile, mimeFromTelegramPath } = await import('@/lib/telegram/botApi');
+          const { buffer, filePath } = await downloadTelegramFile(archivo.fileId);
+          await manejarFotoIngresoManual({
+            supabase,
+            chatId,
+            userId,
+            username: msg.from?.username ?? null,
+            buffer,
+            mimeType: msg.document.mime_type ?? mimeFromTelegramPath(filePath),
+            ext: filePath.split('.').pop() ?? 'pdf',
+            fileName: msg.document.file_name,
+            caption: msg.caption,
+          });
+          return NextResponse.json({ ok: true, ingreso_manual_documento: true });
+        } catch (err) {
+          console.error('[telegram ingreso manual documento]', err);
+          await sendTelegramMessage(chatId, '❌ No se pudo leer el documento.', { parse_mode: 'HTML' });
+          return NextResponse.json({ ok: true, ingreso_manual_documento: 'error' });
+        }
+      }
+    }
+
     const estado = await getTelegramEstado(supabase, chatId);
     const caption = msg.caption?.trim();
 
     switch (estado.contexto) {
       case 'factura': {
-        if (esFlujoFacturaCompradorManual(estado)) {
-          // PDF u otro archivo como soporte de la carga manual del comprador.
-          if ((estado.metadata as { paso?: string })?.paso !== 'foto') {
-            await recordarPasoFacturaCompradorManual(supabase, chatId);
-            return NextResponse.json({ ok: true, factura_comprador_manual_archivo_antes: true });
-          }
+        if (
+          esFlujoFacturaCompradorManual(estado) &&
+          (estado.metadata as { paso?: string })?.paso === 'foto'
+        ) {
+          // PDF u otro archivo como soporte de la carga manual del comprador (paso foto).
           const { downloadTelegramFile, mimeFromTelegramPath } = await import('@/lib/telegram/botApi');
           const { buffer, filePath } = await downloadTelegramFile(archivo.fileId);
           await manejarFotoFacturaCompradorManual({
@@ -1750,6 +1803,19 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
             chatLabel: label,
           });
           return NextResponse.json({ ok: true, factura_comprador_manual_archivo: true });
+        }
+        if (esFlujoFacturaCompradorManual(estado)) {
+          // Documento antes de tiempo: primero se lee, como en /facturas; la carga manual se reinicia.
+          await setTelegramContexto(supabase, chatId, {
+            contexto: 'factura',
+            metadata: {},
+            reemplazarMetadata: true,
+          });
+          await sendTelegramMessage(
+            chatId,
+            '📄 Leo el documento primero. Se reinició la carga manual; luego complete lo que falte.',
+            { parse_mode: 'HTML' },
+          );
         }
         const factura = await manejarFacturaTelegram({
           supabase,

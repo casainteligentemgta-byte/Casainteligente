@@ -143,6 +143,8 @@ export function ubicacionPerteneceAProyecto(
   proyectoNombre?: string,
 ): boolean {
   if (u.obra_id === proyectoId || u.proyecto?.id === proyectoId) return true;
+  /** Con obra asignada, el almacén pertenece solo a esa obra: el nombre no lo cambia. */
+  if (u.proyecto?.id) return false;
 
   const pn = normalizarEtiquetaUbicacion(proyectoNombre ?? u.proyecto?.nombre ?? '');
   if (!pn) return false;
@@ -196,6 +198,8 @@ function incluirAlmacenesCentralesHermanoObra(
   for (const u of flat) {
     if (u.tipo !== 'almacen_central' && u.tipo !== 'almacen_movil') continue;
     if (byId.has(u.id)) continue;
+    /** Con obra asignada no se completa por nombre: pertenece a su propia obra. */
+    if (u.proyecto?.id) continue;
     const nom = normalizarEtiquetaUbicacion(u.nombre);
     if (nombresObra.has(nom) || nombresCentral.has(nom)) {
       byId.set(u.id, u);
@@ -213,6 +217,7 @@ function incluirAlmacenesCentralesHermanoObra(
   for (const u of flat) {
     if (u.tipo !== 'obra' && u.tipo !== 'cuarentena' && u.tipo !== 'garantias') continue;
     if (byId.has(u.id)) continue;
+    if (u.proyecto?.id) continue;
     const nom = normalizarEtiquetaUbicacion(u.nombre);
     if (nombresCentral.has(nom)) {
       byId.set(u.id, u);
