@@ -6,6 +6,7 @@ import { describe, it } from 'node:test';
 import {
   bancoEvaluacionUnificadaObrero,
   TOTAL_EVALUACION_UNIFICADA,
+  TOTAL_EVALUACION_UNIFICADA_CHOFER,
 } from './bancoEvaluacionUnificadaObrero';
 import { evaluarSemaforoObrero } from './evaluarSemaforoObrero';
 import { urlSiguientePostHv } from './flujoHvEvaluacion';
@@ -33,6 +34,40 @@ describe('bancoEvaluacionUnificadaObrero', () => {
     assert.equal(ayu.etiquetaTrack, 'Ayudante');
     assert.equal(elec.etiquetaTrack, 'Personal clasificado');
     assert.notEqual(ayu.abc[6]?.pregunta, elec.abc[6]?.pregunta);
+  });
+});
+
+describe('banco de chofer', () => {
+  it('25 preguntas, sin las de obra del núcleo, con 13 situacionales de manejo', () => {
+    const b = bancoEvaluacionUnificadaObrero({ cargo: 'CHOFER DE 1ra. (DE 8 A 15 TONS)', codigoGoE: '5.9' });
+    assert.equal(b.familia, 'chofer');
+    assert.equal(b.total, TOTAL_EVALUACION_UNIFICADA_CHOFER);
+    assert.equal(b.total, 25);
+    assert.equal(b.abc.length, 13);
+    const ids = b.abc.map((q) => q.id);
+    assert.ok(!ids.includes('obr_01'), 'sin la de arnés');
+    assert.ok(ids.includes('obr_09') && ids.includes('obr_10'));
+    assert.ok(ids.includes('chf_01') && ids.includes('chf_06'));
+    assert.equal(new Set(ids).size, ids.length, 'claves ABC únicas');
+  });
+
+  it('todas las preguntas de chofer tienen opciones A, B y C', () => {
+    const b = bancoEvaluacionUnificadaObrero({ cargo: 'Chofer personal / familiar' });
+    for (const q of b.abc) {
+      assert.deepEqual(
+        q.opciones.map((o) => o.valor),
+        ['A', 'B', 'C'],
+        q.id,
+      );
+    }
+  });
+
+  it('dos respuestas de riesgo al volante dan rojo', () => {
+    const b = bancoEvaluacionUnificadaObrero({ cargo: 'Chofer' });
+    const todasA = Object.fromEntries(b.abc.map((q) => [q.id, 'A']));
+    assert.equal(evaluarSemaforoObrero(todasA).semaforo, 'verde');
+    assert.equal(evaluarSemaforoObrero({ ...todasA, obr_18: 'C' }).semaforo, 'amarillo');
+    assert.equal(evaluarSemaforoObrero({ ...todasA, obr_18: 'C', chf_03: 'C' }).semaforo, 'rojo');
   });
 });
 

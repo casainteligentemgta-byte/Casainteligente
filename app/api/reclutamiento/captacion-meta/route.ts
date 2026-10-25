@@ -18,7 +18,9 @@ export async function GET(req: Request) {
 
   const { data: need, error } = await admin.client
     .from('recruitment_needs')
-    .select('id,title,cargo_nombre,cargo_codigo,cargo_nivel,tipo_vacante,protocol_active,proyecto_modulo_id')
+    .select(
+      'id,title,cargo_nombre,cargo_codigo,cargo_nivel,tipo_vacante,protocol_active,proyecto_modulo_id,examen_primero',
+    )
     .eq('captacion_token', token)
     .maybeSingle();
 
@@ -46,6 +48,7 @@ export async function GET(req: Request) {
     tipo_vacante: string | null;
     protocol_active: boolean | null;
     proyecto_modulo_id: string | null;
+    examen_primero?: boolean | null;
   };
 
   if (n.protocol_active === false) {

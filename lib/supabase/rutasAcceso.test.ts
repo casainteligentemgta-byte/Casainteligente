@@ -224,6 +224,7 @@ describe('APIs de RRHH: cerradas salvo las del candidato', () => {
       '/api/recruitment/examen/nueva-invitacion',
       '/api/recruitment/ceo-auth',
       '/api/reclutamiento/captacion-token',
+      '/api/reclutamiento/examen-primero',
       // configuración
       '/api/admin/alertas-config',
       '/api/admin/config-nomina/aplicar-proyectos',
@@ -243,6 +244,7 @@ describe('APIs de RRHH: cerradas salvo las del candidato', () => {
       '/api/reclutamiento/vacante',
       '/api/reclutamiento/captacion-meta',
       '/api/reclutamiento/captacion-completar',
+      '/api/reclutamiento/captacion-iniciar',
       '/api/reclutamiento/patrono',
       '/api/reclutamiento/firma-resumen',
       '/api/registro/finalizar',
@@ -319,6 +321,7 @@ describe('toda ruta abierta del proyecto está revisada', () => {
       '/api/expediente/marcar-token-usado',
       '/api/expediente/validar-token',
       '/api/reclutamiento/captacion-completar',
+      '/api/reclutamiento/captacion-iniciar',
       '/api/reclutamiento/captacion-meta',
       '/api/reclutamiento/firma-resumen',
       '/api/reclutamiento/patrono',
