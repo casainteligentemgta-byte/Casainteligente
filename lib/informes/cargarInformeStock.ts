@@ -113,7 +113,7 @@ async function costosPorMaterial(
   ids: string[],
 ): Promise<Map<string, number>> {
   const out = new Map<string, number>();
-  const uniq = [...new Set(ids.filter(Boolean))];
+  const uniq = Array.from(new Set(ids.filter(Boolean)));
   if (!uniq.length) return out;
   // lotes de 100
   for (let i = 0; i < uniq.length; i += 100) {

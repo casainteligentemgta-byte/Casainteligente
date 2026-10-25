@@ -75,13 +75,13 @@ async function normalizar(
   rows: Array<Record<string, unknown>>,
   supabase: SupabaseClient,
 ): Promise<{ filas: FilaCadenaProcura[]; resumen: ResumenCadenaProcura }> {
-  const proyectoIds = [
-    ...new Set(
+  const proyectoIds = Array.from(
+    new Set(
       rows
         .map((r) => (r.proyecto_id != null ? String(r.proyecto_id) : ''))
         .filter(Boolean),
     ),
-  ];
+  );
   const nombrePorId = new Map<string, string>();
   if (proyectoIds.length) {
     const { data: proyectos } = await supabase
