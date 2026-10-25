@@ -720,7 +720,7 @@ export default function NetVisionClienteView() {
     if (!project) return
     const next: NetVisionProject = { ...project, clientePresupuesto: snap }
     if (extra.ventasBudgetId) next.ventasBudgetId = extra.ventasBudgetId
-    if (extra.cliente && !next.client.trim()) next.client = extra.cliente
+    if (extra.cliente && !(next.client ?? '').trim()) next.client = extra.cliente
     saveProject(next)
     setProject(next)
     setIncluirPresupuesto(true)
