@@ -827,7 +827,7 @@ export default function NetVisionClienteView() {
           return
         }
         if (!leido.ok) {
-          setShareMsg(leido.error)
+          setShareMsg('error' in leido ? leido.error : 'No se pudo leer el presupuesto de Ventas.')
           return
         }
         aPublicar = { ...project, clientePresupuesto: leido.snap }
