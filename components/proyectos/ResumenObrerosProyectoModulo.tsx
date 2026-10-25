@@ -7,7 +7,10 @@ import ContratosExpressModuloPanel from '@/components/proyectos/ContratosExpress
 import IngenieroResidenteObraCard from '@/components/proyectos/IngenieroResidenteObraCard';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { hrefGestionPersonalSolicitados } from '@/lib/rrhh/hrefSolicitudPersonal';
+import {
+  hrefGestionPersonalSolicitados,
+  hrefSolicitudPersonalObrero,
+} from '@/lib/rrhh/hrefSolicitudPersonal';
 import { projectIdsAlcanceLaborDesdeModulos } from '@/lib/rrhh/alcanceLaborProyectos';
 import {
   esContratoExpressObrero,
@@ -17,6 +20,8 @@ import { normCedulaToken } from '@/lib/talento/cedulaAuth';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+
+export type ListaVistaHub = 'solicitados' | 'porContratar' | 'activos' | 'enCarpeta';
 
 export type ResumenObrerosProyectoModuloProps = {
   proyectoModuloId: string;
@@ -51,6 +56,14 @@ export type ResumenObrerosProyectoModuloProps = {
   };
   /** Entidad de trabajo común al elegir «Todos» (suma todos los proyectos del patrono). */
   entidadIdAlcance?: string | null;
+  /**
+   * `tarjetas` (default): cinco cajas. `contadores`: tres chips + un listado (hub RRHH).
+   */
+  variante?: 'tarjetas' | 'contadores';
+  /** Lista inicial en modo contadores. */
+  listaInicial?: ListaVistaHub;
+  /** Chips extra de Candidatos (no aprobados, banca, evaluaciones). */
+  ayudaCandidatos?: boolean;
 };
 
 /** Fila ficticia para pruebas UI (no persiste en BD). UUID solo para keys/links estables en demo. */
@@ -347,6 +360,9 @@ export default function ResumenObrerosProyectoModulo({
   proyectoModuloIdFiltroEnlaces,
   selectorObra,
   entidadIdAlcance = null,
+  variante = 'tarjetas',
+  listaInicial,
+  ayudaCandidatos = false,
 }: ResumenObrerosProyectoModuloProps) {
   const supabase = useMemo(() => createClient(), []);
   const [loading, setLoading] = useState(true);
@@ -363,6 +379,11 @@ export default function ResumenObrerosProyectoModulo({
   const [filasContratoPorEmpleado, setFilasContratoPorEmpleado] = useState<Map<string, FilaContratoObra[]>>(() => new Map());
   const [obraEstadoPorId, setObraEstadoPorId] = useState<Map<string, string>>(() => new Map());
   const [listaModal, setListaModal] = useState<ListaModalTipo | null>(null);
+  const [listaVista, setListaVista] = useState<ListaVistaHub>(listaInicial ?? 'activos');
+
+  useEffect(() => {
+    if (listaInicial) setListaVista(listaInicial);
+  }, [listaInicial]);
   const [expressPanelAbierto, setExpressPanelAbierto] = useState(false);
   const [contratosExpressCount, setContratosExpressCount] = useState(0);
   const [proyectoIdsExpressAlcance, setProyectoIdsExpressAlcance] = useState<string[]>([]);
@@ -901,6 +922,42 @@ export default function ResumenObrerosProyectoModulo({
       ? Math.max(porContratarObrerosCount, 1)
       : porContratarObrerosCount;
 
+  const filasListaVista = useMemo(() => {
+    if (listaVista === 'solicitados') {
+      return empleados.filter((e) => solicitadosWorkerIdSet.has(e.id));
+    }
+    if (listaVista === 'enCarpeta') {
+      if (demoListasObrero && !demoEliminadoPorLista.enCarpeta) return [OBRERO_DEMO_LISTA];
+      return empleados.filter((e) => evaluacionNoAprobada(e));
+    }
+    if (listaVista === 'activos') {
+      return empleados.filter((e) => entraEnListaContratadosActivos(e, contratoPorEmpleado));
+    }
+    if (demoListasObrero && listaVista === 'porContratar') {
+      const reales = empleados.filter((e) => entraEnListaPorContratar(e, contratoPorEmpleado));
+      if (demoEliminadoPorLista.porContratar) return reales;
+      if (reales.length > 0) return reales;
+      return [LUS_VICENTE_MATA_DEMO];
+    }
+    return empleados.filter((e) => entraEnListaPorContratar(e, contratoPorEmpleado));
+  }, [
+    listaVista,
+    empleados,
+    solicitadosWorkerIdSet,
+    contratoPorEmpleado,
+    demoListasObrero,
+    demoEliminadoPorLista,
+  ]);
+
+  const tituloListaVista =
+    listaVista === 'solicitados'
+      ? 'Solicitados — asignados a plazas de esta obra'
+      : listaVista === 'enCarpeta'
+        ? 'No aprobados — no pasaron la evaluación'
+        : listaVista === 'activos'
+          ? 'En obra — contrato vigente'
+          : 'Por contratar — aptos, sin contrato';
+
   const tituloListaModal = useMemo(() => {
     switch (listaModal) {
       case 'enCarpeta':
@@ -956,7 +1013,7 @@ export default function ResumenObrerosProyectoModulo({
                 </label>
               ) : null}
             </div>
-            {subtituloSeccion ? (
+            {subtituloSeccion && variante !== 'contadores' ? (
               <p className="mt-0.5 text-[11px] text-zinc-500">{subtituloSeccion}</p>
             ) : null}
             {demoListasObrero ? (
@@ -985,6 +1042,146 @@ export default function ResumenObrerosProyectoModulo({
       ) : null}
       {loading ? <p className="mt-2 text-xs text-zinc-500">Actualizando contadores…</p> : null}
 
+      {variante === 'contadores' ? (
+        <div className={`mt-4 space-y-4 ${loading ? 'opacity-90' : ''}`}>
+          <div className="grid grid-cols-3 gap-2">
+            {(
+              [
+                {
+                  id: 'solicitados' as const,
+                  label: 'Solicitados',
+                  n: solicitadosPlazas,
+                  on: 'border-violet-400/70 bg-violet-600/35 text-white',
+                  off: 'border-violet-500/30 bg-violet-950/40 text-violet-100 hover:bg-violet-900/45',
+                },
+                {
+                  id: 'porContratar' as const,
+                  label: 'Por contratar',
+                  n: porContratarMostrar,
+                  on: 'border-amber-400/70 bg-amber-600/35 text-white',
+                  off: 'border-amber-500/30 bg-amber-950/40 text-amber-100 hover:bg-amber-900/45',
+                },
+                {
+                  id: 'activos' as const,
+                  label: 'En obra',
+                  n: contratadosActivos,
+                  on: 'border-emerald-400/70 bg-emerald-600/35 text-white',
+                  off: 'border-emerald-500/30 bg-emerald-950/40 text-emerald-100 hover:bg-emerald-900/45',
+                },
+              ] as const
+            ).map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setListaVista(c.id)}
+                className={`rounded-xl border px-2 py-3 text-center transition ${listaVista === c.id ? c.on : c.off}`}
+              >
+                <p className="text-xl font-bold tabular-nums sm:text-2xl">{numResumen(c.n)}</p>
+                <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide">{c.label}</p>
+              </button>
+            ))}
+          </div>
+
+          {ayudaCandidatos ? (
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setListaVista('enCarpeta')}
+                className={`rounded-lg border px-3 py-1.5 text-[11px] font-semibold ${
+                  listaVista === 'enCarpeta'
+                    ? 'border-sky-400/70 bg-sky-600/35 text-white'
+                    : 'border-white/15 bg-white/5 text-zinc-300 hover:bg-white/10'
+                }`}
+              >
+                No aprobados ({numResumen(enCarpetaMostrar)})
+              </button>
+              <Link
+                href="/rrhh/hojas-vida/archivo"
+                className="rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-zinc-300 hover:bg-white/10"
+              >
+                Banca
+              </Link>
+              <Link
+                href="/rrhh/evaluaciones"
+                className="rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-zinc-300 hover:bg-white/10"
+              >
+                Evaluaciones
+              </Link>
+            </div>
+          ) : null}
+
+          <div className="rounded-xl border border-white/10 bg-black/20">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
+              <h3 className="text-sm font-semibold text-white">{tituloListaVista}</h3>
+              {listaVista === 'solicitados' ? (
+                <Link
+                  href={hrefSolicitudPersonalObrero({ proyectoModuloId: idFiltroEnlaces })}
+                  className="text-[11px] font-semibold text-violet-200 underline decoration-violet-500/40 hover:text-violet-100"
+                >
+                  Pedir plazas
+                </Link>
+              ) : null}
+            </div>
+            {filasListaVista.length === 0 ? (
+              <p className="px-4 py-8 text-center text-sm text-zinc-500">
+                {listaVista === 'solicitados'
+                  ? 'No hay obreros asignados a solicitudes en esta obra.'
+                  : listaVista === 'activos'
+                    ? 'No hay obreros con contrato activo en esta obra.'
+                    : listaVista === 'enCarpeta'
+                      ? 'Nadie en no aprobado.'
+                      : 'No hay candidatos por contratar.'}
+              </p>
+            ) : (
+              <div className="max-h-[55vh] overflow-auto">
+                <table className="w-full min-w-[640px] text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-white/10 text-[10px] font-bold uppercase tracking-wide text-zinc-500">
+                      <th className="sticky top-0 bg-zinc-950/95 px-3 py-2">Nombre</th>
+                      <th className="sticky top-0 bg-zinc-950/95 px-3 py-2">Cédula</th>
+                      <th className="sticky top-0 bg-zinc-950/95 px-3 py-2">Oficio</th>
+                      {listaVista === 'activos' ? (
+                        <th className="sticky top-0 bg-zinc-950/95 px-3 py-2 text-center">Contrato</th>
+                      ) : null}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filasListaVista.map((row) => {
+                      const { nombre, apellido } = nombreApellidoDesdeEmpleado(row);
+                      return (
+                        <tr key={row.id} className="border-b border-white/[0.06] hover:bg-white/5">
+                          <td className="px-3 py-2 font-medium text-zinc-100">
+                            {esEmpleadoContratoExpress(row) ? (
+                              <span>{[nombre, apellido].filter((x) => x && x !== '—').join(' ')}</span>
+                            ) : (
+                              <Link
+                                href={`/empleados/${encodeURIComponent(row.id)}`}
+                                className="text-sky-300 underline decoration-sky-500/40 hover:text-sky-200"
+                              >
+                                {[nombre, apellido].filter((x) => x && x !== '—').join(' ')}
+                              </Link>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 tabular-nums text-zinc-300">{cedulaDesdeEmpleado(row)}</td>
+                          <td className="px-3 py-2 text-zinc-300">{oficioDesdeEmpleado(row)}</td>
+                          {listaVista === 'activos' ? (
+                            <td className="px-3 py-2 text-center">
+                              <AccionesContratoPdfFila
+                                empleadoRowId={row.id}
+                                nombreObrero={[nombre, apellido].filter((x) => x && x !== '—').join(' ')}
+                              />
+                            </td>
+                          ) : null}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
       <div
         className={`mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 ${loading ? 'opacity-90' : ''}`}
       >
@@ -1091,8 +1288,9 @@ export default function ResumenObrerosProyectoModulo({
               </p>
             </button>
       </div>
+      )}
 
-      <Dialog open={listaModal !== null} onOpenChange={(open) => !open && setListaModal(null)}>
+      <Dialog open={variante === 'tarjetas' && listaModal !== null} onOpenChange={(open) => !open && setListaModal(null)}>
             <DialogContent className="max-h-[85vh] overflow-hidden border-fuchsia-500/20 bg-zinc-950 p-0 sm:max-w-[min(96vw,900px)]">
               <DialogHeader className="border-b border-white/10 px-5 py-4 pr-12">
                 <DialogTitle className="text-base">{tituloListaModal || 'Listado'}</DialogTitle>

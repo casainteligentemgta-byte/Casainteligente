@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import SolicitudPersonalObreroForm from '@/components/rrhh/gestion-personal/SolicitudPersonalObreroForm';
+import RrhhSubnavEnlaces from '@/components/rrhh/RrhhSubnavEnlaces';
 import { hrefGestionPersonalSolicitados } from '@/lib/rrhh/hrefSolicitudPersonal';
 import { createClient } from '@/lib/supabase/client';
 
@@ -69,12 +70,9 @@ export default function SolicitudPersonalObreroPageClient() {
             en cada fila.
           </p>
         </div>
-        <Link
-          href="/rrhh/hojas-vida"
-          className="shrink-0 rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold text-zinc-300 hover:bg-white/10"
-        >
-          ← RRHH / Hojas de vida
-        </Link>
+      </div>
+      <div className="mb-6">
+        <RrhhSubnavEnlaces proyectoModuloId={proyectoModuloId} />
       </div>
 
       <section className="rounded-2xl border-2 border-violet-400/60 bg-gradient-to-b from-violet-950/50 to-zinc-950/80 p-5 shadow-xl shadow-violet-950/40 sm:p-6">
