@@ -7,6 +7,7 @@ import {
 } from '@/lib/contabilidad/auditoriaFechaCompra';
 import { updateContabilidadCompraRow } from '@/lib/contabilidad/updateContabilidadCompraRow';
 import {
+  payloadCondicionPagoCompra,
   monedaExtractedConfirmada,
   normalizarMonedaExtracted,
   type ExtractedCanalHeader,
@@ -219,6 +220,7 @@ export async function actualizarCompraContableDesdeExtracted(
         supplier_rif: supplierRif,
         date: fecha,
         ...payloadCompraBimonetario(montos),
+        ...payloadCondicionPagoCompra(extracted, fecha),
         updated_at: new Date().toISOString(),
       } as never)
       .eq('id', piId);
