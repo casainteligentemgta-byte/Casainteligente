@@ -161,13 +161,13 @@ export default function InformeRentabilidadPage() {
         <InformesTabla
           headers={['Obra', 'Ventas', 'Cobrado', 'Por cobrar', 'Compras', 'Margen', '%']}
           empty="Sin obras para el filtro."
-          rows={filas.map((f) => [
+          rows={filas.map((f, i) => [
             f.proyectoNombre,
             fmtUsd(f.ventasAceptadasUsd),
             fmtUsd(f.cobradoUsd),
             fmtUsd(f.porCobrarUsd),
             fmtUsd(f.comprasUsd),
-            <span style={{ color: f.margenBrutoUsd >= 0 ? '#34C759' : '#FF3B30', fontWeight: 700 }}>
+            <span key={`margen-${i}`} style={{ color: f.margenBrutoUsd >= 0 ? '#34C759' : '#FF3B30', fontWeight: 700 }}>
               {fmtUsd(f.margenBrutoUsd)}
             </span>,
             f.margenBrutoPct != null ? `${f.margenBrutoPct}%` : '—',
