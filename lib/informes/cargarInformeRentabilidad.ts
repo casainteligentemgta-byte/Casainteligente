@@ -59,9 +59,9 @@ export async function cargarInformeRentabilidad(
     customer_id: string | null;
   }>;
 
-  const customerIds = [
-    ...new Set(lista.map((p) => (p.customer_id ? String(p.customer_id) : '')).filter(Boolean)),
-  ];
+  const customerIds = Array.from(
+    new Set(lista.map((p) => (p.customer_id ? String(p.customer_id) : '')).filter(Boolean)),
+  );
 
   const budgetsPorCliente = new Map<string, BudgetRow[]>();
   if (customerIds.length) {
