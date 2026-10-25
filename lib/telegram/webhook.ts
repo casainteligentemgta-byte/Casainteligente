@@ -60,6 +60,7 @@ import {
   manejarCallbackFacturaCompradorManual,
   manejarFotoFacturaCompradorManual,
   manejarTextoFacturaCompradorManual,
+  recordarPasoFacturaCompradorManual,
 } from '@/lib/telegram/facturaCompradorManualTelegram';
 import {
   esCallbackCondicionPagoFactura,
@@ -486,6 +487,12 @@ async function manejarComandoFacturasDirecto(
   warn?: string;
 }> {
   try {
+    // Limpia cualquier carga manual a medias: la siguiente foto se lee con IA.
+    await setTelegramContexto(supabase, chatId, {
+      contexto: 'factura',
+      metadata: {},
+      reemplazarMetadata: true,
+    });
     const { enviarMenuCarga } = await import('@/lib/telegram/menuCargaTelegram');
     await enviarMenuCarga(supabase, chatId);
   } catch (err) {
@@ -1177,6 +1184,18 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
       );
       if (textoDiasCredito) {
         return NextResponse.json({ ok: true, factura_dias_credito_texto: true });
+      }
+
+      const { manejarTextoDatoFaltanteFactura } = await import('@/lib/telegram/faltantesFacturaTelegram');
+      const { avanzarFlujoFacturaCompradorTelegram } = await import('@/lib/telegram/flujoFacturaCompradorTelegram');
+      const textoDatoFaltante = await manejarTextoDatoFaltanteFactura(
+        supabase,
+        chatId,
+        texto,
+        avanzarFlujoFacturaCompradorTelegram,
+      );
+      if (textoDatoFaltante) {
+        return NextResponse.json({ ok: true, factura_dato_faltante_texto: true });
       }
 
       const estadoMotivoRechazo = await getTelegramEstado(supabase, chatId);

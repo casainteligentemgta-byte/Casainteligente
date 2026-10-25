@@ -11,6 +11,7 @@ import type { ProvisionMode } from '@/lib/auth/provisionEmployee';
 import { ROLES_EMPRESA } from '@/lib/auth/permisosCatalogo';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
+import { EntidadConNombre, SELECT_NOMBRE_ENTIDAD, conNombreEntidad, conNombreFila, nombreEntidad } from '@/lib/entidades/nombreEntidad';
 
 type EntidadOpcion = { id: string; nombre: string };
 
@@ -53,9 +54,8 @@ export default function AccesoEmpleadoPanel({
   const cargarEntidades = useCallback(async () => {
     const { data } = await supabase
       .from('ci_entidades')
-      .select('id,nombre')
-      .order('nombre', { ascending: true });
-    setEntidades((data ?? []) as EntidadOpcion[]);
+      .select(SELECT_NOMBRE_ENTIDAD);
+    setEntidades(conNombreEntidad((data ?? []) as EntidadConNombre[]) as EntidadOpcion[]);
   }, [supabase]);
 
   useEffect(() => {

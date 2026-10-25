@@ -12,6 +12,7 @@ import { apiUrl } from '@/lib/http/apiUrl';
 import { ROLES_EMPRESA } from '@/lib/auth/permisosCatalogo';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
+import { EntidadConNombre, SELECT_NOMBRE_ENTIDAD, conNombreEntidad, conNombreFila, nombreEntidad } from '@/lib/entidades/nombreEntidad';
 
 function etiquetaRolAsignacion(slug: string): string {
   return ROLES_EMPRESA.find((r) => r.value === slug)?.label ?? slug;
@@ -56,14 +57,13 @@ export default function AsignarRolUsuario({
     setCargandoEntidades(true);
     const { data, error } = await supabase
       .from('ci_entidades')
-      .select('id,nombre,rif')
-      .order('nombre', { ascending: true });
+      .select(`${SELECT_NOMBRE_ENTIDAD}, rif`);
 
     if (error) {
       toast.error(error.message ?? 'No se pudieron cargar las entidades');
       setEntidades([]);
     } else {
-      setEntidades((data ?? []) as EntidadOpcion[]);
+      setEntidades(conNombreEntidad((data ?? []) as EntidadConNombre[]) as EntidadOpcion[]);
     }
     setCargandoEntidades(false);
   }, [supabase, embebido]);

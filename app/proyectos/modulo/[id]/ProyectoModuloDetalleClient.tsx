@@ -22,6 +22,7 @@ import { hrefCcoProyecto } from '@/lib/contabilidad/cco/hrefCcoProyecto';
 import { guardarProyectoRrhhContexto } from '@/lib/rrhh/proyectoRrhhContexto';
 import { evaluarChecklistObraContratoPm } from '@/lib/talento/datosObraContratoPm';
 import dynamic from 'next/dynamic';
+import { EntidadConNombre, SELECT_NOMBRE_ENTIDAD, conNombreEntidad, conNombreFila, nombreEntidad } from '@/lib/entidades/nombreEntidad';
 
 const ProjectLocationPicker = dynamic(
   () => import('@/components/proyectos/ProjectLocationPicker'),
@@ -204,9 +205,8 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
     void (async () => {
       const { data } = await supabase
         .from('ci_entidades')
-        .select('id,nombre,rif,direccion_fiscal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil')
-        .order('nombre');
-      setEntidades((data ?? []) as EntidadOpt[]);
+        .select(`${SELECT_NOMBRE_ENTIDAD}, rif, direccion_fiscal, rep_legal_nombre, rep_legal_cedula, rep_legal_cargo, registro_mercantil`);
+      setEntidades(conNombreEntidad((data ?? []) as EntidadConNombre[]) as EntidadOpt[]);
     })();
   }, [supabase]);
 

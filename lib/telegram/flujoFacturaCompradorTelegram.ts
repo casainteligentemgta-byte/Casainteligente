@@ -21,8 +21,18 @@ import {
   enviarPickerCondicionPagoTelegram,
   enviarPreguntaDiasCreditoFacturaTelegram,
 } from '@/lib/telegram/condicionPagoPicker';
+import {
+  campoFaltanteFactura,
+  enviarPreguntaDatoFaltanteFactura,
+} from '@/lib/telegram/faltantesFacturaTelegram';
+import {
+  EntidadConNombre,
+  SELECT_NOMBRE_ENTIDAD,
+  nombreEntidad,
+} from '@/lib/entidades/nombreEntidad';
 
 export type PasoFlujoFacturaComprador =
+  | 'dato_faltante'
   | 'fecha'
   | 'moneda'
   | 'condicion'
@@ -41,6 +51,8 @@ export function siguientePasoFlujoFacturaComprador(
   extracted: ExtractedCanalHeader,
   row?: Pick<FilaPendienteFlujo, 'proyecto_id' | 'entidad_id' | 'ubicacion_destino_id'> | null,
 ): PasoFlujoFacturaComprador {
+  // El OCR no leyó número o total: el comprador los escribe antes de seguir.
+  if (campoFaltanteFactura(extracted)) return 'dato_faltante';
   const fecha = String(extracted.date ?? '').slice(0, 10);
   if (
     fecha &&
@@ -222,14 +234,14 @@ async function enviarPasoDestinoFacturaComprador(
   if (entidadId) {
     const { data: ent } = await supabase
       .from('ci_entidades')
-      .select('nombre')
+      .select(SELECT_NOMBRE_ENTIDAD)
       .eq('id', entidadId)
       .maybeSingle();
     await enviarPickerDestinoFacturaTelegram(
       supabase,
       chatId,
       entidadId,
-      String(ent?.nombre ?? 'Entidad').trim() || 'Entidad',
+      nombreEntidad(ent as EntidadConNombre | null),
     );
     return;
   }
@@ -275,6 +287,11 @@ export async function avanzarFlujoFacturaCompradorTelegram(
 
   try {
     switch (paso) {
+      case 'dato_faltante': {
+        const campo = campoFaltanteFactura(extracted);
+        if (campo) await enviarPreguntaDatoFaltanteFactura(supabase, chatId, pendingId, campo);
+        break;
+      }
       case 'fecha':
         await enviarConfirmacionFechaFacturaTelegram(supabase, chatId, pendingId);
         break;

@@ -21,6 +21,7 @@ import {
   leerProyectoRrhhContexto,
 } from '@/lib/rrhh/proyectoRrhhContexto';
 import { createClient } from '@/lib/supabase/client';
+import { EntidadConNombre, SELECT_NOMBRE_ENTIDAD, conNombreEntidad, conNombreFila, nombreEntidad } from '@/lib/entidades/nombreEntidad';
 
 /** '' = todos los proyectos de la misma entidad de trabajo; uuid = una obra concreta. */
 type AlcanceObra = string;
@@ -156,12 +157,12 @@ export default function RrhhHojasVidaClient() {
     void (async () => {
       const [{ proyectos, errors }, entRes] = await Promise.all([
         loadProyectosModuloIntegralPorEntidad(supabase, eid),
-        supabase.from('ci_entidades').select('nombre').eq('id', eid).maybeSingle(),
+        supabase.from('ci_entidades').select(SELECT_NOMBRE_ENTIDAD).eq('id', eid).maybeSingle(),
       ]);
       if (!alive) return;
       setEntidadIdAlcance(eid);
       setEntidadNombreAlcance(
-        ((entRes.data as { nombre?: string | null } | null)?.nombre ?? '').trim() || null,
+        nombreEntidad(entRes.data as EntidadConNombre | null, '') || null,
       );
       if (errors.length && !proyectos.length) {
         setProyectoIdsEntidadTodos(proyectosModulo.map((p) => p.id));

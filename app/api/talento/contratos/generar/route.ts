@@ -24,6 +24,7 @@ import {
 } from '@/lib/talento/cedulaAuth';
 import { laboresContratoDesdeCargo } from '@/lib/talento/laboresOficioContrato';
 import { construirCodigoExpedienteContrato } from '@/lib/talento/codigoExpedienteContrato';
+import { EntidadConNombre, SELECT_NOMBRE_ENTIDAD, conNombreEntidad, conNombreFila, nombreEntidad } from '@/lib/entidades/nombreEntidad';
 
 function strOrNull(value: unknown): string | null {
   if (typeof value !== 'string') return null;
@@ -300,12 +301,12 @@ export async function POST(req: Request) {
           const { data: entExtra } = await supabase
             .from('ci_entidades')
             .select(
-              'nombre,nombre_legal,nombre_comercial,rif,direccion_fiscal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil',
+              'nombre,customer_id,customers(nombre),nombre_legal,nombre_comercial,rif,direccion_fiscal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil',
             )
             .eq('id', eidRes)
             .maybeSingle();
           if (entExtra) {
-            entidadDesdeProyecto = entExtra as EntidadPatronoRow;
+            entidadDesdeProyecto = conNombreFila(entExtra as EntidadConNombre) as EntidadPatronoRow;
             proyecto = { ...p, entidad_id: eidRes };
           }
         }
@@ -386,7 +387,7 @@ export async function POST(req: Request) {
       const { data: entidadProyecto } = await supabase
         .from('ci_entidades')
         .select(
-          'nombre,nombre_comercial,rif,direccion_fiscal,registro_mercantil,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo',
+          'nombre,customer_id,customers(nombre),nombre_comercial,rif,direccion_fiscal,registro_mercantil,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo',
         )
         .eq('id', entidadIdProyecto)
         .maybeSingle();

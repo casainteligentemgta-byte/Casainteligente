@@ -32,6 +32,7 @@ import { isBonoColumnMissingError, parseBonoUsd } from '@/lib/rrhh/projectAssign
 import { idsObrerosConContratoSuscrito } from '@/lib/rrhh/obreroContratoSuscrito';
 import { apiUrl } from '@/lib/http/apiUrl';
 import { mensajeWhatsAppHvYEvaluacion } from '@/lib/talento/flujoHvEvaluacion';
+import { EntidadConNombre, SELECT_NOMBRE_ENTIDAD, conNombreEntidad, conNombreFila, nombreEntidad } from '@/lib/entidades/nombreEntidad';
 
 type LaborRequestRow = {
   id: string;
@@ -463,11 +464,11 @@ export default function RrhhGestionPersonalClient({
         scope = modulos.length ? await projectIdsAlcanceLaborDesdeModulos(supabase, modulos) : [];
         const { data: ent } = await supabase
           .from('ci_entidades')
-          .select('nombre')
+          .select(SELECT_NOMBRE_ENTIDAD)
           .eq('id', entidadFiltro)
           .maybeSingle();
         if (!alive) return;
-        const nomEnt = ((ent as { nombre?: string | null } | null)?.nombre ?? '').trim();
+        const nomEnt = nombreEntidad(ent as EntidadConNombre | null, '');
         nombreAlcance = nomEnt
           ? `Todos los proyectos · ${nomEnt}`
           : 'Todos los proyectos de la entidad';

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { EntidadConNombre, nombreEntidad } from '@/lib/entidades/nombreEntidad';
 
 export type FilaRolUsuario = {
   id?: string;
@@ -22,9 +23,20 @@ function esErrorColumnaInexistente(message: string | undefined, columna: string)
   );
 }
 
+/** El nombre de la entidad embebida sale de customers cuando está enlazada. */
+function resolverNombreEntidadEmbebida(row: FilaRolUsuario): FilaRolUsuario {
+  const rel = (row as { ci_entidades?: unknown }).ci_entidades;
+  if (!rel || typeof rel !== 'object') return row;
+  const ent = (Array.isArray(rel) ? rel[0] : rel) as EntidadConNombre | undefined;
+  if (!ent) return row;
+  const conNombre = { ...ent, nombre: nombreEntidad(ent, '') };
+  return { ...row, ci_entidades: Array.isArray(rel) ? [conNombre] : conNombre } as FilaRolUsuario;
+}
+
 function normalizarFilaRol(row: FilaRolUsuario): FilaRolUsuario {
   const usuarioId = row.usuario_id ?? row.user_id;
-  return usuarioId ? { ...row, usuario_id: usuarioId, user_id: usuarioId } : row;
+  const base = usuarioId ? { ...row, usuario_id: usuarioId, user_id: usuarioId } : row;
+  return resolverNombreEntidadEmbebida(base);
 }
 
 function esErrorRecursionRls(message: string | undefined): boolean {
@@ -38,7 +50,7 @@ export async function listarAsignacionesRolesEmpresa(
 ): Promise<{ data: FilaRolUsuario[]; error: string | null }> {
   const legacy = await supabase
     .from('ci_usuarios_roles')
-    .select('id, rol, entidad_id, user_id, created_at, ci_entidades(nombre)')
+    .select('id, rol, entidad_id, user_id, created_at, ci_entidades(nombre, customer_id, customers(nombre))')
     .order('created_at', { ascending: false });
   if (!legacy.error) {
     return {
@@ -59,7 +71,7 @@ export async function listarAsignacionesRolesEmpresa(
 
   const modern = await supabase
     .from('ci_usuarios_roles')
-    .select('id, rol, entidad_id, usuario_id, created_at, updated_at, ci_entidades(nombre)')
+    .select('id, rol, entidad_id, usuario_id, created_at, updated_at, ci_entidades(nombre, customer_id, customers(nombre))')
     .order('created_at', { ascending: false });
   if (modern.error) {
     if (esErrorRecursionRls(modern.error.message)) {
