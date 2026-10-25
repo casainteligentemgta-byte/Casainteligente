@@ -832,7 +832,7 @@ export default function NetVisionClienteView() {
         }
         aPublicar = { ...project, clientePresupuesto: leido.snap }
         if (leido.ventasBudgetId) aPublicar.ventasBudgetId = leido.ventasBudgetId
-        if (leido.cliente && !aPublicar.client.trim()) aPublicar.client = leido.cliente
+        if (leido.cliente && !(aPublicar.client ?? '').trim()) aPublicar.client = leido.cliente
       } else if (project.clientePresupuesto) {
         const next = { ...project }
         delete next.clientePresupuesto
