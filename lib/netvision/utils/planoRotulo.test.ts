@@ -13,6 +13,7 @@ describe('planoRotulo', () => {
     assert.equal(planoTipoFromBranch('cctv'), 'CCTV')
     assert.equal(planoTipoFromBranch(null), 'CCTV')
     assert.equal(planoTipoFromBranch('sonido'), 'Sonido')
+    assert.equal(planoTipoFromBranch('alarma'), 'Alarma')
   })
 
   it('usa el logo oficial junto al nombre de la empresa', () => {

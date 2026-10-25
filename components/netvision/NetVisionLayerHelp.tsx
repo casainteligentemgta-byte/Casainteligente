@@ -27,7 +27,7 @@ export const NETVISION_LAYER_HELP: LayerHelpItem[] = [
     id: 'sound',
     label: 'Sonido',
     blurb:
-      'Plano de sonido: coloca altavoces, sirenas y micrófonos, luego configúralos. El semáforo muestra alcance; los muros atenúan.',
+      'Plano de sonido: coloca altavoces y micrófonos, luego configúralos. El semáforo muestra alcance; los muros atenúan. Las sirenas van en Alarma.',
   },
   {
     id: 'internet',
@@ -39,7 +39,19 @@ export const NETVISION_LAYER_HELP: LayerHelpItem[] = [
     id: 'domotica',
     label: 'Domótica',
     blurb:
-      'Hubs, sensores, relés y teclados. Primero ubícalos en el plano; después ajusta modelo y alcance en la ficha.',
+      'Hubs, sensores, relés y teclados. Primero ubícalos en el plano; después ajusta modelo y alcance en la ficha. Con «Solo este» se ocultan cámaras y alarma; «Todos» los prende a la vez.',
+  },
+  {
+    id: 'alarma',
+    label: 'Alarma',
+    blurb:
+      'Central, PIR, contactos, teclado y sirenas en el mismo PDF. Trabaja este sistema solo o enciéndelo junto a CCTV y domótica con Todos.',
+  },
+  {
+    id: 'escenarios',
+    label: 'Escenarios CCTV',
+    blurb:
+      'Varios grupos de cámaras en el mismo plano (perímetro, interior, noche). Se ven uno a uno o «Cámaras · todos». Cada cámara nueva entra al escenario activo.',
   },
   {
     id: 'electrico',

@@ -16,26 +16,6 @@ export const PLAN_DEVICE_CATALOG: PlanDeviceModel[] = [
     priceUsd: 85,
   },
   {
-    id: 'snd-ajax-siren',
-    discipline: 'sonido',
-    kind: 'siren',
-    brand: 'Ajax',
-    name: 'StreetSiren',
-    rangeM: 12,
-    fovDeg: 360,
-    priceUsd: 120,
-  },
-  {
-    id: 'snd-ezviz-t9c',
-    discipline: 'sonido',
-    kind: 'siren',
-    brand: 'Ezviz',
-    name: 'T9C (requiere gateway A3)',
-    rangeM: 12,
-    fovDeg: 360,
-    priceUsd: 54,
-  },
-  {
     id: 'snd-mic-amb',
     discipline: 'sonido',
     kind: 'mic',
@@ -84,6 +64,66 @@ export const PLAN_DEVICE_CATALOG: PlanDeviceModel[] = [
     rangeM: 4,
     fovDeg: 120,
     priceUsd: 95,
+  },
+  {
+    id: 'alm-ajax-hub',
+    discipline: 'alarma',
+    kind: 'hub',
+    brand: 'Ajax',
+    name: 'Hub 2 Plus',
+    rangeM: 12,
+    fovDeg: 360,
+    priceUsd: 220,
+  },
+  {
+    id: 'alm-ajax-pir',
+    discipline: 'alarma',
+    kind: 'sensor',
+    brand: 'Ajax',
+    name: 'MotionProtect',
+    rangeM: 12,
+    fovDeg: 90,
+    priceUsd: 68,
+  },
+  {
+    id: 'alm-ajax-door',
+    discipline: 'alarma',
+    kind: 'contact',
+    brand: 'Ajax',
+    name: 'DoorProtect',
+    rangeM: 1,
+    fovDeg: 360,
+    priceUsd: 45,
+  },
+  {
+    id: 'alm-ajax-keypad',
+    discipline: 'alarma',
+    kind: 'keypad',
+    brand: 'Ajax',
+    name: 'KeyPad',
+    rangeM: 3,
+    fovDeg: 120,
+    priceUsd: 95,
+  },
+  {
+    id: 'snd-ajax-siren',
+    discipline: 'alarma',
+    kind: 'siren',
+    brand: 'Ajax',
+    name: 'StreetSiren',
+    rangeM: 12,
+    fovDeg: 360,
+    priceUsd: 120,
+  },
+  {
+    id: 'snd-ezviz-t9c',
+    discipline: 'alarma',
+    kind: 'siren',
+    brand: 'Ezviz',
+    name: 'T9C (requiere gateway A3)',
+    rangeM: 12,
+    fovDeg: 360,
+    priceUsd: 54,
   },
   {
     id: 'ele-panel-12',
@@ -135,6 +175,7 @@ export const PLAN_KIND_LABEL: Record<PlanDeviceKind, string> = {
   sensor: 'Sensor',
   relay: 'Relé',
   keypad: 'Teclado',
+  contact: 'Contacto',
   panel: 'Tablero',
   outlet: 'Toma',
   light: 'Luminaria',
@@ -144,6 +185,7 @@ export const PLAN_KIND_LABEL: Record<PlanDeviceKind, string> = {
 export const PLAN_DISCIPLINE_LABEL: Record<PlanDiscipline, string> = {
   sonido: 'Sonido',
   domotica: 'Domótica',
+  alarma: 'Alarma',
   electrico: 'Eléctrico',
 }
 
@@ -155,6 +197,7 @@ const KIND_PREFIX: Record<PlanDeviceKind, string> = {
   sensor: 'SEN',
   relay: 'REL',
   keypad: 'TEC',
+  contact: 'CON',
   panel: 'TAB',
   outlet: 'TOM',
   light: 'LUZ',
@@ -199,5 +242,6 @@ export function labelPrefixForPlanKind(kind: PlanDeviceKind): string {
 export function planDeviceColor(discipline: PlanDiscipline): string {
   if (discipline === 'sonido') return '#c084fc'
   if (discipline === 'domotica') return '#38bdf8'
+  if (discipline === 'alarma') return '#f87171'
   return '#fbbf24'
 }
