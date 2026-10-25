@@ -221,3 +221,28 @@ export function extractedDesdeCompraLista(c: {
     }),
   };
 }
+
+/**
+ * Condición de pago de la compra y fecha de vencimiento (crédito = fecha + días).
+ * Contado o sin días válidos: vencimiento nulo.
+ */
+export function payloadCondicionPagoCompra(
+  extracted: ExtractedCanalHeader,
+  fechaIso: string,
+): { condicion_pago: 'contado' | 'credito'; dias_credito: number | null; fecha_vencimiento: string | null } {
+  const condicion = parseCondicionPagoExtracted(extracted.condicion_pago);
+  if (condicion !== 'credito') {
+    return { condicion_pago: 'contado', dias_credito: null, fecha_vencimiento: null };
+  }
+  const dias = parseDiasCreditoExtracted(extracted.dias_credito);
+  if (dias == null) {
+    return { condicion_pago: 'credito', dias_credito: null, fecha_vencimiento: null };
+  }
+  const base = new Date(`${fechaIso}T00:00:00Z`);
+  base.setUTCDate(base.getUTCDate() + dias);
+  return {
+    condicion_pago: 'credito',
+    dias_credito: dias,
+    fecha_vencimiento: base.toISOString().slice(0, 10),
+  };
+}
