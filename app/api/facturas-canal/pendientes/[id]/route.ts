@@ -4,6 +4,7 @@ import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
 import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 import { MENSAJE_FACTURA_DUPLICADA, esErrorFacturaDuplicada } from '@/lib/canal/facturaDuplicada';
+import { ConflictoEdicionError, reclamarVersionPendiente } from '@/lib/canal/edicionConcurrente';
 import {
   cambiosEntreFacturas,
   registrarCambiosFactura,
@@ -65,6 +66,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       purchase_invoice_id?: string;
       extracted?: Record<string, unknown>;
       mensaje_error?: string | null;
+      /** Versión (updated_at) que tenía quien edita; si cambió, el guardado se rechaza. */
+      expected_updated_at?: string | null;
     };
     const admin = supabaseAdminForRoute();
     if (!admin.ok) return admin.response;
@@ -76,6 +79,10 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       update.ubicacion_destino_id = body.ubicacion_destino_id;
     }
     if (body.purchase_invoice_id !== undefined) update.purchase_invoice_id = body.purchase_invoice_id;
+    if (body.expected_updated_at) {
+      await reclamarVersionPendiente(supabase, id, body.expected_updated_at);
+    }
+
     // Historial: qué campos cambian respecto a la versión guardada.
     let cambiosExtracted: CambioFactura[] = [];
     if (body.extracted !== undefined) {
@@ -117,6 +124,9 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     });
     return NextResponse.json({ success: true, pendiente: data });
   } catch (err: unknown) {
+    if (err instanceof ConflictoEdicionError) {
+      return NextResponse.json({ error: err.message, codigo: 'conflicto_edicion' }, { status: 409 });
+    }
     const message = err instanceof Error ? err.message : 'Error';
     return NextResponse.json({ error: message }, { status: 500 });
   }

@@ -7,6 +7,7 @@ import {
 } from '@/lib/contabilidad/auditoriaFechaCompra';
 import { updateContabilidadCompraRow } from '@/lib/contabilidad/updateContabilidadCompraRow';
 import { FacturaDuplicadaError, esErrorFacturaDuplicada } from '@/lib/canal/facturaDuplicada';
+import { reclamarVersionPendiente } from '@/lib/canal/edicionConcurrente';
 import {
   cambiosEntreFacturas,
   registrarCambiosFactura,
@@ -68,6 +69,8 @@ export type ActualizarCompraContableDesdeExtractedInput = {
   pendienteCanalId?: string | null;
   /** Quién hace la corrección (id de usuario web), para el historial. */
   actor?: string | null;
+  /** Versión de la factura que tenía quien edita (updated_at de la fila pendiente). */
+  expectedUpdatedAt?: string | null;
 };
 
 export type ActualizarCompraContableDesdeExtractedResult = {
@@ -160,6 +163,12 @@ export async function actualizarCompraContableDesdeExtracted(
     fecha_confirmada_manual:
       audit.nivel === 'critico' ? Boolean(input.confirmarFechaAnomala) : false,
   };
+
+  // Versión: si otra edición cambió la factura desde que se abrió, no se guarda nada.
+  const pendienteVersion = input.pendienteCanalId?.trim();
+  if (pendienteVersion && input.expectedUpdatedAt) {
+    await reclamarVersionPendiente(supabase, pendienteVersion, input.expectedUpdatedAt);
+  }
 
   // Primero la factura: su índice único rechaza un RIF + número repetido antes de tocar la compra.
   const piId = compra.purchase_invoice_id?.trim();
