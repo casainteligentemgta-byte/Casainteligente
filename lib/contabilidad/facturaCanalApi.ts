@@ -58,6 +58,8 @@ export async function actualizarPendienteCanal(
     mensaje_error?: string | null;
     proyecto_id?: string;
     ubicacion_destino_id?: string;
+    /** Versión que tenía quien edita; si cambió, el servidor responde conflicto. */
+    expected_updated_at?: string | null;
   },
 ): Promise<PendienteCanal> {
   const id = resolveIdPendienteCanal(rawId);

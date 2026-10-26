@@ -38,6 +38,24 @@ export async function enviarMenuCarga(_supabase: SupabaseClient, chatId: string)
   );
 }
 
+/** Menú de carga del chofer: solo factura por foto y nota con foto (ver lib/flota/choferTelegram). */
+export async function enviarMenuCargaChofer(chatId: string): Promise<void> {
+  await sendTelegramMessage(
+    chatId,
+    '🧾 <b>Cargar factura o nota con foto</b>\n\n' +
+      'Envíe la foto. Lo que cargue queda <b>precargado</b> para el ingreso en almacén.',
+    {
+      parse_mode: 'HTML',
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '📷 Factura con foto', callback_data: `${PREFIX_CARGA}factura_ia` }],
+          [{ text: '📄 Nota de entrega (foto)', callback_data: `${PREFIX_CARGA}nota` }],
+        ],
+      },
+    },
+  );
+}
+
 export async function enviarMenuIngreso(_supabase: SupabaseClient, chatId: string): Promise<void> {
   await sendTelegramMessage(
     chatId,

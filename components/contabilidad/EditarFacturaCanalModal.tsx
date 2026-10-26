@@ -41,6 +41,8 @@ export type DestinoCompraEdicion = {
 
 export type GuardarFacturaCanalOpts = {
   confirmarFechaAnomala?: boolean;
+  /** Versión de la factura al abrir el modal (detecta ediciones simultáneas). */
+  expectedUpdatedAt?: string | null;
   destino?: {
     entidad_id?: string;
     proyecto_id: string;
@@ -58,6 +60,8 @@ type Props = {
   destino?: DestinoCompraEdicion | null;
   onClose: () => void;
   onGuardar: (extracted: ExtractedCanalHeader, opts?: GuardarFacturaCanalOpts) => Promise<void>;
+  /** Versión (updated_at) de la factura al abrir el modal. */
+  versionPendiente?: string | null;
 };
 
 export default function EditarFacturaCanalModal({
@@ -67,6 +71,7 @@ export default function EditarFacturaCanalModal({
   destino,
   onClose,
   onGuardar,
+  versionPendiente = null,
 }: Props) {
   const [form, setForm] = useState<FacturaCanalForm>(() => formDesdeExtracted(extracted));
   const [guardando, setGuardando] = useState(false);
@@ -157,6 +162,7 @@ export default function EditarFacturaCanalModal({
       const nombreObra = proyectos.find((p) => p.id === proyectoId)?.nombre;
       await onGuardar(next, {
         confirmarFechaAnomala: requiereConfirmacionFecha ? confirmarFechaCritica : undefined,
+        expectedUpdatedAt: versionPendiente,
         destino: mostrarDestino
           ? {
               entidad_id: entidadId.trim(),

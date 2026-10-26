@@ -321,6 +321,8 @@ export default function ComprasPage() {
         compraId: string | null;
         extracted: ExtractedCanalHeader;
         destino: DestinoCompraEdicion | null;
+        /** updated_at de la factura al abrirla: el servidor rechaza si cambió. */
+        versionPendiente?: string | null;
     } | null>(null);
     const [reubicarCompra, setReubicarCompra] = useState<{
         id: string;
@@ -1037,13 +1039,18 @@ export default function ComprasPage() {
             const res = await fetch(`/api/facturas-canal/pendientes/${canalId}`, {
                 cache: 'no-store',
             });
-            const data = (await res.json()) as { extracted?: ExtractedCanalHeader | null; error?: string };
+            const data = (await res.json()) as {
+                extracted?: ExtractedCanalHeader | null;
+                updated_at?: string | null;
+                error?: string;
+            };
             if (res.ok && data.extracted) {
                 setEditandoCanal({
                     pendienteId: canalId,
                     compraId: c.id.startsWith('canal-') ? null : c.id,
                     extracted: data.extracted,
                     destino: destinoEdicionDesdeCompra(c),
+                    versionPendiente: typeof data.updated_at === 'string' ? data.updated_at : null,
                 });
                 return;
             }
@@ -1082,6 +1089,7 @@ export default function ComprasPage() {
                     extracted,
                     confirmar_fecha_anomala: Boolean(opts?.confirmarFechaAnomala),
                     pendiente_canal_id: editandoCanal.pendienteId,
+                    pendiente_updated_at: opts?.expectedUpdatedAt ?? null,
                 }),
             });
             const data = (await res.json()) as { error?: string; requiere_confirmacion?: boolean };
@@ -1092,6 +1100,7 @@ export default function ComprasPage() {
             await actualizarPendienteCanal(editandoCanal.pendienteId, {
                 extracted,
                 mensaje_error: null,
+                expected_updated_at: opts?.expectedUpdatedAt ?? null,
             });
         }
 
@@ -3781,6 +3790,7 @@ export default function ComprasPage() {
                 open={editandoCanal != null}
                 extracted={editandoCanal?.extracted ?? null}
                 destino={editandoCanal?.destino ?? null}
+                versionPendiente={editandoCanal?.versionPendiente ?? null}
                 onClose={() => setEditandoCanal(null)}
                 onGuardar={guardarEdicionTelegram}
             />
