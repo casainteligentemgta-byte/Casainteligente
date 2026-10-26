@@ -144,6 +144,7 @@ import {
 } from '@/lib/telegram/botCommands';
 import { COMANDOS_SOLO_NO_COMPRADOR, MENSAJE_NO_DISPONIBLE_COMPRADOR, esChatComprador } from '@/lib/telegram/compradorRestricciones';
 import { MENSAJE_SOLO_FOTO_CHOFER, callbackPermitidoChofer, esChatChofer } from '@/lib/flota/choferTelegram';
+import { esCallbackCorreccion } from '@/lib/telegram/correccionFacturaTelegram';
 import { esFlujoNotaPrecarga, manejarFotoNotaPrecarga } from '@/lib/telegram/notaPrecargaTelegram';
 import {
   esCallbackResolverLineas,
@@ -837,6 +838,17 @@ export async function handleTelegramCallbackQuery(
         return NextResponse.json({ ok: true, callback: 'menu_carga' });
       }
     }
+    if (esCallbackCorreccion(cq.data)) {
+      const { manejarCallbackCorreccion } = await import('@/lib/telegram/correccionFacturaTelegram');
+      const handledCorreccion = await manejarCallbackCorreccion(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+      });
+      if (handledCorreccion) {
+        return NextResponse.json({ ok: true, callback: 'correccion_factura' });
+      }
+    }
     if (cq.data?.startsWith('fd:')) {
       const handledFd = await manejarCallbackObraSugeridaCompra(admin.client, {
         chatId,
@@ -1204,6 +1216,11 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
       );
       if (textoDiasCredito) {
         return NextResponse.json({ ok: true, factura_dias_credito_texto: true });
+      }
+
+      const { manejarTextoCorreccionFactura } = await import('@/lib/telegram/correccionFacturaTelegram');
+      if (await manejarTextoCorreccionFactura(supabase, chatId, texto)) {
+        return NextResponse.json({ ok: true, factura_correccion_texto: true });
       }
 
       const { manejarTextoDatoFaltanteFactura } = await import('@/lib/telegram/faltantesFacturaTelegram');

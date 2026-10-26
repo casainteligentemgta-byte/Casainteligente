@@ -347,6 +347,10 @@ async function processInvoiceFromCanalCore(
         );
       }
     }
+    if (params.canal === 'telegram') {
+      const { enviarOfertaCorreccion } = await import('@/lib/telegram/correccionFacturaTelegram');
+      await enviarOfertaCorreccion(params.chatId, params.pendingId);
+    }
   } else {
     await params.sendReply(plain, false);
     if (params.canal === 'telegram' && !fastTrackMsg) {
