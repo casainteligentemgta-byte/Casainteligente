@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { nombreEntidad, type EntidadConNombre } from '@/lib/entidades/nombreEntidad';
 import { GlassCard } from '@/components/inventory/GlassCard';
 import {
     Package,
@@ -104,7 +105,7 @@ import {
 
 const INVENTORY_SELECT = `
   *,
-  entidad:ci_entidades(id,nombre,rif),
+  entidad:ci_entidades(id,nombre,rif,customer_id,customers(nombre)),
   proyecto:ci_proyectos(id,nombre,entidad_id,naturaleza_proyecto,clasificacion_gasto_entidad),
   partida:ci_presupuesto_partidas(id,codigo_partida,descripcion),
   category:material_categories(id,name)
@@ -972,7 +973,7 @@ export default function InventarioCuadro() {
                     invQuery = supabase
                         .from('global_inventory')
                         .select(
-                            `*, entidad:ci_entidades(id,nombre,rif), proyecto:ci_proyectos(id,nombre,entidad_id), partida:ci_presupuesto_partidas(id,codigo_partida,descripcion), category:material_categories(id,name)`,
+                            `*, entidad:ci_entidades(id,nombre,rif,customer_id,customers(nombre)), proyecto:ci_proyectos(id,nombre,entidad_id), partida:ci_presupuesto_partidas(id,codigo_partida,descripcion), category:material_categories(id,name)`,
                         )
                         .order('name');
                     invRes = await invQuery;
@@ -1185,7 +1186,7 @@ export default function InventarioCuadro() {
                 !term ||
                 item.name.toLowerCase().includes(term) ||
                 (item.sap_code?.toLowerCase().includes(term) ?? false) ||
-                (item.entidad?.nombre?.toLowerCase().includes(term) ?? false) ||
+                nombreEntidad(item.entidad as EntidadConNombre | null, '').toLowerCase().includes(term) ||
                 (item.proyecto?.nombre?.toLowerCase().includes(term) ?? false) ||
                 (item.partida?.codigo_partida?.toLowerCase().includes(term) ?? false) ||
                 (item.partida?.descripcion?.toLowerCase().includes(term) ?? false) ||
@@ -1371,7 +1372,7 @@ export default function InventarioCuadro() {
                     codigo: item.sap_code?.trim() || '',
                     material: item.name,
                     unidad: item.unit || 'UND',
-                    entidad: item.entidad?.nombre?.trim() || '',
+                    entidad: nombreEntidad(item.entidad as EntidadConNombre | null, '').trim(),
                     obra: obraTabla?.nombre?.trim() || item.proyecto?.nombre?.trim() || '',
                     partida: item.partida
                         ? [item.partida.codigo_partida, item.partida.descripcion]
@@ -2740,9 +2741,9 @@ export default function InventarioCuadro() {
                                     </td>
                                     <td className="px-2 py-2 max-w-0">
                                         <div className="space-y-0.5 text-[9px] font-bold min-w-0">
-                                            {item.entidad?.nombre ? (
-                                                <p className="text-violet-300 truncate" title={item.entidad.nombre}>
-                                                    {item.entidad.nombre}
+                                            {nombreEntidad(item.entidad as EntidadConNombre | null, '') ? (
+                                                <p className="text-violet-300 truncate" title={nombreEntidad(item.entidad as EntidadConNombre | null, '')}>
+                                                    {nombreEntidad(item.entidad as EntidadConNombre | null, '')}
                                                 </p>
                                             ) : (
                                                 <p className="text-zinc-600 uppercase tracking-wider">Sin entidad</p>
