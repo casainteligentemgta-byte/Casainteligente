@@ -11,6 +11,10 @@ import {
   liberarConfirmacionCompraCanal,
   reclamarConfirmacionCompraCanal,
 } from '@/lib/canal/reservarFacturaCanalTelegram';
+import {
+  MENSAJE_FACTURA_DUPLICADA,
+  esErrorFacturaDuplicada,
+} from '@/lib/canal/facturaDuplicada';
 import { buscarCompraContablePorFactura } from '@/lib/contabilidad/buscarCompraContablePorFactura';
 import { updateContabilidadCompraRow } from '@/lib/contabilidad/updateContabilidadCompraRow';
 import { aplicarDefaultsCcoCompraTelegram } from '@/lib/contabilidad/cco/aplicarDefaultsCcoCompraTelegram';
@@ -468,6 +472,7 @@ async function confirmarCompraDesdeCanalInterno(
       .select('id')
       .single();
 
+    if (esErrorFacturaDuplicada(invErr)) throw new Error(MENSAJE_FACTURA_DUPLICADA);
     if (invErr) throw new Error(`No se pudo crear la factura: ${invErr.message}`);
     purchaseInvoiceId = String((inv as { id: string }).id);
   } else {

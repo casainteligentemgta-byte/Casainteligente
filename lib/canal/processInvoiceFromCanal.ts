@@ -16,6 +16,11 @@ import {
 } from '@/lib/almacen/procurementDocumentStorage';
 import { formatTotalExtracted } from '@/lib/contabilidad/extractedCanal';
 import { linkConfirmarCompraTelegram } from '@/lib/contabilidad/confirmarCompraDesdeCanal';
+import {
+  MENSAJE_FACTURA_DUPLICADA,
+  esErrorFacturaDuplicada,
+  marcarPendienteDuplicado,
+} from '@/lib/canal/facturaDuplicada';
 
 export type CanalFactura = 'telegram' | 'whatsapp';
 
@@ -189,7 +194,7 @@ async function processInvoiceFromCanalCore(
     dias_credito: null;
   };
 
-  await supabase
+  const { error: errGuardarExtraccion } = await supabase
     .from('ci_facturas_canal_pendientes')
     .update({
       estado: 'extraido',
@@ -198,6 +203,19 @@ async function processInvoiceFromCanalCore(
       updated_at: new Date().toISOString(),
     })
     .eq('id', params.pendingId);
+
+  // Otra carga ya tiene el mismo RIF y número (índice único, mig. 372): no se guarda esta.
+  if (esErrorFacturaDuplicada(errGuardarExtraccion)) {
+    await marcarPendienteDuplicado(supabase, params.pendingId);
+    const msgDuplicadaCarga = `⚠️ <b>Factura duplicada</b>\n\n${MENSAJE_FACTURA_DUPLICADA}`;
+    if (prog) {
+      await prog.ok('');
+      await params.sendReply(msgDuplicadaCarga, true);
+    } else {
+      await params.sendReply(msgDuplicadaCarga, false);
+    }
+    return;
+  }
 
   const { data: rowLog } = await supabase
     .from('ci_facturas_canal_pendientes')
