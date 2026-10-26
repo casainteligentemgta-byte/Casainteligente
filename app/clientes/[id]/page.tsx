@@ -7,6 +7,7 @@ import ClienteContextoObraPatrono from '@/components/clientes/ClienteContextoObr
 import CustomerLoyaltyCard from '@/components/clientes/CustomerLoyaltyCard';
 import BotonTema from '@/components/tema/BotonTema';
 import { useCustomerLoyaltyScore } from '@/hooks/useCustomerLoyaltyScore';
+import { nombreEntidad, type EntidadConNombre } from '@/lib/entidades/nombreEntidad';
 import {
   cargarClienteDetalle,
   type CustomerDetail,
@@ -119,7 +120,7 @@ export default function ClienteDetallePage() {
       const { data, error: err } = await supabase
         .from('ci_proyectos')
         .select(
-          'id,nombre,estado,tipo_proyecto,monto_aproximado,obra_precio_venta_usd,entidad_id,ci_entidades(nombre,rif)',
+          'id,nombre,estado,tipo_proyecto,monto_aproximado,obra_precio_venta_usd,entidad_id,ci_entidades(nombre,rif,customer_id,customers(nombre))',
         )
         .eq('customer_id', id)
         .order('created_at', { ascending: false });
@@ -128,7 +129,9 @@ export default function ClienteDetallePage() {
       if (err) return;
       setObras(
         (data ?? []).map((p) => {
-          const ent = p.ci_entidades as { nombre?: string | null; rif?: string | null } | null;
+          const ent = p.ci_entidades as
+            | (EntidadConNombre & { nombre?: string | null; rif?: string | null })
+            | null;
           return {
             id: String(p.id),
             nombre: String(p.nombre ?? 'Obra'),
@@ -136,7 +139,7 @@ export default function ClienteDetallePage() {
             tipo_proyecto: p.tipo_proyecto ?? null,
             montoUsd: montoObraUsd(p),
             entidadId: p.entidad_id ? String(p.entidad_id) : null,
-            entidadNombre: ent?.nombre ?? null,
+            entidadNombre: ent ? nombreEntidad(ent, '') || null : null,
             entidadRif: ent?.rif ?? null,
           };
         }),
