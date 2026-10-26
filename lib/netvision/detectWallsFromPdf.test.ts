@@ -6,6 +6,7 @@ import assert from 'node:assert/strict'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { PDFDocument, rgb } from 'pdf-lib'
+import './testing/domMatrixNode' // antes de pdfjs-dist: en Node no existe DOMMatrix
 import { GlobalWorkerOptions } from 'pdfjs-dist'
 import { detectWallsFromPdfBytes, structuresFromWallDetection } from './detectWallsFromPdf'
 
