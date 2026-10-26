@@ -6,6 +6,11 @@ import {
   type AuditoriaFechaCompra,
 } from '@/lib/contabilidad/auditoriaFechaCompra';
 import { updateContabilidadCompraRow } from '@/lib/contabilidad/updateContabilidadCompraRow';
+import { FacturaDuplicadaError, esErrorFacturaDuplicada } from '@/lib/canal/facturaDuplicada';
+import {
+  cambiosEntreFacturas,
+  registrarCambiosFactura,
+} from '@/lib/contabilidad/historialCambiosFactura';
 import {
   payloadCondicionPagoCompra,
   monedaExtractedConfirmada,
@@ -61,6 +66,8 @@ export type ActualizarCompraContableDesdeExtractedInput = {
   extracted: ExtractedCanalHeader;
   confirmarFechaAnomala?: boolean;
   pendienteCanalId?: string | null;
+  /** Quién hace la corrección (id de usuario web), para el historial. */
+  actor?: string | null;
 };
 
 export type ActualizarCompraContableDesdeExtractedResult = {
@@ -154,6 +161,43 @@ export async function actualizarCompraContableDesdeExtracted(
       audit.nivel === 'critico' ? Boolean(input.confirmarFechaAnomala) : false,
   };
 
+  // Primero la factura: su índice único rechaza un RIF + número repetido antes de tocar la compra.
+  const piId = compra.purchase_invoice_id?.trim();
+  if (piId) {
+    const { error: piErr } = await supabase
+      .from('purchase_invoices')
+      .update({
+        invoice_number: invoiceNumber,
+        supplier_name: supplierName,
+        supplier_rif: supplierRif,
+        date: fecha,
+        ...payloadCompraBimonetario(montos),
+        ...payloadCondicionPagoCompra(extracted, fecha),
+        updated_at: new Date().toISOString(),
+      } as never)
+      .eq('id', piId);
+    if (esErrorFacturaDuplicada(piErr)) throw new FacturaDuplicadaError();
+    if (piErr) {
+      console.warn('[actualizarCompraContable] purchase_invoices:', piErr.message);
+    } else {
+      await registrarCambiosFactura(supabase, {
+        tabla: 'purchase_invoices',
+        registroId: piId,
+        cambios: cambiosEntreFacturas(
+          {
+            invoice_number: compra.invoice_number,
+            supplier_name: compra.supplier_name,
+            supplier_rif: compra.supplier_rif,
+            date: String(compra.fecha ?? '').slice(0, 10),
+          },
+          { invoice_number: invoiceNumber, supplier_name: supplierName, supplier_rif: supplierRif, date: fecha },
+        ),
+        origen: 'web',
+        actor: input.actor ?? null,
+      });
+    }
+  }
+
   const { error: upCompraErr } = await updateContabilidadCompraRow(supabase, input.compraId, {
     ...patchCompra,
     ...patchAuditoria,
@@ -208,25 +252,6 @@ export async function actualizarCompraContableDesdeExtracted(
     const extra = lineas[i];
     if (!extra?.id) continue;
     await supabase.from('contabilidad_compra_lineas').delete().eq('id', extra.id);
-  }
-
-  const piId = compra.purchase_invoice_id?.trim();
-  if (piId) {
-    const { error: piErr } = await supabase
-      .from('purchase_invoices')
-      .update({
-        invoice_number: invoiceNumber,
-        supplier_name: supplierName,
-        supplier_rif: supplierRif,
-        date: fecha,
-        ...payloadCompraBimonetario(montos),
-        ...payloadCondicionPagoCompra(extracted, fecha),
-        updated_at: new Date().toISOString(),
-      } as never)
-      .eq('id', piId);
-    if (piErr) {
-      console.warn('[actualizarCompraContable] purchase_invoices:', piErr.message);
-    }
   }
 
   const pendienteId = input.pendienteCanalId?.trim();

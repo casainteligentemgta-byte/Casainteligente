@@ -3,6 +3,12 @@ import { deleteCompraRegistro } from '@/lib/contabilidad/deleteCompraRegistro';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
 import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
+import { MENSAJE_FACTURA_DUPLICADA, esErrorFacturaDuplicada } from '@/lib/canal/facturaDuplicada';
+import {
+  cambiosEntreFacturas,
+  registrarCambiosFactura,
+  type CambioFactura,
+} from '@/lib/contabilidad/historialCambiosFactura';
 export const dynamic = 'force-dynamic';
 
 function idFromParams(params: { id?: string }): string | null {
@@ -70,7 +76,20 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       update.ubicacion_destino_id = body.ubicacion_destino_id;
     }
     if (body.purchase_invoice_id !== undefined) update.purchase_invoice_id = body.purchase_invoice_id;
-    if (body.extracted !== undefined) update.extracted = body.extracted;
+    // Historial: qué campos cambian respecto a la versión guardada.
+    let cambiosExtracted: CambioFactura[] = [];
+    if (body.extracted !== undefined) {
+      const { data: actual } = await supabase
+        .from('ci_facturas_canal_pendientes')
+        .select('extracted')
+        .eq('id', id)
+        .maybeSingle();
+      cambiosExtracted = cambiosEntreFacturas(
+        (actual?.extracted ?? {}) as Record<string, unknown>,
+        body.extracted,
+      );
+      update.extracted = body.extracted;
+    }
     if (body.mensaje_error !== undefined) update.mensaje_error = body.mensaje_error;
 
     const { data, error } = await supabase
@@ -82,7 +101,20 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         'id, canal, chat_id, chat_label, estado, proyecto_id, ubicacion_destino_id, purchase_invoice_id, document_file_name, document_storage_path, extracted, mensaje_error, created_at',
       )
       .single();
+    if (esErrorFacturaDuplicada(error)) {
+      return NextResponse.json(
+        { error: MENSAJE_FACTURA_DUPLICADA, codigo: 'factura_duplicada' },
+        { status: 409 },
+      );
+    }
     if (error) throw error;
+    await registrarCambiosFactura(supabase, {
+      tabla: 'ci_facturas_canal_pendientes',
+      registroId: id,
+      cambios: cambiosExtracted,
+      origen: 'web',
+      actor: acceso.userId,
+    });
     return NextResponse.json({ success: true, pendiente: data });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Error';

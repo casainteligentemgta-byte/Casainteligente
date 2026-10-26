@@ -17,6 +17,7 @@ import {
 import { tasaBcvCompra } from '@/lib/contabilidad/comprasMontos';
 import { updateContabilidadCompraRow } from '@/lib/contabilidad/updateContabilidadCompraRow';
 import { requirePermisoWeb } from '@/lib/auth/requirePermisoRoute';
+import { FacturaDuplicadaError } from '@/lib/canal/facturaDuplicada';
 import type { Permiso } from '@/lib/auth/permisosCatalogo';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import type { MonedaOrigen } from '@/lib/finanzas/currency-converter';
@@ -253,6 +254,7 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
           extracted: body.extracted,
           confirmarFechaAnomala: Boolean(body.confirmar_fecha_anomala),
           pendienteCanalId: body.pendiente_canal_id,
+          actor: auth.userId,
         });
         const { data: compra } = await admin.client
           .from('contabilidad_compras')
@@ -263,6 +265,12 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
           .maybeSingle();
         return NextResponse.json({ ok: true, compra, ...result });
       } catch (err) {
+        if (err instanceof FacturaDuplicadaError) {
+          return NextResponse.json(
+            { error: err.message, codigo: 'factura_duplicada' },
+            { status: 409 },
+          );
+        }
         if (err instanceof FechaCompraAnomalaError) {
           return NextResponse.json(
             {
