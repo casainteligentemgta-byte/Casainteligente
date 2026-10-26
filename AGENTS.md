@@ -24,7 +24,7 @@ The repo ships without an `.eslintrc.json`. Running `npm run lint` for the first
 
 ### Key caveats
 
-- No automated tests exist in this codebase (no test framework configured).
+- Tests run with the Node test runner through `tsx` (`npx tsx --test <archivos>`). CI (`.github/workflows/tests.yml`) runs every tracked `*.test.ts(x)` file on each push and PR (about 150 files). Add new tests next to the code they cover.
 - The `scripts/` directory contains a one-off CSV migration script, not setup scripts.
 - SQL files in `/workspace/sql/` and root are intended for the Supabase SQL Editor, not local execution.
 - Temporary debug files (`tmp_*.mjs`) at the root are development artifacts and not part of the application.
