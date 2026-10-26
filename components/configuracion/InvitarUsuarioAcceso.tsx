@@ -12,7 +12,6 @@ import { apiUrl } from '@/lib/http/apiUrl';
 import { ROLES_EMPRESA } from '@/lib/auth/permisosCatalogo';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
-import { EntidadConNombre, SELECT_NOMBRE_ENTIDAD, conNombreEntidad, conNombreFila, nombreEntidad } from '@/lib/entidades/nombreEntidad';
 
 const campoClase =
   'mt-1.5 w-full rounded-lg border border-white/10 bg-zinc-900/80 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-[#FF9500]/50 focus:ring-2 focus:ring-[#FF9500]/15 disabled:opacity-50';
@@ -58,12 +57,13 @@ export default function InvitarUsuarioAcceso({
     setCargandoEntidades(true);
     const { data, error } = await supabase
       .from('ci_entidades')
-      .select(`${SELECT_NOMBRE_ENTIDAD}, rif`);
+      .select('id,nombre,rif')
+      .order('nombre', { ascending: true });
     if (error) {
       toast.error(error.message ?? 'No se pudieron cargar las entidades');
       setEntidades([]);
     } else {
-      setEntidades(conNombreEntidad((data ?? []) as EntidadConNombre[]) as EntidadOpcion[]);
+      setEntidades((data ?? []) as EntidadOpcion[]);
     }
     setCargandoEntidades(false);
   }, [supabase, embebido]);

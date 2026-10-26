@@ -13,7 +13,6 @@ import {
   esCompraSoloAuditoriaCco,
   esDescripcionAuditoriaCco,
 } from '@/lib/contabilidad/compraEsAuditoriaCco';
-import { EntidadConNombre, SELECT_NOMBRE_ENTIDAD, nombreEntidad } from '@/lib/entidades/nombreEntidad';
 
 export type LoCompradoFiltros = {
   proyectoId?: string | null;
@@ -282,10 +281,10 @@ export async function cargarLoComprado(
   if (entidadIds.length) {
     const { data: ents } = await supabase
       .from('ci_entidades')
-      .select(SELECT_NOMBRE_ENTIDAD)
+      .select('id,nombre')
       .in('id', entidadIds);
     for (const e of ents ?? []) {
-      entidadesMap.set(String(e.id), nombreEntidad(e as EntidadConNombre, ''));
+      entidadesMap.set(String(e.id), String(e.nombre ?? '').trim());
     }
   }
 

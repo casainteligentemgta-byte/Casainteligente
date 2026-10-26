@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { Loader2, Users } from 'lucide-react';
 import EquipoEntidadPanel from '@/components/configuracion/EquipoEntidadPanel';
 import { createClient } from '@/lib/supabase/client';
-import { EntidadConNombre, nombreEntidad } from '@/lib/entidades/nombreEntidad';
 
 type Props = {
   proyectoId: string;
@@ -27,7 +26,7 @@ export default function ProyectoEquipoAccesoPanel({ proyectoId }: Props) {
       try {
         const { data, error: qErr } = await supabase
           .from('ci_proyectos')
-          .select('entidad_id, ci_entidades(nombre, customer_id, customers(nombre))')
+          .select('entidad_id, ci_entidades(nombre)')
           .eq('id', proyectoId)
           .maybeSingle();
         if (cancelled) return;
@@ -43,8 +42,7 @@ export default function ProyectoEquipoAccesoPanel({ proyectoId }: Props) {
             : '';
         const rel = (data as { ci_entidades?: { nombre?: string } | { nombre?: string }[] | null })
           ?.ci_entidades;
-        const relRow = Array.isArray(rel) ? rel[0] : rel;
-        const nombreRel = relRow ? nombreEntidad(relRow as EntidadConNombre, '') : null;
+        const nombreRel = Array.isArray(rel) ? rel[0]?.nombre : rel?.nombre;
         setEntidadId(eid || null);
         setEntidadNombre(nombreRel?.trim() || null);
       } catch (e) {

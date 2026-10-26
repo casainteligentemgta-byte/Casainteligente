@@ -1,7 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { planillaPatronoDesdeEntidadRow } from '@/lib/talento/planillaPatronoBuild';
 import type { PlanillaPatronoCampos } from '@/lib/talento/planillaPatronoTypes';
-import { EntidadConNombre, SELECT_NOMBRE_ENTIDAD, conNombreEntidad, conNombreFila, nombreEntidad } from '@/lib/entidades/nombreEntidad';
 
 function trimStr(v: unknown): string {
   if (v == null) return '';
@@ -31,13 +30,13 @@ export async function resolvePlanillaPatronoPdf(
   const { data: e, error: eErr } = await client
     .from('ci_entidades')
     .select(
-      'nombre,customer_id,customers(nombre),nombre_comercial,rif,direccion_fiscal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil',
+      'nombre,nombre_comercial,rif,direccion_fiscal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil',
     )
     .eq('id', eid)
     .maybeSingle();
   if (eErr || !e) return { proyectoNombre };
 
-  const er = conNombreFila(e as EntidadConNombre) as {
+  const er = e as {
     nombre: string | null;
     nombre_legal?: string | null;
     rif: string | null;

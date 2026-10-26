@@ -1,7 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { projectIdsAlcanceLaborDesdeModulos } from '@/lib/rrhh/alcanceLaborProyectos';
 import { loadProyectosModuloIntegralPorEntidad } from '@/lib/proyectos/proyectosUnificados';
-import { EntidadConNombre, SELECT_NOMBRE_ENTIDAD, nombreEntidad } from '@/lib/entidades/nombreEntidad';
 
 export type ResumenOficioFila = {
   codigo: string;
@@ -79,8 +78,8 @@ export async function loadResumenSolicitadosOficios(
     }
     const modulos = proyectos.map((p) => p.id);
     scope = modulos.length ? await projectIdsAlcanceLaborDesdeModulos(supabase, modulos) : [];
-    const { data: ent } = await supabase.from('ci_entidades').select(SELECT_NOMBRE_ENTIDAD).eq('id', entidadId).maybeSingle();
-    const nomEnt = nombreEntidad(ent as EntidadConNombre | null, '');
+    const { data: ent } = await supabase.from('ci_entidades').select('nombre').eq('id', entidadId).maybeSingle();
+    const nomEnt = ((ent as { nombre?: string | null } | null)?.nombre ?? '').trim();
     alcanceNombre = nomEnt
       ? `Todos los proyectos · ${nomEnt}`
       : `Todos los proyectos de la entidad`;

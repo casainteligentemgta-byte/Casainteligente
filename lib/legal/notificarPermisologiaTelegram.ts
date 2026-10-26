@@ -6,7 +6,6 @@ import {
   textoDiasRestantes,
   type PermisologiaVencimientoItem,
 } from '@/lib/legal/permisologiaVencimientos';
-import { EntidadConNombre, SELECT_NOMBRE_ENTIDAD, nombreEntidad } from '@/lib/entidades/nombreEntidad';
 
 export type PermisologiaNotifyResult = {
   revisadas: number;
@@ -102,7 +101,7 @@ export async function notificarPermisologiaTelegram(
   }
 
   const supabase = createSupabaseAdminClient();
-  let query = supabase.from('ci_entidades').select(`${SELECT_NOMBRE_ENTIDAD}, rif, permisologia`);
+  let query = supabase.from('ci_entidades').select('id,nombre,rif,permisologia');
   if (opts.entidadId?.trim()) {
     query = query.eq('id', opts.entidadId.trim());
   } else {
@@ -122,7 +121,7 @@ export async function notificarPermisologiaTelegram(
   for (const row of filas) {
     const items = extraerVencimientosEntidad({
       id: String(row.id),
-      nombre: nombreEntidad(row as EntidadConNombre, 'Entidad'),
+      nombre: String(row.nombre ?? 'Entidad'),
       rif: row.rif == null ? null : String(row.rif),
       permisologia: row.permisologia,
     });

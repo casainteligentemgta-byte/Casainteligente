@@ -17,11 +17,6 @@ import {
   tecladoFacturaRegistradaOk,
 } from '@/lib/telegram/mensajesFactura';
 import { procuraIdDesdeMetadataFactura } from '@/lib/telegram/facturaCompradorManualTelegram';
-import {
-  EntidadConNombre,
-  SELECT_NOMBRE_ENTIDAD,
-  nombreEntidad,
-} from '@/lib/entidades/nombreEntidad';
 
 export const FLUJO_FACTURA_ENTIDAD = 'factura_compra_entidad';
 
@@ -64,19 +59,35 @@ export function esCallbackFacturaEntidadDestino(data: string): boolean {
 async function listarEntidadesActivas(
   supabase: SupabaseClient,
 ): Promise<EntidadOption[]> {
-  // Todas las entidades: también las que no tienen obras (gasto de entidad, p. ej. Tecnología).
+  const { data: proys, error: pErr } = await supabase
+    .from('ci_proyectos')
+    .select('entidad_id')
+    .not('entidad_id', 'is', null)
+    .limit(500);
+  if (pErr?.code === '42P01') return [];
+  if (pErr) throw new Error(pErr.message);
+
+  const ids = Array.from(
+    new Set(
+      (proys ?? [])
+        .map((r) => String((r as { entidad_id?: string }).entidad_id ?? '').trim())
+        .filter(Boolean),
+    ),
+  );
+  if (!ids.length) return [];
+
   const { data: entidades, error: eErr } = await supabase
     .from('ci_entidades')
-    .select(SELECT_NOMBRE_ENTIDAD);
+    .select('id, nombre')
+    .in('id', ids.slice(0, 200))
+    .order('nombre');
   if (eErr?.code === '42P01') return [];
   if (eErr) throw new Error(eErr.message);
 
-  return (entidades ?? [])
-    .map((e) => ({
-      id: String(e.id),
-      nombre: nombreEntidad(e as EntidadConNombre, 'Sin nombre'),
-    }))
-    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  return (entidades ?? []).map((e) => ({
+    id: String(e.id),
+    nombre: String(e.nombre ?? 'Sin nombre').trim() || 'Sin nombre',
+  }));
 }
 
 export async function enviarPickerEntidadesFacturaTelegram(
@@ -103,7 +114,7 @@ export async function enviarPickerEntidadesFacturaTelegram(
   if (!entidades.length) {
     await sendTelegramMessage(
       chatId,
-      '⚠️ No hay entidades registradas.',
+      '⚠️ No hay entidades con obras configuradas.',
       { parse_mode: 'HTML' },
     );
     return;

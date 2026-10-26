@@ -14,7 +14,6 @@ import {
 import { etiquetaFuenteProyecto } from '@/lib/proyectos/proyectosUnificados';
 import { withTimeout } from '@/lib/http/withTimeout';
 import ProyectoModuloListaAcciones from '@/components/proyectos/ProyectoModuloListaAcciones';
-import { EntidadConNombre, SELECT_NOMBRE_ENTIDAD, conNombreEntidad, conNombreFila, nombreEntidad } from '@/lib/entidades/nombreEntidad';
 
 /** `modulo` = ci_proyectos integral; `obra_talento` = misma tabla con tipo_proyecto = talento (ex ci_obras). */
 type ProyectoOrigen = 'modulo' | 'obra_talento';
@@ -307,7 +306,7 @@ export default function ModuloProyectosPage() {
       let patronoPorId: Record<string, string> = {};
       if (entidadIds.length > 0) {
         const { data: entRows } = await withTimeout(
-          Promise.resolve(supabase.from('ci_entidades').select(SELECT_NOMBRE_ENTIDAD).in('id', entidadIds)),
+          Promise.resolve(supabase.from('ci_entidades').select('id,nombre').in('id', entidadIds)),
           22_000,
           'Entidades (patronos)',
         );
@@ -315,7 +314,7 @@ export default function ModuloProyectosPage() {
         patronoPorId = Object.fromEntries(
           ((entRows ?? []) as { id: string; nombre: string | null }[]).map((e) => [
             e.id,
-            nombreEntidad(e as EntidadConNombre, 'Sin nombre'),
+            (e.nombre ?? '').trim() || 'Sin nombre',
           ]),
         );
       }

@@ -44,7 +44,6 @@ import {
 } from '@/lib/talento/ingresoSemanalUsdTabuladorConstruccion';
 import { resolverDomicilioProcesalContrato } from '@/lib/talento/datosObraContratoPm';
 import { arregloPagoPorDefecto, montoArregloValido } from '@/lib/nomina/arregloPago';
-import { EntidadConNombre, SELECT_NOMBRE_ENTIDAD, conNombreEntidad, conNombreFila, nombreEntidad } from '@/lib/entidades/nombreEntidad';
 
 /**
  * Patrono para contrato / planilla: nombre y domicilio desde `ci_entidades`
@@ -61,10 +60,10 @@ export async function resolverPatronoDesdeEntidad(
   const eid = (entidadId ?? '').trim();
   if (!eid) return { nombre: envNombre, domicilio: envDom, representante: envRep };
 
-  const { data, error } = await supabase.from('ci_entidades').select('*, customers(nombre)').eq('id', eid).maybeSingle();
+  const { data, error } = await supabase.from('ci_entidades').select('*').eq('id', eid).maybeSingle();
   if (error || !data) return { nombre: envNombre, domicilio: envDom, representante: envRep };
 
-  const e = conNombreFila(data as EntidadConNombre) as Record<string, unknown>;
+  const e = data as Record<string, unknown>;
   const nombre =
     strOpt(e.nombre_legal) ?? strOpt(e.nombre as string | null | undefined) ?? envNombre;
   const domicilio =
@@ -315,7 +314,7 @@ async function fetchCiProyectoCamposContratoPdf(
   for (const sel of CI_PROYECTO_SELECT_CANDIDATES) {
     const attempt = await supabase.from('ci_proyectos').select(sel).eq('id', id).maybeSingle();
     if (!attempt.error) {
-      return { data: conNombreFila(attempt.data as EntidadConNombre | null), error: null };
+      return { data: attempt.data, error: null };
     }
     lastErr = attempt.error;
   }
@@ -328,9 +327,9 @@ async function fetchCiProyectoCamposContratoPdf(
  * se reintenta con listas más cortas (misma idea que `CI_PROYECTO_SELECT_CANDIDATES`).
  */
 const CI_ENTIDAD_SELECT_CANDIDATES = [
-  'nombre,customer_id,customers(nombre),nombre_legal,nombre_comercial,rif,direccion_fiscal,domicilio_fiscal,municipio_fiscal,estado_fiscal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil',
-  'nombre,customer_id,customers(nombre),nombre_legal,nombre_comercial,rif,direccion_fiscal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil',
-  'nombre,customer_id,customers(nombre),rif,direccion_fiscal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil',
+  'nombre,nombre_legal,nombre_comercial,rif,direccion_fiscal,domicilio_fiscal,municipio_fiscal,estado_fiscal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil',
+  'nombre,nombre_legal,nombre_comercial,rif,direccion_fiscal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil',
+  'nombre,rif,direccion_fiscal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil',
 ] as const;
 
 async function fetchCiEntidadCamposContratoPdf(

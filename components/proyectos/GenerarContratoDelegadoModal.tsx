@@ -5,7 +5,6 @@ import { AlertTriangle, FileSignature, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import { useSyncSubmitLock } from '@/hooks/useSyncSubmitLock';
-import { EntidadConNombre, SELECT_NOMBRE_ENTIDAD, conNombreEntidad, conNombreFila, nombreEntidad } from '@/lib/entidades/nombreEntidad';
 
 export type GenerarContratoDelegadoModalProps = {
   open: boolean;
@@ -52,12 +51,13 @@ export default function GenerarContratoDelegadoModal({
       const supabase = createClient();
       const { data, error: e } = await supabase
         .from('ci_entidades')
-        .select(SELECT_NOMBRE_ENTIDAD);
+        .select('id, nombre')
+        .order('nombre');
       if (e) {
         setError(e.message);
         setEntidades([]);
       } else {
-        setEntidades(conNombreEntidad((data ?? []) as EntidadConNombre[]) as EntidadRow[]);
+        setEntidades((data ?? []) as EntidadRow[]);
       }
       setCargandoEntidades(false);
     })();

@@ -4,7 +4,6 @@ import {
   extraerVencimientosEntidad,
   type PermisologiaVencimientoItem,
 } from '@/lib/legal/permisologiaVencimientos';
-import { EntidadConNombre, SELECT_NOMBRE_ENTIDAD, conNombreEntidad, conNombreFila, nombreEntidad } from '@/lib/entidades/nombreEntidad';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -16,29 +15,25 @@ export async function GET() {
 
   const { data, error } = await gate.admin
     .from('ci_entidades')
-    .select(`${SELECT_NOMBRE_ENTIDAD}, rif, permisologia`);
+    .select('id,nombre,rif,permisologia')
+    .order('nombre');
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
   const items: PermisologiaVencimientoItem[] = [];
-  type FilaEntidadPermisos = EntidadConNombre & {
-    id: string;
-    rif: string | null;
-    permisologia: Parameters<typeof extraerVencimientosEntidad>[0]['permisologia'];
-  };
-  const entidades = conNombreEntidad(data as FilaEntidadPermisos[] | null).map((row) => {
+  const entidades = (data ?? []).map((row) => {
     const vencimientos = extraerVencimientosEntidad({
       id: String(row.id),
-      nombre: row.nombre,
+      nombre: String(row.nombre ?? 'Entidad'),
       rif: row.rif == null ? null : String(row.rif),
       permisologia: row.permisologia,
     });
     items.push(...vencimientos);
     return {
       id: String(row.id),
-      nombre: row.nombre,
+      nombre: String(row.nombre ?? 'Entidad'),
       rif: row.rif == null ? null : String(row.rif),
       permisologia: row.permisologia ?? null,
       alertas: vencimientos,

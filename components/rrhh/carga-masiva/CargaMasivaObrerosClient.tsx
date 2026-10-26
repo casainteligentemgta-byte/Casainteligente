@@ -16,7 +16,6 @@ import {
   type FilaCargaMasivaEntrada,
   type FilaCargaMasivaValidada,
 } from '@/lib/rrhh/cargaMasivaObreros';
-import { EntidadConNombre, SELECT_NOMBRE_ENTIDAD, conNombreEntidad, conNombreFila, nombreEntidad } from '@/lib/entidades/nombreEntidad';
 
 type Obra = { id: string; nombre: string; entidad: string };
 
@@ -85,9 +84,9 @@ export default function CargaMasivaObrerosClient() {
     void (async () => {
       const [{ data: pr }, { data: ent }] = await Promise.all([
         supabase.from('ci_proyectos').select('id,nombre,entidad_id,created_at').order('created_at', { ascending: false }).limit(300),
-        supabase.from('ci_entidades').select(SELECT_NOMBRE_ENTIDAD),
+        supabase.from('ci_entidades').select('id,nombre'),
       ]);
-      const nombreEnt = new Map(conNombreEntidad((ent ?? []) as EntidadConNombre[]).map((e) => [String(e.id), e.nombre]));
+      const nombreEnt = new Map(((ent ?? []) as Array<{ id: string; nombre: string }>).map((e) => [e.id, e.nombre]));
       setObras(
         ((pr ?? []) as Array<{ id: string; nombre: string | null; entidad_id: string | null }>).map((p) => ({
           id: p.id,

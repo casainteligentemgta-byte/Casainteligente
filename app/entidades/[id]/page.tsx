@@ -5,7 +5,6 @@ import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import type { CiEntidad } from '@/types/ci-entidad';
-import { EntidadConNombre, conNombreEntidad, conNombreFila } from '@/lib/entidades/nombreEntidad';
 
 export default function EditarEntidadPage() {
   const params = useParams();
@@ -15,7 +14,6 @@ export default function EditarEntidadPage() {
 
   const [loading, setLoading] = useState(true);
   const [nombre, setNombre] = useState('');
-  const [entidadVinculada, setEntidadVinculada] = useState(false);
   const [rif, setRif] = useState('');
   const [notas, setNotas] = useState('');
   const [saving, setSaving] = useState(false);
@@ -25,14 +23,13 @@ export default function EditarEntidadPage() {
     if (!id) return;
     setLoading(true);
     setError(null);
-    const { data, error: qErr } = await supabase.from('ci_entidades').select('*, customer_id, customers(nombre)').eq('id', id).maybeSingle();
+    const { data, error: qErr } = await supabase.from('ci_entidades').select('*').eq('id', id).maybeSingle();
     setLoading(false);
     if (qErr || !data) {
       setError(qErr?.message ?? 'Entidad no encontrada.');
       return;
     }
-    const r = conNombreFila(data as EntidadConNombre) as CiEntidad;
-    setEntidadVinculada(Boolean((data as { customer_id?: string | null }).customer_id));
+    const r = data as CiEntidad;
     setNombre(r.nombre);
     setRif(r.rif ?? '');
     setNotas(r.notas ?? '');
@@ -48,11 +45,10 @@ export default function EditarEntidadPage() {
     if (!n || !id) return;
     setSaving(true);
     setError(null);
-    const { data: cur } = await supabase.from('ci_entidades').select('customer_id').eq('id', id).maybeSingle();
     const { error: upErr } = await supabase
       .from('ci_entidades')
       .update({
-        ...(cur?.customer_id ? {} : { nombre: n }),
+        nombre: n,
         rif: rif.trim() || null,
         notas: notas.trim() || null,
         updated_at: new Date().toISOString(),
@@ -104,18 +100,7 @@ export default function EditarEntidadPage() {
         <form onSubmit={(e) => void onSubmit(e)} className="mt-6 space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <label className="block">
             <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Nombre o razón social *</span>
-            <input
-              className={inp}
-              value={nombre}
-              onChange={(e) => setNombre(e.target.value)}
-              disabled={Boolean(entidadVinculada)}
-              required
-            />
-            {entidadVinculada ? (
-              <span className="mt-1 block text-xs text-slate-500">
-                Nombre tomado del cliente vinculado. Para cambiarlo, edite el cliente.
-              </span>
-            ) : null}
+            <input className={inp} value={nombre} onChange={(e) => setNombre(e.target.value)} required />
           </label>
           <label className="block">
             <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">RIF</span>

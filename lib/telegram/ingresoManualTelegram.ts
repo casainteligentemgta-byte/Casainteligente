@@ -66,7 +66,6 @@ import {
   tecladoSinObservaciones,
 } from '@/lib/telegram/observacionRapida';
 import { enviarPickerProyectosTelegram, nombreProyectoTelegram } from '@/lib/telegram/proyectoPicker';
-import { EntidadConNombre, SELECT_NOMBRE_ENTIDAD, conNombreEntidad, conNombreFila, nombreEntidad } from '@/lib/entidades/nombreEntidad';
 
 export const FLUJO_INGRESO_MANUAL = 'ingreso_manual';
 /** Ingreso con datos de factura tecleados (obra → almacén → proveedor → Nº → líneas). */
@@ -315,12 +314,12 @@ async function resolverEntidadMetadataProyecto(
 
   const { data: ent } = await supabase
     .from('ci_entidades')
-    .select('nombre, nombre_abreviado, customer_id, customers(nombre)')
+    .select('nombre, nombre_abreviado')
     .eq('id', entidad_id)
     .maybeSingle();
 
   const entidad_nombre =
-    String(ent?.nombre_abreviado ?? nombreEntidad(ent as EntidadConNombre, '')).trim() || null;
+    String(ent?.nombre_abreviado ?? ent?.nombre ?? '').trim() || null;
   return { entidad_id, entidad_nombre };
 }
 

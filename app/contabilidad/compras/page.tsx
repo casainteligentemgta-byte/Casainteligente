@@ -1,6 +1,5 @@
 'use client';
 
-import { EntidadConNombre, SELECT_NOMBRE_ENTIDAD, conNombreEntidad, conNombreFila, nombreEntidad } from '@/lib/entidades/nombreEntidad';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -533,7 +532,8 @@ export default function ComprasPage() {
             const supabase = createClient();
             const { data } = await supabase
                 .from('ci_entidades')
-                .select(SELECT_NOMBRE_ENTIDAD)
+                .select('id,nombre')
+                .order('nombre')
                 .limit(300);
             if (data?.length) {
                 setEntidades(

@@ -382,33 +382,6 @@ export async function manejarCallbackFacturaCompradorManual(
   return true;
 }
 
-const PREGUNTA_POR_PASO: Partial<Record<PasoFacturaCompradorManual, string>> = {
-  proveedor: '✍️ Escriba el <b>nombre del proveedor</b>.',
-  num_doc: '📄 Escriba el <b>número de factura</b> (<code>S/N</code> si no hay).',
-  rif: '🆔 Escriba el <b>RIF del proveedor</b> o <code>-</code> para omitir.',
-  proyecto: '🏗️ Elija la <b>obra o entidad</b> con los botones.',
-  material: '📦 Escriba el <b>material</b> (nombre o código).',
-  cantidad: '🔢 Escriba la <b>cantidad</b>.',
-  precio: '💰 Escriba el <b>precio unitario</b>.',
-  mas_lineas: '➕ ¿Agregar otro material? Use los botones.',
-  foto: '📷 Ya puede enviar la foto.',
-  confirmar: '✅ Confirme con los botones.',
-};
-
-/** Foto fuera de paso: en vez de rechazarla sin explicar, repite la pregunta que falta. */
-export async function recordarPasoFacturaCompradorManual(
-  supabase: SupabaseClient,
-  chatId: string,
-): Promise<void> {
-  const estado = await getTelegramEstado(supabase, chatId);
-  const pregunta = PREGUNTA_POR_PASO[meta(estado).paso as PasoFacturaCompradorManual] ?? '';
-  await sendTelegramMessage(
-    chatId,
-    `📌 <b>Primero responda esto:</b>\n${pregunta}\n\n<code>/cancelar</code> para empezar de nuevo.`,
-    { parse_mode: 'HTML' },
-  );
-}
-
 export async function manejarTextoFacturaCompradorManual(
   supabase: SupabaseClient,
   chatId: string,

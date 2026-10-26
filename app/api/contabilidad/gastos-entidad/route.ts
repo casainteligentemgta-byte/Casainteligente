@@ -3,7 +3,6 @@ import { cargarResumenGastosEntidad } from '@/lib/contabilidad/resumenGastosEnti
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
 import { requireCcoAcceso } from '@/lib/auth/requireCcoRoute';
-import { EntidadConNombre, SELECT_NOMBRE_ENTIDAD, conNombreEntidad, conNombreFila, nombreEntidad } from '@/lib/entidades/nombreEntidad';
 export const dynamic = 'force-dynamic';
 
 function mesActualRango(): { desde: string; hasta: string } {
@@ -42,12 +41,12 @@ export async function GET(req: Request) {
     if (entidadIds.length) {
       const { data: entRows } = await admin.client
         .from('ci_entidades')
-        .select(SELECT_NOMBRE_ENTIDAD)
+        .select('id,nombre')
         .in('id', entidadIds.slice(0, 100));
       entidadesMap = Object.fromEntries(
-        (entRows ?? []).map((e: { id: string } & EntidadConNombre) => [
+        (entRows ?? []).map((e: { id: string; nombre: string | null }) => [
           e.id,
-          nombreEntidad(e),
+          (e.nombre ?? 'Entidad').trim(),
         ]),
       );
     }

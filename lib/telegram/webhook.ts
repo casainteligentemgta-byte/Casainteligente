@@ -60,7 +60,6 @@ import {
   manejarCallbackFacturaCompradorManual,
   manejarFotoFacturaCompradorManual,
   manejarTextoFacturaCompradorManual,
-  recordarPasoFacturaCompradorManual,
 } from '@/lib/telegram/facturaCompradorManualTelegram';
 import {
   esCallbackCondicionPagoFactura,
@@ -487,12 +486,6 @@ async function manejarComandoFacturasDirecto(
   warn?: string;
 }> {
   try {
-    // Limpia cualquier carga manual a medias: la siguiente foto se lee con IA.
-    await setTelegramContexto(supabase, chatId, {
-      contexto: 'factura',
-      metadata: {},
-      reemplazarMetadata: true,
-    });
     const { enviarMenuCarga } = await import('@/lib/telegram/menuCargaTelegram');
     await enviarMenuCarga(supabase, chatId);
   } catch (err) {
@@ -1186,18 +1179,6 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
         return NextResponse.json({ ok: true, factura_dias_credito_texto: true });
       }
 
-      const { manejarTextoDatoFaltanteFactura } = await import('@/lib/telegram/faltantesFacturaTelegram');
-      const { avanzarFlujoFacturaCompradorTelegram } = await import('@/lib/telegram/flujoFacturaCompradorTelegram');
-      const textoDatoFaltante = await manejarTextoDatoFaltanteFactura(
-        supabase,
-        chatId,
-        texto,
-        avanzarFlujoFacturaCompradorTelegram,
-      );
-      if (textoDatoFaltante) {
-        return NextResponse.json({ ok: true, factura_dato_faltante_texto: true });
-      }
-
       const estadoMotivoRechazo = await getTelegramEstado(supabase, chatId);
       if (esEsperandoMotivoRechazoProcura(estadoMotivoRechazo)) {
         const textoRechazo = await manejarTextoMotivoRechazoProcura(supabase, chatId, texto);
@@ -1748,37 +1729,6 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
         { parse_mode: 'HTML' },
       );
       return NextResponse.json({ ok: true, hint: 'no_media' });
-    }
-
-    // PDF o archivo en el ingreso manual del depositario: se lee igual que una foto.
-    if (msg.document) {
-      const estadoIngresoDoc = await getTelegramEstado(supabase, chatId);
-      const pasoIngresoDoc = (estadoIngresoDoc.metadata as { paso?: string })?.paso;
-      if (
-        esFlujoIngresoManual(estadoIngresoDoc) &&
-        (pasoIngresoDoc === 'foto' || pasoIngresoDoc === 'observacion' || pasoIngresoDoc === 'foto_inicial')
-      ) {
-        try {
-          const { downloadTelegramFile, mimeFromTelegramPath } = await import('@/lib/telegram/botApi');
-          const { buffer, filePath } = await downloadTelegramFile(archivo.fileId);
-          await manejarFotoIngresoManual({
-            supabase,
-            chatId,
-            userId,
-            username: msg.from?.username ?? null,
-            buffer,
-            mimeType: msg.document.mime_type ?? mimeFromTelegramPath(filePath),
-            ext: filePath.split('.').pop() ?? 'pdf',
-            fileName: msg.document.file_name,
-            caption: msg.caption,
-          });
-          return NextResponse.json({ ok: true, ingreso_manual_documento: true });
-        } catch (err) {
-          console.error('[telegram ingreso manual documento]', err);
-          await sendTelegramMessage(chatId, '❌ No se pudo leer el documento.', { parse_mode: 'HTML' });
-          return NextResponse.json({ ok: true, ingreso_manual_documento: 'error' });
-        }
-      }
     }
 
     const estado = await getTelegramEstado(supabase, chatId);

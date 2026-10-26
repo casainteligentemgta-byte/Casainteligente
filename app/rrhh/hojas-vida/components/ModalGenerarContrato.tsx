@@ -16,7 +16,6 @@ import {
   evaluarChecklistObraContratoPm,
   type ChecklistObraContratoPm,
 } from '@/lib/talento/datosObraContratoPm';
-import { EntidadConNombre, SELECT_NOMBRE_ENTIDAD, conNombreEntidad, conNombreFila, nombreEntidad } from '@/lib/entidades/nombreEntidad';
 
 const formSchema = z.object({
   fechaIngreso: z
@@ -202,17 +201,17 @@ async function cargarContextoContrato(client: SupabaseClient, obreroId: string, 
       }
       if (eid) {
         const selEntFull =
-          'id,nombre,customer_id,customers(nombre),nombre_legal,rif,domicilio_fiscal,direccion_fiscal,representante_legal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil';
+          'id,nombre,nombre_legal,rif,domicilio_fiscal,direccion_fiscal,representante_legal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil';
         let ent = await client.from('ci_entidades').select(selEntFull).eq('id', eid).maybeSingle();
         if (ent.error) {
           ent = await client
             .from('ci_entidades')
-            .select('id,nombre,customer_id,customers(nombre),rif,direccion_fiscal,representante_legal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil')
+            .select('id,nombre,rif,direccion_fiscal,representante_legal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil')
             .eq('id', eid)
             .maybeSingle();
         }
         if (!ent.error && ent.data) {
-          const raw = conNombreFila(ent.data as EntidadConNombre) as Record<string, unknown>;
+          const raw = ent.data as Record<string, unknown>;
           const nombreLegal =
             (typeof raw.nombre_legal === 'string' ? raw.nombre_legal : null) ??
             (typeof raw.nombre === 'string' ? raw.nombre : null);

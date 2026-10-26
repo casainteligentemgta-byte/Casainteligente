@@ -48,7 +48,6 @@ import type {
   RegistroMercantilCi,
   RepresentanteMercantilCi,
 } from '@/types/ci-entidad';
-import { EntidadConNombre, nombreEntidad } from '@/lib/entidades/nombreEntidad';
 
 type PermFormRow = PermisoPatronoItem & { file: File | null };
 
@@ -255,7 +254,7 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
     const e = entidad;
     setTab('datos');
     setEnSeccion(false);
-    setNombreLegal(nombreEntidad(e as EntidadConNombre | null, '').trim());
+    setNombreLegal((e?.nombre ?? '').trim());
     setNombreComercial((e?.nombre_comercial ?? '').trim());
     setRif(formatRifMascara((e?.rif ?? '').trim()));
     setDireccionFiscal((e?.direccion_fiscal ?? '').trim());
@@ -416,9 +415,8 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
 
       let id = entidad?.id ?? '';
 
-      const entidadVinculada = Boolean((entidad as { customer_id?: string | null } | null)?.customer_id);
       const basePayload = {
-        ...(entidadVinculada ? {} : { nombre: nombreLegal.trim() }),
+        nombre: nombreLegal.trim(),
         nombre_comercial: nombreComercial.trim() || null,
         rif: rif.trim() || null,
         direccion_fiscal: direccionFiscal.trim() || null,
@@ -667,7 +665,6 @@ export default function FormularioEntidad({ open, onClose, entidad, onGuardado }
                   <input
                     required
                     value={nombreLegal}
-                    disabled={Boolean((entidad as { customer_id?: string | null } | null)?.customer_id)}
                     onChange={(e) => setNombreLegal(e.target.value)}
                     className={inputClass}
                     placeholder="Razón social registrada"

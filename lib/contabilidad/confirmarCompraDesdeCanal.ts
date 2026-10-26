@@ -20,7 +20,7 @@ import {
   formaPagoExtractedCompleta,
   monedaExtractedConfirmada,
   normalizarMonedaExtracted,
-  payloadCondicionPagoCompra,
+  parseCondicionPagoExtracted,
   type ExtractedCanalHeader,
 } from '@/lib/contabilidad/extractedCanal';
 import type { LineaCompraContabilidadInput } from '@/lib/contabilidad/registerCompraDesdeRecepcion';
@@ -459,7 +459,6 @@ async function confirmarCompraDesdeCanalInterno(
       document_storage_path: docStoragePath,
       document_file_name: docFileName,
       document_mime_type: docMimeType,
-      ...payloadCondicionPagoCompra(extracted, fecha),
     };
 
     const { data: inv, error: invErr } = await supabase

@@ -11,7 +11,6 @@ import { apiUrl } from '@/lib/http/apiUrl';
 import { withTimeout } from '@/lib/http/withTimeout';
 import { parseClientesApiResponse } from '@/lib/proyectos/parseClientesApiResponse';
 import { moduloProyectosPageShell, moduloProyectosStickyHeader } from '@/lib/ui/moduloProyectosTheme';
-import { EntidadConNombre, SELECT_NOMBRE_ENTIDAD, conNombreEntidad, conNombreFila, nombreEntidad } from '@/lib/entidades/nombreEntidad';
 
 type Customer = Record<string, unknown> & { id: string };
 type Budget = {
@@ -198,14 +197,15 @@ export default function NuevoProyectoModuloPage() {
 
         const full = await supabase
           .from('ci_entidades')
-          .select(`${SELECT_NOMBRE_ENTIDAD}, nombre_legal, rif`);
+          .select('id,nombre,nombre_legal,rif')
+          .order('nombre_legal', { ascending: true, nullsFirst: false });
 
         if (full.error) {
-          const fallback = await supabase.from('ci_entidades').select(`${SELECT_NOMBRE_ENTIDAD}, rif`);
+          const fallback = await supabase.from('ci_entidades').select('id,nombre,rif').order('nombre');
           if (fallback.error) {
             entErr = fallback.error as { message?: string };
           } else {
-            data = conNombreEntidad((fallback.data ?? []) as Array<EntidadConNombre & { id: string; rif: string | null }>).map((r) => ({
+            data = ((fallback.data ?? []) as Array<{ id: string; nombre: string | null; rif: string | null }>).map((r) => ({
               id: r.id,
               nombre: r.nombre,
               nombre_legal: null,
@@ -213,7 +213,7 @@ export default function NuevoProyectoModuloPage() {
             }));
           }
         } else {
-          data = conNombreEntidad((full.data ?? []) as EntidadConNombre[]) as EntidadOpt[];
+          data = (full.data ?? []) as EntidadOpt[];
         }
 
         if (cancelled) return;

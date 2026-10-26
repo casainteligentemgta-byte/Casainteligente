@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import type { CiEntidad } from '@/types/ci-entidad';
-import { EntidadConNombre, conNombreEntidad, conNombreFila } from '@/lib/entidades/nombreEntidad';
 
 export default async function EntidadesPage() {
   let entidades: CiEntidad[] = [];
@@ -9,9 +8,9 @@ export default async function EntidadesPage() {
 
   try {
     const supabase = await createClient();
-    const { data, error: e } = await supabase.from('ci_entidades').select('*, customer_id, customers(nombre)');
+    const { data, error: e } = await supabase.from('ci_entidades').select('*').order('nombre');
     if (e) error = e.message;
-    else if (data) entidades = conNombreEntidad(data as EntidadConNombre[]) as CiEntidad[];
+    else if (data) entidades = data as CiEntidad[];
   } catch (err) {
     error = err instanceof Error ? err.message : 'Error al conectar';
   }

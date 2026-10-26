@@ -7,7 +7,6 @@ import {
   moduloProyectosPageShell,
   moduloProyectosStickyHeader,
 } from '@/lib/ui/moduloProyectosTheme';
-import { EntidadConNombre, SELECT_NOMBRE_ENTIDAD, conNombreEntidad, conNombreFila, nombreEntidad } from '@/lib/entidades/nombreEntidad';
 
 type ObraRow = {
   id: string;
@@ -47,8 +46,8 @@ export default function EditarObraTalentoPage({ params }: { params: { proyectoId
 
   useEffect(() => {
     void (async () => {
-      const { data } = await supabase.from('ci_entidades').select(`${SELECT_NOMBRE_ENTIDAD}, rif`);
-      setEntidades(conNombreEntidad((data ?? []) as EntidadConNombre[]) as EntidadOpt[]);
+      const { data } = await supabase.from('ci_entidades').select('id,nombre,rif').order('nombre');
+      setEntidades((data ?? []) as EntidadOpt[]);
     })();
   }, [supabase]);
 

@@ -7,7 +7,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import type { CiEntidad } from '@/types/ci-entidad';
-import { EntidadConNombre, conNombreEntidad } from '@/lib/entidades/nombreEntidad';
 
 /** Carga diferida: el formulario (Radix Tabs + muchos campos) no forma parte del chunk inicial de la ruta; evita fallos de carga tipo `/_next/undefined` en dev tras HMR o splits raros de webpack. */
 const FormularioEntidad = dynamic(() => import('./FormularioEntidad'), {
@@ -20,7 +19,7 @@ const FormularioEntidad = dynamic(() => import('./FormularioEntidad'), {
 });
 
 const SELECT_ENTIDADES =
-  'id,nombre,customer_id,customers(nombre),nombre_comercial,rif,direccion_fiscal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil,permisologia,logo_url,sello_url,notas,created_at,updated_at';
+  'id,nombre,nombre_comercial,rif,direccion_fiscal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil,permisologia,logo_url,sello_url,notas,created_at,updated_at';
 
 export default function EntidadesPatronoClient() {
   const router = useRouter();
@@ -43,7 +42,7 @@ export default function EntidadesPatronoClient() {
   const cargar = useCallback(async () => {
     setCargando(true);
     setError(null);
-    const full = await supabase.from('ci_entidades').select(SELECT_ENTIDADES);
+    const full = await supabase.from('ci_entidades').select(SELECT_ENTIDADES).order('nombre');
 
     if (full.error) {
       const msg = full.error.message ?? '';
@@ -52,13 +51,14 @@ export default function EntidadesPatronoClient() {
       if (schemaMismatch) {
         const minimal = await supabase
           .from('ci_entidades')
-          .select('id,nombre,customer_id,customers(nombre),rif,notas,created_at,updated_at');
+          .select('id,nombre,rif,notas,created_at,updated_at')
+          .order('nombre');
         if (minimal.error) {
           const m = minimal.error.message ?? 'Error al cargar entidades.';
           setError(`${m}${m.toLowerCase().includes('relation') ? ' — Ejecuta migración 063 (ci_entidades).' : ''}`);
           setFilas([]);
         } else {
-          setFilas(conNombreEntidad((minimal.data ?? []) as EntidadConNombre[]) as CiEntidad[]);
+          setFilas((minimal.data ?? []) as CiEntidad[]);
           setError(null);
         }
       } else {
@@ -68,7 +68,7 @@ export default function EntidadesPatronoClient() {
         setFilas([]);
       }
     } else {
-      setFilas(conNombreEntidad((full.data ?? []) as EntidadConNombre[]) as CiEntidad[]);
+      setFilas((full.data ?? []) as CiEntidad[]);
       setError(null);
     }
     setCargando(false);
