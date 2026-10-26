@@ -11,7 +11,7 @@ import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
 export const dynamic = 'force-dynamic';
 
-const SELECT_LISTADO = `id,ticket,estado,material_txt,cantidad,unidad,proyecto_id,entidad_id,ubicacion_destino_id,motivo_ultimo,observaciones,created_at,updated_at,ci_proyectos(nombre),ci_entidades(nombre),${SELECT_PROCURA_SOLICITANTE}`;
+const SELECT_LISTADO = `id,ticket,estado,material_txt,cantidad,unidad,proyecto_id,entidad_id,ubicacion_destino_id,motivo_ultimo,observaciones,created_at,updated_at,ci_proyectos(nombre),ci_entidades(nombre,customer_id,customers(nombre)),${SELECT_PROCURA_SOLICITANTE}`;
 
 /** GET listado de procuras. */
 export async function GET(req: Request) {
@@ -67,7 +67,7 @@ export async function GET(req: Request) {
 
     if (error && /solicitante_nombre|ci_procuras_solicitante/i.test(error.message)) {
       const fallbackSelect =
-        'id,ticket,estado,material_txt,cantidad,unidad,proyecto_id,entidad_id,ubicacion_destino_id,motivo_ultimo,observaciones,solicitante_empleado_id,solicitante_telegram_chat_id,created_at,updated_at,ci_proyectos(nombre),ci_entidades(nombre)';
+        'id,ticket,estado,material_txt,cantidad,unidad,proyecto_id,entidad_id,ubicacion_destino_id,motivo_ultimo,observaciones,solicitante_empleado_id,solicitante_telegram_chat_id,created_at,updated_at,ci_proyectos(nombre),ci_entidades(nombre,customer_id,customers(nombre))';
       let q2 = admin.client.from('ci_procuras').select(fallbackSelect).order('updated_at', { ascending: false }).limit(limit);
       if (estado) q2 = q2.eq('estado', estado);
       if (proyectoId) q2 = q2.eq('proyecto_id', proyectoId);

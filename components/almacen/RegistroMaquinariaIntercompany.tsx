@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import { labelPartida, type PartidaRow } from '@/lib/almacen/inventoryClasificacion';
 import { calcularTechoRemanentePartida } from '@/lib/proyectos/techoPartidaLulo';
+import { nombreEntidad, type EntidadConNombre } from '@/lib/entidades/nombreEntidad';
 import { useSyncSubmitLock } from '@/hooks/useSyncSubmitLock';
 
 const SELECT_MAQUINARIA = `
@@ -15,7 +16,7 @@ const SELECT_MAQUINARIA = `
   costo_hora_cliente_final,
   activo,
   inventory:global_inventory ( id, name, sap_code ),
-  entidad:ci_entidades ( id, nombre, nombre_abreviado )
+  entidad:ci_entidades ( id, nombre, nombre_abreviado, customer_id, customers(nombre) )
 `;
 
 type MaquinariaRow = {
@@ -296,7 +297,7 @@ export default function RegistroMaquinariaIntercompany({ proyectoId }: Props) {
                   const inv = joinOne(m.inventory);
                   const ent = joinOne(m.entidad);
                   const entLabel = ent
-                    ? abreviarEntidad(ent.nombre, ent.nombre_abreviado)
+                    ? abreviarEntidad(nombreEntidad(ent as EntidadConNombre, ''), ent.nombre_abreviado)
                     : '—';
                   const nombre = inv?.name ?? m.codigo_interno ?? 'Equipo';
                   const sap = inv?.sap_code ? ` · ${inv.sap_code}` : '';
@@ -316,7 +317,7 @@ export default function RegistroMaquinariaIntercompany({ proyectoId }: Props) {
                   Entidad dueña:{' '}
                   <span className="font-bold text-amber-200">
                     {abreviarEntidad(
-                      joinOne(maquinaSel.entidad)?.nombre ?? '',
+                      nombreEntidad(joinOne(maquinaSel.entidad) as EntidadConNombre | null | undefined, ''),
                       joinOne(maquinaSel.entidad)?.nombre_abreviado,
                     )}
                   </span>

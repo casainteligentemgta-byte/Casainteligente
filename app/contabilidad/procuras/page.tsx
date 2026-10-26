@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Check, FileImage, Link2, Loader2, RefreshCw, Timer, Trash2, X } from 'lucide-react';
 import { apiUrl } from '@/lib/http/apiUrl';
+import { nombreEntidadDeRelacion } from '@/lib/entidades/nombreEntidad';
 import {
   COLOR_ESTADO_PROCURA,
   etiquetaEstadoProcura,
@@ -64,7 +65,7 @@ function nombreRel(
 function etiquetaObra(f: ProcuraRow): string {
   const obra = nombreRel(f.ci_proyectos);
   if (obra) return obra;
-  const entidad = nombreRel(f.ci_entidades);
+  const entidad = nombreEntidadDeRelacion(f.ci_entidades as Parameters<typeof nombreEntidadDeRelacion>[0]);
   if (entidad) return entidad;
   return '—';
 }

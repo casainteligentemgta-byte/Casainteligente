@@ -80,7 +80,7 @@ export async function GET() {
         honorarios_admin_pct,
         estado,
         created_at,
-        entidad:ci_entidades ( nombre )
+        entidad:ci_entidades ( nombre, customer_id, customers(nombre) )
       `,
       )
       .in('proyecto_id', proyectoIds)
@@ -103,7 +103,7 @@ export async function GET() {
           row.honorarios_admin_pct != null ? Number(row.honorarios_admin_pct) : null,
         estado: String(row.estado ?? ''),
         created_at: String(row.created_at),
-        entidad: ent ?? null,
+        entidad: ent ? { nombre: nombreEntidad(ent as EntidadConNombre, '') } : null,
       });
     }
   }

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { nombreEntidadDeRelacion, type EntidadConNombre } from '@/lib/entidades/nombreEntidad';
 
 export const TIPO_CONTRATO_AD = 'administracion_delegada';
 export const ESTADO_CONTRATO_EXITOSO = 'exitoso';
@@ -46,7 +47,7 @@ export async function obtenerContratoAdProyecto(
       honorarios_admin_pct,
       estado,
       created_at,
-      entidad:ci_entidades ( nombre )
+      entidad:ci_entidades ( nombre, customer_id, customers(nombre) )
     `,
     )
     .eq('proyecto_id', proyectoId)
@@ -57,8 +58,9 @@ export async function obtenerContratoAdProyecto(
 
   if (error || !data) return null;
 
-  const entRaw = data.entidad as { nombre: string } | { nombre: string }[] | null;
-  const ent = Array.isArray(entRaw) ? entRaw[0] : entRaw;
+  const entNombre = nombreEntidadDeRelacion(
+    data.entidad as EntidadConNombre | EntidadConNombre[] | null,
+  );
 
   return {
     id: String(data.id),
@@ -67,7 +69,7 @@ export async function obtenerContratoAdProyecto(
       data.honorarios_admin_pct != null ? Number(data.honorarios_admin_pct) : null,
     estado: String(data.estado ?? ''),
     created_at: String(data.created_at),
-    entidad: ent ?? null,
+    entidad: entNombre ? { nombre: entNombre } : null,
   };
 }
 
