@@ -86,11 +86,13 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     // Historial: qué campos cambian respecto a la versión guardada.
     let cambiosExtracted: CambioFactura[] = [];
     if (body.extracted !== undefined) {
-      const { data: actual } = await supabase
+      const { data: actualRaw } = await supabase
         .from('ci_facturas_canal_pendientes')
         .select('extracted')
         .eq('id', id)
         .maybeSingle();
+      // El cliente de Supabase sin tipos generados infiere `never`; se tipa a mano.
+      const actual = actualRaw as { extracted?: unknown } | null;
       cambiosExtracted = cambiosEntreFacturas(
         (actual?.extracted ?? {}) as Record<string, unknown>,
         body.extracted,
