@@ -143,6 +143,7 @@ import {
   MENSAJE_NO_DISPONIBLE_DEPOSITARIO,
 } from '@/lib/telegram/botCommands';
 import { COMANDOS_SOLO_NO_COMPRADOR, MENSAJE_NO_DISPONIBLE_COMPRADOR, esChatComprador } from '@/lib/telegram/compradorRestricciones';
+import { MENSAJE_SOLO_FOTO_CHOFER, callbackPermitidoChofer, esChatChofer } from '@/lib/flota/choferTelegram';
 import { esFlujoNotaPrecarga, manejarFotoNotaPrecarga } from '@/lib/telegram/notaPrecargaTelegram';
 import {
   esCallbackResolverLineas,
@@ -263,6 +264,8 @@ import {
 } from '@/lib/telegram/stockCommand';
 
 const CMD_FACTURAS = /^\/facturas?(@\S+)?\s*$/i;
+/** Comandos que un chofer puede usar: cargar facturas y notas, y arrancar el bot. */
+const CMD_PERMITIDO_CHOFER = /^\/(facturas?|nota|start|ayuda)(@\S+)?(\s|$)/i;
 
 export type TelegramUpdate = {
   message?: {
@@ -493,8 +496,12 @@ async function manejarComandoFacturasDirecto(
       metadata: {},
       reemplazarMetadata: true,
     });
-    const { enviarMenuCarga } = await import('@/lib/telegram/menuCargaTelegram');
-    await enviarMenuCarga(supabase, chatId);
+    const { enviarMenuCarga, enviarMenuCargaChofer } = await import('@/lib/telegram/menuCargaTelegram');
+    if (await esChatChofer(supabase, chatId)) {
+      await enviarMenuCargaChofer(chatId);
+    } else {
+      await enviarMenuCarga(supabase, chatId);
+    }
   } catch (err) {
     console.error('[telegram /facturas menu]', err);
     return { ok: true, warn: 'menu' };
@@ -529,6 +536,14 @@ export async function handleTelegramCallbackQuery(
   }
 
   try {
+
+    // Chofer: solo factura por foto y nota con foto; nada del menú de ingreso.
+    if (await esChatChofer(admin.client, chatId)) {
+      if (esCallbackMenuIngresoTelegram(cq.data) || !callbackPermitidoChofer(cq.data)) {
+        await sendTelegramMessage(chatId, MENSAJE_SOLO_FOTO_CHOFER, { parse_mode: 'HTML' });
+        return NextResponse.json({ ok: true, denied: 'chofer' });
+      }
+    }
 
     if (esCallbackMenuIngresoTelegram(cq.data)) {
       const handled = await manejarCallbackMenuIngresoTelegram(admin.client, {
@@ -1087,6 +1102,11 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
 
     const label = chatLabel(msg);
     const texto = msg.text?.trim() ?? '';
+
+    if (texto.startsWith('/') && !CMD_PERMITIDO_CHOFER.test(texto) && (await esChatChofer(supabase, chatId))) {
+      await sendTelegramMessage(chatId, MENSAJE_SOLO_FOTO_CHOFER, { parse_mode: 'HTML' });
+      return NextResponse.json({ ok: true, denied: 'chofer' });
+    }
 
     const userId = String(msg.from?.id ?? msg.chat.id);
 

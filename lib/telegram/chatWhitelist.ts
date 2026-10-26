@@ -3,6 +3,7 @@ import { getTelegramAllowedChatIds } from '@/lib/telegram/botApi';
 import { telegramSupabaseAdmin } from '@/lib/telegram/supabaseAdmin';
 import { simulacionBotActiva } from '@/lib/telegram/simulacion/contexto';
 import { esChatDeEnsayo } from '@/lib/telegram/simulacion/obraDeEnsayo';
+import { esChatChofer } from '@/lib/flota/choferTelegram';
 
 export type FilaTelegramWhitelist = {
   id: string;
@@ -162,7 +163,11 @@ export async function isChatAllowedAsync(chatId: string | number): Promise<boole
   if (!activa) return true;
 
   const dbIds = await getCachedAllowedDbIds();
-  return dbIds.has(id);
+  if (dbIds.has(id)) return true;
+
+  // Conductores de la flota activos: entran aunque no estén en la lista blanca.
+  const admin = telegramSupabaseAdmin();
+  return admin.ok ? esChatChofer(admin.client, id) : false;
 }
 
 export async function listarTelegramWhitelist(
