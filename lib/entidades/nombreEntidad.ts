@@ -22,6 +22,18 @@ export function nombreEntidad(entidad: EntidadConNombre | null | undefined, fall
 }
 
 /**
+ * Nombre de una entidad embebida en otra consulta (`ci_entidades(...)`), que PostgREST
+ * devuelve como objeto o como arreglo. Requiere haber pedido `customer_id, customers(nombre)`.
+ */
+export function nombreEntidadDeRelacion(
+  rel: EntidadConNombre | EntidadConNombre[] | null | undefined,
+  fallback = '',
+): string {
+  const ent = Array.isArray(rel) ? rel[0] : rel;
+  return ent ? nombreEntidad(ent, fallback) : fallback;
+}
+
+/**
  * Aplica el nombre resuelto a cada fila y ordena por nombre.
  * Úsalo después de un select que incluya SELECT_NOMBRE_ENTIDAD.
  */

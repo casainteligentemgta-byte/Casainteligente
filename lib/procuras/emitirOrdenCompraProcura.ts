@@ -3,6 +3,10 @@ import {
   listarUsuariosOrdenCompraTelegram,
 } from '@/lib/compras/usuariosSistemaTelegram';
 import { etiquetaCapituloMaestro } from '@/lib/compras/capitulosMaestro';
+import {
+  nombreEntidadDeRelacion,
+  type EntidadConNombre,
+} from '@/lib/entidades/nombreEntidad';
 import { nombreMaterialProcuraVisible } from '@/lib/compras/procuraMaterialTexto';
 import { LINEA_COMPRA_A_CREDITO, procuraSinFondos } from '@/lib/procuras/compraACredito';
 import {
@@ -53,7 +57,7 @@ export type ProcuraOrdenCompraRow = {
   /** Migración 365: el solicitante eligió comprar; el almacén no despacha esta procura. */
   solo_compra?: boolean | null;
   ci_proyectos?: { nombre: string } | { nombre: string }[] | null;
-  ci_entidades?: { nombre: string } | { nombre: string }[] | null;
+  ci_entidades?: EntidadConNombre | EntidadConNombre[] | null;
   ci_compras_capitulos_maestro?: { codigo?: string; nombre?: string } | null;
 };
 
@@ -81,7 +85,7 @@ export async function cargarProcuraOrdenCompra(
   const { data, error } = await supabase
     .from('ci_procuras')
     .select(
-      'id,ticket,estado,material_txt,material_id,cantidad,unidad,solicitante_nombre,solicitante_telegram_chat_id,prioridad,monto_estimado_usd,observaciones,proyecto_id,entidad_id,viabilidad_presupuestaria,solo_compra,ci_proyectos(nombre),ci_entidades(nombre),ci_compras_capitulos_maestro(codigo,nombre)',
+      'id,ticket,estado,material_txt,material_id,cantidad,unidad,solicitante_nombre,solicitante_telegram_chat_id,prioridad,monto_estimado_usd,observaciones,proyecto_id,entidad_id,viabilidad_presupuestaria,solo_compra,ci_proyectos(nombre),ci_entidades(nombre,customer_id,customers(nombre)),ci_compras_capitulos_maestro(codigo,nombre)',
     )
     .eq('id', procuraId.trim())
     .maybeSingle();
@@ -110,7 +114,7 @@ export function mensajeOrdenCompraComprador(
   const obra =
     capLabel ||
     nombreRel(procura.ci_proyectos) ||
-    nombreRel(procura.ci_entidades) ||
+    nombreEntidadDeRelacion(procura.ci_entidades) ||
     '—';
   const qty =
     params.cantidadCompra != null && Number.isFinite(params.cantidadCompra)
