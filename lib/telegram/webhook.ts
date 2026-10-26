@@ -1115,11 +1115,6 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
     const label = chatLabel(msg);
     const texto = msg.text?.trim() ?? '';
 
-    if (texto.startsWith('/') && !CMD_PERMITIDO_CHOFER.test(texto) && (await esChatChofer(supabase, chatId))) {
-      await sendTelegramMessage(chatId, MENSAJE_SOLO_FOTO_CHOFER, { parse_mode: 'HTML' });
-      return NextResponse.json({ ok: true, denied: 'chofer' });
-    }
-
     const userId = String(msg.from?.id ?? msg.chat.id);
 
     const admin = telegramSupabaseAdmin();
@@ -1133,6 +1128,11 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
     }
 
     const supabase = admin.client;
+
+    if (texto.startsWith('/') && !CMD_PERMITIDO_CHOFER.test(texto) && (await esChatChofer(supabase, chatId))) {
+      await sendTelegramMessage(chatId, MENSAJE_SOLO_FOTO_CHOFER, { parse_mode: 'HTML' });
+      return NextResponse.json({ ok: true, denied: 'chofer' });
+    }
 
     if (texto && esComandoDetenidos(texto)) {
       await eliminarBotEstadoAgua(supabase, userId).catch(() => undefined);
