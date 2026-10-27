@@ -337,10 +337,8 @@ async function aplicarComando(
   cmd: ReturnType<typeof procesarComandoTelegram>,
   userId?: string,
 ): Promise<void> {
+  // Agua, stock y /factura sí están disponibles para el depositario (su menú).
   const pideFuncionSoloNoDepositario =
-    Boolean(cmd.comandoAgua) ||
-    Boolean(cmd.comandoStockConsulta) ||
-    Boolean(cmd.stockKeyword) ||
     Boolean(cmd.comandoAgenda) ||
     Boolean(cmd.comandoLimpiarAgenda) ||
     Boolean(cmd.comandoTecnico) ||
