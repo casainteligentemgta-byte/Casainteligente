@@ -1,44 +1,7 @@
 -- Una factura (contabilidad_compras / purchase_invoice) puede cubrir varias procuras.
-
-create table if not exists public.ci_procura_factura_vinculos (
-  id uuid primary key default gen_random_uuid(),
-  procura_id uuid not null references public.ci_procuras (id) on delete cascade,
-  contabilidad_compra_id uuid not null references public.contabilidad_compras (id) on delete cascade,
-  purchase_invoice_id uuid references public.purchase_invoices (id) on delete set null,
-  created_at timestamptz not null default now(),
-  constraint ci_procura_factura_vinculos_procura_unique unique (procura_id)
-);
-
-create index if not exists idx_ci_procura_factura_vinculos_compra
-  on public.ci_procura_factura_vinculos (contabilidad_compra_id);
-
-create index if not exists idx_ci_procura_factura_vinculos_pi
-  on public.ci_procura_factura_vinculos (purchase_invoice_id)
-  where purchase_invoice_id is not null;
-
-comment on table public.ci_procura_factura_vinculos is
-  'N procuras → 1 factura contable. Cada procura aparece como máximo en una factura.';
-
-alter table public.ci_procura_factura_vinculos enable row level security;
-
--- Backfill desde vínculos existentes (procura_id en contabilidad_compras)
-insert into public.ci_procura_factura_vinculos (procura_id, contabilidad_compra_id, purchase_invoice_id)
-select p.id, cc.id, cc.purchase_invoice_id
-from public.ci_procuras p
-join public.contabilidad_compras cc on cc.procura_id = p.id
-where p.id is not null
-on conflict (procura_id) do nothing;
-
--- Backfill desde purchase_invoice_id en procura sin fila en contabilidad_compras.procura_id
-insert into public.ci_procura_factura_vinculos (procura_id, contabilidad_compra_id, purchase_invoice_id)
-select p.id, cc.id, p.purchase_invoice_id
-from public.ci_procuras p
-join public.contabilidad_compras cc on cc.purchase_invoice_id = p.purchase_invoice_id
-where p.purchase_invoice_id is not null
-  and not exists (
-    select 1 from public.ci_procura_factura_vinculos v where v.procura_id = p.id
-  )
-on conflict (procura_id) do nothing;
+-- Nota: esta migración ya no crea la tabla puente ci_procura_factura_vinculos.
+-- Esa tabla nunca existió en producción; el vínculo procura↔factura se guarda en
+-- ci_procuras.purchase_invoice_id y contabilidad_compras.procura_id.
 
 create or replace function public.ci_vincular_procura_compra(
   p_purchase_invoice_id uuid,
@@ -143,17 +106,6 @@ begin
   set procura_id = coalesce(c.procura_id, v_procura_id)
   where c.id = v_cc.id;
 
-  insert into public.ci_procura_factura_vinculos (
-    procura_id,
-    contabilidad_compra_id,
-    purchase_invoice_id
-  )
-  values (v_procura_id, v_cc.id, v_pi)
-  on conflict (procura_id) do update
-  set
-    contabilidad_compra_id = excluded.contabilidad_compra_id,
-    purchase_invoice_id = excluded.purchase_invoice_id;
-
   v_desv := public.ci_calcular_desviacion_procura_usd(v_procura_id);
 
   update public.ci_procuras p
@@ -169,4 +121,4 @@ end;
 $$;
 
 comment on function public.ci_vincular_procura_compra(uuid, uuid, uuid, boolean) is
-  'Enlaza procura↔factura; permite varias procuras en la misma compra contable (tabla puente).';
+  'Enlaza procura↔factura por ci_procuras.purchase_invoice_id y contabilidad_compras.procura_id.';
