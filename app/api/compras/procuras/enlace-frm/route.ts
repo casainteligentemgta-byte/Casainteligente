@@ -97,7 +97,9 @@ export async function GET(req: Request) {
   }[];
 
   const ids = (recepciones ?? []).map((r) => String(r.id));
-  const proveedorIds = [...new Set((recepciones ?? []).map((r) => r.proveedor_id).filter(Boolean))] as string[];
+  const proveedorIds = Array.from(
+    new Set((recepciones ?? []).map((r) => r.proveedor_id).filter(Boolean)),
+  ) as string[];
 
   const [resLineas, resEmpresas] = await Promise.all([
     ids.length
