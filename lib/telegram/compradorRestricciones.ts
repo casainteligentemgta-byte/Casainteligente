@@ -7,6 +7,10 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 export const MENSAJE_NO_DISPONIBLE_COMPRADOR =
   '⛔ El comprador no registra ingresos ni salidas de almacén. Use /facturas o /nota para cargar facturas y notas de entrega.';
 
+/** Fotos / evidencia de obra: el comprador no las registra (eso es de obra y de administración). */
+export const MENSAJE_EVIDENCIA_OBRA_NO_COMPRADOR =
+  '⛔ El comprador no registra fotos ni evidencia de obra. Use /facturas o /nota para cargar facturas y notas de entrega.';
+
 /** Comandos de movimiento de almacén que el comprador no puede usar. */
 export const COMANDOS_SOLO_NO_COMPRADOR = [
   'comandoIngresoManual',
