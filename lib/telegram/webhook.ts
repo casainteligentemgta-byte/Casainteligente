@@ -142,7 +142,7 @@ import {
   MENSAJE_MENU_TELEGRAM,
   MENSAJE_NO_DISPONIBLE_DEPOSITARIO,
 } from '@/lib/telegram/botCommands';
-import { COMANDOS_SOLO_NO_COMPRADOR, MENSAJE_NO_DISPONIBLE_COMPRADOR, esChatComprador } from '@/lib/telegram/compradorRestricciones';
+import { COMANDOS_SOLO_NO_COMPRADOR, MENSAJE_EVIDENCIA_OBRA_NO_COMPRADOR, MENSAJE_NO_DISPONIBLE_COMPRADOR, esChatComprador } from '@/lib/telegram/compradorRestricciones';
 import { MENSAJE_SOLO_FOTO_CHOFER, callbackPermitidoChofer, esChatChofer } from '@/lib/flota/choferTelegram';
 import { esCallbackCorreccion } from '@/lib/telegram/correccionFacturaTelegram';
 import { esFlujoNotaPrecarga, manejarFotoNotaPrecarga } from '@/lib/telegram/notaPrecargaTelegram';
@@ -1869,6 +1869,10 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
         });
       }
       case 'obra':
+        if (await esChatComprador(supabase, chatId)) {
+          await sendTelegramMessage(chatId, MENSAJE_EVIDENCIA_OBRA_NO_COMPRADOR, { parse_mode: 'HTML' });
+          break;
+        }
         if (estado.proyecto_id) {
           await manejarFotoObraTelegram({
             supabase,
