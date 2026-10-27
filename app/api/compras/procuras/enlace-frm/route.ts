@@ -39,20 +39,22 @@ export async function GET(req: Request) {
   if (!admin.ok) return admin.response;
   const db = admin.client;
 
-  const { data: cc } = await db
+  const { data: ccRaw } = await db
     .from('contabilidad_compras')
     .select('id, supplier_rif, supplier_name')
     .eq('purchase_invoice_id', piId)
     .maybeSingle();
+  const cc = ccRaw as { id: string; supplier_rif: string | null; supplier_name: string | null } | null;
   if (!cc?.id) {
     return NextResponse.json({ error: 'La compra contable no existe para esta factura de Procura.' }, { status: 404 });
   }
 
-  const { data: cf } = await db
+  const { data: cfRaw } = await db
     .from('compras_facturas')
     .select('id, estado, ubicacion_destino_id')
     .eq('purchase_invoice_id', piId)
     .maybeSingle();
+  const cf = cfRaw as { id: string; estado: string | null; ubicacion_destino_id: string | null } | null;
   if (!cf?.ubicacion_destino_id) {
     return NextResponse.json({ error: 'La compra no tiene ubicación de destino.' }, { status: 409 });
   }
@@ -60,12 +62,13 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'La compra ya tiene stock registrado; no se puede enlazar.' }, { status: 409 });
   }
 
-  const { data: lineasCompra } = await db
+  const { data: lineasCompraRaw } = await db
     .from('compras_factura_lineas')
     .select('descripcion')
     .eq('factura_id', cf.id);
-  const materialesCompra = (lineasCompra ?? [])
-    .map((l) => String((l as { descripcion?: string }).descripcion ?? '').trim())
+  const lineasCompra = (lineasCompraRaw ?? []) as { descripcion: string | null }[];
+  const materialesCompra = lineasCompra
+    .map((l) => String(l.descripcion ?? '').trim())
     .filter(Boolean);
 
   const ctx: ContextoCompra = {
@@ -76,7 +79,7 @@ export async function GET(req: Request) {
     materiales: materialesCompra,
   };
 
-  const { data: recepciones } = await db
+  const { data: recepcionesRaw } = await db
     .from('ci_recepciones_campo')
     .select('id, proveedor_id, proveedor_nombre, ubicacion_id, contabilidad_compra_id')
     .eq('estado', 'registrado')
@@ -85,11 +88,18 @@ export async function GET(req: Request) {
     .eq('ubicacion_id', ctx.ubicacionId)
     .neq('contabilidad_compra_id', ctx.contabilidadCompraId)
     .limit(200);
+  const recepciones = (recepcionesRaw ?? []) as {
+    id: string;
+    proveedor_id: string | null;
+    proveedor_nombre: string | null;
+    ubicacion_id: string;
+    contabilidad_compra_id: string | null;
+  }[];
 
   const ids = (recepciones ?? []).map((r) => String(r.id));
   const proveedorIds = [...new Set((recepciones ?? []).map((r) => r.proveedor_id).filter(Boolean))] as string[];
 
-  const [{ data: lineas }, { data: empresas }] = await Promise.all([
+  const [resLineas, resEmpresas] = await Promise.all([
     ids.length
       ? db.from('ci_recepciones_campo_lineas').select('recepcion_id, descripcion').in('recepcion_id', ids)
       : Promise.resolve({ data: [] as { recepcion_id: string; descripcion: string | null }[] }),
@@ -98,7 +108,9 @@ export async function GET(req: Request) {
       : Promise.resolve({ data: [] as { id: string; rif: string | null }[] }),
   ]);
 
-  const rifPorEmpresa = new Map((empresas ?? []).map((e) => [String(e.id), (e.rif as string | null) ?? null]));
+  const lineas = (resLineas.data ?? []) as { recepcion_id: string; descripcion: string | null }[];
+  const empresas = (resEmpresas.data ?? []) as { id: string; rif: string | null }[];
+  const rifPorEmpresa = new Map(empresas.map((e) => [String(e.id), e.rif ?? null]));
   const materialesPorRecepcion = new Map<string, string[]>();
   for (const l of lineas ?? []) {
     const k = String(l.recepcion_id);
