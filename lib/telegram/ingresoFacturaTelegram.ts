@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { etiquetaProveedorBoton } from '@/lib/telegram/etiquetaProveedorBoton';
 import type { FacturaPendienteIngreso } from '@/lib/almacen/listarFacturasPendientesIngreso';
 import { listarFacturasPendientesDeMisObras } from '@/lib/telegram/facturasPendientesDeMisObras';
 import { PROCUREMENT_DOCUMENTS_BUCKET } from '@/lib/almacen/procurementDocumentStorage';
@@ -335,7 +336,7 @@ function buildKeyboardProveedores(
   const slice = proveedores.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
   const buttons: Array<Array<{ text: string; callback_data: string }>> = slice.map((p) => [
     {
-      text: truncar(`🏢 ${p.nombre} (${p.count})`),
+      text: etiquetaProveedorBoton(p.nombre, p.count),
       callback_data: `${PREFIX_PROV}${p.key}`,
     },
   ]);

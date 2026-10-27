@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { etiquetaProveedorBoton } from '@/lib/telegram/etiquetaProveedorBoton';
 import type { FacturaPendienteIngreso } from '@/lib/almacen/listarFacturasPendientesIngreso';
 import { listarFacturasPendientesDeMisObras } from '@/lib/telegram/facturasPendientesDeMisObras';
 import {
@@ -26,11 +27,6 @@ const PREFIX_INGRESO = 'ig:';
 const PREFIX_SALIDA = 'sg:';
 const MENU_PROV_PAGE_SIZE = 8;
 const MENU_FACT_PAGE_SIZE = 8;
-
-function truncar(s: string, max = 52): string {
-  const t = s.trim();
-  return t.length <= max ? t : `${t.slice(0, max - 1)}…`;
-}
 
 function callbackMenuProveedor(key: string): string {
   return `${PREFIX_INGRESO}pr:${key}`;
@@ -115,7 +111,7 @@ export async function enviarMenuIngresoTelegram(
     for (const p of slice) {
       rows.push([
         {
-          text: truncar(`🏢 ${p.nombre} (${p.count})`),
+          text: etiquetaProveedorBoton(p.nombre, p.count),
           callback_data: callbackMenuProveedor(p.key),
         },
       ]);
