@@ -14,6 +14,7 @@ import {
   nombreMaterialProcuraVisible,
 } from '@/lib/compras/procuraMaterialTexto';
 import PanelAuditoriaProcuras from '@/components/contabilidad/PanelAuditoriaProcuras';
+import EnlazarRecepcionCampoModal from '@/components/contabilidad/EnlazarRecepcionCampoModal';
 import VincularFacturaProcuraModal, {
   type ProcuraVinculoFactura,
 } from '@/components/contabilidad/VincularFacturaProcuraModal';
@@ -126,6 +127,7 @@ export default function ProcurasPage() {
   const [eliminandoBulk, setEliminandoBulk] = useState(false);
   const [seleccionEliminarIds, setSeleccionEliminarIds] = useState<Set<string>>(new Set());
   const [vincularProcuras, setVincularProcuras] = useState<ProcuraVinculoFactura[]>([]);
+  const [enlazarFrm, setEnlazarFrm] = useState<{ pi: string; ticket: string } | null>(null);
   const [seleccionVinculoIds, setSeleccionVinculoIds] = useState<Set<string>>(new Set());
   const [verFactura, setVerFactura] = useState<FacturaProcuraVista | null>(null);
 
@@ -568,6 +570,19 @@ export default function ProcurasPage() {
                             const compraId = compraIdProcura(f);
                             if (compraId) {
                               return (
+                                <>
+                                {f.purchase_invoice_id?.trim() ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setEnlazarFrm({ pi: f.purchase_invoice_id!.trim(), ticket: f.ticket })
+                                    }
+                                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#FF9500]/15 border border-[#FF9500]/30 text-[#FFB84D] text-[10px] font-black uppercase hover:bg-[#FF9500]/25 transition-colors"
+                                    title="Enlazar con nota de entrega de campo"
+                                  >
+                                    Enlazar nota
+                                  </button>
+                                ) : null}
                                 <button
                                   type="button"
                                   onClick={() =>
@@ -587,6 +602,7 @@ export default function ProcurasPage() {
                                   <FileImage size={12} />
                                   Ver factura
                                 </button>
+                                </>
                               );
                             }
                             if (ESTADOS_COMPRADOS.has(f.estado.toLowerCase())) {
@@ -659,6 +675,14 @@ export default function ProcurasPage() {
           setSeleccionVinculoIds(new Set());
         }}
         onVinculada={() => void cargar()}
+      />
+
+      <EnlazarRecepcionCampoModal
+        open={Boolean(enlazarFrm)}
+        purchaseInvoiceId={enlazarFrm?.pi ?? null}
+        ticket={enlazarFrm?.ticket ?? ''}
+        onClose={() => setEnlazarFrm(null)}
+        onEnlazada={() => void cargar()}
       />
 
       <VerFacturaProcuraModal
