@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import {
@@ -166,7 +167,8 @@ export async function POST(req: Request) {
   const admin = supabaseAdminForRoute();
   if (!admin.ok) return admin.response;
 
-  const { data, error } = await admin.client.rpc('ci_enlazar_frm_con_compra_procura', {
+  const rpcClient = admin.client as unknown as SupabaseClient;
+  const { data, error } = await rpcClient.rpc('ci_enlazar_frm_con_compra_procura', {
     p_recepcion_id: recepcionId,
     p_contabilidad_compra_id: compraId,
   });
