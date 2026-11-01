@@ -13,6 +13,7 @@ También desde Contabilidad → **Reportes**.
 | Stock valorizado | `/informes/stock` | Stock × `average_weighted_cost` |
 | Rentabilidad de obra | `/informes/rentabilidad` | Ventas del cliente de la obra vs compras |
 | Movimientos de almacén | `/informes/movimientos-almacen` | `inv_movimientos` del periodo (entradas/salidas) + `inventario_stock` (existencia y tránsito). Existencia inicial = actual − neto del periodo |
+| Conciliación factura · recepción · stock | `/informes/conciliacion` | `purchase_invoices`, `quality_inspections`, `inv_movimientos` (con `documento_id`) e `inventario_stock` |
 
 Cada informe exporta CSV.
 
@@ -22,6 +23,17 @@ Cada informe exporta CSV.
 - `GET /api/informes/cadena-procura?proyecto_id=`
 - `GET /api/informes/stock?proyecto_id=`
 - `GET /api/informes/rentabilidad?proyecto_id=`
+- `GET /api/informes/conciliacion`
+
+## Conciliación factura · recepción · stock
+
+Una fila por (factura, ubicación, material). Solo lee; no corrige nada.
+
+- **Estado:** recibido, en cuarentena, en tránsito o factura borrada.
+- **Alertas:** factura borrada con movimientos en el ledger; tránsito sin cuarentena pendiente; ledger distinto de lo aprobado.
+- **Ledger vs stock:** compara la suma de `inv_movimientos` por ubicación y material con `inventario_stock` y lista los descuadres.
+
+Código: `lib/informes/cargarInformeConciliacionCompras.ts` (función pura `conciliarCompras`, con tests).
 
 ## Próximos packs (no implementados)
 
