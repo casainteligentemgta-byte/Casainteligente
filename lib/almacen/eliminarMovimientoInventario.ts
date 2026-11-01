@@ -309,7 +309,7 @@ async function revertirStockEnUbicacion(
 
   const { data: stock } = await supabase
     .from('inventario_stock')
-    .select('id, cantidad_disponible')
+    .select('id, cantidad_disponible, cantidad_reservada, cantidad_en_transito_entrante')
     .eq('ubicacion_id', ubicacionId)
     .eq('material_id', materialId)
     .maybeSingle();
@@ -318,7 +318,9 @@ async function revertirStockEnUbicacion(
   if (qty <= 0) return false;
 
   await aplicarDeltaStock(supabase, ubicacionId, materialId, -qty);
-  if (stock?.id) {
+  // La fila solo se borra si no queda tránsito ni reservado: borrarla con ese saldo
+  // lo elimina sin movimiento (el ledger seguiría mostrándolo).
+  if (stock?.id && !tieneSaldoNoDisponible(stock as StockRow)) {
     await supabase.from('inventario_stock').delete().eq('id', stock.id);
   }
   return true;
@@ -657,7 +659,23 @@ type StockRow = {
   ubicacion_id: string;
   material_id: string;
   cantidad_disponible: number;
+  cantidad_reservada?: number | null;
+  cantidad_en_transito_entrante?: number | null;
 };
+
+/**
+ * Hay saldo que no es disponible (en tránsito o reservado). Esa cantidad no está en el
+ * ledger como disponible: si se borra la fila, se pierde sin movimiento que la respalde.
+ */
+export function tieneSaldoNoDisponible(row: {
+  cantidad_reservada?: number | string | null;
+  cantidad_en_transito_entrante?: number | string | null;
+}): boolean {
+  return (
+    Number(row.cantidad_reservada ?? 0) > 0 ||
+    Number(row.cantidad_en_transito_entrante ?? 0) > 0
+  );
+}
 
 async function buscarFilaInventarioStock(
   supabase: SupabaseClient,
@@ -667,7 +685,9 @@ async function buscarFilaInventarioStock(
   if (stockId) {
     const { data, error } = await supabase
       .from('inventario_stock')
-      .select('id, ubicacion_id, material_id, cantidad_disponible')
+      .select(
+        'id, ubicacion_id, material_id, cantidad_disponible, cantidad_reservada, cantidad_en_transito_entrante',
+      )
       .eq('id', stockId)
       .maybeSingle();
     if (error) throw new Error(error.message);
@@ -679,7 +699,9 @@ async function buscarFilaInventarioStock(
   if (ubicacionId && materialId) {
     const { data, error } = await supabase
       .from('inventario_stock')
-      .select('id, ubicacion_id, material_id, cantidad_disponible')
+      .select(
+        'id, ubicacion_id, material_id, cantidad_disponible, cantidad_reservada, cantidad_en_transito_entrante',
+      )
       .eq('ubicacion_id', ubicacionId)
       .eq('material_id', materialId)
       .maybeSingle();
@@ -698,6 +720,14 @@ async function eliminarStockUbicacion(
   if (!row) {
     throw new Error(
       'Registro de stock no encontrado. Actualice la lista: el saldo pudo haber cambiado o ya fue eliminado.',
+    );
+  }
+
+  // No se borra un registro con mercancía en tránsito o reservada: ese saldo desaparecería
+  // sin movimiento. Primero hay que recibirla o cancelarla desde su compra o pedido.
+  if (tieneSaldoNoDisponible(row)) {
+    throw new Error(
+      'Este registro tiene mercancía en tránsito o reservada. No se puede eliminar hasta recibirla o cancelar su compra o pedido.',
     );
   }
 
