@@ -112,11 +112,6 @@ export async function eliminarProcurasPorIds(
     }
   } else {
     await desvincularProcurasAntesDeBorrar(supabase, idsFound);
-    const { error: vErr } = await supabase
-      .from('ci_procura_factura_vinculos')
-      .delete()
-      .in('procura_id', idsFound);
-    if (vErr?.code !== '42P01' && vErr) throw new Error(vErr.message);
   }
 
   const { error: delErr } = await supabase.from('ci_procuras').delete().in('id', idsFound);

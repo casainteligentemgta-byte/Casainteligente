@@ -10,10 +10,10 @@ import {
 } from '@/lib/telegram/botCommands';
 
 describe('menú del depositario (sin procuras)', () => {
-  it('el menú nativo del depositario solo incluye facturas, ingreso, salida, menú, ayuda y cancelar', () => {
-    const nombres = TELEGRAM_BOT_COMMANDS_DEPOSITARIO.map((c) => c.command).sort();
-    assert.deepEqual(nombres, ['ayuda', 'cancelar', 'facturas', 'ingreso', 'menu', 'nota', 'salida']);
-    for (const c of ['procura', 'stock', 'agenda', 'tecnico', 'bitacora', 'agua', 'limpiar_agenda']) {
+  it('el menú nativo del depositario solo incluye factura, ingreso, salida, agua, stock y cancelar', () => {
+    const nombres = TELEGRAM_BOT_COMMANDS_DEPOSITARIO.map((c) => c.command);
+    assert.deepEqual(nombres, ['factura', 'ingreso', 'salida', 'agua', 'stock', 'cancelar']);
+    for (const c of ['procura', 'facturas', 'nota', 'menu', 'ayuda', 'agenda', 'tecnico', 'bitacora', 'limpiar_agenda']) {
       assert.ok(!nombres.includes(c), c);
     }
   });
@@ -21,19 +21,20 @@ describe('menú del depositario (sin procuras)', () => {
   it('/menu del depositario no muestra procuras; el general sí', () => {
     const dep = mensajeMenuTelegram({ depositario: true });
     assert.ok(!/procura/i.test(dep));
-    assert.match(dep, /\/facturas/);
-    assert.match(dep, /\/nota/);
+    assert.match(dep, /\/factura\b/);
     assert.match(dep, /\/ingreso/);
     assert.match(dep, /\/salida/);
-    assert.ok(!/stock|bitacora|agua|agenda|tecnico|campo|consulta/i.test(dep));
+    assert.match(dep, /\/agua/);
+    assert.match(dep, /\/stock/);
+    assert.ok(!/bitacora|agenda|tecnico|\/nota|\/facturas/i.test(dep));
     assert.match(mensajeMenuTelegram(), /\/procura/);
   });
 
   it('/ayuda del depositario no muestra procuras ni funciones de campo, consultas, agenda o técnico', () => {
     const ayuda = mensajeAyudaTelegram({ depositario: true });
     assert.ok(!/procura/i.test(ayuda));
-    assert.match(ayuda, /\/nota/);
-    assert.ok(!/stock|bitacora|agua|agenda|tecnico|campo|consulta/i.test(ayuda));
+    assert.match(ayuda, /\/stock/);
+    assert.ok(!/bitacora|agenda|tecnico/i.test(ayuda));
     assert.match(mensajeAyudaTelegram(), /\/procura/);
   });
 

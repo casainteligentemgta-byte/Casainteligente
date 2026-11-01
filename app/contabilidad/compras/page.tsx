@@ -539,9 +539,10 @@ export default function ComprasPage() {
                 .limit(300);
             if (data?.length) {
                 setEntidades(
-                    (data as { id: string; nombre: string | null }[]).map((e) => ({
+                    (data as (EntidadConNombre & { id: string })[]).map((e) => ({
                         id: e.id,
-                        nombre: (e.nombre || 'Entidad').trim(),
+                        // Usa el nombre del cliente cuando la entidad es cliente_administrada.
+                        nombre: nombreEntidad(e),
                     })),
                 );
             }

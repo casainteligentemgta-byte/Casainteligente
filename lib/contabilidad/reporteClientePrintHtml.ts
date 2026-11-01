@@ -1,5 +1,6 @@
 import {
   REPORTE_CLIENTE_HEADERS,
+  totalesReporteCliente,
   type ReporteClienteFila,
 } from '@/lib/contabilidad/reporteClienteCompras';
 import { formatearBs, formatearTasaBcv, formatearUsd } from '@/lib/contabilidad/comprasMontos';
@@ -92,6 +93,20 @@ export function buildReporteClientePrintHtml(input: ReporteClientePrintInput): s
   <table>
     <thead><tr>${headersHtml}</tr></thead>
     <tbody>${filasHtml || '<tr><td colspan="9">Sin facturas</td></tr>'}</tbody>
+    ${
+      input.filas.length
+        ? (() => {
+            const t = totalesReporteCliente(input.filas);
+            return `<tfoot><tr style="font-weight:700;border-top:2px solid #333">
+      <td colspan="5">TOTAL</td>
+      <td class="num">${t.totalArticulos.toLocaleString('es-VE')}</td>
+      <td class="num">${escapeHtml(formatearBs(t.montoTotalBs))}</td>
+      <td class="num usd">${escapeHtml(formatearUsd(t.montoUsd))}</td>
+      <td></td>
+    </tr></tfoot>`;
+          })()
+        : ''
+    }
   </table>
   <p class="brand">Casa Inteligente · ${escapeHtml(new Date().toLocaleString('es-VE'))}</p>
   </main>

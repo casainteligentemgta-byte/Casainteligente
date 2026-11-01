@@ -37,28 +37,23 @@ function lineasComprasMenuTelegram(): string {
   }).join('\n');
 }
 
-/**
- * Comandos que ve y puede usar un depositario: facturas, nota de entrega, ingreso y salida
- * (más menú, ayuda y cancelar). Sin procura, campo, consultas, agenda ni técnico.
- */
-export const COMANDOS_DEPOSITARIO_PERMITIDOS = new Set([
-  'menu',
-  'ayuda',
-  'facturas',
-  'nota',
-  'ingreso',
-  'salida',
-  'cancelar',
-]);
-
-/** Menú nativo de Telegram (setMyCommands) para un depositario. */
+/** Comandos visibles para un depositario, en el orden del menú. */
 export const TELEGRAM_BOT_COMMANDS_DEPOSITARIO: Array<{ command: string; description: string }> = [
-  ...TELEGRAM_BOT_COMMANDS.filter((c) => COMANDOS_DEPOSITARIO_PERMITIDOS.has(c.command)),
-  { command: 'nota', description: 'Cargar nota de entrega (foto o manual)' },
-].sort((a, b) => a.command.localeCompare(b.command));
+  { command: 'factura', description: 'Facturas precargadas por el comprador' },
+  { command: 'ingreso', description: 'Ingreso a almacén: manual · nota · sin nota · precargadas' },
+  { command: 'salida', description: 'Salida: obrero en obra · despacho · traspaso' },
+  { command: 'agua', description: 'Registro agua: camión, PPM y litros' },
+  { command: 'stock', description: 'Stock guiado o por obra/material' },
+  { command: 'cancelar', description: 'Cancelar flujo y volver al menú' },
+];
+
+/** Comandos que puede usar un depositario (los visibles en su menú). */
+export const COMANDOS_DEPOSITARIO_PERMITIDOS = new Set(
+  TELEGRAM_BOT_COMMANDS_DEPOSITARIO.map((c) => c.command),
+);
 
 export const MENSAJE_NO_DISPONIBLE_DEPOSITARIO =
-  '⛔ Esa función no está disponible para el depositario. Use /ingreso, /salida o /facturas.';
+  '⛔ Esa función no está disponible para el depositario. Use /factura, /ingreso, /salida, /agua o /stock.';
 
 /**
  * Texto HTML de /menu (una sola fuente para no divergir del menú nativo).
@@ -93,14 +88,7 @@ export function mensajeMenuTelegram(opts?: { depositario?: boolean; comprador?: 
   if (opts?.depositario) {
     return (
       '🏠 <b>Casa Inteligente</b>\n\n' +
-      '<b>Facturas y notas</b>\n' +
-      '• /facturas — facturas precargadas por el comprador\n' +
-      '• /nota — cargar nota de entrega (foto o manual)\n\n' +
-      '<b>Ingresos almacén</b>\n' +
-      '• /ingreso — manual · automático · nota · sin nota · precargadas\n\n' +
-      '<b>Salidas</b>\n' +
-      '• /salida — obrero en obra · despacho · traspaso\n\n' +
-      '• /cancelar — volver al menú'
+      TELEGRAM_BOT_COMMANDS_DEPOSITARIO.map((c) => `• /${c.command} — ${c.description}`).join('\n')
     );
   }
   const compras = `<b>${TITULO_COMPRAS_ABASTECIMIENTO_TELEGRAM}</b>\n${lineasComprasMenuTelegram()}\n\n`;
@@ -140,14 +128,7 @@ export function mensajeAyudaTelegram(opts?: { depositario?: boolean; comprador?:
     );
   }
   if (opts?.depositario) {
-    return (
-      '<b>Comandos Casa Inteligente</b>\n\n' +
-      '<b>Facturas</b>: /facturas\n' +
-      '<b>Notas de entrega</b>: /nota\n' +
-      '<b>Ingresos</b>: /ingreso\n' +
-      '<b>Salidas</b>: /salida\n\n' +
-      '/menu — menú · /cancelar — reiniciar'
-    );
+    return mensajeMenuTelegram({ depositario: true });
   }
   const compras = `<b>${TITULO_COMPRAS_ABASTECIMIENTO_TELEGRAM}</b>\n/procura /facturas\n\n`;
   return (

@@ -4,6 +4,7 @@ import { Download, FileSpreadsheet, FileText, X } from 'lucide-react';
 import {
   exportarReporteClienteExcel,
   REPORTE_CLIENTE_HEADERS,
+  totalesReporteCliente,
   type ReporteClienteFila,
 } from '@/lib/contabilidad/reporteClienteCompras';
 import { exportarReporteClientePdf } from '@/lib/contabilidad/reporteClientePrintHtml';
@@ -169,6 +170,28 @@ export default function ReporteClienteComprasModal({
                   </tr>
                 ))}
               </tbody>
+              <tfoot>
+                {(() => {
+                  const t = totalesReporteCliente(filas);
+                  return (
+                    <tr className="border-t-2 border-white/20 bg-white/[0.06] font-bold text-white">
+                      <td className="px-3 py-3" colSpan={5}>
+                        TOTAL
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums">
+                        {t.totalArticulos.toLocaleString('es-VE')}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums">
+                        {formatearBs(t.montoTotalBs)}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums text-emerald-300">
+                        {formatearUsd(t.montoUsd)}
+                      </td>
+                      <td className="px-3 py-3" />
+                    </tr>
+                  );
+                })()}
+              </tfoot>
             </table>
           )}
         </div>

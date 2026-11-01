@@ -11,6 +11,10 @@ import {
 } from '@/lib/proyectos/proyectosUnificados';
 import { isValidProyectoUuid } from '@/lib/proyectos/validarProyectoUuid';
 import {
+  MENSAJE_EVIDENCIA_OBRA_NO_COMPRADOR,
+  esChatComprador,
+} from '@/lib/telegram/compradorRestricciones';
+import {
   filtrarProyectosCatalogoParaChatTelegram,
   modoTelegramUsaObraComprador,
 } from '@/lib/telegram/proyectosTelegramUsuario';
@@ -234,6 +238,10 @@ export async function aplicarSeleccionProyectoTelegram(
   proyectoId: string,
   nombreObra: string,
 ): Promise<void> {
+  if (modo === 'obra' && (await esChatComprador(supabase, chatId))) {
+    await sendTelegramMessage(chatId, MENSAJE_EVIDENCIA_OBRA_NO_COMPRADOR, { parse_mode: 'HTML' });
+    return;
+  }
   if (modo === 'factura_compra') {
     const estado = await import('@/lib/telegram/estados').then((m) =>
       m.getTelegramEstado(supabase, chatId),

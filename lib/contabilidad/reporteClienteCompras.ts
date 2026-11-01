@@ -111,6 +111,20 @@ export function reporteClienteAoa(filas: ReporteClienteFila[]): (string | number
   return [[...REPORTE_CLIENTE_HEADERS], ...filas.map(filaAValores)];
 }
 
+/** Totales del reporte: cantidad de artículos, Bs y USD (USD al final, para el pie del reporte). */
+export function totalesReporteCliente(filas: ReporteClienteFila[]): {
+  totalArticulos: number;
+  montoTotalBs: number;
+  montoUsd: number;
+} {
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  return {
+    totalArticulos: filas.reduce((acc, f) => acc + (f.totalArticulos || 0), 0),
+    montoTotalBs: r2(filas.reduce((acc, f) => acc + (f.montoTotalBs || 0), 0)),
+    montoUsd: r2(filas.reduce((acc, f) => acc + (f.montoUsd || 0), 0)),
+  };
+}
+
 function escapeXmlExcel(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -147,9 +161,23 @@ function reporteClienteSpreadsheetMl(filas: ReporteClienteFila[]): string {
       .join('');
   });
 
+  const t = totalesReporteCliente(filas);
+  const totalRow = [
+    celdaSpreadsheetMl('TOTAL', { header: true }),
+    celdaSpreadsheetMl('', { header: true }),
+    celdaSpreadsheetMl('', { header: true }),
+    celdaSpreadsheetMl('', { header: true }),
+    celdaSpreadsheetMl('', { header: true }),
+    celdaSpreadsheetMl(t.totalArticulos, { header: true }),
+    celdaSpreadsheetMl(t.montoTotalBs, { header: true }),
+    celdaSpreadsheetMl(t.montoUsd, { header: true }),
+    celdaSpreadsheetMl('', { header: true }),
+  ].join('');
+
   const filasXml =
     `<Row>${headerRow.join('')}</Row>` +
-    dataRows.map((cells) => `<Row>${cells}</Row>`).join('');
+    dataRows.map((cells) => `<Row>${cells}</Row>`).join('') +
+    `<Row>${totalRow}</Row>`;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <?mso-application progid="Excel.Sheet"?>

@@ -27,10 +27,8 @@ import {
   resolverUbicacionIdsFiltroConMeta,
   resolverUbicacionIdsFiltroEntidadConMeta,
 } from '@/lib/almacen/inventarioFiltroUbicacion';
-import {
-  asegurarUbicacionDeposito,
-  asegurarUbicacionObra,
-} from '@/lib/almacen/ubicacionesInventario';
+import { asegurarUbicacionObraCliente } from '@/lib/almacen/asegurarUbicacionObraCliente';
+import { asegurarUbicacionDeposito } from '@/lib/almacen/ubicacionesInventario';
 import {
   hasInventarioShareParams,
   parseInventarioShareParams,
@@ -307,8 +305,7 @@ export function AlmacenFiltrosProvider({ children }: { children: ReactNode }) {
             });
             sync = true;
           } else if (filterProyectoId) {
-            await asegurarUbicacionObra(
-              supabase,
+            await asegurarUbicacionObraCliente(
               filterProyectoId,
               nombreObraFiltro || 'Obra',
             );
@@ -316,7 +313,7 @@ export function AlmacenFiltrosProvider({ children }: { children: ReactNode }) {
           } else if (filterEntidadId && !filterProyectoId && !filterDepositId) {
             const proysEntidad = proyectos.filter((p) => p.entidad_id === filterEntidadId);
             for (const pr of proysEntidad.slice(0, 25)) {
-              await asegurarUbicacionObra(supabase, pr.id, pr.nombre);
+              await asegurarUbicacionObraCliente(pr.id, pr.nombre);
             }
             sync = true;
           }
