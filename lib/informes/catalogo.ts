@@ -1,6 +1,6 @@
 /** Catálogo del Centro de Informes (pack 1). */
 
-export type InformeId = 'compras' | 'cadena-procura' | 'stock' | 'rentabilidad';
+export type InformeId = 'compras' | 'cadena-procura' | 'stock' | 'rentabilidad' | 'conciliacion';
 
 export type InformeDef = {
   id: InformeId;
@@ -39,5 +39,12 @@ export const INFORMES_PACK1: InformeDef[] = [
     titulo: 'Rentabilidad de obra',
     descripcion: 'Ventas aceptadas, cobrado y compras vs margen bruto simple.',
     fuentes: ['budgets', 'contabilidad_compras'],
+  },
+  {
+    id: 'conciliacion',
+    href: '/informes/conciliacion',
+    titulo: 'Conciliación factura · recepción · stock',
+    descripcion: 'Qué facturó cada compra, qué llegó, qué está en tránsito y dónde no cuadra el ledger.',
+    fuentes: ['purchase_invoices', 'quality_inspections', 'inv_movimientos', 'inventario_stock'],
   },
 ];
