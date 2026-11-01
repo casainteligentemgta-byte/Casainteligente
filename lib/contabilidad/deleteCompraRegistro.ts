@@ -111,13 +111,10 @@ async function deleteCompraPorId(
     new Set((inspections ?? []).map((i) => i.material_id).filter(Boolean) as string[]),
   );
 
-  // Lo que seguía en cuarentena ya no va a llegar: sacarlo del tránsito antes de borrar.
-  const { revertirTransitoInspeccion } = await import('@/lib/almacen/stockTransitoCompra');
-  for (const insp of inspections ?? []) {
-    if (insp.status === 'PENDIENTE') {
-      await revertirTransitoInspeccion(supabase, String(insp.id), 'Compra eliminada antes de recibirla');
-    }
-  }
+  // Todo lo que la factura dejó en tránsito (según el ledger) ya no va a llegar: sacarlo
+  // antes de borrar. Cubre también cuarentenas ya cerradas o sin inspección.
+  const { revertirTransitoDocumentoCompra } = await import('@/lib/almacen/stockTransitoCompra');
+  await revertirTransitoDocumentoCompra(supabase, String(invoiceId), 'Compra eliminada: se descuenta el tránsito que dejó');
 
   await deleteContabilidadCompraRow(supabase, compraId);
 

@@ -149,3 +149,64 @@ export async function revertirTransitoInspeccion(
     console.warn('[revertirTransitoInspeccion]', inspectionId, e);
   }
 }
+
+/**
+ * Tránsito neto que una factura dejó en el ledger, por (ubicación, material).
+ * Pura: se prueba sin base de datos.
+ */
+export function transitoNetoPorDocumento(
+  movimientos: Array<{ ubicacion_id: string; material_id: string; delta_transito_entrante: number | string | null }>,
+): Array<{ ubicacionId: string; materialId: string; cantidad: number }> {
+  const acum = new Map<string, { ubicacionId: string; materialId: string; cantidad: number }>();
+  for (const m of movimientos) {
+    const ubicacionId = String(m.ubicacion_id ?? '').trim();
+    const materialId = String(m.material_id ?? '').trim();
+    if (!ubicacionId || !materialId) continue;
+    const k = `${ubicacionId}|${materialId}`;
+    const a = acum.get(k) ?? { ubicacionId, materialId, cantidad: 0 };
+    a.cantidad += Number(m.delta_transito_entrante) || 0;
+    acum.set(k, a);
+  }
+  return Array.from(acum.values())
+    .map((a) => ({ ...a, cantidad: Math.round(a.cantidad * 10000) / 10000 }))
+    .filter((a) => a.cantidad > 0.0001);
+}
+
+/**
+ * Factura o compra eliminada: descuenta todo el tránsito que el documento dejó en el
+ * ledger. Antes solo se revertía el de las cuarentenas en PENDIENTE; si no había ninguna,
+ * el tránsito quedaba huérfano (caso de dos facturas borradas con 33 u. en tránsito).
+ * Lanza si falla: el borrado no debe seguir sin revertir.
+ */
+export async function revertirTransitoDocumentoCompra(
+  supabase: SupabaseClient,
+  documentoId: string,
+  notas = 'Compra eliminada: se descuenta el tránsito que dejó',
+): Promise<number> {
+  const docId = documentoId.trim();
+  if (!docId) return 0;
+
+  const { data, error } = await supabase
+    .from('inv_movimientos')
+    .select('ubicacion_id, material_id, delta_transito_entrante')
+    .eq('documento_id', docId);
+  if (error) throw new Error(error.message);
+
+  const netos = transitoNetoPorDocumento(
+    (data ?? []) as Array<{ ubicacion_id: string; material_id: string; delta_transito_entrante: number }>,
+  );
+
+  for (const n of netos) {
+    await aplicarDeltaStockInventario(supabase, {
+      ubicacionId: n.ubicacionId,
+      materialId: n.materialId,
+      deltaTransitoEntrante: -n.cantidad,
+      tipoMovimiento: 'anulacion',
+      documentoId: docId,
+      referenciaTipo: 'purchase_invoice',
+      referenciaId: null,
+      notas,
+    });
+  }
+  return netos.reduce((s, n) => s + n.cantidad, 0);
+}
