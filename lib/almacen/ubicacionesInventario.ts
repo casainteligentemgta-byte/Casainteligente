@@ -299,7 +299,12 @@ export async function asegurarUbicacionDeposito(
   return String(created.id);
 }
 
-/** Crea ubicación raíz tipo obra si no existe (para ingreso de compras en sitio). */
+/**
+ * Crea ubicación raíz tipo obra si no existe (para ingreso de compras en sitio).
+ * Solo servidor: el cliente que se pase debe ser admin/service_role.
+ * No llamar desde el navegador — EXECUTE de `ci_asegurar_ubicacion_obra` fue
+ * revocado a authenticated/anon. Desde el cliente use `asegurarUbicacionObraCliente`.
+ */
 export async function asegurarUbicacionObra(
   supabase: SupabaseClient,
   proyectoId: string,
@@ -321,11 +326,13 @@ export async function asegurarUbicacionObra(
     return String(rpcId);
   }
 
+  const rpcDenied =
+    rpcErr?.code === '42501' ||
+    /permission denied/i.test(rpcErr?.message ?? '');
   const rpcMissing =
-    rpcErr?.code === 'PGRST202' ||
-    /ci_asegurar_ubicacion_obra|does not exist|Could not find the function/i.test(
-      rpcErr?.message ?? '',
-    );
+    !rpcDenied &&
+    (rpcErr?.code === 'PGRST202' ||
+      /does not exist|Could not find the function/i.test(rpcErr?.message ?? ''));
 
   if (!rpcMissing) {
     throw new Error(rpcErr?.message ?? 'No se pudo asegurar ubicación de obra.');
