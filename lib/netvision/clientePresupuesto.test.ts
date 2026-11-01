@@ -31,6 +31,8 @@ describe('oferta del cliente desde Ventas', () => {
       subtotal: 158.4,
       notas: 'Generado desde NetVision: Casa Pérez.\nCanalización a cargo de otro contratista.',
       moneda: 'USD',
+      // Fijo: new Date().toISOString() a menudo trae "50" (min/seg/ms) y el assert de costo fallaba en CI.
+      publicadoAt: '2026-10-07T12:00:00.000Z',
     })
     assert.ok(snap)
     assert.equal(snap!.renglones.length, 2)
@@ -39,6 +41,8 @@ describe('oferta del cliente desde Ventas', () => {
     assert.equal(snap!.renglones[0]!.unitUsd, 72)
     assert.equal(snap!.subtotalUsd, 158.4)
     assert.equal(snap!.nota, 'Canalización a cargo de otro contratista.')
+    assert.equal('costo' in snap!.renglones[0]!, false)
+    assert.equal('margen' in snap!.renglones[0]!, false)
     const json = JSON.stringify(snap)
     assert.equal(json.includes('costo'), false)
     assert.equal(json.includes('product_id'), false)

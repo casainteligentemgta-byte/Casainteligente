@@ -121,6 +121,7 @@ describe('APIs que piden sesión', () => {
       '/api/almacen/transferencias',
       '/api/almacen/stock',
       '/api/almacen/inventario/abc/stock',
+      '/api/almacen/ubicaciones/asegurar-obra',
       '/api/compras/procuras',
       '/api/compras/usuarios-telegram/7',
       '/api/procuras',
