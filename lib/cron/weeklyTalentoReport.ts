@@ -199,8 +199,13 @@ export async function buildWeeklyTalentoReport(
   let entidadesFichaIncompleta = 0;
   for (const ent of entidades ?? []) {
     const rif = ((ent as { rif?: string | null }).rif ?? '').trim();
-    const rm = ((ent as { registro_mercantil?: string | null }).registro_mercantil ?? '').trim();
-    if (!rif || !rm) entidadesFichaIncompleta += 1;
+    // `registro_mercantil` es jsonb (objeto, o {} por defecto); no siempre es texto.
+    const rmRaw = (ent as { registro_mercantil?: unknown }).registro_mercantil;
+    const rmCompleto =
+      typeof rmRaw === 'string'
+        ? rmRaw.trim().length > 0
+        : rmRaw !== null && typeof rmRaw === 'object' && Object.keys(rmRaw as object).length > 0;
+    if (!rif || !rmCompleto) entidadesFichaIncompleta += 1;
   }
 
   return {
