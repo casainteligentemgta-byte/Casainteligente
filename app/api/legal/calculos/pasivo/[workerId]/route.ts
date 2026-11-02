@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { autorizarPasivoTrabajador } from '@/lib/legal/autorizarPasivoTrabajador';
 import { requireAccesoLegal } from '@/lib/legal/requireAccesoLegal';
 import { calculateWorkerPasivo } from '@/lib/legal/calculateWorkerPasivo';
 
@@ -8,6 +9,9 @@ export const runtime = 'nodejs';
 /**
  * GET /api/legal/calculos/pasivo/[workerId]?fecha_fin=YYYY-MM-DD
  * Pasivo laboral: garantía trimestral vs retroactivo → monto a provisionar (Art. 142).
+ * Requiere acceso Legal y el mismo alcance de salarios que la migración 374
+ * (super_admin, o entidad_admin/director/rrhh de la entidad del trabajador).
+ * El cálculo usa el cliente de la sesión para no saltarse el RLS.
  */
 export async function GET(
   req: Request,
@@ -22,10 +26,29 @@ export async function GET(
     return NextResponse.json({ error: 'workerId requerido' }, { status: 400 });
   }
 
+  const authz = await autorizarPasivoTrabajador({
+    userId: gate.userId,
+    supabase: gate.supabase,
+    admin: gate.admin,
+    workerId,
+  });
+  if (!authz.ok) {
+    return NextResponse.json(
+      {
+        error: authz.error,
+        hint:
+          authz.status === 403
+            ? 'Solo super_admin, o entidad_admin / director / rrhh de la entidad del trabajador.'
+            : undefined,
+      },
+      { status: authz.status },
+    );
+  }
+
   const url = new URL(req.url);
   const fechaFin = url.searchParams.get('fecha_fin');
 
-  const result = await calculateWorkerPasivo(gate.admin, workerId, {
+  const result = await calculateWorkerPasivo(gate.supabase, workerId, {
     fechaFin,
   });
 
