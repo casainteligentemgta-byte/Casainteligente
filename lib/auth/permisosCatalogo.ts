@@ -47,6 +47,8 @@ export const ALIAS_ROL_EMPRESA: Record<string, RolEmpresa> = {
   administrador: 'admin',
   /** Rol enum en BD legacy (permisos absolutos). */
   super_admin: 'admin',
+  entidad_admin: 'admin',
+  director: 'pm_obra',
   pm_obra: 'pm_obra',
   proyectos: 'pm_obra',
   project_manager: 'pm_obra',

@@ -16,5 +16,7 @@ describe('permisos de clientes', () => {
     assert.equal(admin.has('clientes.ver'), true);
     assert.equal(pm.has('clientes.editar'), true);
     assert.equal(comprador.has('clientes.ver'), false);
+    assert.equal(permisosDeRolesEmpresa(['entidad_admin']).has('clientes.borrar'), true);
+    assert.equal(permisosDeRolesEmpresa(['director']).has('clientes.ver'), true);
   });
 });
