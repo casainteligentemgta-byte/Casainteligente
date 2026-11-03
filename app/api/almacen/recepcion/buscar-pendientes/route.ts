@@ -11,11 +11,14 @@ function isUuid(v: string): boolean {
 }
 
 export async function GET(req: Request) {
-  const acceso = await requireAlgunPermisoWeb(['almacen.ingreso', 'almacen.cuarentena', 'almacen.despacho', 'compra.registrar']);
-  if (!acceso.ok) return acceso.response;
-
   const url = new URL(req.url);
   const proyectoId = url.searchParams.get('proyecto_id')?.trim() ?? '';
+
+  const acceso = await requireAlgunPermisoWeb(
+    ['almacen.ingreso', 'almacen.cuarentena', 'almacen.despacho', 'compra.registrar'],
+    { proyectoId: proyectoId || null },
+  );
+  if (!acceso.ok) return acceso.response;
   let proveedorId = url.searchParams.get('proveedor_id')?.trim() ?? '';
   const proveedorNombre = url.searchParams.get('proveedor_nombre')?.trim() ?? '';
   const proveedorRif = url.searchParams.get('proveedor_rif')?.trim() ?? '';

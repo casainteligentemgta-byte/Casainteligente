@@ -171,7 +171,7 @@ export async function manejarFotoNotaPrecarga(params: {
     // Quien carga la nota resuelve las líneas sin material; el aviso al depositario sale al cerrar.
     await sendTelegramMessage(
       chatId,
-      `Revisemos las ${sinMaterial.length} sin material. Puede vincularlas, crear el material (con confirmación) o dejarlas para el depositario.`,
+      `Revisemos las ${sinMaterial.length} sin material. Debe vincularlas o crear el material (con confirmación) antes de avisar al depositario.`,
       { parse_mode: 'HTML' },
     );
     const iniciada = await iniciarResolverLineasPrecarga(supabase, chatId, creada.id);

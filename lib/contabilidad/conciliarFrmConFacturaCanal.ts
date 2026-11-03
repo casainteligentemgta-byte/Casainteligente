@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ExtractedCanalHeader } from '@/lib/contabilidad/extractedCanal';
+import { obtenerTasaBcvVesPorUsd } from '@/lib/finanzas/bcvTasaPorFecha';
 
 export type ResultadoConciliacionFrm = {
   compraId: string;
@@ -42,6 +43,9 @@ export async function conciliarFrmConFacturaCanal(
     throw new Error('Factura y recepción de campo son obligatorias.');
   }
 
+  const fecha = new Date().toISOString().slice(0, 10);
+  const bcv = await obtenerTasaBcvVesPorUsd(fecha, { supabase });
+
   const { data, error } = await supabase.rpc('ci_conciliar_frm_con_factura_canal', {
     p_recepcion_campo_id: recepcionId,
     p_factura_canal_id: pendingId,
@@ -50,6 +54,7 @@ export async function conciliarFrmConFacturaCanal(
     p_monto_usd: params.montoUsd ?? null,
     p_monto_ves: params.montoVes ?? null,
     p_compra_provisional_id: params.compraProvisionalId?.trim() || null,
+    p_tasa_bcv: bcv.tasa_bcv_ves_por_usd,
   });
 
   if (error) {

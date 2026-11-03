@@ -30,4 +30,8 @@ export type PayloadRecepcionManualApi = {
   borrador_token?: string | null;
   /** Procura PR-* que satisface este ingreso (D-03). */
   procura_id?: string | null;
+  /** UUID de un solo uso (token de borrador Telegram o generado en web). */
+  idempotency_key?: string | null;
+  /** Nota precargada que se marca ingresada en la misma TX del RPC. */
+  precarga_id?: string | null;
 };

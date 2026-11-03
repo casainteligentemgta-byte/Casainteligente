@@ -10,8 +10,6 @@ const BCV_HISTORY_URL = 'https://bcv.today/api/v1/history';
 const BCV_RATE_URL = 'https://bcv.today/api/v1/rate.json';
 const BCV_RAFNIXG_URL = 'https://bcv-api.rafnixg.dev/rates';
 const BCV_FETCH_TIMEOUT_MS = 8_000;
-/** Solo si fallan API, env y ci_config_nomina. */
-const TASA_BCV_FALLBACK_DEFAULT = 36.5;
 
 const tasaCache = new Map<string, { result: TasaBcvResult; at: number }>();
 const CACHE_TTL_MS = 60 * 60 * 1000;
@@ -21,8 +19,7 @@ export type FuenteTasaBcv =
   | 'bcv.today_actual'
   | 'bcv.rafnixg'
   | 'ci_config_nomina'
-  | 'env'
-  | 'fallback';
+  | 'env';
 
 export type TasaBcvResult = {
   fecha: string;
@@ -172,8 +169,6 @@ export function etiquetaFuenteTasaBcv(fuente: FuenteTasaBcv | string | null | un
       return 'Configuración nómina (ci_config_nomina GLOBAL)';
     case 'env':
       return 'Variable NEXT_PUBLIC_TASA_BCV_VES_POR_USD';
-    case 'fallback':
-      return `Tasa por defecto (${TASA_BCV_FALLBACK_DEFAULT}) — actualice config o .env`;
     default:
       return fuente?.trim() || '—';
   }
@@ -215,11 +210,9 @@ export async function obtenerTasaBcvVesPorUsd(
     return guardarTasaEnCache(iso, { fecha: iso, tasa_bcv_ves_por_usd: env, fuente: 'env' });
   }
 
-  return guardarTasaEnCache(iso, {
-    fecha: iso,
-    tasa_bcv_ves_por_usd: TASA_BCV_FALLBACK_DEFAULT,
-    fuente: 'fallback',
-  });
+  throw new Error(
+    `No hay tasa BCV para ${iso}. Consulte bcv.today, configure ci_config_nomina GLOBAL o NEXT_PUBLIC_TASA_BCV_VES_POR_USD.`,
+  );
 }
 
 /** Obtiene tasa BCV vía API interna (navegador) o consulta directa (servidor). */

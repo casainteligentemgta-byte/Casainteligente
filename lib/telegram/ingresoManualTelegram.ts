@@ -7,12 +7,14 @@ import {
 import { listarMaterialesObraRecepcion } from '@/lib/almacen/listarMaterialesObraRecepcion';
 import { listarProveedoresSugeridosIngreso } from '@/lib/almacen/listarProveedoresSugeridosIngreso';
 import { normalizarCodigoUnidad, UNIDADES_MEDIDA_DEFAULT } from '@/lib/almacen/unidadesMedidaDefault';
+import { claveIdempotenciaRecepcionCampo } from '@/lib/almacen/documentoRecepcionCampo';
 import {
   listarNotasPrecargadasPendientes,
   marcarNotaPrecargadaIngresada,
   obtenerNotaPrecargada,
   separarLineasPrecarga,
 } from '@/lib/almacen/notasPrecargadas';
+import { assertUbicacionPerteneceAProyecto } from '@/lib/almacen/validarUbicacionProyecto';
 import { esChatCargaComprador } from '@/lib/telegram/compradorRestricciones';
 import { prepararPrecargaNotaComprador } from '@/lib/telegram/notaPrecargaTelegram';
 import {
@@ -60,6 +62,7 @@ import {
 } from '@/lib/telegram/tecladoSoporteFotoTelegram';
 import type { TelegramEstado } from '@/lib/telegram/estados';
 import { getTelegramEstado, setTelegramContexto, upsertTelegramEstado } from '@/lib/telegram/estados';
+import { resolverUsuarioAuthDesdeTelegram } from '@/lib/telegram/resolverUsuarioAuthTelegram';
 import {
   MENSAJE_PEDIR_OBSERVACIONES,
   observacionDesdeTexto,
@@ -158,6 +161,8 @@ export type MetadataIngresoManual = {
   /** Nota precargada por compras que el depositario está ingresando (ci_notas_precargadas). */
   precarga_id?: string;
   recepcion_campo_registrada_id?: string;
+  recepcion_campo_idempotency_key?: string;
+  recepcion_campo_confirmando_at?: string;
   /** /ingreso → ingreso automático: OCR de factura tras elegir almacén. */
   ingreso_ocr_auto?: boolean;
   /** Ingreso manual de factura: foto recibida antes de obra y almacén. */
@@ -916,6 +921,14 @@ async function cargarNotaPrecargadaEnFlujo(
   }
 
   const { conMaterial, sinMaterial } = separarLineasPrecarga(nota.lineas);
+  if (sinMaterial.length) {
+    await sendTelegramMessage(
+      chatId,
+      '⚠️ Esta nota tiene líneas sin material vinculado. Compras debe resolverlas antes del ingreso.',
+      { parse_mode: 'HTML' },
+    );
+    return;
+  }
   if (!conMaterial.length) {
     await sendTelegramMessage(
       chatId,
@@ -938,19 +951,16 @@ async function cargarNotaPrecargadaEnFlujo(
     proveedor_nombre: nota.proveedor_nombre,
     num_doc: nota.num_doc,
     lineas,
-    observaciones: sinMaterial.length
-      ? `Sin vincular en la precarga: ${sinMaterial.map((l) => l.descripcion).join('; ')}`
-      : undefined,
+    soporte_storage_path: nota.soporte_storage_path ?? undefined,
+    soporte_file_name: nota.soporte_file_name ?? undefined,
+    soporte_mime_type: nota.soporte_mime_type ?? undefined,
+    fotos_storage_paths: nota.soporte_storage_path ? [nota.soporte_storage_path] : undefined,
   });
 
-  const aviso =
-    sinMaterial.length > 0
-      ? `\n⚠️ ${sinMaterial.length} línea(s) sin vincular: regístrelas a mano en la app.`
-      : '';
   await sendTelegramMessage(
     chatId,
     `📥 Precarga cargada: <b>${escHtml(nota.proveedor_nombre)}</b> · #${escHtml(nota.num_doc)} ` +
-      `(${lineas.length} línea(s)).${aviso}\n\nElija el <b>almacén</b> donde entró la mercancía:`,
+      `(${lineas.length} línea(s)).\n\nElija el <b>almacén</b> donde entró la mercancía:`,
     { parse_mode: 'HTML' },
   );
   const nombreObra = (await nombreProyectoTelegram(supabase, nota.proyecto_id)) ?? 'Obra';
@@ -1822,6 +1832,10 @@ async function registrarIngresoManual(
     fotosCount?: number;
     telegramUserId?: string;
     procuraId?: string | null;
+    idempotencyKey?: string | null;
+    precargaId?: string | null;
+    usuarioId?: string | null;
+    chatId?: string;
   },
 ): Promise<{ ok: true; recepcionId: string } | { ok: false; error: string }> {
   const lineasRpc: LineaRecepcionCampoInput[] = params.lineas.map((l) => ({
@@ -1836,6 +1850,20 @@ async function registrarIngresoManual(
     soporte_mime_type: l.soporte_mime_type ?? null,
   }));
 
+  const ubiOk = await assertUbicacionPerteneceAProyecto(
+    supabase,
+    params.ubicacionId,
+    params.proyectoId,
+  );
+  if (!ubiOk.ok) {
+    return { ok: false, error: ubiOk.error };
+  }
+
+  let usuarioId = params.usuarioId?.trim() || null;
+  if (!usuarioId && params.chatId) {
+    usuarioId = await resolverUsuarioAuthDesdeTelegram(supabase, params.chatId);
+  }
+
   const { data: recepcionId, error: rpcErr } = await supabase.rpc('ci_registrar_ingreso_manual_campo', {
     p_proyecto_id: params.proyectoId,
     p_ubicacion_id: params.ubicacionId,
@@ -1843,8 +1871,14 @@ async function registrarIngresoManual(
     p_tipo: params.tipoRecepcion,
     p_num_doc: params.numDoc.trim() || 'S/N',
     p_lineas: lineasRpc,
-    p_usuario_id: null,
+    p_usuario_id: usuarioId,
     p_procura_id: params.procuraId?.trim() || null,
+    p_idempotency_key: params.idempotencyKey?.trim() || null,
+    p_precarga_id: params.precargaId?.trim() || null,
+    p_proveedor_nombre: params.proveedorNombre.trim() || null,
+    p_soporte_storage_path: params.soporteStoragePath?.trim() || null,
+    p_soporte_file_name: params.soporteFileName?.trim() || null,
+    p_soporte_mime_type: params.soporteMimeType?.trim() || null,
   } as never);
 
   if (rpcErr) {
@@ -2257,11 +2291,12 @@ export async function manejarCallbackIngresoManual(
     const fresh = await getTelegramEstado(supabase, params.chatId);
     const fm = meta(fresh);
 
-    if (fm.recepcion_campo_registrada_id?.trim()) {
+    const clave = claveIdempotenciaRecepcionCampo(fm);
+    if (clave.alreadyRegisteredId) {
       await sendTelegramMessage(
         params.chatId,
         '✅ Este ingreso ya fue registrado. No repita la operación.\n\n' +
-          `ID: <code>${fm.recepcion_campo_registrada_id.slice(0, 8)}…</code>`,
+          `ID: <code>${clave.alreadyRegisteredId.slice(0, 8)}…</code>`,
         { parse_mode: 'HTML' },
       );
       return true;
@@ -2287,11 +2322,16 @@ export async function manejarCallbackIngresoManual(
     if (lineasInvalidas.length) {
       await sendTelegramMessage(
         params.chatId,
-        '❌ Hay materiales sin cantidad válida. Agregue de nuevo las líneas con cantidad mayor a cero.',
+        '❌ Hay líneas sin material o sin cantidad válida. Resuelva cada línea antes de confirmar.',
         { parse_mode: 'HTML' },
       );
       return true;
     }
+
+    await patchMeta(supabase, params.chatId, fresh, {
+      recepcion_campo_idempotency_key: clave.key,
+      recepcion_campo_confirmando_at: new Date().toISOString(),
+    });
 
     const fotos = fm.fotos_storage_paths ?? [];
     const resultado = await registrarIngresoManual(supabase, {
@@ -2309,12 +2349,24 @@ export async function manejarCallbackIngresoManual(
       soporteMimeType: fm.soporte_mime_type,
       fotosCount: fotos.length || (fm.soporte_storage_path ? 1 : 0),
       telegramUserId: fm.telegram_user_id,
+      idempotencyKey: clave.key,
+      precargaId: fm.precarga_id,
+      chatId: params.chatId,
     });
 
     if (!resultado.ok) {
+      await patchMeta(supabase, params.chatId, await getTelegramEstado(supabase, params.chatId), {
+        recepcion_campo_confirmando_at: undefined,
+      });
       await sendTelegramMessage(params.chatId, `❌ ${resultado.error}`, { parse_mode: 'HTML' });
       return true;
     }
+
+    await patchMeta(supabase, params.chatId, await getTelegramEstado(supabase, params.chatId), {
+      recepcion_campo_registrada_id: resultado.recepcionId,
+      recepcion_campo_idempotency_key: clave.key,
+      recepcion_campo_confirmando_at: undefined,
+    });
 
     let avisoContabilidad = '';
     let contaOk = false;
