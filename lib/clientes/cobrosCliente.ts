@@ -1,4 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { FiltroEntidadFicha } from '@/lib/clientes/clienteEntidades';
+import { filtrarObrasPorEntidad, filtrarPresupuestosPorEntidad } from '@/lib/clientes/filtrarFichaPorEntidad';
 import {
   etiquetaMetodoAbono,
   redondearUsd,
@@ -107,19 +109,44 @@ export async function cargarMontoPagadoPorPresupuesto(
 export async function cargarCobrosCliente(
   supabase: SupabaseClient,
   customerId: string,
+  opts?: {
+    filtroEntidad?: FiltroEntidadFicha | null;
+  },
 ): Promise<{ cobros: CobroCliente[]; error: string | null }> {
   const id = customerId.trim();
   if (!id) return { cobros: [], error: null };
 
   const [pres, obras] = await Promise.all([
     supabase.from('budgets').select('id').eq('customer_id', id),
-    supabase.from('ci_proyectos').select('id,nombre').eq('customer_id', id),
+    supabase.from('ci_proyectos').select('id,nombre,entidad_id,budget_id,budgets_adicionales').eq('customer_id', id),
   ]);
 
-  const budgetIds = (pres.data ?? []).map((b) => String((b as { id?: unknown }).id ?? '')).filter(Boolean);
-  const proyectos = (obras.data ?? []) as Array<{ id?: unknown; nombre?: unknown }>;
-  const proyectoIds = proyectos.map((p) => String(p.id ?? '')).filter(Boolean);
-  const nombreObra = new Map(proyectos.map((p) => [String(p.id ?? ''), String(p.nombre ?? 'Obra')]));
+  const filtro = opts?.filtroEntidad ?? null;
+  let budgetIds = (pres.data ?? []).map((b) => String((b as { id?: unknown }).id ?? '')).filter(Boolean);
+  const proyectos = (obras.data ?? []) as Array<{
+    id?: unknown;
+    nombre?: unknown;
+    entidad_id?: unknown;
+    budget_id?: unknown;
+    budgets_adicionales?: unknown;
+  }>;
+  const obrasNorm = proyectos.map((p) => ({
+    id: String(p.id ?? ''),
+    entidadId: p.entidad_id ? String(p.entidad_id) : null,
+    budgetId: p.budget_id ? String(p.budget_id) : null,
+    budgetsAdicionales: p.budgets_adicionales,
+  }));
+  budgetIds = filtrarPresupuestosPorEntidad(
+    budgetIds.map((bid) => ({ id: bid })),
+    obrasNorm,
+    filtro,
+  ).map((b) => b.id);
+  const proyectosVisibles = filtrarObrasPorEntidad(
+    proyectos.map((p) => ({ ...p, entidadId: p.entidad_id ? String(p.entidad_id) : null })),
+    filtro,
+  );
+  const proyectoIds = proyectosVisibles.map((p) => String(p.id ?? '')).filter(Boolean);
+  const nombreObra = new Map(proyectosVisibles.map((p) => [String(p.id ?? ''), String(p.nombre ?? 'Obra')]));
 
   const cobros: CobroCliente[] = [];
   const errores: string[] = [];

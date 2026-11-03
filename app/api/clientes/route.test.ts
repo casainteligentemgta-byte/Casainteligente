@@ -6,11 +6,12 @@ import { describe, it } from 'node:test';
 describe('POST /api/clientes', () => {
   const codigo = readFileSync(join(process.cwd(), 'app/api/clientes/route.ts'), 'utf8');
 
-  it('exige clientes.editar, asigna entidad activa y escribe con el cliente de sesión', () => {
+  it('exige clientes.editar, asigna entidad activa y vincula duplicados en vez de crear otro', () => {
     assert.match(codigo, /requirePermisoWeb\('clientes\.editar'\)/);
     assert.match(codigo, /entidadActivaDesdeRoles/);
     assert.match(codigo, /payload\.entidad_id = entidadId/);
-    assert.match(codigo, /guardarClienteEnDb\(acceso\.supabase/);
+    assert.match(codigo, /altaOVincularCliente/);
+    assert.match(codigo, /createSupabaseAdminOnlyClient/);
     assert.doesNotMatch(codigo, /supabaseAdminForRoute/);
   });
 });

@@ -4,9 +4,10 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
+import AsignarEntidadMasiva from '@/components/clientes/AsignarEntidadMasiva';
 import ClienteCard from '@/components/clientes/ClienteCard';
 import BotonTema from '@/components/tema/BotonTema';
-import { apiArchivarCliente } from '@/lib/clientes/apiCliente';
+import { apiArchivarCliente, apiClientesSinEntidad } from '@/lib/clientes/apiCliente';
 import { mensajeConfirmarArchivar } from '@/lib/clientes/guardarCliente';
 import { listarClientesCrm } from '@/lib/clientes/listarClientes';
 import { withTimeout } from '@/lib/http/withTimeout';
@@ -26,6 +27,7 @@ export default function ClientesPage() {
     const [lista, setLista] = useState<CustomerListItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [fetchError, setFetchError] = useState<string | null>(null);
+    const [sinEntidad, setSinEntidad] = useState<Array<{ id: string; nombre: string }>>([]);
 
     const irAlMenuInicio = () => {
         router.push('/');
@@ -55,6 +57,8 @@ export default function ClientesPage() {
                 return;
             }
             setLista(res.lista);
+            const pendientes = await apiClientesSinEntidad();
+            setSinEntidad(pendientes.clientes);
         } catch (e: unknown) {
             setFetchError(e instanceof Error ? e.message : 'Error inesperado al cargar clientes.');
             setLista([]);
@@ -259,6 +263,16 @@ export default function ClientesPage() {
                     </div>
                 </div>
             </div>
+
+            {sinEntidad.length > 0 ? (
+                <AsignarEntidadMasiva
+                    clientes={sinEntidad}
+                    onAsignado={() => {
+                        setSinEntidad([]);
+                        void fetchClientes();
+                    }}
+                />
+            ) : null}
 
             {/* ── Stats ── */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', padding: '16px 16px 8px' }}>
