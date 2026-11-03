@@ -20,6 +20,8 @@ export interface Customer {
     nombre_comercial?: string | null
     created_at?: string
     updated_at?: string
+    telegram_username?: string | null
+    telegram_chat_id?: number | null
 }
 
 export type CustomerCategoriaUi = 'personal' | 'empresa'
@@ -28,4 +30,6 @@ export interface CustomerListItem extends Customer {
     initials: string
     categoria: CustomerCategoriaUi
     telefono: string
+    cedula?: string
+    obraCount?: number
 }

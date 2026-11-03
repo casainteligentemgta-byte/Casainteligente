@@ -4,27 +4,23 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import NuevoClienteForm from '@/components/clientes/NuevoClienteForm';
+import { cargarClienteDetalle, type CustomerDetail } from '@/lib/clientes/cargarClienteDetalle';
 import { tinta } from '@/lib/tema/tinta';
 
 export default function EditarClientePage() {
     const { id } = useParams();
     const router = useRouter();
-    const [cliente, setCliente] = useState<any>(null);
+    const [cliente, setCliente] = useState<CustomerDetail | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const fetchCliente = async () => {
             const supabase = createClient();
-            const { data, error } = await supabase
-                .from('customers')
-                .select('*')
-                .eq('id', id)
-                .single();
-
+            const { data } = await cargarClienteDetalle(supabase, String(id ?? ''));
             if (data) setCliente(data);
             setLoading(false);
         };
-        fetchCliente();
+        void fetchCliente();
     }, [id]);
 
     if (loading) return (
@@ -48,7 +44,9 @@ export default function EditarClientePage() {
                 display: 'flex', alignItems: 'center', gap: '12px'
             }}>
                 <button
-                    onClick={() => router.back()}
+                    type="button"
+                    onClick={() => router.push(`/clientes/${cliente.id}`)}
+                    aria-label="Volver a la ficha"
                     style={{ background: 'none', border: 'none', color: 'var(--tono-azul)', cursor: 'pointer', padding: '5px' }}
                 >
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none">

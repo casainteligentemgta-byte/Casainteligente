@@ -3,6 +3,7 @@
  * Tablas prefijadas nexus_* para coexistir con el CRM legado (customers, budgets, …).
  */
 import {
+  bigint,
   boolean,
   integer,
   jsonb,
@@ -71,6 +72,8 @@ export const customers = pgTable('customers', {
   /** Domicilio para comparecencia / contratos */
   direccion: text('direccion'),
   imagen: text('imagen'),
+  telegramUsername: text('telegram_username'),
+  telegramChatId: bigint('telegram_chat_id', { mode: 'number' }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });

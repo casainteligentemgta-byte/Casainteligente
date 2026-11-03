@@ -18,12 +18,16 @@ export type CustomerDetail = {
   telefono: string | null;
   movil: string | null;
   created_at: string | null;
+  telegram_username: string | null;
+  telegram_chat_id: number | null;
+  status: string | null;
 };
 
 const SELECT_FULL =
-  'id,nombre,apellido,customer_type,tipo,cedula,rif,razon_social,representante_legal,genero,estado_civil,profesion,direccion,email,telefono,movil,created_at';
+  'id,nombre,apellido,customer_type,tipo,cedula,rif,razon_social,representante_legal,genero,estado_civil,profesion,direccion,email,telefono,movil,created_at,telegram_username,telegram_chat_id,status';
 
 const SELECT_FALLBACKS = [
+  'id,nombre,apellido,customer_type,tipo,cedula,rif,razon_social,representante_legal,genero,estado_civil,profesion,direccion,email,telefono,movil,created_at',
   'id,nombre,apellido,customer_type,tipo,cedula,rif,razon_social,representante_legal,direccion,email,telefono,movil,created_at',
   'id,nombre,customer_type,tipo,cedula,rif,razon_social,representante_legal,direccion,email,telefono,movil,created_at',
   'id,nombre,tipo,cedula,rif,razon_social,representante_legal,direccion,email,telefono,movil,created_at',
@@ -85,6 +89,14 @@ function normalizarDetalle(row: Record<string, unknown> | null): CustomerDetail 
     telefono,
     movil: typeof row.movil === 'string' ? row.movil : null,
     created_at: typeof row.created_at === 'string' ? row.created_at : null,
+    telegram_username: typeof row.telegram_username === 'string' ? row.telegram_username : null,
+    telegram_chat_id:
+      typeof row.telegram_chat_id === 'number'
+        ? row.telegram_chat_id
+        : typeof row.telegram_chat_id === 'string' && row.telegram_chat_id
+          ? Number(row.telegram_chat_id)
+          : null,
+    status: typeof row.status === 'string' ? row.status : null,
   };
 }
 

@@ -136,6 +136,9 @@ export function ampliarModulosPorPermisos(
   if (ps.has('flota.gestionar')) {
     set.add('flota');
   }
+  if (ps.has('clientes.ver') || ps.has('clientes.editar') || ps.has('clientes.borrar')) {
+    set.add('clientes');
+  }
   return set;
 }
 
