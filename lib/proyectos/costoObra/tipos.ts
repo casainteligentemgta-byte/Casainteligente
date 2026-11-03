@@ -3,7 +3,7 @@
 export const REGLA_MANO_OBRA_COSTO =
   'Nómina pagada si existe para el empleado y la semana; si no, jornales. Nunca ambos para el mismo empleado y periodo.';
 
-export const MIGRACION_COSTO_OBRA = '389_ci_costo_obra.sql';
+export const MIGRACION_COSTO_OBRA = '395_ci_costo_obra.sql';
 
 export type CostoObraFuenteManoObra = 'nomina' | 'jornales' | 'mixto' | 'ninguna';
 

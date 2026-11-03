@@ -58,7 +58,7 @@ describe('cargarCostoObra', () => {
     assert.equal(r.total_con_honorarios_ad_usd, 3.45);
   });
 
-  it('si falta el RPC, pide la migración 389', async () => {
+  it('si falta el RPC, pide la migración 395', async () => {
     const supabase = {
       rpc: async () => ({
         data: null,
@@ -67,7 +67,7 @@ describe('cargarCostoObra', () => {
     };
     await assert.rejects(
       () => cargarCostoObra(supabase as never, 'obra-1'),
-      /389_ci_costo_obra/,
+      /395_ci_costo_obra/,
     );
   });
 });

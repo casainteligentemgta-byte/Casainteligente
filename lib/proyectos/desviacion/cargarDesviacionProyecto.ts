@@ -42,8 +42,8 @@ export async function cargarDesviacionProyecto(
     costo = await cargarCostoObra(supabase, proyectoId);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    if (esMigracionCostoObraPendiente(msg) || /389_ci_costo_obra/i.test(msg)) {
-      throw new Error('Aplique la migración 389_ci_costo_obra.sql en Supabase.');
+    if (esMigracionCostoObraPendiente(msg) || /395_ci_costo_obra/i.test(msg)) {
+      throw new Error('Aplique la migración 395_ci_costo_obra.sql en Supabase.');
     }
     throw err;
   }

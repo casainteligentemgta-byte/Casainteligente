@@ -56,7 +56,7 @@ export default function HerramientasView() {
       if (retry.error) {
         setError(
           /costo_diario|fecha_devolucion|schema cache/i.test(retry.error.message)
-            ? 'Aplique la migración 389_ci_costo_obra.sql en Supabase para asignar herramientas con costo por día.'
+            ? 'Aplique la migración 395_ci_costo_obra.sql en Supabase para asignar herramientas con costo por día.'
             : retry.error.message,
         );
         setRows([]);
@@ -66,7 +66,7 @@ export default function HerramientasView() {
     } else if (qErr) {
       setError(
         /costo_diario|fecha_devolucion|schema cache/i.test(qErr.message)
-          ? 'Aplique la migración 389_ci_costo_obra.sql en Supabase para asignar herramientas con costo por día.'
+          ? 'Aplique la migración 395_ci_costo_obra.sql en Supabase para asignar herramientas con costo por día.'
           : qErr.message,
       );
       setRows([]);

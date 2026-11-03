@@ -1,6 +1,6 @@
 /**
  * Reglas del centro de costo por obra. Deben coincidir con
- * `supabase/migrations/389_ci_costo_obra.sql` (`ci_costo_obra`).
+ * `supabase/migrations/395_ci_costo_obra.sql` (`ci_costo_obra`).
  */
 
 import { honorariosAdminPctODefault } from '@/lib/contabilidad/cco/honorarios';
