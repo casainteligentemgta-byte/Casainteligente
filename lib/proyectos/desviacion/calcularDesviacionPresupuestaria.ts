@@ -162,7 +162,10 @@ export type CalcularDesviacionInput = {
   fuentePresupuesto: string;
   laborUsd: number;
   materialesUsd: number;
+  /** Informativo: egresos ajenos ya van dentro de materialesUsd (centro de costo). */
   egresosUsd: number;
+  herramientasUsd?: number;
+  otrosUsd?: number;
   presupuestoManoObraUsd: number;
   presupuestoMaterialesUsd: number;
   umbralPct?: number;
@@ -277,7 +280,10 @@ export function calcularDesviacionPresupuestaria(
   const labor = round2(Math.max(0, input.laborUsd));
   const materiales = round2(Math.max(0, input.materialesUsd));
   const egresos = round2(Math.max(0, input.egresosUsd));
-  const ejecutado = round2(labor + materiales + egresos);
+  const herramientas = round2(Math.max(0, input.herramientasUsd ?? 0));
+  const otros = round2(Math.max(0, input.otrosUsd ?? 0));
+  // Materiales del RPC ya incluyen egresos de almacén ajeno; no se vuelven a sumar.
+  const ejecutado = round2(labor + materiales + herramientas + otros);
   const presupuesto = round2(Math.max(0, input.presupuestoUsd));
   const diferencia = round2(ejecutado - presupuesto);
   const desv = desviacionPct(ejecutado, presupuesto);
@@ -321,6 +327,8 @@ export function calcularDesviacionPresupuestaria(
       mano_obra_usd: labor,
       materiales_usd: materiales,
       egresos_almacen_usd: egresos,
+      herramientas_usd: herramientas,
+      otros_usd: otros,
     },
     capitulos: capitulosCerrados,
     umbral_pct: umbral,

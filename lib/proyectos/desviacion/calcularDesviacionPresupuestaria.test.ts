@@ -118,20 +118,22 @@ describe('presupuesto y compras', () => {
 });
 
 describe('desviación presupuestaria', () => {
-  it('estado verde: ejecutado = labor + materiales + egresos, ~70%', () => {
+  it('estado verde: ejecutado = labor + materiales (egresos ajenos ya van en materiales)', () => {
     const r = calcularDesviacionPresupuestaria({
       proyectoId: 'p-verde',
       proyectoNombre: 'Instalación CCTV Palos Grandes',
       presupuestoUsd: 20000,
       fuentePresupuesto: 'ci_presupuesto_partidas',
       laborUsd: 400,
-      materialesUsd: 8000,
+      materialesUsd: 13000,
       egresosUsd: 5000,
       presupuestoManoObraUsd: 6000,
       presupuestoMaterialesUsd: 14000,
       tasaBcv: 36.5,
     });
     assert.equal(r.gasto_ejecutado_usd, 13400);
+    assert.equal(r.desglose.egresos_almacen_usd, 5000);
+    assert.equal(r.desglose.herramientas_usd, 0);
     assert.equal(r.pct_consumido, 67);
     assert.equal(r.salud, 'verde');
     assert.equal(r.desviacion_pct, -33);
@@ -145,7 +147,7 @@ describe('desviación presupuestaria', () => {
       presupuestoUsd: 15000,
       fuentePresupuesto: 'ci_presupuesto_partidas',
       laborUsd: 500,
-      materialesUsd: 8500,
+      materialesUsd: 13300,
       egresosUsd: 4800,
       presupuestoManoObraUsd: 2000,
       presupuestoMaterialesUsd: 13000,
@@ -164,7 +166,7 @@ describe('desviación presupuestaria', () => {
       presupuestoUsd: 10000,
       fuentePresupuesto: 'ci_presupuesto_partidas',
       laborUsd: 3200,
-      materialesUsd: 6500,
+      materialesUsd: 8200,
       egresosUsd: 1700,
       presupuestoManoObraUsd: 3000,
       presupuestoMaterialesUsd: 5000,
@@ -183,6 +185,7 @@ describe('desviación presupuestaria', () => {
     const textos = r.alertas.map((a) => a.mensaje);
     assert.ok(textos.some((t) => /supera el presupuesto estimado/i.test(t)));
     assert.ok(textos.some((t) => /costo de materiales excede el 15%/i.test(t)));
+    assert.equal(r.desglose.materiales_usd, 8200);
     assert.ok(textos.some((t) => /jornadas de instalación de CCTV superan el límite/i.test(t)));
   });
 
@@ -225,5 +228,26 @@ describe('desviación presupuestaria', () => {
     });
     assert.equal(alertas.length, 0);
     assert.equal(desviacionPct(1070, 1000), 7);
+  });
+
+  it('herramientas y otros entran al ejecutado; egresos ajenos no se suman dos veces', () => {
+    const r = calcularDesviacionPresupuestaria({
+      proyectoId: 'p-costo',
+      proyectoNombre: 'Obra centro de costo',
+      presupuestoUsd: 1000,
+      fuentePresupuesto: 'ci_presupuesto_partidas',
+      laborUsd: 100,
+      materialesUsd: 200,
+      egresosUsd: 50,
+      herramientasUsd: 30,
+      otrosUsd: 20,
+      presupuestoManoObraUsd: 100,
+      presupuestoMaterialesUsd: 900,
+      tasaBcv: 36.5,
+    });
+    assert.equal(r.gasto_ejecutado_usd, 350);
+    assert.equal(r.desglose.herramientas_usd, 30);
+    assert.equal(r.desglose.otros_usd, 20);
+    assert.equal(r.desglose.egresos_almacen_usd, 50);
   });
 });

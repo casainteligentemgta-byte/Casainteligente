@@ -5,6 +5,10 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { etiquetaCliente, idCliente, rifCliente } from '@/lib/clientes/etiquetaCliente';
+import {
+  payloadClienteMinimoObraTalento,
+  resolverCustomerIdObraTalento,
+} from '@/lib/proyectos/talento/resolverCustomerIdObraTalento';
 import { apiUrl } from '@/lib/http/apiUrl';
 import { withTimeout } from '@/lib/http/withTimeout';
 import {
@@ -472,10 +476,43 @@ function ProyectoNuevoPageContent() {
 
     const ubicTxt = (ubicacion.trim() || n).trim();
     const moduloOrigen = proyectoModuloIdParam.trim();
+
+    let entidadCustomerId: string | null = null;
+    if (entidadId.trim()) {
+      const { data: entRow } = await supabase
+        .from('ci_entidades')
+        .select('customer_id')
+        .eq('id', entidadId.trim())
+        .maybeSingle();
+      const cid = (entRow as { customer_id?: string | null } | null)?.customer_id;
+      entidadCustomerId = cid ? String(cid) : null;
+    }
+
+    let customerIdObra = resolverCustomerIdObraTalento({
+      clienteId: customerId || idCliente(clienteSeleccionado),
+      presupuestoCustomerId: presRow.customer_id,
+      entidadCustomerId,
+    });
+    if (!customerIdObra) {
+      const { data: createdCust, error: custErr } = await supabase
+        .from('customers')
+        .insert(payloadClienteMinimoObraTalento(n))
+        .select('id')
+        .single();
+      if (custErr || !createdCust?.id) {
+        setLoading(false);
+        setError(
+          'Esta obra necesita un cliente. Elige uno o un presupuesto con cliente. En producción customer_id no puede quedar vacío.',
+        );
+        return;
+      }
+      customerIdObra = String((createdCust as { id: string }).id);
+    }
+
     const payload: Record<string, unknown> = {
       tipo_proyecto: 'talento',
-      customer_id: null,
-      budget_id: null,
+      customer_id: customerIdObra,
+      budget_id: budgetId,
       nombre: n,
       estado: 'ejecucion',
       ubicacion_texto: ubicTxt,
@@ -485,7 +522,7 @@ function ProyectoNuevoPageContent() {
       moneda: 'USD',
       observaciones: notasObra,
       entidad_id: entidadId.trim(),
-      obra_cliente: textoClienteObra(clienteSeleccionado),
+      obra_cliente: textoClienteObra(clienteSeleccionado) || n,
       obra_ubicacion: ubicacion.trim() || null,
       obra_fecha_inicio: fechaInicio,
       obra_fecha_entrega: fechaFin,
@@ -507,11 +544,13 @@ function ProyectoNuevoPageContent() {
     setLoading(false);
     if (err) {
       setError(
-        err.message.includes('entidad_id')
-          ? `${err.message} — Revisa migraciones 063/071 (entidad_id) y 086 (unificación ci_proyectos).`
-          : err.message.includes('tipo_proyecto') || err.message.includes('column')
-            ? `${err.message} — Ejecuta la migración 086_ci_proyectos_unifica_ci_obras.sql en Supabase.`
-            : err.message,
+        /customer_id/i.test(err.message) && /null|not-null|not null/i.test(err.message)
+          ? 'No se pudo guardar la obra sin cliente. Elige un cliente o un presupuesto con cliente e inténtalo de nuevo.'
+          : err.message.includes('entidad_id')
+            ? `${err.message} — Revisa migraciones 063/071 (entidad_id) y 086 (unificación ci_proyectos).`
+            : err.message.includes('tipo_proyecto') || err.message.includes('column')
+              ? `${err.message} — Ejecuta la migración 086_ci_proyectos_unifica_ci_obras.sql en Supabase.`
+              : err.message,
       );
       return;
     }

@@ -21,7 +21,10 @@ export type DesviacionAlerta = {
 export type DesviacionDesglose = {
   mano_obra_usd: number;
   materiales_usd: number;
+  /** Egresos desde almacén ajeno (ya incluidos en materiales_usd; no se suman otra vez). */
   egresos_almacen_usd: number;
+  herramientas_usd: number;
+  otros_usd: number;
 };
 
 export type DesviacionPresupuestariaPayload = {

@@ -1,6 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { calcularTotalesComprasObra } from '@/lib/contabilidad/resumenComprasObra';
 import { ESTADOS_VENTA, montoPagadoDe } from '@/lib/presupuesto/listaPresupuestos';
+import { cargarCostoObra } from '@/lib/proyectos/costoObra/cargarCostoObra';
+import { esObraDemo } from '@/lib/proyectos/costoObra/reglasCostoObra';
 
 export type FilaRentabilidadObra = {
   proyectoId: string;
@@ -9,6 +11,13 @@ export type FilaRentabilidadObra = {
   cobradoUsd: number;
   porCobrarUsd: number;
   comprasUsd: number;
+  costoObraUsd: number;
+  materialesUsd: number;
+  manoObraUsd: number;
+  herramientasUsd: number;
+  otrosUsd: number;
+  honorariosAdUsd: number;
+  honorariosAdPct: number;
   facturasCompra: number;
   margenBrutoUsd: number;
   margenBrutoPct: number | null;
@@ -21,6 +30,7 @@ export type ResumenRentabilidad = {
   ventasAceptadasUsd: number;
   cobradoUsd: number;
   comprasUsd: number;
+  costoObraUsd: number;
   margenBrutoUsd: number;
 };
 
@@ -33,8 +43,9 @@ type BudgetRow = {
 };
 
 /**
- * Rentabilidad simple por obra: compras de la obra + presupuestos del cliente de la obra.
- * No incluye nómina ni CCO (próximo pack).
+ * Rentabilidad por obra: ventas del cliente vs centro de costo `ci_costo_obra`
+ * (materiales sin doble conteo, mano de obra, herramientas, otros).
+ * Honorarios AD se informan aparte y no entran al margen bruto.
  */
 export async function cargarInformeRentabilidad(
   supabase: SupabaseClient,
@@ -53,11 +64,11 @@ export async function cargarInformeRentabilidad(
   const { data: proyectos, error: pErr } = await proyectosQ;
   if (pErr) throw new Error(pErr.message);
 
-  const lista = (proyectos ?? []) as Array<{
+  const lista = ((proyectos ?? []) as Array<{
     id: string;
     nombre: string | null;
     customer_id: string | null;
-  }>;
+  }>).filter((p) => !esObraDemo(p.nombre));
 
   const customerIds = Array.from(
     new Set(lista.map((p) => (p.customer_id ? String(p.customer_id) : '')).filter(Boolean)),
@@ -98,12 +109,15 @@ export async function cargarInformeRentabilidad(
     const proyectoNombre = String(p.nombre ?? 'Obra').trim() || 'Obra';
     const customerId = p.customer_id ? String(p.customer_id) : null;
 
-    const compras = await calcularTotalesComprasObra(supabase, proyectoId).catch(() => ({
-      facturasContabilidad: 0,
-      facturasCanalExtra: 0,
-      totalVes: 0,
-      totalUsd: 0,
-    }));
+    const [compras, costo] = await Promise.all([
+      calcularTotalesComprasObra(supabase, proyectoId).catch(() => ({
+        facturasContabilidad: 0,
+        facturasCanalExtra: 0,
+        totalVes: 0,
+        totalUsd: 0,
+      })),
+      cargarCostoObra(supabase, proyectoId).catch(() => null),
+    ]);
 
     let ventasAceptadasUsd = 0;
     let cobradoUsd = 0;
@@ -123,7 +137,12 @@ export async function cargarInformeRentabilidad(
     }
 
     const comprasUsd = Number(compras.totalUsd) || 0;
-    const margenBrutoUsd = Math.round((ventasAceptadasUsd - comprasUsd) * 100) / 100;
+    const costoObraUsd = costo
+      ? costo.excluido_demo
+        ? 0
+        : Number(costo.total_directo_usd) || 0
+      : comprasUsd;
+    const margenBrutoUsd = Math.round((ventasAceptadasUsd - costoObraUsd) * 100) / 100;
     const margenBrutoPct =
       ventasAceptadasUsd > 0
         ? Math.round((margenBrutoUsd / ventasAceptadasUsd) * 1000) / 10
@@ -137,13 +156,20 @@ export async function cargarInformeRentabilidad(
       cobradoUsd: Math.round(cobradoUsd * 100) / 100,
       porCobrarUsd: Math.max(0, Math.round((ventasAceptadasUsd - cobradoUsd) * 100) / 100),
       comprasUsd: Math.round(comprasUsd * 100) / 100,
+      costoObraUsd: Math.round(costoObraUsd * 100) / 100,
+      materialesUsd: Math.round(Number(costo?.partidas.materiales.usd ?? comprasUsd) * 100) / 100,
+      manoObraUsd: Math.round(Number(costo?.partidas.mano_obra.usd ?? 0) * 100) / 100,
+      herramientasUsd: Math.round(Number(costo?.partidas.herramientas.usd ?? 0) * 100) / 100,
+      otrosUsd: Math.round(Number(costo?.partidas.otros.usd ?? 0) * 100) / 100,
+      honorariosAdUsd: Math.round(Number(costo?.honorarios_ad.usd ?? 0) * 100) / 100,
+      honorariosAdPct: Number(costo?.honorarios_ad.pct ?? 0),
       facturasCompra: compras.facturasContabilidad + compras.facturasCanalExtra,
       margenBrutoUsd,
       margenBrutoPct,
     });
   }
 
-  filas.sort((a, b) => b.comprasUsd - a.comprasUsd);
+  filas.sort((a, b) => b.costoObraUsd - a.costoObraUsd);
 
   // Ventas van por cliente: si varias obras comparten customer_id, no sumar dos veces.
   const clientesVistos = new Set<string>();
@@ -157,13 +183,15 @@ export async function cargarInformeRentabilidad(
     cobradoUsd += f.cobradoUsd;
   }
   const comprasUsd = Math.round(filas.reduce((s, f) => s + f.comprasUsd, 0) * 100) / 100;
+  const costoObraUsd = Math.round(filas.reduce((s, f) => s + f.costoObraUsd, 0) * 100) / 100;
 
   const resumen: ResumenRentabilidad = {
     obras: filas.length,
     ventasAceptadasUsd: Math.round(ventasAceptadasUsd * 100) / 100,
     cobradoUsd: Math.round(cobradoUsd * 100) / 100,
     comprasUsd,
-    margenBrutoUsd: Math.round((ventasAceptadasUsd - comprasUsd) * 100) / 100,
+    costoObraUsd,
+    margenBrutoUsd: Math.round((ventasAceptadasUsd - costoObraUsd) * 100) / 100,
   };
 
   return { filas, resumen };
