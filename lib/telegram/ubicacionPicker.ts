@@ -4,9 +4,11 @@ import {
   sendTelegramMessage,
 } from '@/lib/telegram/botApi';
 import {
+  asegurarAlmacenObra,
   asegurarUbicacionObra,
   etiquetaUbicacionSelector,
   listarUbicacionesParaSelector,
+  MENSAJE_OBRA_SIN_ALMACEN_TELEGRAM,
 } from '@/lib/almacen/ubicacionesInventario';
 import { getTelegramEstado, setTelegramContexto } from '@/lib/telegram/estados';
 import { confirmarCompraDesdeCanal } from '@/lib/contabilidad/confirmarCompraDesdeCanal';
@@ -103,6 +105,12 @@ export async function enviarPickerUbicacionesTelegram(
   },
 ): Promise<void> {
   await asegurarUbicacionObra(supabase, params.proyectoId, params.nombreObra);
+  try {
+    await asegurarAlmacenObra(supabase, params.proyectoId, params.nombreObra);
+  } catch (e) {
+    const det = e instanceof Error ? e.message : String(e);
+    console.warn('[telegram] no se pudo asegurar almacén de obra:', det);
+  }
 
   await setTelegramContexto(supabase, chatId, {
     contexto: params.esNotaEntrega ? 'entrada_obra' : 'factura',
@@ -122,11 +130,9 @@ export async function enviarPickerUbicacionesTelegram(
   });
 
   if (!ubicaciones.length) {
-    await sendTelegramMessage(
-      chatId,
-      '⚠️ No hay almacenes configurados. Aplique migraciones 180–181 o cree ubicaciones en la app.',
-      { parse_mode: 'HTML' },
-    );
+    await sendTelegramMessage(chatId, MENSAJE_OBRA_SIN_ALMACEN_TELEGRAM, {
+      parse_mode: 'HTML',
+    });
     return;
   }
 

@@ -365,3 +365,158 @@ export async function asegurarUbicacionObra(
   if (error) throw new Error(error.message);
   return String(created.id);
 }
+
+/** `DEP-` + primeros 12 hex del UUID de la obra, en mayúsculas (sin guiones). */
+export function codigoAlmacenCentralObra(proyectoId: string): string {
+  const hex = proyectoId.replace(/-/g, '').toUpperCase();
+  return `DEP-${hex.slice(0, 12)}`;
+}
+
+/** Nombre de almacén de obra, mismo patrón que los creados a mano (`ALMACÉN – TH-4`). */
+export function nombreAlmacenCentralObra(nombreObra: string): string {
+  const n = nombreObra.trim() || 'Obra';
+  return `ALMACÉN – ${n}`;
+}
+
+export const MENSAJE_OBRA_SIN_ALMACEN_TELEGRAM =
+  '⚠️ Esta obra no tiene almacén todavía.\n\nIntenta de nuevo en un momento. Si sigue igual, avísale a administración.';
+
+/**
+ * Crea o devuelve el almacén central de la obra (hijo de la ubicación tipo obra).
+ * Solo servidor: el cliente debe ser admin/service_role (Telegram, APIs).
+ */
+export async function asegurarAlmacenObra(
+  supabase: SupabaseClient,
+  proyectoId: string,
+  nombreObra: string,
+): Promise<string> {
+  const pid = proyectoId?.trim();
+  if (!pid) {
+    throw new Error('Proyecto no indicado; no se puede crear el almacén de la obra.');
+  }
+
+  const nombre = nombreObra?.trim() || 'Obra';
+
+  const { data: rpcId, error: rpcErr } = await supabase.rpc('ci_asegurar_almacen_obra', {
+    p_proyecto_id: pid,
+    p_nombre: nombre,
+  });
+
+  if (!rpcErr && rpcId) {
+    return String(rpcId);
+  }
+
+  const rpcDenied =
+    rpcErr?.code === '42501' ||
+    /permission denied/i.test(rpcErr?.message ?? '');
+  const rpcMissing =
+    !rpcDenied &&
+    (rpcErr?.code === 'PGRST202' ||
+      /does not exist|Could not find the function/i.test(rpcErr?.message ?? ''));
+
+  if (!rpcMissing) {
+    throw new Error(rpcErr?.message ?? 'No se pudo asegurar el almacén de la obra.');
+  }
+
+  return insertarAlmacenObraFallback(supabase, pid, nombre);
+}
+
+async function insertarAlmacenObraFallback(
+  supabase: SupabaseClient,
+  pid: string,
+  nombreObra: string,
+): Promise<string> {
+  const { data: existing, error: selErr } = await supabase
+    .from('inv_ubicaciones')
+    .select('id, activo')
+    .eq('ci_proyecto_id', pid)
+    .in('tipo', ['almacen_central', 'almacen_movil'])
+    .order('activo', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (selErr?.code === '42P01') {
+    throw new Error('Tabla inv_ubicaciones no existe. Aplique la migración de inventario.');
+  }
+  if (selErr) throw new Error(selErr.message);
+  if (existing?.id) {
+    if (existing.activo === false) {
+      const { error: actErr } = await supabase
+        .from('inv_ubicaciones')
+        .update({ activo: true })
+        .eq('id', existing.id);
+      if (actErr) throw new Error(actErr.message);
+    }
+    return String(existing.id);
+  }
+
+  const padreId = await asegurarUbicacionObra(supabase, pid, nombreObra);
+
+  const { data: proy } = await supabase
+    .from('ci_proyectos')
+    .select('nombre, entidad_id')
+    .eq('id', pid)
+    .maybeSingle();
+  const nombre = nombreAlmacenCentralObra(
+    String(proy?.nombre ?? '').trim() || nombreObra,
+  );
+  const entidadId = proy?.entidad_id ? String(proy.entidad_id) : null;
+
+  const codigoBase = codigoAlmacenCentralObra(pid);
+  const payloadBase = {
+    nombre,
+    tipo: 'almacen_central' as const,
+    ci_proyecto_id: pid,
+    ubicacion_padre_id: padreId,
+    descripcion: 'Almacén de obra (auto)',
+    activo: true,
+  };
+
+  for (let n = 0; n <= 20; n += 1) {
+    const codigo = n === 0 ? codigoBase : `${codigoBase}-${n}`;
+    const { data: created, error } = await insertAlmacenObra(supabase, {
+      ...payloadBase,
+      codigo,
+      entidad_id: entidadId,
+    });
+    if (!error && created?.id) return String(created.id);
+
+    if (error?.code === '23505' || /duplicate|unique/i.test(error?.message ?? '')) {
+      const { data: race } = await supabase
+        .from('inv_ubicaciones')
+        .select('id')
+        .eq('ci_proyecto_id', pid)
+        .in('tipo', ['almacen_central', 'almacen_movil'])
+        .limit(1)
+        .maybeSingle();
+      if (race?.id) return String(race.id);
+      continue;
+    }
+    if (error) throw new Error(error.message);
+  }
+
+  throw new Error('No se pudo crear el almacén de la obra (código ocupado).');
+}
+
+async function insertAlmacenObra(
+  supabase: SupabaseClient,
+  row: {
+    codigo: string;
+    nombre: string;
+    tipo: 'almacen_central';
+    ci_proyecto_id: string;
+    ubicacion_padre_id: string;
+    descripcion: string;
+    activo: boolean;
+    entidad_id: string | null;
+  },
+): Promise<{ data: { id: string } | null; error: { message: string; code?: string } | null }> {
+  const conEntidad = await supabase.from('inv_ubicaciones').insert(row).select('id').single();
+  if (
+    conEntidad.error &&
+    (conEntidad.error.code === '42703' || /entidad_id/i.test(conEntidad.error.message ?? ''))
+  ) {
+    const { entidad_id: _omit, ...sinEntidad } = row;
+    return supabase.from('inv_ubicaciones').insert(sinEntidad).select('id').single();
+  }
+  return conEntidad;
+}
