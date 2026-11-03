@@ -525,7 +525,7 @@ function VentasContent() {
             const { iva_pct: _i, iva_monto: _m, ...sinIva } = budgetDataBase;
             res = await persist(sinIva);
             if (!res.error) {
-                alert('Guardado. Falta la migración 389 (IVA): el documento quedará sin IVA hasta aplicarla.');
+                alert('Guardado. Falta la migración 397 (IVA): el documento quedará sin IVA hasta aplicarla.');
             }
         }
         if (res.error && esErrorColumnaFecha(res.error.message)) {

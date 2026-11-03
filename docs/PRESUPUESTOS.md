@@ -16,7 +16,7 @@ Un solo módulo. En la barra hay un botón, **Presupuestos**.
 
 ## IVA y bolívares
 
-Cada presupuesto tiene `iva_pct` (16 % por defecto; 0 = exento) e `iva_monto`. El documento (vista previa y PDF) muestra subtotal, IVA y **total con IVA**. El equivalente en bolívares es referencial: tasa BCV del día y su fecha. Migración `389_presupuestos_iva_cobros_staff.sql`.
+Cada presupuesto tiene `iva_pct` (16 % por defecto; 0 = exento) e `iva_monto`. El documento (vista previa y PDF) muestra subtotal, IVA y **total con IVA**. El equivalente en bolívares es referencial: tasa BCV del día y su fecha. Migración `397_presupuestos_iva_cobros_staff.sql`.
 
 ## PDF y WhatsApp
 
