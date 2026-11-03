@@ -1,13 +1,17 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { z } from 'zod';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { createClient } from '@/lib/supabase/client';
-import { apiGuardarCliente } from '@/lib/clientes/apiCliente';
-import { buscarClientesParecidos, type ClienteParecido } from '@/lib/clientes/duplicadosCliente';
+import { apiBuscarDuplicadosCliente, apiGuardarCliente } from '@/lib/clientes/apiCliente';
+import {
+  etiquetaMotivoDuplicado,
+  mensajeClienteYaExiste,
+} from '@/lib/clientes/clienteEntidades';
+import { puedeForzarNuevoPorTelefono } from '@/lib/clientes/altaOVincularCliente';
+import { type ClienteParecido } from '@/lib/clientes/duplicadosCliente';
 import { normalizarTelegramUsername } from '@/lib/clientes/normalizarIdentidad';
 import BotonTema from '@/components/tema/BotonTema';
 import { tinta, tintaTexto } from '@/lib/tema/tinta';
@@ -146,7 +150,6 @@ export default function NuevoClienteForm({
   isEditing?: boolean;
 }) {
   const router = useRouter();
-  const supabase = useMemo(() => createClient(), []);
   const yaExiste = Boolean(isEditing && initialData?.id);
   const [paso, setPaso] = useState<1 | 2>(yaExiste ? 2 : 1);
   const [clienteId, setClienteId] = useState<string | null>(
@@ -183,13 +186,19 @@ export default function NuevoClienteForm({
 
   async function guardarFila(payload: Record<string, unknown>, id: string | null) {
     const result = await apiGuardarCliente(payload, id);
+    if (result.yaExistia && result.id) {
+      toast.success(
+        mensajeClienteYaExiste(result.nombre || 'Este cliente', result.motivo ?? 'telefono'),
+      );
+    }
     return {
       error: result.error ? { message: result.error } : null,
       data: result.id ? { id: result.id } : null,
+      yaExistia: result.yaExistia,
     };
   }
 
-  const submitPaso1 = async (opts?: { ignorar?: boolean }) => {
+  const submitPaso1 = async (opts?: { ignorar?: boolean; usarExistente?: boolean }) => {
     const payload =
       customerType === 'natural'
         ? {
@@ -219,7 +228,7 @@ export default function NuevoClienteForm({
     }
     setErrors({});
 
-    const dup = await buscarClientesParecidos(supabase, {
+    const dup = await apiBuscarDuplicadosCliente({
       telefono: parsed.data.telefono,
       excludeId: clienteId,
     });
@@ -227,7 +236,11 @@ export default function NuevoClienteForm({
       toast.error('No se pudo comprobar si ya existe un cliente parecido. ' + dup.error);
       return;
     }
-    if (dup.parecidos.length && !(opts?.ignorar || ignorarDup)) {
+    if (
+      dup.parecidos.length &&
+      !(opts?.ignorar || opts?.usarExistente || ignorarDup) &&
+      !clienteId
+    ) {
       setDupDe(1);
       setParecidos(dup.parecidos);
       return;
@@ -237,7 +250,7 @@ export default function NuevoClienteForm({
     try {
       const tg = normalizarTelegramUsername(parsed.data.telegram_username) || null;
       const statusAlta = clienteId ? {} : { status: 'activo' };
-      const insertData =
+      const insertData: Record<string, unknown> =
         parsed.data.customerType === 'natural'
           ? {
               customer_type: 'natural',
@@ -260,6 +273,7 @@ export default function NuevoClienteForm({
               telegram_username: tg,
               ...statusAlta,
             };
+      if (opts?.ignorar) insertData.forzar_nuevo = true;
 
       const result = await guardarFila(insertData, clienteId);
       if (result.error) {
@@ -283,7 +297,7 @@ export default function NuevoClienteForm({
     }
   };
 
-  const submitPaso2 = async (opts?: { ignorar?: boolean }) => {
+  const submitPaso2 = async (opts?: { ignorar?: boolean; usarExistente?: boolean }) => {
     if (!clienteId) {
       toast.error('Primero guarda el contacto (paso 1).');
       return;
@@ -294,7 +308,7 @@ export default function NuevoClienteForm({
     }
     setErrors({});
 
-    const dup = await buscarClientesParecidos(supabase, {
+    const dup = await apiBuscarDuplicadosCliente({
       rif: rif.trim() || null,
       cedula: cedula.trim() || null,
       excludeId: clienteId,
@@ -303,7 +317,7 @@ export default function NuevoClienteForm({
       toast.error('No se pudo comprobar duplicados. ' + dup.error);
       return;
     }
-    if (dup.parecidos.length && !(opts?.ignorar || ignorarDup)) {
+    if (dup.parecidos.length && !(opts?.ignorar || opts?.usarExistente || ignorarDup)) {
       setDupDe(2);
       setParecidos(dup.parecidos);
       return;
@@ -348,36 +362,69 @@ export default function NuevoClienteForm({
           color: 'var(--label-primary)',
         }}
       >
-        <p className="font-semibold">Ya existe un cliente parecido</p>
+        <p className="font-semibold">Este cliente ya está en el sistema</p>
+        <p className="mt-1 text-xs" style={{ color: tintaTexto(0.6) }}>
+          Lo vincularemos a su empresa para no crear un duplicado. Un mismo cliente puede ser de
+          varias empresas (Casa Inteligente, DIMAQUINAS, etc.).
+        </p>
         <ul className="mt-2 space-y-1">
           {parecidos.slice(0, 3).map((p) => (
             <li key={p.id}>
               <Link href={`/clientes/${p.id}`} className="font-semibold" style={{ color: 'var(--tono-azul)' }}>
                 {p.nombre}
               </Link>
-              <span style={{ color: tintaTexto(0.5) }}>
-                {' '}
-                ({p.motivo === 'rif' ? 'mismo RIF' : p.motivo === 'cedula' ? 'misma cédula' : 'mismo teléfono'})
-              </span>
+              <span style={{ color: tintaTexto(0.5) }}> ({etiquetaMotivoDuplicado(p.motivo)})</span>
             </li>
           ))}
         </ul>
-        <button
-          type="button"
-          onClick={() => {
-            setIgnorarDup(true);
-            setParecidos([]);
-            void (dupDe === 1 ? submitPaso1({ ignorar: true }) : submitPaso2({ ignorar: true }));
-          }}
-          className="mt-3 rounded-xl px-4 py-2.5 text-[13px] font-semibold"
-          style={{
-            background: 'rgba(255,149,0,0.2)',
-            color: 'var(--tono-naranja)',
-            border: '1px solid rgba(255,149,0,0.35)',
-          }}
-        >
-          Guardar de todos modos
-        </button>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              const primero = parecidos[0];
+              setParecidos([]);
+              if (dupDe === 2 && primero) {
+                void (async () => {
+                  await apiGuardarCliente({
+                    nombre: primero.nombre,
+                    cedula: cedula.trim() || null,
+                    rif: rif.trim() || null,
+                  });
+                  router.push(`/clientes/${primero.id}`);
+                  router.refresh();
+                })();
+                return;
+              }
+              void submitPaso1({ usarExistente: true });
+            }}
+            className="rounded-xl px-4 py-2.5 text-[13px] font-semibold"
+            style={{
+              background: 'rgba(0,122,255,0.2)',
+              color: 'var(--tono-azul)',
+              border: '1px solid rgba(0,122,255,0.35)',
+            }}
+          >
+            Usar este cliente
+          </button>
+          {parecidos.every((p) => puedeForzarNuevoPorTelefono(p.motivo)) ? (
+            <button
+              type="button"
+              onClick={() => {
+                setIgnorarDup(true);
+                setParecidos([]);
+                void (dupDe === 1 ? submitPaso1({ ignorar: true }) : submitPaso2({ ignorar: true }));
+              }}
+              className="rounded-xl px-4 py-2.5 text-[13px] font-semibold"
+              style={{
+                background: 'rgba(255,149,0,0.2)',
+                color: 'var(--tono-naranja)',
+                border: '1px solid rgba(255,149,0,0.35)',
+              }}
+            >
+              Crear uno nuevo (otro cliente, mismo teléfono)
+            </button>
+          ) : null}
+        </div>
       </div>
     ) : null;
 

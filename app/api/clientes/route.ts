@@ -1,19 +1,21 @@
 import { NextResponse } from 'next/server';
 import { listarRolesEmpresaUsuario } from '@/lib/auth/ciUsuariosRolesDb';
 import { requirePermisoWeb } from '@/lib/auth/requirePermisoRoute';
+import { altaOVincularCliente } from '@/lib/clientes/altaOVincularCliente';
 import {
   entidadActivaDesdeRoles,
   esAdminGlobalRoles,
 } from '@/lib/clientes/entidadActiva';
-import { guardarClienteEnDb, payloadClientePermitido } from '@/lib/clientes/guardarCliente';
+import { payloadClientePermitido } from '@/lib/clientes/guardarCliente';
+import { createSupabaseAdminOnlyClient } from '@/lib/supabase/adminOnlyClient';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 /**
  * POST /api/clientes
- * Alta de cliente con la entidad activa del usuario (RLS + clientes.editar).
- * Usa el cliente de sesión (no service_role) para no romper Telegram ni RPCs DEFINER.
+ * Alta con la entidad activa. Si ya existe por cédula/RIF (o teléfono),
+ * se vincula a esa empresa en vez de duplicar.
  */
 export async function POST(req: Request) {
   const acceso = await requirePermisoWeb('clientes.editar');
@@ -35,7 +37,6 @@ export async function POST(req: Request) {
   let roles = await listarRolesEmpresaUsuario(acceso.supabase, acceso.userId);
   if (roles.length === 0) {
     try {
-      const { createSupabaseAdminOnlyClient } = await import('@/lib/supabase/adminOnlyClient');
       const admin = createSupabaseAdminOnlyClient();
       if (admin) roles = await listarRolesEmpresaUsuario(admin, acceso.userId);
     } catch {
@@ -49,18 +50,36 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         error:
-          'No hay una entidad asignada a su usuario. Pida a un administrador que le dé un rol en una entidad.',
+          'No hay una entidad asignada a su usuario. Pida a un administrador que le dé un rol en una empresa.',
       },
       { status: 400 },
     );
   }
 
-  const result = await guardarClienteEnDb(acceso.supabase, payload, null);
-  if (result.error) {
+  const busqueda = createSupabaseAdminOnlyClient() ?? acceso.supabase;
+  const result = await altaOVincularCliente({
+    session: acceso.supabase,
+    busqueda,
+    payload,
+    entidadId,
+    forzarNuevo: body.forzar_nuevo === true,
+  });
+  if (result.error && !result.id) {
     return NextResponse.json({ error: result.error }, { status: 400 });
   }
   if (!result.id) {
     return NextResponse.json({ error: 'Se guardó el cliente pero no se obtuvo el identificador.' }, { status: 500 });
   }
-  return NextResponse.json({ ok: true, id: result.id }, { status: 201 });
+  return NextResponse.json(
+    {
+      ok: true,
+      id: result.id,
+      ya_existia: result.yaExistia,
+      vinculado: result.vinculado,
+      nombre: result.nombre,
+      motivo: result.motivo,
+      error: result.error,
+    },
+    { status: result.yaExistia ? 200 : 201 },
+  );
 }

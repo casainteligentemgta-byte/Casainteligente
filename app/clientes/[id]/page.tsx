@@ -5,13 +5,27 @@ import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { toast } from 'sonner';
 import ClienteContextoObraPatrono from '@/components/clientes/ClienteContextoObraPatrono';
+import ClienteEntidadesFicha from '@/components/clientes/ClienteEntidadesFicha';
 import CustomerLoyaltyCard from '@/components/clientes/CustomerLoyaltyCard';
 import HistorialCobrosCliente from '@/components/clientes/HistorialCobrosCliente';
 import HistorialContactosCliente from '@/components/clientes/HistorialContactosCliente';
 import BotonTema from '@/components/tema/BotonTema';
 import { useCustomerLoyaltyScore } from '@/hooks/useCustomerLoyaltyScore';
 import { nombreEntidad, type EntidadConNombre } from '@/lib/entidades/nombreEntidad';
-import { apiArchivarCliente, apiRegistrarContactoCliente } from '@/lib/clientes/apiCliente';
+import {
+  apiArchivarCliente,
+  apiDesvincularEntidadCliente,
+  apiRegistrarContactoCliente,
+} from '@/lib/clientes/apiCliente';
+import {
+  cargarContextoEntidadUsuario,
+  cargarEntidadesCliente,
+  filtroFichaDesdeContexto,
+  mensajeConfirmarDesvincular,
+  type ClienteEntidadVinculo,
+  type ContextoEntidadUsuario,
+} from '@/lib/clientes/clienteEntidades';
+import { filtrarObrasPorEntidad, filtrarPresupuestosPorEntidad } from '@/lib/clientes/filtrarFichaPorEntidad';
 import {
   cargarClienteDetalle,
   type CustomerDetail,
@@ -70,6 +84,8 @@ type ObraVinculada = {
   entidadId: string | null;
   entidadNombre: string | null;
   entidadRif: string | null;
+  budgetId: string | null;
+  budgetsAdicionales: unknown;
 };
 
 const btnBarra: CSSProperties = {
@@ -108,8 +124,40 @@ export default function ClienteDetallePage() {
   const [contactosLoading, setContactosLoading] = useState(false);
   const [contactosError, setContactosError] = useState<string | null>(null);
   const [registrandoContacto, setRegistrandoContacto] = useState(false);
+  const [contexto, setContexto] = useState<ContextoEntidadUsuario>({
+    esAdmin: false,
+    entidadIds: [],
+    entidadActivaId: null,
+  });
+  const [vinculos, setVinculos] = useState<ClienteEntidadVinculo[]>([]);
+  const [contextoListo, setContextoListo] = useState(false);
   const loyalty = useCustomerLoyaltyScore(id);
-  const resumenPresupuestos = useMemo(() => resumenPresupuestosCliente(presupuestos), [presupuestos]);
+  const filtroEntidad = useMemo(
+    () => (contextoListo ? filtroFichaDesdeContexto(contexto) : { entidadIds: [] as string[] }),
+    [contexto, contextoListo],
+  );
+  const obrasVisibles = useMemo(
+    () => filtrarObrasPorEntidad(obras, filtroEntidad),
+    [obras, filtroEntidad],
+  );
+  const presupuestosVisibles = useMemo(
+    () =>
+      filtrarPresupuestosPorEntidad(
+        presupuestos,
+        obras.map((o) => ({
+          id: o.id,
+          entidadId: o.entidadId,
+          budgetId: o.budgetId,
+          budgetsAdicionales: o.budgetsAdicionales,
+        })),
+        filtroEntidad,
+      ),
+    [presupuestos, obras, filtroEntidad],
+  );
+  const resumenPresupuestos = useMemo(
+    () => resumenPresupuestosCliente(presupuestosVisibles),
+    [presupuestosVisibles],
+  );
 
   const clienteDisplayNombre = cliente?.razon_social ?? cliente?.nombre ?? 'Cliente';
   const telefono = cliente?.movil || cliente?.telefono || '';
@@ -120,14 +168,20 @@ export default function ClienteDetallePage() {
   const patronos = useMemo(
     () =>
       agruparPatronosDesdeObras(
-        obras.map((o) => ({
+        obrasVisibles.map((o) => ({
           entidadId: o.entidadId,
           entidadNombre: o.entidadNombre,
           entidadRif: o.entidadRif,
         })),
       ),
-    [obras],
+    [obrasVisibles],
   );
+
+  const recargarVinculos = useCallback(async () => {
+    if (!id) return;
+    const r = await cargarEntidadesCliente(supabase, id);
+    setVinculos(r.vinculos);
+  }, [id, supabase]);
 
   useEffect(() => {
     if (!id) {
@@ -139,14 +193,22 @@ export default function ClienteDetallePage() {
     (async () => {
       setLoading(true);
       setError(null);
-      const { data, error: err } = await cargarClienteDetalle(supabase, id);
+      const [{ data, error: err }, ctx] = await Promise.all([
+        cargarClienteDetalle(supabase, id),
+        cargarContextoEntidadUsuario(supabase),
+      ]);
       if (!alive) return;
       setLoading(false);
+      setContexto(ctx);
+      setContextoListo(true);
       if (err) {
         setError(err);
         return;
       }
       setCliente(data);
+      const v = await cargarEntidadesCliente(supabase, id);
+      if (!alive) return;
+      setVinculos(v.vinculos);
     })();
     return () => {
       alive = false;
@@ -161,7 +223,7 @@ export default function ClienteDetallePage() {
       const { data, error: err } = await supabase
         .from('ci_proyectos')
         .select(
-          'id,nombre,estado,tipo_proyecto,monto_aproximado,obra_precio_venta_usd,entidad_id,ci_entidades(nombre,rif,customer_id,customers(nombre))',
+          'id,nombre,estado,tipo_proyecto,monto_aproximado,obra_precio_venta_usd,entidad_id,budget_id,budgets_adicionales,ci_entidades(nombre,rif,customer_id,customers(nombre))',
         )
         .eq('customer_id', id)
         .order('created_at', { ascending: false });
@@ -182,6 +244,8 @@ export default function ClienteDetallePage() {
             entidadId: p.entidad_id ? String(p.entidad_id) : null,
             entidadNombre: ent ? nombreEntidad(ent, '') || null : null,
             entidadRif: ent?.rif ?? null,
+            budgetId: p.budget_id ? String(p.budget_id) : null,
+            budgetsAdicionales: p.budgets_adicionales,
           };
         }),
       );
@@ -236,12 +300,12 @@ export default function ClienteDetallePage() {
   }, [id, supabase]);
 
   useEffect(() => {
-    if (!id) return;
+    if (!id || !contextoListo) return;
     let alive = true;
     (async () => {
       setCobrosLoading(true);
       setCobrosError(null);
-      const res = await cargarCobrosCliente(supabase, id);
+      const res = await cargarCobrosCliente(supabase, id, { filtroEntidad });
       if (!alive) return;
       setCobrosLoading(false);
       setCobrosError(res.error);
@@ -250,7 +314,7 @@ export default function ClienteDetallePage() {
     return () => {
       alive = false;
     };
-  }, [id, supabase]);
+  }, [id, supabase, contextoListo, filtroEntidad]);
 
   async function registrarContacto(
     input: { canal: CanalContactoCliente; nota: string },
@@ -274,6 +338,21 @@ export default function ClienteDetallePage() {
 
   async function archivar() {
     if (!id) return;
+    if (!contexto.esAdmin && contexto.entidadActivaId) {
+      const nombreEmpresa =
+        vinculos.find((v) => v.entidadId === contexto.entidadActivaId)?.nombre || 'su empresa';
+      if (!window.confirm(mensajeConfirmarDesvincular(clienteDisplayNombre, nombreEmpresa))) return;
+      setArchivando(true);
+      const { error: err } = await apiDesvincularEntidadCliente(id, contexto.entidadActivaId);
+      setArchivando(false);
+      if (err) {
+        toast.error('No se pudo quitar: ' + err);
+        return;
+      }
+      toast.success(`Se quitó de ${nombreEmpresa}`);
+      window.location.href = '/clientes';
+      return;
+    }
     const next = archivado ? 'activo' : 'inactivo';
     if (next === 'inactivo') {
       if (!window.confirm(mensajeConfirmarArchivar(clienteDisplayNombre))) return;
@@ -330,6 +409,7 @@ export default function ClienteDetallePage() {
                     {archivado ? ' · Archivado' : ''}
                   </p>
                 </div>
+                {contexto.esAdmin || contexto.entidadActivaId ? (
                 <button
                   type="button"
                   onClick={() => void archivar()}
@@ -338,11 +418,18 @@ export default function ClienteDetallePage() {
                   style={{
                     border: `1px solid ${tinta(0.15)}`,
                     background: tinta(0.06),
-                    color: archivado ? 'var(--tono-verde)' : 'var(--tono-naranja)',
+                    color: archivado && contexto.esAdmin ? 'var(--tono-verde)' : 'var(--tono-naranja)',
                   }}
                 >
-                  {archivando ? '…' : archivado ? 'Restaurar' : 'Archivar'}
+                  {archivando
+                    ? '…'
+                    : contexto.esAdmin
+                      ? archivado
+                        ? 'Restaurar'
+                        : 'Archivar'
+                      : 'Quitar de mi empresa'}
                 </button>
+                ) : null}
               </div>
               <div
                 className="mt-3 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2"
@@ -369,6 +456,16 @@ export default function ClienteDetallePage() {
                 </p>
               </div>
             </div>
+
+            <ClienteEntidadesFicha
+              customerId={id}
+              customerNombre={clienteDisplayNombre}
+              vinculos={vinculos}
+              esAdmin={contexto.esAdmin}
+              entidadIdsUsuario={contexto.entidadIds}
+              card={card}
+              onChange={() => void recargarVinculos()}
+            />
 
             <ClienteContextoObraPatrono patronos={patronos} clienteNombre={clienteDisplayNombre} />
 
@@ -406,7 +503,7 @@ export default function ClienteDetallePage() {
                     className="rounded-full px-2.5 py-0.5 text-xs font-medium"
                     style={{ background: tinta(0.08), color: tintaTexto(0.7) }}
                   >
-                    {presupuestos.length}
+                    {presupuestosVisibles.length}
                   </span>
                   <Link
                     href={`/ventas?customerId=${encodeURIComponent(id)}`}
@@ -428,7 +525,7 @@ export default function ClienteDetallePage() {
                 </p>
               ) : presupuestosError ? (
                 <p className="mt-4 text-sm text-red-400">No se pudieron cargar los presupuestos: {presupuestosError}</p>
-              ) : presupuestos.length === 0 ? (
+              ) : presupuestosVisibles.length === 0 ? (
                 <p className="mt-4 text-sm" style={{ color: tintaTexto(0.5) }}>
                   Este cliente todavía no tiene presupuestos.
                 </p>
@@ -455,7 +552,7 @@ export default function ClienteDetallePage() {
                     </div>
                   </div>
                   <ul className="mt-3 space-y-2">
-                    {presupuestos.map((p) => (
+                    {presupuestosVisibles.map((p) => (
                       <li key={p.id}>
                         <Link
                           href={`/ventas?id=${encodeURIComponent(p.id)}`}
@@ -504,7 +601,7 @@ export default function ClienteDetallePage() {
                   className="rounded-full px-2.5 py-0.5 text-xs font-medium"
                   style={{ background: tinta(0.08), color: tintaTexto(0.7) }}
                 >
-                  {obras.length}
+                  {obrasVisibles.length}
                 </span>
               </div>
 
@@ -512,13 +609,13 @@ export default function ClienteDetallePage() {
                 <p className="mt-4 text-sm" style={{ color: tintaTexto(0.5) }}>
                   Cargando obras…
                 </p>
-              ) : obras.length === 0 ? (
+              ) : obrasVisibles.length === 0 ? (
                 <p className="mt-4 text-sm" style={{ color: tintaTexto(0.5) }}>
                   Este cliente no tiene obras asignadas.
                 </p>
               ) : (
                 <ul className="mt-4 space-y-3">
-                  {obras.map((obra) => (
+                  {obrasVisibles.map((obra) => (
                     <li
                       key={obra.id}
                       className="rounded-xl p-3"

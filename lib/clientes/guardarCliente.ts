@@ -42,6 +42,10 @@ export function esErrorSchemaColumnaCustomers(message: string): boolean {
   );
 }
 
+export function esErrorUnicoCustomers(message: string): boolean {
+  return /duplicate key|unique constraint|uq_customers_rif|uq_customers_cedula|23505/i.test(message);
+}
+
 /** Quita campos que el cliente no puede fijar (id, entidad_id se asignan en servidor). */
 export function payloadClientePermitido(body: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};

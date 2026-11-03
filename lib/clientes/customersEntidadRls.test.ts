@@ -51,7 +51,7 @@ describe('APIs de clientes', () => {
   it('alta, edición y archivo pasan por requirePermisoWeb y el cliente de sesión', () => {
     assert.match(apiAlta, /requirePermisoWeb\('clientes\.editar'\)/);
     assert.match(apiAlta, /entidadActivaDesdeRoles/);
-    assert.match(apiAlta, /guardarClienteEnDb\(acceso\.supabase/);
+    assert.match(apiAlta, /altaOVincularCliente/);
     assert.doesNotMatch(apiAlta, /supabaseAdminForRoute/);
     assert.match(apiEdit, /requirePermisoWeb\('clientes\.editar'\)/);
     assert.match(apiEdit, /acceso\.supabase/);
@@ -60,6 +60,8 @@ describe('APIs de clientes', () => {
 
   it('el formulario y el archivo ya no escriben customers desde el browser', () => {
     assert.match(form, /apiGuardarCliente/);
+    assert.match(form, /apiBuscarDuplicadosCliente/);
+    assert.match(form, /Usar este cliente/);
     assert.doesNotMatch(form, /from\('customers'\)\.insert/);
     assert.match(lista, /apiArchivarCliente/);
     assert.match(lista, /mensajeConfirmarArchivar/);
