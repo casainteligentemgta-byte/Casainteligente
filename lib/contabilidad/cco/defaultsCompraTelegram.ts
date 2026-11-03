@@ -1,5 +1,8 @@
 import { clasificarTipoGasto } from '@/lib/contabilidad/ccoClasificarGasto'
-import { aplicarHonorariosABase } from '@/lib/contabilidad/cco/honorarios'
+import {
+  aplicarHonorariosABase,
+  honorariosAdminPctODefault,
+} from '@/lib/contabilidad/cco/honorarios'
 import { parseCondicionPagoExtracted } from '@/lib/contabilidad/extractedCanal'
 
 export type CcoEstadoTelegram = 'PAGADO' | 'PENDIENTE'
@@ -35,10 +38,7 @@ export function buildPatchCcoCompraTelegram(input: {
 }): Record<string, unknown> | null {
   const existing = input.existing ?? null
   const mapped = mapCondicionPagoTelegramACco(input.condicionPago)
-  const pctGlobal =
-    Number.isFinite(Number(input.honorariosAdminPct)) && Number(input.honorariosAdminPct) > 0
-      ? Number(input.honorariosAdminPct)
-      : 15
+  const pctGlobal = honorariosAdminPctODefault(input.honorariosAdminPct)
   const calc = aplicarHonorariosABase(input.montoUsd, null, pctGlobal)
   const patch: Record<string, unknown> = {}
 

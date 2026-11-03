@@ -8,7 +8,10 @@
  * SALDO EN CAJA   = TOTAL INGRESOS − COSTO TOTAL
  */
 
-import { aplicarHonorariosABase } from '@/lib/contabilidad/cco/honorarios';
+import {
+  aplicarHonorariosABase,
+  honorariosAdminPctODefault,
+} from '@/lib/contabilidad/cco/honorarios';
 import { brechaCsvADevaluacionV4 } from '@/lib/contabilidad/cco/tasas';
 
 export type CcoGastoKpiInput = {
@@ -85,9 +88,9 @@ export function honorariosDeFila(
 export function calcularKpisOficiales(opts: {
   ingresosUsd: number[];
   gastos: CcoGastoKpiInput[];
-  honorariosPctGlobal: number;
+  honorariosPctGlobal: number | null | undefined;
 }): CcoKpisOficiales {
-  const pctGlobal = Number(opts.honorariosPctGlobal) || 15;
+  const pctGlobal = honorariosAdminPctODefault(opts.honorariosPctGlobal);
 
   let ingresos = 0;
   let countIngresos = 0;

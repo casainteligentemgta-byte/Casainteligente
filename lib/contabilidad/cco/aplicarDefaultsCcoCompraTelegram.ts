@@ -46,7 +46,7 @@ export async function aplicarDefaultsCcoCompraTelegram(
   let pctGlobal = 15
   try {
     const cfg = await obtenerConfigCco(supabase, proyectoId)
-    pctGlobal = cfg.honorarios_admin_pct || 15
+    pctGlobal = cfg.honorarios_admin_pct ?? 15
   } catch {
     /* config opcional */
   }

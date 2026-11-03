@@ -4,7 +4,10 @@ import { IMPUTACION_OBRA } from '@/lib/contabilidad/imputacionCompra';
 import { proveedorYRifParaCompraCco } from '@/lib/contabilidad/rifVenezolano';
 import { upsertCompraContableDedup } from '@/lib/contabilidad/upsertCompraContableDedup';
 import { clasificarTipoGasto } from '@/lib/contabilidad/ccoClasificarGasto';
-import { aplicarHonorariosABase } from '@/lib/contabilidad/cco/honorarios';
+import {
+  aplicarHonorariosABase,
+  honorariosAdminPctODefault,
+} from '@/lib/contabilidad/cco/honorarios';
 import { normalizarTipoGastoCco } from '@/lib/contabilidad/cco/normalizarTipoGasto';
 import { resolverContratoVinculado } from '@/lib/contabilidad/cco/vincularContrato';
 import { normalizarDevaluacionConfig } from '@/lib/contabilidad/cco/tasas';
@@ -96,7 +99,7 @@ export async function importarMaestroV4(
   opts?: CcoV4ImportOptions,
 ): Promise<CcoV4ImportResult> {
   const proyectoId = payload.proyecto_id;
-  const pctGlobal = num(payload.honorarios_admin_pct) || 15;
+  const pctGlobal = honorariosAdminPctODefault(payload.honorarios_admin_pct);
   const errores: string[] = [];
   const result: CcoV4ImportResult = {
     ok: true,

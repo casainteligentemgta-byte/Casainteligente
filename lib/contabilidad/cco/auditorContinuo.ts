@@ -9,6 +9,7 @@ import {
 } from '@/lib/alertas/alertasConfig';
 import { conciliarContratosPorProveedor } from '@/lib/contabilidad/cco/conciliacionContratos';
 import { cargarJerarquiaContratos } from '@/lib/contabilidad/cco/contratosJerarquia';
+import { honorariosAdminPctODefault } from '@/lib/contabilidad/cco/honorarios';
 import { calcularKpisOficiales } from '@/lib/contabilidad/cco/kpisOficiales';
 import { limpiarDescuadreCco } from '@/lib/contabilidad/cco/limpiarDescuadreCco';
 import { obtenerConfigCco } from '@/lib/contabilidad/cco/proyectoConfig';
@@ -338,7 +339,7 @@ export async function auditarObraCco(
     const saldo = await saldoCajaRapido(
       supabase,
       proyectoId,
-      Number(config.honorarios_admin_pct) || 15,
+      honorariosAdminPctODefault(config.honorarios_admin_pct),
     );
     resumen.saldo_caja = saldo;
     if (saldo != null && saldo < UMBRAL_SALDO_CAJA_NEG_USD) {
