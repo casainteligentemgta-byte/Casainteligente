@@ -23,7 +23,7 @@ export default function ProyectoFinanzasPage({ params }: PageProps) {
             Finanzas del proyecto
           </h1>
           <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '12px', margin: '4px 0 0' }}>
-            Abonos del cliente, capital consolidado y análisis de mano de obra.
+            Abonos del cliente, desviación presupuestaria y análisis de mano de obra.
           </p>
         </div>
       </div>

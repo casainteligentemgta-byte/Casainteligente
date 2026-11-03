@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
+  CalendarCheck2,
   CalendarRange,
   Droplets,
   FileText,
@@ -27,6 +28,7 @@ function tabs(proyectoId: string): Tab[] {
     { id: 'maquinaria', href: `${base}/maquinaria`, label: 'Maquinaria intercompany', icon: Truck },
     { id: 'informes', href: `${base}/informes`, label: 'Informes ingeniero', icon: FileText },
     { id: 'cronograma', href: `${base}/cronograma`, label: 'Cronograma', icon: CalendarRange },
+    { id: 'jornales', href: `${base}/jornales`, label: 'Jornales', icon: CalendarCheck2 },
     { id: 'equipo', href: `${base}/equipo`, label: 'Equipo', icon: HardHat },
     { id: 'tours', href: `${base}/tours`, label: 'Tours 3D', icon: Video },
   ];
@@ -42,6 +44,7 @@ function tabActivo(pathname: string, tab: Tab): boolean {
         !pathname.includes('/agua') &&
         !pathname.includes('/informes') &&
         !pathname.includes('/cronograma') &&
+        !pathname.includes('/jornales') &&
         !pathname.includes('/equipo') &&
         !pathname.includes('/maquinaria') &&
         !pathname.includes('/tours'))

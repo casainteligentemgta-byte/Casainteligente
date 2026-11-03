@@ -29,7 +29,7 @@ export default function ControlObraShell({ proyectoId, children }: Props) {
           uppercase
         />
         <p className="text-sm text-zinc-500 pl-[2.375rem]">
-          Presupuesto, equipo, agua, maquinaria, informes, cronograma y tours 3D
+          Presupuesto, equipo, agua, maquinaria, informes, cronograma, jornales y tours 3D
         </p>
       </header>
 

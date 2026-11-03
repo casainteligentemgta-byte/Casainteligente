@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Banknote, Plus } from 'lucide-react';
+import AlertaDesviacionPresupuestaria from '@/components/finanzas/AlertaDesviacionPresupuestaria';
 import AnalisisCostosProyecto from '@/components/finanzas/AnalisisCostosProyecto';
 import { TarjetaBalanceBimonetarioFlotante } from '@/components/finanzas/TarjetaBalanceBimonetarioFlotante';
 import RegistroAbonoClienteModal from '@/components/finanzas/RegistroAbonoClienteModal';
@@ -144,6 +145,10 @@ export default function FinanzasProyectoPageClient({ proyectoId }: Props) {
             minimumFractionDigits: 2,
           })}
         </div>
+      </div>
+
+      <div className="mt-6">
+        <AlertaDesviacionPresupuestaria proyectoId={proyectoId} />
       </div>
 
       <div className="mt-6">
