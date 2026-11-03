@@ -65,6 +65,18 @@ describe('resumen de presupuestos del cliente', () => {
     });
   });
 
+  it('Por cobrar usa abonos reales, no solo el estado pagado', () => {
+    const r = resumenPresupuestosCliente([
+      { id: 'a', subtotal: 1000, status: 'parcialmente_pagado', created_at: null, montoPagadoUsd: 250 },
+      { id: 'b', subtotal: 400, status: 'cobrado', created_at: null, montoPagadoUsd: 0 },
+      { id: 'c', subtotal: 200, status: 'enviado', created_at: null, montoPagadoUsd: 0 },
+    ]);
+    assert.equal(r.aceptados, 2);
+    assert.equal(r.montoAceptadoUsd, 1400);
+    assert.equal(r.montoPagadoUsd, 250);
+    assert.equal(r.montoPorCobrarUsd, 1150);
+  });
+
   it('sin presupuestos todo queda en cero', () => {
     assert.deepEqual(resumenPresupuestosCliente([]), {
       cantidad: 0,
@@ -77,7 +89,7 @@ describe('resumen de presupuestos del cliente', () => {
 
   it('descarta filas sin identificador y tolera montos vacíos', () => {
     const filas = normalizarPresupuestosCliente([{ subtotal: 5 }, { id: 'x', subtotal: null, status: 'pagado' }, null]);
-    assert.deepEqual(filas, [{ id: 'x', subtotal: 0, status: 'pagado', created_at: null }]);
+    assert.deepEqual(filas, [{ id: 'x', subtotal: 0, status: 'pagado', created_at: null, montoPagadoUsd: 0 }]);
     assert.deepEqual(normalizarPresupuestosCliente(null), []);
   });
 });
@@ -99,6 +111,20 @@ describe('lecturas del cliente', () => {
       r.presupuestos.map((p) => p.id),
       ['b2', 'b1'],
     );
+  });
+
+  it('toma el pagado de budget_abonos cuando hay abonos', async () => {
+    const sb = base({
+      ...tablas(),
+      budget_abonos: [
+        { id: 'a1', budget_id: 'b1', monto_usd: 40, monto: 40, moneda: 'USD' },
+        { id: 'a2', budget_id: 'b1', monto_usd: 15, monto: 15, moneda: 'USD' },
+      ],
+    });
+    const r = await cargarPresupuestosCliente(sb, CLIENTE);
+    assert.equal(r.error, null);
+    const b1 = r.presupuestos.find((p) => p.id === 'b1');
+    assert.equal(b1?.montoPagadoUsd, 55);
   });
 
   it('si la lectura falla lo dice en vez de mostrar una lista vacía sin aviso', async () => {

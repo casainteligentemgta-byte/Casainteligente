@@ -45,8 +45,8 @@ export function clientesParecidos(
     const id = String(c.id ?? '').trim();
     if (!id || id === exclude || visto.has(id)) continue;
     let motivo: ClienteParecido['motivo'] | null = null;
-    if (rif && normalizarDocumentoVe(c.rif) === rif) motivo = 'rif';
-    else if (cedula && normalizarDocumentoVe(c.cedula) === cedula) motivo = 'cedula';
+    if (cedula && normalizarDocumentoVe(c.cedula) === cedula) motivo = 'cedula';
+    else if (rif && normalizarDocumentoVe(c.rif) === rif) motivo = 'rif';
     else if (telefono && telefonoDeFila(c) === telefono) motivo = 'telefono';
     if (!motivo) continue;
     visto.add(id);
@@ -78,4 +78,16 @@ export async function buscarClientesParecidos(
     parecidos: clientesParecidos((data ?? []) as ClienteCandidatoDup[], criterio),
     error: null,
   };
+}
+
+const ORDEN_MOTIVO: Record<ClienteParecido['motivo'], number> = {
+  cedula: 0,
+  rif: 1,
+  telefono: 2,
+};
+
+/** El de cédula/RIF primero; teléfono solo como respaldo. */
+export function mejorParecido(parecidos: ClienteParecido[]): ClienteParecido | null {
+  if (!parecidos.length) return null;
+  return [...parecidos].sort((a, b) => ORDEN_MOTIVO[a.motivo] - ORDEN_MOTIVO[b.motivo])[0] ?? null;
 }

@@ -34,8 +34,8 @@ describe('hrefTelegram', () => {
     assert.equal(normalizarTelegramUsername(' @Luis '), 'Luis');
   });
 
-  it('si no hay usuario abre t.me/+58…', () => {
-    assert.equal(hrefTelegram('', '0414-1234567'), 'https://t.me/+584141234567');
+  it('sin usuario no ofrece Telegram (aunque haya teléfono)', () => {
+    assert.equal(hrefTelegram('', '0414-1234567'), null);
     assert.equal(hrefTelegram(null, null), null);
   });
 });
