@@ -1,8 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
+  asegurarAlmacenObra,
   asegurarUbicacionObra,
   etiquetaUbicacionSelector,
   listarUbicacionesParaSelector,
+  MENSAJE_OBRA_SIN_ALMACEN_TELEGRAM,
 } from '@/lib/almacen/ubicacionesInventario';
 import { listarMaterialesObraRecepcion } from '@/lib/almacen/listarMaterialesObraRecepcion';
 import { listarProveedoresSugeridosIngreso } from '@/lib/almacen/listarProveedoresSugeridosIngreso';
@@ -826,6 +828,14 @@ export async function prepararIngresoManualTrasObra(
 ): Promise<void> {
   const nombre = (await nombreProyectoTelegram(supabase, proyectoId)) ?? 'Obra';
   await asegurarUbicacionObra(supabase, proyectoId, nombre);
+  try {
+    await asegurarAlmacenObra(supabase, proyectoId, nombre);
+  } catch (e) {
+    console.warn(
+      '[telegram] no se pudo asegurar almacén de obra:',
+      e instanceof Error ? e.message : String(e),
+    );
+  }
   const estadoPrev = await getTelegramEstado(supabase, chatId);
   const prevMeta = meta(estadoPrev);
   const { entidad_id, entidad_nombre } = await resolverEntidadMetadataProyecto(supabase, proyectoId);
@@ -998,17 +1008,23 @@ async function enviarPickerAlmacenIngresoManual(
   page = 0,
   entidadNombre?: string | null,
 ): Promise<void> {
+  try {
+    await asegurarAlmacenObra(supabase, proyectoId, nombreObra);
+  } catch (e) {
+    console.warn(
+      '[telegram] no se pudo asegurar almacén de obra:',
+      e instanceof Error ? e.message : String(e),
+    );
+  }
   const ubicaciones = await listarUbicacionesParaSelector(supabase, {
     proyectoId,
     soloAlmacenes: true,
   });
 
   if (!ubicaciones.length) {
-    await sendTelegramMessage(
-      chatId,
-      '⚠️ No hay almacenes configurados para esta obra. Créalos en la app web.',
-      { parse_mode: 'HTML' },
-    );
+    await sendTelegramMessage(chatId, MENSAJE_OBRA_SIN_ALMACEN_TELEGRAM, {
+      parse_mode: 'HTML',
+    });
     return;
   }
 
