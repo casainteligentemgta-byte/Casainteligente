@@ -3,7 +3,7 @@
  * Ejemplo: «V-12.345.678» → «V12345678».
  */
 
-import { numeroWhatsapp } from '@/lib/clientes/presupuestosCliente';
+import { numeroWhatsapp } from '@/lib/clientes/numeroWhatsapp';
 
 const LETRA_DOC = /^[VEJGPC]/i;
 
@@ -36,13 +36,12 @@ export function normalizarTelegramUsername(raw: string | null | undefined): stri
     .replace(/\s+/g, '');
 }
 
+/** Enlace a Telegram solo si hay username. Sin usuario no se muestra el botón. */
 export function hrefTelegram(
   username: string | null | undefined,
-  telefono: string | null | undefined,
+  _telefono?: string | null | undefined,
 ): string | null {
   const u = normalizarTelegramUsername(username);
   if (u) return `https://t.me/${encodeURIComponent(u)}`;
-  const wa = numeroWhatsapp(telefono);
-  if (wa) return `https://t.me/+${wa}`;
   return null;
 }

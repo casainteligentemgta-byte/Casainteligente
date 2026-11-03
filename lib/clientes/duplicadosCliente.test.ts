@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { crearFakeSupabase } from '@/lib/telegram/testing/fakeSupabase';
-import { buscarClientesParecidos, clientesParecidos } from './duplicadosCliente';
+import { buscarClientesParecidos, clientesParecidos, mejorParecido } from './duplicadosCliente';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 const A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -40,6 +40,11 @@ describe('clientesParecidos', () => {
 
   it('no marca coincidencia vacía', () => {
     assert.equal(clientesParecidos(filas, { rif: '', cedula: '', telefono: '' }).length, 0);
+  });
+
+  it('prioriza cédula sobre teléfono al elegir el mejor', () => {
+    const r = clientesParecidos(filas, { cedula: 'V12345678', telefono: '0414-1234567' });
+    assert.equal(mejorParecido(r)?.motivo, 'cedula');
   });
 });
 
