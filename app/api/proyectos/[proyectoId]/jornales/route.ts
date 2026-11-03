@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
-import { listarEmpleadosProyectoEgreso } from '@/lib/almacen/listarEmpleadosProyectoEgreso';
 import {
   esMigracionJornalesPendiente,
 } from '@/lib/proyectos/jornales/calcularJornalesSemana';
 import {
   cargarJornalesSemana,
+  listarRosterJornalesProyecto,
   resolverCostoJornal,
 } from '@/lib/proyectos/jornales/cargarJornalesProyecto';
 import {
@@ -134,7 +134,7 @@ export async function POST(req: Request, { params }: RouteCtx) {
 
     if (body.accion === 'marcar_hoy') {
       const hoy = hoyIsoCaracas();
-      const roster = await listarEmpleadosProyectoEgreso(supabase, proyectoId);
+      const roster = await listarRosterJornalesProyecto(supabase, proyectoId);
       const { data: ya } = await supabase
         .from('ci_jornales_obra_asistencias')
         .select('empleado_id')
@@ -143,11 +143,11 @@ export async function POST(req: Request, { params }: RouteCtx) {
       const yaSet = new Set((ya ?? []).map((r) => String((r as { empleado_id: string }).empleado_id)));
       const filas = [];
       for (const emp of roster) {
-        if (yaSet.has(emp.id)) continue;
-        const costo = await resolverCostoJornal(supabase, proyectoId, emp.id, body.costo_jornal);
+        if (yaSet.has(emp.empleado_id)) continue;
+        const costo = await resolverCostoJornal(supabase, proyectoId, emp.empleado_id, body.costo_jornal);
         filas.push({
           proyecto_id: proyectoId,
-          empleado_id: emp.id,
+          empleado_id: emp.empleado_id,
           fecha: hoy,
           costo_jornal: costo,
           estado: 'presente',

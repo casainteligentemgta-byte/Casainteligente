@@ -4,6 +4,10 @@
 -- Limpieza manual: supabase/sql/cleanup_seed_demo_jornales_desviacion.sql
 -- No aplicar a producción desde este agente; el dueño lo ejecuta cuando quiera demo.
 
+-- Variante aplicada en producción (nov 2026): ci_proyectos.nombre_proyecto NOT NULL;
+-- ci_empleados sin columnas oficio/status; sin insert en ci_obra_empleados
+-- (en prod obra_id referencia ci_obras, no ci_proyectos).
+
 -- Tres obras técnicas con semáforo verde / ámbar / rojo:
 --   Verde  (~67%): Instalación CCTV Los Palos Grandes
 --   Ámbar  (~92%): Automatización de red Chacao
@@ -64,25 +68,25 @@ begin
   on conflict (id) do update set nombre = excluded.nombre;
 
   insert into public.ci_proyectos (
-    id, customer_id, nombre, estado, ubicacion_texto, monto_aproximado, moneda,
+    id, customer_id, nombre, nombre_proyecto, estado, ubicacion_texto, monto_aproximado, moneda,
     entidad_id, observaciones, tipo_proyecto
   )
   values
     (
       v_p_verde, v_customer,
-      '[DEMO] Instalación CCTV Los Palos Grandes',
+      '[DEMO] Instalación CCTV Los Palos Grandes', '[DEMO] Instalación CCTV Los Palos Grandes',
       'ejecucion', 'Los Palos Grandes, Chacao, Caracas',
       20000, 'USD', v_entidad, v_tag, 'integral'
     ),
     (
       v_p_ambar, v_customer,
-      '[DEMO] Automatización de red Chacao',
+      '[DEMO] Automatización de red Chacao', '[DEMO] Automatización de red Chacao',
       'ejecucion', 'Chacao, Caracas',
       15000, 'USD', v_entidad, v_tag, 'integral'
     ),
     (
       v_p_rojo, v_customer,
-      '[DEMO] CCTV Centro Empresarial',
+      '[DEMO] CCTV Centro Empresarial', '[DEMO] CCTV Centro Empresarial',
       'ejecucion', 'El Rosal, Caracas',
       10000, 'USD', v_entidad, v_tag, 'integral'
     )
@@ -94,47 +98,41 @@ begin
 
   insert into public.ci_empleados (
     id, nombre_completo, nombres, primer_apellido, documento, cedula,
-    rol_examen, estado, estado_proceso, cargo_nombre, cargo_codigo, oficio,
-    entidad_id, proyecto_modulo_id, email, status
+    rol_examen, estado, estado_proceso, cargo_nombre, cargo_codigo,
+    entidad_id, proyecto_modulo_id, email
   )
   values
     (v_e_ana, 'Ana Rivas', 'Ana', 'Rivas', 'V-20111222', 'V-20111222',
-     'tecnico', 'aprobado', 'cv_completado', 'Instalador CCTV', 'INST_CCTV', 'Instalador CCTV',
-     v_entidad, v_p_verde, 'ana.rivas.demo@example.invalid', 'activo'),
+     'tecnico', 'aprobado', 'cv_completado', 'Instalador CCTV', 'INST_CCTV',
+     v_entidad, v_p_verde, 'ana.rivas.demo@example.invalid'),
     (v_e_luis, 'Luis Mora', 'Luis', 'Mora', 'V-19888777', 'V-19888777',
-     'tecnico', 'aprobado', 'cv_completado', 'Eléctrico', 'ELECT', 'Eléctrico',
-     v_entidad, v_p_verde, 'luis.mora.demo@example.invalid', 'activo'),
+     'tecnico', 'aprobado', 'cv_completado', 'Eléctrico', 'ELECT',
+     v_entidad, v_p_verde, 'luis.mora.demo@example.invalid'),
     (v_e_carla, 'Carla Díaz', 'Carla', 'Díaz', 'V-21111000', 'V-21111000',
-     'tecnico', 'aprobado', 'cv_completado', 'Ayudante', 'AYUD', 'Ayudante',
-     v_entidad, v_p_verde, 'carla.diaz.demo@example.invalid', 'activo'),
+     'tecnico', 'aprobado', 'cv_completado', 'Ayudante', 'AYUD',
+     v_entidad, v_p_verde, 'carla.diaz.demo@example.invalid'),
     (v_e_pedro, 'Pedro Núñez', 'Pedro', 'Núñez', 'V-17666555', 'V-17666555',
-     'tecnico', 'aprobado', 'cv_completado', 'Técnico de redes', 'RED', 'Técnico de redes',
-     v_entidad, v_p_ambar, 'pedro.nunez.demo@example.invalid', 'activo'),
+     'tecnico', 'aprobado', 'cv_completado', 'Técnico de redes', 'RED',
+     v_entidad, v_p_ambar, 'pedro.nunez.demo@example.invalid'),
     (v_e_sofia, 'Sofía Blanco', 'Sofía', 'Blanco', 'V-22333444', 'V-22333444',
-     'tecnico', 'aprobado', 'cv_completado', 'Instalador CCTV', 'INST_CCTV', 'Instalador CCTV',
-     v_entidad, v_p_ambar, 'sofia.blanco.demo@example.invalid', 'activo'),
+     'tecnico', 'aprobado', 'cv_completado', 'Instalador CCTV', 'INST_CCTV',
+     v_entidad, v_p_ambar, 'sofia.blanco.demo@example.invalid'),
     (v_e_miguel, 'Miguel Torres', 'Miguel', 'Torres', 'V-15555666', 'V-15555666',
-     'tecnico', 'aprobado', 'cv_completado', 'Instalador CCTV', 'INST_CCTV', 'Instalador CCTV',
-     v_entidad, v_p_rojo, 'miguel.torres.demo@example.invalid', 'activo'),
+     'tecnico', 'aprobado', 'cv_completado', 'Instalador CCTV', 'INST_CCTV',
+     v_entidad, v_p_rojo, 'miguel.torres.demo@example.invalid'),
     (v_e_elena, 'Elena Castro', 'Elena', 'Castro', 'V-16777888', 'V-16777888',
-     'tecnico', 'aprobado', 'cv_completado', 'Instalador CCTV', 'INST_CCTV', 'Instalador CCTV',
-     v_entidad, v_p_rojo, 'elena.castro.demo@example.invalid', 'activo'),
+     'tecnico', 'aprobado', 'cv_completado', 'Instalador CCTV', 'INST_CCTV',
+     v_entidad, v_p_rojo, 'elena.castro.demo@example.invalid'),
     (v_e_jorge, 'Jorge Silva', 'Jorge', 'Silva', 'V-14444555', 'V-14444555',
-     'tecnico', 'aprobado', 'cv_completado', 'Eléctrico', 'ELECT', 'Eléctrico',
-     v_entidad, v_p_rojo, 'jorge.silva.demo@example.invalid', 'activo')
+     'tecnico', 'aprobado', 'cv_completado', 'Eléctrico', 'ELECT',
+     v_entidad, v_p_rojo, 'jorge.silva.demo@example.invalid')
   on conflict (id) do update
     set nombre_completo = excluded.nombre_completo,
         cargo_nombre = excluded.cargo_nombre,
         entidad_id = excluded.entidad_id,
         proyecto_modulo_id = excluded.proyecto_modulo_id;
 
-  insert into public.ci_obra_empleados (obra_id, empleado_id, honorarios_acordados_usd)
-  values
-    (v_p_verde, v_e_ana, 28), (v_p_verde, v_e_luis, 32), (v_p_verde, v_e_carla, 18),
-    (v_p_ambar, v_e_pedro, 30), (v_p_ambar, v_e_sofia, 28),
-    (v_p_rojo, v_e_miguel, 80), (v_p_rojo, v_e_elena, 80), (v_p_rojo, v_e_jorge, 32)
-  on conflict (obra_id, empleado_id) do update
-    set honorarios_acordados_usd = excluded.honorarios_acordados_usd;
+  -- ci_obra_empleados omitido: en producción obra_id referencia ci_obras, no ci_proyectos.
 
   insert into public.ci_jornales_obra_tarifas (proyecto_id, empleado_id, costo_jornal_usd, seed_tag)
   values
@@ -382,3 +380,5 @@ begin
 end $$;
 
 notify pgrst, 'reload schema';
+
+

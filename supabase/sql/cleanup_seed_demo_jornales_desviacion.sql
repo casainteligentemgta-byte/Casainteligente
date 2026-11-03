@@ -3,6 +3,8 @@
 -- en el SQL Editor cuando se quieran borrar las obras / jornales / compras de demostración.
 --
 -- Idempotente. No toca filas de producción sin el marcador.
+-- En producción ci_obra_empleados.obra_id referencia ci_obras, no ci_proyectos:
+-- no borrar cuadrilla usando UUID de proyecto demo como obra_id.
 
 do $$
 declare
@@ -96,9 +98,11 @@ begin
     where id = any (v_ids) or origen = 'seed_demo' or proyecto_id = any (v_proyectos);
   end if;
 
+  -- En producción ci_obra_empleados.obra_id referencia ci_obras, no ci_proyectos.
+  -- El seed 383 no inserta cuadrilla; no borrar por obra_id = UUID de proyecto demo.
   if to_regclass('public.ci_obra_empleados') is not null then
     delete from public.ci_obra_empleados
-    where obra_id = any (v_proyectos) or empleado_id = any (v_empleados);
+    where empleado_id = any (v_empleados);
   end if;
 
   if to_regclass('public.inventario_stock') is not null then
