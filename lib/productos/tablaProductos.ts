@@ -5,7 +5,7 @@
 export const TABLA_PRODUCTOS = 'products'
 export const VISTA_PRODUCTOS_LECTURA = 'products_lectura'
 
-/** La vista aún no existe (migración 389 no aplicada) o PostgREST no la cacheó. */
+/** La vista aún no existe (migración 398 no aplicada) o PostgREST no la cacheó. */
 export function esErrorVistaProductos(
   error: { code?: string | null; message?: string | null } | null | undefined,
 ): boolean {

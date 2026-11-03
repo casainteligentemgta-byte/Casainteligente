@@ -5,11 +5,11 @@ import { join } from 'node:path'
 import { esErrorVistaProductos } from './tablaProductos'
 
 const sql = readFileSync(
-  join(process.cwd(), 'supabase/migrations/389_productos_margen_foto_rls_costos.sql'),
+  join(process.cwd(), 'supabase/migrations/398_productos_margen_foto_rls_costos.sql'),
   'utf8',
 )
 
-describe('migración 389: margen, foto y RLS de costos', () => {
+describe('migración 398: margen, foto y RLS de costos', () => {
   it('agrega margen_pct al producto y margen por defecto a la categoría', () => {
     assert.match(sql, /add column if not exists margen_pct numeric\(7, 2\)/)
     assert.match(sql, /product_categories[\s\S]*margen_pct_defecto/)
