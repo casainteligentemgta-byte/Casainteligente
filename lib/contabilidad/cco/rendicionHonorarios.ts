@@ -11,6 +11,8 @@
  * Sin acceso a base de datos: todo lo de aquí se prueba con datos en memoria.
  */
 
+import { honorariosAdminPctODefault } from './honorarios';
+
 export type PeriodoRendicion = 'semana' | 'mes' | 'obra';
 export type VersionRendicion = 'interna' | 'cliente';
 
@@ -264,7 +266,7 @@ export function construirRendicion(opts: {
   pctPactado: number;
 }): RendicionHonorarios {
   const { rango } = opts;
-  const pctPactado = Number(opts.pctPactado) > 0 ? Number(opts.pctPactado) : 15;
+  const pctPactado = honorariosAdminPctODefault(opts.pctPactado);
   const esObra = rango.tipo === 'obra' || !rango.desde || !rango.hasta;
 
   const anterior = totalesVacios();

@@ -276,6 +276,12 @@ describe('qué filas del CCO entran en la rendición', () => {
 
     const propio = gastoDesdeCompra({ ...base, honorarios_usd: null, admin_pct_override: 10 }, 15)
     assert.equal(propio?.honorariosUsd, 20)
+
+    const overrideCero = gastoDesdeCompra({ ...base, honorarios_usd: null, admin_pct_override: 0 }, 15)
+    assert.equal(overrideCero?.honorariosUsd, 0)
+
+    const globalCero = gastoDesdeCompra({ ...base, honorarios_usd: null }, 0)
+    assert.equal(globalCero?.honorariosUsd, 0)
   })
 
   it('las filas de bitácora del programa viejo no son gastos', () => {

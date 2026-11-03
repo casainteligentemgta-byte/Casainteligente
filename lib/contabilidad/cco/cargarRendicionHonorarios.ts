@@ -14,6 +14,7 @@ import {
   honorariosDeFila,
   resolverMontoBaseUsdKpi,
 } from '@/lib/contabilidad/cco/kpisOficiales';
+import { honorariosAdminPctODefault } from '@/lib/contabilidad/cco/honorarios';
 import { obtenerConfigCco } from '@/lib/contabilidad/cco/proyectoConfig';
 import { tieneRegistrosGastos } from '@/lib/contabilidad/cco/registrosGastos';
 import {
@@ -272,7 +273,7 @@ export async function cargarRendicionHonorarios(
 
   const p = proyecto as Fila;
   const config = await obtenerConfigCco(supabase, proyectoId);
-  let pctPactado = config.honorarios_admin_pct > 0 ? config.honorarios_admin_pct : 15;
+  let pctPactado = honorariosAdminPctODefault(config.honorarios_admin_pct);
   if (config.fuente_honorarios === 'default') {
     // Igual que el tablero: sin ajuste CCO, vale el % del contrato de administración delegada.
     const { data: contrato } = await supabase

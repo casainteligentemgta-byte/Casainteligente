@@ -2,7 +2,11 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { esDescripcionAuditoriaCco } from '@/lib/contabilidad/compraEsAuditoriaCco';
 import { IMPUTACION_ENTIDAD } from '@/lib/contabilidad/imputacionCompra';
 import { clasificarTipoGasto } from '@/lib/contabilidad/ccoClasificarGasto';
-import { aplicarHonorariosABase } from '@/lib/contabilidad/cco/honorarios';
+import {
+  aplicarHonorariosABase,
+  honorariosAdminPctODefault,
+  resolverAdminPct,
+} from '@/lib/contabilidad/cco/honorarios';
 import {
   claveGastoDividido,
   parsePctDistribucion,
@@ -250,7 +254,7 @@ export async function cargarLibroMaestro(
     .select('honorarios_admin_pct')
     .eq('proyecto_id', proyectoId)
     .maybeSingle();
-  const pctGlobal = num(cfg?.honorarios_admin_pct) || 15;
+  const pctGlobal = honorariosAdminPctODefault(cfg?.honorarios_admin_pct);
 
   // Preferir histórico sincronizado/importado (FDW suegro / CSV) en registros_gastos.
   if (await tieneRegistrosGastos(supabase, proyectoId)) {
@@ -346,7 +350,11 @@ export async function cargarLibroMaestro(
       const tipo =
         String(r.tipo_gasto_cco ?? '').trim() ||
         clasificarTipoGasto(String(r.supplier_name ?? ''));
-      const calc = aplicarHonorariosABase(base, num(r.admin_pct_override) || null, pctGlobal);
+      const calc = aplicarHonorariosABase(
+        base,
+        r.admin_pct_override == null ? null : num(r.admin_pct_override),
+        pctGlobal,
+      );
       const honorarios = r.honorarios_usd != null ? num(r.honorarios_usd) : calc.honorariosUsd;
       const tasaBinance = num(r.tasa_binance);
       const tasa = resolverTasa(r, moneda, base);
@@ -566,7 +574,10 @@ export async function cargarLibroMaestro(
         tasa: 0,
         monto_orig: base,
         pct_distribucion: 100,
-        admin_pct: num(r.admin_pct) || pctGlobal,
+        admin_pct: resolverAdminPct(
+          r.admin_pct == null ? null : num(r.admin_pct),
+          pctGlobal,
+        ),
         monto_base_usd: base,
         honorarios_usd: num(r.honorarios_usd),
         costo_total_usd: num(r.costo_total_usd),
