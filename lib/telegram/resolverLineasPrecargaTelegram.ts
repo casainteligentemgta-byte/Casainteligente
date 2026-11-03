@@ -167,15 +167,18 @@ async function vincularLinea(
   if (error) throw new Error(error.message);
 }
 
-function botonesLinea(fuente: Fuente): Array<Array<{ text: string; callback_data: string }>> {
-  const filas = [
+/** Pura: el comprador debe resolver cada línea; no se omite hacia el depositario. */
+export function botonesResolverLinea(
+  _fuente: 'nota' | 'factura' = 'nota',
+): Array<Array<{ text: string; callback_data: string }>> {
+  return [
     [{ text: '🔎 Buscar en catálogo', callback_data: `${PREFIX}buscar` }],
     [{ text: '➕ Crear material nuevo', callback_data: `${PREFIX}crear` }],
   ];
-  if (fuente === 'nota') {
-    filas.push([{ text: '⏭ Dejar para el depositario', callback_data: `${PREFIX}omitir` }]);
-  }
-  return filas;
+}
+
+function botonesLinea(fuente: Fuente): Array<Array<{ text: string; callback_data: string }>> {
+  return botonesResolverLinea(fuente);
 }
 
 async function enviarLinea(chatId: string, m: MetaResolver, vista: LineaVista[], indices: number[], idx: number): Promise<void> {
@@ -257,10 +260,17 @@ async function cerrar(
   const nota = m.precarga_id ? await obtenerNotaPrecargada(supabase, m.precarga_id) : null;
   if (!nota) return;
   const sin = cargada.indices.length ? cargada.vista.filter((l) => !l.material_id).length : 0;
+  if (sin) {
+    await sendTelegramMessage(
+      chatId,
+      `⚠️ Quedan ${sin} línea(s) sin material. Vincúlelas o créelas antes de avisar al depositario.`,
+      { parse_mode: 'HTML' },
+    );
+    return;
+  }
   await sendTelegramMessage(
     chatId,
-    `✅ Líneas revisadas: ${cargada.vista.length - sin} vinculada(s)` +
-      (sin ? `, ${sin} pendiente(s) para el depositario.` : '.') +
+    `✅ Líneas revisadas: ${cargada.vista.length} vinculada(s).` +
       '\n\nLa nota ya está precargada para el depositario de la obra.',
     { parse_mode: 'HTML' },
   );
@@ -422,8 +432,12 @@ export async function manejarCallbackResolverLineas(
     return true;
   }
 
-  if (accion === 'omitir' && m.fuente !== 'factura') {
-    await avanzar(supabase, chatId, idx);
+  if (accion === 'omitir') {
+    await sendTelegramMessage(
+      chatId,
+      'Debe vincular o crear el material. No se puede dejar la línea sin resolver.',
+      { parse_mode: 'HTML' },
+    );
     return true;
   }
 

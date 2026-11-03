@@ -148,9 +148,6 @@ export async function GET(req: Request) {
  * Toda la validación vive en ci_enlazar_frm_con_compra_procura (379a).
  */
 export async function POST(req: Request) {
-  const acceso = await requireAlgunPermisoWeb(['compra.registrar']);
-  if (!acceso.ok) return acceso.response;
-
   let body: { recepcion_id?: string; contabilidad_compra_id?: string };
   try {
     body = (await req.json()) as typeof body;
@@ -166,6 +163,16 @@ export async function POST(req: Request) {
 
   const admin = supabaseAdminForRoute();
   if (!admin.ok) return admin.response;
+
+  const { data: recepcion } = await admin.client
+    .from('ci_recepciones_campo')
+    .select('proyecto_id')
+    .eq('id', recepcionId)
+    .maybeSingle();
+  const proyectoId = String((recepcion as { proyecto_id?: string } | null)?.proyecto_id ?? '').trim();
+
+  const acceso = await requireAlgunPermisoWeb(['compra.registrar'], { proyectoId: proyectoId || null });
+  if (!acceso.ok) return acceso.response;
 
   const rpcClient = admin.client as unknown as SupabaseClient;
   const { data, error } = await rpcClient.rpc('ci_enlazar_frm_con_compra_procura', {

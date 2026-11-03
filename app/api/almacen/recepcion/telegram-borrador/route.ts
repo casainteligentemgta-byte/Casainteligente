@@ -6,8 +6,13 @@ import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
-  const acceso = await requireAlgunPermisoWeb(['almacen.ingreso', 'almacen.cuarentena', 'almacen.despacho', 'compra.registrar']);
-  if (!acceso.ok) return acceso.response;
+  const sesion = await requireAlgunPermisoWeb([
+    'almacen.ingreso',
+    'almacen.cuarentena',
+    'almacen.despacho',
+    'compra.registrar',
+  ]);
+  if (!sesion.ok) return sesion.response;
 
   const token = new URL(req.url).searchParams.get('token')?.trim() ?? '';
   if (!token) {
@@ -25,6 +30,11 @@ export async function GET(req: Request) {
         { status: 404 },
       );
     }
+    const acceso = await requireAlgunPermisoWeb(
+      ['almacen.ingreso', 'almacen.cuarentena', 'almacen.despacho', 'compra.registrar'],
+      { proyectoId: borrador.proyecto_id },
+    );
+    if (!acceso.ok) return acceso.response;
     return NextResponse.json({ ok: true, borrador });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Error al cargar borrador';

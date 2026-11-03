@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { claveIdempotenciaRecepcionCampo, esUuid } from '@/lib/almacen/documentoRecepcionCampo';
 import { limpiarBorradorRecepcionPorToken, obtenerBorradorRecepcionPorToken } from '@/lib/almacen/recepcionBorradorTelegram';
 import type { PayloadRecepcionManualApi } from '@/lib/almacen/recepcionCampoTypes';
 import { esFormaIngresoRecepcion } from '@/lib/almacen/formaIngresoRecepcion';
+import { validarRequisitosNotaEntrega } from '@/lib/almacen/validarRecepcionCampoPayload';
+import { assertUbicacionPerteneceAProyecto } from '@/lib/almacen/validarUbicacionProyecto';
 import { sincronizarContabilidadDesdeRecepcionCampo } from '@/lib/contabilidad/sincronizarContabilidadDesdeRecepcionCampo';
 import { actualizarProcuraDesdeRecepcionCampo } from '@/lib/procuras/actualizarProcuraDesdeRecepcion';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
@@ -11,15 +14,9 @@ import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 export const dynamic = 'force-dynamic';
 
 const TIPOS_VALIDOS = new Set(['nota_entrega', 'emergencia', 'factura_canal']);
-
-function isUuid(v: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
-}
+const PERMISOS_RECEPCION = ['almacen.ingreso', 'compra.registrar'] as const;
 
 export async function POST(req: Request) {
-  const acceso = await requireAlgunPermisoWeb(['almacen.ingreso', 'compra.registrar']);
-  if (!acceso.ok) return acceso.response;
-
   let body: PayloadRecepcionManualApi;
   try {
     body = (await req.json()) as PayloadRecepcionManualApi;
@@ -31,7 +28,10 @@ export async function POST(req: Request) {
   const ubicacionId = body.ubicacion_id?.trim() ?? '';
   const tipo = body.tipo?.trim() ?? '';
 
-  if (!isUuid(proyectoId) || !isUuid(ubicacionId)) {
+  const acceso = await requireAlgunPermisoWeb(PERMISOS_RECEPCION, { proyectoId: proyectoId || null });
+  if (!acceso.ok) return acceso.response;
+
+  if (!esUuid(proyectoId) || !esUuid(ubicacionId)) {
     return NextResponse.json({ error: 'Proyecto y ubicación de ingreso son obligatorios.' }, { status: 400 });
   }
   if (!TIPOS_VALIDOS.has(tipo)) {
@@ -55,7 +55,7 @@ export async function POST(req: Request) {
         soporte_mime_type: String(l.soporte_mime_type ?? '').trim() || null,
       };
     })
-    .filter((l) => isUuid(l.material_id) && Number.isFinite(l.cantidad) && l.cantidad > 0);
+    .filter((l) => esUuid(l.material_id) && Number.isFinite(l.cantidad) && l.cantidad > 0);
 
   if (!lineas.length) {
     return NextResponse.json(
@@ -65,13 +65,24 @@ export async function POST(req: Request) {
   }
 
   const proveedorId = body.proveedor_id?.trim();
-  if (proveedorId && !isUuid(proveedorId)) {
+  if (proveedorId && !esUuid(proveedorId)) {
     return NextResponse.json({ error: 'proveedor_id inválido.' }, { status: 400 });
   }
 
   const procuraId = body.procura_id?.trim() ?? '';
-  if (procuraId && !isUuid(procuraId)) {
+  if (procuraId && !esUuid(procuraId)) {
     return NextResponse.json({ error: 'procura_id inválido.' }, { status: 400 });
+  }
+
+  const proveedorNombre = String(body.proveedor_nombre ?? '').trim();
+  const soportePath = String(body.soporte_storage_path ?? '').trim();
+  const requisitoNota = validarRequisitosNotaEntrega({
+    tipo,
+    proveedorNombre,
+    soportePath,
+  });
+  if (requisitoNota) {
+    return NextResponse.json({ error: requisitoNota }, { status: 400 });
   }
 
   const auth = await createClient();
@@ -82,6 +93,11 @@ export async function POST(req: Request) {
   const admin = supabaseAdminForRoute();
   if (!admin.ok) return admin.response;
   const supabase = admin.client;
+
+  const ubiOk = await assertUbicacionPerteneceAProyecto(supabase, ubicacionId, proyectoId);
+  if (!ubiOk.ok) {
+    return NextResponse.json({ error: ubiOk.error }, { status: 400 });
+  }
 
   const borradorToken = body.borrador_token?.trim();
   if (borradorToken) {
@@ -102,6 +118,12 @@ export async function POST(req: Request) {
     }
   }
 
+  const clave = claveIdempotenciaRecepcionCampo({
+    recepcion_campo_idempotency_key: body.idempotency_key,
+    recepcion_campo_token: borradorToken,
+  });
+  const precargaId = String(body.precarga_id ?? '').trim();
+
   const { data: recepcionId, error: rpcErr } = await supabase.rpc('ci_registrar_ingreso_manual_campo', {
     p_proyecto_id: proyectoId,
     p_ubicacion_id: ubicacionId,
@@ -111,13 +133,19 @@ export async function POST(req: Request) {
     p_lineas: lineas,
     p_usuario_id: user?.id ?? null,
     p_procura_id: procuraId || null,
+    p_idempotency_key: clave.key,
+    p_precarga_id: esUuid(precargaId) ? precargaId : null,
+    p_proveedor_nombre: proveedorNombre || null,
+    p_soporte_storage_path: soportePath || null,
+    p_soporte_file_name: body.soporte_file_name?.trim() || null,
+    p_soporte_mime_type: body.soporte_mime_type?.trim() || null,
   } as never);
 
   if (rpcErr) {
     const msg = rpcErr.message ?? 'Error al registrar ingreso';
     if (/does not exist|ci_registrar_ingreso_manual_campo/i.test(msg)) {
       return NextResponse.json(
-        { error: 'RPC no disponible. Aplique migración 199_ci_recepciones_provisionales_campo.sql.' },
+        { error: 'RPC no disponible. Aplique migración 386_frm_idempotencia_ubicacion_bcv.sql.' },
         { status: 503 },
       );
     }
@@ -130,7 +158,6 @@ export async function POST(req: Request) {
   }
 
   const patch: Record<string, unknown> = {};
-  const proveedorNombre = String(body.proveedor_nombre ?? '').trim();
   if (proveedorNombre) patch.proveedor_nombre = proveedorNombre;
   if (body.soporte_storage_path?.trim()) {
     patch.soporte_storage_path = body.soporte_storage_path.trim();

@@ -15,9 +15,6 @@ export async function POST(
   _req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
-  const acceso = await requireAlgunPermisoWeb(['almacen.ingreso', 'compra.registrar']);
-  if (!acceso.ok) return acceso.response;
-
   const { id } = await ctx.params;
   const recepcionId = id?.trim() ?? '';
 
@@ -27,6 +24,18 @@ export async function POST(
 
   const admin = supabaseAdminForRoute();
   if (!admin.ok) return admin.response;
+
+  const { data: recepcionProy } = await admin.client
+    .from('ci_recepciones_campo')
+    .select('proyecto_id')
+    .eq('id', recepcionId)
+    .maybeSingle();
+  const proyectoId = String((recepcionProy as { proyecto_id?: string } | null)?.proyecto_id ?? '').trim();
+
+  const acceso = await requireAlgunPermisoWeb(['almacen.ingreso', 'compra.registrar'], {
+    proyectoId: proyectoId || null,
+  });
+  if (!acceso.ok) return acceso.response;
 
   const result = await reintentarContabilidadRecepcionCampo(admin.client, recepcionId);
 

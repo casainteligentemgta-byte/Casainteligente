@@ -469,6 +469,20 @@ export default function RecepcionCampoClient() {
       return;
     }
 
+    const tipoPayloadPreview = borradorTipo ?? tipoManual;
+    if (tipoPayloadPreview === 'nota_entrega' && !proveedorNombre.trim()) {
+      toast.error('Indique el proveedor de la nota de entrega.');
+      return;
+    }
+    if (
+      tipoPayloadPreview === 'nota_entrega' &&
+      !soporteFile &&
+      !soporteTelegramPath
+    ) {
+      toast.error('Adjunte la foto de la nota de entrega.');
+      return;
+    }
+
     await runLocked(async () => {
       const draftId = crypto.randomUUID();
       let soporte:
@@ -540,7 +554,7 @@ export default function RecepcionCampoClient() {
           proveedor_id: null,
           proveedor_nombre: proveedorNombre.trim() || (tipoIngreso === 'emergencia' ? 'Proveedor no identificado' : ''),
           tipo: tipoPayload,
-          num_doc: numDoc.trim() || (tipoIngreso === 'emergencia' ? 'EMERGENCIA' : 'NOTA-ENTREGA'),
+          num_doc: numDoc.trim() || (tipoIngreso === 'emergencia' ? 'EMERGENCIA' : 'S/N'),
           lineas: lineasPayload,
           observaciones: observacionesPayload,
           soporte_storage_path: soporte?.path ?? soporteTelegramPath ?? null,
@@ -784,7 +798,8 @@ export default function RecepcionCampoClient() {
                     value={proveedorNombre}
                     onChange={(e) => setProveedorNombre(e.target.value)}
                     disabled={isSubmitting}
-                    placeholder={tipoIngreso === 'emergencia' ? 'Opcional' : 'Nombre del proveedor'}
+                    placeholder={tipoIngreso === 'emergencia' ? 'Opcional' : 'Obligatorio'}
+                    required={tipoIngreso !== 'emergencia'}
                     className={inputClass}
                   />
                 </label>
@@ -1115,11 +1130,12 @@ export default function RecepcionCampoClient() {
             <div className={panelClass}>
               <h3 className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-zinc-500">
                 <Camera className="h-4 w-4 text-[#FF9500]" />
-                Soporte fotográfico general (opcional)
+                Soporte fotográfico general{tipoIngreso === 'emergencia' ? ' (opcional)' : ' (obligatorio en nota)'}
               </h3>
               <p className="mb-3 text-[11px] text-zinc-500">
-                Cada línea puede llevar su propia foto arriba. Use este adjunto solo si hay un documento
-                único para todo el ingreso.
+                {tipoIngreso === 'emergencia'
+                  ? 'Cada línea puede llevar su propia foto. Use este adjunto si hay un documento único para todo el ingreso.'
+                  : 'La nota de entrega exige foto del papel. Cada línea también puede llevar su propia foto.'}
               </p>
               <ProcurementDocumentAttach
                 variant="primary"

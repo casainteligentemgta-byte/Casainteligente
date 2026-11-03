@@ -1,4 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import {
+  numeroDocumentoContabilidad,
+  puedeReutilizarCompraContable,
+} from '@/lib/almacen/documentoRecepcionCampo';
 import { buscarPrecioHistoricoUnitarioUsd } from '@/lib/compras/precioHistoricoMaterialProcura';
 import {
   buscarCompraContablePorFactura,
@@ -27,16 +31,6 @@ export type ResultadoRegistroCompraIngresoManualFactura =
   | { ok: false; error: string };
 
 export type TipoRecepcionCampoContabilidad = 'factura_canal' | 'nota_entrega' | 'emergencia';
-
-function numeroDocumentoContabilidad(
-  tipo: TipoRecepcionCampoContabilidad,
-  numDoc: string,
-): string {
-  const doc = numDoc.trim() || 'S/N';
-  if (tipo === 'nota_entrega') return doc.startsWith('NE-') ? doc : `NE-${doc}`;
-  if (tipo === 'emergencia') return doc.startsWith('EMG-') ? doc : `EMG-${doc}`;
-  return doc;
-}
 
 function origenContabilidadDesdeRecepcion(tipo: TipoRecepcionCampoContabilidad): string {
   if (tipo === 'nota_entrega') return 'FRM_NOTA';
@@ -330,12 +324,18 @@ export async function registrarCompraDesdeIngresoManualFactura(
       entidadId = await resolverEntidadIdDesdeProyecto(supabase, params.proyectoId);
     }
 
-    const existente = await buscarCompraContablePorFactura(supabase, {
-      invoice_number: invoiceNumber,
-      supplier_name: proveedorNombre,
-      proyecto_id: params.proyectoId,
-      ignorar_proyecto: true,
+    const reutilizar = puedeReutilizarCompraContable({
+      tipoRecepcion: tipo,
+      invoiceNumber,
     });
+    const existente = reutilizar.buscar
+      ? await buscarCompraContablePorFactura(supabase, {
+          invoice_number: invoiceNumber,
+          supplier_name: proveedorNombre,
+          proyecto_id: params.proyectoId,
+          ignorar_proyecto: reutilizar.ignorarProyecto,
+        })
+      : null;
 
     let purchaseInvoiceId = existente?.purchase_invoice_id?.trim() || '';
     let compraId = existente?.id?.trim() || '';

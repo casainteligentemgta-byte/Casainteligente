@@ -47,6 +47,15 @@ export async function resolverMontosCompraBimonetario(
 
   let tasa = Number(input.tasaBcvDigitada);
   if (!Number.isFinite(tasa) || tasa <= 0) {
+    if (monto === 0) {
+      return {
+        montoVes: 0,
+        montoUsd: 0,
+        tasaApplied: 0,
+        monedaOriginal,
+        totalAmountLegacy: 0,
+      };
+    }
     const tasaRes = await resolverTasaBcvVesPorUsd(input.fecha, input.tasaBcvDigitada);
     tasa = tasaRes.tasa_bcv_ves_por_usd;
   }

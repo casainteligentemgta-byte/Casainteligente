@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
-import { eliminarMovimientoInventario } from '@/lib/almacen/eliminarMovimientoInventario';
+import { eliminarMovimientoInventario, parseMovimientoInventarioId } from '@/lib/almacen/eliminarMovimientoInventario';
 import { listarMovimientosInventario } from '@/lib/almacen/listarMovimientosInventario';
 import type { VistaMovimientoInventario } from '@/lib/almacen/listarMovimientosInventario';
 import { supabaseAdminMovimientos } from '@/lib/almacen/supabaseAdminMovimientos';
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 
 export const dynamic = 'force-dynamic';
 
@@ -73,6 +74,22 @@ export async function DELETE(req: Request) {
 
     const admin = supabaseAdminMovimientos();
     if (!admin.ok) return admin.response;
+
+    let proyectoId: string | null = null;
+    const parsed = parseMovimientoInventarioId(id);
+    if (parsed?.kind === 'ingreso_recepcion_campo') {
+      const { data } = await admin.client
+        .from('ci_recepciones_campo')
+        .select('proyecto_id')
+        .eq('id', parsed.recepcionId)
+        .maybeSingle();
+      proyectoId = String((data as { proyecto_id?: string } | null)?.proyecto_id ?? '').trim() || null;
+    }
+
+    const acceso = await requireAlgunPermisoWeb(['almacen.ingreso', 'almacen.despacho'], {
+      proyectoId,
+    });
+    if (!acceso.ok) return acceso.response;
 
     const result = await eliminarMovimientoInventario(admin.client, id);
     return NextResponse.json({ success: true, ...result });
