@@ -5,6 +5,9 @@
  * probarlas sin navegador.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { redondearUsd } from '@/lib/presupuesto/cobros';
+import { cargarMontoPagadoPorPresupuesto } from '@/lib/clientes/cobrosCliente';
+import { numeroWhatsapp as numeroWhatsappHelper } from '@/lib/clientes/numeroWhatsapp';
 
 /** Estados en los que el cliente ya aceptó el presupuesto (igual que la pantalla Presupuestos). */
 export const ESTADOS_PRESUPUESTO_ACEPTADO = ['aprobado', 'cobrado', 'parcialmente_pagado', 'pagado'] as const;
@@ -35,6 +38,8 @@ export type PresupuestoCliente = {
   subtotal: number;
   status: string;
   created_at: string | null;
+  /** Abonos reales (budget_abonos) o budgets.monto_pagado. 0 si no hay. */
+  montoPagadoUsd: number;
 };
 
 export type ResumenPresupuestosCliente = {
@@ -42,9 +47,9 @@ export type ResumenPresupuestosCliente = {
   aceptados: number;
   /** Suma de los aceptados (aprobado, por pagar, pago parcial y pagado). */
   montoAceptadoUsd: number;
-  /** Suma de los que están en «Pagado». */
+  /** Suma de abonos reales (o subtotal si el estado es pagado y no hay abonos). */
   montoPagadoUsd: number;
-  /** Aceptados que todavía no están en «Pagado». */
+  /** Aceptados menos abonos reales. */
   montoPorCobrarUsd: number;
 };
 
@@ -54,7 +59,18 @@ function numero(v: unknown): number {
 }
 
 function centimos(n: number): number {
-  return Math.round(n * 100) / 100;
+  return redondearUsd(n);
+}
+
+/**
+ * Pagado real: abonos si hay; si el estado es «pagado» y no hay abonos (datos viejos),
+ * se toma el subtotal para no romper fichas ya cobradas.
+ */
+export function montoPagadoEfectivo(p: Pick<PresupuestoCliente, 'subtotal' | 'status' | 'montoPagadoUsd'>): number {
+  const pagado = centimos(p.montoPagadoUsd);
+  if (pagado > 0) return pagado;
+  if (p.status === 'pagado') return centimos(p.subtotal);
+  return 0;
 }
 
 export function presupuestoAceptado(status: string | null | undefined): boolean {
@@ -80,6 +96,7 @@ export function normalizarPresupuestosCliente(filas: unknown): PresupuestoClient
         subtotal: numero(r.subtotal),
         status: String(r.status ?? '').trim(),
         created_at: typeof r.created_at === 'string' && r.created_at ? r.created_at : null,
+        montoPagadoUsd: centimos(numero(r.monto_pagado ?? r.montoPagadoUsd)),
       };
     })
     .filter((p) => p.id);
@@ -93,14 +110,18 @@ export function resumenPresupuestosCliente(presupuestos: PresupuestoCliente[]): 
     if (!presupuestoAceptado(p.status)) continue;
     aceptados += 1;
     montoAceptado += p.subtotal;
-    if (p.status === 'pagado') montoPagado += p.subtotal;
+    const pagado = montoPagadoEfectivo(p);
+    const tope = centimos(p.subtotal);
+    montoPagado += tope > 0 ? Math.min(pagado, tope) : pagado;
   }
+  const aceptado = centimos(montoAceptado);
+  const pagado = centimos(montoPagado);
   return {
     cantidad: presupuestos.length,
     aceptados,
-    montoAceptadoUsd: centimos(montoAceptado),
-    montoPagadoUsd: centimos(montoPagado),
-    montoPorCobrarUsd: centimos(montoAceptado - montoPagado),
+    montoAceptadoUsd: aceptado,
+    montoPagadoUsd: pagado,
+    montoPorCobrarUsd: centimos(Math.max(0, aceptado - pagado)),
   };
 }
 
@@ -111,13 +132,37 @@ export async function cargarPresupuestosCliente(
 ): Promise<{ presupuestos: PresupuestoCliente[]; error: string | null }> {
   const id = customerId.trim();
   if (!id) return { presupuestos: [], error: null };
-  const { data, error } = await supabase
+  const first = await supabase
     .from('budgets')
-    .select('id,subtotal,status,created_at')
+    .select('id,subtotal,status,created_at,monto_pagado')
     .eq('customer_id', id)
     .order('created_at', { ascending: false });
+
+  let filas: unknown = first.data;
+  let error = first.error;
+  if (error && /monto_pagado|does not exist|schema cache/i.test(error.message)) {
+    const second = await supabase
+      .from('budgets')
+      .select('id,subtotal,status,created_at')
+      .eq('customer_id', id)
+      .order('created_at', { ascending: false });
+    filas = second.data;
+    error = second.error;
+  }
   if (error) return { presupuestos: [], error: error.message };
-  return { presupuestos: normalizarPresupuestosCliente(data), error: null };
+
+  const presupuestos = normalizarPresupuestosCliente(filas);
+  const porAbono = await cargarMontoPagadoPorPresupuesto(
+    supabase,
+    presupuestos.map((p) => p.id),
+  );
+  if (porAbono.size) {
+    for (const p of presupuestos) {
+      const real = porAbono.get(p.id);
+      if (real != null && real > 0) p.montoPagadoUsd = real;
+    }
+  }
+  return { presupuestos, error: null };
 }
 
 export type VinculosCliente = { presupuestos: number; obras: number };
@@ -159,15 +204,5 @@ export async function contarVinculosCliente(
   };
 }
 
-/**
- * Número para abrir un chat de WhatsApp (solo dígitos, con código de país).
- * Los celulares venezolanos escritos como 0414… o 414… se completan con 58.
- */
-export function numeroWhatsapp(telefono: string | null | undefined): string | null {
-  const d = String(telefono ?? '').replace(/\D/g, '');
-  if (d.length < 10) return null;
-  if (d.length === 11 && d.startsWith('0')) return `58${d.slice(1)}`;
-  if (d.length === 10 && d.startsWith('4')) return `58${d}`;
-  if (d.startsWith('00')) return d.slice(2);
-  return d;
-}
+/** @deprecated importar desde `@/lib/clientes/numeroWhatsapp`. Se reexporta para no romper imports. */
+export const numeroWhatsapp = numeroWhatsappHelper;

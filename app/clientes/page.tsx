@@ -4,8 +4,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
+import AsignarEntidadMasiva from '@/components/clientes/AsignarEntidadMasiva';
 import ClienteCard from '@/components/clientes/ClienteCard';
 import BotonTema from '@/components/tema/BotonTema';
+import { apiArchivarCliente, apiClientesSinEntidad } from '@/lib/clientes/apiCliente';
+import { mensajeConfirmarArchivar } from '@/lib/clientes/guardarCliente';
 import { listarClientesCrm } from '@/lib/clientes/listarClientes';
 import { withTimeout } from '@/lib/http/withTimeout';
 import { createClient } from '@/lib/supabase/client';
@@ -24,6 +27,7 @@ export default function ClientesPage() {
     const [lista, setLista] = useState<CustomerListItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [fetchError, setFetchError] = useState<string | null>(null);
+    const [sinEntidad, setSinEntidad] = useState<Array<{ id: string; nombre: string }>>([]);
 
     const irAlMenuInicio = () => {
         router.push('/');
@@ -53,6 +57,8 @@ export default function ClientesPage() {
                 return;
             }
             setLista(res.lista);
+            const pendientes = await apiClientesSinEntidad();
+            setSinEntidad(pendientes.clientes);
         } catch (e: unknown) {
             setFetchError(e instanceof Error ? e.message : 'Error inesperado al cargar clientes.');
             setLista([]);
@@ -93,16 +99,13 @@ export default function ClientesPage() {
     const empresasCount = lista.filter(c => c.categoria === 'empresa').length;
 
     const handleArchivar = async (id: string, status: CustomerStatus) => {
-        let supabase: ReturnType<typeof createClient>;
-        try {
-            supabase = createClient();
-        } catch {
-            toast.error('No se pudo conectar a Supabase. Revisa .env.local.');
-            return;
+        if (status === 'inactivo') {
+            const nombre = lista.find((c) => c.id === id)?.nombre;
+            if (!window.confirm(mensajeConfirmarArchivar(nombre))) return;
         }
-        const { error } = await supabase.from('customers').update({ status }).eq('id', id);
+        const { error } = await apiArchivarCliente(id, status === 'inactivo' ? 'inactivo' : 'activo');
         if (error) {
-            toast.error('No se pudo actualizar: ' + error.message);
+            toast.error('No se pudo actualizar: ' + error);
             return;
         }
         setLista((prev) => prev.map((c) => (c.id === id ? { ...c, status } : c)));
@@ -260,6 +263,16 @@ export default function ClientesPage() {
                     </div>
                 </div>
             </div>
+
+            {sinEntidad.length > 0 ? (
+                <AsignarEntidadMasiva
+                    clientes={sinEntidad}
+                    onAsignado={() => {
+                        setSinEntidad([]);
+                        void fetchClientes();
+                    }}
+                />
+            ) : null}
 
             {/* ── Stats ── */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', padding: '16px 16px 8px' }}>
