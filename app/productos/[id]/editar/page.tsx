@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import NuevoProductoForm from '@/components/productos/NuevoProductoForm';
 import { tinta } from '@/lib/tema/tinta';
+import { TABLA_PRODUCTOS, VISTA_PRODUCTOS_LECTURA, esErrorVistaProductos } from '@/lib/productos/tablaProductos';
 
 export default function EditarProductoPage() {
     const { id } = useParams();
@@ -15,11 +16,14 @@ export default function EditarProductoPage() {
     useEffect(() => {
         const fetchProducto = async () => {
             const supabase = createClient();
-            const { data, error } = await supabase
-                .from('products')
+            let { data, error } = await supabase
+                .from(VISTA_PRODUCTOS_LECTURA)
                 .select('*')
                 .eq('id', id)
                 .single();
+            if (error && esErrorVistaProductos(error)) {
+                ({ data, error } = await supabase.from(TABLA_PRODUCTOS).select('*').eq('id', id).single());
+            }
 
             if (data) setProducto(data);
             setLoading(false);

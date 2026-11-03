@@ -1,8 +1,9 @@
 /**
  * Aviso antes de guardar un presupuesto: qué renglones se venden al costo o por debajo.
  *
- * El margen del presupuesto empieza en 0 % y en la mayoría de los productos el precio del
- * catálogo es igual al costo, así que es fácil guardar un presupuesto que no deja nada.
+ * El presupuesto arranca con el mismo 20 % extra que NetVision, sobre el precio
+ * del catálogo. Si el catálogo aún tiene precio = costo, el extra cubre la ganancia;
+ * si ya tiene margen, el operador puede bajar el extra a 0 %.
  * No se bloquea: se avisa y el operador decide.
  */
 

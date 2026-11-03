@@ -9,7 +9,10 @@ export interface Product {
     costo: number | null
     precio: number | null
     utilidad: number | null
+    margen_pct?: number | null
     cantidad: number | null
+    /** Canónico. `image_url` es espejo por compatibilidad. */
+    imagen?: string | null
     image_url: string | null
     ubicacion?: string | null
     created_at?: string

@@ -345,13 +345,16 @@ function normalizeInventoryName(name: string): string {
 }
 
 function buildCatalogImageLookup(
-    rows: { nombre: string | null; imagen: string | null }[] | null | undefined,
+    rows: { nombre: string | null; imagen: string | null; image_url?: string | null }[] | null | undefined,
 ): Record<string, string> {
     const lookup: Record<string, string> = {};
     for (const row of rows ?? []) {
         const key = normalizeInventoryName(String(row.nombre ?? ''));
         if (!key) continue;
-        const u = typeof row.imagen === 'string' ? row.imagen.trim() : '';
+        const u =
+            (typeof row.imagen === 'string' && row.imagen.trim()) ||
+            (typeof row.image_url === 'string' && row.image_url.trim()) ||
+            '';
         if (!u) continue;
         if (lookup[key] === undefined) lookup[key] = u;
     }
@@ -956,7 +959,7 @@ export default function InventarioCuadro() {
 
             let invRes = await invQuery;
             const [prodRes, depRes, furRes] = await Promise.all([
-                supabase.from('products').select('nombre, imagen').not('imagen', 'is', null),
+                supabase.from('products').select('nombre, imagen, image_url'),
                 supabase.from('inventory_deposits').select('id,name,locality'),
                 supabase.from('inventory_furniture').select('id,deposit_id,name'),
             ]);
@@ -1023,13 +1026,17 @@ export default function InventarioCuadro() {
             if (linkedIds.length > 0) {
                 const { data: byIdRows, error: byIdErr } = await supabase
                     .from('products')
-                    .select('id, imagen')
+                    .select('id, imagen, image_url')
                     .in('id', linkedIds);
                 if (!byIdErr && byIdRows) {
                     const map: Record<number, string> = {};
                     for (const r of byIdRows) {
                         const id = Number(r.id);
-                        const u = typeof r.imagen === 'string' ? r.imagen.trim() : '';
+                        const u =
+                            (typeof r.imagen === 'string' && r.imagen.trim()) ||
+                            (typeof (r as { image_url?: string | null }).image_url === 'string'
+                                ? String((r as { image_url?: string | null }).image_url).trim()
+                                : '');
                         if (Number.isFinite(id) && u) map[id] = u;
                     }
                     setCatalogImagenByProductId(map);

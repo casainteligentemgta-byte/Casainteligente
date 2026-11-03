@@ -28,6 +28,8 @@ import {
     formatFechaPresupuestoLarga,
     hoyFechaPresupuesto,
 } from '@/lib/presupuesto/fecha';
+import { MARGEN_VENTAS_DEFECTO } from '@/lib/productos/margenCatalogo';
+import { TABLA_PRODUCTOS, VISTA_PRODUCTOS_LECTURA, esErrorVistaProductos } from '@/lib/productos/tablaProductos';
 
 /** Fila mínima de `customers` para el selector de presupuesto */
 interface CustomerPickerRow {
@@ -66,7 +68,8 @@ function saveVentasCustomersToCache(rows: CustomerPickerRow[]) {
 }
 
 const MARGIN_PRESETS = [0, 10, 15, 20];
-const MARGEN_INICIAL_PRESUPUESTO = 0;
+/** Mismo 20 % que NetVision; se aplica sobre el precio del catálogo. */
+const MARGEN_INICIAL_PRESUPUESTO = MARGEN_VENTAS_DEFECTO;
 
 function demoLineItems(): LineItem[] {
     const demoItem = (
@@ -112,8 +115,8 @@ function VentasContent() {
     /** Con productos en la lista, el buscador se oculta hasta “Agregar producto”. */
     const [showProductSearch, setShowProductSearch] = useState(!isDemo);
     /**
-     * Margen sobre el precio del catálogo. Empieza en 0 %: el operador lo sube al armar
-     * cada presupuesto (decisión del dueño, oct 2026). Antes arrancaba en 20 %.
+     * Margen extra sobre el precio del catálogo. Empieza en 20 %, igual que NetVision.
+     * El catálogo ya puede llevar su propio margen (precio = costo × 1.20).
      */
     const [globalMargin, setGlobalMargin] = useState(MARGEN_INICIAL_PRESUPUESTO);
     const [clientName, setClientName] = useState('');
@@ -402,11 +405,14 @@ function VentasContent() {
         if (prodIds && !id) { // Solo si no estamos cargando un presupuesto ya guardado
             const idsList = prodIds.split(',').filter(Boolean);
             if (idsList.length > 0) {
-                supabase
-                    .from('products')
-                    .select('*')
-                    .in('id', idsList)
-                    .then(({ data, error }) => {
+                const armar = (tabla: string) => supabase.from(tabla).select('*').in('id', idsList);
+                armar(VISTA_PRODUCTOS_LECTURA)
+                    .then(async (primero) => {
+                        const r =
+                            primero.error && esErrorVistaProductos(primero.error)
+                                ? await armar(TABLA_PRODUCTOS)
+                                : primero;
+                        const { data, error } = r;
                         if (!error && data) {
                             const newItems = data.map((p: Product) => ({
                                 id: `${p.id}-${Math.random().toString(36).substr(2, 9)}`,
@@ -1075,7 +1081,7 @@ function VentasContent() {
                     <div style={{ marginBottom: '20px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
                             <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--label-secondary)', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
-                                Margen Global
+                                Margen extra sobre el catálogo
                             </label>
                             <span style={{ fontSize: '13px', color: 'var(--tono-verde)', fontWeight: 700 }}>{globalMargin}%</span>
                         </div>

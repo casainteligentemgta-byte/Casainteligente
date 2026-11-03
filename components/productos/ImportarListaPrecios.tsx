@@ -24,6 +24,7 @@ import { extraerPaginasPdf, recortarFotosPdf } from '@/lib/productos/extraerText
 import { recortesDeFotos } from '@/lib/productos/fotosListaPdf';
 import { extraerDeZip, listarZip, nombreBase, tipoDeImagen, type EntradaZip } from '@/lib/productos/leerZip';
 import { tinta, tintaTexto, tonoTexto } from '@/lib/tema/tinta';
+import { TABLA_PRODUCTOS, VISTA_PRODUCTOS_LECTURA, esErrorVistaProductos } from '@/lib/productos/tablaProductos';
 
 const NARANJA = '#FF9500';
 const VERDE = '#34C759';
@@ -288,7 +289,7 @@ function etiquetaSugerida(seccion: string): string {
 
 export default function ImportarListaPrecios() {
     const supabase = useMemo(() => createClient(), []);
-    const { nombres: categoriasNombres, subcategorias: subcategoriasPorCategoria } = useCategoriasCatalogo();
+    const { nombres: categoriasNombres, subcategorias: subcategoriasPorCategoria, margenPorCategoria } = useCategoriasCatalogo();
     /** Categorías y, debajo de cada una, sus subcategorías («CCTV › Cámaras IP»). */
     const categorias = useMemo(
         () => opcionesCategoriaConSub({ categorias: categoriasNombres, subcategorias: subcategoriasPorCategoria }),
@@ -343,12 +344,17 @@ export default function ImportarListaPrecios() {
         setErrorProductos(null);
         const todos: ProductoActual[] = [];
         let desde = 0;
+        let tabla: typeof VISTA_PRODUCTOS_LECTURA | typeof TABLA_PRODUCTOS = VISTA_PRODUCTOS_LECTURA;
+        const columnas = 'id,nombre,marca,modelo,categoria,costo,precio,margen_pct,imagen,image_url';
         while (desde < 20000) {
-            const { data, error } = await supabase
-                .from('products')
-                .select('id,nombre,marca,modelo,categoria,costo,precio,imagen')
-                .order('id')
-                .range(desde, desde + 999);
+            const armar = (t: string) => supabase.from(t).select(columnas).order('id').range(desde, desde + 999);
+            let { data, error } = await armar(tabla);
+            if (error && tabla === VISTA_PRODUCTOS_LECTURA && esErrorVistaProductos(error) && desde === 0) {
+                tabla = TABLA_PRODUCTOS;
+                const retry = await armar(tabla);
+                data = retry.data;
+                error = retry.error;
+            }
             if (error) {
                 setErrorProductos(`No pude leer tus productos: ${error.message}`);
                 return;
@@ -359,6 +365,8 @@ export default function ImportarListaPrecios() {
                     ...p,
                     costo: p.costo == null ? null : Number(p.costo),
                     precio: p.precio == null ? null : Number(p.precio),
+                    margen_pct: p.margen_pct == null ? null : Number(p.margen_pct),
+                    imagen: (p.imagen as string | null) || (p.image_url as string | null) || null,
                 });
             }
             if (lote.length < 1000) break;
@@ -593,7 +601,7 @@ export default function ImportarListaPrecios() {
         const total = aActualizar.length + aCrear.length;
         if (total === 0) return;
         const res: Resultado = { actualizados: 0, creados: 0, fotos: 0, errores: [] };
-        const opciones = { mantenerMargen };
+        const opciones = { mantenerMargen, margenPorCategoria };
         const fecha = fechaLista || hoyLocal();
         let hechos = 0;
         setProgreso({ hechos, total });
@@ -620,7 +628,7 @@ export default function ImportarListaPrecios() {
                             res.errores.push(`${c.producto.nombre}: la foto no subió (${err instanceof Error ? err.message : 'error'}).`);
                         }
                     }
-                    const { data, error } = await supabase.from('products').update(cambio).eq('id', c.producto.id).select('id');
+                    const { data, error } = await supabase.from(TABLA_PRODUCTOS).update(cambio).eq('id', c.producto.id).select('id');
                     if (error) res.errores.push(`${c.producto.nombre}: ${error.message}`);
                     else if (!data || data.length === 0) res.errores.push(`${c.producto.nombre}: no se guardó. Revisa que tu sesión siga abierta.`);
                     else {
@@ -633,7 +641,14 @@ export default function ImportarListaPrecios() {
 
             await enParalelo<FilaLista>(aCrear, EN_PARALELO, async (f) => {
                 const elegida = separarEtiquetaCategoria(categoriaNuevo[f.n] ?? '');
-                const fila = productoNuevoDesdeFila(f, elegida.categoria, fecha, new Date().toISOString(), elegida.subcategoria);
+                const fila = productoNuevoDesdeFila(
+                    f,
+                    elegida.categoria,
+                    fecha,
+                    new Date().toISOString(),
+                    elegida.subcategoria,
+                    opciones,
+                );
                 let conFoto = false;
                 if (llevaFotoNueva(null, f)) {
                     try {
@@ -646,7 +661,7 @@ export default function ImportarListaPrecios() {
                         res.errores.push(`${f.modelo}: la foto no subió (${err instanceof Error ? err.message : 'error'}).`);
                     }
                 }
-                const { error } = await supabase.from('products').insert([fila]);
+                const { error } = await supabase.from(TABLA_PRODUCTOS).insert([fila]);
                 if (error) res.errores.push(`${f.modelo}: ${error.message}`);
                 else {
                     res.creados += 1;
@@ -661,7 +676,7 @@ export default function ImportarListaPrecios() {
         setProgreso(null);
         setResultado(res);
         await cargarProductos();
-    }, [aActualizar, aCrear, mantenerMargen, fechaLista, filaElegida, llevaFotoNueva, subirFoto, supabase, categoriaNuevo, cargarProductos]);
+    }, [aActualizar, aCrear, mantenerMargen, margenPorCategoria, fechaLista, filaElegida, llevaFotoNueva, subirFoto, supabase, categoriaNuevo, cargarProductos]);
 
     const marcarGrupo = (lista: Coincidencia[], valor: boolean) =>
         setMarcados((prev) => {
@@ -672,7 +687,7 @@ export default function ImportarListaPrecios() {
 
     const filaProducto = (c: Coincidencia) => {
         const f = filaElegida(c);
-        const e = f ? efectoEnProducto(c.producto, f, { mantenerMargen }) : null;
+        const e = f ? efectoEnProducto(c.producto, f, { mantenerMargen, margenPorCategoria }) : null;
         const sube = e && e.costo != null && c.producto.costo != null ? e.costo - c.producto.costo : null;
         return (
             <div
@@ -956,7 +971,7 @@ export default function ImportarListaPrecios() {
                             mantenerMargen,
                             setMantenerMargen,
                             'Mantener mi margen',
-                            'Para los productos que tienen ganancia propia: si el costo sube o baja, su precio se mueve en la misma proporción. Apagado: su precio no se toca. Los que tienen el precio igual al costo siempre siguen al costo.',
+                            'Para los productos que tienen ganancia propia: si el costo sube o baja, su precio se mueve en la misma proporción. Apagado: su precio no se toca. Los que tienen el precio igual al costo reciben el margen del catálogo (20 %, o el de su categoría).',
                         )}
                         {hayFotosDeLista
                             ? interruptor(
@@ -1033,7 +1048,7 @@ export default function ImportarListaPrecios() {
                         id="nuevos"
                         titulo="No los tienes en tu catálogo"
                         cuenta={plan.nuevos.length}
-                        ayuda="Marca solo los que quieras agregar. Se crean con el precio igual al costo; el margen se pone al armar cada presupuesto."
+                        ayuda="Marca solo los que quieras agregar. Se crean con precio = costo × (1 + margen). El margen es el de la categoría o 20 %."
                         abiertoInicial={plan.coincidencias.length === 0}
                     >
                         <div style={{ padding: '10px 16px', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>

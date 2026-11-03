@@ -4,9 +4,11 @@
  * de Ventas y calculan los totales con las mismas reglas que /ventas.
  */
 import type { BomLine, BomSummary } from '@/lib/netvision/types'
+import { MARGEN_VENTAS_DEFECTO } from '@/lib/productos/margenCatalogo'
 
-/** Margen que /ventas aplica por defecto sobre el precio del producto. */
-export const MARGEN_VENTAS_DEFECTO = 20
+export { MARGEN_VENTAS_DEFECTO }
+
+/** Margen que /ventas aplica por defecto sobre el precio del catálogo. */
 
 /** Espera antes de reescribir el borrador de Ventas cuando cambia el plano. */
 export const PRESUPUESTO_VIVO_DEBOUNCE_MS = 1600
@@ -99,8 +101,8 @@ export function precioVentaProducto(
  *   productos: van como notas.
  * - Equipos iguales se juntan en un renglón.
  * - Si el renglón ya tiene producto recordado, sale enlazado y con su precio.
- * - Todos los precios llevan el margen: los libres sobre la referencia de
- *   NetVision (su costo) y los enlazados sobre el precio del producto.
+ * - Todos los precios llevan el margen extra de NetVision/Ventas: los libres
+ *   sobre la referencia (su costo) y los enlazados sobre el precio del catálogo.
  * - Las cantidades salen enteras (ver `cantidadParaVentas`).
  */
 export function renglonesDesdeBom(

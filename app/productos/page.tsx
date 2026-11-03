@@ -19,6 +19,15 @@ import {
     usoDeProducto,
     type RevisionCatalogo,
 } from '@/lib/productos/revisionCatalogo';
+import {
+    MARGEN_CATALOGO_DEFECTO,
+    acotarMargenPct,
+    aplicarMargenACosto,
+    productoSinMargen,
+} from '@/lib/productos/margenCatalogo';
+import { productoSinFoto, urlFotoProducto } from '@/lib/productos/fotoProducto';
+import { TABLA_PRODUCTOS, VISTA_PRODUCTOS_LECTURA, esErrorVistaProductos } from '@/lib/productos/tablaProductos';
+import SubirFotoProducto from '@/components/productos/SubirFotoProducto';
 
 interface Product {
     id: number;
@@ -31,8 +40,10 @@ interface Product {
     costo: number | null;
     precio: number | null;
     utilidad: number | null;
+    margen_pct?: number | null;
     cantidad: number | null;
     imagen: string | null;
+    image_url?: string | null;
     ubicacion?: string | null;
     manual_instrucciones?: string | null;
     manual_documento_url?: string | null;
@@ -60,7 +71,7 @@ function ProductAvatar({ product }: { product: Product }) {
     const color = coloresCategoria(cat).dot;
     const initials = (product.nombre || '??').slice(0, 2).toUpperCase();
     const [imgFailed, setImgFailed] = useState(false);
-    const src = product.imagen?.trim();
+    const src = urlFotoProducto(product);
 
     if (src && !imgFailed) {
         return (
@@ -102,18 +113,24 @@ function ProductAvatar({ product }: { product: Product }) {
 interface CartItem { product: Product; qty: number; }
 
 function ProductRow({
-    product, onTap, onAddToCart, onDelete, inCart,
+    product, onTap, onAddToCart, onDelete, inCart, seleccionable, seleccionado, onToggleSeleccion, onFoto,
 }: {
     product: Product;
     onTap: () => void;
     onAddToCart: (p: Product) => void;
     onDelete: (id: number) => void;
     inCart: boolean;
+    seleccionable?: boolean;
+    seleccionado?: boolean;
+    onToggleSeleccion?: (id: number) => void;
+    onFoto?: (id: number, url: string) => void;
 }) {
     const cat = product.categoria ?? '';
     const colors = coloresCategoria(cat);
     const [confirmDel, setConfirmDel] = useState(false);
     const aviso = avisoProveedor(product);
+    const sinMargen = productoSinMargen(product);
+    const sinFoto = productoSinFoto(product);
 
     const handleDelete = () => {
         if (confirmDel) { onDelete(product.id); }
@@ -126,10 +143,26 @@ function ProductRow({
             background: 'transparent',
         }}>
             {/* ── Info row (clickable) ── */}
+            <div style={{ display: 'flex', alignItems: 'flex-start' }}>
+            {seleccionable ? (
+                <label
+                    style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        padding: '16px 0 16px 12px', cursor: 'pointer',
+                    }}
+                >
+                    <input
+                        type="checkbox"
+                        checked={!!seleccionado}
+                        onChange={() => onToggleSeleccion?.(product.id)}
+                        aria-label={`Seleccionar ${product.nombre}`}
+                    />
+                </label>
+            ) : null}
             <button
                 onClick={onTap}
                 style={{
-                    width: '100%', padding: '16px', display: 'flex', gap: '12px',
+                    flex: 1, minWidth: 0, padding: '16px', display: 'flex', gap: '12px',
                     textAlign: 'left', background: 'transparent', border: 'none',
                     cursor: 'pointer', fontFamily: 'inherit',
                     alignItems: 'flex-start',
@@ -172,6 +205,28 @@ function ProductRow({
                                     {aviso.texto}
                                 </span>
                             )}
+                            {sinMargen && (
+                                <span
+                                    data-producto-sin-margen
+                                    style={{
+                                        fontSize: '10px', fontWeight: 800, padding: '2px 8px', borderRadius: '6px',
+                                        background: 'rgba(255,149,0,0.18)', color: tonoTexto('#FF9500'),
+                                    }}
+                                >
+                                    sin margen
+                                </span>
+                            )}
+                            {sinFoto && (
+                                <span
+                                    data-producto-sin-foto
+                                    style={{
+                                        fontSize: '10px', fontWeight: 800, padding: '2px 8px', borderRadius: '6px',
+                                        background: tinta(0.08), color: tintaTexto(0.55),
+                                    }}
+                                >
+                                    sin foto
+                                </span>
+                            )}
                         </div>
                         <div
                             style={{
@@ -212,6 +267,17 @@ function ProductRow({
                     </p>
                 </div>
             </button>
+            </div>
+
+            {sinFoto && onFoto ? (
+                <div style={{ padding: '0 16px 10px 16px' }}>
+                    <SubirFotoProducto
+                        productId={product.id}
+                        compacto
+                        onUploaded={(url) => onFoto(product.id, url)}
+                    />
+                </div>
+            ) : null}
 
             {/* ── Action bar ── */}
             <div style={{ display: 'flex', borderTop: `1px solid ${tinta(0.04)}`, margin: '0 16px', marginBottom: '2px' }}>
@@ -283,9 +349,9 @@ function ProductDetail({ product, onClose }: { product: Product; onClose: () => 
                 }}
             >
                 <div style={{ width: '40px', height: '4px', background: tinta(0.2), borderRadius: '2px', margin: '0 auto 20px' }} />
-                {product.imagen ? (
+                {urlFotoProducto(product) ? (
                     <img
-                        src={product.imagen}
+                        src={urlFotoProducto(product) ?? ''}
                         alt=""
                         style={{
                             width: '100%',
@@ -345,7 +411,7 @@ function ProductDetail({ product, onClose }: { product: Product; onClose: () => 
 export default function ProductosPage() {
     const supabase = useMemo(() => createClient(), []);
     const router = useRouter();
-    const { nombres: categoriasNombres, subcategorias: subcategoriasPorCategoria, crear: crearCategoria, crearSub: crearSubcategoria } = useCategoriasCatalogo();
+    const { nombres: categoriasNombres, subcategorias: subcategoriasPorCategoria, margenPorCategoria, crear: crearCategoria, crearSub: crearSubcategoria, recargar: recargarCategorias } = useCategoriasCatalogo();
     const categorias = useMemo(() => ['Todas', ...categoriasNombres], [categoriasNombres]);
     const [products, setProducts] = useState<Product[]>([]);
     const [total, setTotal] = useState(0);
@@ -371,8 +437,12 @@ export default function ProductosPage() {
     const [guardandoCategoria, setGuardandoCategoria] = useState(false);
     const [errorCategoria, setErrorCategoria] = useState<string | null>(null);
     const [errorCarga, setErrorCarga] = useState<string | null>(null);
-    /** Filtro «por corregir»: fichas sin precio, sin categoría o con el nombre repetido. */
+    /** Filtro «por corregir»: fichas sin precio, sin margen, sin foto, sin categoría o repetidas. */
     const [revision, setRevision] = useState<RevisionCatalogo | ''>('');
+    const [seleccion, setSeleccion] = useState<Set<number>>(() => new Set());
+    const [margenLote, setMargenLote] = useState(String(MARGEN_CATALOGO_DEFECTO));
+    const [aplicandoLote, setAplicandoLote] = useState(false);
+    const [margenCategoria, setMargenCategoria] = useState('');
 
     useEffect(() => {
         try {
@@ -412,7 +482,7 @@ export default function ProductosPage() {
         const aviso = avisoEliminarProducto(nombre, uso);
         if (aviso && !window.confirm(aviso)) return;
 
-        const { error } = await supabase.from('products').delete().eq('id', id);
+        const { error } = await supabase.from(TABLA_PRODUCTOS).delete().eq('id', id);
         if (error) {
             alert('No se pudo eliminar: ' + error.message);
             return;
@@ -449,10 +519,11 @@ export default function ProductosPage() {
         let from = 0;
         let totalCount = 0;
         let failed = false;
+        let tabla: typeof VISTA_PRODUCTOS_LECTURA | typeof TABLA_PRODUCTOS = VISTA_PRODUCTOS_LECTURA;
 
         while (from < 20_000) {
             let query = supabase
-                .from('products')
+                .from(tabla)
                 .select('*', { count: 'exact' })
                 .order('nombre')
                 .range(from, from + PAGE_SIZE - 1);
@@ -465,7 +536,12 @@ export default function ProductosPage() {
                 if (subcategoria) query = query.eq('subcategoria', subcategoria);
             }
 
-            const { data, error, count } = await query;
+            let { data, error, count } = await query;
+            if (error && tabla === VISTA_PRODUCTOS_LECTURA && from === 0 && esErrorVistaProductos(error)) {
+                // Vista aún no aplicada: se lee la tabla (costos visibles para quien tenga sesión).
+                tabla = TABLA_PRODUCTOS;
+                continue;
+            }
             if (error) {
                 failed = true;
                 break;
@@ -489,7 +565,14 @@ export default function ProductosPage() {
     /** Los conteos «por corregir» solo tienen sentido con el catálogo completo a la vista. */
     const catalogoCompleto = categoria === 'Todas' && terminoBusquedaCatalogo(search).length < 2;
     const porCorregir = useMemo(() => contarPorCorregir(products), [products]);
-    const hayPorCorregir = porCorregir.sin_precio + porCorregir.sin_categoria + porCorregir.repetidos > 0;
+    const hayPorCorregir =
+        porCorregir.sin_precio +
+            porCorregir.sin_margen +
+            porCorregir.sin_foto +
+            porCorregir.sin_categoria +
+            porCorregir.repetidos >
+        0;
+    const modoLote = revision === 'sin_margen' || revision === 'sin_foto';
     const visibles = useMemo(
         () => (revision && catalogoCompleto ? filtrarPorCorregir(products, revision) : products),
         [products, revision, catalogoCompleto],
@@ -498,6 +581,96 @@ export default function ProductosPage() {
     useEffect(() => {
         if (!catalogoCompleto && revision) setRevision('');
     }, [catalogoCompleto, revision]);
+
+    useEffect(() => {
+        setSeleccion(new Set());
+    }, [revision, categoria, subcategoria, search]);
+
+    useEffect(() => {
+        if (categoria === 'Todas') {
+            setMargenCategoria('');
+            return;
+        }
+        const m = margenPorCategoria[categoria];
+        setMargenCategoria(m != null ? String(m) : '');
+    }, [categoria, margenPorCategoria]);
+
+    const toggleSeleccion = useCallback((id: number) => {
+        setSeleccion((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    }, []);
+
+    const seleccionarVisibles = useCallback(() => {
+        setSeleccion(new Set(visibles.map((p) => p.id)));
+    }, [visibles]);
+
+    const onFotoFila = useCallback((id: number, url: string) => {
+        setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, imagen: url, image_url: url } : p)));
+    }, []);
+
+    const aplicarMargenSeleccion = useCallback(async () => {
+        const ids = Array.from(seleccion);
+        const elegidos = products.filter((p) => ids.includes(p.id) && p.costo != null && Number(p.costo) > 0);
+        if (elegidos.length === 0) {
+            alert('Selecciona productos con costo para aplicar el margen. El costo no se modifica.');
+            return;
+        }
+        const margen = acotarMargenPct(margenLote);
+        if (
+            !window.confirm(
+                `Se pondrá precio = costo × (1 + ${margen}/100) en ${elegidos.length} producto(s). El costo no cambia. ¿Continuar?`,
+            )
+        ) {
+            return;
+        }
+        setAplicandoLote(true);
+        let ok = 0;
+        let fallos = 0;
+        for (const p of elegidos) {
+            const aplicado = aplicarMargenACosto(Number(p.costo), margen);
+            const { error } = await supabase
+                .from(TABLA_PRODUCTOS)
+                .update({
+                    precio: aplicado.precio,
+                    utilidad: aplicado.utilidad,
+                    margen_pct: aplicado.margen_pct,
+                })
+                .eq('id', p.id);
+            if (error) fallos += 1;
+            else {
+                ok += 1;
+                setProducts((prev) =>
+                    prev.map((x) =>
+                        x.id === p.id
+                            ? { ...x, precio: aplicado.precio, utilidad: aplicado.utilidad, margen_pct: aplicado.margen_pct }
+                            : x,
+                    ),
+                );
+            }
+        }
+        setAplicandoLote(false);
+        setSeleccion(new Set());
+        alert(fallos ? `Listo: ${ok} actualizados, ${fallos} no se pudieron guardar.` : `Margen aplicado a ${ok} producto(s).`);
+    }, [seleccion, products, margenLote, supabase]);
+
+    const guardarMargenCategoria = useCallback(async () => {
+        if (categoria === 'Todas') return;
+        const valor = margenCategoria.trim() === '' ? null : acotarMargenPct(margenCategoria);
+        const { error } = await supabase
+            .from('product_categories')
+            .update({ margen_pct_defecto: valor })
+            .is('parent_id', null)
+            .ilike('name', categoria);
+        if (error) {
+            alert('No se pudo guardar el margen de la categoría: ' + error.message);
+            return;
+        }
+        await recargarCategorias();
+    }, [categoria, margenCategoria, supabase, recargarCategorias]);
 
     useEffect(() => {
         const t = setTimeout(fetchProducts, search ? 350 : 0);
@@ -871,6 +1044,129 @@ export default function ProductosPage() {
                     </div>
                 ) : null}
 
+                {categoria !== 'Todas' ? (
+                    <div
+                        style={{
+                            display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px',
+                            marginBottom: '12px',
+                        }}
+                    >
+                        <span style={{ fontSize: '12px', fontWeight: 700, color: tintaTexto(0.45) }}>
+                            Margen por defecto de {categoria}:
+                        </span>
+                        <input
+                            type="number"
+                            min={0}
+                            max={300}
+                            step={0.1}
+                            value={margenCategoria}
+                            onChange={(e) => setMargenCategoria(e.target.value)}
+                            placeholder={String(MARGEN_CATALOGO_DEFECTO)}
+                            style={{
+                                width: '72px',
+                                background: tinta(0.05),
+                                border: `1px solid ${tinta(0.12)}`,
+                                borderRadius: '8px',
+                                padding: '6px 8px',
+                                color: 'var(--label-primary)',
+                                fontSize: '13px',
+                                fontWeight: 700,
+                                fontFamily: 'inherit',
+                            }}
+                        />
+                        <span style={{ fontSize: '12px', color: tintaTexto(0.4) }}>%</span>
+                        <button
+                            type="button"
+                            onClick={() => void guardarMargenCategoria()}
+                            style={{
+                                background: tinta(0.06),
+                                color: 'var(--tono-naranja)',
+                                border: `1px solid ${tinta(0.12)}`,
+                                borderRadius: '8px',
+                                padding: '6px 10px',
+                                fontSize: '12px',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                fontFamily: 'inherit',
+                            }}
+                        >
+                            Guardar
+                        </button>
+                    </div>
+                ) : null}
+
+                {modoLote && revision === 'sin_margen' && visibles.length > 0 ? (
+                    <div
+                        style={{
+                            display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px',
+                            marginBottom: '12px',
+                            padding: '10px 12px',
+                            borderRadius: '12px',
+                            background: 'rgba(255,149,0,0.08)',
+                            border: '1px solid rgba(255,149,0,0.25)',
+                        }}
+                    >
+                        <button
+                            type="button"
+                            onClick={seleccionarVisibles}
+                            style={{
+                                background: tinta(0.06),
+                                color: 'var(--label-primary)',
+                                border: `1px solid ${tinta(0.12)}`,
+                                borderRadius: '8px',
+                                padding: '6px 10px',
+                                fontSize: '12px',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                fontFamily: 'inherit',
+                            }}
+                        >
+                            Seleccionar los {visibles.length}
+                        </button>
+                        <span style={{ fontSize: '12px', color: tintaTexto(0.55) }}>
+                            {seleccion.size} elegido{seleccion.size === 1 ? '' : 's'}
+                        </span>
+                        <input
+                            type="number"
+                            min={0}
+                            max={300}
+                            step={0.1}
+                            value={margenLote}
+                            onChange={(e) => setMargenLote(e.target.value)}
+                            style={{
+                                width: '64px',
+                                background: tinta(0.05),
+                                border: `1px solid ${tinta(0.12)}`,
+                                borderRadius: '8px',
+                                padding: '6px 8px',
+                                color: 'var(--label-primary)',
+                                fontSize: '13px',
+                                fontWeight: 700,
+                                fontFamily: 'inherit',
+                            }}
+                        />
+                        <span style={{ fontSize: '12px', color: tintaTexto(0.45) }}>%</span>
+                        <button
+                            type="button"
+                            disabled={aplicandoLote || seleccion.size === 0}
+                            onClick={() => void aplicarMargenSeleccion()}
+                            style={{
+                                background: seleccion.size === 0 ? tinta(0.06) : 'rgba(255,149,0,0.2)',
+                                color: 'var(--tono-naranja)',
+                                border: 'none',
+                                borderRadius: '8px',
+                                padding: '6px 12px',
+                                fontSize: '12px',
+                                fontWeight: 800,
+                                cursor: seleccion.size === 0 || aplicandoLote ? 'not-allowed' : 'pointer',
+                                fontFamily: 'inherit',
+                            }}
+                        >
+                            {aplicandoLote ? 'Aplicando…' : 'Aplicar margen a la selección'}
+                        </button>
+                    </div>
+                ) : null}
+
                 {errorCarga ? (
                     <p style={{ margin: '0 0 12px', fontSize: '13px', color: 'var(--tono-rojo)', fontWeight: 600 }}>
                         {errorCarga}
@@ -900,6 +1196,10 @@ export default function ProductosPage() {
                                 onTap={() => setSelected(p)}
                                 onAddToCart={addToCart}
                                 onDelete={deleteProduct}
+                                seleccionable={revision === 'sin_margen'}
+                                seleccionado={seleccion.has(p.id)}
+                                onToggleSeleccion={toggleSeleccion}
+                                onFoto={onFotoFila}
                                 inCart={cart.some(items => items.product.id === p.id)}
                             />
                         ))

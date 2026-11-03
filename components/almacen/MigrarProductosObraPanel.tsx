@@ -17,6 +17,7 @@ import UbicacionInventarioSelect from '@/components/almacen/UbicacionInventarioS
 import { createClient } from '@/lib/supabase/client';
 import type { InventarioClasificacionValue } from '@/lib/almacen/inventoryClasificacion';
 import { useSyncSubmitLock } from '@/hooks/useSyncSubmitLock';
+import { urlFotoProducto } from '@/lib/productos/fotoProducto';
 
 type ProductoRow = {
   id: number;
@@ -26,6 +27,7 @@ type ProductoRow = {
   modelo: string | null;
   costo: number | null;
   imagen: string | null;
+  image_url?: string | null;
 };
 
 type Props = {
@@ -56,8 +58,8 @@ export default function MigrarProductosObraPanel({ proyectoIdInicial }: Props) {
     setLoadError(null);
     try {
       const { data, error } = await supabase
-        .from('products')
-        .select('id,nombre,categoria,marca,modelo,costo,imagen')
+        .from('products_lectura')
+        .select('id,nombre,categoria,marca,modelo,costo,imagen,image_url')
         .order('nombre');
 
       if (error) throw new Error(error.message);
@@ -333,9 +335,9 @@ export default function MigrarProductosObraPanel({ proyectoIdInicial }: Props) {
                           onChange={() => toggle(p.id)}
                           className="h-5 w-5 rounded border-white/20"
                         />
-                        {p.imagen ? (
+                        {urlFotoProducto(p) ? (
                           <img
-                            src={p.imagen}
+                            src={urlFotoProducto(p) ?? ''}
                             alt=""
                             className="h-10 w-10 rounded-lg border border-white/10 object-cover"
                           />

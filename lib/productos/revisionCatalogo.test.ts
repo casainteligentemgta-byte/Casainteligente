@@ -11,12 +11,12 @@ import {
 } from './revisionCatalogo';
 
 const productos = [
-  { id: 1, nombre: 'Cámara Domo 2MP', categoria: 'Cámaras IP', precio: 50 },
-  { id: 2, nombre: 'camara domo 2mp ', categoria: 'Cámaras IP', precio: 55 },
-  { id: 3, nombre: 'Tubo conduit', categoria: '', precio: 0 },
-  { id: 4, nombre: 'Andamios', categoria: null, precio: null },
-  { id: 5, nombre: 'Switch 8 puertos', categoria: 'Network', precio: 120 },
-  { id: 6, nombre: 'CÁMARA  DOMO 2MP', categoria: ' ', precio: 60 },
+  { id: 1, nombre: 'Cámara Domo 2MP', categoria: 'Cámaras IP', precio: 50, costo: 40, imagen: 'https://a' },
+  { id: 2, nombre: 'camara domo 2mp ', categoria: 'Cámaras IP', precio: 55, costo: 40, imagen: null },
+  { id: 3, nombre: 'Tubo conduit', categoria: '', precio: 0, costo: 8, imagen: null },
+  { id: 4, nombre: 'Andamios', categoria: null, precio: null, costo: null, imagen: null },
+  { id: 5, nombre: 'Switch 8 puertos', categoria: 'Network', precio: 120, costo: 120, imagen: 'https://b' },
+  { id: 6, nombre: 'CÁMARA  DOMO 2MP', categoria: ' ', precio: 60, costo: 60, image_url: 'https://c' },
 ];
 
 describe('productos por corregir', () => {
@@ -38,11 +38,19 @@ describe('productos por corregir', () => {
   });
 
   it('cuenta cada grupo', () => {
-    assert.deepEqual(contarPorCorregir(productos), { sin_precio: 2, sin_categoria: 3, repetidos: 3 });
+    assert.deepEqual(contarPorCorregir(productos), {
+      sin_precio: 2,
+      sin_margen: 3,
+      sin_foto: 3,
+      sin_categoria: 3,
+      repetidos: 3,
+    });
   });
 
   it('filtra cada grupo y deja juntas las copias', () => {
     assert.deepEqual(filtrarPorCorregir(productos, 'sin_precio').map((p) => p.id), [3, 4]);
+    assert.deepEqual(filtrarPorCorregir(productos, 'sin_margen').map((p) => p.id), [3, 5, 6]);
+    assert.deepEqual(filtrarPorCorregir(productos, 'sin_foto').map((p) => p.id), [2, 3, 4]);
     assert.deepEqual(filtrarPorCorregir(productos, 'sin_categoria').map((p) => p.id), [3, 4, 6]);
     assert.deepEqual(filtrarPorCorregir(productos, 'repetidos').map((p) => p.id), [1, 2, 6]);
     assert.equal(filtrarPorCorregir(productos, '').length, productos.length);
