@@ -1,4 +1,4 @@
--- 389 · Baja / merma en kardex + trigger de transferencias con firma de 10 parámetros.
+-- 396 · Baja / merma en kardex + trigger de transferencias con firma de 10 parámetros.
 --
 -- 1) inv_movimientos admite tipo «baja» (deterioro, vencido, perdido, robo).
 -- 2) El trigger de transferencias llamaba inv_stock_apply_delta con 5 argumentos
