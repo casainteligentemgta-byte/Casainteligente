@@ -23,11 +23,7 @@ export function mensajeModoFacturasActivado(opts?: { ticket?: string | null }): 
   return (
     '✅ <b>COMPRADOR: cargar factura.</b>\n' +
     procuraHint +
-    '\nEnvía una <b>foto</b> de la factura de compra.\n' +
-    'Tras leerla, indique si los montos están en <b>Bs</b> o <b>USD</b>, si es <b>contado</b> o <b>crédito</b>.\n\n' +
-    'Luego elija destino:\n' +
-    '• <b>Obra (AD)</b> → obra + almacén → Contabilidad y precarga para ingreso físico.\n' +
-    '• <b>Gasto de entidad (OpEx)</b> → solo entidad y clasificación → Contabilidad (sin almacén).\n\n' +
+    '\nEnvía una <b>foto</b> de la factura de compra.\n\n' +
     '<code>/cancelar</code> para salir de este modo.'
   );
 }

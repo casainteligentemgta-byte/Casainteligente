@@ -18,24 +18,23 @@ import { enviarPickerProyectosTelegram } from '@/lib/telegram/proyectoPicker';
  */
 export const PREFIX_CARGA = 'cg:';
 
+export const MENSAJE_CARGAR_FACTURA_O_NOTA = '🧾 <b>Cargar factura o nota</b>';
+
+export const TECLADO_CARGAR_FACTURA_O_NOTA: {
+  inline_keyboard: Array<Array<{ text: string; callback_data: string }>>;
+} = {
+  inline_keyboard: [
+    [{ text: '📷 Factura con foto (IA)', callback_data: `${PREFIX_CARGA}factura_ia` }],
+    [{ text: '✍️ Factura manual', callback_data: `${PREFIX_CARGA}factura_manual` }],
+    [{ text: '📄 Nota de entrega (foto)', callback_data: `${PREFIX_CARGA}nota` }],
+  ],
+};
+
 export async function enviarMenuCarga(_supabase: SupabaseClient, chatId: string): Promise<void> {
-  await sendTelegramMessage(
-    chatId,
-    '🧾 <b>Cargar factura o nota</b>\n\n' +
-      'Lo que cargue queda <b>precargado</b>, pendiente de ingreso en el almacén de la obra.\n' +
-      '• <b>Con foto (IA):</b> la IA lee la factura y solo se piden los datos que falten.\n' +
-      '• <b>Manual:</b> se escriben todos los datos.',
-    {
-      parse_mode: 'HTML',
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: '📷 Factura con foto (IA)', callback_data: `${PREFIX_CARGA}factura_ia` }],
-          [{ text: '✍️ Factura manual', callback_data: `${PREFIX_CARGA}factura_manual` }],
-          [{ text: '📄 Nota de entrega (foto)', callback_data: `${PREFIX_CARGA}nota` }],
-        ],
-      },
-    },
-  );
+  await sendTelegramMessage(chatId, MENSAJE_CARGAR_FACTURA_O_NOTA, {
+    parse_mode: 'HTML',
+    reply_markup: TECLADO_CARGAR_FACTURA_O_NOTA,
+  });
 }
 
 /** Menú de carga del chofer: solo factura por foto y nota con foto (ver lib/flota/choferTelegram). */
