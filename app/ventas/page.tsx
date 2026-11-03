@@ -28,6 +28,13 @@ import {
     formatFechaPresupuestoLarga,
     hoyFechaPresupuesto,
 } from '@/lib/presupuesto/fecha';
+import {
+    esErrorColumnaIva,
+    etiquetaIva,
+    IVA_PCT_DEFAULT,
+    ivaMontoDe,
+    totalConIvaDe,
+} from '@/lib/presupuesto/iva';
 
 /** Fila mínima de `customers` para el selector de presupuesto */
 interface CustomerPickerRow {
@@ -139,14 +146,16 @@ function VentasContent() {
     const [fecha, setFecha] = useState(hoyFechaPresupuesto);
     const [notes, setNotes] = useState('');
     const [showZelle, setShowZelle] = useState(true);
+    /** 16 = gravado; 0 = exento. */
+    const [ivaPct, setIvaPct] = useState(IVA_PCT_DEFAULT);
     const [saving, setSaving] = useState(false);
     /**
      * Huella de lo que hay en pantalla, para saber si quedó algo sin guardar. `firmaGuardada`
      * es la del último guardado (o la del presupuesto recién abierto).
      */
     const firma = useMemo(
-        () => JSON.stringify([customerId, fecha, notes, showZelle, items.map((i) => [i.product.id, i.qty, i.unitPrice, i.discount])]),
-        [customerId, fecha, notes, showZelle, items],
+        () => JSON.stringify([customerId, fecha, notes, showZelle, ivaPct, items.map((i) => [i.product.id, i.qty, i.unitPrice, i.discount])]),
+        [customerId, fecha, notes, showZelle, ivaPct, items],
     );
     const [firmaGuardada, setFirmaGuardada] = useState(firma);
     /** Sube cada vez que termina de cargarse un presupuesto guardado: ese es el punto de partida. */
@@ -336,6 +345,7 @@ function VentasContent() {
                         setModificadoEl((data.updated_at as string | null) ?? null);
                         setEstadoGuardado((data.status as string | null) ?? null);
                         setShowZelle(data.show_zelle !== false); // Default to true if undefined
+                        setIvaPct(Number(data.iva_pct) === 0 ? 0 : IVA_PCT_DEFAULT);
 
                         if (data.customer_id) {
                             supabase
@@ -492,6 +502,8 @@ function VentasContent() {
             margin_pct: marginPct,
             notes: notes,
             show_zelle: showZelle,
+            iva_pct: ivaPct,
+            iva_monto: ivaMontoDe(subtotal, ivaPct),
             fecha: fechaIso,
         };
 
@@ -509,6 +521,13 @@ function VentasContent() {
         };
 
         let res = await persist(budgetDataBase);
+        if (res.error && esErrorColumnaIva(res.error.message)) {
+            const { iva_pct: _i, iva_monto: _m, ...sinIva } = budgetDataBase;
+            res = await persist(sinIva);
+            if (!res.error) {
+                alert('Guardado. Falta la migración 389 (IVA): el documento quedará sin IVA hasta aplicarla.');
+            }
+        }
         if (res.error && esErrorColumnaFecha(res.error.message)) {
             const { fecha: _omitFecha, ...sinFecha } = budgetDataBase;
             res = await persist({
@@ -691,6 +710,8 @@ function VentasContent() {
     const totalCost = items.reduce((s, i) => s + lineCost(i), 0);
     const totalProfit = subtotal - totalCost;
     const marginPct = subtotal > 0 ? (totalProfit / subtotal) * 100 : 0;
+    const ivaMonto = ivaMontoDe(subtotal, ivaPct);
+    const totalConIva = totalConIvaDe(subtotal, ivaPct);
 
     const glass = {
         background: 'var(--superficie)',
@@ -1447,6 +1468,35 @@ function VentasContent() {
                     </div>
                 </div>
 
+                <div style={{ ...glass, padding: '16px', marginBottom: '20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                        <div>
+                            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--label-secondary)', letterSpacing: '0.5px', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>
+                                IVA
+                            </label>
+                            <p style={{ fontSize: '14px', color: 'var(--label-primary)', fontWeight: 500 }}>
+                                {ivaPct === 0 ? 'Exento (0 %)' : 'Gravado 16 %'}
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setIvaPct((p) => (p === 0 ? IVA_PCT_DEFAULT : 0))}
+                            style={{
+                                border: 'none',
+                                borderRadius: '12px',
+                                padding: '10px 14px',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                background: ivaPct === 0 ? tinta(0.1) : 'rgba(52,199,89,0.18)',
+                                color: ivaPct === 0 ? 'var(--label-primary)' : 'var(--tono-verde)',
+                                fontFamily: 'inherit',
+                            }}
+                        >
+                            {ivaPct === 0 ? 'Marcar 16 %' : 'Marcar exento'}
+                        </button>
+                    </div>
+                </div>
+
                 <div
                     id="presupuesto-resumen"
                     style={{
@@ -1500,9 +1550,17 @@ function VentasContent() {
                         </div>
 
                         {/* Total */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0' }}>
+                            <span style={{ color: tintaTexto(0.6), fontSize: '13px' }}>Subtotal</span>
+                            <span style={{ color: 'var(--label-primary)', fontSize: '15px', fontWeight: 600 }}>${formatUSD(subtotal)}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0' }}>
+                            <span style={{ color: tintaTexto(0.6), fontSize: '13px' }}>{etiquetaIva(ivaPct)}</span>
+                            <span style={{ color: 'var(--label-primary)', fontSize: '15px', fontWeight: 600 }}>${formatUSD(ivaMonto)}</span>
+                        </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderTop: `2px solid ${tinta(0.12)}` }}>
-                            <span style={{ color: 'var(--label-primary)', fontSize: '18px', fontWeight: 700 }}>TOTAL</span>
-                            <span style={{ color: 'var(--tono-verde)', fontSize: '24px', fontWeight: 800 }}>${formatUSD(subtotal)}</span>
+                            <span style={{ color: 'var(--label-primary)', fontSize: '18px', fontWeight: 700 }}>TOTAL CON IVA</span>
+                            <span style={{ color: 'var(--tono-verde)', fontSize: '24px', fontWeight: 800 }}>${formatUSD(totalConIva)}</span>
                         </div>
 
                         {/* Actions: Guardar vive solo en el menú fijo de arriba */}
@@ -1525,13 +1583,14 @@ function VentasContent() {
                                         items: items.map((i) => ({
                                             nombre: i.product.nombre,
                                             categoria: null,
-                                            descripcion: null,
+                                            descripcion: i.product.descripcion ?? null,
                                             qty: i.qty,
                                             unitPrice: i.unitPrice,
                                             discount: i.discount,
-                                            costo: i.product.costo,
+                                            costo: null,
                                         })),
                                         subtotal,
+                                        ivaPct,
                                         totalCost,
                                         totalProfit,
                                         marginPct,
