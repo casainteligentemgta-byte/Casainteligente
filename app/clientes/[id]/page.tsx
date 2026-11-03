@@ -2,19 +2,29 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { toast } from 'sonner';
 import ClienteContextoObraPatrono from '@/components/clientes/ClienteContextoObraPatrono';
 import CustomerLoyaltyCard from '@/components/clientes/CustomerLoyaltyCard';
+import HistorialCobrosCliente from '@/components/clientes/HistorialCobrosCliente';
+import HistorialContactosCliente from '@/components/clientes/HistorialContactosCliente';
 import BotonTema from '@/components/tema/BotonTema';
 import { useCustomerLoyaltyScore } from '@/hooks/useCustomerLoyaltyScore';
 import { nombreEntidad, type EntidadConNombre } from '@/lib/entidades/nombreEntidad';
+import { apiArchivarCliente, apiRegistrarContactoCliente } from '@/lib/clientes/apiCliente';
 import {
   cargarClienteDetalle,
   type CustomerDetail,
 } from '@/lib/clientes/cargarClienteDetalle';
+import { cargarCobrosCliente, type CobroCliente } from '@/lib/clientes/cobrosCliente';
+import {
+  cargarContactosCliente,
+  type CanalContactoCliente,
+  type ContactoCliente,
+} from '@/lib/clientes/contactosCliente';
+import { mensajeConfirmarArchivar } from '@/lib/clientes/guardarCliente';
 import { hrefTelegram } from '@/lib/clientes/normalizarIdentidad';
-import { numeroWhatsapp } from '@/lib/clientes/presupuestosCliente';
+import { numeroWhatsapp } from '@/lib/clientes/numeroWhatsapp';
 import {
   agruparPatronosDesdeObras,
   etiquetaEstadoObraLegible,
@@ -91,6 +101,13 @@ export default function ClienteDetallePage() {
   const [presupuestosLoading, setPresupuestosLoading] = useState(false);
   const [presupuestosError, setPresupuestosError] = useState<string | null>(null);
   const [archivando, setArchivando] = useState(false);
+  const [cobros, setCobros] = useState<CobroCliente[]>([]);
+  const [cobrosLoading, setCobrosLoading] = useState(false);
+  const [cobrosError, setCobrosError] = useState<string | null>(null);
+  const [contactos, setContactos] = useState<ContactoCliente[]>([]);
+  const [contactosLoading, setContactosLoading] = useState(false);
+  const [contactosError, setContactosError] = useState<string | null>(null);
+  const [registrandoContacto, setRegistrandoContacto] = useState(false);
   const loyalty = useCustomerLoyaltyScore(id);
   const resumenPresupuestos = useMemo(() => resumenPresupuestosCliente(presupuestos), [presupuestos]);
 
@@ -191,14 +208,81 @@ export default function ClienteDetallePage() {
     };
   }, [id, supabase]);
 
+  const recargarContactos = useCallback(async () => {
+    if (!id) return;
+    setContactosLoading(true);
+    setContactosError(null);
+    const res = await cargarContactosCliente(supabase, id);
+    setContactosLoading(false);
+    setContactosError(res.error);
+    setContactos(res.contactos);
+  }, [id, supabase]);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (!id) return;
+      setContactosLoading(true);
+      setContactosError(null);
+      const res = await cargarContactosCliente(supabase, id);
+      if (!alive) return;
+      setContactosLoading(false);
+      setContactosError(res.error);
+      setContactos(res.contactos);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [id, supabase]);
+
+  useEffect(() => {
+    if (!id) return;
+    let alive = true;
+    (async () => {
+      setCobrosLoading(true);
+      setCobrosError(null);
+      const res = await cargarCobrosCliente(supabase, id);
+      if (!alive) return;
+      setCobrosLoading(false);
+      setCobrosError(res.error);
+      setCobros(res.cobros);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [id, supabase]);
+
+  async function registrarContacto(
+    input: { canal: CanalContactoCliente; nota: string },
+    opts?: { silencioso?: boolean },
+  ) {
+    if (!id) return;
+    setRegistrandoContacto(true);
+    const r = await apiRegistrarContactoCliente({
+      customerId: id,
+      canal: input.canal,
+      nota: input.nota || (input.canal === 'whatsapp' ? 'Abrió WhatsApp desde la ficha' : null),
+    });
+    setRegistrandoContacto(false);
+    if (r.error) {
+      if (!opts?.silencioso) toast.error(r.error);
+      return;
+    }
+    if (!opts?.silencioso) toast.success('Contacto guardado');
+    await recargarContactos();
+  }
+
   async function archivar() {
     if (!id) return;
-    setArchivando(true);
     const next = archivado ? 'activo' : 'inactivo';
-    const { error: err } = await supabase.from('customers').update({ status: next }).eq('id', id);
+    if (next === 'inactivo') {
+      if (!window.confirm(mensajeConfirmarArchivar(clienteDisplayNombre))) return;
+    }
+    setArchivando(true);
+    const { error: err } = await apiArchivarCliente(id, next);
     setArchivando(false);
     if (err) {
-      toast.error('No se pudo actualizar: ' + err.message);
+      toast.error('No se pudo actualizar: ' + err);
       return;
     }
     setCliente((c) => (c ? { ...c, status: next } : c));
@@ -287,6 +371,15 @@ export default function ClienteDetallePage() {
             </div>
 
             <ClienteContextoObraPatrono patronos={patronos} clienteNombre={clienteDisplayNombre} />
+
+            <HistorialContactosCliente
+              contactos={contactos}
+              loading={contactosLoading}
+              error={contactosError}
+              card={card}
+              registrando={registrandoContacto}
+              onRegistrar={registrarContacto}
+            />
 
             {loyalty.isLoading ? (
               <p className="text-sm" style={{ color: tintaTexto(0.5) }}>
@@ -395,6 +488,13 @@ export default function ClienteDetallePage() {
               )}
             </div>
 
+            <HistorialCobrosCliente
+              cobros={cobros}
+              loading={cobrosLoading}
+              error={cobrosError}
+              card={card}
+            />
+
             <div style={card}>
               <div className="flex items-center justify-between gap-3">
                 <h2 className="text-lg font-semibold" style={{ color: 'var(--label-primary)' }}>
@@ -501,6 +601,12 @@ export default function ClienteDetallePage() {
               href={`https://wa.me/${whatsapp}`}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() => {
+                void registrarContacto(
+                  { canal: 'whatsapp', nota: 'Abrió WhatsApp desde la ficha' },
+                  { silencioso: true },
+                );
+              }}
               style={{
                 ...btnBarra,
                 background: 'rgba(37,211,102,0.14)',
@@ -529,11 +635,7 @@ export default function ClienteDetallePage() {
             >
               Telegram
             </a>
-          ) : (
-            <span style={{ ...btnBarra, background: tinta(0.06), color: tintaTexto(0.35), cursor: 'not-allowed' }}>
-              Telegram
-            </span>
-          )}
+          ) : null}
         </div>
       ) : null}
     </div>

@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
+import { apiGuardarCliente } from '@/lib/clientes/apiCliente';
 import { buscarClientesParecidos, type ClienteParecido } from '@/lib/clientes/duplicadosCliente';
 import { normalizarTelegramUsername } from '@/lib/clientes/normalizarIdentidad';
 import BotonTema from '@/components/tema/BotonTema';
@@ -53,23 +54,6 @@ const paso1Juridico = z.object({
 const paso1Schema = z.discriminatedUnion('customerType', [paso1Natural, paso1Juridico]);
 
 type FormErrors = Record<string, string>;
-
-function columnaCustomersFaltante(message: string): string | null {
-  const m1 = /Could not find the '(\w+)' column of 'customers'/i.exec(message);
-  if (m1?.[1]) return m1[1];
-  const m2 = /column ['"](\w+)['"] of relation ['"]customers['"]/i.exec(message);
-  if (m2?.[1]) return m2[1];
-  const m3 = /['"](\w+)['"].*customers.*does not exist/i.exec(message);
-  return m3?.[1] ?? null;
-}
-
-function esErrorSchemaColumnaCustomers(message: string): boolean {
-  if (/Could not find the '\w+' column of 'customers'/i.test(message)) return true;
-  return (
-    /customers/i.test(message) &&
-    (/schema cache/i.test(message) || /column/i.test(message) || /does not exist/i.test(message))
-  );
-}
 
 function Field({
   label,
@@ -198,20 +182,11 @@ export default function NuevoClienteForm({
   const [dupDe, setDupDe] = useState<1 | 2>(1);
 
   async function guardarFila(payload: Record<string, unknown>, id: string | null) {
-    let actual = { ...payload };
-    const run = () =>
-      id
-        ? supabase.from('customers').update(actual).eq('id', id).select('id').maybeSingle()
-        : supabase.from('customers').insert(actual).select('id').maybeSingle();
-
-    let result = await run();
-    for (let i = 0; i < 12 && result.error && esErrorSchemaColumnaCustomers(result.error.message); i++) {
-      const col = columnaCustomersFaltante(result.error.message);
-      if (!col || !(col in actual)) break;
-      delete actual[col];
-      result = await run();
-    }
-    return result;
+    const result = await apiGuardarCliente(payload, id);
+    return {
+      error: result.error ? { message: result.error } : null,
+      data: result.id ? { id: result.id } : null,
+    };
   }
 
   const submitPaso1 = async (opts?: { ignorar?: boolean }) => {

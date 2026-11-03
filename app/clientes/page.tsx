@@ -6,6 +6,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import ClienteCard from '@/components/clientes/ClienteCard';
 import BotonTema from '@/components/tema/BotonTema';
+import { apiArchivarCliente } from '@/lib/clientes/apiCliente';
+import { mensajeConfirmarArchivar } from '@/lib/clientes/guardarCliente';
 import { listarClientesCrm } from '@/lib/clientes/listarClientes';
 import { withTimeout } from '@/lib/http/withTimeout';
 import { createClient } from '@/lib/supabase/client';
@@ -93,16 +95,13 @@ export default function ClientesPage() {
     const empresasCount = lista.filter(c => c.categoria === 'empresa').length;
 
     const handleArchivar = async (id: string, status: CustomerStatus) => {
-        let supabase: ReturnType<typeof createClient>;
-        try {
-            supabase = createClient();
-        } catch {
-            toast.error('No se pudo conectar a Supabase. Revisa .env.local.');
-            return;
+        if (status === 'inactivo') {
+            const nombre = lista.find((c) => c.id === id)?.nombre;
+            if (!window.confirm(mensajeConfirmarArchivar(nombre))) return;
         }
-        const { error } = await supabase.from('customers').update({ status }).eq('id', id);
+        const { error } = await apiArchivarCliente(id, status === 'inactivo' ? 'inactivo' : 'activo');
         if (error) {
-            toast.error('No se pudo actualizar: ' + error.message);
+            toast.error('No se pudo actualizar: ' + error);
             return;
         }
         setLista((prev) => prev.map((c) => (c.id === id ? { ...c, status } : c)));

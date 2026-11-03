@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { hrefTelegram } from '@/lib/clientes/normalizarIdentidad';
-import { numeroWhatsapp } from '@/lib/clientes/presupuestosCliente';
+import { numeroWhatsapp } from '@/lib/clientes/numeroWhatsapp';
 import { tinta, tintaTexto } from '@/lib/tema/tinta';
 
 type ClienteStatus = 'activo' | 'inactivo' | 'pendiente';
