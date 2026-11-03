@@ -5,10 +5,16 @@ import { manejarComandoIngresoFacturaTelegram } from '@/lib/telegram/ingresoFact
 import {
   manejarComandoIngresoFacturaManualTelegram,
   manejarComandoIngresoFacturaSinIaTelegram,
+  manejarComandoIngresoSinNotaTelegram,
   manejarComandoNotaEntregaIaTelegram,
   manejarComandoNotaEntregaTelegram,
 } from '@/lib/telegram/ingresoManualTelegram';
 import { iniciarModoCargaFacturasTelegram } from '@/lib/telegram/mensajesFactura';
+import { esChatDepositarioNomina } from '@/lib/telegram/menuDepositarioTelegram';
+import {
+  MENSAJE_CARGA_FACTURA_NO_DEPOSITARIO,
+  esCallbackCargaFacturaComprador,
+} from '@/lib/telegram/permisosAlmacenTelegram';
 import { enviarPickerProyectosTelegram } from '@/lib/telegram/proyectoPicker';
 
 /**
@@ -58,17 +64,15 @@ export async function enviarMenuCargaChofer(chatId: string): Promise<void> {
 export async function enviarMenuIngreso(_supabase: SupabaseClient, chatId: string): Promise<void> {
   await sendTelegramMessage(
     chatId,
-    '📥 <b>Ingreso a almacén</b>\n\nElija:',
+    '📥 <b>Ingreso a almacén</b>\n\nElija una opción:',
     {
       parse_mode: 'HTML',
       reply_markup: {
         inline_keyboard: [
-          [{ text: '📥 Facturas precargadas (pendientes de ingreso)', callback_data: `${PREFIX_CARGA}pendientes` }],
-          [{ text: '📄 Notas precargadas (pendientes de ingreso)', callback_data: `${PREFIX_CARGA}notas_pendientes` }],
-          [{ text: '🧾 Ingreso con factura · con foto (IA)', callback_data: `${PREFIX_CARGA}ingreso_ia` }],
-          [{ text: '🧾 Ingreso con factura · manual', callback_data: `${PREFIX_CARGA}ingreso_manual` }],
-          [{ text: '📄 Nota de entrega · con foto (IA)', callback_data: `${PREFIX_CARGA}nota_ingreso_ia` }],
-          [{ text: '📄 Nota de entrega · manual', callback_data: `${PREFIX_CARGA}nota_ingreso_manual` }],
+          [{ text: '📥 Facturas del comprador', callback_data: `${PREFIX_CARGA}pendientes` }],
+          [{ text: '📄 Nota de entrega', callback_data: `${PREFIX_CARGA}nota_ingreso_ia` }],
+          [{ text: '🧾 Factura en mano', callback_data: `${PREFIX_CARGA}ingreso_ia` }],
+          [{ text: '📝 Sin nota', callback_data: `${PREFIX_CARGA}ingreso_sin_nota` }],
         ],
       },
     },
@@ -85,6 +89,13 @@ export async function manejarCallbackCarga(
 ): Promise<boolean> {
   if (!esCallbackCarga(params.data)) return false;
   const accion = params.data.slice(PREFIX_CARGA.length);
+
+  if (esCallbackCargaFacturaComprador(params.data) && (await esChatDepositarioNomina(supabase, params.chatId))) {
+    await answerCallbackQuery(params.callbackId, MENSAJE_CARGA_FACTURA_NO_DEPOSITARIO.slice(0, 180), true);
+    await sendTelegramMessage(params.chatId, MENSAJE_CARGA_FACTURA_NO_DEPOSITARIO);
+    return true;
+  }
+
   await answerCallbackQuery(params.callbackId);
 
   switch (accion) {
@@ -119,6 +130,9 @@ export async function manejarCallbackCarga(
       return true;
     case 'ingreso_manual':
       await manejarComandoIngresoFacturaSinIaTelegram(supabase, params.chatId);
+      return true;
+    case 'ingreso_sin_nota':
+      await manejarComandoIngresoSinNotaTelegram(supabase, params.chatId);
       return true;
     default:
       return false;

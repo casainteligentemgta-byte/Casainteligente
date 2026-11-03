@@ -17,8 +17,8 @@ export const TELEGRAM_BOT_COMMANDS: Array<{ command: string; description: string
   ...TELEGRAM_COMANDOS_COMPRAS_ABASTECIMIENTO,
   { command: 'agenda', description: 'Cumpleaños, citas y recordatorios (IA)' },
   { command: 'tecnico', description: 'Técnico de cámaras y redes (IA): /tecnico <pregunta>' },
-  { command: 'ingreso', description: 'Menú ingreso: factura, nota, sin nota, precargadas' },
-  { command: 'salida', description: 'Menú salida: obrero en obra, despacho o traspaso' },
+  { command: 'ingreso', description: 'Ingreso a almacén: facturas del comprador, nota, sin nota' },
+  { command: 'salida', description: 'Salida: obrero, despacho, traspaso o merma' },
   { command: 'bitacora', description: 'Bitácora de obra por nota de voz' },
   { command: 'agua', description: 'Registro agua: camión, PPM y litros' },
   { command: 'stock', description: 'Stock guiado o por obra/material' },
@@ -40,8 +40,8 @@ function lineasComprasMenuTelegram(): string {
 /** Comandos visibles para un depositario, en el orden del menú. */
 export const TELEGRAM_BOT_COMMANDS_DEPOSITARIO: Array<{ command: string; description: string }> = [
   { command: 'factura', description: 'Facturas precargadas por el comprador' },
-  { command: 'ingreso', description: 'Ingreso a almacén: manual · nota · sin nota · precargadas' },
-  { command: 'salida', description: 'Salida: obrero en obra · despacho · traspaso' },
+  { command: 'ingreso', description: 'Ingreso: facturas del comprador, nota o sin nota' },
+  { command: 'salida', description: 'Salida: obrero, despacho, traspaso o merma' },
   { command: 'agua', description: 'Registro agua: camión, PPM y litros' },
   { command: 'stock', description: 'Stock guiado o por obra/material' },
   { command: 'cancelar', description: 'Cancelar flujo y volver al menú' },
@@ -96,9 +96,9 @@ export function mensajeMenuTelegram(opts?: { depositario?: boolean; comprador?: 
     '🏠 <b>Casa Inteligente</b>\n\n' +
     compras +
     '<b>Ingresos almacén</b>\n' +
-    '• /ingreso — manual · automático · nota · sin nota · precargadas\n\n' +
+    '• /ingreso — facturas del comprador, nota o sin nota\n\n' +
     '<b>Salidas</b>\n' +
-    '• /salida — obrero en obra · despacho · traspaso\n\n' +
+    '• /salida — obrero, despacho, traspaso o merma\n\n' +
     '<b>Campo</b>\n' +
     '• /bitacora — nota de voz · /agua — camión, PPM, litros\n\n' +
     '<b>Consultas</b>\n' +
@@ -140,7 +140,7 @@ export function mensajeAyudaTelegram(opts?: { depositario?: boolean; comprador?:
     '<b>Agenda</b>: /agenda /limpiar_agenda\n' +
     '<b>Técnico IA</b>: /tecnico ¿cuántos W consume la H9c?\n' +
     '<b>Stock</b>: /stock · /stock rancho flamboyant · /stock cemento\n\n' +
-    '<b>Atajos</b> (sin menú): /nota /entrada /emergencia /ingresofactura /egreso\n\n' +
+      '<b>Atajos</b> (sin menú): /nota /entrada /ingresofactura /egreso\n\n' +
     '/menu — menú · /cancelar — reiniciar'
   );
 }

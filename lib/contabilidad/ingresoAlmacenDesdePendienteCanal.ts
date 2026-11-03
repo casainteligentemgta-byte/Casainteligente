@@ -282,6 +282,14 @@ export async function ingresoAlmacenDesdePendienteCanal(
 ): Promise<ResultadoIngresoAlmacenCanal> {
   const resultado = await registrarIngresoAlmacenDesdePendienteCanal(supabase, pendingId, opts);
   if (resultado.success) {
+    try {
+      const { documentarConteoDepositarioTrasIngresoCanal } = await import(
+        '@/lib/almacen/registrarRecepcionCampoDesdeConteo'
+      );
+      await documentarConteoDepositarioTrasIngresoCanal(supabase, pendingId, opts);
+    } catch (e) {
+      console.warn('[ingresoAlmacen] ci_recepciones_campo:', e);
+    }
     const purchaseInvoiceId = await cerrarRetiroDeLaFactura(supabase, pendingId, opts?.purchaseInvoiceId);
     // La solicitud que originó la compra pasa a «Recibida» y se avisa a quien la pidió.
     if (purchaseInvoiceId) {

@@ -247,6 +247,17 @@ import {
   manejarTextoTraspasoTelegram,
 } from '@/lib/telegram/traspasoFlujoTelegram';
 import {
+  esCallbackMermaTelegram,
+  esFlujoMermaTelegram,
+  manejarCallbackMermaTelegram,
+  manejarFotoMermaTelegram,
+  manejarTextoMermaTelegram,
+} from '@/lib/telegram/mermaTelegram';
+import {
+  compradorNoPuedeMoverAlmacen,
+  esCallbackMovimientoAlmacenTelegram,
+} from '@/lib/telegram/permisosAlmacenTelegram';
+import {
   enviarMenuSalidaTelegram,
   esCallbackMenuIngresoTelegram,
   esCallbackMenuSalidaTelegram,
@@ -489,16 +500,22 @@ async function manejarComandoFacturasDirecto(
   warn?: string;
 }> {
   try {
-    // Limpia cualquier carga manual a medias: la siguiente foto se lee con IA.
-    await setTelegramContexto(supabase, chatId, {
-      contexto: 'factura',
-      metadata: {},
-      reemplazarMetadata: true,
-    });
     const { enviarMenuCarga, enviarMenuCargaChofer } = await import('@/lib/telegram/menuCargaTelegram');
     if (await esChatChofer(supabase, chatId)) {
+      await setTelegramContexto(supabase, chatId, {
+        contexto: 'factura',
+        metadata: {},
+        reemplazarMetadata: true,
+      });
       await enviarMenuCargaChofer(chatId);
+    } else if (await esChatDepositarioNomina(supabase, chatId)) {
+      await manejarComandoIngresoFacturaTelegram(supabase, chatId);
     } else {
+      await setTelegramContexto(supabase, chatId, {
+        contexto: 'factura',
+        metadata: {},
+        reemplazarMetadata: true,
+      });
       await enviarMenuCarga(supabase, chatId);
     }
   } catch (err) {
@@ -541,6 +558,25 @@ export async function handleTelegramCallbackQuery(
       if (esCallbackMenuIngresoTelegram(cq.data) || !callbackPermitidoChofer(cq.data)) {
         await sendTelegramMessage(chatId, MENSAJE_SOLO_FOTO_CHOFER, { parse_mode: 'HTML' });
         return NextResponse.json({ ok: true, denied: 'chofer' });
+      }
+    }
+
+    if (
+      esCallbackMovimientoAlmacenTelegram(cq.data) &&
+      (await compradorNoPuedeMoverAlmacen(admin.client, chatId))
+    ) {
+      await sendTelegramMessage(chatId, MENSAJE_NO_DISPONIBLE_COMPRADOR, { parse_mode: 'HTML' });
+      return NextResponse.json({ ok: true, denied: 'comprador' });
+    }
+
+    if (esCallbackMermaTelegram(cq.data)) {
+      const handledMerma = await manejarCallbackMermaTelegram(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+      });
+      if (handledMerma) {
+        return NextResponse.json({ ok: true, callback: 'merma' });
       }
     }
 
@@ -1311,6 +1347,11 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
         return NextResponse.json({ ok: true, traspaso_texto: true });
       }
 
+      const textoMerma = await manejarTextoMermaTelegram(supabase, chatId, texto);
+      if (textoMerma) {
+        return NextResponse.json({ ok: true, merma_texto: true });
+      }
+
       const obsEntradaSalida = await manejarTextoObservacionEntradaSalida({
         supabase,
         chatId,
@@ -1743,6 +1784,35 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
       })();
       if (fotoTraspaso) {
         return NextResponse.json({ ok: true, traspaso_foto: true });
+      }
+
+      const fotoMerma = await (async () => {
+        const photos = msg.photo;
+        if (!photos?.length) return false;
+        const estadoMerma = await getTelegramEstado(supabase, chatId);
+        if (!esFlujoMermaTelegram(estadoMerma)) return false;
+        const fileId = photos[photos.length - 1]?.file_id;
+        if (!fileId) return false;
+        try {
+          const { downloadTelegramFile, mimeFromTelegramPath } = await import('@/lib/telegram/botApi');
+          const { buffer, filePath } = await downloadTelegramFile(fileId);
+          const ext = filePath.split('.').pop() ?? 'jpg';
+          await manejarFotoMermaTelegram({
+            supabase,
+            chatId,
+            buffer,
+            mimeType: mimeFromTelegramPath(filePath),
+            ext,
+          });
+          return true;
+        } catch (err) {
+          console.error('[telegram merma foto]', err);
+          await sendTelegramMessage(chatId, '❌ No se pudo guardar la foto.', { parse_mode: 'HTML' });
+          return true;
+        }
+      })();
+      if (fotoMerma) {
+        return NextResponse.json({ ok: true, merma_foto: true });
       }
 
       const fotoEntradaSalida = await manejarFotoEntradaSalidaTelegram({

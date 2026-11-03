@@ -6,12 +6,13 @@ const REQUISITO_FOTO = etiquetaRequisitoFoto();
 
 export const MENU_SALIDA_TEXTO =
   '📤 <b>Salida de material</b>\n\n' +
-  'Elige el tipo. Las tres primeras las registra el almacén y descuentan stock al confirmar.\n\n' +
-  '🏗 <b>A un obrero en obra</b> — quién recibe y qué material.\n' +
-  '🏭 <b>Despacho</b> — a obra u otro almacén (igual que en la app).\n' +
-  '🔄 <b>Traspaso / préstamo</b> — mueve stock entre almacenes.\n' +
-  '📝 <b>Pedir material al almacén</b> — usted pide y dice para qué; el almacén despacha con foto.\n\n' +
-  '<code>/cancelar</code> para abortar.';
+  'Elija una opción:\n\n' +
+  '🏗 A un obrero\n' +
+  '🏭 Despacho a obra u otro almacén\n' +
+  '🔄 Traspaso entre almacenes\n' +
+  '📝 Pedir material\n' +
+  '🗑 Deterioro / merma (baja de stock)\n\n' +
+  '<code>/cancelar</code> para salir.';
 
 export const FLUJO_PASOS_SALIDA_OBRA =
   '1️⃣ Se toma la <b>obra</b> y su almacén (sin elegir).\n' +
@@ -49,3 +50,9 @@ export const MENSAJE_INICIO_SALIDA_DESPACHO =
 export const MENSAJE_INICIO_SALIDA_TRASPASO =
   '🔄 <b>Traspaso / préstamo entre almacenes</b> (<code>/salida</code>)\n\n' +
   FLUJO_PASOS_SALIDA_TRASPASO;
+
+export const MENSAJE_INICIO_SALIDA_MERMA =
+  '🗑 <b>Deterioro / merma</b>\n\n' +
+  'Almacén → producto → cantidad → motivo → foto (opcional).\n' +
+  'Se descuenta el stock y se avisa a administración.\n\n' +
+  '<code>/cancelar</code> para salir.';

@@ -33,6 +33,8 @@ import {
 } from '@/lib/telegram/procuraConciliacionWebhook';
 import { auditarUpdateTelegramAsync } from '@/lib/telegram/logBotAuditoria';
 import { claveWebhookAceptada, validarClaveWebhook } from '@/lib/telegram/claveWebhook';
+import { MENSAJE_NO_DISPONIBLE_COMPRADOR, esChatComprador } from '@/lib/telegram/compradorRestricciones';
+import { MENSAJE_EMERGENCIA_NO_COMPRADOR } from '@/lib/telegram/permisosAlmacenTelegram';
 
 /** Telegram exige HTTP 200; un 503/502 hace que marque el webhook como fallido. */
 function respuestaWebhook(body: Record<string, unknown>, status = 200) {
@@ -206,6 +208,10 @@ export async function handleTelegramWebhookRoutePost(req: Request) {
     cmd === '/emergencias'
   ) {
     const admin = telegramSupabaseAdmin();
+    if (admin.ok && (await esChatComprador(admin.client, chatId))) {
+      await sendTelegramMessage(chatId, MENSAJE_EMERGENCIA_NO_COMPRADOR);
+      return respuestaWebhook({ ok: true, denied: 'comprador', command: 'emergencia' });
+    }
     if (!admin.ok) {
       try {
         await sendTelegramMessage(
@@ -238,6 +244,10 @@ export async function handleTelegramWebhookRoutePost(req: Request) {
 
   if (cmd === '/sinnota' || cmd === '/ingresomanual') {
     const admin = telegramSupabaseAdmin();
+    if (admin.ok && (await esChatComprador(admin.client, chatId))) {
+      await sendTelegramMessage(chatId, MENSAJE_NO_DISPONIBLE_COMPRADOR, { parse_mode: 'HTML' });
+      return respuestaWebhook({ ok: true, denied: 'comprador', command: 'ingreso_manual' });
+    }
     if (!admin.ok) {
       try {
         await sendTelegramMessage(
@@ -271,6 +281,10 @@ export async function handleTelegramWebhookRoutePost(req: Request) {
 
   if (cmd === '/ingreso') {
     const admin = telegramSupabaseAdmin();
+    if (admin.ok && (await esChatComprador(admin.client, chatId))) {
+      await sendTelegramMessage(chatId, MENSAJE_NO_DISPONIBLE_COMPRADOR, { parse_mode: 'HTML' });
+      return respuestaWebhook({ ok: true, denied: 'comprador', command: 'ingreso_menu' });
+    }
     if (!admin.ok) {
       try {
         await sendTelegramMessage(
@@ -297,6 +311,10 @@ export async function handleTelegramWebhookRoutePost(req: Request) {
 
   if (cmd === '/ingresofactura' || cmd === '/ingresofacturas') {
     const admin = telegramSupabaseAdmin();
+    if (admin.ok && (await esChatComprador(admin.client, chatId))) {
+      await sendTelegramMessage(chatId, MENSAJE_NO_DISPONIBLE_COMPRADOR, { parse_mode: 'HTML' });
+      return respuestaWebhook({ ok: true, denied: 'comprador', command: 'ingreso_factura' });
+    }
     if (!admin.ok) {
       try {
         await sendTelegramMessage(

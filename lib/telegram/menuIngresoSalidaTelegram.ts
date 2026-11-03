@@ -2,7 +2,6 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { FacturaPendienteIngreso } from '@/lib/almacen/listarFacturasPendientesIngreso';
 import { listarFacturasPendientesDeMisObras } from '@/lib/telegram/facturasPendientesDeMisObras';
 import {
-  agruparProveedoresFacturasPrecargadas,
   etiquetaFacturaBotonPorNumero,
   manejarComandoIngresoFacturaTelegram,
   ordenarFacturasPendientesPorNumero,
@@ -21,20 +20,11 @@ import { manejarComandoSalidaObraTelegram } from '@/lib/telegram/salidaObraTeleg
 import { MENU_SALIDA_TEXTO } from '@/lib/telegram/mensajesSalidaTelegram';
 import { iniciarRequerimientoSalidaTelegram } from '@/lib/telegram/requerimientoSalidaTelegram';
 import { manejarComandoTraspasoTelegram } from '@/lib/telegram/traspasoFlujoTelegram';
+import { manejarComandoMermaTelegram } from '@/lib/telegram/mermaTelegram';
 
 const PREFIX_INGRESO = 'ig:';
 const PREFIX_SALIDA = 'sg:';
-const MENU_PROV_PAGE_SIZE = 8;
 const MENU_FACT_PAGE_SIZE = 8;
-
-function truncar(s: string, max = 52): string {
-  const t = s.trim();
-  return t.length <= max ? t : `${t.slice(0, max - 1)}…`;
-}
-
-function callbackMenuProveedor(key: string): string {
-  return `${PREFIX_INGRESO}pr:${key}`;
-}
 
 function callbackMenuFactura(key: string): string {
   return `${PREFIX_INGRESO}fc:${key}`;
@@ -46,7 +36,7 @@ function callbackMenuFacturasPagina(provKey: string, page: number): string {
 
 /** Opciones del submenú /ingreso (4 flujos + listado precargadas). */
 export type OpcionMenuIngreso = 'factura' | 'factauto' | 'nota' | 'sinnota' | 'precargadas';
-export type OpcionMenuSalida = 'obra' | 'almacen' | 'prestamo' | 'requerir';
+export type OpcionMenuSalida = 'obra' | 'almacen' | 'prestamo' | 'requerir' | 'merma';
 
 function escapeHtml(s: string): string {
   return s
@@ -82,65 +72,9 @@ export async function manejarComandoIngresoTelegram(
 export async function enviarMenuIngresoTelegram(
   supabase: SupabaseClient,
   chatId: string,
-  pageProveedores = 0,
+  _pageProveedores = 0,
 ): Promise<void> {
-  const facturas = await listarFacturasPendientesDeMisObras(supabase, chatId);
-
-  const rows: Array<Array<{ text: string; callback_data: string }>> = [
-    [{ text: '🧾 Ingreso manual de factura', callback_data: callbackMenuIngreso('factura') }],
-    [{ text: '🤖 Ingreso automático de factura', callback_data: callbackMenuIngreso('factauto') }],
-    [{ text: '📄 Ingreso con nota de entrega', callback_data: callbackMenuIngreso('nota') }],
-    [{ text: '📝 Ingreso sin nota', callback_data: callbackMenuIngreso('sinnota') }],
-  ];
-
-  const nIngreso = facturas.filter((f) => f.accion === 'ingreso_almacen').length;
-  const nConfirmar = facturas.length - nIngreso;
-  let texto = '📥 <b>Ingreso a almacén</b>\n\nElige el tipo de ingreso:';
-
-  if (facturas.length) {
-    const proveedores = agruparProveedoresFacturasPrecargadas(facturas);
-    const totalPages = Math.max(1, Math.ceil(proveedores.length / MENU_PROV_PAGE_SIZE));
-    const safePage = Math.min(Math.max(0, pageProveedores), totalPages - 1);
-    const slice = proveedores.slice(
-      safePage * MENU_PROV_PAGE_SIZE,
-      safePage * MENU_PROV_PAGE_SIZE + MENU_PROV_PAGE_SIZE,
-    );
-
-    texto +=
-      `\n\n<b>Facturas precargadas</b> (pendientes de ingreso) — elige <b>proveedor</b> (${facturas.length})` +
-      (nIngreso ? `\n📥 ${nIngreso} para ingreso` : '') +
-      (nConfirmar ? `\n⏳ ${nConfirmar} pend. confirmar compra` : '') +
-      '\n<i>Luego verás las facturas por número.</i>';
-
-    for (const p of slice) {
-      rows.push([
-        {
-          text: truncar(`🏢 ${p.nombre} (${p.count})`),
-          callback_data: callbackMenuProveedor(p.key),
-        },
-      ]);
-    }
-
-    if (totalPages > 1) {
-      const nav: Array<{ text: string; callback_data: string }> = [];
-      if (safePage > 0) {
-        nav.push({ text: '◀', callback_data: `${PREFIX_INGRESO}pp:${safePage - 1}` });
-      }
-      nav.push({
-        text: `${safePage + 1}/${totalPages}`,
-        callback_data: `${PREFIX_INGRESO}pp:${safePage}`,
-      });
-      if (safePage < totalPages - 1) {
-        nav.push({ text: '▶', callback_data: `${PREFIX_INGRESO}pp:${safePage + 1}` });
-      }
-      rows.push(nav);
-    }
-  }
-
-  await sendTelegramMessage(chatId, texto, {
-    parse_mode: 'HTML',
-    reply_markup: { inline_keyboard: rows },
-  });
+  await manejarComandoIngresoTelegram(supabase, chatId);
 }
 
 function tecladoFacturasPrecargadasMenu(
@@ -190,7 +124,7 @@ async function enviarFacturasPrecargadasMenuPorProveedor(
   );
 
   if (!facturas.length) {
-    await enviarMenuIngresoTelegram(supabase, chatId);
+    await manejarComandoIngresoTelegram(supabase, chatId);
     return;
   }
 
@@ -228,6 +162,7 @@ export async function enviarMenuSalidaTelegram(chatId: string): Promise<void> {
         [{ text: '🏭 Despacho a obra u otro almacén', callback_data: callbackMenuSalida('almacen') }],
         [{ text: '🔄 Traspaso / préstamo', callback_data: callbackMenuSalida('prestamo') }],
         [{ text: '📝 Pedir material al almacén', callback_data: callbackMenuSalida('requerir') }],
+        [{ text: '🗑 Deterioro / merma', callback_data: callbackMenuSalida('merma') }],
       ],
     },
   });
@@ -293,6 +228,9 @@ async function iniciarSalidaPorOpcion(
     case 'requerir':
       await iniciarRequerimientoSalidaTelegram(supabase, chatId);
       break;
+    case 'merma':
+      await manejarComandoMermaTelegram(supabase, chatId);
+      break;
     default:
       await sendTelegramMessage(chatId, '⚠️ Opción no válida. Use <code>/salida</code>.', {
         parse_mode: 'HTML',
@@ -313,6 +251,7 @@ const ETIQUETA_SALIDA: Record<OpcionMenuSalida, string> = {
   almacen: 'Despacho a obra u otro almacén',
   prestamo: 'Traspaso / préstamo',
   requerir: 'Pedir material al almacén',
+  merma: 'Deterioro / merma',
 };
 
 export async function manejarCallbackMenuIngresoTelegram(
@@ -325,27 +264,13 @@ export async function manejarCallbackMenuIngresoTelegram(
 
   if (raw === 'back') {
     await answerCallbackQuery(params.callbackId);
-    await enviarMenuIngresoTelegram(supabase, params.chatId);
+    await manejarComandoIngresoTelegram(supabase, params.chatId);
     return true;
   }
 
-  if (raw.startsWith('pp:')) {
-    const page = Number(raw.slice(3));
-    if (!Number.isFinite(page) || page < 0) return false;
+  if (raw.startsWith('pp:') || raw.startsWith('pg:')) {
     await answerCallbackQuery(params.callbackId);
-    try {
-      await enviarMenuIngresoTelegram(supabase, params.chatId, Math.floor(page));
-    } catch (e) {
-      console.error('[telegram menu ingreso pagina proveedores]', e);
-    }
-    return true;
-  }
-
-  if (raw.startsWith('pg:')) {
-    const page = Number(raw.slice(3));
-    if (!Number.isFinite(page) || page < 0) return false;
-    await answerCallbackQuery(params.callbackId);
-    await enviarMenuIngresoTelegram(supabase, params.chatId, Math.floor(page));
+    await manejarComandoIngresoTelegram(supabase, params.chatId);
     return true;
   }
 
