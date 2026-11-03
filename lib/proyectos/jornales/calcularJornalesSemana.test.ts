@@ -7,7 +7,7 @@ import {
   kpisJornales,
   round2,
 } from './calcularJornalesSemana';
-import { jornalDesdeHonorarios } from './cargarJornalesProyecto';
+import { jornalDesdeHonorarios, unirIdsRosterJornales } from './cargarJornalesProyecto';
 import { fechasDeSemana, lunesDeSemanaJornales } from './semanaJornales';
 
 describe('costo semanal de jornal', () => {
@@ -108,5 +108,27 @@ describe('fila de colaborador y KPIs', () => {
     assert.equal(jornalDesdeHonorarios(28), 28);
     assert.equal(jornalDesdeHonorarios(0), 0);
     assert.equal(jornalDesdeHonorarios(4500), 0);
+  });
+});
+
+describe('roster de jornales sin obra_id = proyecto_id', () => {
+  it('une asignados, tarifas y asistencias aunque la cuadrilla esté vacía', () => {
+    const ids = unirIdsRosterJornales(
+      ['e-modulo'],
+      [],
+      ['e-tarifa', 'e-asis'],
+      ['e-asis', '  ', 'e-tarifa'],
+    );
+    assert.deepEqual(ids.sort(), ['e-asis', 'e-modulo', 'e-tarifa']);
+  });
+
+  it('sigue mostrando colaboradores demo si solo hay tarifas/asistencias', () => {
+    const ids = unirIdsRosterJornales([], ['a1111111-b222-4c33-8d44-000000000201'], [
+      'a1111111-b222-4c33-8d44-000000000201',
+      'a1111111-b222-4c33-8d44-000000000202',
+    ]);
+    assert.equal(ids.length, 2);
+    assert.ok(ids.includes('a1111111-b222-4c33-8d44-000000000201'));
+    assert.ok(ids.includes('a1111111-b222-4c33-8d44-000000000202'));
   });
 });

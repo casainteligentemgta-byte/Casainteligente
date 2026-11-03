@@ -85,4 +85,32 @@ describe('seed demo y limpieza', () => {
     assert.match(sqlCleanup, /delete from public\.ci_jornales_obra_asistencias/)
     assert.match(sqlCleanup, /delete from public\.ci_proyectos/)
   })
+
+  it('383 coincide con el schema real de producción', () => {
+    assert.match(sql383, /nombre_proyecto/)
+    assert.doesNotMatch(sql383, /insert into public\.ci_obra_empleados/i)
+    assert.doesNotMatch(sql383, /cargo_codigo, oficio/)
+    assert.doesNotMatch(sql383, /email, status/)
+  })
+
+  it('cleanup no borra ci_obra_empleados por obra_id = proyecto demo', () => {
+    assert.doesNotMatch(sqlCleanup, /obra_id = any \(v_proyectos\)/)
+    assert.match(sqlCleanup, /empleado_id = any \(v_empleados\)/)
+  })
+})
+
+const cargarJornales = readFileSync(
+  join(process.cwd(), 'lib/proyectos/jornales/cargarJornalesProyecto.ts'),
+  'utf8',
+)
+
+describe('roster API de jornales', () => {
+  it('no usa ci_obra_empleados.obra_id = proyecto_id como única fuente', () => {
+    assert.match(cargarJornales, /unirIdsRosterJornales/)
+    assert.match(cargarJornales, /ci_jornales_obra_tarifas/)
+    assert.match(cargarJornales, /legacy_obra_id/)
+    assert.doesNotMatch(cargarJornales, /\.eq\(['"]obra_id['"], proyectoId\)/)
+    assert.doesNotMatch(apiJornales, /listarEmpleadosProyectoEgreso/)
+    assert.match(apiJornales, /listarRosterJornalesProyecto/)
+  })
 })
