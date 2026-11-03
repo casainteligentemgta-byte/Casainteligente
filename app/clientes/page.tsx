@@ -3,49 +3,25 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, useCallback } from 'react';
+import { toast } from 'sonner';
 import ClienteCard from '@/components/clientes/ClienteCard';
 import BotonTema from '@/components/tema/BotonTema';
-import { contarVinculosCliente, motivoNoBorrarCliente } from '@/lib/clientes/presupuestosCliente';
+import { listarClientesCrm } from '@/lib/clientes/listarClientes';
 import { withTimeout } from '@/lib/http/withTimeout';
 import { createClient } from '@/lib/supabase/client';
-import type { CustomerListItem } from '@/types';
+import type { CustomerListItem, CustomerStatus } from '@/types';
 import { tinta, tintaTexto } from '@/lib/tema/tinta';
 
 const CUSTOMERS_LOAD_TIMEOUT_MS = 22_000;
 
-// Clasificación por tipo (sin chip «Ambos»: sin filtro = todos).
-const FILTERS = ['Personas', 'Empresas'] as const;
+const FILTERS = ['Personas', 'Empresas', 'Archivados'] as const;
 type FiltroCliente = '' | (typeof FILTERS)[number];
-
-type ClienteTipoCard = 'V' | 'J' | 'E';
-type ClienteStatusCard = 'activo' | 'inactivo' | 'pendiente';
-
-function colorPorId(id: string): string {
-    const paleta = ['#007AFF', '#5856D6', '#AF52DE', '#FF2D55', '#FF9500', '#00C7BE', '#34C759'];
-    let h = 0;
-    for (let i = 0; i < id.length; i++) h += id.charCodeAt(i);
-    return paleta[h % paleta.length];
-}
-
-/** La tabla `customers.tipo` puede ser "empresa" o letra RIF; ClienteCard espera V | J | E */
-function normalizarTipo(tipoRaw: string | null | undefined, categoria: 'personal' | 'empresa'): ClienteTipoCard {
-    const t = (tipoRaw || '').trim().toUpperCase();
-    if (t === 'V' || t === 'J' || t === 'E') return t;
-    if (categoria === 'empresa') return 'J';
-    return 'V';
-}
-
-function normalizarStatus(s: string | null | undefined): ClienteStatusCard {
-    const v = (s || 'activo').toLowerCase();
-    if (v === 'inactivo' || v === 'pendiente' || v === 'activo') return v;
-    return 'activo';
-}
 
 export default function ClientesPage() {
     const router = useRouter();
     const [search, setSearch] = useState('');
     const [filtro, setFiltro] = useState<FiltroCliente>('');
-    const [lista, setLista] = useState<any[]>([]);
+    const [lista, setLista] = useState<CustomerListItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [fetchError, setFetchError] = useState<string | null>(null);
 
@@ -66,112 +42,17 @@ export default function ClientesPage() {
                 return;
             }
 
-            let data: Record<string, unknown>[] | null = null;
-            let error: { message: string } | null = null;
-
-            const first = await withTimeout(
-                Promise.resolve(
-                    supabase
-                        .from('customers')
-                        .select('*')
-                        .order('created_at', { ascending: false }),
-                ),
+            const res = await withTimeout(
+                listarClientesCrm(supabase),
                 CUSTOMERS_LOAD_TIMEOUT_MS,
-                'Lectura de customers (*)',
+                'Lectura de customers',
             );
-            if (first.error) {
-                const second = await withTimeout(
-                    Promise.resolve(
-                        supabase
-                            .from('customers')
-                            .select('id,nombre,rif,email,movil,tipo,status,direccion,imagen,created_at,updated_at')
-                            .order('created_at', { ascending: false }),
-                    ),
-                    CUSTOMERS_LOAD_TIMEOUT_MS,
-                    'Lectura de customers (columnas base)',
-                );
-                data = (second.data ?? null) as Record<string, unknown>[] | null;
-                error = second.error;
-                if (error) {
-                    setFetchError(`${first.error.message} · ${error.message}`);
-                    setLista([]);
-                    return;
-                }
-            } else {
-                data = (first.data ?? null) as Record<string, unknown>[] | null;
-            }
-
-            if (!data || data.length === 0) {
+            if (res.error) {
+                setFetchError(res.error);
                 setLista([]);
                 return;
             }
-
-            const ids = data.map((c) => String(c.id ?? '')).filter(Boolean);
-            const obraCountPorCliente = new Map<string, number>();
-            if (ids.length) {
-                const { data: proys } = await withTimeout(
-                    Promise.resolve(
-                        supabase
-                            .from('ci_proyectos')
-                            .select('customer_id')
-                            .in('customer_id', ids),
-                    ),
-                    CUSTOMERS_LOAD_TIMEOUT_MS,
-                    'Conteo obras por cliente',
-                );
-                for (const p of proys ?? []) {
-                    const cid = String(p.customer_id ?? '');
-                    if (!cid) continue;
-                    obraCountPorCliente.set(cid, (obraCountPorCliente.get(cid) ?? 0) + 1);
-                }
-            }
-
-            const mapped = data.map((c: Record<string, unknown>) => {
-                const nombreSafe = (typeof c.nombre === 'string' && c.nombre.trim()) ? c.nombre.trim() : 'Sin nombre';
-                const partes = nombreSafe.split(/\s+/).filter(Boolean);
-                const initials =
-                    partes.map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() || '??';
-                const tipoStr = typeof c.tipo === 'string' ? c.tipo : '';
-                const customerType = typeof c.customer_type === 'string' ? c.customer_type.toLowerCase() : '';
-                const esEmpresa =
-                    customerType === 'juridico' ||
-                    /jurid|empresa/i.test(tipoStr) ||
-                    tipoStr.trim().toUpperCase() === 'J';
-                const categoria = esEmpresa ? 'empresa' : 'personal';
-                const tipoLetra = normalizarTipo(tipoStr, categoria);
-                const idStr = String(c.id ?? '');
-
-                const cedula = typeof c.cedula === 'string' ? c.cedula.trim() : '';
-                const rif = typeof c.rif === 'string' ? c.rif.trim() : '';
-                const documentoLabel = esEmpresa
-                    ? rif
-                        ? `RIF: ${rif}`
-                        : ''
-                    : cedula
-                      ? `Cédula: ${cedula}`
-                      : rif
-                        ? `RIF: ${rif}`
-                        : '';
-
-                return {
-                    ...c,
-                    nombre: nombreSafe,
-                    rif: documentoLabel || rif,
-                    cedula,
-                    email: typeof c.email === 'string' ? c.email : '',
-                    tipo: tipoLetra,
-                    categoria,
-                    status: normalizarStatus(typeof c.status === 'string' ? c.status : undefined),
-                    telefono: typeof c.movil === 'string' ? c.movil : typeof c.telefono === 'string' ? c.telefono : '',
-                    movil: typeof c.movil === 'string' ? c.movil : typeof c.telefono === 'string' ? c.telefono : undefined,
-                    direccion: typeof c.direccion === 'string' ? c.direccion : '',
-                    imagen: c.imagen || null,
-                    initials,
-                    color: colorPorId(idStr),
-                    obraCount: obraCountPorCliente.get(idStr) ?? 0,
-                };
-            });
-            setLista(mapped);
+            setLista(res.lista);
         } catch (e: unknown) {
             setFetchError(e instanceof Error ? e.message : 'Error inesperado al cargar clientes.');
             setLista([]);
@@ -194,12 +75,16 @@ export default function ClientesPage() {
             (c.email && String(c.email).toLowerCase().includes(q)) ||
             (c.movil && String(c.movil).includes(search));
 
+        const archivado = c.status === 'inactivo';
         const matchFiltro =
-            !filtro
-                ? true
-                : filtro === 'Personas'
-                  ? c.categoria === 'personal'
-                  : c.categoria === 'empresa';
+            filtro === 'Archivados'
+                ? archivado
+                : !archivado &&
+                  (!filtro
+                      ? true
+                      : filtro === 'Personas'
+                        ? c.categoria === 'personal'
+                        : c.categoria === 'empresa');
 
         return matchSearch && matchFiltro;
     });
@@ -207,31 +92,21 @@ export default function ClientesPage() {
     const personasCount = lista.filter(c => c.categoria === 'personal').length;
     const empresasCount = lista.filter(c => c.categoria === 'empresa').length;
 
-    const handleDelete = async (id: string) => {
+    const handleArchivar = async (id: string, status: CustomerStatus) => {
         let supabase: ReturnType<typeof createClient>;
         try {
             supabase = createClient();
         } catch {
-            alert('No se pudo conectar a Supabase. Revisa .env.local.');
+            toast.error('No se pudo conectar a Supabase. Revisa .env.local.');
             return;
         }
-        // Un cliente con presupuestos u obras no se borra: sus documentos quedarían sin dueño.
-        const { vinculos, error: errVinculos } = await contarVinculosCliente(supabase, id);
-        if (errVinculos) {
-            alert('No se pudo comprobar si el cliente tiene presupuestos u obras. No se eliminó. ' + errVinculos);
+        const { error } = await supabase.from('customers').update({ status }).eq('id', id);
+        if (error) {
+            toast.error('No se pudo actualizar: ' + error.message);
             return;
         }
-        const motivo = motivoNoBorrarCliente(vinculos);
-        if (motivo) {
-            alert(motivo);
-            return;
-        }
-        const { error } = await supabase.from('customers').delete().eq('id', id);
-        if (!error) {
-            setLista(prev => prev.filter(c => c.id !== id));
-        } else {
-            alert('Error al borrar: ' + error.message);
-        }
+        setLista((prev) => prev.map((c) => (c.id === id ? { ...c, status } : c)));
+        toast.success(status === 'inactivo' ? 'Cliente archivado' : 'Cliente restaurado');
     };
 
     if (loading) {
@@ -341,10 +216,10 @@ export default function ClientesPage() {
                         type="text"
                         value={search}
                         onChange={e => setSearch(e.target.value)}
-                        placeholder="Buscar por nombre, RIF, email..."
+                        placeholder="Buscar por nombre, cédula, teléfono..."
                         style={{
                             flex: 1, background: 'transparent', border: 'none', outline: 'none',
-                            color: 'var(--label-primary)', fontSize: '15px', fontFamily: 'inherit',
+                            color: 'var(--label-primary)', fontSize: '16px', fontFamily: 'inherit',
                         }}
                     />
                     {search && (
@@ -372,7 +247,7 @@ export default function ClientesPage() {
                                         border: active ? '1.5px solid #007AFF' : `1px solid ${tinta(0.1)}`,
                                         background: active ? 'rgba(0,122,255,0.18)' : tinta(0.05),
                                         color: active ? 'var(--tono-azul)' : tintaTexto(0.45),
-                                        fontSize: '12px', fontWeight: active ? 700 : 500,
+                                        fontSize: '13px', fontWeight: active ? 700 : 500,
                                         cursor: 'pointer', fontFamily: 'inherit',
                                         transition: 'all 0.18s',
                                         boxShadow: active ? '0 0 0 3px rgba(0,122,255,0.1)' : 'none',
@@ -445,11 +320,27 @@ export default function ClientesPage() {
                         )}
                     </div>
                 ) : (
-                    filtered.map(cliente => (
+                    filtered.map((cliente) => (
                         <ClienteCard
                             key={cliente.id}
-                            cliente={cliente}
-                            onDelete={handleDelete}
+                            cliente={{
+                                id: cliente.id,
+                                nombre: cliente.nombre,
+                                rif: cliente.rif,
+                                tipo: cliente.categoria === 'empresa' ? 'J' : 'V',
+                                categoria: cliente.categoria,
+                                status: cliente.status ?? 'activo',
+                                email: cliente.email,
+                                telefono: cliente.telefono,
+                                movil: cliente.movil,
+                                direccion: cliente.direccion,
+                                initials: cliente.initials,
+                                color: cliente.color,
+                                imagen: cliente.imagen ?? undefined,
+                                obraCount: cliente.obraCount,
+                                telegram_username: cliente.telegram_username,
+                            }}
+                            onArchivar={handleArchivar}
                         />
                     ))
                 )}

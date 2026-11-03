@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { ESTADOS_PRESUPUESTO_ACEPTADO, presupuestoAceptado } from '@/lib/clientes/presupuestosCliente';
+import { normalizarDocumentoVe } from '@/lib/clientes/normalizarIdentidad';
 
 export type CustomerLoyaltyTier = 'Bronce' | 'Silver' | 'Gold' | 'Platinum';
 
@@ -136,6 +137,28 @@ export function calcularPuntajeCliente(
   };
 }
 
+async function ventasLegacyPorRif(
+  supabase: SupabaseClient,
+  rif: string | null | undefined,
+): Promise<Array<{ id: string; importe_total?: unknown; fecha?: string | null }>> {
+  const norm = normalizarDocumentoVe(rif);
+  if (!norm) return [];
+  const digits = norm.replace(/^[A-Z]/, '');
+  const variantes = Array.from(new Set([String(rif ?? '').trim(), norm, digits].filter((v) => v.length >= 4)));
+  const empRes = await supabase.from('empresas').select('id,rif').in('rif', variantes);
+  const empresas = (empRes.data ?? []) as Array<{ id?: string; rif?: string | null }>;
+  const empresaIds = empresas
+    .filter((e) => e.id && (variantes.includes(String(e.rif ?? '').trim()) || normalizarDocumentoVe(e.rif) === norm))
+    .map((e) => String(e.id));
+  if (!empresaIds.length) return [];
+  const venRes = await supabase
+    .from('ventas')
+    .select('id,importe_total,fecha')
+    .in('empresa_id', empresaIds)
+    .neq('estado', 'cancelada');
+  return (venRes.data ?? []) as Array<{ id: string; importe_total?: unknown; fecha?: string | null }>;
+}
+
 export async function calculateCustomerLoyaltyScore(
   supabase: SupabaseClient,
   customerId: string,
@@ -145,15 +168,17 @@ export async function calculateCustomerLoyaltyScore(
     throw new Error('customerId requerido');
   }
 
-  const [customerRes, budgetsRes, proyectosRes, ventasRes] = await Promise.all([
+  const [customerRes, budgetsRes, proyectosRes] = await Promise.all([
     supabase.from('customers').select('id,created_at,rif').eq('id', id).maybeSingle(),
     supabase
       .from('budgets')
       .select('id,subtotal,status,created_at')
       .eq('customer_id', id)
       .in('status', [...ESTADOS_PRESUPUESTO_ACEPTADO]),
-    supabase.from('ci_proyectos').select('*').eq('customer_id', id),
-    supabase.from('ventas').select('id,importe_total,fecha,empresa_id').neq('estado', 'cancelada'),
+    supabase
+      .from('ci_proyectos')
+      .select('id,monto_aproximado,obra_precio_venta_usd,created_at,budget_id,budgets_adicionales')
+      .eq('customer_id', id),
   ]);
 
   if (customerRes.error || !customerRes.data) {
@@ -166,26 +191,8 @@ export async function calculateCustomerLoyaltyScore(
 
   const customer = customerRes.data as { created_at?: string | null; rif?: string | null };
 
-  const ventasRows = (ventasRes.data ?? []) as Array<{
-    id: string;
-    importe_total?: unknown;
-    fecha?: string | null;
-    empresa_id?: string | null;
-  }>;
-
-  // Ventas del registro antiguo (por empresa) → cliente, emparejadas por RIF.
-  let ventasMatched: typeof ventasRows = [];
-  const rif = (customer.rif ?? '').trim().toLowerCase();
-  if (rif && ventasRows.length > 0) {
-    const empRes = await supabase.from('empresas').select('id,rif');
-    const empresas = (empRes.data ?? []) as Array<{ id?: string; rif?: string | null }>;
-    const empresaIds = new Set(
-      empresas
-        .filter((e) => (e.rif ?? '').trim().toLowerCase() === rif && e.id)
-        .map((e) => String(e.id)),
-    );
-    ventasMatched = ventasRows.filter((v) => (v.empresa_id ? empresaIds.has(v.empresa_id) : false));
-  }
+  // Ventas legacy (por empresa): solo las de este RIF, no el catálogo entero.
+  const ventasMatched = await ventasLegacyPorRif(supabase, customer.rif);
 
   return calcularPuntajeCliente(id, {
     clienteCreadoEn: customer.created_at ?? null,

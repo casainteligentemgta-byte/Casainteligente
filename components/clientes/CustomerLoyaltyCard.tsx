@@ -2,65 +2,81 @@
 
 import { useState } from 'react';
 import type { CustomerScoreResult, CustomerLoyaltyTier } from '@/lib/finanzas/customerScore';
+import { tinta, tintaTexto } from '@/lib/tema/tinta';
 
-function tierClasses(tier: CustomerLoyaltyTier): string {
+function tierColor(tier: CustomerLoyaltyTier): { bg: string; text: string; border: string } {
   switch (tier) {
     case 'Platinum':
-      return 'bg-cyan-500/20 text-cyan-300 border-cyan-400/40';
+      return { bg: 'rgba(6,182,212,0.18)', text: '#67e8f9', border: 'rgba(34,211,238,0.4)' };
     case 'Gold':
-      return 'bg-amber-500/20 text-amber-300 border-amber-400/40';
+      return { bg: 'rgba(245,158,11,0.18)', text: 'var(--tono-naranja)', border: 'rgba(245,158,11,0.4)' };
     case 'Silver':
-      return 'bg-zinc-500/20 text-zinc-200 border-zinc-400/35';
+      return { bg: tinta(0.08), text: 'var(--label-primary)', border: tinta(0.2) };
     default:
-      return 'bg-orange-500/20 text-orange-300 border-orange-400/40';
+      return { bg: 'rgba(249,115,22,0.18)', text: 'var(--tono-naranja)', border: 'rgba(249,115,22,0.4)' };
   }
 }
 
-type Props = {
-  model: CustomerScoreResult;
-};
-
-export default function CustomerLoyaltyCard({ model }: Props) {
+export default function CustomerLoyaltyCard({ model }: { model: CustomerScoreResult }) {
   const [open, setOpen] = useState(false);
+  const t = tierColor(model.tier);
 
   return (
     <button
       type="button"
       onClick={() => setOpen((v) => !v)}
-      className="w-full rounded-2xl border border-white/10 bg-gradient-to-br from-zinc-900 to-black p-4 text-left transition hover:border-white/20"
+      className="w-full rounded-2xl p-4 text-left transition"
+      style={{
+        border: `1px solid ${tinta(0.1)}`,
+        background: 'var(--superficie)',
+      }}
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Score de fidelidad</p>
-          <p className="mt-1 text-3xl font-black text-white">{model.score}</p>
+          <p className="text-[11px] uppercase tracking-[0.14em]" style={{ color: tintaTexto(0.45) }}>
+            Score de fidelidad
+          </p>
+          <p className="mt-1 text-3xl font-black" style={{ color: 'var(--label-primary)' }}>
+            {model.score}
+          </p>
         </div>
-        <span className={`rounded-full border px-3 py-1 text-xs font-bold ${tierClasses(model.tier)}`}>{model.tier}</span>
+        <span
+          className="rounded-full border px-3 py-1 text-xs font-bold"
+          style={{ background: t.bg, color: t.text, borderColor: t.border }}
+        >
+          {model.tier}
+        </span>
       </div>
 
-      <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] p-3">
-        <p className="text-xs text-zinc-400">LTV Total</p>
-        <p className="mt-1 font-mono text-xl font-semibold tabular-nums text-zinc-100">
+      <div className="mt-4 rounded-xl p-3" style={{ border: `1px solid ${tinta(0.1)}`, background: tinta(0.03) }}>
+        <p className="text-xs" style={{ color: tintaTexto(0.45) }}>
+          LTV Total
+        </p>
+        <p className="mt-1 font-mono text-xl font-semibold tabular-nums" style={{ color: 'var(--label-primary)' }}>
           ${model.breakdown.ltvTotalUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </p>
       </div>
 
       <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
-        <div className="rounded-lg border border-white/10 bg-white/[0.02] p-2">
-          <p className="text-zinc-500">Volumen</p>
-          <p className="font-mono tabular-nums text-zinc-200">{model.breakdown.scoreVolumen.toFixed(1)}</p>
-        </div>
-        <div className="rounded-lg border border-white/10 bg-white/[0.02] p-2">
-          <p className="text-zinc-500">Recurrencia</p>
-          <p className="font-mono tabular-nums text-zinc-200">{model.breakdown.scoreRecurrencia.toFixed(1)}</p>
-        </div>
-        <div className="rounded-lg border border-white/10 bg-white/[0.02] p-2">
-          <p className="text-zinc-500">Lealtad</p>
-          <p className="font-mono tabular-nums text-zinc-200">{model.breakdown.scoreLealtad.toFixed(1)}</p>
-        </div>
+        {[
+          ['Volumen', model.breakdown.scoreVolumen],
+          ['Recurrencia', model.breakdown.scoreRecurrencia],
+          ['Lealtad', model.breakdown.scoreLealtad],
+        ].map(([label, val]) => (
+          <div key={String(label)} className="rounded-lg p-2" style={{ border: `1px solid ${tinta(0.1)}` }}>
+            <p style={{ color: tintaTexto(0.45) }}>{label}</p>
+            <p className="font-mono tabular-nums" style={{ color: 'var(--label-primary)' }}>
+              {Number(val).toFixed(1)}
+            </p>
+          </div>
+        ))}
       </div>
 
       {open ? (
-        <div className="mt-3 space-y-1 rounded-xl border border-white/10 bg-black/30 p-3 text-xs text-zinc-300">
+        <div
+          className="mt-3 space-y-1 rounded-xl p-3 text-xs"
+          style={{ border: `1px solid ${tinta(0.1)}`, background: tinta(0.04), color: 'var(--label-secondary)' }}
+        >
           <p>Presupuestos aceptados: {model.breakdown.presupuestosAprobadosContribuyentes}</p>
           <p>Proyectos vinculados: {model.breakdown.proyectosContribuyentes}</p>
           <p>Ventas vinculadas: {model.breakdown.ventasContribuyentes}</p>

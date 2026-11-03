@@ -2,8 +2,8 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { hrefTelegram } from '@/lib/clientes/normalizarIdentidad';
 import { numeroWhatsapp } from '@/lib/clientes/presupuestosCliente';
-import type { CustomerListItem } from '@/types';
 import { tinta, tintaTexto } from '@/lib/tema/tinta';
 
 type ClienteStatus = 'activo' | 'inactivo' | 'pendiente';
@@ -26,6 +26,7 @@ interface Cliente {
     color?: string;
     imagen?: string;
     obraCount?: number;
+    telegram_username?: string | null;
 }
 
 const statusConfig: Record<ClienteStatus, { label: string; dot: string; bg: string; text: string }> = {
@@ -83,6 +84,7 @@ function ClienteModal({ cliente, onClose }: { cliente: Cliente; onClose: () => v
     const rifTipo = getRifTipo(cliente.rif);
     const accent = cliente.color ?? '#007AFF';
     const whatsapp = numeroWhatsapp(cliente.movil || cliente.telefono);
+    const telegram = hrefTelegram(cliente.telegram_username, cliente.movil || cliente.telefono);
     return (
         <div
             onClick={onClose}
@@ -193,6 +195,21 @@ function ClienteModal({ cliente, onClose }: { cliente: Cliente; onClose: () => v
                             WhatsApp
                         </a>
                     ) : null}
+                    {telegram ? (
+                        <a
+                            href={telegram}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                                flex: 1, padding: '12px', borderRadius: '14px', textDecoration: 'none',
+                                background: 'rgba(0,136,204,0.12)', border: '1px solid rgba(0,136,204,0.3)',
+                                color: 'var(--tono-azul)', fontSize: '13px', fontWeight: 600,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                            }}
+                        >
+                            Telegram
+                        </a>
+                    ) : null}
                     <a href={`mailto:${cliente.email}`} style={{
                         flex: 1, padding: '12px', borderRadius: '14px', textDecoration: 'none',
                         background: 'rgba(0,122,255,0.12)', border: '1px solid rgba(0,122,255,0.25)',
@@ -212,22 +229,17 @@ function ClienteModal({ cliente, onClose }: { cliente: Cliente; onClose: () => v
 }
 
 // ── Main Card ──────────────────────────────────────────────────────
-export default function ClienteCard({ cliente, onDelete }: { cliente: Cliente; onDelete?: (id: string) => void }) {
+export default function ClienteCard({
+    cliente,
+    onArchivar,
+}: {
+    cliente: Cliente;
+    onArchivar?: (id: string, status: ClienteStatus) => void;
+}) {
     const status = statusConfig[cliente.status] ?? statusConfig.activo;
-    const tipo = tipoConfig[cliente.tipo] ?? tipoConfig.V;
     const accent = cliente.color ?? '#007AFF';
     const [showModal, setShowModal] = useState(false);
-    const [confirmDelete, setConfirmDelete] = useState(false);
-
-    const handleDelete = () => {
-        if (confirmDelete) {
-            onDelete?.(cliente.id);
-            setConfirmDelete(false);
-        } else {
-            setConfirmDelete(true);
-            setTimeout(() => setConfirmDelete(false), 3000);
-        }
-    };
+    const archivado = cliente.status === 'inactivo';
 
     return (
         <>
@@ -339,7 +351,7 @@ export default function ClienteCard({ cliente, onDelete }: { cliente: Cliente; o
                             background: 'rgba(52,199,89,0.10)',
                             borderBottom: `1px solid ${tinta(0.07)}`,
                             textDecoration: 'none',
-                            color: 'var(--tono-verde)', fontSize: '13px', fontWeight: 700,
+                            color: 'var(--tono-verde)', fontSize: '14px', fontWeight: 700,
                             transition: 'background 0.15s',
                             letterSpacing: '-0.01em',
                         }}
@@ -366,7 +378,7 @@ export default function ClienteCard({ cliente, onDelete }: { cliente: Cliente; o
                                 background: 'transparent', border: 'none',
                                 borderRight: `1px solid ${tinta(0.07)}`,
                                 cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px',
-                                color: 'var(--tono-azul)', fontSize: '11px', fontWeight: 600, fontFamily: 'inherit',
+                                color: 'var(--tono-azul)', fontSize: '13px', fontWeight: 600, fontFamily: 'inherit',
                                 transition: 'background 0.15s',
                             }}
                             onMouseEnter={e => (e.currentTarget.style.background = 'rgba(0,122,255,0.08)')}
@@ -388,7 +400,7 @@ export default function ClienteCard({ cliente, onDelete }: { cliente: Cliente; o
                                 borderRight: `1px solid ${tinta(0.07)}`,
                                 textDecoration: 'none',
                                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px',
-                                color: 'var(--tono-celeste)', fontSize: '11px', fontWeight: 600,
+                                color: 'var(--tono-celeste)', fontSize: '13px', fontWeight: 600,
                                 transition: 'background 0.15s',
                             }}
                             onMouseEnter={e => (e.currentTarget.style.background = 'rgba(90,200,250,0.08)')}
@@ -410,7 +422,7 @@ export default function ClienteCard({ cliente, onDelete }: { cliente: Cliente; o
                                 borderRight: `1px solid ${tinta(0.07)}`,
                                 textDecoration: 'none',
                                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px',
-                                color: 'var(--tono-naranja)', fontSize: '11px', fontWeight: 600,
+                                color: 'var(--tono-naranja)', fontSize: '13px', fontWeight: 600,
                                 transition: 'background 0.15s',
                             }}
                             onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,149,0,0.08)')}
@@ -423,26 +435,21 @@ export default function ClienteCard({ cliente, onDelete }: { cliente: Cliente; o
                             Editar
                         </Link>
 
-                        {/* Eliminar */}
                         <button
-                            onClick={handleDelete}
+                            onClick={() => onArchivar?.(cliente.id, archivado ? 'activo' : 'inactivo')}
                             style={{
                                 flex: 1, padding: '9px 0',
-                                background: confirmDelete ? 'rgba(255,59,48,0.10)' : 'transparent',
+                                background: 'transparent',
                                 border: 'none', cursor: 'pointer',
                                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px',
-                                color: 'var(--tono-rojo)', fontSize: '11px', fontWeight: 600, fontFamily: 'inherit',
+                                color: archivado ? 'var(--tono-verde)' : 'var(--tono-naranja)',
+                                fontSize: '13px', fontWeight: 600, fontFamily: 'inherit',
                                 transition: 'background 0.15s',
                             }}
-                            onMouseEnter={e => !confirmDelete && (e.currentTarget.style.background = 'rgba(255,59,48,0.06)')}
-                            onMouseLeave={e => !confirmDelete && (e.currentTarget.style.background = 'transparent')}
+                            onMouseEnter={e => (e.currentTarget.style.background = archivado ? 'rgba(52,199,89,0.08)' : 'rgba(255,149,0,0.08)')}
+                            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                         >
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                                <polyline points="3 6 5 6 21 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                                <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                                <path d="M10 11v6M14 11v6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                            </svg>
-                            {confirmDelete ? '¿Confirmar?' : 'Eliminar'}
+                            {archivado ? 'Restaurar' : 'Archivar'}
                         </button>
                     </div>
                 </div>
