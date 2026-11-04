@@ -115,7 +115,12 @@ revoke select (costo, utilidad, margen_pct) on public.products from public;
 -- security_invoker = false (dueño): puede leer las columnas revocadas y
 -- aplicar CASE. Las filas siguen siendo las de products (RLS authenticated
 -- usando true, equivalente).
-create or replace view public.products_lectura
+-- No proyectar products.ubicacion ni products.updated_at: en producción
+-- no existen (42703). La app no las necesita; el almacén de obra usa
+-- inv_ubicaciones, y el sello temporal del catálogo es `modificado`.
+-- DROP + CREATE (no OR REPLACE) para poder quitar columnas si ya existía.
+drop view if exists public.products_lectura;
+create view public.products_lectura
   with (security_invoker = false) as
 select
   p.id,
@@ -134,9 +139,7 @@ select
   p.cantidad,
   coalesce(nullif(btrim(p.imagen), ''), nullif(btrim(p.image_url), '')) as imagen,
   coalesce(nullif(btrim(p.imagen), ''), nullif(btrim(p.image_url), '')) as image_url,
-  p.ubicacion,
   p.created_at,
-  p.updated_at,
   p.modificado,
   p.manual_instrucciones,
   p.manual_documento_url,

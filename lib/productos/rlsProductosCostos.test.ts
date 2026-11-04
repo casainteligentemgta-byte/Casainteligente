@@ -29,6 +29,9 @@ describe('migración 398: margen, foto y RLS de costos', () => {
     assert.match(sql, /security_invoker = false/)
     assert.match(sql, /ci_tiene_permiso\('productos\.costos'\)/)
     assert.match(sql, /'productos\.ver'/)
+    assert.match(sql, /drop view if exists public\.products_lectura/)
+    assert.doesNotMatch(sql, /p\.ubicacion/)
+    assert.doesNotMatch(sql, /p\.updated_at/)
   })
 })
 

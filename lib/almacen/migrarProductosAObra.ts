@@ -12,7 +12,6 @@ export type ProductoCatalogoRow = {
   costo: number | null;
   imagen: string | null;
   image_url?: string | null;
-  ubicacion: string | null;
 };
 
 export type MigrarProductosAObraInput = {
@@ -102,7 +101,7 @@ export async function migrarProductosAObra(
 
   const { data: productos, error: prodErr } = await supabase
     .from('products_lectura')
-    .select('id,nombre,categoria,marca,modelo,descripcion,costo,imagen,image_url,ubicacion')
+    .select('id,nombre,categoria,marca,modelo,descripcion,costo,imagen,image_url')
     .in('id', productIds);
 
   if (prodErr) throw new Error(prodErr.message);
@@ -164,7 +163,7 @@ export async function migrarProductosAObra(
         stock_quarantine: 0,
         reorder_point: 0,
         average_weighted_cost: costo,
-        location: prod.ubicacion?.trim() || null,
+        location: null,
         brand: prod.marca?.trim() || null,
         model: prod.modelo?.trim() || null,
         observations: prod.descripcion?.trim() || null,
