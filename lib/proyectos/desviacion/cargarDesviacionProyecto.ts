@@ -1,14 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { obtenerTasaBcvVesPorUsd } from '@/lib/finanzas/bcvTasaPorFecha';
-import { costoEgresoLineaUsd } from '@/lib/proyectos/desviacion/montoAUsd';
+import { cargarCostoObra, esMigracionCostoObraPendiente } from '@/lib/proyectos/costoObra/cargarCostoObra';
 import {
   calcularDesviacionPresupuestaria,
   esCapituloManoObra,
-  materialesComprasUsd,
   presupuestoPorCapitulo,
   resolverPresupuestoUsd,
   UMBRAL_DESVIACION_DEFAULT_PCT,
-  type CompraDesviacion,
   type PartidaPresupuesto,
 } from '@/lib/proyectos/desviacion/calcularDesviacionPresupuestaria';
 import { esMigracionJornalesPendiente } from '@/lib/proyectos/jornales/calcularJornalesSemana';
@@ -39,21 +37,27 @@ export async function cargarDesviacionProyecto(
   }));
   const tasa = tasaRes.tasa_bcv_ves_por_usd > 0 ? tasaRes.tasa_bcv_ves_por_usd : 36.5;
 
-  const [partidasRes, comprasRes, laborRes, egresosRes, configRes] = await Promise.all([
+  let costo;
+  try {
+    costo = await cargarCostoObra(supabase, proyectoId);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (esMigracionCostoObraPendiente(msg) || /395_ci_costo_obra/i.test(msg)) {
+      throw new Error('Aplique la migración 395_ci_costo_obra.sql en Supabase.');
+    }
+    throw err;
+  }
+
+  const [partidasRes, laborRes, configRes] = await Promise.all([
     supabase
       .from('ci_presupuesto_partidas')
       .select('codigo_partida,descripcion,capitulo_codigo,capitulo_descripcion,monto_total_estimado')
-      .eq('proyecto_id', proyectoId),
-    supabase
-      .from('contabilidad_compras')
-      .select('monto_usd,monto_ves,total_amount,moneda,moneda_original,tasa_bcv_ves_por_usd')
       .eq('proyecto_id', proyectoId),
     supabase
       .from('ci_jornales_obra_asistencias')
       .select('empleado_id,costo_jornal,fecha')
       .eq('proyecto_id', proyectoId)
       .eq('estado', 'presente'),
-    supabase.from('inv_egresos_campo').select('id').eq('proyecto_id', proyectoId),
     supabase.from('ci_proyecto_desviacion_config').select('*').eq('proyecto_id', proyectoId).maybeSingle(),
   ]);
 
@@ -79,47 +83,11 @@ export async function cargarDesviacionProyecto(
     tasaBcv: tasa,
   });
 
-  const compras: CompraDesviacion[] = (comprasRes.error ? [] : comprasRes.data ?? []) as CompraDesviacion[];
-  const materialesUsd = materialesComprasUsd(compras, tasa);
-
-  const laborUsd = (laborRes.data ?? []).reduce(
-    (s, r) => s + num((r as { costo_jornal?: unknown }).costo_jornal),
-    0,
-  );
-
-  let egresosUsd = 0;
-  const egresoIds = (egresosRes.data ?? []).map((r) => String((r as { id: string }).id));
-  if (egresoIds.length) {
-    const { data: lineas } = await supabase
-      .from('inv_egresos_campo_lineas')
-      .select('cantidad, material_id, ci_presupuesto_partida_id')
-      .in('egreso_id', egresoIds);
-    const matIds = Array.from(
-      new Set((lineas ?? []).map((l) => String((l as { material_id?: string }).material_id ?? '')).filter(Boolean)),
-    );
-    const costoPorMat = new Map<string, { avg: number; last: number }>();
-    if (matIds.length) {
-      const { data: mats } = await supabase
-        .from('global_inventory')
-        .select('id, average_weighted_cost, last_purchase_price')
-        .in('id', matIds);
-      for (const m of mats ?? []) {
-        costoPorMat.set(String((m as { id: string }).id), {
-          avg: num((m as { average_weighted_cost?: unknown }).average_weighted_cost),
-          last: num((m as { last_purchase_price?: unknown }).last_purchase_price),
-        });
-      }
-    }
-    for (const ln of lineas ?? []) {
-      const mid = String((ln as { material_id?: string }).material_id ?? '');
-      const c = costoPorMat.get(mid);
-      egresosUsd += costoEgresoLineaUsd({
-        cantidad: num((ln as { cantidad?: unknown }).cantidad),
-        averageWeightedCost: c?.avg,
-        lastPurchasePrice: c?.last,
-      });
-    }
-  }
+  const laborUsd = costo.partidas.mano_obra.usd;
+  const materialesUsd = costo.partidas.materiales.usd;
+  const egresosUsd = costo.partidas.materiales.egresos_ajenos_usd;
+  const herramientasUsd = costo.partidas.herramientas.usd;
+  const otrosUsd = costo.partidas.otros.usd;
 
   const capitulos = presupuestoPorCapitulo(partidas);
   const presupuestoMoPartidas = capitulos
@@ -133,18 +101,21 @@ export async function cargarDesviacionProyecto(
         ? presupuestoMoVes / tasa
         : 0;
   const presupuestoMaterialesUsd = Math.max(0, presupuestoUsd - presupuestoManoObraUsd);
+  const noMoUsd = materialesUsd + herramientasUsd + otrosUsd;
 
   const ejecutadoPorCapitulo = capitulos.map((c) => {
     if (esCapituloManoObra(c.descripcion, c.codigo)) {
       const peso =
-        presupuestoMoPartidas > 0 ? c.presupuesto_usd / presupuestoMoPartidas : 1 / Math.max(1, capitulos.filter((x) => esCapituloManoObra(x.descripcion, x.codigo)).length);
+        presupuestoMoPartidas > 0
+          ? c.presupuesto_usd / presupuestoMoPartidas
+          : 1 / Math.max(1, capitulos.filter((x) => esCapituloManoObra(x.descripcion, x.codigo)).length);
       return { codigo: c.codigo, ejecutadoUsd: laborUsd * peso };
     }
     const pesoMat =
       presupuestoMaterialesUsd > 0
         ? c.presupuesto_usd / presupuestoMaterialesUsd
         : 1 / Math.max(1, capitulos.filter((x) => !esCapituloManoObra(x.descripcion, x.codigo)).length);
-    return { codigo: c.codigo, ejecutadoUsd: (materialesUsd + egresosUsd) * pesoMat };
+    return { codigo: c.codigo, ejecutadoUsd: noMoUsd * pesoMat };
   });
 
   const cfg = configRes.data as {
@@ -186,6 +157,8 @@ export async function cargarDesviacionProyecto(
     laborUsd,
     materialesUsd,
     egresosUsd,
+    herramientasUsd,
+    otrosUsd,
     presupuestoManoObraUsd,
     presupuestoMaterialesUsd,
     umbralPct: cfg?.umbral_desviacion_pct ?? UMBRAL_DESVIACION_DEFAULT_PCT,
@@ -198,6 +171,6 @@ export async function cargarDesviacionProyecto(
     jornadasPorEspecialidad: [
       { especialidad: especialidadLimite, jornadas: jornadasEspecialidad, limite: cfg?.limite_jornadas_instalacion ?? null },
     ],
-    tasaBcv: tasa,
+    tasaBcv: costo.tasa_bcv_ves_por_usd > 0 ? costo.tasa_bcv_ves_por_usd : tasa,
   });
 }

@@ -5,7 +5,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
  * mercancía en depósitos o almacenes: eso es del depositario y de logística.
  */
 export const MENSAJE_NO_DISPONIBLE_COMPRADOR =
-  '⛔ El comprador no registra ingresos ni salidas de almacén. Use /facturas o /nota para cargar facturas y notas de entrega.';
+  '⛔ El comprador no registra ingresos ni salidas de almacén. Use /facturas o /nota.';
 
 /** Fotos / evidencia de obra: el comprador no las registra (eso es de obra y de administración). */
 export const MENSAJE_EVIDENCIA_OBRA_NO_COMPRADOR =
@@ -18,6 +18,7 @@ export const COMANDOS_SOLO_NO_COMPRADOR = [
   'comandoIngresoFactura',
   'comandoMenuSalida',
   'comandoSalida',
+  'comandoEmergencia',
 ] as const;
 
 /**

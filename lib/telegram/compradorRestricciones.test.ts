@@ -4,13 +4,13 @@ import { COMANDOS_SOLO_NO_COMPRADOR, MENSAJE_NO_DISPONIBLE_COMPRADOR } from '@/l
 
 describe('comprador: sin ingreso ni salida de almacén', () => {
   it('bloquea todos los comandos de movimiento de almacén', () => {
-    for (const k of ['comandoIngresoManual', 'comandoMenuIngreso', 'comandoIngresoFactura', 'comandoMenuSalida', 'comandoSalida']) {
+    for (const k of ['comandoIngresoManual', 'comandoMenuIngreso', 'comandoIngresoFactura', 'comandoMenuSalida', 'comandoSalida', 'comandoEmergencia']) {
       assert.ok(COMANDOS_SOLO_NO_COMPRADOR.includes(k as never), k);
     }
   });
 
   it('no bloquea facturas ni notas de entrega', () => {
-    for (const k of ['comandoNotaEntrega', 'comandoEmergencia', 'comandoProcura']) {
+    for (const k of ['comandoNotaEntrega', 'comandoProcura']) {
       assert.ok(!COMANDOS_SOLO_NO_COMPRADOR.includes(k as never), k);
     }
   });

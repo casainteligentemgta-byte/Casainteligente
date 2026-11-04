@@ -7,6 +7,7 @@ import {
   MENSAJE_INICIO_SALIDA_OBRA,
   MENSAJE_INICIO_SALIDA_DESPACHO,
   MENSAJE_INICIO_SALIDA_TRASPASO,
+  MENSAJE_INICIO_SALIDA_MERMA,
 } from './mensajesSalidaTelegram'
 
 describe('menú /salida unificado', () => {
@@ -18,13 +19,16 @@ describe('menú /salida unificado', () => {
     assert.equal(procesarComandoTelegram('/egreso').comandoSalida, true)
   })
 
-  it('describe los tres tipos y apunta a /salida', () => {
-    assert.match(MENU_SALIDA_TEXTO, /obrero en obra/)
+  it('describe los tipos y apunta a /salida', () => {
+    assert.match(MENU_SALIDA_TEXTO, /obrero/i)
     assert.match(MENU_SALIDA_TEXTO, /Despacho/)
     assert.match(MENU_SALIDA_TEXTO, /Traspaso/)
+    assert.match(MENU_SALIDA_TEXTO, /merma/i)
     assert.match(MENSAJE_INICIO_SALIDA_OBRA, /\/salida/)
     assert.match(MENSAJE_INICIO_SALIDA_DESPACHO, /\/salida/)
     assert.match(MENSAJE_INICIO_SALIDA_TRASPASO, /\/salida/)
+    assert.match(MENSAJE_INICIO_SALIDA_MERMA, /Deterioro \/ merma/)
+    assert.match(MENSAJE_INICIO_SALIDA_MERMA, /foto \(opcional\)/)
     assert.doesNotMatch(MENSAJE_INICIO_SALIDA_DESPACHO, /\/salidaalmacen/)
     assert.doesNotMatch(MENSAJE_INICIO_SALIDA_TRASPASO, /\/traspaso/)
   })

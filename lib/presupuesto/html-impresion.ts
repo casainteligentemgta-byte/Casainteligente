@@ -8,10 +8,12 @@ import {
   nombreDocumentoPresupuestoPdf,
   textoMetodosPago,
 } from '@/lib/presupuesto/brand';
+import { documentoDesdeBudget } from '@/lib/presupuesto/documentoCliente';
 import {
   PRESUPUESTO_PRINT_FIT_SCRIPT,
   sheetModifierForItemCount,
 } from '@/lib/presupuesto/fitPrintOnePage';
+import { etiquetaIva, formatearBsPresupuesto } from '@/lib/presupuesto/iva';
 import { lineaPresupuestoTitulo, tituloPresupuestoPlano } from '@/lib/presupuesto/presentacion';
 import { fechaDocumentoDeBudget, formatFechaPresupuestoLarga } from '@/lib/presupuesto/fecha';
 
@@ -28,6 +30,8 @@ export type BudgetRow = {
   notes?: string | null;
   show_zelle?: boolean | null;
   subtotal?: number | null;
+  iva_pct?: number | null;
+  iva_monto?: number | null;
   monto_pagado?: number | null;
   saldo?: number | null;
   items?: unknown;
@@ -76,18 +80,27 @@ export function sanitizeBudgetItemsForPrint(raw: unknown): BudgetItemJson[] {
           ? String(nombreRaw)
           : '';
     const nombre = tituloPresupuestoPlano(nombreBase) || 'Ítem';
+    const descRaw = pdIn.descripcion;
+    const descripcion =
+      typeof descRaw === 'string' && descRaw.trim()
+        ? tituloPresupuestoPlano(descRaw)
+        : null;
     return {
       qty: Number(r.qty) || 0,
       unit_price: Number(r.unit_price) || 0,
       discount: Number(r.discount) || 0,
-      product_data: { nombre, categoria: null, descripcion: null },
+      product_data: { nombre, categoria: null, descripcion },
     };
   });
 }
 
 /** Genera documento A4 claro alineado con docs/PRESUPUESTO-DISENO.md (una sola página). */
-export function buildPresupuestoPrintHtml(budget: BudgetRow): string {
+export function buildPresupuestoPrintHtml(
+  budget: BudgetRow,
+  extra?: { tasaBcv?: number | null; tasaBcvFecha?: string | null },
+): string {
   const { impresion: c } = PRESUPUESTO_BRAND;
+  const doc = documentoDesdeBudget(budget as Record<string, unknown>, extra);
   const items = sanitizeBudgetItemsForPrint(budget.items);
   const numeroCorrelativo =
     budget.numero_correlativo != null ? Number(budget.numero_correlativo) : null;
@@ -100,11 +113,18 @@ export function buildPresupuestoPrintHtml(budget: BudgetRow): string {
   const rows = items
     .map((it) => {
       const nombre = lineaPresupuestoTitulo(it.product_data?.nombre, 'Ítem');
+      const desc = it.product_data?.descripcion
+        ? `<div class="item-desc">${escapeHtml(it.product_data.descripcion)}</div>`
+        : '';
+      const descue =
+        (it.discount ?? 0) > 0
+          ? `<div class="item-disc">Desc. ${escapeHtml(String(it.discount))}%</div>`
+          : '';
       const qty = it.qty ?? 0;
       const up = it.unit_price ?? 0;
       const sub = lineTotal(it);
       return `<tr>
-        <td><strong>${escapeHtml(nombre)}</strong></td>
+        <td><strong>${escapeHtml(nombre)}</strong>${desc}${descue}</td>
         <td class="num">${fmt(up)}</td>
         <td class="num">${qty}</td>
         <td class="num"><strong>${fmt(sub)}</strong></td>
@@ -197,6 +217,8 @@ export function buildPresupuestoPrintHtml(budget: BudgetRow): string {
       line-height: 1.08;
     }
     .items-table td strong { font-weight: 700; line-height: 1.05; }
+    .item-desc { font-size: 7.5px; color: ${c.textoMuted}; margin-top: 1px; }
+    .item-disc { font-size: 7.5px; color: #c2410c; margin-top: 1px; }
     .items-table td img, .items-table td picture { display: none !important; width: 0 !important; height: 0 !important; }
     .items-table tbody tr:nth-child(even) td { background: #f8fafc; }
     .footer-grid { display: grid; grid-template-columns: 1fr minmax(110px, 150px); gap: 8px; margin-top: 2px; align-items: start; }
@@ -273,15 +295,29 @@ export function buildPresupuestoPrintHtml(budget: BudgetRow): string {
         ${notas ? `<div class="block"><h4>Notas / Condiciones del presupuesto</h4><p>${notas}</p></div>` : `<div class="block"><h4>Notas / Condiciones del presupuesto</h4><p></p></div>`}
       </div>
       <div>
+        <div class="sum-line"><span>Subtotal</span><span>$${fmt(doc.subtotal)}</span></div>
+        ${
+          doc.descuentoTotal > 0
+            ? `<div class="sum-line"><span>Descuentos</span><span>-$${fmt(doc.descuentoTotal)}</span></div>`
+            : ''
+        }
+        <div class="sum-line"><span>${escapeHtml(etiquetaIva(doc.ivaPct))}</span><span>$${fmt(doc.ivaMonto)}</span></div>
         <div class="sum-line sum-total">
-          <span>TOTAL</span>
-          <span class="sum-total-val"><span class="currency">$</span>${fmt(Number(budget.subtotal ?? 0))}</span>
+          <span>TOTAL CON IVA</span>
+          <span class="sum-total-val"><span class="currency">$</span>${fmt(doc.totalConIva)}</span>
         </div>
+        ${
+          doc.totalBs != null && doc.tasaBcv
+            ? `<p class="muted" style="font-size:7px;margin-top:4px;text-align:right;line-height:1.15">Referencial ${escapeHtml(
+                formatearBsPresupuesto(doc.totalBs),
+              )} · BCV ${fmt(doc.tasaBcv)} Bs/USD${doc.tasaBcvFecha ? ` · ${escapeHtml(doc.tasaBcvFecha)}` : ''}</p>`
+            : ''
+        }
         ${
           Number(budget.monto_pagado ?? 0) > 0
             ? `<div class="sum-line" style="margin-top:4px"><span>Abonado</span><span>$${fmt(Number(budget.monto_pagado ?? 0))}</span></div>
         <div class="sum-line"><span>Saldo</span><span>$${fmt(
-          Number(budget.saldo ?? Math.max(0, Number(budget.subtotal ?? 0) - Number(budget.monto_pagado ?? 0))),
+          Number(budget.saldo ?? Math.max(0, doc.totalConIva - Number(budget.monto_pagado ?? 0))),
         )}</span></div>`
             : ''
         }

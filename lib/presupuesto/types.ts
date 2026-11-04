@@ -26,4 +26,10 @@ export interface PresupuestoVista {
   email?: string;
   /** Dirección del cliente (desde `customers.direccion`) */
   direccion?: string;
+  ivaPct?: number;
+  ivaMonto?: number;
+  totalConIva?: number;
+  tasaBcv?: number | null;
+  tasaBcvFecha?: string | null;
+  totalBs?: number | null;
 }

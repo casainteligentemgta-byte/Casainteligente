@@ -16,6 +16,7 @@ export type TelegramContexto =
   | 'memoria_obra_foto'
   | 'depositario_recepcion'
   | 'traspaso_inventario'
+  | 'merma_almacen'
   | 'consulta_stock'
   | 'procura_solicitud'
   | 'procura_departamento'
@@ -47,6 +48,7 @@ const CONTEXTOS: TelegramContexto[] = [
   'memoria_obra_foto',
   'depositario_recepcion',
   'traspaso_inventario',
+  'merma_almacen',
   'consulta_stock',
   'procura_solicitud',
   'procura_departamento',

@@ -185,7 +185,7 @@ export default function AlertaDesviacionPresupuestaria({ proyectoId }: Props) {
 
       <div className="grid gap-3 sm:grid-cols-4">
         <DatoCard label="Presupuesto estimado original" value={fmtUsd(data.presupuesto_estimado_usd)} hint={data.fuente_presupuesto} />
-        <DatoCard label="Gasto ejecutado real" value={fmtUsd(data.gasto_ejecutado_usd)} hint="Jornales + materiales + egresos" />
+        <DatoCard label="Gasto ejecutado real" value={fmtUsd(data.gasto_ejecutado_usd)} hint="Centro de costo (4 partidas, sin doble conteo)" />
         <DatoCard
           label="Diferencia"
           value={fmtUsd(data.diferencia_usd)}
@@ -216,10 +216,12 @@ export default function AlertaDesviacionPresupuestaria({ proyectoId }: Props) {
         </div>
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-3">
-        <Mini label="Mano de obra (jornales)" value={fmtUsd(data.desglose.mano_obra_usd)} />
-        <Mini label="Materiales (contabilidad)" value={fmtUsd(data.desglose.materiales_usd)} />
-        <Mini label="Egresos de almacén" value={fmtUsd(data.desglose.egresos_almacen_usd)} />
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+        <Mini label="Mano de obra" value={fmtUsd(data.desglose.mano_obra_usd)} />
+        <Mini label="Materiales" value={fmtUsd(data.desglose.materiales_usd)} />
+        <Mini label="De otro almacén" value={fmtUsd(data.desglose.egresos_almacen_usd)} />
+        <Mini label="Herramientas" value={fmtUsd(data.desglose.herramientas_usd ?? 0)} />
+        <Mini label="Otros" value={fmtUsd(data.desglose.otros_usd ?? 0)} />
       </div>
 
       {data.capitulos.length ? (

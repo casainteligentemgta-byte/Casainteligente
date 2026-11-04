@@ -17,7 +17,8 @@ import {
   separarLineasPrecarga,
 } from '@/lib/almacen/notasPrecargadas';
 import { assertUbicacionPerteneceAProyecto } from '@/lib/almacen/validarUbicacionProyecto';
-import { esChatCargaComprador } from '@/lib/telegram/compradorRestricciones';
+import { esChatCargaComprador, esChatComprador, MENSAJE_NO_DISPONIBLE_COMPRADOR } from '@/lib/telegram/compradorRestricciones';
+import { MENSAJE_EMERGENCIA_NO_COMPRADOR } from '@/lib/telegram/permisosAlmacenTelegram';
 import { prepararPrecargaNotaComprador } from '@/lib/telegram/notaPrecargaTelegram';
 import {
   crearMaterialParaLineaCompra,
@@ -618,6 +619,10 @@ export async function manejarComandoIngresoSinNotaTelegram(
   supabase: SupabaseClient,
   chatId: string,
 ): Promise<void> {
+  if (await esChatComprador(supabase, chatId)) {
+    await sendTelegramMessage(chatId, MENSAJE_NO_DISPONIBLE_COMPRADOR, { parse_mode: 'HTML' });
+    return;
+  }
   await iniciarFlujoRecepcionCampo(supabase, chatId, FLUJO_EMERGENCIA, 'emergencia');
 }
 
@@ -654,6 +659,10 @@ export async function manejarComandoEmergenciaTelegram(
   supabase: SupabaseClient,
   chatId: string,
 ): Promise<void> {
+  if (await esChatComprador(supabase, chatId)) {
+    await sendTelegramMessage(chatId, MENSAJE_EMERGENCIA_NO_COMPRADOR);
+    return;
+  }
   await iniciarFlujoRecepcionCampo(supabase, chatId, FLUJO_EMERGENCIA, 'emergencia');
 }
 

@@ -8,6 +8,9 @@ import Link from 'next/link';
 import BotonTema from '@/components/tema/BotonTema';
 import PresupuestosFiltrosModal from '@/components/presupuestos/PresupuestosFiltrosModal';
 import PresupuestoCobrosModal from '@/components/presupuestos/PresupuestoCobrosModal';
+import ConvertirObraModal from '@/components/presupuestos/ConvertirObraModal';
+import { AVISO_STATUS_SOLO_ABONOS, esEstadoCobroSoloAbonos } from '@/lib/presupuesto/estadosCobro';
+import { nombreObraDesdePresupuesto, puedeConvertirEnObra } from '@/lib/presupuesto/convertirObra';
 import { fechaDocumentoDeBudget, formatFechaPresupuestoCorta } from '@/lib/presupuesto/fecha';
 import {
     esVenta,
@@ -21,6 +24,7 @@ import {
 
 interface Budget {
     id: string;
+    customer_id?: string | null;
     customer_name: string;
     customer_rif: string;
     subtotal: number;
@@ -115,6 +119,7 @@ function TarjetaPresupuesto({
     onDelete,
     onUpdateStatus,
     onAbono,
+    onConvertirObra,
 }: {
     b: Budget;
     fallbackById: Record<string, number>;
@@ -125,6 +130,7 @@ function TarjetaPresupuesto({
     onDelete: () => void;
     onUpdateStatus: (status: ClasificacionPresupuesto) => void;
     onAbono: () => void;
+    onConvertirObra: () => void;
 }) {
     const [menuAbierto, setMenuAbierto] = useState(false);
     const clasif = clasificarPresupuesto(b);
@@ -281,7 +287,12 @@ function TarjetaPresupuesto({
                         }}
                     >
                         {(Object.keys(CLASIFICACION_COLORS) as ClasificacionPresupuesto[]).map((k) => (
-                            <option key={k} value={k} style={{ color: '#111', background: '#fff' }}>
+                            <option
+                                key={k}
+                                value={k}
+                                disabled={esEstadoCobroSoloAbonos(k) && k !== b.status}
+                                style={{ color: '#111', background: '#fff' }}
+                            >
                                 {CLASIFICACION_COLORS[k].label}
                             </option>
                         ))}
@@ -305,6 +316,24 @@ function TarjetaPresupuesto({
                     >
                         Abono
                     </button>
+                    {puedeConvertirEnObra(b.status) ? (
+                        <button
+                            type="button"
+                            onClick={onConvertirObra}
+                            style={{
+                                border: 'none',
+                                borderRadius: '10px',
+                                padding: '8px 12px',
+                                fontSize: '12px',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                background: tonoFondo('#5856D6'),
+                                color: '#5856D6',
+                            }}
+                        >
+                            Convertir en obra
+                        </button>
+                    ) : null}
                     <button
                         type="button"
                         onClick={onEditar}
@@ -403,6 +432,29 @@ function TarjetaPresupuesto({
                             >
                                 Ver documento
                             </button>
+                            {puedeConvertirEnObra(b.status) ? (
+                                <button
+                                    type="button"
+                                    role="menuitem"
+                                    onClick={() => {
+                                        setMenuAbierto(false);
+                                        onConvertirObra();
+                                    }}
+                                    style={{
+                                        border: 'none',
+                                        background: 'transparent',
+                                        color: 'var(--tono-azul)',
+                                        textAlign: 'left',
+                                        padding: '10px 12px',
+                                        borderRadius: '8px',
+                                        fontSize: '13px',
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                    }}
+                                >
+                                    Convertir en obra
+                                </button>
+                            ) : null}
                             <button
                                 type="button"
                                 role="menuitem"
@@ -482,6 +534,7 @@ export default function PresupuestosPage() {
     const [fallbackById, setFallbackById] = useState<Record<string, number>>({});
     const [filtrosAbiertos, setFiltrosAbiertos] = useState(false);
     const [cobroId, setCobroId] = useState<string | null>(null);
+    const [obraId, setObraId] = useState<string | null>(null);
 
     const fetchBudgets = async () => {
         setLoading(true);
@@ -626,6 +679,11 @@ export default function PresupuestosPage() {
 
     const updateStatus = async (b: Budget, status: ClasificacionPresupuesto) => {
         if (status === b.status) return;
+        if (esEstadoCobroSoloAbonos(status)) {
+            alert(AVISO_STATUS_SOLO_ABONOS);
+            setBudgets((prev) => [...prev]);
+            return;
+        }
         const numero = getPresupuestoNumero(b, fallbackById[b.id]);
         if (!confirm(`¿Cambiar ${numero} (${b.customer_name || 'sin cliente'}) de «${CLASIFICACION_COLORS[b.status].label}» a «${CLASIFICACION_COLORS[status].label}»?`)) {
             // El desplegable vuelve a mostrar el estado guardado.
@@ -658,9 +716,27 @@ export default function PresupuestosPage() {
         fetchBudgets();
     };
 
-    const handleShare = (b: Budget) => {
-                    const text = `*PRESUPUESTO CASA INTELIGENTE*\nCliente: ${b.customer_name}\nTotal: $${formatUSD(b.subtotal)}\nNro: ${getPresupuestoNumero(b, fallbackById[b.id])}`;
-        window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+    const handleShare = async (b: Budget) => {
+        try {
+            const res = await fetch(`/api/budgets/${b.id}/compartir`);
+            const body = (await res.json()) as {
+                ok?: boolean;
+                url?: string;
+                motivo?: string;
+                sinTelefono?: boolean;
+            };
+            if (!res.ok) {
+                alert(body.motivo || 'No se pudo armar el mensaje de WhatsApp.');
+                return;
+            }
+            if (body.sinTelefono || !body.ok) {
+                alert(body.motivo || 'Este cliente no tiene un teléfono de WhatsApp.');
+                return;
+            }
+            if (body.url) window.open(body.url, '_blank', 'noopener,noreferrer');
+        } catch (e) {
+            alert(e instanceof Error ? e.message : 'No se pudo abrir WhatsApp.');
+        }
     };
 
     const glass = {
@@ -939,10 +1015,11 @@ export default function PresupuestosPage() {
                                         'noopener,noreferrer',
                                     )
                                 }
-                                onShare={() => handleShare(b)}
+                                onShare={() => void handleShare(b)}
                                 onDelete={() => deleteBudget(b)}
                                 onUpdateStatus={(status) => updateStatus(b, status)}
                                 onAbono={() => setCobroId(b.id)}
+                                onConvertirObra={() => setObraId(b.id)}
                             />
                         ))}
                     </div>
@@ -954,6 +1031,27 @@ export default function PresupuestosPage() {
                 customerName={budgets.find((x) => x.id === cobroId)?.customer_name}
                 onClose={() => setCobroId(null)}
                 onChanged={() => void fetchBudgets()}
+            />
+            <ConvertirObraModal
+                open={Boolean(obraId)}
+                budgetId={obraId}
+                nombreSugerido={
+                    obraId
+                        ? nombreObraDesdePresupuesto({
+                              cliente: budgets.find((x) => x.id === obraId)?.customer_name ?? '',
+                              numero: budgets.find((x) => x.id === obraId)?.numero_correlativo ?? fallbackById[obraId],
+                          })
+                        : ''
+                }
+                onClose={() => setObraId(null)}
+                onCreada={({ proyectoId, nombre, yaExistia }) => {
+                    alert(
+                        yaExistia
+                            ? `Este presupuesto ya está vinculado a la obra «${nombre}».`
+                            : `Obra creada: ${nombre}. El presupuesto queda vinculado.`,
+                    );
+                    router.push(`/proyectos/modulo/${proyectoId}`);
+                }}
             />
         </div>
     );

@@ -15,11 +15,11 @@ export const CATEGORIAS_EQUIPO_PROYECTO = [
 export type CategoriaEquipoProyecto = (typeof CATEGORIAS_EQUIPO_PROYECTO)[number];
 
 export const PROYECTO_EQUIPO_SELECT =
-  'id,proyecto_id,categoria,nombre_equipo,marca,modelo,serial,cantidad,notas,fecha_asignacion,fecha_arriendo_inicio,fecha_arriendo_fin,arrendatario,arrendatario_rif,costo_arriendo,moneda_arriendo,created_at';
+  'id,proyecto_id,categoria,nombre_equipo,marca,modelo,serial,cantidad,notas,fecha_asignacion,fecha_devolucion,costo_diario,fecha_arriendo_inicio,fecha_arriendo_fin,arrendatario,arrendatario_rif,costo_arriendo,moneda_arriendo,created_at';
 
 /** Incluye entidad, ubicación y fotos (migraciones 287 / 289). */
 export const PROYECTO_EQUIPO_SELECT_ENTIDAD =
-  'id,proyecto_id,entidad_id,categoria,nombre_equipo,marca,modelo,serial,cantidad,notas,fecha_asignacion,fecha_arriendo_inicio,fecha_arriendo_fin,arrendatario,arrendatario_rif,costo_arriendo,moneda_arriendo,ubicacion_id,fotos_costados,created_at,ubicacion:inv_ubicaciones(id,nombre,tipo)';
+  'id,proyecto_id,entidad_id,categoria,nombre_equipo,marca,modelo,serial,cantidad,notas,fecha_asignacion,fecha_devolucion,costo_diario,fecha_arriendo_inicio,fecha_arriendo_fin,arrendatario,arrendatario_rif,costo_arriendo,moneda_arriendo,ubicacion_id,fotos_costados,created_at,ubicacion:inv_ubicaciones(id,nombre,tipo)';
 
 export type ProyectoEquipoUbicacion = {
   id: string;
@@ -39,6 +39,8 @@ export type ProyectoEquipoRow = {
   cantidad: number;
   notas: string | null;
   fecha_asignacion: string | null;
+  fecha_devolucion?: string | null;
+  costo_diario?: number | null;
   fecha_arriendo_inicio: string | null;
   fecha_arriendo_fin: string | null;
   arrendatario: string | null;
@@ -92,6 +94,8 @@ export function isMaquinariaColumnMissing(message: string): boolean {
     m.includes('arrendatario') ||
     m.includes('costo_arriendo') ||
     m.includes('fecha_asignacion') ||
+    m.includes('fecha_devolucion') ||
+    m.includes('costo_diario') ||
     m.includes('moneda_arriendo') ||
     m.includes('ubicacion_id') ||
     m.includes('fotos_costados') ||
@@ -130,6 +134,13 @@ export function mapProyectoEquipoRow(raw: Record<string, unknown>): ProyectoEqui
     cantidad: Number(raw.cantidad) || 1,
     notas: raw.notas != null ? String(raw.notas) : null,
     fecha_asignacion: raw.fecha_asignacion != null ? String(raw.fecha_asignacion) : null,
+    fecha_devolucion: raw.fecha_devolucion != null ? String(raw.fecha_devolucion) : null,
+    costo_diario:
+      typeof raw.costo_diario === 'number' && Number.isFinite(raw.costo_diario)
+        ? Math.round(Number(raw.costo_diario) * 10000) / 10000
+        : raw.costo_diario != null && Number.isFinite(Number(raw.costo_diario))
+          ? Math.round(Number(raw.costo_diario) * 10000) / 10000
+          : null,
     fecha_arriendo_inicio: raw.fecha_arriendo_inicio != null ? String(raw.fecha_arriendo_inicio) : null,
     fecha_arriendo_fin: raw.fecha_arriendo_fin != null ? String(raw.fecha_arriendo_fin) : null,
     arrendatario: raw.arrendatario != null ? String(raw.arrendatario) : null,

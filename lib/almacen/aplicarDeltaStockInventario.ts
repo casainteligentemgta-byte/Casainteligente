@@ -7,7 +7,8 @@ export type TipoMovimientoInventario =
   | 'recepcion_campo'
   | 'salida_obra'
   | 'ajuste'
-  | 'anulacion';
+  | 'anulacion'
+  | 'baja';
 
 export type AplicarDeltaStockParams = {
   ubicacionId: string;
