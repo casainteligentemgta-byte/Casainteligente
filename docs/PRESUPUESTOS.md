@@ -14,6 +14,19 @@ Un solo módulo. En la barra hay un botón, **Presupuestos**.
 - **Fecha del documento (`fecha`):** la que sale impresa; se puede escoger.
 - Migración `354_presupuestos_numero_fechas_abonos.sql`.
 
+## IVA y bolívares
+
+Cada presupuesto tiene `iva_pct` (16 % por defecto; 0 = exento) e `iva_monto`. El documento (vista previa y PDF) muestra subtotal, IVA y **total con IVA**. El equivalente en bolívares es referencial: tasa BCV del día y su fecha. Migración `397_presupuestos_iva_cobros_staff.sql`.
+
+## PDF y WhatsApp
+
+- **PDF real:** `GET /api/budgets/[id]/pdf` (sesión) y `GET /api/budgets/documento?t=…` (cliente, token firmado). No usa `window.print`. El archivo se puede compartir desde el móvil. Muestra descuentos y descripción de ítems; **nunca costos**.
+- **WhatsApp:** un solo helper (`lib/presupuesto/whatsapp.ts`) normaliza 0414… / +58 / 412… a `58XXXXXXXXXX` (reusa `numeroWhatsapp`). Si no hay teléfono, avisa; no abre `wa.me/58`. El mensaje lleva resumen y el enlace seguro `/presupuestos/documento?t=…`.
+
+## Convertir en obra
+
+En presupuestos **aprobados / por pagar / pagados** el botón **Convertir en obra** crea `ci_proyectos` con cliente, entidad (se elige), `budget_id` y nombre. El presupuesto queda vinculado. El INSERT dispara el trigger 388 (`ci_asegurar_almacén_obra`).
+
 ## Abonos
 
 Botón **Abono** en cada presupuesto. Los abonos (`budget_abonos`) y las cuotas (`budget_cuotas`) se registran con funciones de la base que exigen sesión (`ci_registrar_abono_presupuesto`, `ci_reaplicar_abonos_presupuesto`…). La base recalcula `monto_pagado`, `saldo` y el estado: con saldo pendiente queda **Parcial**, sin saldo queda **Pagado**. No deja abonar más que el saldo. Borrar un abono recalcula todo.
@@ -23,6 +36,7 @@ Protecciones:
 - No se puede borrar un presupuesto aceptado o con abonos (disparador `budgets_no_borrar_aceptados`).
 - Editar un presupuesto aceptado pide confirmación.
 - Cambiar el estado desde la lista pide confirmación.
+- **Pagado / por pagar / parcial** solo los pone el recálculo de abonos (`ci_es_staff_cobros` + disparador). No se marcan a mano.
 
 ## Ganancia guardada
 

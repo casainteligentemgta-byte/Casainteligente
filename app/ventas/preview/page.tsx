@@ -2,13 +2,25 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { PRESUPUESTO_BRAND, nombreDocumentoPresupuestoPdf, textoMetodosPago } from '@/lib/presupuesto/brand';
+import { PRESUPUESTO_BRAND, filenamePresupuestoPdf, nombreDocumentoPresupuestoPdf, textoMetodosPago } from '@/lib/presupuesto/brand';
 import { DEMO_PRESUPUESTO } from '@/lib/presupuesto/demo-data';
+import { descargarPdfCliente } from '@/lib/presupuesto/descargarPdfCliente';
 import { attachFitPresupuestoPrintToOnePage } from '@/lib/presupuesto/fitPrintOnePage';
+import {
+    descuentoLineaUsd,
+    etiquetaIva,
+    formatearBsPresupuesto,
+    IVA_PCT_DEFAULT,
+    ivaMontoDe,
+    totalConIvaDe,
+    totalReferencialBs,
+} from '@/lib/presupuesto/iva';
 import { lineaPresupuestoTitulo, textoPresupuesto, tituloPresupuestoPlano } from '@/lib/presupuesto/presentacion';
 import { fechaDocumentoDeBudget, formatFechaPresupuestoLarga } from '@/lib/presupuesto/fecha';
 import type { PresupuestoVista } from '@/lib/presupuesto/types';
+import { urlChatWhatsApp } from '@/lib/presupuesto/whatsapp';
 import { createClient } from '@/lib/supabase/client';
+import { useTasaBcvHoy } from '@/lib/contabilidad/useTasaBcvHoy';
 
 function isBudgetUuid(s: string) {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
@@ -30,10 +42,11 @@ function budgetRowToPreviewPayload(
             typeof pd.nombre === 'string' ? pd.nombre : pd.nombre != null ? String(pd.nombre) : '';
         return {
             nombre: tituloPresupuestoPlano(nombreBruto),
+            descripcion: typeof pd.descripcion === 'string' ? pd.descripcion : null,
             qty: r.qty,
             unitPrice: r.unit_price,
             discount: r.discount ?? 0,
-            costo: pd.costo,
+            costo: null,
         };
     });
     const id = String(budget.id ?? '');
@@ -55,6 +68,7 @@ function budgetRowToPreviewPayload(
         totalProfit: Number(budget.total_profit) || 0,
         marginPct: Number(budget.margin_pct) || 0,
         showZelle: budget.show_zelle !== false,
+        ivaPct: budget.iva_pct ?? budget.ivaPct ?? IVA_PCT_DEFAULT,
         fecha: formatFechaPresupuestoLarga(fechaDocumentoDeBudget(budget)),
         numero:
             correlativoNum != null && !Number.isNaN(correlativoNum)
@@ -99,14 +113,15 @@ function sanitizePreviewItems(raw: unknown): PresupuestoVista['items'] {
     return raw.map((it) => {
         const o = it && typeof it === 'object' ? (it as Record<string, unknown>) : {};
         const nombre = pickItemNombre(o);
+        const descRaw = typeof o.descripcion === 'string' ? o.descripcion : '';
         return {
             nombre,
             categoria: null,
-            descripcion: null,
+            descripcion: descRaw.trim() ? tituloPresupuestoPlano(descRaw) : null,
             qty: Number(o.qty) || 0,
             unitPrice: Number(o.unitPrice) || 0,
             discount: Number(o.discount) || 0,
-            costo: o.costo != null && o.costo !== '' ? Number(o.costo) : null,
+            costo: null,
         };
     });
 }
@@ -127,6 +142,10 @@ function normalizePresupuestoVista(raw: Record<string, unknown>): PresupuestoVis
         telefono: raw.telefono != null ? String(raw.telefono) : undefined,
         email: raw.email != null ? String(raw.email) : undefined,
         direccion: raw.direccion != null ? String(raw.direccion) : undefined,
+        ivaPct: raw.ivaPct != null ? Number(raw.ivaPct) : raw.iva_pct != null ? Number(raw.iva_pct) : IVA_PCT_DEFAULT,
+        tasaBcv: raw.tasaBcv != null ? Number(raw.tasaBcv) : null,
+        tasaBcvFecha: raw.tasaBcvFecha != null ? String(raw.tasaBcvFecha) : null,
+        totalBs: raw.totalBs != null ? Number(raw.totalBs) : null,
     };
 }
 
@@ -149,6 +168,11 @@ export default function PreviewPage() {
     const [avisoNotas, setAvisoNotas] = useState<string | null>(null);
     /** Muestra lo que hay en la pantalla de armar, con cambios todavía sin guardar. */
     const [esBorrador, setEsBorrador] = useState(false);
+    /** Token firmado: el cliente abre el documento sin sesión. */
+    const [tokenPublico, setTokenPublico] = useState<string | null>(null);
+    const [avisoPdf, setAvisoPdf] = useState<string | null>(null);
+    const [avisoWa, setAvisoWa] = useState<string | null>(null);
+    const { tasa: tasaBcvHoy, loading: cargandoTasa } = useTasaBcvHoy();
 
     /** Al imprimir / Guardar PDF: escala el documento a una sola hoja A4. */
     useEffect(() => {
@@ -178,6 +202,35 @@ export default function PreviewPage() {
                     const d = { ...DEMO_PRESUPUESTO, items: sanitizePreviewItems(DEMO_PRESUPUESTO.items) };
                     setData(d);
                     setIsDemo(true);
+                }
+                return;
+            }
+
+            const tokenParam = params.get('t')?.trim() ?? '';
+            if (tokenParam) {
+                setTokenPublico(tokenParam);
+                setLoading(true);
+                try {
+                    const res = await fetch(
+                        `/api/budgets/documento?t=${encodeURIComponent(tokenParam)}&format=json`,
+                        { cache: 'no-store' },
+                    );
+                    const body = (await res.json()) as {
+                        error?: string;
+                        documento?: Record<string, unknown>;
+                    };
+                    if (!cancelled && res.ok && body.documento) {
+                        setData(normalizePresupuestoVista(body.documento));
+                        setIsDemo(false);
+                        setIdGuardado(null);
+                        setEsBorrador(false);
+                    } else if (!cancelled) {
+                        setData(null);
+                    }
+                } catch {
+                    if (!cancelled) setData(null);
+                } finally {
+                    if (!cancelled) setLoading(false);
                 }
                 return;
             }
@@ -218,11 +271,11 @@ export default function PreviewPage() {
                     if (cid) {
                         const { data: c } = await supabase
                             .from('customers')
-                            .select('movil, email, direccion')
+                            .select('movil, telefono, email, direccion')
                             .eq('id', cid)
                             .single();
                         if (!cancelled && c) {
-                            telefono = (c.movil as string) || '';
+                            telefono = String((c.movil as string) || (c.telefono as string) || '');
                             email = (c.email as string) || '';
                             direccion = (c.direccion as string) || '';
                         }
@@ -405,8 +458,76 @@ export default function PreviewPage() {
         );
     }
 
-    const totalItems = data.items.reduce((s, i) => s + i.qty, 0);
-    const descuento = 0; // puede extenderse
+    const vista = data;
+    const totalItems = vista.items.reduce((s, i) => s + i.qty, 0);
+    const ivaPct = data.ivaPct ?? IVA_PCT_DEFAULT;
+    const descuento = data.items.reduce(
+        (s, i) => s + descuentoLineaUsd(i.unitPrice, i.discount, i.qty),
+        0,
+    );
+    const ivaMonto = data.ivaMonto ?? ivaMontoDe(data.subtotal, ivaPct);
+    const totalConIva = data.totalConIva ?? totalConIvaDe(data.subtotal, ivaPct);
+    const tasaBcv = data.tasaBcv && data.tasaBcv > 0 ? data.tasaBcv : tasaBcvHoy;
+    const totalBs =
+        data.totalBs != null && data.totalBs > 0
+            ? data.totalBs
+            : tasaBcv
+              ? totalReferencialBs(totalConIva, tasaBcv)
+              : null;
+    const fechaTasa = data.tasaBcvFecha || new Date().toLocaleDateString('en-CA', { timeZone: 'America/Caracas' });
+
+    async function descargarPdfReal() {
+        setAvisoPdf(null);
+        try {
+            if (tokenPublico) {
+                await descargarPdfCliente(
+                    `/api/budgets/documento?t=${encodeURIComponent(tokenPublico)}`,
+                    filenamePresupuestoPdf(vista.numero, 'pdf'),
+                );
+                return;
+            }
+            if (idGuardado) {
+                await descargarPdfCliente(
+                    `/api/budgets/${idGuardado}/pdf`,
+                    filenamePresupuestoPdf(vista.numero, 'pdf'),
+                );
+                return;
+            }
+            setAvisoPdf('Guarda el presupuesto para descargar el PDF.');
+        } catch (e) {
+            setAvisoPdf(e instanceof Error ? e.message : 'No se pudo descargar el PDF.');
+        }
+    }
+
+    async function compartirWhatsApp() {
+        setAvisoWa(null);
+        if (idGuardado) {
+            try {
+                const res = await fetch(`/api/budgets/${idGuardado}/compartir`);
+                const body = (await res.json()) as {
+                    ok?: boolean;
+                    url?: string;
+                    motivo?: string;
+                    sinTelefono?: boolean;
+                };
+                if (body.sinTelefono || !body.ok) {
+                    setAvisoWa(body.motivo || 'Este cliente no tiene teléfono de WhatsApp.');
+                    return;
+                }
+                if (body.url) window.open(body.url, '_blank', 'noopener,noreferrer');
+            } catch (e) {
+                setAvisoWa(e instanceof Error ? e.message : 'No se pudo armar el mensaje.');
+            }
+            return;
+        }
+        const text = `*PRESUPUESTO ${PRESUPUESTO_BRAND.nombreLegal}*\n\n*Nro:* ${vista.numero}\n*Fecha:* ${vista.fecha}\n*Cliente:* ${vista.cliente} ${vista.rif ? `(${vista.rif})` : ''}\n\n*TOTAL: $${fmt(totalConIva)}* (${etiquetaIva(ivaPct)})`;
+        const wa = urlChatWhatsApp(vista.telefono, text);
+        if (!wa.ok) {
+            setAvisoWa(wa.motivo);
+            return;
+        }
+        window.open(wa.url, '_blank', 'noopener,noreferrer');
+    }
 
     return (
         <div
@@ -488,7 +609,7 @@ export default function PreviewPage() {
                                 const nom = lineaPresupuestoTitulo(i.nombre);
                                 const desc = i.descripcion ? textoPresupuesto(tituloPresupuestoPlano(i.descripcion)) : '';
                                 return `${i.qty}x ${nom}${desc ? ` — ${desc}` : ''} — $${fmt(lineTotal(i))}`;
-                            }).join('\n')}\n${'─'.repeat(50)}\nTOTAL: $${fmt(data.subtotal)}`;
+                            }).join('\n')}\n${'─'.repeat(50)}\nTOTAL CON IVA: $${fmt(totalConIva)}`;
                             navigator.clipboard.writeText(text);
                         }}
                         className="preview-toolbar-btn"
@@ -507,16 +628,7 @@ export default function PreviewPage() {
                         Copiar
                     </button>
                     <button
-                        onClick={() => {
-                            const notasWa = data.notas?.trim() ? `\n*Notas:* ${data.notas.trim()}\n` : '';
-                            const text = `*PRESUPUESTO ${PRESUPUESTO_BRAND.nombreLegal}*\n\n*Nro:* ${data.numero}\n*Fecha:* ${data.fecha}\n*Cliente:* ${data.cliente} ${data.rif ? `(${data.rif})` : ''}${notasWa}\n${data.items.map((i) => {
-                                const nom = lineaPresupuestoTitulo(i.nombre);
-                                const desc = i.descripcion ? textoPresupuesto(tituloPresupuestoPlano(i.descripcion)) : '';
-                                return `• ${i.qty}x ${nom}${desc ? ` — ${desc}` : ''} — $${fmt(lineTotal(i))}`;
-                            }).join('\n')}\n\n*TOTAL: $${fmt(data.subtotal)}*\n\n_Generado por Casa Inteligente APP_`;
-                            const phone = data.telefono ? data.telefono.replace(/\D/g, '') : '';
-                            window.open(`https://wa.me/${phone.startsWith('58') ? phone : '58' + phone}?text=${encodeURIComponent(text)}`, '_blank');
-                        }}
+                        onClick={() => void compartirWhatsApp()}
                         className="preview-toolbar-btn"
                         style={{
                             background: '#25D366', border: 'none',
@@ -533,25 +645,7 @@ export default function PreviewPage() {
                         WhatsApp
                     </button>
                     <button
-                        onClick={() => window.print()}
-                        className="preview-toolbar-btn"
-                        style={{
-                            background: '#F8FAFC', borderRadius: '12px', padding: '10px 18px',
-                            border: '1px solid #E2E8F0', color: '#0F172A', fontSize: '13px',
-                            fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px'
-                        }}
-                    >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2" />
-                            <rect x="6" y="14" width="12" height="8" rx="1" />
-                        </svg>
-                        PDF
-                    </button>
-                    <button
-                        onClick={() => {
-                            // Simple text download fallback or just print
-                            window.print();
-                        }}
+                        onClick={() => void descargarPdfReal()}
                         className="preview-toolbar-btn"
                         style={{
                             background: 'linear-gradient(135deg, #FF9500, #FF6B00)',
@@ -770,11 +864,20 @@ export default function PreviewPage() {
                                     boxSizing: 'border-box',
                                     minWidth: 0,
                                 }}>
-                                    {/* Solo nombre: la cantidad va en la columna Cant */}
                                     <div style={{ minWidth: 0 }}>
                                         <p style={{ fontSize: '13px', fontWeight: 500, color: '#0F172A', lineHeight: 1.3, wordBreak: 'break-word' }}>
                                             {lineaPresupuestoTitulo(item.nombre)}
                                         </p>
+                                        {item.descripcion ? (
+                                            <p style={{ fontSize: '11px', color: '#64748B', marginTop: 2, lineHeight: 1.35 }}>
+                                                {textoPresupuesto(tituloPresupuestoPlano(item.descripcion))}
+                                            </p>
+                                        ) : null}
+                                        {item.discount > 0 ? (
+                                            <p style={{ fontSize: '11px', color: '#C2410C', marginTop: 2 }}>
+                                                Desc. {item.discount}%
+                                            </p>
+                                        ) : null}
                                     </div>
                                     <p style={{ fontSize: '13px', color: '#475569', textAlign: 'right', alignSelf: 'center', minWidth: 0 }}>
                                         ${fmt(item.unitPrice)}
@@ -901,6 +1004,7 @@ export default function PreviewPage() {
                             {[
                                 { label: 'SUB-Total', value: `$${fmt(data.subtotal)}`, highlight: false },
                                 { label: 'Descuento', value: `$${fmt(descuento)}`, highlight: false },
+                                { label: etiquetaIva(ivaPct), value: `$${fmt(ivaMonto)}`, highlight: false },
                                 { label: 'Items', value: data.items.length.toString(), highlight: false },
                                 { label: 'Artículos', value: totalItems.toString(), highlight: false },
                             ].map(row => (
@@ -927,12 +1031,22 @@ export default function PreviewPage() {
                                 gap: '10px',
                                 minWidth: 0,
                             }}>
-                                <span style={{ fontSize: '13px', fontWeight: 700, color: '#15803D' }}>TOTAL</span>
+                                <span style={{ fontSize: '13px', fontWeight: 700, color: '#15803D' }}>TOTAL CON IVA</span>
                                 <span className="preview-total-monto" style={{ fontSize: '32px', fontWeight: 800, color: '#34C759', letterSpacing: '-0.04em', lineHeight: 1, wordBreak: 'break-word' }}>
                                     <span style={{ fontSize: '18px', fontWeight: 600 }}>$</span>
-                                    {fmt(data.subtotal)}
+                                    {fmt(totalConIva)}
                                 </span>
                             </div>
+                            {totalBs != null ? (
+                                <p style={{ fontSize: '11px', color: '#64748B', textAlign: 'right', margin: 0, lineHeight: 1.4 }}>
+                                    Referencial {formatearBsPresupuesto(totalBs)}
+                                    {tasaBcv ? ` · BCV ${fmt(tasaBcv)} Bs/USD` : ''}
+                                    {fechaTasa ? ` · ${fechaTasa}` : ''}
+                                    {cargandoTasa && !tasaBcv ? ' · cargando tasa…' : ''}
+                                </p>
+                            ) : null}
+                            {avisoPdf ? <p className="no-print" style={{ fontSize: 12, color: '#DC2626', margin: 0 }}>{avisoPdf}</p> : null}
+                            {avisoWa ? <p className="no-print" style={{ fontSize: 12, color: '#DC2626', margin: 0 }}>{avisoWa}</p> : null}
                         </div>
                     </div>
                 </div>
@@ -968,7 +1082,7 @@ export default function PreviewPage() {
 
                         <button
                             type="button"
-                            onClick={() => window.print()}
+                            onClick={() => void descargarPdfReal()}
                             style={{
                                 background: 'rgba(255,149,0,0.15)', border: '1px solid rgba(255,149,0,0.3)',
                                 borderRadius: '16px', padding: '16px 12px',
@@ -984,12 +1098,7 @@ export default function PreviewPage() {
 
                         <button
                             type="button"
-                            onClick={() => {
-                                const notasWa2 = data.notas?.trim() ? `\n*Notas:* ${data.notas.trim()}\n` : '';
-                                const text = `*PRESUPUESTO ${PRESUPUESTO_BRAND.nombreLegal}*\n\n*Nro:* ${data.numero}\n*Fecha:* ${data.fecha}\n*Cliente:* ${data.cliente} ${data.rif ? `(${data.rif})` : ''}${notasWa2}\n${data.items.map((i) => `• ${i.qty}x ${lineaPresupuestoTitulo(i.nombre)} — $${fmt(lineTotal(i))}`).join('\n')}\n\n*TOTAL: $${fmt(data.subtotal)}*`;
-                                const phone = data.telefono ? data.telefono.replace(/\D/g, '') : '';
-                                window.open(`https://wa.me/${phone.startsWith('58') ? phone : '58' + phone}?text=${encodeURIComponent(text)}`, '_blank');
-                            }}
+                            onClick={() => void compartirWhatsApp()}
                             style={{
                                 background: 'rgba(52,199,89,0.15)', border: '1px solid rgba(52,199,89,0.3)',
                                 borderRadius: '16px', padding: '16px 12px',

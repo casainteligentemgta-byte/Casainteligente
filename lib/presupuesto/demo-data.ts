@@ -56,6 +56,7 @@ export const DEMO_PRESUPUESTO: PresupuestoVista = {
   totalProfit,
   marginPct: 22,
   showZelle: true,
+  ivaPct: 16,
   fecha: new Date().toLocaleDateString('es', {
     day: 'numeric',
     month: 'long',

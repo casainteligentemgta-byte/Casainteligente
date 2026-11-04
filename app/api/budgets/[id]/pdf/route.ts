@@ -1,94 +1,39 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { filenamePresupuestoPdf } from '@/lib/presupuesto/brand';
-import { buildPresupuestoPrintHtml } from '@/lib/presupuesto/html-impresion';
+import { documentoClienteDesdeId } from '@/lib/presupuesto/cargarDocumento';
+import { respuestaPdfPresupuesto } from '@/lib/presupuesto/respuestaPdf';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/budgets/[id]/pdf
- * HTML imprimible A4 (fondo claro). Diseño alineado con docs/PRESUPUESTO-DISENO.md y lib/presupuesto/brand.ts
+ * PDF real (application/pdf) para descargar o compartir desde el móvil.
+ * Requiere sesión. El cliente sin sesión usa /api/budgets/documento?t=…
  */
-export async function GET(
-  _request: NextRequest,
-  context: { params: { id: string } },
-) {
+export async function GET(request: NextRequest, context: { params: { id: string } }) {
   const { id } = context.params;
   if (!id) {
     return NextResponse.json({ error: 'Falta id' }, { status: 400 });
   }
 
   const supabase = await createClient();
-
-  const { data: budget, error } = await supabase
-    .from('budgets')
-    .select('*')
-    .eq('id', id)
-    .single();
-
-  if (error || !budget) {
-    return NextResponse.json(
-      { error: error?.message ?? 'Presupuesto no encontrado' },
-      { status: 404 },
-    );
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Inicia sesión para descargar el PDF.' }, { status: 401 });
   }
-  // Si la columna `numero_correlativo` no existe aún, calculamos un correlativo temporal.
-  // Importante: NO listamos todos los presupuestos (puede causar timeout en Vercel).
-  let numero_correlativo_override: number | null = null;
+
+  const loaded = await documentoClienteDesdeId(supabase, id);
+  if (!loaded.ok) {
+    return NextResponse.json({ error: loaded.error }, { status: loaded.status });
+  }
+
   try {
-    const raw = (budget as any).numero_correlativo as unknown;
-    const correlativoNum =
-      typeof raw === 'number'
-        ? raw
-        : typeof raw === 'string'
-          ? Number(raw)
-          : null;
-    const correlativoMissing = correlativoNum == null || Number.isNaN(correlativoNum);
-
-    if (correlativoMissing) {
-      const createdAt = (budget as any).created_at as string | null | undefined;
-      if (createdAt) {
-        const { count: beforeCount } = await supabase
-          .from('budgets')
-          .select('id', { count: 'exact', head: true })
-          .lt('created_at', createdAt);
-
-        const { count: sameEarlierCount } = await supabase
-          .from('budgets')
-          .select('id', { count: 'exact', head: true })
-          .eq('created_at', createdAt)
-          .lt('id', id);
-
-        const a = typeof beforeCount === 'number' ? beforeCount : 0;
-        const b = typeof sameEarlierCount === 'number' ? sameEarlierCount : 0;
-        numero_correlativo_override = 500 + a + b;
-      }
-    }
-  } catch {
-    /* ignorar */
+    return await respuestaPdfPresupuesto(loaded.doc, request, 'attachment');
+  } catch (e) {
+    console.error('[budgets pdf]', e);
+    return NextResponse.json({ error: 'No se pudo generar el PDF.' }, { status: 500 });
   }
-
-  const budgetForHtml = {
-    ...budget,
-    id,
-    ...(numero_correlativo_override != null ? { numero_correlativo: numero_correlativo_override } : {}),
-  };
-  const html = buildPresupuestoPrintHtml(budgetForHtml);
-
-  const correlativoFinal =
-    numero_correlativo_override != null
-      ? numero_correlativo_override
-      : (() => {
-          const raw = (budget as { numero_correlativo?: unknown }).numero_correlativo;
-          const n = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : null;
-          return n != null && !Number.isNaN(n) ? n : id.slice(0, 8).toUpperCase();
-        })();
-  const fileHtml = filenamePresupuestoPdf(correlativoFinal, 'html');
-  const fileAscii = fileHtml.replace(/[^\x20-\x7E]/g, '_').replace(/"/g, '');
-
-  return new NextResponse(html, {
-    status: 200,
-    headers: {
-      'Content-Type': 'text/html; charset=utf-8',
-      'Content-Disposition': `inline; filename="${fileAscii}"; filename*=UTF-8''${encodeURIComponent(fileHtml)}`,
-    },
-  });
 }

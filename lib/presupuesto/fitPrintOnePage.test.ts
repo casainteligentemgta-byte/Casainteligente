@@ -86,4 +86,31 @@ describe('buildPresupuestoPrintHtml', () => {
     assert.equal(out[0]!.qty, 2);
     assert.equal((out[0] as { imagen?: unknown }).imagen, undefined);
   });
+
+  it('conserva descripción y descuento; muestra IVA en el HTML', () => {
+    const html = buildPresupuestoPrintHtml(
+      {
+        customer_name: 'Cliente Demo',
+        customer_rif: 'J-1',
+        subtotal: 180,
+        iva_pct: 16,
+        items: [
+          {
+            qty: 2,
+            unit_price: 100,
+            discount: 10,
+            product_data: { nombre: 'Cámara', descripcion: 'Visión nocturna', costo: 40 },
+          },
+        ],
+        numero_correlativo: 501,
+      },
+      { tasaBcv: 40, tasaBcvFecha: '2026-03-05' },
+    );
+    assert.match(html, /Visión nocturna/);
+    assert.match(html, /Desc\. 10%/);
+    assert.match(html, /IVA \(16%\)/);
+    assert.match(html, /TOTAL CON IVA/);
+    assert.match(html, /Referencial/);
+    assert.doesNotMatch(html, /costo|margen|ganancia/i);
+  });
 });

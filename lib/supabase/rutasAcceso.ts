@@ -19,6 +19,8 @@ export const RUTAS_PUBLICAS = [
   '/abogado',
   // Vista previa del presupuesto: su demostración (?demo=1) no usa datos reales.
   '/ventas/preview',
+  // Documento del cliente por token firmado (sin sesión, sin costos).
+  '/presupuestos/documento',
   // Mini App del depositario: valida la firma de Telegram (no pide sesión).
   '/movimientos-deposito',
 ];
@@ -118,6 +120,8 @@ export const APIS_SIN_SESION = [
   '/api/expediente',
   // Plano compartido con el cliente por enlace (token).
   '/api/netvision/compartido',
+  // PDF / JSON del presupuesto comercial por token firmado (el cliente no tiene sesión).
+  '/api/budgets/documento',
 ];
 
 /** Abiertas solo en esa dirección exacta (lo que cuelga de ellas sí pide sesión). */

@@ -85,7 +85,7 @@ describe('formularios públicos de reclutamiento', () => {
       assert.equal(requiereSesion(ruta), true, ruta)
     }
     // Lo que ve el cliente por enlace sigue abierto.
-    for (const ruta of ['/nexus/vision/cliente', '/presupuesto/p-49', '/abogado/registro', '/ventas/preview']) {
+    for (const ruta of ['/nexus/vision/cliente', '/presupuesto/p-49', '/abogado/registro', '/ventas/preview', '/presupuestos/documento']) {
       assert.equal(requiereSesion(ruta), false, ruta)
     }
   })
@@ -150,6 +150,7 @@ describe('APIs que piden sesión', () => {
       '/api/alerts/telegram-exception',
       '/api/proyectos/tours/worker-callback',
       '/api/netvision/compartido/abc',
+      '/api/budgets/documento',
       '/api/legal/solicitudes',
       '/api/finanzas/bcv-tasa',
       '/api/talento/examen/submit',
@@ -318,6 +319,7 @@ describe('toda ruta abierta del proyecto está revisada', () => {
       '/api/finanzas/bcv-tasa',
       '/api/legal/solicitudes',
       '/api/netvision/compartido/[token]',
+      '/api/budgets/documento',
       // candidato y trabajador, con su enlace
       '/api/expediente/marcar-token-usado',
       '/api/expediente/validar-token',
