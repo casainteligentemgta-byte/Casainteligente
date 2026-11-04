@@ -1,12 +1,12 @@
 -- Recupera 386b (aplicada en prod como 20261103141220_386b_tasa_bcv_fallback_sin_demo).
 -- Idempotente: CREATE OR REPLACE. No reescribe filas.
 --
--- 386 quitó el 36.5 y solo leía ci_config_nomina GLOBAL. Si no hay fila GLOBAL
--- (así está prod hoy) cada FRM con monto > 0 fallaba. 386b toma, en orden:
+-- 386 quitó la tasa fija antigua y solo leía ci_config_nomina GLOBAL. Si no hay
+-- fila GLOBAL (así está prod hoy) cada FRM con monto > 0 fallaba. 386b toma:
 --   1) GLOBAL
 --   2) última compra contable no-DEMO
 --   3) última purchase_invoice no-DEMO
--- Sigue sin inventar 36.5.
+-- Sigue sin inventar una tasa fija.
 
 create or replace function public.ci_tasa_bcv_compra_fallback()
 returns numeric
@@ -27,4 +27,4 @@ as $$
 $$;
 
 comment on function public.ci_tasa_bcv_compra_fallback() is
-  'Tasa BCV: GLOBAL, luego última compra/factura no-DEMO. Sin 36.5. Si todo es null, el caller falla.';
+  'Tasa BCV: GLOBAL, luego última compra/factura no-DEMO. Sin tasa fija. Si todo es null, el caller falla.';

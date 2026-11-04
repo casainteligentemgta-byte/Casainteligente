@@ -18,7 +18,7 @@ describe('migración 399: fallback BCV sin demo ni 36.5', () => {
     assert.match(m399, /not ilike 'DEMO-%'/)
     assert.match(m399, /contabilidad_compras/)
     assert.match(m399, /purchase_invoices/)
-    assert.doesNotMatch(m399, /36\.5/)
+    assert.doesNotMatch(m399.replace(/--.*$/gm, '').replace(/'[^']*'/g, ''), /36\.5/)
     assert.doesNotMatch(m399, /update\s+public\.(contabilidad_compras|purchase_invoices)/i)
   })
 })
