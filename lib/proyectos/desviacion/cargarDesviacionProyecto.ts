@@ -32,10 +32,11 @@ export async function cargarDesviacionProyecto(
   if (pErr) throw new Error(pErr.message);
   if (!proy) throw new Error('Proyecto no encontrado');
 
-  const tasaRes = await obtenerTasaBcvVesPorUsd(hoyIsoCaracas(), { supabase }).catch(() => ({
-    tasa_bcv_ves_por_usd: 36.5,
-  }));
-  const tasa = tasaRes.tasa_bcv_ves_por_usd > 0 ? tasaRes.tasa_bcv_ves_por_usd : 36.5;
+  const tasaRes = await obtenerTasaBcvVesPorUsd(hoyIsoCaracas(), { supabase });
+  const tasa = tasaRes.tasa_bcv_ves_por_usd;
+  if (!(tasa > 0)) {
+    throw new Error('No hay tasa BCV del día. Configure ci_config_nomina GLOBAL o la fuente BCV.');
+  }
 
   let costo;
   try {

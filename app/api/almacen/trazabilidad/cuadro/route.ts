@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { listarTrazabilidadEstrategica } from '@/lib/almacen/listarTrazabilidadEstrategica';
 import { supabaseAdminMovimientos } from '@/lib/almacen/supabaseAdminMovimientos';
+import { PERMISOS_ALMACEN_VER } from '@/lib/auth/permisosAlmacen';
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 import type { TipoMovimientoTrazabilidadFiltro } from '@/lib/almacen/trazabilidadCuadroShare';
 import { trazabilidadFilasACsv } from '@/lib/almacen/trazabilidadExport';
 
@@ -25,6 +27,8 @@ function parseTipo(raw: string | null): TipoMovimientoTrazabilidadFiltro {
 }
 
 export async function GET(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(PERMISOS_ALMACEN_VER);
+  if (!acceso.ok) return acceso.response;
   try {
     const url = new URL(req.url);
     const admin = supabaseAdminMovimientos();

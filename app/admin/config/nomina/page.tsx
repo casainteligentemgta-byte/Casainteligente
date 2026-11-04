@@ -184,7 +184,11 @@ export default function AdminConfigNominaPage() {
       }
 
       const toInsert = missing.map((m) => {
-        const tasa = tasaBcvVesPorUsdFromEnv() ?? 36.5;
+        const tasa = tasaBcvVesPorUsdFromEnv();
+        if (!tasa) {
+          toast.error('Indique la tasa BCV del día (NEXT_PUBLIC_TASA_BCV_VES_POR_USD) antes de cargar el tabulador.');
+          return;
+        }
         const cestaticketVes = Math.round(CESTATICKET_MENSUAL_USD * tasa * 100) / 100;
         return {
           cargo_nombre: m.nombre,

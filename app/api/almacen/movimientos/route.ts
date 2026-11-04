@@ -3,6 +3,7 @@ import { eliminarMovimientoInventario, parseMovimientoInventarioId } from '@/lib
 import { listarMovimientosInventario } from '@/lib/almacen/listarMovimientosInventario';
 import type { VistaMovimientoInventario } from '@/lib/almacen/listarMovimientosInventario';
 import { supabaseAdminMovimientos } from '@/lib/almacen/supabaseAdminMovimientos';
+import { PERMISOS_ALMACEN_VER } from '@/lib/auth/permisosAlmacen';
 import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 
 export const dynamic = 'force-dynamic';
@@ -36,6 +37,8 @@ async function resolveMovimientoId(req: Request): Promise<string | null> {
 }
 
 export async function GET(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(PERMISOS_ALMACEN_VER);
+  if (!acceso.ok) return acceso.response;
   try {
     const url = new URL(req.url);
     const admin = supabaseAdminMovimientos();

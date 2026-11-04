@@ -1,12 +1,16 @@
 import { NextResponse } from 'next/server';
-import { margenNetoProyecto } from '@/lib/talento/obra-math';
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 import { clientePersonalConSesion } from '@/lib/auth/sesionPersonalRuta';
+import { margenNetoProyecto } from '@/lib/talento/obra-math';
 
 export async function GET(_req: Request, { params }: { params: { obraId: string } }) {
   const obraId = params.obraId?.trim();
   if (!obraId) {
     return NextResponse.json({ error: 'obraId requerido' }, { status: 400 });
   }
+
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar', 'cco.ver']);
+  if (!acceso.ok) return acceso.response;
 
   const sb = await clientePersonalConSesion();
   if (!sb.ok) return sb.response;

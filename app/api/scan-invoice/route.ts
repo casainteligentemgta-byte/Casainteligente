@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 
 // ══════════════════════════════════════════════════════════════
 // POST /api/scan-invoice
@@ -35,11 +36,14 @@ Reglas importantes:
 - Si un campo no está visible, usa null o 0
 - Las cantidades y precios siempre deben ser números, sin símbolo de moneda
 - La fecha siempre en formato YYYY-MM-DD
-- Si la moneda no es clara, asume USD
+- Si la moneda no es clara, asume VES (facturas venezolanas en bolívares)
 - Extrae TODOS los ítems de la factura, no omitas ninguno
 - Normaliza descripción de ítems al español`;
 
 export async function POST(req: NextRequest) {
+    const acceso = await requireAlgunPermisoWeb(['compra.registrar']);
+    if (!acceso.ok) return acceso.response;
+
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey || apiKey === 'TU_GEMINI_API_KEY_AQUI') {
         return NextResponse.json(

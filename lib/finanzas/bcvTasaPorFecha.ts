@@ -160,11 +160,11 @@ async function tasaDesdeConfigNomina(
 export function etiquetaFuenteTasaBcv(fuente: FuenteTasaBcv | string | null | undefined): string {
   switch (fuente) {
     case 'bcv.today':
-      return 'BCV oficial (historial bcv.today)';
+      return 'Agregador BCV (historial bcv.today)';
     case 'bcv.today_actual':
-      return 'BCV oficial (tasa actual bcv.today)';
+      return 'Agregador BCV (tasa actual bcv.today)';
     case 'bcv.rafnixg':
-      return 'BCV (bcv-api.rafnixg.dev)';
+      return 'Agregador BCV (bcv-api.rafnixg.dev)';
     case 'ci_config_nomina':
       return 'Configuración nómina (ci_config_nomina GLOBAL)';
     case 'env':

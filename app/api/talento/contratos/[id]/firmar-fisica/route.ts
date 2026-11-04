@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 import { clientePersonalConSesion } from '@/lib/auth/sesionPersonalRuta';
 
 export const runtime = 'nodejs';
@@ -12,6 +13,9 @@ export async function POST(_req: Request, context: { params: { id: string } }) {
   if (!id) {
     return NextResponse.json({ error: 'Falta id de contrato' }, { status: 400 });
   }
+
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
 
   const sb = await clientePersonalConSesion();
   if (!sb.ok) return sb.response;

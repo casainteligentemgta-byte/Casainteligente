@@ -72,7 +72,7 @@ export async function handleTelegramWebhookRoutePost(req: Request) {
   const clave = validarClaveWebhook(req, 'bot');
   if (!claveWebhookAceptada(clave)) {
     console.warn(`[telegram webhook] aviso rechazado: clave ${clave}`);
-    return respuestaWebhook({ ok: false, error: 'unauthorized_webhook' }, 401);
+    return respuestaWebhook({ ok: false, error: 'Webhook no autorizado' }, 401);
   }
   if (clave === 'ausente_permitida') {
     // Rastro para saber cuándo Telegram ya envía la clave y se puede exigir.

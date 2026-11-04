@@ -9,6 +9,7 @@ import {
   seriePresupuestoVsGasto,
   type ProyectoFinSnapshot,
 } from '@/lib/finanzas/consolidarDashboardUtilidadReal';
+import { obtenerTasaBcvVesPorUsd } from '@/lib/finanzas/bcvTasaPorFecha';
 
 export type DashboardUtilidadRealModel = {
   proyecto: ProyectoFinSnapshot;
@@ -48,8 +49,16 @@ export async function fetchDashboardUtilidadRealData(
   },
 ): Promise<DashboardUtilidadRealModel> {
   const id = proyectoId.trim();
-  const tasaBcv =
-    opts?.tasaBcvUsdPorVes ?? (Number(process.env.NEXT_PUBLIC_TASA_BCV_USD_POR_VES ?? 0) || 36.5);
+  const tasaEnv = Number(process.env.NEXT_PUBLIC_TASA_BCV_USD_POR_VES ?? 0);
+  let tasaBcv = opts?.tasaBcvUsdPorVes ?? (Number.isFinite(tasaEnv) && tasaEnv > 0 ? tasaEnv : 0);
+  if (!(tasaBcv > 0)) {
+    const hoy = new Date().toISOString().slice(0, 10);
+    const resuelta = await obtenerTasaBcvVesPorUsd(hoy, { supabase });
+    tasaBcv = resuelta.tasa_bcv_ves_por_usd;
+  }
+  if (!(tasaBcv > 0)) {
+    throw new Error('No hay tasa BCV. Configure la fuente del día; no se usa 36.5.');
+  }
   const costeVacante =
     opts?.costePorVacanteReclutamientoUsd ?? (Number(process.env.NEXT_PUBLIC_RECRUITMENT_COST_USD ?? 0) || 0);
   const tasaBen = opts?.tasaBeneficiosSobreNomina ?? 0.12;

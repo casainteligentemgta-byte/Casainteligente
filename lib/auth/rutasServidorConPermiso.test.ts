@@ -10,7 +10,7 @@ import { apiRequiereSesion } from '../supabase/rutasAcceso'
  * Sin esto, cualquier cuenta —también la de un obrero o una de prueba— podría usarla.
  */
 const USA_LLAVE_SERVIDOR =
-  /supabaseAdminForRoute|createSupabaseAdminClient|createSupabaseAdminOnlyClient|SUPABASE_SERVICE_ROLE|resolveSupabaseServiceRoleKey|telegramSupabaseAdmin/
+  /supabaseAdminForRoute|createSupabaseAdminClient|createSupabaseAdminOnlyClient|supabaseAdminMovimientos|clientePersonalConSesion|SUPABASE_SERVICE_ROLE|resolveSupabaseServiceRoleKey|telegramSupabaseAdmin/
 
 /** Rutas que usan la llave de servidor sin pedir permiso, a propósito. */
 const EXCEPCIONES = new Set([

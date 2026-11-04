@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server';
 import { listarStockProyecto } from '@/lib/almacen/listarStockProyecto';
 import { supabaseAdminMovimientos } from '@/lib/almacen/supabaseAdminMovimientos';
+import { PERMISOS_ALMACEN_VER } from '@/lib/auth/permisosAlmacen';
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
+  const acceso = await requireAlgunPermisoWeb(PERMISOS_ALMACEN_VER);
+  if (!acceso.ok) return acceso.response;
   const url = new URL(req.url);
   const ubicacionId = url.searchParams.get('ubicacion_id')?.trim();
   const proyectoId = url.searchParams.get('proyecto_id')?.trim();
