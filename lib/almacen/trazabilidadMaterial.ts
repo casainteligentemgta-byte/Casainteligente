@@ -171,6 +171,7 @@ const ETIQUETAS_TIPO: Record<TipoMovimientoInventario, string> = {
   salida_obra: 'Salida / consumo en obra',
   ajuste: 'Ajuste de inventario',
   anulacion: 'Anulación',
+  baja: 'Baja / merma',
 };
 
 function nombreUbicacion(raw: MovRow['ubicacion']): string {

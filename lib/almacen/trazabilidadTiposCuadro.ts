@@ -136,6 +136,7 @@ export function clasificarTipoMovimientoTrazabilidad(
   const ledger = String(mov.tipo_movimiento ?? '').trim();
 
   if (ledger === 'anulacion') return 'anulacion';
+  if (ledger === 'baja') return 'perdida_deterioro';
 
   const trf = refId ? ctx.transferencia.get(refId) : undefined;
   if (trf || ledger === 'transferencia_salida' || ledger === 'transferencia_entrada') {
