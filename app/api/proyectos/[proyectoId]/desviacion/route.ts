@@ -27,7 +27,11 @@ export async function GET(_req: Request, { params }: RouteCtx) {
     return NextResponse.json(payload);
   } catch (err) {
     const msg = formatErrorMessage(err);
-    const status = /no encontrado/i.test(msg) ? 404 : /migración 382/i.test(msg) ? 503 : 500;
+    const status = /no encontrado/i.test(msg)
+      ? 404
+      : /migración 382|migración 395/i.test(msg)
+        ? 503
+        : 500;
     return NextResponse.json({ error: msg }, { status });
   }
 }

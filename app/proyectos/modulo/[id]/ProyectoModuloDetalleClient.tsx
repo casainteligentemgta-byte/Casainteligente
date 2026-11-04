@@ -11,6 +11,7 @@ import ModalNuevaVacante from './components/ModalNuevaVacante';
 import ProyectoAdLogisticaBanner from '@/components/proyectos/ProyectoAdLogisticaBanner';
 import { useContratoAdProyecto } from '@/hooks/useContratoAdProyecto';
 import DashboardUtilidadReal from '@/components/finanzas/DashboardUtilidadReal';
+import CostoObraPanel from '@/components/proyectos/CostoObraPanel';
 import CuadroNominaContratados from '@/components/nomina/CuadroNominaContratados';
 import ImportarPresupuestoLulo from '@/components/proyectos/ImportarPresupuestoLulo';
 import ControlPlanosObra from '@/components/proyectos/ControlPlanosObra';
@@ -584,25 +585,30 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
     });
   }, [proyecto]);
 
-  /** Enlace directo ?tab=rrhh|talento|solicitados|finanzas: vistas compactas / cuadro RRHH / utilidad real. */
+  /** Enlace directo ?tab=rrhh|talento|solicitados|finanzas|costo: vistas compactas / cuadro RRHH / utilidad real. */
   const tabVistaTalento =
     searchParams.get('tab') === 'rrhh' ||
     searchParams.get('tab') === 'talento' ||
     searchParams.get('tab') === 'solicitados' ||
-    searchParams.get('tab') === 'finanzas';
+    searchParams.get('tab') === 'finanzas' ||
+    searchParams.get('tab') === 'costo';
   const tabSolicitados = searchParams.get('tab') === 'solicitados';
   /** rrhh/talento/solicitados/finanzas: sin barra superior de acciones (modificar, vacante, enlaces RRHH, etc.). */
   const tabCabeceraMinimaSinAcciones =
     searchParams.get('tab') === 'rrhh' ||
     searchParams.get('tab') === 'talento' ||
     searchParams.get('tab') === 'solicitados' ||
-    searchParams.get('tab') === 'finanzas';
+    searchParams.get('tab') === 'finanzas' ||
+    searchParams.get('tab') === 'costo';
   const tabUrl = searchParams.get('tab') ?? '';
   /** Ficha normal del módulo (sin ?tab=): sin vacante, RRHH, reclutamiento, gestión laboral ni «Terminar». */
   const fichaModuloSinPestaña = tabUrl === '';
 
   const panelRrhhModulo = useMemo(() => {
     if (!proyecto) return null;
+    if (tabUrl === 'costo') {
+      return <CostoObraPanel proyectoId={id} />;
+    }
     /** `tab=finanzas` o `tab=rrhh`: consolidado de utilidad real (mismo dashboard). */
     if (tabUrl === 'finanzas' || tabUrl === 'rrhh') {
       return (
@@ -1089,7 +1095,18 @@ export default function ProyectoModuloDetalleClient({ id }: { id: string }) {
                   >
                     Finanzas · CCO de esta obra →
                   </Link>
+                  <Link
+                    href={`/proyectos/modulo/${id}?tab=costo`}
+                    className="rounded-xl border border-amber-500/40 bg-amber-950/30 px-4 py-3 text-xs font-semibold text-amber-100 hover:bg-amber-900/40"
+                  >
+                    Costo de la obra →
+                  </Link>
                 </div>
+                {fichaModuloSinPestaña && !modoEdicion ? (
+                  <div className="mt-4">
+                    <CostoObraPanel proyectoId={id} />
+                  </div>
+                ) : null}
               </>
             ) : null}
 

@@ -22,6 +22,7 @@ export default function InformeRentabilidadPage() {
     ventasAceptadasUsd: 0,
     cobradoUsd: 0,
     comprasUsd: 0,
+    costoObraUsd: 0,
     margenBrutoUsd: 0,
   });
 
@@ -73,8 +74,12 @@ export default function InformeRentabilidadPage() {
         'Ventas aceptadas USD',
         'Cobrado USD',
         'Por cobrar USD',
-        'Compras USD',
-        'Facturas compra',
+        'Costo obra USD',
+        'Materiales',
+        'Mano de obra',
+        'Herramientas',
+        'Otros',
+        'Honorarios AD',
         'Margen bruto USD',
         'Margen %',
       ],
@@ -83,8 +88,12 @@ export default function InformeRentabilidadPage() {
         f.ventasAceptadasUsd,
         f.cobradoUsd,
         f.porCobrarUsd,
-        f.comprasUsd,
-        f.facturasCompra,
+        f.costoObraUsd,
+        f.materialesUsd,
+        f.manoObraUsd,
+        f.herramientasUsd,
+        f.otrosUsd,
+        f.honorariosAdUsd,
         f.margenBrutoUsd,
         f.margenBrutoPct ?? '',
       ]),
@@ -95,7 +104,7 @@ export default function InformeRentabilidadPage() {
   return (
     <InformesShell
       titulo="Rentabilidad de obra"
-      subtitulo="Ventas aceptadas del cliente de la obra vs compras contables. No incluye nómina ni CCO (próximo pack)."
+      subtitulo="Ventas del cliente vs costo de la obra (materiales, mano de obra, herramientas y otros). Honorarios AD aparte. Sin obras DEMO."
       actions={
         <>
           <select
@@ -146,7 +155,7 @@ export default function InformeRentabilidadPage() {
         <InformesKpi label="Obras" value={String(resumen.obras)} />
         <InformesKpi label="Ventas aceptadas" value={fmtUsd(resumen.ventasAceptadasUsd)} color="#5AC8FA" />
         <InformesKpi label="Cobrado" value={fmtUsd(resumen.cobradoUsd)} color="#34C759" />
-        <InformesKpi label="Compras" value={fmtUsd(resumen.comprasUsd)} color="#FF9500" />
+        <InformesKpi label="Costo de obra" value={fmtUsd(resumen.costoObraUsd)} color="#FF9500" />
         <InformesKpi
           label="Margen bruto"
           value={fmtUsd(resumen.margenBrutoUsd)}
@@ -159,14 +168,16 @@ export default function InformeRentabilidadPage() {
         <p style={{ color: 'var(--label-secondary)', fontSize: '13px' }}>Cargando…</p>
       ) : (
         <InformesTabla
-          headers={['Obra', 'Ventas', 'Cobrado', 'Por cobrar', 'Compras', 'Margen', '%']}
+          headers={['Obra', 'Ventas', 'Cobrado', 'Costo obra', 'MO', 'Herramientas', 'AD', 'Margen', '%']}
           empty="Sin obras para el filtro."
           rows={filas.map((f, i) => [
             f.proyectoNombre,
             fmtUsd(f.ventasAceptadasUsd),
             fmtUsd(f.cobradoUsd),
-            fmtUsd(f.porCobrarUsd),
-            fmtUsd(f.comprasUsd),
+            fmtUsd(f.costoObraUsd),
+            fmtUsd(f.manoObraUsd),
+            fmtUsd(f.herramientasUsd),
+            fmtUsd(f.honorariosAdUsd),
             <span key={`margen-${i}`} style={{ color: f.margenBrutoUsd >= 0 ? '#34C759' : '#FF3B30', fontWeight: 700 }}>
               {fmtUsd(f.margenBrutoUsd)}
             </span>,
