@@ -1,6 +1,7 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { debeCambiarPassword } from '@/lib/auth/passwordPolicy';
+import { supabasePublicoConfigurado } from '@/lib/supabase/configPublica';
 import { apiRequiereSesion, requiereSesion } from '@/lib/supabase/rutasAcceso';
 import { supabaseFetch } from '@/lib/supabase/supabaseFetch';
 
@@ -46,7 +47,20 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
 
   let supabaseResponse = NextResponse.next({ request });
 
-  if (!url || !key || /example\.supabase\.co/i.test(url) || url.includes('your-project-url')) {
+  if (!supabasePublicoConfigurado(url, key)) {
+    // En producción no se deja pasar sin auth. En local sí, para poder abrir
+    // pantallas vacías sin credenciales (AGENTS.md).
+    if (process.env.NODE_ENV === 'production') {
+      if (request.nextUrl.pathname.startsWith('/api')) {
+        return NextResponse.json(
+          { error: 'El servidor no tiene configurada la base. Avise a administración.', code: 'SIN_SUPABASE' },
+          { status: 503 },
+        );
+      }
+      if (requiereSesion(request.nextUrl.pathname)) {
+        return NextResponse.redirect(new URL('/login', request.url));
+      }
+    }
     return supabaseResponse;
   }
 

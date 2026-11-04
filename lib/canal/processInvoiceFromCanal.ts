@@ -36,8 +36,8 @@ function baseUrlApp(): string {
 
 function supabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
-  const key = resolveSupabaseServiceRoleKey() || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
-  if (!url || !key) throw new Error('Supabase no configurado');
+  const key = resolveSupabaseServiceRoleKey();
+  if (!url || !key) throw new Error('Supabase no configurado (falta la llave de servidor)');
   return createClient(url, key);
 }
 

@@ -4,10 +4,13 @@ import {
   type DatosGastoEstrategico,
 } from '@/lib/contabilidad/registrarGastoEstrategico';
 import { supabaseAdminMovimientos } from '@/lib/almacen/supabaseAdminMovimientos';
+import { requireCcoAcceso } from '@/lib/auth/requireCcoRoute';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
+  const acceso = await requireCcoAcceso('editar');
+  if (!acceso.ok) return acceso.response;
   try {
     const body = (await req.json()) as DatosGastoEstrategico;
     const admin = supabaseAdminMovimientos();

@@ -93,7 +93,7 @@ export async function POST(req: Request) {
   const clave = validarClaveWebhook(req, 'registro');
   if (!claveWebhookAceptada(clave)) {
     console.warn(`[webhook registro] aviso rechazado: clave ${clave}`);
-    return NextResponse.json({ ok: false, error: 'unauthorized_webhook' }, { status: 401 });
+    return NextResponse.json({ ok: false, error: 'Webhook no autorizado' }, { status: 401 });
   }
   if (clave === 'ausente_permitida') {
     console.warn('[webhook registro] aviso sin clave (todavía permitido)');

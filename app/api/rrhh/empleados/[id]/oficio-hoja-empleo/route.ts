@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { buildEmpleadoUpdateOficioHojaEmpleo } from '@/lib/rrhh/empleadoOficioHojaEmpleo';
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 import { clientePersonalConSesion } from '@/lib/auth/sesionPersonalRuta';
+import { buildEmpleadoUpdateOficioHojaEmpleo } from '@/lib/rrhh/empleadoOficioHojaEmpleo';
 
 export const runtime = 'nodejs';
 
@@ -13,6 +14,9 @@ export async function PATCH(req: Request, context: { params: { id: string } }) {
   if (!empleadoId) {
     return NextResponse.json({ error: 'id de empleado requerido' }, { status: 400 });
   }
+
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
 
   const admin = await clientePersonalConSesion();
   if (!admin.ok) return admin.response;

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 import { clientePersonalConSesion } from '@/lib/auth/sesionPersonalRuta';
 import { forceAceptarContrato } from '@/lib/talento/forceAceptarContrato';
 
@@ -15,7 +16,9 @@ export async function POST(req: Request, context: { params: { id: string } }) {
     return NextResponse.json({ error: 'Falta id de contrato o empleado' }, { status: 400 });
   }
 
-  // Verificar que el usuario está autenticado (sesión de la app).
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   const sb = await clientePersonalConSesion();
   if (!sb.ok) return sb.response;
 

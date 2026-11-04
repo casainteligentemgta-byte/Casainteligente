@@ -6,6 +6,7 @@ import {
   salarioBasicoDiarioVesDesdeNivel,
 } from '@/lib/talento/contratoGacetaLaboral';
 import { resolverPatronoDesdeEntidad } from '@/lib/talento/contratoObreroPdfContext';
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 import { clientePersonalConSesion } from '@/lib/auth/sesionPersonalRuta';
 
 function formatDate(d?: string | null): string | null {
@@ -26,6 +27,9 @@ function estimateDuration(start?: string | null, end?: string | null): string {
 }
 
 export async function GET(_req: Request, context: { params: { id: string } }) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   const id = context.params.id?.trim();
   if (!id) {
     return NextResponse.json({ error: 'Falta id de contrato' }, { status: 400 });
@@ -186,6 +190,9 @@ export async function GET(_req: Request, context: { params: { id: string } }) {
 
 /** Campos laborales Gaceta / LOTTT editables por admin o RRHH. */
 export async function PATCH(req: Request, context: { params: { id: string } }) {
+  const acceso = await requireAlgunPermisoWeb(['equipo.gestionar']);
+  if (!acceso.ok) return acceso.response;
+
   const id = context.params.id?.trim();
   if (!id) {
     return NextResponse.json({ error: 'Falta id de contrato' }, { status: 400 });

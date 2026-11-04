@@ -4,6 +4,8 @@ import {
   listarStockMaterial,
 } from '@/lib/almacen/fijarStockMaterialUbicacion';
 import { supabaseAdminMovimientos } from '@/lib/almacen/supabaseAdminMovimientos';
+import { PERMISOS_ALMACEN_EDITAR, PERMISOS_ALMACEN_VER } from '@/lib/auth/permisosAlmacen';
+import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,6 +23,8 @@ async function resolveMaterialId(
 
 /** GET /api/almacen/inventario/[id]/stock — filas inventario_stock del material. */
 export async function GET(_req: Request, ctx: RouteCtx) {
+  const acceso = await requireAlgunPermisoWeb(PERMISOS_ALMACEN_VER);
+  if (!acceso.ok) return acceso.response;
   try {
     const materialId = await resolveMaterialId(ctx.params);
     if (!materialId) {
@@ -42,6 +46,8 @@ export async function GET(_req: Request, ctx: RouteCtx) {
 
 /** PATCH body: { ubicacion_id, cantidad } */
 export async function PATCH(req: Request, ctx: RouteCtx) {
+  const acceso = await requireAlgunPermisoWeb(PERMISOS_ALMACEN_EDITAR);
+  if (!acceso.ok) return acceso.response;
   try {
     const materialId = await resolveMaterialId(ctx.params);
     if (!materialId) {
