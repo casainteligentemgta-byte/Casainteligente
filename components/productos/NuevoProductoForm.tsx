@@ -1,12 +1,21 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { uploadProductImage, uploadProductManualPdf } from '@/lib/supabase/product-media';
 import SelectorCategoriaProducto from '@/components/productos/SelectorCategoriaProducto';
 import { proveedoresAdmitidos, revisarEnlaceProveedor } from '@/lib/productos/precioProveedorWeb';
 import { tinta, tintaTexto } from '@/lib/tema/tinta';
+import {
+    MARGEN_CATALOGO_DEFECTO,
+    margenPctDesdePrecios,
+    precioVentaDesdeCosto,
+    utilidadDesdePrecios,
+} from '@/lib/productos/margenCatalogo';
+import { payloadFotoProducto, urlFotoProducto } from '@/lib/productos/fotoProducto';
+import { TABLA_PRODUCTOS } from '@/lib/productos/tablaProductos';
+import { useCategoriasCatalogo } from '@/lib/productos/useCategoriasCatalogo';
 
 export default function NuevoProductoForm({ initialData, isEditing }: { initialData?: any; isEditing?: boolean }) {
     const router = useRouter();
@@ -20,6 +29,14 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
     const [uploadingManual, setUploadingManual] = useState(false);
     const [mediaError, setMediaError] = useState<string | null>(null);
 
+    const { margenPorCategoria } = useCategoriasCatalogo();
+    const margenInicial = (() => {
+        const propio = Number(initialData?.margen_pct);
+        if (Number.isFinite(propio) && initialData?.margen_pct != null) return String(propio);
+        const dePrecios = margenPctDesdePrecios(initialData?.costo, initialData?.precio);
+        if (dePrecios != null) return String(dePrecios);
+        return String(MARGEN_CATALOGO_DEFECTO);
+    })();
     const [form, setForm] = useState({
         nombre: initialData?.nombre || '',
         categoria: initialData?.categoria || '',
@@ -28,13 +45,26 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
         modelo: initialData?.modelo || '',
         descripcion: initialData?.descripcion || '',
         costo: initialData?.costo?.toString() || '',
+        margen: margenInicial,
         precio: initialData?.precio?.toString() || '',
         cantidad: initialData?.cantidad?.toString() || '',
-        imagen: (initialData?.imagen as string) || '',
+        imagen: urlFotoProducto(initialData) || '',
         manual_instrucciones: (initialData?.manual_instrucciones as string) || '',
         manual_documento_url: (initialData?.manual_documento_url as string) || '',
         proveedor_url: (initialData?.proveedor_url as string) || '',
     });
+    const [puedeCostos, setPuedeCostos] = useState(true);
+
+    useEffect(() => {
+        void fetch('/api/auth/permisos', { cache: 'no-store', credentials: 'include' })
+            .then((r) => r.json())
+            .then((d: { permisos?: string[] }) => {
+                if (Array.isArray(d.permisos)) setPuedeCostos(d.permisos.includes('productos.costos'));
+            })
+            .catch(() => {
+                /* sin catálogo de permisos: se muestra el costo (pantalla ya pide sesión) */
+            });
+    }, []);
     /** Precio leído de la web del proveedor con el botón «Leer precio». */
     const [precioWeb, setPrecioWeb] = useState<{ precio: number | null; error: string | null; leyendo: boolean }>({
         precio: null,
@@ -61,27 +91,62 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
         }
     };
 
-    /** Pone el precio de la web como costo; el precio lo sigue si estaba igual al costo o vacío. */
+    /** Pone el precio de la web como costo y recalcula el precio de venta con el margen. */
     const usarPrecioWeb = () => {
         if (precioWeb.precio == null) return;
         const nuevo = String(precioWeb.precio);
         setForm((f) => {
-            const costoAntes = parseFloat(f.costo);
-            const precioAntes = parseFloat(f.precio);
-            const precioSigue = !f.precio || !(precioAntes > 0) || (Number.isFinite(costoAntes) && Math.abs(precioAntes - costoAntes) < 0.005);
-            return { ...f, costo: nuevo, precio: precioSigue ? nuevo : f.precio };
+            const margenN = parseMoney(f.margen) ?? MARGEN_CATALOGO_DEFECTO;
+            return { ...f, costo: nuevo, precio: String(precioVentaDesdeCosto(precioWeb.precio!, margenN)) };
         });
     };
 
     const utilidad = form.costo && form.precio
-        ? (parseFloat(form.precio) - parseFloat(form.costo)).toFixed(2)
+        ? (utilidadDesdePrecios(parseMoney(form.costo), parseMoney(form.precio)) ?? '—')
         : '—';
 
-    const margenPct = form.costo && form.precio && parseFloat(form.precio) > 0
-        ? (((parseFloat(form.precio) - parseFloat(form.costo)) / parseFloat(form.precio)) * 100).toFixed(1)
-        : null;
+    const margenPctMostrado = parseMoney(form.margen);
 
     const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+    const setCosto = (raw: string) => {
+        setForm((f) => {
+            const costoN = parseMoney(raw);
+            const margenN = parseMoney(f.margen) ?? MARGEN_CATALOGO_DEFECTO;
+            return {
+                ...f,
+                costo: raw,
+                precio: costoN != null ? String(precioVentaDesdeCosto(costoN, margenN)) : f.precio,
+            };
+        });
+    };
+
+    const setMargen = (raw: string) => {
+        setForm((f) => {
+            const margenN = parseMoney(raw);
+            const costoN = parseMoney(f.costo);
+            return {
+                ...f,
+                margen: raw,
+                precio:
+                    costoN != null && margenN != null
+                        ? String(precioVentaDesdeCosto(costoN, margenN))
+                        : f.precio,
+            };
+        });
+    };
+
+    const setPrecio = (raw: string) => {
+        setForm((f) => {
+            const precioN = parseMoney(raw);
+            const costoN = parseMoney(f.costo);
+            const margen =
+                costoN != null && costoN > 0 && precioN != null
+                    ? String(margenPctDesdePrecios(costoN, precioN) ?? '')
+                    : f.margen;
+            return { ...f, precio: raw, margen };
+        });
+    };
 
     /** Evita que "12,50" se convierta en 12 con parseFloat (coma decimal). */
     function parseMoney(raw: string): number | null {
@@ -137,10 +202,11 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
 
         const costoN = parseMoney(form.costo);
         const precioN = parseMoney(form.precio);
+        const margenN = parseMoney(form.margen);
 
         // imagen / manual: vacío → null en BD (producto válido sin URL; se puede completar después)
-        const imagenVal = form.imagen.trim() || null;
-        const productData = {
+        const imagenVal = payloadFotoProducto(form.imagen).imagen;
+        const productData: Record<string, string | number | null> = {
             nombre: form.nombre.trim(),
             categoria: form.categoria || null,
             // Sin categoría no hay subcategoría.
@@ -148,16 +214,18 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
             marca: form.marca || null,
             modelo: form.modelo || null,
             descripcion: form.descripcion || null,
-            costo: costoN,
             precio: precioN,
-            utilidad:
-                costoN != null && precioN != null ? precioN - costoN : null,
             cantidad: form.cantidad ? parseInt(form.cantidad, 10) : 0,
             imagen: imagenVal,
             manual_instrucciones: form.manual_instrucciones.trim() || null,
             manual_documento_url: form.manual_documento_url.trim() || null,
             proveedor_url: enlaceRevisado && enlaceRevisado.ok ? enlaceRevisado.url : null,
         };
+        if (puedeCostos) {
+            productData.costo = costoN;
+            productData.utilidad = utilidadDesdePrecios(costoN, precioN);
+            productData.margen_pct = margenN;
+        }
 
         let error;
         if (isEditing && initialData?.id != null) {
@@ -167,7 +235,7 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
                     ? initialData.id
                     : String(initialData.id);
             const res = await supabase
-                .from('products')
+                .from(TABLA_PRODUCTOS)
                 .update(productData)
                 .eq('id', rowId)
                 .select('id');
@@ -180,7 +248,7 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
                 return;
             }
         } else {
-            const res = await supabase.from('products').insert([productData]);
+            const res = await supabase.from(TABLA_PRODUCTOS).insert([productData]);
             error = res.error;
         }
 
@@ -378,7 +446,25 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
                 value={form.categoria}
                 onChange={(nombre) =>
                     // Al cambiar de categoría, la subcategoría anterior ya no aplica.
-                    setForm((prev) => (prev.categoria === nombre ? prev : { ...prev, categoria: nombre, subcategoria: '' }))
+                    // Si el margen sigue en el 20 % por defecto, se toma el de la categoría.
+                    setForm((prev) => {
+                        if (prev.categoria === nombre) return prev;
+                        const deCat = margenPorCategoria[nombre];
+                        const margenActual = parseMoney(prev.margen);
+                        const usarDeCat =
+                            deCat != null &&
+                            (margenActual == null || Math.abs(margenActual - MARGEN_CATALOGO_DEFECTO) < 0.005);
+                        const margen = usarDeCat ? String(deCat) : prev.margen;
+                        const costoN = parseMoney(prev.costo);
+                        const margenN = parseMoney(margen) ?? MARGEN_CATALOGO_DEFECTO;
+                        return {
+                            ...prev,
+                            categoria: nombre,
+                            subcategoria: '',
+                            margen,
+                            precio: costoN != null ? String(precioVentaDesdeCosto(costoN, margenN)) : prev.precio,
+                        };
+                    })
                 }
                 subcategoria={form.subcategoria}
                 onSubcategoriaChange={(nombre) => set('subcategoria', nombre)}
@@ -410,24 +496,58 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
                 </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
-                <div style={{ ...fieldBox, marginBottom: 0 }}>
-                    <label style={labelStyle}>Costo ($)</label>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <span style={{ color: tintaTexto(0.3), fontSize: '16px' }}>$</span>
-                        <input
-                            type="number"
-                            min={0}
-                            step={0.01}
-                            value={form.costo}
-                            onChange={(e) => set('costo', e.target.value)}
-                            placeholder="0.00"
-                            style={{ ...inputStyle, color: 'var(--tono-rojo)' }}
-                        />
+            {puedeCostos ? (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+                    <div style={{ ...fieldBox, marginBottom: 0 }}>
+                        <label style={labelStyle}>Costo ($)</label>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <span style={{ color: tintaTexto(0.3), fontSize: '16px' }}>$</span>
+                            <input
+                                type="number"
+                                min={0}
+                                step={0.01}
+                                value={form.costo}
+                                onChange={(e) => setCosto(e.target.value)}
+                                placeholder="0.00"
+                                style={{ ...inputStyle, color: 'var(--tono-rojo)' }}
+                            />
+                        </div>
+                    </div>
+                    <div style={{ ...fieldBox, marginBottom: 0 }}>
+                        <label style={labelStyle}>Margen (%)</label>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <input
+                                type="number"
+                                min={0}
+                                max={300}
+                                step={0.1}
+                                value={form.margen}
+                                onChange={(e) => setMargen(e.target.value)}
+                                placeholder={String(MARGEN_CATALOGO_DEFECTO)}
+                                style={{ ...inputStyle, color: 'var(--tono-naranja)' }}
+                            />
+                            <span style={{ color: tintaTexto(0.3), fontSize: '14px' }}>%</span>
+                        </div>
+                    </div>
+                    <div style={{ ...fieldBox, marginBottom: 0 }}>
+                        <label style={labelStyle}>Precio ($)</label>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <span style={{ color: tintaTexto(0.3), fontSize: '16px' }}>$</span>
+                            <input
+                                type="number"
+                                min={0}
+                                step={0.01}
+                                value={form.precio}
+                                onChange={(e) => setPrecio(e.target.value)}
+                                placeholder="0.00"
+                                style={{ ...inputStyle, color: 'var(--tono-verde)' }}
+                            />
+                        </div>
                     </div>
                 </div>
-                <div style={{ ...fieldBox, marginBottom: 0 }}>
-                    <label style={labelStyle}>Precio ($)</label>
+            ) : (
+                <div style={{ ...fieldBox }}>
+                    <label style={labelStyle}>Precio de venta ($)</label>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <span style={{ color: tintaTexto(0.3), fontSize: '16px' }}>$</span>
                         <input
@@ -440,10 +560,13 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
                             style={{ ...inputStyle, color: 'var(--tono-verde)' }}
                         />
                     </div>
+                    <p style={{ fontSize: '12px', color: tintaTexto(0.45), margin: '8px 0 0' }}>
+                        El costo y el margen solo los ven quienes tienen permiso de costos.
+                    </p>
                 </div>
-            </div>
+            )}
 
-            {form.costo && form.precio && (
+            {puedeCostos && form.costo && form.precio && (
                 <div
                     style={{
                         ...fieldBox,
@@ -473,17 +596,17 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
                             ${utilidad}
                         </p>
                     </div>
-                    {margenPct && (
+                    {margenPctMostrado != null && (
                         <div style={{ textAlign: 'right' }}>
-                            <p style={{ fontSize: '12px', color: tintaTexto(0.4) }}>Margen</p>
+                            <p style={{ fontSize: '12px', color: tintaTexto(0.4) }}>precio = costo × (1+margen)</p>
                             <p
                                 style={{
                                     fontSize: '24px',
                                     fontWeight: 800,
-                                    color: parseFloat(margenPct) >= 20 ? 'var(--tono-verde)' : 'var(--tono-naranja)',
+                                    color: margenPctMostrado >= 20 ? 'var(--tono-verde)' : 'var(--tono-naranja)',
                                 }}
                             >
-                                {margenPct}%
+                                {margenPctMostrado}%
                             </p>
                         </div>
                     )}
@@ -539,7 +662,10 @@ export default function NuevoProductoForm({ initialData, isEditing }: { initialD
             </div>
 
             <div style={fieldBox}>
-                <label style={labelStyle}>Stock</label>
+                <label style={labelStyle}>Cantidad referencial</label>
+                <p style={{ fontSize: '12px', color: tintaTexto(0.45), margin: '0 0 8px', lineHeight: 1.4 }}>
+                    No es el stock del almacén. El inventario vive en Almacén; esto solo es una cantidad de catálogo.
+                </p>
                 <input
                     type="number"
                     min={0}

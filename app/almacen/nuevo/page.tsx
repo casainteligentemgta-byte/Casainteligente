@@ -116,7 +116,7 @@ export default function NewInventoryItemPage() {
 
     const { data: prodData, error: prodErr } = await supabase
       .from('products')
-      .select('id,nombre,marca,modelo,imagen')
+      .select('id,nombre,marca,modelo,imagen,image_url')
       .order('nombre');
     if (!prodErr && prodData) {
       setCatalogProducts(prodData as CatalogProductRow[]);

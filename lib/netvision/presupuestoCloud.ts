@@ -7,6 +7,7 @@ import type {
   PresupuestoVentas,
   ProductoVenta,
 } from '@/lib/netvision/presupuesto'
+import { TABLA_PRODUCTOS, VISTA_PRODUCTOS_LECTURA, esErrorVistaProductos } from '@/lib/productos/tablaProductos'
 
 export type ClientePresupuesto = {
   id: string
@@ -23,9 +24,9 @@ export type DatosPresupuesto = {
   error?: string
 }
 
-/** Sin la columna `imagen`: puede traer fotos incrustadas muy pesadas. */
+/** `imagen` e `image_url` salen iguales (campo canónico + espejo). */
 const COLUMNAS_PRODUCTO =
-  'id,external_id,nombre,categoria,marca,modelo,descripcion,costo,precio,utilidad,cantidad,image_url'
+  'id,external_id,nombre,categoria,marca,modelo,descripcion,costo,precio,utilidad,margen_pct,cantidad,imagen,image_url'
 
 const TABLA_ENLACES = 'netvision_producto_enlaces'
 
@@ -43,14 +44,18 @@ export async function cargarDatosPresupuesto(): Promise<DatosPresupuesto> {
     } = await supabase.auth.getUser()
     if (!user) return vacio
 
-    const [clientes, productos, enlaces] = await Promise.all([
+    const [clientes, productosVista, enlaces] = await Promise.all([
       supabase
         .from('customers')
         .select('id,nombre,rif')
         .order('nombre', { ascending: true, nullsFirst: false }),
-      supabase.from('products').select(COLUMNAS_PRODUCTO).order('nombre', { ascending: true }),
+      supabase.from(VISTA_PRODUCTOS_LECTURA).select(COLUMNAS_PRODUCTO).order('nombre', { ascending: true }),
       supabase.from(TABLA_ENLACES).select('sku,product_id'),
     ])
+    const productos =
+      productosVista.error && esErrorVistaProductos(productosVista.error)
+        ? await supabase.from(TABLA_PRODUCTOS).select(COLUMNAS_PRODUCTO).order('nombre', { ascending: true })
+        : productosVista
     if (clientes.error) return { ...vacio, autenticado: true, error: clientes.error.message }
     if (productos.error) return { ...vacio, autenticado: true, error: productos.error.message }
 

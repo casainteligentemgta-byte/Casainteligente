@@ -18,6 +18,7 @@ export function useCategoriasCatalogo() {
   const [subcategorias, setSubcategorias] = useState<Record<string, string[]>>(() =>
     subcategoriasAMostrar(CATEGORIAS_CATALOGO_DEFAULT, null),
   );
+  const [margenPorCategoria, setMargenPorCategoria] = useState<Record<string, number>>({});
   const [cargando, setCargando] = useState(true);
 
   const recargar = useCallback(async () => {
@@ -25,6 +26,7 @@ export function useCategoriasCatalogo() {
       const arbol = await listarArbolCategorias(supabase);
       setNombres(arbol.categorias);
       setSubcategorias(arbol.subcategorias);
+      setMargenPorCategoria(arbol.margenPorCategoria ?? {});
     } catch {
       setNombres((prev) => mergeNombresCategoria(CATEGORIAS_CATALOGO_DEFAULT, prev));
     }
@@ -59,5 +61,5 @@ export function useCategoriasCatalogo() {
     [supabase],
   );
 
-  return { nombres, subcategorias, cargando, crear, crearSub, recargar };
+  return { nombres, subcategorias, margenPorCategoria, cargando, crear, crearSub, recargar };
 }

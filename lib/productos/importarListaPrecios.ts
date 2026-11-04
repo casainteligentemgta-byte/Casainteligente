@@ -5,7 +5,21 @@
  * La lista llega como CSV (una fila por renglón del proveedor). Aquí se lee,
  * se cruza con los productos que ya existen y se calcula qué cambiaría.
  * Nada se escribe: la pantalla aplica solo lo que el dueño marque.
+ *
+ * El costo de la lista NO se copia al precio de venta: se aplica el margen
+ * del catálogo (producto → categoría → 20 %). Antes se igualaba precio=costo
+ * y el margen se dejaba para el presupuesto; por eso ~78 % del catálogo
+ * quedó sin ganancia.
  */
+import {
+  MARGEN_CATALOGO_DEFECTO,
+  margenEfectivoProducto,
+  margenPctDesdePrecios,
+  precioVentaDesdeCosto,
+  productoSinMargen,
+  utilidadDesdePrecios,
+  type OpcionesMargenCatalogo,
+} from '@/lib/productos/margenCatalogo'
 
 export type EstatusProveedor = 'disponible' | 'no_disponible' | 'en_transito'
 
@@ -36,6 +50,10 @@ export type ProductoActual = {
   costo: number | null
   precio: number | null
   imagen: string | null
+  /** Leftover previo a unificar la foto en `imagen`. */
+  image_url?: string | null
+  /** Margen propio del producto (% sobre costo). Null = usar el de la categoría o el 20 %. */
+  margen_pct?: number | null
 }
 
 const redondear2 = (n: number) => Math.round(n * 100) / 100
@@ -319,12 +337,13 @@ export function planificarImportacion(filas: FilaLista[], productos: ProductoAct
 export type OpcionesImportacion = {
   /** Subir el precio de venta en la misma proporción que el costo. */
   mantenerMargen: boolean
-}
+} & OpcionesMargenCatalogo
 
 export type Efecto = {
   costo: number | null
   precio: number | null
   utilidad: number | null
+  margen_pct: number | null
   cambiaCosto: boolean
   cambiaPrecio: boolean
   disponibilidad: EstatusProveedor | null
@@ -339,13 +358,15 @@ export function efectoEnProducto(p: ProductoActual, f: FilaLista, opciones: Opci
   const costo = costoLista != null ? costoLista : p.costo
   let precio = p.precio
   let cambiaPrecio = false
-  // Precio base igual al costo (o sin precio): el precio sigue al costo siempre. Así se
-  // cargan las listas de distribuidor; el margen se pone al armar cada presupuesto.
-  const precioSigueAlCosto =
-    p.precio == null || p.precio <= 0 || (p.costo != null && Math.abs(p.precio - p.costo) < 0.005)
-  if (precioSigueAlCosto && costoLista != null) {
-    cambiaPrecio = p.precio == null || Math.abs(costoLista - p.precio) >= 0.005
-    precio = costoLista
+  const margen = margenEfectivoProducto(p, opciones)
+  let margenResultado: number | null = p.margen_pct ?? null
+  // Precio igual al costo (o sin precio): se aplica el margen del catálogo.
+  // Antes se copiaba el costo al precio y el margen se dejaba para el presupuesto.
+  if (productoSinMargen(p) && costoLista != null) {
+    const nuevo = precioVentaDesdeCosto(costoLista, margen)
+    cambiaPrecio = p.precio == null || Math.abs(nuevo - p.precio) >= 0.005
+    precio = nuevo
+    margenResultado = margen
   } else if (
     opciones.mantenerMargen &&
     cambiaCosto &&
@@ -358,11 +379,15 @@ export function efectoEnProducto(p: ProductoActual, f: FilaLista, opciones: Opci
     const nuevo = redondear2((costoLista * p.precio) / p.costo)
     cambiaPrecio = Math.abs(nuevo - p.precio) >= 0.005
     precio = nuevo
+    margenResultado = margenPctDesdePrecios(costoLista, nuevo)
+  } else if (costo != null && costo > 0 && precio != null) {
+    margenResultado = margenPctDesdePrecios(costo, precio) ?? p.margen_pct ?? null
   }
   return {
     costo,
     precio,
-    utilidad: costo != null && precio != null ? redondear2(precio - costo) : null,
+    utilidad: utilidadDesdePrecios(costo, precio),
+    margen_pct: margenResultado,
     cambiaCosto,
     cambiaPrecio,
     disponibilidad: f.estatus,
@@ -386,7 +411,10 @@ export function cambioParaProducto(
   }
   if (e.cambiaCosto) cambio.costo = e.costo
   if (e.cambiaPrecio) cambio.precio = e.precio
-  if (e.cambiaCosto || e.cambiaPrecio) cambio.utilidad = e.utilidad
+  if (e.cambiaCosto || e.cambiaPrecio) {
+    cambio.utilidad = e.utilidad
+    if (e.margen_pct != null) cambio.margen_pct = e.margen_pct
+  }
   return cambio
 }
 
@@ -432,20 +460,24 @@ export function productoNuevoDesdeFila(
   ahoraIso: string,
   /** Solo cuenta si se indicó `categoria`; sin categoría se usa la pareja sugerida. */
   subcategoria = '',
+  opciones: OpcionesMargenCatalogo = {},
 ): Record<string, string | number | null> {
   const sugerida = ubicacionSugerida(f.seccion)
+  const categoriaFinal = categoria || sugerida.categoria
+  const costo = precioUsable(f)
+  const margen = margenEfectivoProducto({ margen_pct: null, categoria: categoriaFinal }, opciones)
+  const precio = costo != null ? precioVentaDesdeCosto(costo, margen) : null
   return {
     nombre: nombreDesdeDescripcion(f.descripcion, f.modelo),
     modelo: f.modelo,
     marca: f.marca || null,
-    categoria: categoria || sugerida.categoria,
+    categoria: categoriaFinal,
     subcategoria: (categoria ? subcategoria : sugerida.subcategoria) || null,
     descripcion: f.descripcion || null,
-    costo: precioUsable(f),
-    // El precio base arranca igual al costo (sin inventar margen): el margen se pone al
-    // armar cada presupuesto. Sin precio, el producto saldría en 0 en un presupuesto.
-    precio: precioUsable(f),
-    utilidad: precioUsable(f) == null ? null : 0,
+    costo,
+    precio,
+    utilidad: utilidadDesdePrecios(costo, precio),
+    margen_pct: costo != null ? margen : null,
     cantidad: 0,
     disponibilidad_proveedor: f.estatus,
     lista_proveedor_fecha: fechaLista,

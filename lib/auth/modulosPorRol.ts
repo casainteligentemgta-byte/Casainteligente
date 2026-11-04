@@ -139,6 +139,9 @@ export function ampliarModulosPorPermisos(
   if (ps.has('clientes.ver') || ps.has('clientes.editar') || ps.has('clientes.borrar')) {
     set.add('clientes');
   }
+  if (ps.has('productos.ver')) {
+    set.add('productos');
+  }
   return set;
 }
 

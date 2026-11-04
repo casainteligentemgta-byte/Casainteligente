@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase/client';
 import { colorHexCategoria, subcategoriasDe } from '@/lib/productos/categoriasCatalogo';
 import { useCategoriasCatalogo } from '@/lib/productos/useCategoriasCatalogo';
 import { tinta, tintaTexto } from '@/lib/tema/tinta';
+import { urlFotoProducto } from '@/lib/productos/fotoProducto';
+import { TABLA_PRODUCTOS, VISTA_PRODUCTOS_LECTURA, esErrorVistaProductos } from '@/lib/productos/tablaProductos';
 
 export interface Product {
     id: number;
@@ -19,6 +21,8 @@ export interface Product {
     precio: number | null;
     utilidad: number | null;
     imagen?: string | null;
+    image_url?: string | null;
+    margen_pct?: number | null;
     manual_instrucciones?: string | null;
     manual_documento_url?: string | null;
 }
@@ -59,7 +63,7 @@ function ProductRowThumb({
     size?: number;
 }) {
     const [failed, setFailed] = useState(false);
-    const url = typeof imagen === 'string' ? imagen.trim() : '';
+    const url = urlFotoProducto({ imagen }) ?? '';
     if (url && !failed) {
         return (
             <img
@@ -200,21 +204,19 @@ export default function ProductSearch({ onSelect, inBudgetQtyById }: ProductSear
         }
         let cancelado = false;
         setCargandoBoton(true);
-        let consulta = supabase
-            .from('products')
-            .select(
-                'id, external_id, nombre, categoria, subcategoria, modelo, marca, descripcion, costo, precio, utilidad, imagen, manual_instrucciones, manual_documento_url',
-            )
-            .eq('categoria', tipoBoton);
-        if (subBoton) consulta = consulta.eq('subcategoria', subBoton);
-        void consulta
-            .order('nombre')
-            .limit(200)
-            .then(({ data, error }) => {
-                if (cancelado) return;
-                setProductosBoton(!error && data ? (data as Product[]) : []);
-                setCargandoBoton(false);
-            });
+        const columnas =
+            'id, external_id, nombre, categoria, subcategoria, modelo, marca, descripcion, costo, precio, utilidad, margen_pct, imagen, image_url, manual_instrucciones, manual_documento_url';
+        const armar = (tabla: string) => {
+            let consulta = supabase.from(tabla).select(columnas).eq('categoria', tipoBoton);
+            if (subBoton) consulta = consulta.eq('subcategoria', subBoton);
+            return consulta.order('nombre').limit(200);
+        };
+        void armar(VISTA_PRODUCTOS_LECTURA).then(async (primero) => {
+            const r = primero.error && esErrorVistaProductos(primero.error) ? await armar(TABLA_PRODUCTOS) : primero;
+            if (cancelado) return;
+            setProductosBoton(!r.error && r.data ? (r.data as Product[]) : []);
+            setCargandoBoton(false);
+        });
         return () => {
             cancelado = true;
         };
@@ -228,23 +230,20 @@ export default function ProductSearch({ onSelect, inBudgetQtyById }: ProductSear
         }
         setLoading(true);
 
-        let queryBuilder = supabase
-            .from('products')
-            .select(
-                'id, external_id, nombre, categoria, subcategoria, modelo, marca, descripcion, costo, precio, utilidad, imagen, manual_instrucciones, manual_documento_url',
-            );
-
-        if (cat !== 'Todos') {
-            queryBuilder = queryBuilder.eq('categoria', cat);
+        const columnas =
+            'id, external_id, nombre, categoria, subcategoria, modelo, marca, descripcion, costo, precio, utilidad, margen_pct, imagen, image_url, manual_instrucciones, manual_documento_url';
+        const armar = (tabla: string) => {
+            let queryBuilder = supabase.from(tabla).select(columnas);
+            if (cat !== 'Todos') queryBuilder = queryBuilder.eq('categoria', cat);
+            if (q.trim().length >= 2) {
+                queryBuilder = queryBuilder.or(`nombre.ilike.%${q}%,marca.ilike.%${q}%,modelo.ilike.%${q}%`);
+            }
+            return queryBuilder.order('nombre').limit(100);
+        };
+        let { data, error } = await armar(VISTA_PRODUCTOS_LECTURA);
+        if (error && esErrorVistaProductos(error)) {
+            ({ data, error } = await armar(TABLA_PRODUCTOS));
         }
-
-        if (q.trim().length >= 2) {
-            queryBuilder = queryBuilder.or(`nombre.ilike.%${q}%,marca.ilike.%${q}%,modelo.ilike.%${q}%`);
-        }
-
-        const { data, error } = await queryBuilder
-            .order('nombre')
-            .limit(100);
 
         if (!error && data) {
             setResults(data);
@@ -479,7 +478,7 @@ export default function ProductSearch({ onSelect, inBudgetQtyById }: ProductSear
                                                 }}
                                             >
                                                 <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', gap: 6 }}>
-                                                    <ProductRowThumb imagen={p.imagen} categoryColor={color} size={44} />
+                                                    <ProductRowThumb imagen={urlFotoProducto(p)} categoryColor={color} size={44} />
                                                     {qty > 0 ? (
                                                         <span style={{ color: 'var(--tono-verde)', fontSize: 11, fontWeight: 800 }}>
                                                             ×{qty}
@@ -659,7 +658,7 @@ export default function ProductSearch({ onSelect, inBudgetQtyById }: ProductSear
                             }}
                             onMouseEnter={() => setActiveIndex(i)}
                         >
-                            <ProductRowThumb imagen={p.imagen} categoryColor={colorCategoria(p.categoria)} />
+                            <ProductRowThumb imagen={urlFotoProducto(p)} categoryColor={colorCategoria(p.categoria)} />
                             <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ color: 'var(--label-primary)', fontSize: '14px', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                     {p.nombre}

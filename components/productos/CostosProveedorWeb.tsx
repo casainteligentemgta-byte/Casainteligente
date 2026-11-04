@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import { efectoEnProducto, type ProductoActual } from '@/lib/productos/importarListaPrecios';
 import { filaDesdePrecioWeb, proveedoresAdmitidos, revisarEnlaceProveedor } from '@/lib/productos/precioProveedorWeb';
 import { tinta, tintaTexto, tonoTexto } from '@/lib/tema/tinta';
+import { TABLA_PRODUCTOS, VISTA_PRODUCTOS_LECTURA, esErrorVistaProductos } from '@/lib/productos/tablaProductos';
 
 const NARANJA = '#FF9500';
 const VERDE = '#34C759';
@@ -79,13 +80,21 @@ export default function CostosProveedorWeb() {
         setErrorCarga(null);
         const todos: ProductoConEnlace[] = [];
         let desde = 0;
+        let tabla: typeof VISTA_PRODUCTOS_LECTURA | typeof TABLA_PRODUCTOS = VISTA_PRODUCTOS_LECTURA;
+        const columnas = 'id,nombre,marca,modelo,categoria,costo,precio,margen_pct,imagen,image_url,proveedor_url';
         while (desde < 20000) {
-            const { data, error } = await supabase
-                .from('products')
-                .select('id,nombre,marca,modelo,categoria,costo,precio,imagen,proveedor_url')
-                .not('proveedor_url', 'is', null)
-                .order('nombre')
-                .range(desde, desde + 999);
+            const armar = (t: string) =>
+                supabase
+                    .from(t)
+                    .select(columnas)
+                    .not('proveedor_url', 'is', null)
+                    .order('nombre')
+                    .range(desde, desde + 999);
+            let { data, error } = await armar(tabla);
+            if (error && tabla === VISTA_PRODUCTOS_LECTURA && esErrorVistaProductos(error) && desde === 0) {
+                tabla = TABLA_PRODUCTOS;
+                ({ data, error } = await armar(tabla));
+            }
             if (error) {
                 setErrorCarga('No se pudieron cargar los productos. Revisa la conexión e intenta de nuevo.');
                 return;
@@ -100,9 +109,10 @@ export default function CostosProveedorWeb() {
                     marca: (p.marca as string | null) ?? null,
                     modelo: (p.modelo as string | null) ?? null,
                     categoria: (p.categoria as string | null) ?? null,
-                    imagen: (p.imagen as string | null) ?? null,
+                    imagen: (p.imagen as string | null) || (p.image_url as string | null) || null,
                     costo: p.costo == null ? null : Number(p.costo),
                     precio: p.precio == null ? null : Number(p.precio),
+                    margen_pct: p.margen_pct == null ? null : Number(p.margen_pct),
                     proveedor_url: enlace,
                 });
             }
@@ -196,7 +206,7 @@ export default function CostosProveedorWeb() {
                 modificado: new Date().toISOString(),
             };
             if (e.cambiaPrecio) cambio.precio = e.precio;
-            const { data, error } = await supabase.from('products').update(cambio).eq('id', f.p.id).select('id');
+            const { data, error } = await supabase.from(TABLA_PRODUCTOS).update(cambio).eq('id', f.p.id).select('id');
             if (error) res.errores.push(`${f.p.nombre}: ${error.message}`);
             else if (!data || data.length === 0) res.errores.push(`${f.p.nombre}: no se guardó. Revisa que tu sesión siga abierta.`);
             else res.actualizados += 1;

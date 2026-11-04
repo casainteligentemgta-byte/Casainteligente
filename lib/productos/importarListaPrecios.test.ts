@@ -193,6 +193,7 @@ test('efecto: cambia el costo y deja el precio de venta quieto', () => {
     costo: 12.34,
     precio: 20,
     utilidad: 7.66,
+    margen_pct: 62.07,
     cambiaCosto: true,
     cambiaPrecio: false,
     disponibilidad: 'disponible',
@@ -200,19 +201,29 @@ test('efecto: cambia el costo y deja el precio de venta quieto', () => {
   })
 })
 
-test('efecto: si el precio era igual al costo (o no había precio), el precio sigue al costo', () => {
-  // Precio base = costo: es como se cargan las listas de distribuidor.
+test('efecto: si el precio era igual al costo (o no había precio), se aplica el margen del catálogo', () => {
+  // Precio = costo: ya no se copia el costo; se aplica el 20 % por defecto.
   const igual = efectoEnProducto(producto(1, 'M', 10, 10), fila(1, 'M', 12.34), { mantenerMargen: false })
-  assert.deepEqual([igual.costo, igual.precio, igual.utilidad, igual.cambiaPrecio, igual.vendeBajoCosto], [12.34, 12.34, 0, true, false])
-  // Sin precio de venta: se le pone el costo, para que no salga en 0 en un presupuesto.
+  assert.deepEqual(
+    [igual.costo, igual.precio, igual.utilidad, igual.margen_pct, igual.cambiaPrecio, igual.vendeBajoCosto],
+    [12.34, 14.81, 2.47, 20, true, false],
+  )
+  // Sin precio de venta: también se aplica el margen, para no vender al costo.
   const sinPrecio = efectoEnProducto(producto(1, 'M', 10, null), fila(1, 'M', 12.34), { mantenerMargen: false })
-  assert.deepEqual([sinPrecio.precio, sinPrecio.cambiaPrecio], [12.34, true])
+  assert.deepEqual([sinPrecio.precio, sinPrecio.cambiaPrecio, sinPrecio.margen_pct], [14.81, true, 20])
   // Con ganancia propia y el interruptor apagado, el precio no se toca.
   const propio = efectoEnProducto(producto(1, 'M', 10, 15), fila(1, 'M', 12.34), { mantenerMargen: false })
   assert.deepEqual([propio.precio, propio.cambiaPrecio], [15, false])
   // Si el proveedor no lo tiene, no cambia ni el costo ni el precio.
   const agotado = efectoEnProducto(producto(1, 'M', 10, 10), fila(1, 'M', 12.34, 'no_disponible'), { mantenerMargen: false })
   assert.deepEqual([agotado.costo, agotado.precio, agotado.cambiaPrecio], [10, 10, false])
+  // El margen de la categoría manda si el producto no tiene uno propio.
+  const deCat = efectoEnProducto(producto(1, 'M', 10, 10), fila(1, 'M', 10), {
+    mantenerMargen: false,
+    margenPorCategoria: { 'Cámaras IP': 25 },
+  })
+  assert.equal(deCat.precio, 12.5)
+  assert.equal(deCat.margen_pct, 25)
 })
 
 test('efecto: mantener el margen sube el precio en la misma proporción', () => {
@@ -249,6 +260,7 @@ test('cambioParaProducto escribe solo lo que cambia', () => {
     modificado: 'AHORA',
     costo: 12.34,
     utilidad: 7.66,
+    margen_pct: 62.07,
   })
   assert.deepEqual(cambioParaProducto(p, fila(1, 'M', 10), { mantenerMargen: true }, '2026-09-20', 'AHORA'), {
     disponibilidad_proveedor: 'disponible',
@@ -263,6 +275,7 @@ test('cambioParaProducto escribe solo lo que cambia', () => {
   assert.equal(conMargen.costo, 15)
   assert.equal(conMargen.precio, 30)
   assert.equal(conMargen.utilidad, 15)
+  assert.equal(conMargen.margen_pct, 100)
 })
 
 test('nombreDesdeDescripcion corta en un sitio decente', () => {
@@ -309,8 +322,9 @@ test('productoNuevoDesdeFila', () => {
     subcategoria: 'Cámaras IP',
     descripcion: 'DESCRIPCION MOD-PRUEBA-900 2.8MM',
     costo: 33,
-    precio: 33,
-    utilidad: 0,
+    precio: 39.6,
+    utilidad: 6.6,
+    margen_pct: 20,
     cantidad: 0,
     disponibilidad_proveedor: 'disponible',
     lista_proveedor_fecha: '2026-09-20',

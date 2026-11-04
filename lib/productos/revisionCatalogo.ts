@@ -3,11 +3,15 @@
  * búsqueda segura y aviso antes de eliminar. Funciones puras, con pruebas.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { productoSinFoto } from '@/lib/productos/fotoProducto';
+import { productoSinMargen } from '@/lib/productos/margenCatalogo';
 
-export type RevisionCatalogo = 'sin_precio' | 'sin_categoria' | 'repetidos';
+export type RevisionCatalogo = 'sin_precio' | 'sin_margen' | 'sin_foto' | 'sin_categoria' | 'repetidos';
 
 export const REVISIONES_CATALOGO: Array<{ id: RevisionCatalogo; etiqueta: string }> = [
   { id: 'sin_precio', etiqueta: 'Sin precio' },
+  { id: 'sin_margen', etiqueta: 'Sin margen' },
+  { id: 'sin_foto', etiqueta: 'Sin foto' },
   { id: 'sin_categoria', etiqueta: 'Sin categoría' },
   { id: 'repetidos', etiqueta: 'Repetidos' },
 ];
@@ -17,6 +21,9 @@ type ProductoRevisable = {
   nombre?: string | null;
   categoria?: string | null;
   precio?: number | null;
+  costo?: number | null;
+  imagen?: string | null;
+  image_url?: string | null;
 };
 
 function claveNombreProducto(nombre: string | null | undefined): string {
@@ -59,6 +66,8 @@ export function contarPorCorregir(
 ): Record<RevisionCatalogo, number> {
   return {
     sin_precio: productos.filter(productoSinPrecio).length,
+    sin_margen: productos.filter(productoSinMargen).length,
+    sin_foto: productos.filter(productoSinFoto).length,
     sin_categoria: productos.filter(productoSinCategoria).length,
     repetidos: idsDeNombresRepetidos(productos).size,
   };
@@ -69,6 +78,8 @@ export function filtrarPorCorregir<T extends ProductoRevisable>(
   revision: RevisionCatalogo | '',
 ): T[] {
   if (revision === 'sin_precio') return productos.filter(productoSinPrecio);
+  if (revision === 'sin_margen') return productos.filter(productoSinMargen);
+  if (revision === 'sin_foto') return productos.filter(productoSinFoto);
   if (revision === 'sin_categoria') return productos.filter(productoSinCategoria);
   if (revision === 'repetidos') {
     const ids = idsDeNombresRepetidos(productos);

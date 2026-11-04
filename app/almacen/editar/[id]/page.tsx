@@ -144,7 +144,7 @@ export default function EditInventoryItemPage() {
   const loadCatalogProducts = useCallback(async () => {
     const { data, error } = await supabase
       .from('products')
-      .select('id,nombre,marca,modelo,imagen')
+      .select('id,nombre,marca,modelo,imagen,image_url')
       .order('nombre');
     if (!error && data) {
       setCatalogProducts(data as CatalogProductRow[]);

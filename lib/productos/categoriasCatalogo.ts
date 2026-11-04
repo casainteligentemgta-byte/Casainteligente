@@ -37,6 +37,8 @@ export type ArbolCategorias = {
   categorias: string[];
   /** Subcategorías de cada categoría (clave: nombre de la categoría tal como se muestra). */
   subcategorias: Record<string, string[]>;
+  /** Margen por defecto de cada categoría (si está guardado). */
+  margenPorCategoria?: Record<string, number>;
 };
 
 export const CAT_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
@@ -196,7 +198,12 @@ export function guardarCategoriaExtraLocal(nombre: string): void {
   }
 }
 
-export type FilaCategoria = { id: string; name: string; parent_id: string | null };
+export type FilaCategoria = {
+  id: string;
+  name: string;
+  parent_id: string | null;
+  margen_pct_defecto?: number | null;
+};
 
 /**
  * De las filas de `product_categories` al árbol: las que no tienen madre son categorías;
@@ -212,13 +219,20 @@ export function arbolDeFilas(filas: readonly FilaCategoria[]): ArbolCategorias {
     categorias.push(nombre);
   }
   const subcategorias: Record<string, string[]> = {};
+  const margenPorCategoria: Record<string, number> = {};
   for (const f of filas) {
     const nombre = normalizarNombreCategoria(f.name);
     const madre = f.parent_id ? nombrePorId[f.parent_id] : undefined;
     if (!nombre || !madre) continue;
     subcategorias[madre] = mergeNombresCategoria(subcategorias[madre] ?? [], [nombre]);
   }
-  return { categorias: mergeNombresCategoria(categorias), subcategorias };
+  for (const f of filas) {
+    const nombre = normalizarNombreCategoria(f.name);
+    if (!nombre || f.parent_id) continue;
+    const m = Number(f.margen_pct_defecto);
+    if (Number.isFinite(m)) margenPorCategoria[nombre] = m;
+  }
+  return { categorias: mergeNombresCategoria(categorias), subcategorias, margenPorCategoria };
 }
 
 /** Subcategorías de una categoría (sin distinguir acentos ni mayúsculas en el nombre). */
@@ -279,15 +293,32 @@ export function opcionesCategoriaConSub(arbol: ArbolCategorias): string[] {
 }
 
 async function filasDeTabla(supabase: SupabaseClient): Promise<FilaCategoria[] | null> {
-  const { data, error } = await supabase
+  let data: unknown[] | null = null;
+  let { data: conMargen, error } = await supabase
     .from('product_categories')
-    .select('id, name, parent_id, sort_order, created_at')
+    .select('id, name, parent_id, sort_order, created_at, margen_pct_defecto')
     .order('sort_order', { ascending: true })
     .order('name', { ascending: true });
+  if (!error) data = conMargen;
+  if (error) {
+    const retry = await supabase
+      .from('product_categories')
+      .select('id, name, parent_id, sort_order, created_at')
+      .order('sort_order', { ascending: true })
+      .order('name', { ascending: true });
+    data = retry.data;
+    error = retry.error;
+  }
   if (error) return null;
   return (data ?? []).map((r) => {
-    const fila = r as { id?: string; name?: string; parent_id?: string | null };
-    return { id: String(fila.id ?? ''), name: String(fila.name ?? ''), parent_id: fila.parent_id ?? null };
+    const fila = r as { id?: string; name?: string; parent_id?: string | null; margen_pct_defecto?: number | null };
+    const margen = Number(fila.margen_pct_defecto);
+    return {
+      id: String(fila.id ?? ''),
+      name: String(fila.name ?? ''),
+      parent_id: fila.parent_id ?? null,
+      margen_pct_defecto: Number.isFinite(margen) ? margen : null,
+    };
   });
 }
 
@@ -349,7 +380,11 @@ export async function listarArbolCategorias(supabase: SupabaseClient): Promise<A
     arbol && arbol.categorias.length > 0
       ? categoriasAMostrar(arbol.categorias, [], [])
       : await listarCategoriasCatalogo(supabase);
-  return { categorias, subcategorias: subcategoriasAMostrar(categorias, arbol ? arbol.subcategorias : null) };
+  return {
+    categorias,
+    subcategorias: subcategoriasAMostrar(categorias, arbol ? arbol.subcategorias : null),
+    margenPorCategoria: arbol?.margenPorCategoria ?? {},
+  };
 }
 
 export async function listarCategoriasCatalogo(supabase: SupabaseClient): Promise<string[]> {

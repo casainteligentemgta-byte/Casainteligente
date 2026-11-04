@@ -24,6 +24,10 @@ export const PERMISOS = [
   'clientes.ver',
   'clientes.editar',
   'clientes.borrar',
+  /** Ver el catálogo comercial (nombres, precio de venta, foto). */
+  'productos.ver',
+  /** Ver y editar costo, utilidad y margen del catálogo. */
+  'productos.costos',
 ] as const;
 
 export type Permiso = (typeof PERMISOS)[number];
@@ -86,6 +90,7 @@ const POR_ROL_EMPRESA: Record<RolEmpresa, Permiso[]> = {
     'clientes.ver',
     'clientes.editar',
     'clientes.borrar',
+    'productos.costos',
   ],
   contador: [
     'compra.registrar',
@@ -94,6 +99,7 @@ const POR_ROL_EMPRESA: Record<RolEmpresa, Permiso[]> = {
     'procura.solicitar',
     'cco.ver',
     'cco.editar',
+    'productos.costos',
   ],
   comprador: [
     'procura.solicitar',
@@ -104,6 +110,7 @@ const POR_ROL_EMPRESA: Record<RolEmpresa, Permiso[]> = {
     'compra.confirmar',
     'almacen.ingreso',
     'cco.ver',
+    'productos.costos',
   ],
   almacen_central: [
     'procura.usar_almacen',

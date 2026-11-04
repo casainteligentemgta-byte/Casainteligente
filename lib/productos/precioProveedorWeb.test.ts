@@ -163,9 +163,9 @@ describe('consultar el precio en la web del proveedor', () => {
 describe('el precio de la web se aplica como el de una lista', () => {
   const producto = (costo: number | null, precio: number | null): ProductoActual => ({ id: 1, nombre: 'P', marca: null, modelo: null, categoria: null, costo, precio, imagen: null })
 
-  it('si el precio era igual al costo, sigue al costo; si tenía ganancia propia, no se toca', () => {
+  it('si el precio era igual al costo, se aplica el margen del catálogo; si tenía ganancia propia, no se toca', () => {
     const sigue = efectoEnProducto(producto(10, 10), filaDesdePrecioWeb(12.5), { mantenerMargen: false })
-    assert.deepEqual([sigue.costo, sigue.precio, sigue.cambiaCosto, sigue.cambiaPrecio], [12.5, 12.5, true, true])
+    assert.deepEqual([sigue.costo, sigue.precio, sigue.cambiaCosto, sigue.cambiaPrecio], [12.5, 15, true, true])
     const propio = efectoEnProducto(producto(10, 15), filaDesdePrecioWeb(12), { mantenerMargen: false })
     assert.deepEqual([propio.costo, propio.precio, propio.cambiaPrecio], [12, 15, false])
     const conMargen = efectoEnProducto(producto(10, 15), filaDesdePrecioWeb(12), { mantenerMargen: true })

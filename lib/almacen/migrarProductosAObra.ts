@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { aplicarDeltaStockInventario } from '@/lib/almacen/aplicarDeltaStockInventario';
+import { urlFotoProducto } from '@/lib/productos/fotoProducto';
 
 export type ProductoCatalogoRow = {
   id: number;
@@ -10,7 +11,7 @@ export type ProductoCatalogoRow = {
   descripcion: string | null;
   costo: number | null;
   imagen: string | null;
-  ubicacion: string | null;
+  image_url?: string | null;
 };
 
 export type MigrarProductosAObraInput = {
@@ -99,8 +100,8 @@ export async function migrarProductosAObra(
   if (!proyecto) throw new Error('Proyecto no encontrado.');
 
   const { data: productos, error: prodErr } = await supabase
-    .from('products')
-    .select('id,nombre,categoria,marca,modelo,descripcion,costo,imagen,ubicacion')
+    .from('products_lectura')
+    .select('id,nombre,categoria,marca,modelo,descripcion,costo,imagen,image_url')
     .in('id', productIds);
 
   if (prodErr) throw new Error(prodErr.message);
@@ -162,7 +163,7 @@ export async function migrarProductosAObra(
         stock_quarantine: 0,
         reorder_point: 0,
         average_weighted_cost: costo,
-        location: prod.ubicacion?.trim() || null,
+        location: null,
         brand: prod.marca?.trim() || null,
         model: prod.modelo?.trim() || null,
         observations: prod.descripcion?.trim() || null,
@@ -173,7 +174,7 @@ export async function migrarProductosAObra(
         status: herramientas ? 'OPERATIVO' : null,
       };
 
-      const img = prod.imagen?.trim();
+      const img = urlFotoProducto(prod);
       if (img) payload.image_url = img;
 
       const { data: inserted, error: insErr } = await supabase

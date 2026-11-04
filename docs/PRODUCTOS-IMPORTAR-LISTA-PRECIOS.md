@@ -18,14 +18,14 @@ La lista la sube el dueño desde la pantalla, con su sesión. El archivo se lee 
 
 1. **Sube la lista**: el **PDF** del proveedor o un `.csv`. Si quiere fotos, el `.zip`. Indica la fecha de la lista y, si el PDF no trae la marca, puede escribirla.
 2. **Cómo aplicar:**
-   - «Mantener mi margen» (apagado por defecto): para los productos con ganancia propia, mueve el precio de venta en la misma proporción que el costo. Apagado, su precio no se toca. Los productos cuyo precio es igual al costo (o no tienen precio) **siempre** siguen al costo.
+   - «Mantener mi margen» (apagado por defecto): para los productos con ganancia propia, mueve el precio de venta en la misma proporción que el costo. Apagado, su precio no se toca. Los productos cuyo precio es igual al costo (o no tienen precio) reciben el **margen del catálogo** (20 %, o el de su categoría).
    - «Poner la foto de la lista a los que no tienen» (encendido si hay ZIP). Las fotos propias se respetan salvo que marque «Reemplazar también…».
 3. **Revisa y marca.** La vista previa separa:
    - **Cambian de costo:** marcados.
    - **Hay que elegir:** el modelo se parece pero no es idéntico, o la lista lo trae con dos precios. No se tocan hasta que elija una opción.
    - **El proveedor no lo tiene:** el costo queda igual; solo se anota la disponibilidad.
    - **Sin cambio de costo:** se anota la disponibilidad.
-   - **No los tienes en tu catálogo:** sin marcar; con buscador, filtro por sección y «Solo disponibles». «Marcar los N a la vista» marca de una vez todo lo filtrado (toda la lista, si se quitan los filtros). Se crean con el precio igual al costo.
+   - **No los tienes en tu catálogo:** sin marcar; con buscador, filtro por sección y «Solo disponibles». «Marcar los N a la vista» marca de una vez todo lo filtrado (toda la lista, si se quitan los filtros). Se crean con `precio = costo × (1 + margen)` (20 % por defecto).
 4. **Aplicar** pide confirmación, guarda de cuatro en cuatro y muestra un resumen con lo que no se pudo. Con listas grandes tarda unos minutos y pide a la pantalla que no se apague; si se interrumpe, basta volver a subir la lista: lo ya guardado no se repite.
 
 ## Lista en PDF
@@ -63,9 +63,9 @@ UTF-8, separado por comas o punto y coma. Columnas (el orden no importa):
 - **No se cruzan** los productos sin modelo ni con modelos de menos de 5 caracteres (servicios, mano de obra).
 - **Costo:** solo se usa el precio si el estatus es `disponible` o `en_transito`. Un `no_disponible` nunca cambia el costo, aunque traiga precio.
 - **Utilidad:** siempre `precio − costo`, como en el formulario de producto.
-- **Fotos:** se suben con `uploadProductImage` (`lib/supabase/product-media.ts`) y la dirección va a `imagen`. Una misma foto se sube una sola vez por importación.
-- **Productos nuevos:** `modelo` completo, `nombre` recortado de la descripción, categoría sugerida por la sección (editable), `cantidad` 0, precio igual al costo (utilidad 0).
-- **Precio igual al costo:** si un producto tenía el precio igual al costo, o no tenía precio, al cambiar el costo el precio lo sigue. El margen se pone al armar cada presupuesto.
+- **Fotos:** se suben con `uploadProductImage` (`lib/supabase/product-media.ts`) y la dirección va a `imagen` (campo canónico; `image_url` es espejo). Una misma foto se sube una sola vez por importación.
+- **Productos nuevos:** `modelo` completo, `nombre` recortado de la descripción, categoría sugerida por la sección (editable), `cantidad` 0, `precio = costo × (1 + margen)` (margen del producto, de la categoría o 20 %).
+- **Precio igual al costo:** si un producto tenía el precio igual al costo, o no tenía precio, al cambiar el costo se aplica el margen del catálogo. No se copia el costo al precio.
 
 ## Dónde está
 
@@ -81,21 +81,22 @@ Pruebas: `tsx --test lib/productos/*.test.ts`.
 
 ## Precio del catálogo y margen del presupuesto
 
-El **precio** guardado en cada producto es la base. Al armar un presupuesto (`/ventas`) el
-margen empieza en **0 %** y el operador lo sube ahí mismo; el precio de cada renglón es
-`precio × (1 + margen)`. Hasta octubre de 2026 el margen arrancaba en 20 %.
+El **precio** guardado en cada producto es la base (`costo × (1 + margen_pct/100)`). Al
+armar un presupuesto (`/ventas`) el margen extra arranca en **20 %**, el mismo número que
+NetVision (`MARGEN_VENTAS_DEFECTO`). El precio de cada renglón es `precio_catálogo × (1 + extra)`.
+Si el catálogo ya tiene margen, el operador puede bajar el extra a 0 %.
 
-Ojo: en la mayoría de los productos cargados desde listas de distribuidor el precio es igual
-al costo. Con margen 0 % esos renglones se venden al costo; el resumen del presupuesto
-muestra la ganancia en rojo cuando no deja nada, y **al guardar** se avisa qué renglones
-se venden al costo o por debajo (`lib/presupuesto/avisoMargen.ts`); el operador puede
-corregir o guardar de todos modos.
+Los productos que aún tienen precio = costo se marcan «sin margen» en el catálogo; hay un
+filtro y una acción para aplicar el margen a la selección (no se reescriben precios en
+producción al desplegar: es una herramienta). **Al guardar** un presupuesto se avisa qué
+renglones se venden al costo o por debajo (`lib/presupuesto/avisoMargen.ts`).
 
 ## Fichas por corregir
 
 En el catálogo, con «Todas» y sin búsqueda, aparece la fila **Por corregir** con los
-productos sin precio, sin categoría o con el nombre repetido. Tocar una opción filtra la
-lista para editarlos uno por uno.
+productos sin precio, **sin margen**, **sin foto**, sin categoría o con el nombre repetido.
+Tocar una opción filtra la lista. En «sin margen» se puede aplicar el margen a la
+selección; en «sin foto» se sube la foto desde el móvil (cámara o galería). No se inventan fotos.
 
 ## Categorías
 
