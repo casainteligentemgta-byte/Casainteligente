@@ -47,7 +47,7 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
 
   let supabaseResponse = NextResponse.next({ request });
 
-  if (!supabasePublicoConfigurado(url, key)) {
+  if (!url || !key || !supabasePublicoConfigurado(url, key)) {
     // En producción no se deja pasar sin auth. En local sí, para poder abrir
     // pantallas vacías sin credenciales (AGENTS.md).
     if (process.env.NODE_ENV === 'production') {
