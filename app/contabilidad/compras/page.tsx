@@ -100,7 +100,11 @@ import {
     normalizarMonedaExtracted,
     type ExtractedCanalHeader,
 } from '@/lib/contabilidad/extractedCanal';
-import { actualizarPendienteCanal, eliminarPendienteCanal } from '@/lib/contabilidad/facturaCanalApi';
+import {
+    actualizarPendienteCanal,
+    eliminarPendienteCanal,
+    rutaDocumentoPendienteCanal,
+} from '@/lib/contabilidad/facturaCanalApi';
 import { reubicarCompra as reubicarCompraApi } from '@/lib/contabilidad/reubicarCompraApi';
 import {
     compraCoincideFuente,
@@ -3610,7 +3614,7 @@ export default function ComprasPage() {
                                                     c.pendiente_canal_id &&
                                                     (c.id.startsWith('canal-') ||
                                                         !c.purchase_invoice_id)
-                                                        ? `/api/facturas-canal/pendientes/${c.pendiente_canal_id}/document`
+                                                        ? rutaDocumentoPendienteCanal(c.pendiente_canal_id)
                                                         : undefined
                                                 }
                                                 expanded={imagenFacturaAbierta === c.id}
@@ -3792,6 +3796,7 @@ export default function ComprasPage() {
                 extracted={editandoCanal?.extracted ?? null}
                 destino={editandoCanal?.destino ?? null}
                 versionPendiente={editandoCanal?.versionPendiente ?? null}
+                pendienteId={editandoCanal?.pendienteId}
                 onClose={() => setEditandoCanal(null)}
                 onGuardar={guardarEdicionTelegram}
             />

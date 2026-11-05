@@ -12,6 +12,8 @@ type Props = {
   documentApiPath?: string;
   /** Solo carga y muestra cuando es true (p. ej. tras pulsar el título). */
   expanded?: boolean;
+  /** Alto máximo de la miniatura (px). Por defecto 220. */
+  maxHeight?: number;
 };
 
 export default function CompraFacturaImagen({
@@ -20,6 +22,7 @@ export default function CompraFacturaImagen({
   esRecepcion = false,
   documentApiPath,
   expanded = true,
+  maxHeight = 220,
 }: Props) {
   const [url, setUrl] = useState<string | null>(null);
   const [mimeType, setMimeType] = useState<string | null>(null);
@@ -165,7 +168,7 @@ export default function CompraFacturaImagen({
                 display: 'block',
                 width: '100%',
                 maxWidth: '320px',
-                maxHeight: '220px',
+                maxHeight: `${maxHeight}px`,
                 objectFit: 'contain',
                 borderRadius: '8px',
                 background: 'rgba(255,255,255,0.04)',

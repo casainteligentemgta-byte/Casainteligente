@@ -2,7 +2,18 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { crearFakeSupabase } from '../telegram/testing/fakeSupabase'
-import { calcularCuellosBotella, enviarAvisosCuellosBotella, materialesBajoMinimo, textoEdad } from './cuellosBotella'
+import {
+  calcularCuellosBotella,
+  enviarAvisosCuellosBotella,
+  filasTecladoFacturasCanal,
+  materialesBajoMinimo,
+  partirFilasTeclado,
+  textoBotonFacturaCanal,
+  textoEdad,
+  urlEdicionFacturaCanal,
+  type ExtraAvisoTelegram,
+  type ItemCuello,
+} from './cuellosBotella'
 
 const AHORA = new Date('2026-10-15T12:00:00Z')
 const haceHoras = (h: number) => new Date(AHORA.getTime() - h * 3_600_000).toISOString()
@@ -77,13 +88,13 @@ describe('cuellos de botella', () => {
 
   it('un mensaje por persona; todos los depositarios reciben la cuarentena', async () => {
     const sb = base()
-    const enviados: Array<{ chat: string; html: string }> = []
+    const enviados: Array<{ chat: string; html: string; extra?: ExtraAvisoTelegram }> = []
     const resumen = await calcularCuellosBotella(sb, { ahora: AHORA })
     const res = await enviarAvisosCuellosBotella(sb, {
       resumen,
       baseUrl: 'https://x.test',
-      enviar: async (chat, html) => {
-        enviados.push({ chat, html })
+      enviar: async (chat, html, extra) => {
+        enviados.push({ chat, html, extra })
       },
     })
     const de = (chat: string) => enviados.filter((e) => e.chat === chat)
@@ -100,12 +111,80 @@ describe('cuellos de botella', () => {
     // quien mandó la factura que se trabó
     assert.match(de('700')[0].html, /lectura trabada/)
     assert.match(de('700')[0].html, /x\.test\/compras\/torre-control/)
+    assert.match(de('700')[0].html, /Pulse el botón de cada factura/)
+    const teclado = de('700')[0].extra?.reply_markup?.inline_keyboard
+    assert.equal(teclado?.length, 1)
+    assert.equal(teclado?.[0]?.[0]?.url, 'https://x.test/contabilidad/compras/telegram/c1')
+    assert.match(teclado?.[0]?.[0]?.text ?? '', /Factura sin leer/)
+    assert.equal(de('101')[0].extra?.reply_markup, undefined)
   })
 
   it('edad legible', () => {
     assert.equal(textoEdad(5), '5 h')
     assert.equal(textoEdad(24), '1 día')
     assert.equal(textoEdad(73), '3 días')
+  })
+
+  it('botón URL de factura apunta a la pantalla de edición', () => {
+    assert.equal(
+      urlEdicionFacturaCanal('abc-1', 'https://casainteligente.company/'),
+      'https://casainteligente.company/contabilidad/compras/telegram/abc-1',
+    )
+    const it: ItemCuello = {
+      id: 'c9',
+      etapa: 'canal',
+      referencia: 'Factura F-99',
+      detalle: 'Ferre · leída, falta confirmar',
+      proyectoId: OBRA,
+      obra: 'RANCHO',
+      desde: haceHoras(48),
+      horas: 48,
+      detenido: true,
+      critico: false,
+      chatOrigen: '700',
+    }
+    assert.match(textoBotonFacturaCanal(it), /^🟠 Factura F-99 · RANCHO · 2 días$/)
+    const filas = filasTecladoFacturasCanal([it], 'https://x.test')
+    assert.deepEqual(filas, [
+      [{ text: '🟠 Factura F-99 · RANCHO · 2 días', url: 'https://x.test/contabilidad/compras/telegram/c9' }],
+    ])
+    assert.equal(partirFilasTeclado(Array.from({ length: 25 }, (_, i) => i)).length, 3)
+    assert.deepEqual(partirFilasTeclado(Array.from({ length: 25 }, (_, i) => i))[2], [24])
+  })
+
+  it('muchas facturas del canal se envían en mensajes adicionales con botones', async () => {
+    const canal = Array.from({ length: 13 }, (_, i) => ({
+      id: `c-${i}`,
+      estado: 'extraido',
+      chat_id: '700',
+      proyecto_id: null,
+      extracted: { invoice_number: `N-${i}`, supplier_name: 'Ferre' },
+      created_at: haceHoras(30),
+      updated_at: haceHoras(30),
+    }))
+    const sb = crearFakeSupabase({
+      ci_facturas_canal_pendientes: canal,
+    }) as unknown as SupabaseClient
+    const enviados: Array<{ chat: string; html: string; extra?: ExtraAvisoTelegram }> = []
+    const resumen = await calcularCuellosBotella(sb, { ahora: AHORA })
+    await enviarAvisosCuellosBotella(sb, {
+      resumen,
+      baseUrl: 'https://x.test',
+      enviar: async (chat, html, extra) => {
+        enviados.push({ chat, html, extra })
+      },
+    })
+    const de700 = enviados.filter((e) => e.chat === '700')
+    assert.equal(de700.length, 2)
+    assert.equal(de700[0]!.extra?.reply_markup?.inline_keyboard.length, 12)
+    assert.equal(de700[1]!.extra?.reply_markup?.inline_keyboard.length, 1)
+    assert.match(de700[1]!.html, /Más facturas sin confirmar/)
+    const urls = de700.flatMap((e) => e.extra?.reply_markup?.inline_keyboard.flatMap((fila) => fila.map((b) => b.url)) ?? [])
+    assert.equal(urls.length, 13)
+    assert.equal(new Set(urls).size, 13)
+    for (let i = 0; i < 13; i += 1) {
+      assert.ok(urls.includes(`https://x.test/contabilidad/compras/telegram/c-${i}`), `falta botón c-${i}`)
+    }
   })
 })
 
