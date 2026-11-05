@@ -11,7 +11,7 @@ const ENLACE_ETAPA: Record<ClaveEtapa, (it: ItemCuello) => string> = {
   aprobacion: () => '/contabilidad/procuras',
   compra: () => '/contabilidad/procuras',
   ingreso: () => '/contabilidad/procuras',
-  canal: (it) => `/contabilidad/compras/canal?pendiente=${it.id}`,
+  canal: (it) => `/contabilidad/compras/telegram/${it.id}`,
   retiro: () => '/almacen/retiros',
   transporte: () => '/almacen/retiros',
   cuarentena: () => '/almacen/recepcion?tab=transito',

@@ -527,15 +527,52 @@ export type ResultadoAvisos = {
 
 const MAX_LINEAS_POR_ETAPA = 12;
 
+/** Telegram admite 8 botones por fila y ~100 por mensaje; uno por fila, a bloques. */
+export const MAX_BOTONES_FACTURA_AVISO = 12;
+const MAX_TEXTO_BOTON_TELEGRAM = 64;
+
+export type BotonUrlTelegram = { text: string; url: string };
+export type TecladoUrlTelegram = { inline_keyboard: BotonUrlTelegram[][] };
+export type ExtraAvisoTelegram = { reply_markup?: TecladoUrlTelegram };
+
+export function urlEdicionFacturaCanal(id: string, baseUrl: string): string {
+  return `${baseUrl.replace(/\/$/, '')}/contabilidad/compras/telegram/${id}`;
+}
+
+export function textoBotonFacturaCanal(
+  it: Pick<ItemCuello, 'referencia' | 'obra' | 'horas' | 'critico'>,
+): string {
+  const marca = it.critico ? '🔴' : '🟠';
+  const partes = [it.referencia];
+  if (it.obra) partes.push(it.obra);
+  partes.push(textoEdad(it.horas));
+  const raw = `${marca} ${partes.join(' · ')}`;
+  if (raw.length <= MAX_TEXTO_BOTON_TELEGRAM) return raw;
+  return `${raw.slice(0, MAX_TEXTO_BOTON_TELEGRAM - 1)}…`;
+}
+
+/** Un botón por factura, una fila cada uno (Telegram: máx. 8 por fila). */
+export function filasTecladoFacturasCanal(items: ItemCuello[], baseUrl: string): BotonUrlTelegram[][] {
+  return items.map((it) => [{ text: textoBotonFacturaCanal(it), url: urlEdicionFacturaCanal(it.id, baseUrl) }]);
+}
+
+export function partirFilasTeclado<T>(filas: T[], max = MAX_BOTONES_FACTURA_AVISO): T[][] {
+  if (max <= 0) return filas.length ? [filas] : [];
+  const out: T[][] = [];
+  for (let i = 0; i < filas.length; i += max) out.push(filas.slice(i, i + max));
+  return out;
+}
+
 /**
  * Un solo mensaje por persona con todo lo que tiene detenido, agrupado por etapa.
+ * Las facturas del canal van como botones URL (inline keyboard) a la pantalla de edición.
  * Pensado para correr una vez al día (cron) o a mano desde el centro.
  */
 export async function enviarAvisosCuellosBotella(
   supabase: SupabaseClient,
   opts?: {
     resumen?: ResumenCuellos;
-    enviar?: (chatId: string, html: string) => Promise<void>;
+    enviar?: (chatId: string, html: string, extra?: ExtraAvisoTelegram) => Promise<void>;
     baseUrl?: string;
   },
 ): Promise<ResultadoAvisos> {
@@ -563,11 +600,12 @@ export async function enviarAvisosCuellosBotella(
     .replace(/\/$/, '');
   const enviar =
     opts?.enviar ??
-    (async (chatId: string, html: string) => {
+    (async (chatId: string, html: string, extra?: ExtraAvisoTelegram) => {
       const { sendTelegramMessage } = await import('@/lib/telegram/botApi');
       await sendTelegramMessage(chatId, html, {
         parse_mode: 'HTML',
         contextoLogEspejo: '[Torre de Control · aviso diario]',
+        ...(extra?.reply_markup ? { reply_markup: extra.reply_markup } : {}),
       });
     });
 
@@ -596,11 +634,22 @@ export async function enviarAvisosCuellosBotella(
         );
       }
       if (lista.length > MAX_LINEAS_POR_ETAPA) partes.push(`… y ${lista.length - MAX_LINEAS_POR_ETAPA} más`);
+      if (etapa.clave === 'canal') {
+        partes.push('<i>Pulse el botón de cada factura para abrirla y confirmarla.</i>');
+      }
     }
     if (admins.has(chatId)) partes.push('', '🛠 Para resolverlos desde aquí: /detenidos');
     partes.push('', `<a href="${base}/compras/torre-control">Abrir la Torre de Control</a>`);
+
+    const filasCanal = filasTecladoFacturasCanal(b.porEtapa.get('canal') ?? [], base);
+    const bloques = partirFilasTeclado(filasCanal);
     try {
-      await enviar(chatId, partes.join('\n'));
+      await enviar(chatId, partes.join('\n'), bloques[0] ? { reply_markup: { inline_keyboard: bloques[0] } } : undefined);
+      for (let i = 1; i < bloques.length; i += 1) {
+        await enviar(chatId, '📄 <b>Más facturas sin confirmar</b>\n<i>Pulse el botón para abrir y editar cada una.</i>', {
+          reply_markup: { inline_keyboard: bloques[i]! },
+        });
+      }
       enviados += 1;
     } catch (e) {
       errores += 1;

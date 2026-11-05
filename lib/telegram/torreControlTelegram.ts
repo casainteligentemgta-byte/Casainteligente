@@ -156,7 +156,7 @@ async function botonesItem(supabase: SupabaseClient, etapa: ClaveEtapa, it: Item
     }
     case 'canal':
       return [
-        [{ text: '🌐 Revisar y confirmar', url: `${urlBase()}/contabilidad/compras/canal?pendiente=${id}` }],
+        [{ text: '🌐 Revisar y confirmar', url: `${urlBase()}/contabilidad/compras/telegram/${id}` }],
         [recordar, { text: '🗑 Descartar factura', callback_data: `${CB_DESCARTAR_FACTURA}${id}` }],
       ];
     case 'retiro':

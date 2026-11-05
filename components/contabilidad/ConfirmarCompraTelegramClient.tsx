@@ -9,6 +9,7 @@ import UbicacionInventarioSelect from '@/components/almacen/UbicacionInventarioS
 import { labelUbicacionOpcion } from '@/lib/almacen/ubicacionesInventario';
 import type { UbicacionInventario } from '@/types/inventario-obra';
 import EditarFacturaCanalModal from '@/components/contabilidad/EditarFacturaCanalModal';
+import CompraFacturaImagen from '@/components/contabilidad/CompraFacturaImagen';
 import { ClasificacionGastoEntidadSelectForm } from '@/components/contabilidad/ClasificacionGastoEntidadSelect';
 import type { ClasificacionGastoEntidad } from '@/lib/contabilidad/clasificacionGastoEntidad';
 import type { ExtractedCanalHeader } from '@/lib/contabilidad/extractedCanal';
@@ -25,6 +26,7 @@ import {
   actualizarPendienteCanal,
   confirmarCompraCanal,
   ingresoAlmacenCanal,
+  rutaDocumentoPendienteCanal,
   type PendienteCanal,
 } from '@/lib/contabilidad/facturaCanalApi';
 import { createClient } from '@/lib/supabase/client';
@@ -613,6 +615,21 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
               </div>
             )}
 
+            {pendiente.document_storage_path || pendiente.document_file_name ? (
+              <section className={panelClass}>
+                <p className="text-[11px] text-zinc-500 leading-relaxed mb-1">
+                  Foto de la factura — compare con los datos extraídos antes de confirmar.
+                </p>
+                <CompraFacturaImagen
+                  compraId={pendiente.id}
+                  documentApiPath={rutaDocumentoPendienteCanal(pendiente.id)}
+                  tieneDocumento
+                  expanded
+                  maxHeight={360}
+                />
+              </section>
+            ) : null}
+
             {yaEnContabilidad && !gastoEntidad ? (
               <div className="rounded-2xl border border-emerald-500/25 bg-emerald-950/15 px-4 py-3 text-xs text-emerald-200/90">
                 Compra registrada en contabilidad. Solo falta el ingreso de mercancía al almacén de la
@@ -1045,6 +1062,8 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
         open={editando}
         titulo="Corregir datos de la factura"
         extracted={extracted}
+        pendienteId={pendingId}
+        tieneDocumento={Boolean(pendiente?.document_storage_path || pendiente?.document_file_name)}
         onClose={() => setEditando(false)}
         onGuardar={guardarExtracted}
       />

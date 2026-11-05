@@ -23,6 +23,8 @@ import {
   type ProyectoRow,
 } from '@/lib/almacen/inventoryClasificacion';
 import { loadCatalogoProyectosApp } from '@/lib/proyectos/proyectosUnificados';
+import CompraFacturaImagen from '@/components/contabilidad/CompraFacturaImagen';
+import { rutaDocumentoPendienteCanal } from '@/lib/contabilidad/facturaCanalApi';
 
 const inputClass =
   'w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-xs text-white placeholder:text-zinc-600 outline-none focus:border-sky-500/50';
@@ -62,6 +64,9 @@ type Props = {
   onGuardar: (extracted: ExtractedCanalHeader, opts?: GuardarFacturaCanalOpts) => Promise<void>;
   /** Versión (updated_at) de la factura al abrir el modal. */
   versionPendiente?: string | null;
+  /** Pendiente de canal: muestra la foto/PDF cargado para cotejar con los datos. */
+  pendienteId?: string | null;
+  tieneDocumento?: boolean;
 };
 
 export default function EditarFacturaCanalModal({
@@ -72,6 +77,8 @@ export default function EditarFacturaCanalModal({
   onClose,
   onGuardar,
   versionPendiente = null,
+  pendienteId = null,
+  tieneDocumento = true,
 }: Props) {
   const [form, setForm] = useState<FacturaCanalForm>(() => formDesdeExtracted(extracted));
   const [guardando, setGuardando] = useState(false);
@@ -186,7 +193,7 @@ export default function EditarFacturaCanalModal({
       role="dialog"
       aria-modal="true"
     >
-      <div className="w-full sm:max-w-2xl max-h-[92vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl border border-white/10 bg-[#0c0c10] shadow-xl">
+      <div className={`w-full ${pendienteId ? 'sm:max-w-4xl' : 'sm:max-w-2xl'} max-h-[92vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl border border-white/10 bg-[#0c0c10] shadow-xl`}>
         <div className="sticky top-0 flex items-center justify-between gap-2 border-b border-white/10 bg-[#0c0c10] px-4 py-3">
           <h2 className="text-sm font-bold text-white">{titulo}</h2>
           <button
@@ -199,7 +206,31 @@ export default function EditarFacturaCanalModal({
           </button>
         </div>
 
-        <div className="p-4 space-y-4">
+        <div className={`p-4 ${pendienteId ? 'grid gap-4 lg:grid-cols-[minmax(220px,300px)_minmax(0,1fr)] lg:items-start' : 'space-y-4'}`}>
+          {pendienteId ? (
+            <aside className="lg:sticky lg:top-2 space-y-2">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+                Foto de la factura
+              </p>
+              <p className="text-[11px] text-zinc-500 leading-relaxed">
+                Compare el documento cargado con los datos editables.
+              </p>
+              {tieneDocumento ? (
+                <CompraFacturaImagen
+                  compraId={pendienteId}
+                  documentApiPath={rutaDocumentoPendienteCanal(pendienteId)}
+                  tieneDocumento
+                  expanded
+                  maxHeight={420}
+                />
+              ) : (
+                <p className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-[11px] text-zinc-500">
+                  No hay foto cargada para cotejar. Puede guardar los datos igual.
+                </p>
+              )}
+            </aside>
+          ) : null}
+          <div className="space-y-4 min-w-0">
           <div className="rounded-xl border border-[#FF9500]/35 bg-[#FF9500]/5 p-3 space-y-2">
             <p className="text-[10px] font-bold text-[#FF9500] uppercase tracking-wider">
               Moneda de la factura
@@ -434,6 +465,7 @@ export default function EditarFacturaCanalModal({
           </div>
 
           {error ? <p className="text-xs text-red-400">{error}</p> : null}
+          </div>
         </div>
 
         <div className="sticky bottom-0 flex gap-2 border-t border-white/10 bg-[#0c0c10] p-4">

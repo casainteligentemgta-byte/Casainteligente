@@ -710,6 +710,8 @@ export default function FacturasCanalClient() {
       <EditarFacturaCanalModal
         open={editando != null}
         extracted={editando?.extracted ?? null}
+        pendienteId={editando?.id}
+        tieneDocumento={Boolean(editando?.document_storage_path || editando?.document_file_name)}
         onClose={() => setEditando(null)}
         onGuardar={guardarEdicion}
       />

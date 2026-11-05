@@ -3,6 +3,11 @@ import type { ExtractedCanalHeader } from '@/lib/contabilidad/extractedCanal';
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** URL firmada del documento: GET → `{ url, mimeType, fileName }`. */
+export function rutaDocumentoPendienteCanal(id: string): string {
+  return `/api/facturas-canal/pendientes/${encodeURIComponent(id)}/document`;
+}
+
 /** Normaliza id de cola canal (`uuid` o `canal-uuid`). */
 export function resolveIdPendienteCanal(raw: string | undefined | null): string {
   let id = String(raw ?? '').trim();
