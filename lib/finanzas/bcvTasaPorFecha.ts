@@ -1,5 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { obtenerTasaBcvConfigNominaGlobal } from '@/lib/contabilidad/tasaBcvConfigNomina';
+import {
+  FUENTE_BCV_OFICIAL,
+  estadoTasaParaFechaSolicitada,
+  hoyIsoCaracas,
+} from '@/lib/finanzas/bcvOficial';
 import { tasaBcvVesPorUsdFromEnv } from '@/lib/nomina/tasaBcvVesPorUsd';
 import { outboundFetch } from '@/lib/network/outboundFetch';
 
@@ -7,34 +12,48 @@ export { calcularGastoBimonetario, montoUsdAVes, montoVesAUsd } from '@/lib/fina
 export type { BimonetarioResult, MonedaOrigen } from '@/lib/finanzas/currency-converter';
 
 const BCV_HISTORY_URL = 'https://bcv.today/api/v1/history';
-const BCV_RATE_URL = 'https://bcv.today/api/v1/rate.json';
 const BCV_RAFNIXG_URL = 'https://bcv-api.rafnixg.dev/rates';
 const BCV_FETCH_TIMEOUT_MS = 8_000;
 
 const tasaCache = new Map<string, { result: TasaBcvResult; at: number }>();
 const CACHE_TTL_MS = 60 * 60 * 1000;
+const CACHE_TTL_DESACTUALIZADA_MS = 15 * 60 * 1000;
 
 export type FuenteTasaBcv =
+  | typeof FUENTE_BCV_OFICIAL
   | 'bcv.today'
   | 'bcv.today_actual'
   | 'bcv.rafnixg'
   | 'ci_config_nomina'
   | 'env';
 
+export type EstadoTasaBcv = 'actualizada' | 'desactualizada';
+
 export type TasaBcvResult = {
   fecha: string;
   tasa_bcv_ves_por_usd: number;
-  fuente: FuenteTasaBcv;
+  fuente: FuenteTasaBcv | string;
+  fecha_valor?: string | null;
+  estado: EstadoTasaBcv;
 };
 
 export type OpcionesTasaBcv = {
   supabase?: SupabaseClient;
+  /** Tests: no pegarle a BCV ni a agregadores. */
+  skipLive?: boolean;
+};
+
+export type FilaTasaBcv = {
+  fecha: string;
+  usd: number;
+  fuente: string;
+  fecha_valor: string | null;
 };
 
 function normalizarFechaIso(fecha: string): string {
   const s = fecha.trim().slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) {
-    return new Date().toISOString().slice(0, 10);
+    return hoyIsoCaracas();
   }
   return s;
 }
@@ -42,6 +61,20 @@ function normalizarFechaIso(fecha: string): string {
 function numeroTasaPositivo(v: unknown): number | null {
   const n = Number(v);
   return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function fechaDesdePayload(data: unknown): string | null {
+  if (!data || typeof data !== 'object') return null;
+  const o = data as Record<string, unknown>;
+  for (const key of ['date', 'fecha', 'fecha_valor', 'fechaValor', 'last_update', 'datetime']) {
+    const raw = o[key];
+    if (typeof raw === 'string') {
+      const iso = raw.trim().slice(0, 10);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+    }
+  }
+  if (o.data && typeof o.data === 'object') return fechaDesdePayload(o.data);
+  return null;
 }
 
 /** Interpreta respuestas de bcv.today, rafnixg y APIs similares. */
@@ -81,9 +114,21 @@ function tasaDesdePayload(data: unknown, depth = 0): number | null {
   return null;
 }
 
+export function vaciarCacheTasaBcv(): void {
+  tasaCache.clear();
+}
+
 function guardarTasaEnCache(iso: string, result: TasaBcvResult): TasaBcvResult {
   tasaCache.set(iso, { result, at: Date.now() });
   return result;
+}
+
+function cacheVigente(iso: string): TasaBcvResult | null {
+  const cached = tasaCache.get(iso);
+  if (!cached) return null;
+  const ttl = cached.result.estado === 'desactualizada' ? CACHE_TTL_DESACTUALIZADA_MS : CACHE_TTL_MS;
+  if (Date.now() - cached.at >= ttl) return null;
+  return cached.result;
 }
 
 async function fetchBcvJson(url: string, context: string): Promise<unknown | null> {
@@ -104,37 +149,97 @@ async function fetchBcvJson(url: string, context: string): Promise<unknown | nul
   }
 }
 
-async function tasaDesdeBcvToday(iso: string, hoy: string): Promise<TasaBcvResult | null> {
-  const history = await fetchBcvJson(`${BCV_HISTORY_URL}/${iso}.json`, `BCV historial ${iso}`);
-  const tasaHist = tasaDesdePayload(history);
-  if (tasaHist) {
-    return { fecha: iso, tasa_bcv_ves_por_usd: tasaHist, fuente: 'bcv.today' };
-  }
-
-  if (iso >= hoy) {
-    const actual = await fetchBcvJson(BCV_RATE_URL, 'BCV tasa actual');
-    const tasaAct = tasaDesdePayload(actual);
-    if (tasaAct) {
-      return { fecha: iso, tasa_bcv_ves_por_usd: tasaAct, fuente: 'bcv.today_actual' };
-    }
-  }
-
-  return null;
+function resultadoDeFila(iso: string, fila: FilaTasaBcv): TasaBcvResult {
+  return {
+    fecha: iso,
+    tasa_bcv_ves_por_usd: fila.usd,
+    fuente: fila.fuente,
+    fecha_valor: fila.fecha_valor ?? fila.fecha,
+    estado: estadoTasaParaFechaSolicitada(iso, fila.fecha),
+  };
 }
 
-async function tasaDesdeRafnixg(iso: string, hoy: string): Promise<TasaBcvResult | null> {
-  const porFecha = await fetchBcvJson(`${BCV_RAFNIXG_URL}/${iso}`, `BCV rafnixg ${iso}`);
-  const tasaFecha = tasaDesdePayload(porFecha);
-  if (tasaFecha) {
-    return { fecha: iso, tasa_bcv_ves_por_usd: tasaFecha, fuente: 'bcv.rafnixg' };
+function mapFila(row: Record<string, unknown> | null | undefined): FilaTasaBcv | null {
+  if (!row) return null;
+  const usd = Number(row.usd);
+  const fecha = String(row.fecha ?? '').slice(0, 10);
+  if (!fecha || !Number.isFinite(usd) || usd <= 0) return null;
+  return {
+    fecha,
+    usd,
+    fuente: String(row.fuente ?? ''),
+    fecha_valor: row.fecha_valor ? String(row.fecha_valor).slice(0, 10) : null,
+  };
+}
+
+function tablaAusente(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  return error.code === '42P01' || /ci_tasas_bcv/i.test(error.message ?? '');
+}
+
+export async function leerTasaBcvPorFecha(
+  supabase: SupabaseClient,
+  fecha: string,
+): Promise<FilaTasaBcv | null> {
+  const { data, error } = await supabase
+    .from('ci_tasas_bcv')
+    .select('fecha, usd, fuente, fecha_valor')
+    .eq('fecha', fecha)
+    .maybeSingle();
+  if (error) {
+    if (tablaAusente(error)) return null;
+    throw new Error(error.message);
+  }
+  return mapFila(data as Record<string, unknown> | null);
+}
+
+export async function leerTasaBcvAnterior(
+  supabase: SupabaseClient,
+  fecha: string,
+): Promise<FilaTasaBcv | null> {
+  const { data, error } = await supabase
+    .from('ci_tasas_bcv')
+    .select('fecha, usd, fuente, fecha_valor')
+    .lt('fecha', fecha)
+    .order('fecha', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    if (tablaAusente(error)) return null;
+    throw new Error(error.message);
+  }
+  return mapFila(data as Record<string, unknown> | null);
+}
+
+/**
+ * Agregadores solo por URL de historial de esa fecha.
+ * No usa el endpoint «actual»: ese era el bug (tasa del 4 nov como si fuera hoy).
+ */
+export async function tasaDesdeAgregadorPorFecha(iso: string): Promise<TasaBcvResult | null> {
+  const history = await fetchBcvJson(`${BCV_HISTORY_URL}/${iso}.json`, `BCV historial ${iso}`);
+  const tasaHist = tasaDesdePayload(history);
+  const fechaHist = fechaDesdePayload(history);
+  if (tasaHist && (!fechaHist || fechaHist === iso)) {
+    return {
+      fecha: iso,
+      tasa_bcv_ves_por_usd: tasaHist,
+      fuente: 'bcv.today',
+      fecha_valor: fechaHist ?? iso,
+      estado: 'actualizada',
+    };
   }
 
-  if (iso >= hoy) {
-    const latest = await fetchBcvJson(`${BCV_RAFNIXG_URL}/`, 'BCV rafnixg actual');
-    const tasaLatest = tasaDesdePayload(latest);
-    if (tasaLatest) {
-      return { fecha: iso, tasa_bcv_ves_por_usd: tasaLatest, fuente: 'bcv.rafnixg' };
-    }
+  const porFecha = await fetchBcvJson(`${BCV_RAFNIXG_URL}/${iso}`, `BCV rafnixg ${iso}`);
+  const tasaFecha = tasaDesdePayload(porFecha);
+  const fechaRaf = fechaDesdePayload(porFecha);
+  if (tasaFecha && (!fechaRaf || fechaRaf === iso)) {
+    return {
+      fecha: iso,
+      tasa_bcv_ves_por_usd: tasaFecha,
+      fuente: 'bcv.rafnixg',
+      fecha_valor: fechaRaf ?? iso,
+      estado: 'actualizada',
+    };
   }
 
   return null;
@@ -151,6 +256,8 @@ async function tasaDesdeConfigNomina(
       fecha: iso,
       tasa_bcv_ves_por_usd: config.tasa_bcv_ves_por_usd,
       fuente: 'ci_config_nomina',
+      fecha_valor: null,
+      estado: 'desactualizada',
     };
   } catch {
     return null;
@@ -159,6 +266,8 @@ async function tasaDesdeConfigNomina(
 
 export function etiquetaFuenteTasaBcv(fuente: FuenteTasaBcv | string | null | undefined): string {
   switch (fuente) {
+    case FUENTE_BCV_OFICIAL:
+      return 'BCV oficial (www.bcv.org.ve)';
     case 'bcv.today':
       return 'Agregador BCV (historial bcv.today)';
     case 'bcv.today_actual':
@@ -176,10 +285,26 @@ export function etiquetaFuenteTasaBcv(fuente: FuenteTasaBcv | string | null | un
 
 export function esFuenteTasaBcvConfiable(fuente: FuenteTasaBcv | string | null | undefined): boolean {
   return (
+    fuente === FUENTE_BCV_OFICIAL ||
     fuente === 'bcv.today' ||
     fuente === 'bcv.today_actual' ||
     fuente === 'bcv.rafnixg'
   );
+}
+
+/** True solo si la tasa es de esa fecha (no una anterior presentada como «hoy»). */
+export function esTasaBcvDelDia(
+  result: Pick<TasaBcvResult, 'estado' | 'fuente' | 'fecha_valor' | 'fecha'> | null | undefined,
+  fecha?: string,
+): boolean {
+  if (!result) return false;
+  if (result.estado === 'desactualizada') return false;
+  if (fecha) {
+    const iso = normalizarFechaIso(fecha);
+    const valor = (result.fecha_valor ?? result.fecha)?.slice(0, 10);
+    if (valor && valor !== iso && result.fecha !== iso) return false;
+  }
+  return esFuenteTasaBcvConfiable(result.fuente);
 }
 
 /** Bolívares por 1 USD (tasa oficial BCV) para una fecha YYYY-MM-DD. */
@@ -188,30 +313,70 @@ export async function obtenerTasaBcvVesPorUsd(
   opts?: OpcionesTasaBcv,
 ): Promise<TasaBcvResult> {
   const iso = normalizarFechaIso(fecha);
-  const cached = tasaCache.get(iso);
-  if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
-    return cached.result;
-  }
-  const hoy = new Date().toISOString().slice(0, 10);
-
-  const bcvToday = await tasaDesdeBcvToday(iso, hoy);
-  if (bcvToday) return guardarTasaEnCache(iso, bcvToday);
-
-  const rafnixg = await tasaDesdeRafnixg(iso, hoy);
-  if (rafnixg) return guardarTasaEnCache(iso, rafnixg);
+  const cached = cacheVigente(iso);
+  if (cached) return cached;
 
   if (opts?.supabase) {
+    try {
+      const exacta = await leerTasaBcvPorFecha(opts.supabase, iso);
+      if (exacta) return guardarTasaEnCache(iso, resultadoDeFila(iso, exacta));
+    } catch (e) {
+      console.warn('[bcv] historial ci_tasas_bcv', e instanceof Error ? e.message : e);
+    }
+  }
+
+  const agregador = opts?.skipLive ? null : await tasaDesdeAgregadorPorFecha(iso);
+  if (agregador) {
+    if (opts?.supabase) {
+      const { error } = await opts.supabase.from('ci_tasas_bcv').upsert(
+        {
+          fecha: iso,
+          usd: agregador.tasa_bcv_ves_por_usd,
+          fuente: agregador.fuente,
+          fecha_valor: agregador.fecha_valor ?? iso,
+        },
+        { onConflict: 'fecha' },
+      );
+      if (error && !tablaAusente(error)) {
+        console.warn('[bcv] no se pudo guardar agregador', error.message);
+      }
+    }
+    return guardarTasaEnCache(iso, agregador);
+  }
+
+  if (opts?.supabase) {
+    try {
+      const anterior = await leerTasaBcvAnterior(opts.supabase, iso);
+      if (anterior) {
+        return guardarTasaEnCache(iso, {
+          fecha: iso,
+          tasa_bcv_ves_por_usd: anterior.usd,
+          fuente: anterior.fuente,
+          fecha_valor: anterior.fecha_valor ?? anterior.fecha,
+          estado: 'desactualizada',
+        });
+      }
+    } catch (e) {
+      console.warn('[bcv] tasa anterior', e instanceof Error ? e.message : e);
+    }
+
     const config = await tasaDesdeConfigNomina(opts.supabase, iso);
     if (config) return guardarTasaEnCache(iso, config);
   }
 
   const env = tasaBcvVesPorUsdFromEnv();
   if (env) {
-    return guardarTasaEnCache(iso, { fecha: iso, tasa_bcv_ves_por_usd: env, fuente: 'env' });
+    return guardarTasaEnCache(iso, {
+      fecha: iso,
+      tasa_bcv_ves_por_usd: env,
+      fuente: 'env',
+      fecha_valor: null,
+      estado: 'desactualizada',
+    });
   }
 
   throw new Error(
-    `No hay tasa BCV para ${iso}. Consulte bcv.today, configure ci_config_nomina GLOBAL o NEXT_PUBLIC_TASA_BCV_VES_POR_USD.`,
+    `No hay tasa BCV para ${iso}. Consulte www.bcv.org.ve, el histórico ci_tasas_bcv o configure ci_config_nomina GLOBAL.`,
   );
 }
 
@@ -221,10 +386,13 @@ export async function resolverTasaBcvVesPorUsd(
   provided?: number | null,
 ): Promise<TasaBcvResult> {
   if (provided != null && provided > 0) {
+    const iso = normalizarFechaIso(fecha);
     return {
-      fecha: normalizarFechaIso(fecha),
+      fecha: iso,
       tasa_bcv_ves_por_usd: provided,
       fuente: 'env',
+      fecha_valor: iso,
+      estado: 'actualizada',
     };
   }
   if (typeof window !== 'undefined') {
@@ -236,7 +404,11 @@ export async function resolverTasaBcvVesPorUsd(
       const body = (await res.json().catch(() => ({}))) as { error?: string };
       throw new Error(body.error || 'No se pudo obtener la tasa BCV.');
     }
-    return (await res.json()) as TasaBcvResult;
+    const json = (await res.json()) as TasaBcvResult;
+    return {
+      ...json,
+      estado: json.estado === 'desactualizada' ? 'desactualizada' : 'actualizada',
+    };
   }
   return obtenerTasaBcvVesPorUsd(fecha);
 }

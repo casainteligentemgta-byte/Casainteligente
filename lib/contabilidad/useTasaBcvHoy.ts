@@ -6,12 +6,16 @@ import { resolverTasaBcvVesPorUsd } from '@/lib/finanzas/bcvTasaPorFecha';
 export function useTasaBcvHoy(fecha?: string) {
   const [tasa, setTasa] = useState<number | null>(null);
   const [fuente, setFuente] = useState<string | null>(null);
+  const [estado, setEstado] = useState<'actualizada' | 'desactualizada' | null>(null);
+  const [fechaValor, setFechaValor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const f =
       fecha?.trim() ||
-      (typeof window !== 'undefined' ? new Date().toISOString().slice(0, 10) : '');
+      (typeof window !== 'undefined'
+        ? new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Caracas' }).format(new Date())
+        : '');
     if (!f) {
       setLoading(false);
       return;
@@ -24,11 +28,15 @@ export function useTasaBcvHoy(fecha?: string) {
         if (cancelled) return;
         setTasa(r.tasa_bcv_ves_por_usd);
         setFuente(r.fuente);
+        setEstado(r.estado === 'desactualizada' ? 'desactualizada' : 'actualizada');
+        setFechaValor(r.fecha_valor ?? r.fecha ?? null);
       })
       .catch(() => {
         if (!cancelled) {
           setTasa(null);
           setFuente(null);
+          setEstado(null);
+          setFechaValor(null);
         }
       })
       .finally(() => {
@@ -40,5 +48,5 @@ export function useTasaBcvHoy(fecha?: string) {
     };
   }, [fecha]);
 
-  return { tasa, fuente, loading };
+  return { tasa, fuente, estado, fechaValor, loading };
 }

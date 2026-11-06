@@ -4,7 +4,11 @@ import { createClient } from '@/lib/supabase/server';
 import { requirePermisoWeb } from '@/lib/auth/requirePermisoRoute';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 import { isValidProyectoUuid } from '@/lib/proyectos/validarProyectoUuid';
-import { esFuenteTasaBcvConfiable, obtenerTasaBcvVesPorUsd } from '@/lib/finanzas/bcvTasaPorFecha';
+import {
+  esFuenteTasaBcvConfiable,
+  esTasaBcvDelDia,
+  obtenerTasaBcvVesPorUsd,
+} from '@/lib/finanzas/bcvTasaPorFecha';
 
 type RouteCtx = { params: { proyectoId: string } };
 
@@ -66,9 +70,13 @@ export async function POST(req: Request, { params }: RouteCtx) {
     body.tasa_bcv != null && esFuenteTasaBcvConfiable(body.tasa_fuente) ? Number(body.tasa_bcv) : 0;
   if (!Number.isFinite(tasa) || tasa <= 0) {
     const bcv = await obtenerTasaBcvVesPorUsd(fecha);
-    if (!esFuenteTasaBcvConfiable(bcv.fuente)) {
+    if (!esTasaBcvDelDia(bcv, fecha)) {
       return NextResponse.json(
-        { error: 'No se pudo obtener la tasa BCV de esa fecha. Intente de nuevo en unos minutos.' },
+        {
+          error: 'No hay tasa BCV de esa fecha (la disponible está desactualizada). Intente de nuevo cuando se publique la oficial.',
+          estado: bcv.estado,
+          fecha_valor: bcv.fecha_valor ?? null,
+        },
         { status: 503 },
       );
     }

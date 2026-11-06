@@ -35,7 +35,13 @@ export default function RegistroAbonoClienteModal({
   const [error, setError] = useState<string | null>(null);
   const { isSubmitting, runLocked } = useSyncSubmitLock();
 
-  const { tasa, fuente: fuenteTasa, loading: cargandoTasa } = useTasaBcvHoy(fecha || undefined);
+  const {
+    tasa,
+    fuente: fuenteTasa,
+    estado: estadoTasa,
+    fechaValor: fechaValorTasa,
+    loading: cargandoTasa,
+  } = useTasaBcvHoy(fecha || undefined);
 
   const reset = useCallback(() => {
     setMonto('');
@@ -91,6 +97,12 @@ export default function RegistroAbonoClienteModal({
       setError('Espere la tasa BCV del día o seleccione otra fecha.');
       return;
     }
+    if (estadoTasa === 'desactualizada') {
+      setError(
+        `No hay tasa BCV de esa fecha${fechaValorTasa ? ` (la última es ${fechaValorTasa})` : ''}. No se registra una tasa vieja como si fuera del día.`,
+      );
+      return;
+    }
 
     await runLocked(async () => {
       try {
@@ -107,7 +119,7 @@ export default function RegistroAbonoClienteModal({
               fecha_abono: fecha,
               observaciones: observaciones.trim() || null,
               tasa_bcv: tasa,
-              tasa_fuente: fuenteTasa,
+              tasa_fuente: estadoTasa === 'desactualizada' ? 'desactualizada' : fuenteTasa,
             }),
           },
         );
@@ -205,6 +217,11 @@ export default function RegistroAbonoClienteModal({
               </p>
               {cargandoTasa ? (
                 <p className="mt-1 text-sm text-zinc-500">Consultando tasa…</p>
+              ) : estadoTasa === 'desactualizada' ? (
+                <p className="mt-1 text-sm text-amber-400/90">
+                  Tasa desactualizada{fechaValorTasa ? ` (fecha valor ${fechaValorTasa})` : ''}.
+                  No hay oficial de este día.
+                </p>
               ) : equivalenteUsd != null && tasa ? (
                 <p className="mt-1 text-lg font-black text-amber-400">
                   ≈ ${equivalenteUsd.toLocaleString('en-US', { minimumFractionDigits: 2 })}{' '}

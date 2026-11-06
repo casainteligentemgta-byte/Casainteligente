@@ -142,6 +142,7 @@ describe('APIs que piden sesión', () => {
       '/api/telegram/registrar-webhook',
       '/api/cron/weekly-report',
       '/api/cron/cco-snapshots-diarios',
+      '/api/cron/bcv-tasa',
       '/api/health',
       '/api/health/supabase',
       '/api/auth/permisos',
@@ -304,6 +305,7 @@ describe('toda ruta abierta del proyecto está revisada', () => {
       '/api/cron/weekly-report',
       '/api/cron/notas-sin-factura',
       '/api/cron/recordatorio-compradores',
+      '/api/cron/bcv-tasa',
       // sesión y diagnóstico
       '/api/auth/cambiar-password',
       '/api/auth/invitar',
