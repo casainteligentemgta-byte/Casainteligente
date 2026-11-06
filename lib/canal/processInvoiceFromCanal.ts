@@ -294,6 +294,47 @@ async function processInvoiceFromCanalCore(
     return;
   }
 
+  // Estación de servicio (Telegram): a compras de una vez, sin pulsar Confirmar.
+  if (params.canal === 'telegram') {
+    const { autoConfirmarCompraEstacionServicio } = await import(
+      '@/lib/canal/autoConfirmarCompraEstacionServicio'
+    );
+    const auto = await autoConfirmarCompraEstacionServicio(
+      supabase,
+      params.pendingId,
+      datosSinConfirmacionComprador,
+    );
+    if (auto.aplicado) {
+      await prog?.reportar(100, 'Completado');
+      const { resumenFacturaCompradorHtml } = await import('@/lib/telegram/mensajesFactura');
+      const msg =
+        '⛽ <b>Estación de servicio</b> — compra registrada automáticamente en Contabilidad.\n\n' +
+        resumenFacturaCompradorHtml(
+          (auto.extracted ?? datosSinConfirmacionComprador) as Record<string, unknown>,
+        );
+      if (prog) {
+        await prog.ok('Estación de servicio: compra registrada en Contabilidad.');
+      }
+      await params.sendReply(msg, true);
+      try {
+        const { setTelegramContexto } = await import('@/lib/telegram/estados');
+        await setTelegramContexto(supabase, params.chatId, {
+          contexto: 'menu',
+          pending_factura_id: null,
+          metadata: {},
+        });
+      } catch (e) {
+        console.warn('[processInvoiceFromCanal] contexto Telegram tras auto-confirm EDS:', e);
+      }
+      return;
+    }
+    if (auto.detectada && auto.motivo) {
+      console.warn(
+        `[processInvoiceFromCanal] EDS no auto-confirmada (${params.pendingId}): ${auto.motivo}`,
+      );
+    }
+  }
+
   // Fast-Track con ingreso a stock: solo app/WhatsApp. En Telegram el comprador registra
   // contabilidad; el depositario ingresa físicamente con /ingresofactura.
   let fastTrackMsg = '';
