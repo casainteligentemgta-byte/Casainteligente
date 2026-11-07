@@ -14,6 +14,9 @@ export const CAMPOS_HISTORIAL_FACTURA = [
   'supplier_name',
   'date',
   'total_amount',
+  'moneda',
+  'condicion_pago',
+  'dias_credito',
 ] as const;
 
 function normalizarValor(v: unknown): string | null {

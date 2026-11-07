@@ -102,15 +102,21 @@ function auditarCompraConfirmadaCanal(params: {
   facturaNum: string;
   yaExistia: boolean;
   montos: MontosCompraBimonetario;
+  extracted?: ExtractedCanalHeader | null;
 }): void {
   if (params.yaExistia) return;
   void import('@/lib/telegram/logBotAuditoria').then(({ notificarEventoSistemaLogAsync }) => {
-    notificarEventoSistemaLogAsync({
-      chatId: params.row.chat_id != null ? String(params.row.chat_id) : null,
-      chatLabel: params.row.chat_label,
-      modulo: 'Contabilidad · Compra',
-      evento: 'Compra confirmada en cuadro',
-      detalle: detalleLogCompraBimonetaria(params.facturaNum, params.compraId, params.montos),
+    void import('@/lib/compras/proveedorMemoria').then(({ textoAnomaliasParaNotificacion }) => {
+      const alertas = textoAnomaliasParaNotificacion(params.extracted?.anomalias ?? []);
+      notificarEventoSistemaLogAsync({
+        chatId: params.row.chat_id != null ? String(params.row.chat_id) : null,
+        chatLabel: params.row.chat_label,
+        modulo: 'Contabilidad · Compra',
+        evento: alertas ? 'Compra confirmada · con alertas' : 'Compra confirmada en cuadro',
+        detalle:
+          detalleLogCompraBimonetaria(params.facturaNum, params.compraId, params.montos) +
+          (alertas ? `\n${alertas}` : ''),
+      });
     });
   });
 }
@@ -580,6 +586,34 @@ async function confirmarCompraDesdeCanalInterno(
     })
     .eq('id', params.pendingId);
 
+  void import('@/lib/compras/proveedorMemoriaDb')
+    .then(async ({ refrescarPerfilProveedorTrasConfirmacion, registrarCorreccionesTrasEdicion }) => {
+      const original = (extracted.ocr_original ?? row.extracted ?? {}) as Record<string, unknown>;
+      await registrarCorreccionesTrasEdicion(supabase, {
+        rif: extracted.supplier_rif,
+        original,
+        corregido: {
+          ...(extracted as Record<string, unknown>),
+          entidad_id: entidadId,
+        },
+        origen: 'confirmacion',
+      });
+      await refrescarPerfilProveedorTrasConfirmacion(supabase, {
+        extracted,
+        entidadId,
+        proyectoId,
+        ubicacionDestinoId,
+        imputacionEntidad: gastoEntidad,
+        clasificacionGastoEntidad: params.clasificacionGastoEntidad,
+      });
+    })
+    .catch((e) => {
+      console.warn(
+        '[confirmarCompraDesdeCanal] memoria proveedor:',
+        e instanceof Error ? e.message : e,
+      );
+    });
+
   if (gastoEntidad) {
     auditarCompraConfirmadaCanal({
       row,
@@ -587,6 +621,7 @@ async function confirmarCompraDesdeCanalInterno(
       facturaNum: (extracted.invoice_number ?? 'S/N').trim(),
       yaExistia,
       montos,
+      extracted,
     });
     return {
       compraId,
@@ -628,6 +663,7 @@ async function confirmarCompraDesdeCanalInterno(
     facturaNum: (extracted.invoice_number ?? 'S/N').trim(),
     yaExistia,
     montos,
+    extracted,
   });
 
   return {

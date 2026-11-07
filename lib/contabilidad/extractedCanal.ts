@@ -12,6 +12,21 @@ export type ExtractedCanalItem = {
   material_nombre?: string;
 };
 
+export type AnomaliaFacturaCanal = {
+  tipo: 'precio_desviado' | 'moneda_distinta' | 'precio_cero' | 'suma_lineas_distinta';
+  mensaje: string;
+  detalle?: string;
+  severidad: 'aviso' | 'alerta';
+};
+
+export type SugerenciasDestinoProveedor = {
+  entidad_id?: string | null;
+  proyecto_id?: string | null;
+  ubicacion_destino_id?: string | null;
+  imputacion?: string | null;
+  clasificacion_gasto?: string | null;
+};
+
 export function normalizarMonedaExtracted(moneda?: string | null): MonedaOrigen {
   const m = String(moneda ?? 'VES')
     .trim()
@@ -100,6 +115,14 @@ export type ExtractedCanalHeader = {
   factura_pendiente?: boolean;
   /** Comprador confirmó fecha sospechosa en Telegram o contabilidad. */
   fecha_auditoria_confirmada?: boolean;
+  /** Campos rellenados desde el perfil del proveedor (el comprador puede cambiarlos). */
+  campos_sugeridos?: string[];
+  /** Alertas vs historial de este proveedor (precio, moneda, suma). */
+  anomalias?: AnomaliaFacturaCanal[];
+  /** Snapshot del OCR antes de sugerencias/correcciones, para aprender. */
+  ocr_original?: ExtractedCanalHeader;
+  /** Destino habitual (obra/almacén/entidad) sugerido; no se confirma solo. */
+  sugerencias_destino?: SugerenciasDestinoProveedor;
 };
 
 export type LineaFacturaCanalForm = {

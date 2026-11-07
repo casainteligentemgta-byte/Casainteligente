@@ -5,6 +5,7 @@ import {
   monedaExtractedConfirmada,
   type ExtractedCanalHeader,
 } from '@/lib/contabilidad/extractedCanal';
+import { esCampoSugerido } from '@/lib/compras/proveedorMemoria';
 import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi';
 import { getTelegramEstado, setTelegramContexto } from '@/lib/telegram/estados';
 import { normalizarNombreEmpresa, normalizarRif } from '@/lib/contabilidad/propietarioFactura';
@@ -61,10 +62,19 @@ export function siguientePasoFlujoFacturaComprador(
   ) {
     return 'fecha';
   }
-  // OCR guarda moneda/pago en null → el comprador debe elegir con botones.
-  if (!monedaExtractedConfirmada(extracted.moneda)) return 'moneda';
-  if (!condicionPagoExtractedConfirmada(extracted.condicion_pago)) return 'condicion';
-  if (!diasCreditoExtractedValido(extracted)) return 'dias_credito';
+  // OCR guarda moneda/pago en null; si el perfil los sugirió, el comprador igual confirma.
+  if (!monedaExtractedConfirmada(extracted.moneda) || esCampoSugerido(extracted, 'moneda')) {
+    return 'moneda';
+  }
+  if (
+    !condicionPagoExtractedConfirmada(extracted.condicion_pago) ||
+    esCampoSugerido(extracted, 'condicion_pago')
+  ) {
+    return 'condicion';
+  }
+  if (!diasCreditoExtractedValido(extracted) || esCampoSugerido(extracted, 'dias_credito')) {
+    return 'dias_credito';
+  }
 
   const proyectoId = row?.proyecto_id?.trim() || '';
   const ubicacionId = row?.ubicacion_destino_id?.trim() || '';

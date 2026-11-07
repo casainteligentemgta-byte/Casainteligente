@@ -85,6 +85,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
     // Historial: qué campos cambian respecto a la versión guardada.
     let cambiosExtracted: CambioFactura[] = [];
+    let extractedPrevio: Record<string, unknown> = {};
     if (body.extracted !== undefined) {
       const { data: actualRaw } = await supabase
         .from('ci_facturas_canal_pendientes')
@@ -93,10 +94,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         .maybeSingle();
       // El cliente de Supabase sin tipos generados infiere `never`; se tipa a mano.
       const actual = actualRaw as { extracted?: unknown } | null;
-      cambiosExtracted = cambiosEntreFacturas(
-        (actual?.extracted ?? {}) as Record<string, unknown>,
-        body.extracted,
-      );
+      extractedPrevio = (actual?.extracted ?? {}) as Record<string, unknown>;
+      cambiosExtracted = cambiosEntreFacturas(extractedPrevio, body.extracted);
       update.extracted = body.extracted;
     }
     if (body.mensaje_error !== undefined) update.mensaje_error = body.mensaje_error;
@@ -124,6 +123,20 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       origen: 'web',
       actor: acceso.userId,
     });
+    if (body.extracted !== undefined && cambiosExtracted.length) {
+      const { registrarCorreccionesTrasEdicion } = await import('@/lib/compras/proveedorMemoriaDb');
+      const prevEx = extractedPrevio;
+      const original =
+        (body.extracted.ocr_original as Record<string, unknown> | undefined) ??
+        (prevEx.ocr_original as Record<string, unknown> | undefined) ??
+        prevEx;
+      void registrarCorreccionesTrasEdicion(supabase, {
+        rif: String(body.extracted.supplier_rif ?? original.supplier_rif ?? ''),
+        original,
+        corregido: body.extracted,
+        origen: 'web',
+      }).catch((e) => console.warn('[facturas-canal PATCH] correcciones:', e));
+    }
     return NextResponse.json({ success: true, pendiente: data });
   } catch (err: unknown) {
     if (err instanceof ConflictoEdicionError) {

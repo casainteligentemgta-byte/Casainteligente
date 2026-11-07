@@ -32,6 +32,10 @@ import {
 import { createClient } from '@/lib/supabase/client';
 import { useSyncSubmitLock } from '@/hooks/useSyncSubmitLock';
 import { TarjetaSugerenciaConciliacionField } from '@/components/contabilidad/TarjetaSugerenciaConciliacionField';
+import AlertasAnomaliasFactura, {
+  BadgeSugerido,
+} from '@/components/contabilidad/AlertasAnomaliasFactura';
+import { esCampoSugerido, sinCampoSugerido } from '@/lib/compras/proveedorMemoria';
 
 const selectClass =
   'w-full rounded-xl border border-white/10 bg-[#0A0A0F] px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-[#FF9500]/50 focus:ring-2 focus:ring-[#FF9500]/20';
@@ -133,10 +137,17 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
     if (!pendiente?.id) return;
     if (pendienteSyncIdRef.current === pendiente.id) return;
     pendienteSyncIdRef.current = pendiente.id;
-    setProyectoId(pendiente.proyecto_id ?? '');
-    setEntidadId(pendiente.entidad_id ?? '');
-    setUbicacionId(pendiente.ubicacion_destino_id ?? '');
+    const sug = pendiente.extracted?.sugerencias_destino;
+    setProyectoId(pendiente.proyecto_id ?? sug?.proyecto_id ?? '');
+    setEntidadId(pendiente.entidad_id ?? sug?.entidad_id ?? '');
+    setUbicacionId(pendiente.ubicacion_destino_id ?? sug?.ubicacion_destino_id ?? '');
     setEditandoUbicacion(false);
+    if (!pendiente.proyecto_id && sug?.imputacion === 'entidad') {
+      setGastoEntidad(true);
+      if (sug.clasificacion_gasto) {
+        setClasificacionGastoEntidad(sug.clasificacion_gasto as ClasificacionGastoEntidad);
+      }
+    }
   }, [pendiente]);
 
   useEffect(() => {
@@ -259,31 +270,40 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
 
   const elegirMoneda = async (moneda: 'VES' | 'USD') => {
     if (!extracted) return;
-    const next: ExtractedCanalHeader = {
-      ...extracted,
-      moneda: normalizarMonedaExtracted(moneda),
-    };
+    const next: ExtractedCanalHeader = sinCampoSugerido(
+      {
+        ...extracted,
+        moneda: normalizarMonedaExtracted(moneda),
+      },
+      'moneda',
+    );
     await guardarExtracted(next);
   };
 
   const elegirCondicionPago = async (condicion: 'contado' | 'credito') => {
     if (!extracted) return;
-    const next: ExtractedCanalHeader = {
-      ...extracted,
-      condicion_pago: condicion,
-      dias_credito: condicion === 'credito' ? extracted.dias_credito ?? null : null,
-    };
+    const next: ExtractedCanalHeader = sinCampoSugerido(
+      {
+        ...extracted,
+        condicion_pago: condicion,
+        dias_credito: condicion === 'credito' ? extracted.dias_credito ?? null : null,
+      },
+      'condicion_pago',
+    );
     await guardarExtracted(next);
   };
 
   const guardarDiasCredito = async (raw: string) => {
     if (!extracted) return;
     const dias = parseDiasCreditoExtracted(raw.trim() === '' ? null : Number(raw));
-    const next: ExtractedCanalHeader = {
-      ...extracted,
-      condicion_pago: 'credito',
-      dias_credito: dias,
-    };
+    const next: ExtractedCanalHeader = sinCampoSugerido(
+      {
+        ...extracted,
+        condicion_pago: 'credito',
+        dias_credito: dias,
+      },
+      'dias_credito',
+    );
     await guardarExtracted(next);
   };
 
@@ -630,6 +650,8 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
               </section>
             ) : null}
 
+            <AlertasAnomaliasFactura anomalias={extracted?.anomalias} />
+
             {yaEnContabilidad && !gastoEntidad ? (
               <div className="rounded-2xl border border-emerald-500/25 bg-emerald-950/15 px-4 py-3 text-xs text-emerald-200/90">
                 Compra registrada en contabilidad. Solo falta el ingreso de mercancía al almacén de la
@@ -655,9 +677,14 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
             ) : null}
 
             <section className={`${panelClass} space-y-3 border-[#FF9500]/30`}>
-              <h2 className="text-sm font-bold text-[#FF9500]">Moneda de la factura</h2>
+              <h2 className="text-sm font-bold text-[#FF9500] flex items-center gap-2">
+                Moneda de la factura
+                {esCampoSugerido(extracted, 'moneda') ? <BadgeSugerido /> : null}
+              </h2>
               <p className="text-[11px] text-zinc-500 leading-relaxed">
-                Indique en qué moneda están el total y los precios unitarios extraídos por la IA.
+                {esCampoSugerido(extracted, 'moneda')
+                  ? 'Sugerido según facturas anteriores de este proveedor. Confirme o cambie.'
+                  : 'Indique en qué moneda están el total y los precios unitarios extraídos por la IA.'}
               </p>
               <div className="grid grid-cols-2 gap-2">
                 <button
@@ -694,9 +721,17 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
             </section>
 
             <section className={`${panelClass} space-y-3 border-[#FF9500]/30`}>
-              <h2 className="text-sm font-bold text-[#FF9500]">Forma de pago</h2>
+              <h2 className="text-sm font-bold text-[#FF9500] flex items-center gap-2">
+                Forma de pago
+                {esCampoSugerido(extracted, 'condicion_pago') ||
+                esCampoSugerido(extracted, 'dias_credito') ? (
+                  <BadgeSugerido />
+                ) : null}
+              </h2>
               <p className="text-[11px] text-zinc-500 leading-relaxed">
-                Indique si esta compra se paga de contado o a crédito.
+                {esCampoSugerido(extracted, 'condicion_pago')
+                  ? 'Sugerido según este proveedor. Confirme o cambie.'
+                  : 'Indique si esta compra se paga de contado o a crédito.'}
               </p>
               <div className="grid grid-cols-2 gap-2">
                 <button
@@ -858,6 +893,9 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
               <section className="space-y-2">
                 <label htmlFor="entidad-telegram" className="text-xs font-bold text-zinc-500">
                   ENTIDAD (PATRONO)
+                  {esCampoSugerido(extracted, 'entidad_id') ? (
+                    <BadgeSugerido className="ml-2" />
+                  ) : null}
                 </label>
                 <select
                   id="entidad-telegram"
@@ -890,6 +928,9 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
             <section className="space-y-2">
               <label htmlFor="proyecto-telegram" className="text-xs font-bold text-zinc-500">
                 PROYECTO
+                {esCampoSugerido(extracted, 'proyecto_id') ? (
+                  <BadgeSugerido className="ml-2" />
+                ) : null}
               </label>
               <select
                 id="proyecto-telegram"

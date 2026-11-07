@@ -5,6 +5,7 @@ import {
   parseDiasCreditoExtracted,
   type ExtractedCanalHeader,
 } from '@/lib/contabilidad/extractedCanal';
+import { esCampoSugerido, sinCampoSugerido } from '@/lib/compras/proveedorMemoria';
 import { AVISO_FACTURA_A_CREDITO, procuraSinFondos } from '@/lib/procuras/compraACredito';
 import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi';
 import type { TelegramEstado } from '@/lib/telegram/estados';
@@ -85,9 +86,15 @@ export async function enviarPickerCondicionPagoTelegram(
     }
   }
 
+  const sugeridaPago = esCampoSugerido(extracted as ExtractedCanalHeader, 'condicion_pago')
+    ? etiquetaCondicionPagoExtracted((extracted as ExtractedCanalHeader).condicion_pago)
+    : null;
+
   await sendTelegramMessage(
     chatId,
-    `💳 <b>¿La compra es a contado o a crédito?</b>\n\n` + resumenFacturaCompradorHtml(extracted),
+    `💳 <b>¿La compra es a contado o a crédito?</b>\n\n` +
+      resumenFacturaCompradorHtml(extracted) +
+      (sugeridaPago ? `\n\n💡 <b>Sugerido</b> para este proveedor: <b>${sugeridaPago}</b>.` : ''),
     {
       parse_mode: 'HTML',
       reply_markup: {
@@ -113,9 +120,23 @@ async function enviarPreguntaDiasCreditoTelegram(
     metadata: { paso: 'dias_credito', flujo: 'factura_compra' },
   });
 
+  const { data: rowDias } = await supabase
+    .from('ci_facturas_canal_pendientes')
+    .select('extracted')
+    .eq('id', pendingId)
+    .maybeSingle();
+  const exDias = (rowDias?.extracted ?? {}) as ExtractedCanalHeader;
+  const diasSug =
+    esCampoSugerido(exDias, 'dias_credito') && parseDiasCreditoExtracted(exDias.dias_credito) != null
+      ? parseDiasCreditoExtracted(exDias.dias_credito)
+      : null;
+
   await sendTelegramMessage(
     chatId,
     `📅 <b>¿Cuántos días de crédito?</b>\n\n` +
+      (diasSug
+        ? `💡 <b>Sugerido</b>: <b>${diasSug} días</b>. Confirme o elija otro plazo.\n\n`
+        : '') +
       `Elija un plazo o escriba un número entero (ej. <code>45</code>).`,
     {
       parse_mode: 'HTML',
@@ -171,11 +192,17 @@ async function guardarDiasCreditoYContinuar(
     return 'La factura ya no está en modo crédito. Pulse /facturas de nuevo si hace falta.';
   }
 
-  const nextExtracted: ExtractedCanalHeader = {
-    ...prev,
-    condicion_pago: 'credito',
-    dias_credito: parsed,
-  };
+  const nextExtracted: ExtractedCanalHeader = sinCampoSugerido(
+    sinCampoSugerido(
+      {
+        ...prev,
+        condicion_pago: 'credito',
+        dias_credito: parsed,
+      },
+      'dias_credito',
+    ),
+    'condicion_pago',
+  );
 
   const { error } = await supabase
     .from('ci_facturas_canal_pendientes')
@@ -228,11 +255,14 @@ export async function manejarCallbackCondicionPagoFacturaTelegram(
     .eq('id', pendingId)
     .maybeSingle();
   const prev = (row?.extracted ?? {}) as ExtractedCanalHeader;
-  const nextExtracted: ExtractedCanalHeader = {
-    ...prev,
-    condicion_pago: condicion,
-    dias_credito: condicion === 'credito' ? null : null,
-  };
+  const nextExtracted: ExtractedCanalHeader = sinCampoSugerido(
+    {
+      ...prev,
+      condicion_pago: condicion,
+      dias_credito: condicion === 'credito' ? prev.dias_credito ?? null : null,
+    },
+    'condicion_pago',
+  );
 
   const { error } = await supabase
     .from('ci_facturas_canal_pendientes')

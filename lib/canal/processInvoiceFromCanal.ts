@@ -14,7 +14,8 @@ import {
   mensajeAmigableErrorStorage,
   PROCUREMENT_DOCUMENTS_BUCKET,
 } from '@/lib/almacen/procurementDocumentStorage';
-import { formatTotalExtracted } from '@/lib/contabilidad/extractedCanal';
+import { formatTotalExtracted, type ExtractedCanalHeader } from '@/lib/contabilidad/extractedCanal';
+import { textoAnomaliasParaNotificacion, textoAnomaliasTelegramHtml } from '@/lib/compras/proveedorMemoria';
 import { linkConfirmarCompraTelegram } from '@/lib/contabilidad/confirmarCompraDesdeCanal';
 import {
   MENSAJE_FACTURA_DUPLICADA,
@@ -138,10 +139,16 @@ async function processInvoiceFromCanalCore(
   let mensajeError: string | null = null;
 
   const extraer = async () => {
+    const { hintExtraccionParaPendiente } = await import('@/lib/compras/proveedorMemoriaDb');
+    const hintProveedor = await hintExtraccionParaPendiente(supabase, {
+      pendingId: params.pendingId,
+      chatId: params.chatId,
+    });
     const { data, fromGemini, modelUsed } = await extractPurchaseInvoiceFromFile({
       buffer: params.buffer,
       mimeType: params.mimeType,
       fileName: params.fileName,
+      hintProveedor,
     });
     extracted = { ...data, fromGemini, modelUsed };
   };
@@ -182,7 +189,7 @@ async function processInvoiceFromCanalCore(
   await prog?.reportar(95, 'Guardando en la aplicación…');
 
   const datosOcr = extracted as DatosOcrFastTrack;
-  /** El comprador confirma Bs/USD y contado/crédito tras el OCR (no asumir valores). */
+  /** El comprador confirma Bs/USD y contado/crédito; el perfil puede sugerirlos. */
   const datosSinConfirmacionComprador = {
     ...datosOcr,
     moneda: null,
@@ -194,11 +201,19 @@ async function processInvoiceFromCanalCore(
     dias_credito: null;
   };
 
+  const { enriquecerExtractedConMemoria } = await import('@/lib/compras/proveedorMemoriaDb');
+  const memoria = await enriquecerExtractedConMemoria(
+    supabase,
+    datosSinConfirmacionComprador as ExtractedCanalHeader,
+  );
+  const datosConMemoria = memoria.extracted;
+  const anomalias = memoria.anomalias;
+
   const { error: errGuardarExtraccion } = await supabase
     .from('ci_facturas_canal_pendientes')
     .update({
       estado: 'extraido',
-      extracted: datosSinConfirmacionComprador,
+      extracted: datosConMemoria,
       mensaje_error: null,
       updated_at: new Date().toISOString(),
     })
@@ -223,21 +238,24 @@ async function processInvoiceFromCanalCore(
     .eq('id', params.pendingId)
     .maybeSingle();
 
-  const facturaNumLog = String(datosOcr.invoice_number ?? 'S/N').trim();
+  const facturaNumLog = String(datosConMemoria.invoice_number ?? datosOcr.invoice_number ?? 'S/N').trim();
+  const avisoAnomalias = textoAnomaliasParaNotificacion(anomalias);
   const { notificarEventoSistemaLogAsync } = await import('@/lib/telegram/logBotAuditoria');
   notificarEventoSistemaLogAsync({
     chatId: rowLog?.chat_id != null ? String(rowLog.chat_id) : null,
     chatLabel: rowLog?.chat_label,
     modulo: 'Compras · OCR',
-    evento: 'Factura extraída (OCR listo)',
-    detalle: `Nº ${facturaNumLog} · ${datosOcr.supplier_name?.trim() || '—'} · RIF ${datosOcr.supplier_rif?.trim() || '—'}`,
+    evento: anomalias.length ? 'Factura extraída · con alertas' : 'Factura extraída (OCR listo)',
+    detalle:
+      `Nº ${facturaNumLog} · ${datosConMemoria.supplier_name?.trim() || '—'} · RIF ${datosConMemoria.supplier_rif?.trim() || '—'}` +
+      (avisoAnomalias ? ` · ${avisoAnomalias}` : ''),
   });
 
-  const facturaNum = String(datosOcr.invoice_number ?? 'S/N').trim();
+  const facturaNum = facturaNumLog;
   const dupParams = {
     invoice_number: facturaNum,
-    supplier_rif: datosOcr.supplier_rif,
-    supplier_name: datosOcr.supplier_name,
+    supplier_rif: datosConMemoria.supplier_rif ?? datosOcr.supplier_rif,
+    supplier_name: datosConMemoria.supplier_name ?? datosOcr.supplier_name,
   };
 
   const dupCompra = await buscarCompraContablePorFactura(supabase, {
@@ -302,7 +320,7 @@ async function processInvoiceFromCanalCore(
     const auto = await autoConfirmarCompraEstacionServicio(
       supabase,
       params.pendingId,
-      datosSinConfirmacionComprador,
+      datosConMemoria as DatosOcrFastTrack,
     );
     if (auto.aplicado) {
       await prog?.reportar(100, 'Completado');
@@ -310,7 +328,7 @@ async function processInvoiceFromCanalCore(
       const msg =
         '⛽ <b>Estación de servicio</b> — compra registrada automáticamente en Contabilidad.\n\n' +
         resumenFacturaCompradorHtml(
-          (auto.extracted ?? datosSinConfirmacionComprador) as Record<string, unknown>,
+          (auto.extracted ?? datosConMemoria) as Record<string, unknown>,
         );
       if (prog) {
         await prog.ok('Estación de servicio: compra registrada en Contabilidad.');
@@ -350,20 +368,29 @@ async function processInvoiceFromCanalCore(
 
   await prog?.reportar(100, 'Completado');
 
-  const inv = datosSinConfirmacionComprador;
+  const inv = datosConMemoria;
   const nItems = Array.isArray(inv.items) ? inv.items.length : 0;
+  const alertaHtml = textoAnomaliasTelegramHtml(anomalias);
   const plain =
     `✅ Factura recibida\n\n` +
     `Nº: ${inv.invoice_number ?? '—'}\n` +
     `Proveedor: ${inv.supplier_name ?? '—'}\n` +
     `RIF: ${inv.supplier_rif ?? '—'}\n` +
-    `Total: ${formatTotalExtracted(inv, { sinMoneda: true })}\n` +
-    `Líneas: ${nItems}${fastTrackMsg ? `\n${fastTrackMsg}` : ''}\n\n` +
-    `Indique moneda (Bs o USD), contado/crédito y confirme en: ${link}`;
+    `Total: ${formatTotalExtracted(inv, { sinMoneda: !inv.moneda })}\n` +
+    `Líneas: ${nItems}${fastTrackMsg ? `\n${fastTrackMsg}` : ''}` +
+    (avisoAnomalias ? `\n${avisoAnomalias}` : '') +
+    `\n\nIndique moneda (Bs o USD), contado/crédito y confirme en: ${link}`;
 
   if (prog) {
     // No pedir moneda/pago en texto plano: los InlineKeyboard salen justo después.
-    await prog.ok('Análisis listo. Use los botones que aparecen a continuación.');
+    await prog.ok(
+      anomalias.length
+        ? 'Análisis listo, con alertas. Use los botones que aparecen a continuación.'
+        : 'Análisis listo. Use los botones que aparecen a continuación.',
+    );
+    if (alertaHtml) {
+      await params.sendReply(alertaHtml.trim(), true);
+    }
     if (params.canal === 'telegram' && !fastTrackMsg) {
       try {
         const { avanzarFlujoFacturaCompradorTelegram } = await import(

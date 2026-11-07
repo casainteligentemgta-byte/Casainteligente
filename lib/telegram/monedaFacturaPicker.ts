@@ -4,6 +4,7 @@ import {
   normalizarMonedaExtracted,
   type ExtractedCanalHeader,
 } from '@/lib/contabilidad/extractedCanal';
+import { esCampoSugerido, sinCampoSugerido } from '@/lib/compras/proveedorMemoria';
 import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi';
 import { getTelegramEstado, setTelegramContexto } from '@/lib/telegram/estados';
 import { resumenFacturaCompradorHtml } from '@/lib/telegram/mensajesFactura';
@@ -29,13 +30,20 @@ export async function enviarPickerMonedaFacturaTelegram(
     .select('extracted')
     .eq('id', pendingId)
     .maybeSingle();
-  const extracted = (row?.extracted ?? {}) as Record<string, unknown>;
+  const extracted = (row?.extracted ?? {}) as ExtractedCanalHeader;
+  const sugerida = esCampoSugerido(extracted, 'moneda')
+    ? normalizarMonedaExtracted(extracted.moneda) === 'USD'
+      ? 'USD'
+      : 'Bolívares (Bs)'
+    : null;
 
   await sendTelegramMessage(
     chatId,
     `💱 <b>¿En qué moneda está esta factura?</b>\n\n` +
-      resumenFacturaCompradorHtml(extracted, { sinMoneda: true }) +
-      `\n\n<i>Total y precios unitarios están en la moneda que elija.</i>`,
+      resumenFacturaCompradorHtml(extracted as Record<string, unknown>, { sinMoneda: !sugerida }) +
+      (sugerida
+        ? `\n\n💡 <b>Sugerido</b> para este proveedor: <b>${sugerida}</b>. Pulse para confirmar o elija la otra.`
+        : `\n\n<i>Total y precios unitarios están en la moneda que elija.</i>`),
     {
       parse_mode: 'HTML',
       reply_markup: {
@@ -72,10 +80,13 @@ export async function manejarCallbackMonedaFacturaTelegram(
     .eq('id', pendingId)
     .maybeSingle();
   const prev = (row?.extracted ?? {}) as ExtractedCanalHeader;
-  const nextExtracted: ExtractedCanalHeader = {
-    ...prev,
-    moneda: normalizarMonedaExtracted(moneda),
-  };
+  const nextExtracted: ExtractedCanalHeader = sinCampoSugerido(
+    {
+      ...prev,
+      moneda: normalizarMonedaExtracted(moneda),
+    },
+    'moneda',
+  );
 
   const { error } = await supabase
     .from('ci_facturas_canal_pendientes')
