@@ -60,6 +60,15 @@ Encabezado:
 
 El proveedor es quien EMITE la factura, no el comprador.`;
 
+export function promptExtraccionConHint(hint?: string | null): string {
+  const h = String(hint ?? '').trim();
+  if (!h) return EXTRACTION_PROMPT;
+  return `${EXTRACTION_PROMPT}
+
+MEMORIA DE PROVEEDORES CONOCIDOS (úsalo SOLO si el emisor del documento coincide; no inventes datos que no estén en la foto):
+${h}`;
+}
+
 const ITEMS_ONLY_PROMPT = `Solo extrae la TABLA DE DETALLE / líneas de productos de esta factura venezolana.
 
 Devuelve items[] con TODAS las filas:
@@ -550,6 +559,8 @@ export async function extractPurchaseInvoiceFromFile(file: {
   buffer: Buffer;
   mimeType: string;
   fileName: string;
+  /** Hint corto (perfil/correcciones de este proveedor) inyectado al prompt. */
+  hintProveedor?: string | null;
 }): Promise<{ data: ExtractedPurchaseInvoice; fromGemini: boolean; modelUsed: string }> {
   if (file.buffer.length > MAX_BYTES) {
     throw new Error('El archivo supera el límite de 12 MB.');
@@ -567,9 +578,11 @@ export async function extractPurchaseInvoiceFromFile(file: {
   let modelUsed = '';
   let lastError: Error | null = null;
 
+  const prompt = promptExtraccionConHint(file.hintProveedor);
+
   for (const model of models) {
     try {
-      text = await callGeminiExtract(model, file.mimeType, base64);
+      text = await callGeminiExtract(model, file.mimeType, base64, prompt);
       modelUsed = model;
       console.info('[extractPurchaseInvoiceGemini] OK con modelo', model);
       break;

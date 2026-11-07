@@ -37,6 +37,9 @@ import {
   type FiltrosFacturaCanal,
 } from '@/lib/contabilidad/filtrosFacturaCanal';
 import { esNotaEntregaExtracted } from '@/lib/telegram/notaEntregaRegistro';
+import AlertasAnomaliasFactura, {
+  BadgeAlertaFactura,
+} from '@/components/contabilidad/AlertasAnomaliasFactura';
 
 type Pendiente = PendienteCanal;
 
@@ -625,6 +628,10 @@ export default function FacturasCanalClient() {
                         Nota entrega · factura pendiente
                       </span>
                     ) : null}
+                    <BadgeAlertaFactura
+                      n={p.extracted?.anomalias?.length ?? 0}
+                      className="ml-2"
+                    />
                   </p>
                   <p className="text-xs text-zinc-500 mt-1">
                     <span className="text-violet-300/90 uppercase">{p.estado}</span>
@@ -657,6 +664,11 @@ export default function FacturasCanalClient() {
                       >
                         USD
                       </button>
+                    </div>
+                  ) : null}
+                  {p.extracted?.anomalias?.length ? (
+                    <div className="mt-2">
+                      <AlertasAnomaliasFactura anomalias={p.extracted.anomalias} />
                     </div>
                   ) : null}
                   {p.estado === 'error' && p.mensaje_error ? (

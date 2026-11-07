@@ -25,6 +25,10 @@ import {
 import { loadCatalogoProyectosApp } from '@/lib/proyectos/proyectosUnificados';
 import CompraFacturaImagen from '@/components/contabilidad/CompraFacturaImagen';
 import { rutaDocumentoPendienteCanal } from '@/lib/contabilidad/facturaCanalApi';
+import AlertasAnomaliasFactura, {
+  BadgeSugerido,
+} from '@/components/contabilidad/AlertasAnomaliasFactura';
+import { esCampoSugerido } from '@/lib/compras/proveedorMemoria';
 
 const inputClass =
   'w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-xs text-white placeholder:text-zinc-600 outline-none focus:border-sky-500/50';
@@ -231,9 +235,11 @@ export default function EditarFacturaCanalModal({
             </aside>
           ) : null}
           <div className="space-y-4 min-w-0">
+          <AlertasAnomaliasFactura anomalias={extracted?.anomalias} />
           <div className="rounded-xl border border-[#FF9500]/35 bg-[#FF9500]/5 p-3 space-y-2">
-            <p className="text-[10px] font-bold text-[#FF9500] uppercase tracking-wider">
+            <p className="text-[10px] font-bold text-[#FF9500] uppercase tracking-wider flex items-center gap-2">
               Moneda de la factura
+              {esCampoSugerido(extracted, 'moneda') ? <BadgeSugerido /> : null}
             </p>
             <p className="text-[11px] text-zinc-400">
               Total y precios unitarios están en la moneda que elija.
@@ -372,7 +378,12 @@ export default function EditarFacturaCanalModal({
               ) : null}
             </div>
             <div className="sm:col-span-2">
-              <label className="text-[10px] font-bold text-zinc-500">PROVEEDOR</label>
+              <label className="text-[10px] font-bold text-zinc-500">
+                PROVEEDOR
+                {esCampoSugerido(extracted, 'supplier_name') ? (
+                  <BadgeSugerido className="ml-2" />
+                ) : null}
+              </label>
               <input
                 className={`${inputClass} mt-1`}
                 value={form.supplier_name}

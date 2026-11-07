@@ -250,6 +250,15 @@ export async function manejarTextoCorreccionFactura(
     actor: chatId,
   });
 
+  void import('@/lib/compras/proveedorMemoriaDb').then(({ registrarCorreccionesTrasEdicion }) =>
+    registrarCorreccionesTrasEdicion(supabase, {
+      rif: String((prev.supplier_rif ?? valor.valor) ?? ''),
+      original: prev,
+      corregido: { ...prev, [clave]: valor.valor },
+      origen: 'telegram',
+    }).catch((e) => console.warn('[correccionFacturaTelegram] memoria:', e)),
+  );
+
   await cerrarCorreccion(supabase, chatId, estado);
   await sendTelegramMessage(
     chatId,
