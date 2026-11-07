@@ -323,7 +323,7 @@ async function resolverEntidadMetadataProyecto(
 
   const { data: ent } = await supabase
     .from('ci_entidades')
-    .select('nombre, nombre_abreviado, customer_id, customers(nombre)')
+    .select('nombre, nombre_abreviado, customer_id, customers!ci_entidades_customer_id_fkey(nombre)')
     .eq('id', entidad_id)
     .maybeSingle();
 

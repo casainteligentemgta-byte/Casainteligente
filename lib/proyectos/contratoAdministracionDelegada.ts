@@ -47,7 +47,7 @@ export async function obtenerContratoAdProyecto(
       honorarios_admin_pct,
       estado,
       created_at,
-      entidad:ci_entidades ( nombre, customer_id, customers(nombre) )
+      entidad:ci_entidades ( nombre, customer_id, customers!ci_entidades_customer_id_fkey(nombre) )
     `,
     )
     .eq('proyecto_id', proyectoId)

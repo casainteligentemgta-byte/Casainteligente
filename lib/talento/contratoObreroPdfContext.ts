@@ -61,7 +61,7 @@ export async function resolverPatronoDesdeEntidad(
   const eid = (entidadId ?? '').trim();
   if (!eid) return { nombre: envNombre, domicilio: envDom, representante: envRep };
 
-  const { data, error } = await supabase.from('ci_entidades').select('*, customers(nombre)').eq('id', eid).maybeSingle();
+  const { data, error } = await supabase.from('ci_entidades').select('*, customers!ci_entidades_customer_id_fkey(nombre)').eq('id', eid).maybeSingle();
   if (error || !data) return { nombre: envNombre, domicilio: envDom, representante: envRep };
 
   const e = conNombreFila(data as EntidadConNombre) as Record<string, unknown>;
@@ -328,9 +328,9 @@ async function fetchCiProyectoCamposContratoPdf(
  * se reintenta con listas más cortas (misma idea que `CI_PROYECTO_SELECT_CANDIDATES`).
  */
 const CI_ENTIDAD_SELECT_CANDIDATES = [
-  'nombre,customer_id,customers(nombre),nombre_legal,nombre_comercial,rif,direccion_fiscal,domicilio_fiscal,municipio_fiscal,estado_fiscal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil',
-  'nombre,customer_id,customers(nombre),nombre_legal,nombre_comercial,rif,direccion_fiscal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil',
-  'nombre,customer_id,customers(nombre),rif,direccion_fiscal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil',
+  'nombre,customer_id,customers!ci_entidades_customer_id_fkey(nombre),nombre_legal,nombre_comercial,rif,direccion_fiscal,domicilio_fiscal,municipio_fiscal,estado_fiscal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil',
+  'nombre,customer_id,customers!ci_entidades_customer_id_fkey(nombre),nombre_legal,nombre_comercial,rif,direccion_fiscal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil',
+  'nombre,customer_id,customers!ci_entidades_customer_id_fkey(nombre),rif,direccion_fiscal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil',
 ] as const;
 
 async function fetchCiEntidadCamposContratoPdf(

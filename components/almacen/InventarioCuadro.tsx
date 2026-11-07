@@ -105,7 +105,7 @@ import {
 
 const INVENTORY_SELECT = `
   *,
-  entidad:ci_entidades(id,nombre,rif,customer_id,customers(nombre)),
+  entidad:ci_entidades(id,nombre,rif,customer_id,customers!ci_entidades_customer_id_fkey(nombre)),
   proyecto:ci_proyectos(id,nombre,entidad_id,naturaleza_proyecto,clasificacion_gasto_entidad),
   partida:ci_presupuesto_partidas(id,codigo_partida,descripcion),
   category:material_categories(id,name)
@@ -976,7 +976,7 @@ export default function InventarioCuadro() {
                     invQuery = supabase
                         .from('global_inventory')
                         .select(
-                            `*, entidad:ci_entidades(id,nombre,rif,customer_id,customers(nombre)), proyecto:ci_proyectos(id,nombre,entidad_id), partida:ci_presupuesto_partidas(id,codigo_partida,descripcion), category:material_categories(id,name)`,
+                            `*, entidad:ci_entidades(id,nombre,rif,customer_id,customers!ci_entidades_customer_id_fkey(nombre)), proyecto:ci_proyectos(id,nombre,entidad_id), partida:ci_presupuesto_partidas(id,codigo_partida,descripcion), category:material_categories(id,name)`,
                         )
                         .order('name');
                     invRes = await invQuery;

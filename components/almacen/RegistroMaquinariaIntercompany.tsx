@@ -16,7 +16,7 @@ const SELECT_MAQUINARIA = `
   costo_hora_cliente_final,
   activo,
   inventory:global_inventory ( id, name, sap_code ),
-  entidad:ci_entidades ( id, nombre, nombre_abreviado, customer_id, customers(nombre) )
+  entidad:ci_entidades ( id, nombre, nombre_abreviado, customer_id, customers!ci_entidades_customer_id_fkey(nombre) )
 `;
 
 type MaquinariaRow = {

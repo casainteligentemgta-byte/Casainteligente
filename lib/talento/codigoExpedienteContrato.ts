@@ -121,7 +121,7 @@ export async function resolverCodigoExpedienteContrato(
   if (entidadId) {
     const { data: ent } = await supabase
       .from('ci_entidades')
-      .select('nombre,nombre_abreviado,customer_id,customers(nombre)')
+      .select('nombre,nombre_abreviado,customer_id,customers!ci_entidades_customer_id_fkey(nombre)')
       .eq('id', entidadId)
       .maybeSingle();
     const e = (ent ?? null) as { nombre?: string | null; nombre_abreviado?: string | null } | null;

@@ -80,7 +80,7 @@ export async function GET() {
         honorarios_admin_pct,
         estado,
         created_at,
-        entidad:ci_entidades ( nombre, customer_id, customers(nombre) )
+        entidad:ci_entidades ( nombre, customer_id, customers!ci_entidades_customer_id_fkey(nombre) )
       `,
       )
       .in('proyecto_id', proyectoIds)
