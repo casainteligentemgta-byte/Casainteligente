@@ -66,10 +66,20 @@ export async function POST(req: Request, { params }: RouteCtx) {
   // Todo ingreso de dinero a la obra es una inyección de capital (migración 359): el abono
   // del cliente se registra ahí con origen «Cliente», así cuenta en el CCO y en los fondos.
   // La tasa hace falta también en USD (equivalente en Bs).
+  const origen = (observaciones ? `Cliente · ${observaciones}` : 'Cliente').slice(0, 250);
+
+  const supabase = await createClient();
+
+  // La función solo la puede ejecutar el servidor (migración 357); el permiso ya se verificó arriba.
+  const admin = supabaseAdminForRoute();
+  if (!admin.ok) return admin.response;
+  // Mismo tipo que usan las funciones de lib/: acepta cualquier nombre de RPC.
+  const servidor: SupabaseClient = admin.client;
+
   let tasa =
     body.tasa_bcv != null && esFuenteTasaBcvConfiable(body.tasa_fuente) ? Number(body.tasa_bcv) : 0;
   if (!Number.isFinite(tasa) || tasa <= 0) {
-    const bcv = await obtenerTasaBcvVesPorUsd(fecha);
+    const bcv = await obtenerTasaBcvVesPorUsd(fecha, { supabase: servidor });
     if (!esTasaBcvDelDia(bcv, fecha)) {
       return NextResponse.json(
         {
@@ -82,16 +92,6 @@ export async function POST(req: Request, { params }: RouteCtx) {
     }
     tasa = bcv.tasa_bcv_ves_por_usd;
   }
-
-  const origen = (observaciones ? `Cliente · ${observaciones}` : 'Cliente').slice(0, 250);
-
-  const supabase = await createClient();
-
-  // La función solo la puede ejecutar el servidor (migración 357); el permiso ya se verificó arriba.
-  const admin = supabaseAdminForRoute();
-  if (!admin.ok) return admin.response;
-  // Mismo tipo que usan las funciones de lib/: acepta cualquier nombre de RPC.
-  const servidor: SupabaseClient = admin.client;
 
   const { data, error } = await servidor.rpc('ci_registrar_inyeccion_capital', {
     p_proyecto_id: proyectoId,

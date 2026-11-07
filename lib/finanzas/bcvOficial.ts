@@ -4,6 +4,8 @@
  * El fetch TLS está en bcvOficialFetch.ts.
  */
 
+import { hayDiaHabilBancarioPosteriorA } from '@/lib/finanzas/feriadosBancariosVE';
+
 export const BCV_OFICIAL_URL = 'https://www.bcv.org.ve/';
 export const BCV_OFICIAL_HOSTS = new Set(['www.bcv.org.ve', 'bcv.org.ve']);
 export const FUENTE_BCV_OFICIAL = 'bcv.org.ve' as const;
@@ -124,12 +126,24 @@ export function fechaAlmacenamientoTasaBcv(opts: {
   return opts.hoy;
 }
 
+/**
+ * Vigencia de una fila BCV para el día pedido.
+ *
+ * El BCV publica la Fecha Valor del próximo día hábil por adelantado: nunca
+ * usar una fila con fecha_valor > fecha solicitada.
+ * Una tasa anterior sigue vigente (estado `actualizada`) si no hay día hábil
+ * bancario VE entre ambas fechas (fin de semana o feriado). Si falta un día
+ * hábil, está `desactualizada`.
+ */
 export function estadoTasaParaFechaSolicitada(
   fechaSolicitada: string,
   fechaDeLaTasa: string | null | undefined,
 ): 'actualizada' | 'desactualizada' {
   const s = fechaSolicitada.trim().slice(0, 10);
   const t = fechaDeLaTasa?.trim().slice(0, 10) ?? '';
-  return t && t === s ? 'actualizada' : 'desactualizada';
+  if (!t) return 'desactualizada';
+  if (t > s) return 'desactualizada';
+  if (t === s) return 'actualizada';
+  return hayDiaHabilBancarioPosteriorA(t, s) ? 'desactualizada' : 'actualizada';
 }
 

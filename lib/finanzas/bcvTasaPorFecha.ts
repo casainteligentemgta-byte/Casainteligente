@@ -27,6 +27,7 @@ export type FuenteTasaBcv =
   | 'ci_config_nomina'
   | 'env';
 
+/** `actualizada` = vigente para la fecha pedida (mismo día, fin de semana o feriado). */
 export type EstadoTasaBcv = 'actualizada' | 'desactualizada';
 
 export type TasaBcvResult = {
@@ -149,13 +150,23 @@ async function fetchBcvJson(url: string, context: string): Promise<unknown | nul
   }
 }
 
+function fechaValorDeFila(fila: FilaTasaBcv): string {
+  return fila.fecha_valor ?? fila.fecha;
+}
+
+/** El BCV publica a veces la Fecha Valor del próximo hábil: no aplica a un día anterior. */
+function filaAplicaAFecha(fila: FilaTasaBcv, iso: string): boolean {
+  return fechaValorDeFila(fila) <= iso;
+}
+
 function resultadoDeFila(iso: string, fila: FilaTasaBcv): TasaBcvResult {
+  const fechaValor = fechaValorDeFila(fila);
   return {
     fecha: iso,
     tasa_bcv_ves_por_usd: fila.usd,
     fuente: fila.fuente,
-    fecha_valor: fila.fecha_valor ?? fila.fecha,
-    estado: estadoTasaParaFechaSolicitada(iso, fila.fecha),
+    fecha_valor: fechaValor,
+    estado: estadoTasaParaFechaSolicitada(iso, fechaValor),
   };
 }
 
@@ -202,13 +213,17 @@ export async function leerTasaBcvAnterior(
     .select('fecha, usd, fuente, fecha_valor')
     .lt('fecha', fecha)
     .order('fecha', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(15);
   if (error) {
     if (tablaAusente(error)) return null;
     throw new Error(error.message);
   }
-  return mapFila(data as Record<string, unknown> | null);
+  const rows = Array.isArray(data) ? data : [];
+  for (const row of rows) {
+    const mapped = mapFila(row as Record<string, unknown>);
+    if (mapped && filaAplicaAFecha(mapped, fecha)) return mapped;
+  }
+  return null;
 }
 
 /**
@@ -292,19 +307,23 @@ export function esFuenteTasaBcvConfiable(fuente: FuenteTasaBcv | string | null |
   );
 }
 
-/** True solo si la tasa es de esa fecha (no una anterior presentada como «hoy»). */
+/**
+ * True si la tasa es vigente para esa fecha: misma Fecha Valor, o la última
+ * oficial sin día hábil bancario VE de por medio (fin de semana / feriado).
+ * Rechaza `desactualizada` cuando falta un día hábil de publicación.
+ */
 export function esTasaBcvDelDia(
   result: Pick<TasaBcvResult, 'estado' | 'fuente' | 'fecha_valor' | 'fecha'> | null | undefined,
   fecha?: string,
 ): boolean {
   if (!result) return false;
-  if (result.estado === 'desactualizada') return false;
-  if (fecha) {
-    const iso = normalizarFechaIso(fecha);
-    const valor = (result.fecha_valor ?? result.fecha)?.slice(0, 10);
-    if (valor && valor !== iso && result.fecha !== iso) return false;
+  if (!esFuenteTasaBcvConfiable(result.fuente)) return false;
+  const iso = fecha ? normalizarFechaIso(fecha) : result.fecha;
+  const valor = (result.fecha_valor ?? result.fecha)?.slice(0, 10) ?? '';
+  if (valor) {
+    return estadoTasaParaFechaSolicitada(iso, valor) === 'actualizada';
   }
-  return esFuenteTasaBcvConfiable(result.fuente);
+  return result.estado !== 'desactualizada';
 }
 
 /** Bolívares por 1 USD (tasa oficial BCV) para una fecha YYYY-MM-DD. */
@@ -319,7 +338,9 @@ export async function obtenerTasaBcvVesPorUsd(
   if (opts?.supabase) {
     try {
       const exacta = await leerTasaBcvPorFecha(opts.supabase, iso);
-      if (exacta) return guardarTasaEnCache(iso, resultadoDeFila(iso, exacta));
+      if (exacta && filaAplicaAFecha(exacta, iso)) {
+        return guardarTasaEnCache(iso, resultadoDeFila(iso, exacta));
+      }
     } catch (e) {
       console.warn('[bcv] historial ci_tasas_bcv', e instanceof Error ? e.message : e);
     }
@@ -348,13 +369,7 @@ export async function obtenerTasaBcvVesPorUsd(
     try {
       const anterior = await leerTasaBcvAnterior(opts.supabase, iso);
       if (anterior) {
-        return guardarTasaEnCache(iso, {
-          fecha: iso,
-          tasa_bcv_ves_por_usd: anterior.usd,
-          fuente: anterior.fuente,
-          fecha_valor: anterior.fecha_valor ?? anterior.fecha,
-          estado: 'desactualizada',
-        });
+        return guardarTasaEnCache(iso, resultadoDeFila(iso, anterior));
       }
     } catch (e) {
       console.warn('[bcv] tasa anterior', e instanceof Error ? e.message : e);

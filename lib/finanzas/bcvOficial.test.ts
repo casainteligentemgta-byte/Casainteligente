@@ -95,10 +95,30 @@ describe('fecha efectiva / no presentar una tasa vieja como de hoy', () => {
     assert.equal(fechaAlmacenamientoTasaBcv({ fechaValor: null, hoy: '2026-11-06' }), '2026-11-06');
   });
 
-  it('marca desactualizada si la tasa no es de la fecha pedida', () => {
+  it('marca desactualizada si falta un día hábil de publicación', () => {
     assert.equal(estadoTasaParaFechaSolicitada('2026-11-06', '2026-11-06'), 'actualizada');
     assert.equal(estadoTasaParaFechaSolicitada('2026-11-06', '2026-11-04'), 'desactualizada');
     assert.equal(estadoTasaParaFechaSolicitada('2026-11-06', null), 'desactualizada');
+  });
+
+  it('viernes sigue vigente el sábado y el domingo', () => {
+    assert.equal(estadoTasaParaFechaSolicitada('2026-11-07', '2026-11-06'), 'actualizada');
+    assert.equal(estadoTasaParaFechaSolicitada('2026-11-08', '2026-11-06'), 'actualizada');
+  });
+
+  it('lunes sin fila propia queda desactualizada', () => {
+    assert.equal(estadoTasaParaFechaSolicitada('2026-11-09', '2026-11-06'), 'desactualizada');
+  });
+
+  it('no usa una Fecha Valor futura (BCV publica el próximo hábil por adelantado)', () => {
+    assert.equal(estadoTasaParaFechaSolicitada('2026-11-06', '2026-11-09'), 'desactualizada');
+    assert.equal(estadoTasaParaFechaSolicitada('2026-11-07', '2026-11-09'), 'desactualizada');
+  });
+
+  it('feriado bancario (Carnaval) sigue vigente sin tasa del día', () => {
+    assert.equal(estadoTasaParaFechaSolicitada('2026-02-16', '2026-02-13'), 'actualizada');
+    assert.equal(estadoTasaParaFechaSolicitada('2026-02-17', '2026-02-13'), 'actualizada');
+    assert.equal(estadoTasaParaFechaSolicitada('2026-02-18', '2026-02-13'), 'desactualizada');
   });
 });
 
