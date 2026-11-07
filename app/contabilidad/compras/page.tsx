@@ -8,11 +8,8 @@ import { createClient } from '@/lib/supabase/client';
 import { formatDeleteCompraError } from '@/lib/contabilidad/deleteCompraRegistro';
 import { useUmbralesFechaCompras } from '@/lib/alertas/useUmbralesFechaCompras';
 import {
-    claseBlinkFechaCompra,
-    etiquetaFechaAnomalaCorta,
     metaAlertaFechaCompra,
 } from '@/lib/contabilidad/auditoriaFechaCompra';
-import { etiquetaAlmacenIngresoCompra } from '@/lib/contabilidad/etiquetaAlmacenCompra';
 import {
     etiquetaPeriodo,
     rangoFechasPeriodo,
@@ -35,6 +32,7 @@ import {
     compraCumpleFiltrosMontos,
 } from '@/lib/contabilidad/filtrosFacturaCanal';
 import ComprasLineasTable from '@/components/contabilidad/ComprasLineasTable';
+import ComprasFacturasTable from '@/components/contabilidad/ComprasFacturasTable';
 import ComprasFiltrosPanel, {
     buildComprasFiltrosChips,
     ComprasFiltrosActivosBar,
@@ -47,16 +45,12 @@ import {
     type ProyectoCatalogo,
 } from '@/lib/proyectos/proyectosUnificados';
 import {
-    CalendarClock,
     Download,
     Filter,
     FileText,
     FileSpreadsheet,
     FileUp,
     Loader2,
-    MapPin,
-    PackageCheck,
-    Pencil,
     Printer,
     RefreshCw,
     Search,
@@ -65,14 +59,10 @@ import {
 } from 'lucide-react';
 import CargarFacturaCuadroModal from '@/components/contabilidad/CargarFacturaCuadroModal';
 import ReubicarCompraModal from '@/components/contabilidad/ReubicarCompraModal';
-import ImputacionCompraToggle from '@/components/contabilidad/ImputacionCompraToggle';
-import ClasificacionGastoEntidadSelect from '@/components/contabilidad/ClasificacionGastoEntidadSelect';
 import { esGastoEntidadImputacion } from '@/lib/contabilidad/imputacionCompra';
-import { etiquetaClasificacionGastoEntidad } from '@/lib/contabilidad/clasificacionGastoEntidad';
 import VerificarFechaCompraModal from '@/components/contabilidad/VerificarFechaCompraModal';
 import ReporteClienteComprasModal from '@/components/contabilidad/ReporteClienteComprasModal';
 import { buildReporteClienteDesdeCompras } from '@/lib/contabilidad/reporteClienteCompras';
-import { tooltipClienteCrmCompra } from '@/lib/clientes/tooltipClienteCrmCompra';
 import EditarFacturaCanalModal, {
     type DestinoCompraEdicion,
     type GuardarFacturaCanalOpts,
@@ -80,8 +70,6 @@ import EditarFacturaCanalModal, {
 import EditarLineaCompraModal, {
     type LineaCompraEditable,
 } from '@/components/contabilidad/EditarLineaCompraModal';
-import CompraFacturaAdjunto from '@/components/contabilidad/CompraFacturaAdjunto';
-import CompraProductosToggle from '@/components/contabilidad/CompraProductosToggle';
 import EtiquetaBimonetariaCompra from '@/components/contabilidad/EtiquetaBimonetariaCompra';
 import {
     formatearBs,
@@ -118,16 +106,9 @@ import { enriquecerComprasConDestino } from '@/lib/contabilidad/enriquecerCompra
 import { enriquecerComprasPuenteInventario } from '@/lib/contabilidad/enriquecerComprasPuenteInventario';
 import { enriquecerComprasRecepcionCampo } from '@/lib/contabilidad/enriquecerComprasRecepcionCampo';
 import {
-    coloresEstadoLogistica,
-    compraMuestraBotonConfirmacionRecepcion,
     enriquecerComprasEstadoLogistica,
-    etiquetaEstadoLogistica,
     type EstadoLogisticaCompra,
 } from '@/lib/contabilidad/estadoLogisticaCompra';
-import {
-    compraTieneDetallePuenteInventario,
-    lineasDetallePuenteInventario,
-} from '@/lib/contabilidad/formatDetalleLogisticaCompra';
 import {
     buildComprasCuadroShareUrl,
     borrarComprasCuadroFiltrosGuardados,
@@ -256,15 +237,30 @@ function lineasParaProductosToggle(row: CompraRow) {
         }));
 }
 
-function puedeReubicarCompra(c: CompraRow): boolean {
-    return (
-        c.fuente_lista === 'app' ||
-        Boolean(c.purchase_invoice_id) ||
-        Boolean(c.pendiente_canal_id) ||
-        c.estado === 'REGISTRADA' ||
-        c.canal_estado === 'confirmado' ||
-        c.canal_estado === 'extraido'
-    );
+type PurchaseInvoiceEmbed = {
+    proyecto_id?: string | null;
+    entidad_id?: string | null;
+    ubicacion_destino_id?: string | null;
+    dias_credito?: number | null;
+    fecha_vencimiento?: string | null;
+    condicion_pago?: string | null;
+};
+
+function aplicarEmbedFactura(
+    r: CompraRow & { purchase_invoice?: PurchaseInvoiceEmbed | null; notas?: string | null },
+): CompraRow {
+    const pi = r.purchase_invoice;
+    return {
+        ...r,
+        fuente_lista: r.fuente_lista ?? 'app',
+        proyecto_id: r.proyecto_id ?? pi?.proyecto_id ?? null,
+        entidad_id: r.entidad_id ?? pi?.entidad_id ?? null,
+        ubicacion_destino_id: r.ubicacion_destino_id ?? pi?.ubicacion_destino_id ?? null,
+        notas: r.notas ?? null,
+        dias_credito: r.dias_credito ?? pi?.dias_credito ?? null,
+        fecha_vencimiento: r.fecha_vencimiento ?? pi?.fecha_vencimiento ?? null,
+        condicion_pago: r.condicion_pago ?? pi?.condicion_pago ?? null,
+    };
 }
 
 function destinoEdicionDesdeCompra(c: CompraRow): DestinoCompraEdicion | null {
@@ -276,26 +272,6 @@ function destinoEdicionDesdeCompra(c: CompraRow): DestinoCompraEdicion | null {
         proyectoId: c.proyecto_id ?? null,
         ubicacionId: c.ubicacion_destino_id ?? null,
     };
-}
-
-function compraPuedeVerImagen(c: CompraRow): boolean {
-    return Boolean(
-        c.document_storage_path ||
-            c.purchase_invoice_id ||
-            c.origen === 'RECEPCION_MERCANCIA' ||
-            c.origen === 'TELEGRAM' ||
-            c.origen === 'HISTORICO_TABLA' ||
-            c.pendiente_canal_id,
-    );
-}
-
-function compraPuedeAdjuntarFactura(c: CompraRow): boolean {
-    return (
-        c.origen === 'HISTORICO_TABLA' &&
-        !c.document_storage_path &&
-        !c.purchase_invoice_id &&
-        !c.pendiente_canal_id
-    );
 }
 
 export default function ComprasPage() {
@@ -669,7 +645,7 @@ export default function ComprasPage() {
                 let q = supabase
                     .from('contabilidad_compras')
                     .select(
-                        `${selectCompraBase}${camposAuditoria}${camposClasificacion},ci_proyectos(nombre),purchase_invoice:purchase_invoices(proyecto_id,entidad_id,ubicacion_destino_id)${camposPuente},${lineasSelect}`
+                        `${selectCompraBase}${camposAuditoria}${camposClasificacion},ci_proyectos(nombre),purchase_invoice:purchase_invoices(proyecto_id,entidad_id,ubicacion_destino_id,dias_credito,fecha_vencimiento,condicion_pago)${camposPuente},${lineasSelect}`
                     )
                     .order('fecha', { ascending: false })
                     .order('created_at', { ascending: false });
@@ -755,24 +731,9 @@ export default function ComprasPage() {
                     }
                     throw qErr;
                 }
-                filas = (data ?? []).map((row) => {
-                    const r = row as unknown as CompraRow & {
-                        purchase_invoice?: {
-                            proyecto_id?: string | null;
-                            entidad_id?: string | null;
-                            ubicacion_destino_id?: string | null;
-                        } | null;
-                    };
-                    const pi = r.purchase_invoice;
-                    return {
-                        ...r,
-                        fuente_lista: r.fuente_lista ?? 'app',
-                        proyecto_id: r.proyecto_id ?? pi?.proyecto_id ?? null,
-                        entidad_id: r.entidad_id ?? pi?.entidad_id ?? null,
-                        ubicacion_destino_id:
-                            r.ubicacion_destino_id ?? pi?.ubicacion_destino_id ?? null,
-                    };
-                });
+                filas = (data ?? []).map((row) =>
+                    aplicarEmbedFactura(row as unknown as CompraRow & { purchase_invoice?: PurchaseInvoiceEmbed | null }),
+                );
             }
 
             if (compraDeepLinkId && !filas.some((f) => f.id === compraDeepLinkId)) {
@@ -781,7 +742,7 @@ export default function ComprasPage() {
                 const primera = await supabase
                     .from('contabilidad_compras')
                     .select(
-                        `${selectCompraBase}${selectAuditoriaFecha}${selectClasificacionEntidad},ci_proyectos(nombre),purchase_invoice:purchase_invoices(proyecto_id,entidad_id,ubicacion_destino_id),${selectLogistica},${lineasSelect}`,
+                        `${selectCompraBase}${selectAuditoriaFecha}${selectClasificacionEntidad},ci_proyectos(nombre),purchase_invoice:purchase_invoices(proyecto_id,entidad_id,ubicacion_destino_id,dias_credito,fecha_vencimiento,condicion_pago),${selectLogistica},${lineasSelect}`,
                     )
                     .eq('id', compraDeepLinkId)
                     .maybeSingle();
@@ -796,7 +757,7 @@ export default function ComprasPage() {
                     const retry = await supabase
                         .from('contabilidad_compras')
                         .select(
-                            `${selectCompraBase}${selectAuditoriaFecha}${selectClasificacionEntidad},ci_proyectos(nombre),purchase_invoice:purchase_invoices(proyecto_id,entidad_id,ubicacion_destino_id),${lineasSelect}`,
+                            `${selectCompraBase}${selectAuditoriaFecha}${selectClasificacionEntidad},ci_proyectos(nombre),purchase_invoice:purchase_invoices(proyecto_id,entidad_id,ubicacion_destino_id,dias_credito,fecha_vencimiento,condicion_pago),${lineasSelect}`,
                         )
                         .eq('id', compraDeepLinkId)
                         .maybeSingle();
@@ -810,7 +771,7 @@ export default function ComprasPage() {
                     const retry = await supabase
                         .from('contabilidad_compras')
                         .select(
-                            `${selectCompraBase},ci_proyectos(nombre),purchase_invoice:purchase_invoices(proyecto_id,entidad_id,ubicacion_destino_id),${selectLogistica},${lineasSelect}`,
+                            `${selectCompraBase},ci_proyectos(nombre),purchase_invoice:purchase_invoices(proyecto_id,entidad_id,ubicacion_destino_id,dias_credito,fecha_vencimiento,condicion_pago),${selectLogistica},${lineasSelect}`,
                         )
                         .eq('id', compraDeepLinkId)
                         .maybeSingle();
@@ -818,23 +779,10 @@ export default function ComprasPage() {
                     extraErr = retry.error;
                 }
                 if (!extraErr && extraRow) {
-                    const r = extraRow as unknown as CompraRow & {
-                        purchase_invoice?: {
-                            proyecto_id?: string | null;
-                            entidad_id?: string | null;
-                            ubicacion_destino_id?: string | null;
-                        } | null;
-                    };
-                    const pi = r.purchase_invoice;
                     filas = [
-                        {
-                            ...r,
-                            fuente_lista: r.fuente_lista ?? 'app',
-                            proyecto_id: r.proyecto_id ?? pi?.proyecto_id ?? null,
-                            entidad_id: r.entidad_id ?? pi?.entidad_id ?? null,
-                            ubicacion_destino_id:
-                                r.ubicacion_destino_id ?? pi?.ubicacion_destino_id ?? null,
-                        },
+                        aplicarEmbedFactura(
+                            extraRow as unknown as CompraRow & { purchase_invoice?: PurchaseInvoiceEmbed | null },
+                        ),
                         ...filas,
                     ];
                 }
@@ -1983,7 +1931,7 @@ export default function ComprasPage() {
         setVistaListado('facturas');
         setImagenFacturaAbierta(compraId);
         requestAnimationFrame(() => {
-            document.getElementById(`compra-card-${compraId}`)?.scrollIntoView({
+            document.getElementById(`compra-row-${compraId}`)?.scrollIntoView({
                 behavior: 'smooth',
                 block: 'center',
             });
@@ -3025,722 +2973,26 @@ export default function ComprasPage() {
                 ) : null}
 
                 {showList && vistaListado === 'facturas' ? (
-                    <div className="compras-facturas-grid">
-                        {compras.map((c) => (
-                            <div
-                                id={`compra-card-${c.id}`}
-                                key={c.id}
-                                className="compras-factura-card"
-                                style={{
-                                    ...glass,
-                                    padding: '18px',
-                                    border: selectedIds.has(c.id)
-                                        ? '1px solid rgba(88,86,214,0.55)'
-                                        : glass.border,
-                                    background: selectedIds.has(c.id)
-                                        ? 'rgba(88,86,214,0.1)'
-                                        : glass.background,
-                                }}
-                            >
-                                <div className="compras-factura-card-header">
-                                    <label
-                                        style={{
-                                            display: 'flex',
-                                            alignItems: 'flex-start',
-                                            paddingTop: '4px',
-                                            cursor: 'pointer',
-                                            flexShrink: 0,
-                                        }}
-                                        title="Seleccionar factura"
-                                    >
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedIds.has(c.id)}
-                                            onChange={() => toggleSelectCompra(c.id)}
-                                            style={{ width: 16, height: 16, accentColor: '#5856D6' }}
-                                        />
-                                    </label>
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                        {(() => {
-                                            const puedeImagen = compraPuedeVerImagen(c);
-                                            const imagenAbierta = imagenFacturaAbierta === c.id;
-                                            return (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        if (puedeImagen) toggleImagenFactura(c.id);
-                                                    }}
-                                                    disabled={!puedeImagen}
-                                                    style={{
-                                                        display: 'block',
-                                                        width: '100%',
-                                                        textAlign: 'left',
-                                                        background: 'none',
-                                                        border: 'none',
-                                                        padding: 0,
-                                                        marginBottom: '4px',
-                                                        cursor: puedeImagen ? 'pointer' : 'default',
-                                                    }}
-                                                    aria-expanded={puedeImagen ? imagenAbierta : undefined}
-                                                >
-                                                    <span
-                                                        style={{
-                                                            color: 'white',
-                                                            fontSize: '17px',
-                                                            fontWeight: 800,
-                                                            textDecoration: puedeImagen
-                                                                ? imagenAbierta
-                                                                    ? 'underline'
-                                                                    : 'underline dotted'
-                                                                : 'none',
-                                                            textDecorationColor: '#a5a3ff',
-                                                        }}
-                                                    >
-                                                        {c.supplier_name}
-                                                    </span>
-                                                    {puedeImagen ? (
-                                                        <span
-                                                            style={{
-                                                                marginLeft: '8px',
-                                                                fontSize: '10px',
-                                                                fontWeight: 700,
-                                                                color: imagenAbierta
-                                                                    ? '#a5a3ff'
-                                                                    : 'rgba(255,255,255,0.35)',
-                                                            }}
-                                                        >
-                                                            {imagenAbierta
-                                                                ? '▲ ocultar'
-                                                                : c.document_storage_path
-                                                                  ? '▼ ver imagen'
-                                                                  : '▼ factura / adjuntar'}
-                                                        </span>
-                                                    ) : null}
-                                                </button>
-                                            );
-                                        })()}
-                                        <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '12px' }}>
-                                            Factura #{c.invoice_number} · RIF {etiquetaRifCompra(c.supplier_rif)}
-                                            <span
-                                                style={{
-                                                    marginLeft: '8px',
-                                                    fontSize: '10px',
-                                                    fontWeight: 800,
-                                                    color:
-                                                        c.fuente_lista === 'telegram'
-                                                            ? '#7dd3fc'
-                                                            : '#a78bfa',
-                                                }}
-                                            >
-                                                {etiquetaOrigenCompra(c)}
-                                            </span>
-                                            {c.estado_logistica && c.estado_logistica !== 'sin_documento' ? (
-                                                <span
-                                                    style={{
-                                                        marginLeft: '8px',
-                                                        fontSize: '10px',
-                                                        fontWeight: 800,
-                                                        padding: '2px 7px',
-                                                        borderRadius: '6px',
-                                                        ...coloresEstadoLogistica(c.estado_logistica),
-                                                    }}
-                                                >
-                                                    {etiquetaEstadoLogistica(
-                                                        c.estado_logistica,
-                                                        c.logistica_conteos,
-                                                    )}
-                                                </span>
-                                            ) : null}
-                                        </p>
-                                        {compraTieneDetallePuenteInventario(c) ? (
-                                            <div
-                                                style={{
-                                                    marginTop: '8px',
-                                                    padding: '8px 10px',
-                                                    borderRadius: '10px',
-                                                    background: 'rgba(52,199,89,0.08)',
-                                                    border: '1px solid rgba(52,199,89,0.22)',
-                                                }}
-                                            >
-                                                {lineasDetallePuenteInventario(c).map((linea) => (
-                                                    <p
-                                                        key={linea}
-                                                        style={{
-                                                            margin: 0,
-                                                            fontSize: '11px',
-                                                            fontWeight: 600,
-                                                            color: c.cuarentena_rechazo_total
-                                                                ? '#fca5a5'
-                                                                : 'rgba(134,239,172,0.95)',
-                                                            lineHeight: 1.45,
-                                                        }}
-                                                    >
-                                                        {linea}
-                                                    </p>
-                                                ))}
-                                            </div>
-                                        ) : null}
-                                        {(c.entidad_nombre ||
-                                            c.proyecto_nombre ||
-                                            c.ubicacion_nombre ||
-                                            (!esGastoEntidadImputacion(c.imputacion) &&
-                                                c.proyecto_nombre &&
-                                                !c.ubicacion_destino_id)) ? (
-                                            <div
-                                                style={{
-                                                    display: 'flex',
-                                                    flexWrap: 'wrap',
-                                                    gap: '6px',
-                                                    marginTop: '8px',
-                                                }}
-                                            >
-                                                {c.entidad_nombre ? (
-                                                    <span
-                                                        style={{
-                                                            fontSize: '10px',
-                                                            fontWeight: 700,
-                                                            padding: '4px 8px',
-                                                            borderRadius: '8px',
-                                                            background: 'rgba(255,255,255,0.06)',
-                                                            color: 'rgba(255,255,255,0.55)',
-                                                        }}
-                                                    >
-                                                        {c.entidad_nombre}
-                                                    </span>
-                                                ) : null}
-                                                {c.proyecto_nombre ? (
-                                                    <span
-                                                        title={tooltipClienteCrmCompra({
-                                                            clienteCrmNombre: c.cliente_crm_nombre,
-                                                            entidadNombre: c.entidad_nombre,
-                                                        })}
-                                                        style={{
-                                                            fontSize: '10px',
-                                                            fontWeight: 700,
-                                                            padding: '4px 8px',
-                                                            borderRadius: '8px',
-                                                            background: 'rgba(167,139,250,0.12)',
-                                                            color: '#c4b5fd',
-                                                            cursor: 'help',
-                                                        }}
-                                                    >
-                                                        {c.proyecto_nombre}
-                                                    </span>
-                                                ) : null}
-                                                {c.proyecto_nombre && c.cliente_crm_nombre ? (
-                                                    <span
-                                                        style={{
-                                                            fontSize: '10px',
-                                                            fontWeight: 600,
-                                                            padding: '4px 8px',
-                                                            borderRadius: '8px',
-                                                            background: 'rgba(0,122,255,0.12)',
-                                                            color: '#7cb9ff',
-                                                        }}
-                                                        title="Cliente CRM vinculado a la obra (compras imputan a obra + patrono)"
-                                                    >
-                                                        CRM: {c.cliente_crm_nombre}
-                                                    </span>
-                                                ) : c.proyecto_nombre && !c.cliente_crm_nombre ? (
-                                                    <span
-                                                        style={{
-                                                            fontSize: '10px',
-                                                            fontWeight: 600,
-                                                            padding: '4px 8px',
-                                                            borderRadius: '8px',
-                                                            background: 'rgba(255,255,255,0.04)',
-                                                            color: 'rgba(255,255,255,0.4)',
-                                                        }}
-                                                        title={tooltipClienteCrmCompra({
-                                                            entidadNombre: c.entidad_nombre,
-                                                        })}
-                                                    >
-                                                        Sin cliente CRM
-                                                    </span>
-                                                ) : null}
-                                                {(() => {
-                                                    const almacen = etiquetaAlmacenIngresoCompra({
-                                                        ubicacionNombre: c.ubicacion_nombre,
-                                                        ubicacionDestinoId: c.ubicacion_destino_id,
-                                                        proyectoNombre: c.proyecto_nombre,
-                                                        imputacionEntidad: esGastoEntidadImputacion(
-                                                            c.imputacion,
-                                                        ),
-                                                        yaIngresadoAlmacen: Boolean(
-                                                            c.ingresado_almacen_at ||
-                                                                c.compra_factura_id,
-                                                        ),
-                                                        estadoLogistica: c.estado_logistica,
-                                                    });
-                                                    if (!almacen.texto || almacen.texto === '—') return null;
-                                                    return (
-                                                        <span
-                                                            style={{
-                                                                fontSize: '10px',
-                                                                fontWeight: 700,
-                                                                padding: '4px 8px',
-                                                                borderRadius: '8px',
-                                                                background: almacen.pendienteIngreso
-                                                                    ? 'rgba(251,191,36,0.12)'
-                                                                    : 'rgba(234,88,12,0.15)',
-                                                                color: almacen.pendienteIngreso
-                                                                    ? '#fcd34d'
-                                                                    : '#fdba74',
-                                                                fontStyle: almacen.pendienteIngreso
-                                                                    ? 'italic'
-                                                                    : undefined,
-                                                            }}
-                                                            title={
-                                                                almacen.pendienteIngreso
-                                                                    ? 'Contabilidad registrada; asigne almacén al ingresar el material'
-                                                                    : undefined
-                                                            }
-                                                        >
-                                                            {almacen.texto}
-                                                        </span>
-                                                    );
-                                                })()}
-                                                {c.fuente_lista === 'app' && !c.id.startsWith('canal-') ? (
-                                                    <ImputacionCompraToggle
-                                                        compraId={c.id}
-                                                        imputacion={c.imputacion}
-                                                        onChanged={() => void load()}
-                                                    />
-                                                ) : null}
-                                                {esGastoEntidadImputacion(c.imputacion) &&
-                                                !c.id.startsWith('canal-') ? (
-                                                    <ClasificacionGastoEntidadSelect
-                                                        compraId={c.id}
-                                                        value={c.clasificacion_gasto_entidad}
-                                                        compact
-                                                        onChanged={() => void load()}
-                                                    />
-                                                ) : esGastoEntidadImputacion(c.imputacion) &&
-                                                  c.clasificacion_gasto_entidad ? (
-                                                    <span
-                                                        style={{
-                                                            fontSize: '10px',
-                                                            fontWeight: 700,
-                                                            padding: '4px 8px',
-                                                            borderRadius: '8px',
-                                                            background: 'rgba(139,92,246,0.15)',
-                                                            color: '#c4b5fd',
-                                                        }}
-                                                    >
-                                                        {etiquetaClasificacionGastoEntidad(
-                                                            c.clasificacion_gasto_entidad,
-                                                        )}
-                                                    </span>
-                                                ) : null}
-                                            </div>
-                                        ) : null}
-                                        <div className="compras-factura-acciones compras-no-imprimir flex w-full flex-wrap items-center gap-1.5">
-                                            {puedeReubicarCompra(c) ? (
-                                                <button
-                                                    type="button"
-                                                    className="compras-factura-accion-btn"
-                                                    onClick={() =>
-                                                        setReubicarCompra({
-                                                            id: c.id,
-                                                            entidadId: c.entidad_id,
-                                                            proyectoId: c.proyecto_id,
-                                                            ubicacionId: c.ubicacion_destino_id,
-                                                            titulo: `Reubicar — ${c.supplier_name}`,
-                                                        })
-                                                    }
-                                                    disabled={deletingId !== null || deletingBulk}
-                                                    style={{
-                                                        border: '1px solid rgba(251,146,60,0.45)',
-                                                        background: 'rgba(234,88,12,0.15)',
-                                                        color: '#fdba74',
-                                                    }}
-                                                >
-                                                    <MapPin className="h-3.5 w-3.5" />
-                                                    Obra / almacén
-                                                </button>
-                                            ) : null}
-                                            {c.purchase_invoice_id &&
-                                            compraMuestraBotonConfirmacionRecepcion(c) &&
-                                            !esGastoEntidadImputacion(c.imputacion) ? (
-                                                !c.ubicacion_destino_id ? (
-                                                    <button
-                                                        type="button"
-                                                        className="compras-factura-accion-btn"
-                                                        onClick={() =>
-                                                            setReubicarCompra({
-                                                                id: c.id,
-                                                                entidadId: c.entidad_id,
-                                                                proyectoId: c.proyecto_id,
-                                                                ubicacionId: c.ubicacion_destino_id,
-                                                                titulo: `Asignar almacén — ${c.supplier_name}`,
-                                                            })
-                                                        }
-                                                        disabled={deletingId !== null || deletingBulk}
-                                                        style={{
-                                                            border: '1px solid rgba(251,191,36,0.45)',
-                                                            background: 'rgba(251,191,36,0.12)',
-                                                            color: '#fcd34d',
-                                                        }}
-                                                    >
-                                                        <MapPin className="h-3.5 w-3.5" />
-                                                        Asignar almacén
-                                                    </button>
-                                                ) : (
-                                                <button
-                                                    type="button"
-                                                    className="compras-factura-accion-btn"
-                                                    onClick={() => void handleIngresoAlmacen(c)}
-                                                    disabled={deletingId !== null || ingresandoAlmacenId !== null}
-                                                    style={{
-                                                        border:
-                                                            c.estado_logistica === 'cuarentena' ||
-                                                            c.estado_logistica === 'en_almacen_parcial'
-                                                                ? '1px solid rgba(245,158,11,0.45)'
-                                                                : '1px solid rgba(52,199,89,0.45)',
-                                                        background:
-                                                            c.estado_logistica === 'cuarentena' ||
-                                                            c.estado_logistica === 'en_almacen_parcial'
-                                                                ? 'rgba(245,158,11,0.14)'
-                                                                : 'rgba(52,199,89,0.14)',
-                                                        color:
-                                                            c.estado_logistica === 'cuarentena' ||
-                                                            c.estado_logistica === 'en_almacen_parcial'
-                                                                ? '#fcd34d'
-                                                                : '#86efac',
-                                                        opacity: ingresandoAlmacenId === c.id ? 0.6 : 1,
-                                                    }}
-                                                >
-                                                    {ingresandoAlmacenId === c.id ? (
-                                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                                    ) : (
-                                                        <PackageCheck className="h-3.5 w-3.5" />
-                                                    )}
-                                                    {c.estado_logistica === 'en_almacen_parcial'
-                                                        ? 'Liberar pendiente'
-                                                        : 'Confirmación recepción'}
-                                                </button>
-                                                )
-                                            ) : null}
-                                            {(() => {
-                                                const metaFecha = metaAlertaFechaCompra({
-                                                    fecha: String(c.fecha ?? '').slice(0, 10),
-                                                    alertaAlmacenada: c.alerta_fecha,
-                                                    fechaConfirmadaManual: c.fecha_confirmada_manual,
-                                                    umbrales: umbralesFecha,
-                                                });
-                                                if (!metaFecha.requiereVerificacion) {
-                                                    return null;
-                                                }
-                                                const esAdvertencia = metaFecha.nivel === 'advertencia';
-                                                return (
-                                                    <button
-                                                        type="button"
-                                                        className={
-                                                            [
-                                                                'compras-factura-accion-btn',
-                                                                claseBlinkFechaCompra(metaFecha.nivel),
-                                                            ]
-                                                                .filter(Boolean)
-                                                                .join(' ') || undefined
-                                                        }
-                                                        onClick={() => abrirVerificarFechaCompra(c)}
-                                                        disabled={deletingId !== null || deletingBulk}
-                                                        style={{
-                                                            border: esAdvertencia
-                                                                ? '1px solid rgba(255,149,0,0.55)'
-                                                                : '1px solid rgba(255,59,48,0.55)',
-                                                            background: esAdvertencia
-                                                                ? 'rgba(255,149,0,0.18)'
-                                                                : 'rgba(255,59,48,0.18)',
-                                                            color: esAdvertencia ? '#FFC56D' : '#FF8A85',
-                                                        }}
-                                                    >
-                                                        <CalendarClock className="h-3.5 w-3.5" />
-                                                        Verificar fecha
-                                                    </button>
-                                                );
-                                            })()}
-                                            {c.pendiente_canal_id ? (
-                                                <button
-                                                    type="button"
-                                                    className="compras-factura-accion-btn"
-                                                    onClick={() => void abrirEditarTelegram(c)}
-                                                    disabled={deletingId !== null || deletingBulk}
-                                                    style={{
-                                                        border: '1px solid rgba(56,189,248,0.4)',
-                                                        background: 'rgba(14,116,144,0.25)',
-                                                        color: '#7dd3fc',
-                                                    }}
-                                                >
-                                                    <Pencil className="h-3.5 w-3.5" />
-                                                    Modificar
-                                                </button>
-                                            ) : null}
-                                            <button
-                                                type="button"
-                                                className="compras-factura-accion-btn"
-                                                onClick={() => void handleDelete(c)}
-                                                disabled={deletingId !== null || deletingBulk}
-                                                style={{
-                                                    border: '1px solid rgba(255,59,48,0.35)',
-                                                    background: 'rgba(255,59,48,0.12)',
-                                                    color: '#FF6B6B',
-                                                    opacity: deletingId === c.id ? 0.6 : 1,
-                                                }}
-                                            >
-                                                {deletingId === c.id ? (
-                                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                                ) : (
-                                                    <Trash2 className="h-3.5 w-3.5" />
-                                                )}
-                                                Borrar
-                                            </button>
-                                        </div>
-                                        {c.mensaje_error_canal ? (
-                                            <p style={{ color: '#FF6B6B', fontSize: '11px', marginTop: '6px' }}>
-                                                {c.mensaje_error_canal}
-                                            </p>
-                                        ) : null}
-                                        <p
-                                            style={{
-                                                color: 'rgba(255,255,255,0.35)',
-                                                fontSize: '11px',
-                                                marginTop: '8px',
-                                            }}
-                                        >
-                                            {c.fecha}
-                                            {(() => {
-                                                const meta = metaAlertaFechaCompra({
-                                                    fecha: String(c.fecha ?? '').slice(0, 10),
-                                                    alertaAlmacenada: c.alerta_fecha,
-                                                    fechaConfirmadaManual: c.fecha_confirmada_manual,
-                                                    umbrales: umbralesFecha,
-                                                });
-                                                if (meta.nivel === 'ok') return null;
-                                                if (meta.verificada) {
-                                                    return (
-                                                        <span
-                                                            style={{
-                                                                marginLeft: 6,
-                                                                color: '#86efac',
-                                                                fontWeight: 600,
-                                                            }}
-                                                        >
-                                                            · fecha verificada
-                                                        </span>
-                                                    );
-                                                }
-                                                if (meta.requiereVerificacion) {
-                                                    const esAdvertencia = meta.nivel === 'advertencia';
-                                                    return (
-                                                        <button
-                                                            type="button"
-                                                            className={
-                                                                claseBlinkFechaCompra(meta.nivel) ??
-                                                                undefined
-                                                            }
-                                                            onClick={() => abrirVerificarFechaCompra(c)}
-                                                            style={{
-                                                                marginLeft: 6,
-                                                                padding: '2px 8px',
-                                                                borderRadius: 6,
-                                                                border: esAdvertencia
-                                                                    ? '1px solid rgba(255,149,0,0.55)'
-                                                                    : '1px solid rgba(255,59,48,0.55)',
-                                                                background: esAdvertencia
-                                                                    ? 'rgba(255,149,0,0.15)'
-                                                                    : 'rgba(255,59,48,0.15)',
-                                                                color: esAdvertencia
-                                                                    ? '#FFC56D'
-                                                                    : '#FF8A85',
-                                                                fontWeight: 700,
-                                                                fontSize: 10,
-                                                                cursor: 'pointer',
-                                                            }}
-                                                            title={meta.mensaje}
-                                                        >
-                                                            · {etiquetaFechaAnomalaCorta(meta.nivel).toLowerCase()} — verificar
-                                                        </button>
-                                                    );
-                                                }
-                                                return null;
-                                            })()}
-                                            {(() => {
-                                                const tasa = tasaDisplayCompra(c);
-                                                return tasa != null
-                                                    ? ` · Tasa ${formatearTasaBcv(tasa)}${
-                                                          !tasaBcvCompra(c) && tasaParaCompra(c)
-                                                              ? ' (BCV fecha factura)'
-                                                              : ''
-                                                      }`
-                                                    : '';
-                                            })()}{' '}
-                                            · {lineCount(c)} producto(s)
-                                        </p>
-                                        {(() => {
-                                            const tasaProductos = tasaDisplayCompra(c);
-                                            const montosProductos = montosBimonetariosLista(
-                                                c,
-                                                tasaProductos,
-                                            );
-                                            return (
-                                                <CompraProductosToggle
-                                                    compraId={c.id}
-                                                    tasaBcv={tasaProductos}
-                                                    tasaEsDelDia={
-                                                        !tasaBcvCompra(c) && !!tasaParaCompra(c)
-                                                    }
-                                                    montoBsFactura={montosProductos.bs}
-                                                    montoUsdFactura={montosProductos.usd}
-                                                    monedaOriginal={montosProductos.moneda}
-                                                    filaMoneda={{
-                                                        total_amount: Number(c.total_amount) || 0,
-                                                        total_amount_usd: c.total_amount_usd,
-                                                        tasa_bcv_ves_por_usd: c.tasa_bcv_ves_por_usd,
-                                                        moneda: c.moneda,
-                                                        moneda_original: c.moneda_original,
-                                                        monto_ves: c.monto_ves,
-                                                        monto_usd: c.monto_usd,
-                                                    }}
-                                                    lineCountHint={lineCount(c)}
-                                                    lineasIniciales={lineasParaProductosToggle(c)}
-                                                />
-                                            );
-                                        })()}
-                                        {compraPuedeVerImagen(c) ? (
-                                            <CompraFacturaAdjunto
-                                                compraId={c.id}
-                                                documentApiPath={
-                                                    c.pendiente_canal_id &&
-                                                    (c.id.startsWith('canal-') ||
-                                                        !c.purchase_invoice_id)
-                                                        ? rutaDocumentoPendienteCanal(c.pendiente_canal_id)
-                                                        : undefined
-                                                }
-                                                expanded={imagenFacturaAbierta === c.id}
-                                                tieneDocumento={
-                                                    Boolean(
-                                                        c.document_storage_path ||
-                                                            c.purchase_invoice_id ||
-                                                            c.pendiente_canal_id,
-                                                    )
-                                                }
-                                                puedeAdjuntar={compraPuedeAdjuntarFactura(c)}
-                                                esRecepcion={
-                                                    c.origen === 'RECEPCION_MERCANCIA' ||
-                                                    c.origen === 'TELEGRAM'
-                                                }
-                                                onAdjuntado={() => void load()}
-                                            />
-                                        ) : c.document_file_name ? (
-                                            <p
-                                                style={{
-                                                    marginTop: '8px',
-                                                    fontSize: '11px',
-                                                    color: 'rgba(255,255,255,0.4)',
-                                                    lineHeight: 1.4,
-                                                }}
-                                            >
-                                                Archivo «{c.document_file_name}» registrado sin imagen en
-                                                Storage. Adjúntala en{' '}
-                                                <Link
-                                                    href="/almacen/procurement"
-                                                    style={{ color: '#5856D6', fontWeight: 700 }}
-                                                >
-                                                    recepción de mercancía
-                                                </Link>
-                                                .
-                                            </p>
-                                        ) : null}
-                                    </div>
-                                    <div className="compras-factura-card-montos" style={{ textAlign: 'right', flexShrink: 0 }}>
-                                        {(() => {
-                                            const tasaDisp = tasaDisplayCompra(c);
-                                            const montos = montosBimonetariosLista(c, tasaDisp);
-                                            return (
-                                                <>
-                                                    <div
-                                                        style={{
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            justifyContent: 'flex-end',
-                                                            gap: '6px',
-                                                            marginBottom: '6px',
-                                                        }}
-                                                    >
-                                                        <label
-                                                            htmlFor={`moneda-${c.id}`}
-                                                            style={{
-                                                                fontSize: '10px',
-                                                                fontWeight: 700,
-                                                                color: 'rgba(255,255,255,0.4)',
-                                                                textTransform: 'uppercase',
-                                                            }}
-                                                        >
-                                                            Moneda
-                                                        </label>
-                                                        <select
-                                                            id={`moneda-${c.id}`}
-                                                            value={monedaOriginalCompra(c)}
-                                                            disabled={
-                                                                cambiandoMonedaId === c.id ||
-                                                                deletingId !== null ||
-                                                                deletingBulk
-                                                            }
-                                                            onChange={(e) =>
-                                                                void cambiarMonedaCompra(
-                                                                    c,
-                                                                    normalizarMonedaExtracted(
-                                                                        e.target.value,
-                                                                    ),
-                                                                )
-                                                            }
-                                                            style={{
-                                                                borderRadius: '8px',
-                                                                border: '1px solid rgba(255,255,255,0.12)',
-                                                                background: '#0A0A0F',
-                                                                color: '#f4f4f5',
-                                                                fontSize: '11px',
-                                                                fontWeight: 800,
-                                                                padding: '4px 8px',
-                                                                cursor: 'pointer',
-                                                                opacity:
-                                                                    cambiandoMonedaId === c.id
-                                                                        ? 0.55
-                                                                        : 1,
-                                                            }}
-                                                        >
-                                                            <option value="VES">Bs</option>
-                                                            <option value="USD">USD</option>
-                                                        </select>
-                                                        {cambiandoMonedaId === c.id ? (
-                                                            <Loader2
-                                                                size={14}
-                                                                className="animate-spin text-zinc-400"
-                                                            />
-                                                        ) : null}
-                                                    </div>
-                                                    <EtiquetaBimonetariaCompra
-                                                        usd={montos.usd}
-                                                        bs={montos.bs}
-                                                        tasa={tasaDisp}
-                                                        tasaEsDelDia={
-                                                            !tasaBcvCompra(c) && !!tasaParaCompra(c)
-                                                        }
-                                                        layout="stack"
-                                                        style={{
-                                                            alignItems: 'flex-end',
-                                                            fontSize: 18,
-                                                        }}
-                                                    />
-                                                </>
-                                            );
-                                        })()}
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
+                    <ComprasFacturasTable
+                        compras={compras}
+                        umbralesFecha={umbralesFecha}
+                        selectedIds={selectedIds}
+                        onToggleCompra={toggleSelectCompra}
+                        imagenFacturaAbierta={imagenFacturaAbierta}
+                        onToggleImagen={toggleImagenFactura}
+                        deletingId={deletingId}
+                        deletingBulk={deletingBulk}
+                        ingresandoAlmacenId={ingresandoAlmacenId}
+                        cambiandoMonedaId={cambiandoMonedaId}
+                        tasaDisplayCompra={tasaDisplayCompra}
+                        onReubicar={setReubicarCompra}
+                        onIngresoAlmacen={(c) => void handleIngresoAlmacen(c)}
+                        onVerificarFecha={abrirVerificarFechaCompra}
+                        onModificar={(c) => void abrirEditarTelegram(c)}
+                        onEliminar={(c) => void handleDelete(c)}
+                        onCambiarMoneda={(c, moneda) => void cambiarMonedaCompra(c, moneda)}
+                        onReload={() => void load()}
+                    />
                 ) : null}
                 </div>
 

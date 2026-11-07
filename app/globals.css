@@ -1045,6 +1045,10 @@
   min-width: 1280px;
 }
 
+.compras-facturas-table-wrap table {
+  min-width: 1680px;
+}
+
 .compras-lineas-table-wrap th.whitespace-nowrap,
 .compras-lineas-table-wrap td.whitespace-nowrap {
   white-space: nowrap;
