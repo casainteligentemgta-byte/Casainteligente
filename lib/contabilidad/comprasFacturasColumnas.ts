@@ -7,6 +7,7 @@ export const COMPRAS_FACTURAS_HEADERS_PRINCIPALES = [
   'Nº factura',
   'Proveedor',
   'RIF',
+  'Producto',
   'Total (Bs)',
   'USD',
   'Entidad',

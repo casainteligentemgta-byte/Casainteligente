@@ -1,6 +1,6 @@
 'use client';
 
-import type { CSSProperties } from 'react';
+import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import Link from 'next/link';
 import {
   CalendarClock,
@@ -10,13 +10,13 @@ import {
   Pencil,
   Trash2,
 } from 'lucide-react';
+import { createClient } from '@/lib/supabase/client';
 import {
   claseBlinkFechaCompra,
   etiquetaFechaAnomalaCorta,
   metaAlertaFechaCompra,
   type UmbralesFechaCompra,
 } from '@/lib/contabilidad/auditoriaFechaCompra';
-import { esDescripcionAuditoriaCco } from '@/lib/contabilidad/compraEsAuditoriaCco';
 import {
   COMPRAS_FACTURAS_HEADERS_EXTRA,
   COMPRAS_FACTURAS_HEADERS_PRINCIPALES,
@@ -37,12 +37,19 @@ import {
 import { esGastoEntidadImputacion } from '@/lib/contabilidad/imputacionCompra';
 import {
   etiquetaOrigenCompra,
+  type CompraLineaUi,
   type CompraListaUnificada,
 } from '@/lib/contabilidad/mapCanalPendienteCompra';
 import {
+  formatearPrecioUnitarioLineaCompra,
   monedaOriginalCompra,
   montosBimonetariosLista,
 } from '@/lib/contabilidad/monedaCompra';
+import {
+  etiquetaProductoFactura,
+  lineasProductoVisibles,
+  resumenProductoFactura,
+} from '@/lib/contabilidad/resumenProductoFactura';
 import { etiquetaRifCompra } from '@/lib/contabilidad/rifVenezolano';
 import { tooltipClienteCrmCompra } from '@/lib/clientes/tooltipClienteCrmCompra';
 import type { MonedaOrigen } from '@/lib/finanzas/currency-converter';
@@ -131,8 +138,7 @@ function lineCount(row: CompraListaUnificada): number {
 }
 
 function lineasParaProductosToggle(row: CompraListaUnificada) {
-  return lineasDetalle(row)
-    .filter((l) => !esDescripcionAuditoriaCco(l.descripcion))
+  return lineasProductoVisibles(lineasDetalle(row))
     .map((l) => ({
       descripcion: l.descripcion,
       item_code: l.item_code,
@@ -280,23 +286,33 @@ function esMontoHeader(label: string): boolean {
 function esNowrapHeader(label: string): boolean {
   return (
     label === 'Fecha' ||
+    label === 'Proveedor' ||
     label === 'RIF' ||
+    label === 'Producto' ||
     label === 'Total (Bs)' ||
     label === 'USD' ||
+    label === 'Entidad' ||
+    label === 'Almacén' ||
     label === 'Tasa BCV' ||
     label === 'Días crédito' ||
-    label === 'Vencimiento'
+    label === 'Vencimiento' ||
+    label === 'Acciones'
   );
 }
 
 function minWidthHeader(label: string): CSSProperties {
   if (label === 'Fecha') return { minWidth: 108 };
+  if (label === 'Proveedor') return { minWidth: 140 };
   if (label === 'RIF') return { minWidth: 120 };
+  if (label === 'Producto') return { minWidth: 168 };
   if (label === 'Total (Bs)') return { minWidth: 120 };
   if (label === 'USD') return { minWidth: 88 };
+  if (label === 'Entidad') return { minWidth: 112 };
+  if (label === 'Almacén') return { minWidth: 120 };
   if (label === 'Tasa BCV') return { minWidth: 112 };
   if (label === 'Días crédito') return { minWidth: 88 };
   if (label === 'Vencimiento') return { minWidth: 108 };
+  if (label === 'Acciones') return { minWidth: 168 };
   return {};
 }
 
@@ -347,6 +363,63 @@ function FilaFactura({
   onCambiarMoneda: (c: CompraListaUnificada, moneda: MonedaOrigen) => void;
   onReload: () => void;
 }) {
+  const compraId = c.id;
+  const lineasBase = lineasProductoVisibles(lineasDetalle(c));
+  const [productoAbierto, setProductoAbierto] = useState(false);
+  const [lineasFetch, setLineasFetch] = useState<CompraLineaUi[]>([]);
+  const [cargandoProductos, setCargandoProductos] = useState(false);
+  const [errorProductos, setErrorProductos] = useState<string | null>(null);
+  const lineasProducto = lineasBase.length > 0 ? lineasBase : lineasFetch;
+
+  useEffect(() => {
+    setProductoAbierto(false);
+    setLineasFetch([]);
+    setErrorProductos(null);
+    setCargandoProductos(false);
+  }, [compraId]);
+
+  const cargarLineasProducto = useCallback(async () => {
+    if (compraId.startsWith('canal-')) return;
+    setCargandoProductos(true);
+    setErrorProductos(null);
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from('contabilidad_compra_lineas')
+        .select('id,descripcion,item_code,subtotal,cantidad,precio_unitario')
+        .eq('compra_id', compraId)
+        .order('created_at', { ascending: true });
+      if (error) {
+        setErrorProductos(error.message);
+        return;
+      }
+      setLineasFetch(
+        lineasProductoVisibles(
+          (data ?? []).map((r) => ({
+            id: r.id != null ? String(r.id) : undefined,
+            descripcion: String(r.descripcion ?? ''),
+            item_code: r.item_code != null ? String(r.item_code) : null,
+            subtotal: Number(r.subtotal) || 0,
+            cantidad: Number(r.cantidad) || 0,
+            precio_unitario: r.precio_unitario != null ? Number(r.precio_unitario) : undefined,
+          })),
+        ),
+      );
+    } catch (e) {
+      setErrorProductos(e instanceof Error ? e.message : 'No se pudieron cargar los productos');
+    } finally {
+      setCargandoProductos(false);
+    }
+  }, [compraId]);
+
+  async function toggleProducto() {
+    const next = !productoAbierto;
+    setProductoAbierto(next);
+    if (next && lineasBase.length === 0 && lineasFetch.length === 0) {
+      await cargarLineasProducto();
+    }
+  }
+
   return (
     <>
       <tr
@@ -387,12 +460,22 @@ function FilaFactura({
           </div>
         </td>
         <td style={{ ...td, fontFamily: 'monospace' }}>{c.invoice_number || '—'}</td>
-        <td style={{ ...td, maxWidth: 160 }}>{c.supplier_name}</td>
+        <CeldaTruncada texto={c.supplier_name} minWidth={140} maxWidth={180} />
         <td
           className="whitespace-nowrap"
           style={{ ...tdRif, color: 'rgba(255,255,255,0.5)', fontFamily: 'monospace' }}
         >
           {etiquetaRifCompra(c.supplier_rif)}
+        </td>
+        <td
+          className="whitespace-nowrap compras-cell-ellipsis"
+          style={{ ...td, minWidth: 168, maxWidth: 240, overflow: 'hidden' }}
+        >
+          <ProductoFacturaCelda
+            c={c}
+            abierto={productoAbierto}
+            onToggle={() => void toggleProducto()}
+          />
         </td>
         <td className="whitespace-nowrap" style={{ ...tdMonto, minWidth: 120, fontWeight: 800 }}>
           {formatearBs(montos.bs)}
@@ -400,27 +483,29 @@ function FilaFactura({
         <td className="whitespace-nowrap" style={{ ...tdMonto, minWidth: 88, color: '#FF3B30', fontWeight: 700 }}>
           {montos.usd != null ? formatearUsd(montos.usd) : '—'}
         </td>
-        <td style={{ ...td, maxWidth: 120, color: 'rgba(255,255,255,0.55)' }}>{c.entidad_nombre || '—'}</td>
-        <td style={{ ...td, maxWidth: 140 }}>
-          {almacen.texto && almacen.texto !== '—' ? (
-            <span
-              style={{
-                color: almacen.pendienteIngreso ? 'rgba(251,191,36,0.85)' : '#fdba74',
-                fontStyle: almacen.pendienteIngreso ? 'italic' : undefined,
-                fontWeight: almacen.pendienteIngreso ? 600 : undefined,
-              }}
-              title={
-                almacen.pendienteIngreso
-                  ? 'Registrada en contabilidad; almacén se asigna al ingresar el material'
-                  : undefined
-              }
-            >
-              {almacen.texto}
-            </span>
-          ) : (
-            '—'
-          )}
-        </td>
+        <CeldaTruncada
+          texto={c.entidad_nombre || '—'}
+          minWidth={112}
+          maxWidth={150}
+          style={{ color: 'rgba(255,255,255,0.55)' }}
+        />
+        <CeldaTruncada
+          texto={almacen.texto && almacen.texto !== '—' ? almacen.texto : '—'}
+          minWidth={120}
+          maxWidth={170}
+          title={
+            almacen.pendienteIngreso
+              ? `${almacen.texto} — Registrada en contabilidad; almacén se asigna al ingresar el material`
+              : almacen.texto && almacen.texto !== '—'
+                ? almacen.texto
+                : undefined
+          }
+          style={{
+            color: almacen.pendienteIngreso ? 'rgba(251,191,36,0.85)' : '#fdba74',
+            fontStyle: almacen.pendienteIngreso ? 'italic' : undefined,
+            fontWeight: almacen.pendienteIngreso ? 600 : undefined,
+          }}
+        />
         <td
           style={{ ...td, maxWidth: 140, color: 'rgba(255,255,255,0.55)' }}
           title={tooltipClienteCrmCompra({
@@ -558,6 +643,18 @@ function FilaFactura({
           {c.cliente_crm_nombre ? `CRM: ${c.cliente_crm_nombre}` : c.proyecto_nombre ? 'Sin cliente CRM' : '—'}
         </td>
       </tr>
+      {productoAbierto ? (
+        <tr>
+          <td colSpan={COLSPAN} style={{ ...td, paddingTop: 0 }}>
+            <ProductoFacturaDetalle
+              c={c}
+              lineas={lineasProducto}
+              cargando={cargandoProductos}
+              error={errorProductos}
+            />
+          </td>
+        </tr>
+      ) : null}
       {compraTieneDetallePuenteInventario(c) ? (
         <tr>
           <td colSpan={COLSPAN} style={{ ...td, paddingTop: 0, color: c.cuarentena_rechazo_total ? '#fca5a5' : 'rgba(134,239,172,0.95)' }}>
@@ -633,11 +730,14 @@ function AccionesFactura({
   onEliminar: (c: CompraListaUnificada) => void;
 }) {
   return (
-    <div className="compras-factura-acciones compras-no-imprimir" style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 118 }}>
+    <div
+      className="compras-factura-acciones compras-no-imprimir"
+      style={{ display: 'flex', flexDirection: 'row', flexWrap: 'nowrap', gap: 4, whiteSpace: 'nowrap' }}
+    >
       {puedeReubicarCompra(c) ? (
-        <button
-          type="button"
-          className="compras-factura-accion-btn"
+        <AccionIcono
+          label="Obra / almacén"
+          disabled={bloqueado}
           onClick={() =>
             onReubicar({
               id: c.id,
@@ -647,20 +747,18 @@ function AccionesFactura({
               titulo: `Reubicar — ${c.supplier_name}`,
             })
           }
-          disabled={bloqueado}
           style={{ border: '1px solid rgba(251,146,60,0.45)', background: 'rgba(234,88,12,0.15)', color: '#fdba74' }}
         >
           <MapPin className="h-3.5 w-3.5" />
-          Obra / almacén
-        </button>
+        </AccionIcono>
       ) : null}
       {c.purchase_invoice_id &&
       compraMuestraBotonConfirmacionRecepcion(c) &&
       !esGastoEntidadImputacion(c.imputacion) ? (
         !c.ubicacion_destino_id ? (
-          <button
-            type="button"
-            className="compras-factura-accion-btn"
+          <AccionIcono
+            label="Asignar almacén"
+            disabled={bloqueado}
             onClick={() =>
               onReubicar({
                 id: c.id,
@@ -670,18 +768,15 @@ function AccionesFactura({
                 titulo: `Asignar almacén — ${c.supplier_name}`,
               })
             }
-            disabled={bloqueado}
             style={{ border: '1px solid rgba(251,191,36,0.45)', background: 'rgba(251,191,36,0.12)', color: '#fcd34d' }}
           >
             <MapPin className="h-3.5 w-3.5" />
-            Asignar almacén
-          </button>
+          </AccionIcono>
         ) : (
-          <button
-            type="button"
-            className="compras-factura-accion-btn"
-            onClick={() => onIngresoAlmacen(c)}
+          <AccionIcono
+            label={c.estado_logistica === 'en_almacen_parcial' ? 'Liberar pendiente' : 'Confirmación recepción'}
             disabled={bloqueado || ingresandoAlmacenId !== null}
+            onClick={() => onIngresoAlmacen(c)}
             style={{
               border:
                 c.estado_logistica === 'cuarentena' || c.estado_logistica === 'en_almacen_parcial'
@@ -703,16 +798,15 @@ function AccionesFactura({
             ) : (
               <PackageCheck className="h-3.5 w-3.5" />
             )}
-            {c.estado_logistica === 'en_almacen_parcial' ? 'Liberar pendiente' : 'Confirmación recepción'}
-          </button>
+          </AccionIcono>
         )
       ) : null}
       {metaFecha.requiereVerificacion ? (
-        <button
-          type="button"
-          className={['compras-factura-accion-btn', claseBlinkFechaCompra(metaFecha.nivel)].filter(Boolean).join(' ') || undefined}
-          onClick={() => onVerificarFecha(c)}
+        <AccionIcono
+          label="Verificar fecha"
+          className={claseBlinkFechaCompra(metaFecha.nivel) ?? undefined}
           disabled={bloqueado}
+          onClick={() => onVerificarFecha(c)}
           style={{
             border:
               metaFecha.nivel === 'advertencia'
@@ -723,26 +817,22 @@ function AccionesFactura({
           }}
         >
           <CalendarClock className="h-3.5 w-3.5" />
-          Verificar fecha
-        </button>
+        </AccionIcono>
       ) : null}
       {c.pendiente_canal_id ? (
-        <button
-          type="button"
-          className="compras-factura-accion-btn"
-          onClick={() => onModificar(c)}
+        <AccionIcono
+          label="Modificar"
           disabled={bloqueado}
+          onClick={() => onModificar(c)}
           style={{ border: '1px solid rgba(56,189,248,0.4)', background: 'rgba(14,116,144,0.25)', color: '#7dd3fc' }}
         >
           <Pencil className="h-3.5 w-3.5" />
-          Modificar
-        </button>
+        </AccionIcono>
       ) : null}
-      <button
-        type="button"
-        className="compras-factura-accion-btn"
-        onClick={() => onEliminar(c)}
+      <AccionIcono
+        label="Borrar"
         disabled={bloqueado}
+        onClick={() => onEliminar(c)}
         style={{
           border: '1px solid rgba(255,59,48,0.35)',
           background: 'rgba(255,59,48,0.12)',
@@ -751,8 +841,193 @@ function AccionesFactura({
         }}
       >
         {deletingId === c.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-        Borrar
-      </button>
+      </AccionIcono>
+    </div>
+  );
+}
+
+function AccionIcono({
+  label,
+  disabled,
+  onClick,
+  className,
+  style,
+  children,
+}: {
+  label: string;
+  disabled?: boolean;
+  onClick: () => void;
+  className?: string;
+  style: CSSProperties;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      className={['compras-factura-accion-btn', className].filter(Boolean).join(' ')}
+      onClick={onClick}
+      disabled={disabled}
+      title={label}
+      aria-label={label}
+      style={style}
+    >
+      {children}
+    </button>
+  );
+}
+
+function CeldaTruncada({
+  texto,
+  minWidth,
+  maxWidth,
+  title,
+  style,
+}: {
+  texto: string;
+  minWidth: number;
+  maxWidth: number;
+  title?: string;
+  style?: CSSProperties;
+}) {
+  const display = texto?.trim() ? texto : '—';
+  return (
+    <td
+      className="whitespace-nowrap compras-cell-ellipsis"
+      style={{
+        ...td,
+        ...style,
+        minWidth,
+        maxWidth,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+      }}
+      title={title ?? (display !== '—' ? display : undefined)}
+    >
+      {display}
+    </td>
+  );
+}
+
+function ProductoFacturaCelda({
+  c,
+  abierto,
+  onToggle,
+}: {
+  c: CompraListaUnificada;
+  abierto: boolean;
+  onToggle: () => void;
+}) {
+  const resumen = resumenProductoFactura(lineasDetalle(c), lineCount(c));
+  const etiqueta = etiquetaProductoFactura(resumen);
+  if (!etiqueta && resumen.total <= 0) {
+    return <span style={{ opacity: 0.4 }}>—</span>;
+  }
+  return (
+    <button
+      type="button"
+      className="compras-producto-toggle"
+      onClick={onToggle}
+      aria-expanded={abierto}
+      title={etiqueta}
+    >
+      <span className="compras-producto-toggle-label">{etiqueta}</span>
+      {resumen.extra > 0 ? <span className="compras-producto-extra">+{resumen.extra}</span> : null}
+    </button>
+  );
+}
+
+function ProductoFacturaDetalle({
+  c,
+  lineas,
+  cargando,
+  error,
+}: {
+  c: CompraListaUnificada;
+  lineas: CompraLineaUi[];
+  cargando: boolean;
+  error: string | null;
+}) {
+  const moneda = monedaOriginalCompra(c);
+  return (
+    <div
+      className="compras-producto-detalle"
+      style={{
+        position: 'sticky',
+        left: 8,
+        width: 'min(720px, calc(100vw - 48px))',
+        borderRadius: 12,
+        border: '1px solid rgba(255,255,255,0.08)',
+        background: 'rgba(0,0,0,0.35)',
+        overflow: 'auto',
+        maxWidth: 'calc(100vw - 48px)',
+      }}
+    >
+      {cargando ? (
+        <p style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 14, color: 'rgba(255,255,255,0.45)', fontSize: 12 }}>
+          <Loader2 size={16} className="animate-spin" />
+          Cargando productos…
+        </p>
+      ) : error ? (
+        <p style={{ padding: 14, color: '#FF6B6B', fontSize: 12, fontWeight: 600 }}>{error}</p>
+      ) : lineas.length === 0 ? (
+        <p style={{ padding: 14, color: 'rgba(255,255,255,0.4)', fontSize: 12 }}>
+          Esta factura no tiene líneas de detalle registradas.
+        </p>
+      ) : (
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <thead>
+            <tr style={{ background: 'rgba(255,255,255,0.04)', textAlign: 'left' }}>
+              <th style={{ padding: '10px 12px', color: 'rgba(255,255,255,0.4)', fontWeight: 700 }}>Descripción</th>
+              <th style={{ padding: '10px 8px', color: 'rgba(255,255,255,0.4)', fontWeight: 700 }}>Cantidad</th>
+              <th style={{ padding: '10px 8px', color: 'rgba(255,255,255,0.4)', fontWeight: 700, textAlign: 'right' }}>P.U.</th>
+              <th style={{ padding: '10px 12px', color: 'rgba(255,255,255,0.4)', fontWeight: 700, textAlign: 'right' }}>Subtotal</th>
+            </tr>
+          </thead>
+          <tbody>
+            {lineas.map((l, i) => {
+              const pu =
+                l.precio_unitario ?? (l.cantidad > 0 ? l.subtotal / l.cantidad : 0);
+              const precioFmt =
+                formatearPrecioUnitarioLineaCompra({
+                  esLinea: true,
+                  cantidad: l.cantidad,
+                  precioUnitario: pu,
+                  montoBs: 0,
+                  monedaOriginal: moneda,
+                }) ?? '—';
+              return (
+                <tr key={l.id ?? `${l.descripcion}-${i}`} style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                  <td style={{ padding: '10px 12px', color: 'rgba(255,255,255,0.88)', fontWeight: 700 }}>
+                    {l.descripcion || '—'}
+                  </td>
+                  <td className="whitespace-nowrap" style={{ padding: '10px 8px', color: 'rgba(255,255,255,0.65)', whiteSpace: 'nowrap' }}>
+                    {l.cantidad}
+                  </td>
+                  <td
+                    className="whitespace-nowrap"
+                    style={{
+                      padding: '10px 8px',
+                      textAlign: 'right',
+                      whiteSpace: 'nowrap',
+                      color: moneda === 'USD' ? '#FF3B30' : '#FFD60A',
+                      fontWeight: 700,
+                    }}
+                  >
+                    {precioFmt}
+                  </td>
+                  <td
+                    className="whitespace-nowrap"
+                    style={{ padding: '10px 12px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 800 }}
+                  >
+                    {moneda === 'USD' ? formatearUsd(l.subtotal) : formatearBs(l.subtotal)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }

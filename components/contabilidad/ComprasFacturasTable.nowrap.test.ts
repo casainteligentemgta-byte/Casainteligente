@@ -20,6 +20,7 @@ describe('ComprasFacturasTable — vista Por factura', () => {
       'Nº factura',
       'Proveedor',
       'RIF',
+      'Producto',
       'Total (Bs)',
       'USD',
       'Entidad',
@@ -44,8 +45,31 @@ describe('ComprasFacturasTable — vista Por factura', () => {
 
   it('mantiene overflow-x para scroll horizontal en tablet', () => {
     assert.match(tableSrc, /compras-facturas-table-wrap/);
-    assert.match(cssSrc, /\.compras-facturas-table-wrap table \{[\s\S]*min-width:\s*1680px/);
+    assert.match(cssSrc, /\.compras-facturas-table-wrap > table \{[\s\S]*min-width:\s*1840px/);
     assert.match(cssSrc, /\.compras-lineas-table-wrap \{[\s\S]*overflow-x:\s*auto/);
+  });
+
+  it('trunca Proveedor, Entidad y Almacén en una sola línea con tooltip', () => {
+    assert.match(tableSrc, /function CeldaTruncada/);
+    assert.match(tableSrc, /compras-cell-ellipsis/);
+    assert.match(tableSrc, /textOverflow: 'ellipsis'/);
+    assert.match(cssSrc, /\.compras-cell-ellipsis \{[\s\S]*text-overflow:\s*ellipsis/);
+  });
+
+  it('pone Acciones en una sola fila horizontal compacta', () => {
+    assert.match(tableSrc, /flexDirection: 'row'/);
+    assert.match(tableSrc, /flexWrap: 'nowrap'/);
+    assert.match(tableSrc, /function AccionIcono/);
+    assert.match(cssSrc, /\.compras-facturas-table-wrap \.compras-factura-acciones \{[\s\S]*flex-wrap:\s*nowrap/);
+  });
+
+  it('columna Producto muestra primera línea, badge \+N y detalle expandible', () => {
+    assert.match(tableSrc, /compras-producto-toggle/);
+    assert.match(tableSrc, /compras-producto-extra/);
+    assert.match(tableSrc, /function ProductoFacturaDetalle/);
+    assert.match(tableSrc, /Descripción/);
+    assert.match(tableSrc, /P\.U\./);
+    assert.match(tableSrc, /position: 'sticky'/);
   });
 
   it('la página Por factura usa la tabla y no la grilla de tarjetas', () => {

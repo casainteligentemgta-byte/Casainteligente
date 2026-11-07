@@ -969,6 +969,82 @@
   background: rgba(255, 255, 255, 0.02);
 }
 
+.compras-facturas-table-wrap .compras-factura-acciones {
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 0;
+  width: auto;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  white-space: nowrap;
+}
+
+.compras-facturas-table-wrap .compras-factura-accion-btn {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0;
+  justify-content: center;
+}
+
+.compras-cell-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compras-producto-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 36px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.compras-producto-toggle-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compras-producto-extra {
+  flex-shrink: 0;
+  min-width: 22px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(88, 86, 214, 0.35);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.compras-producto-detalle {
+  position: sticky;
+  left: 8px;
+  width: min(720px, calc(100vw - 48px));
+  max-width: calc(100vw - 48px);
+}
+
+.compras-facturas-table-wrap .compras-producto-detalle table {
+  min-width: 0;
+  width: 100%;
+}
+
 .compras-factura-accion-btn {
   display: inline-flex;
   align-items: center;
@@ -1045,8 +1121,8 @@
   min-width: 1280px;
 }
 
-.compras-facturas-table-wrap table {
-  min-width: 1680px;
+.compras-facturas-table-wrap > table {
+  min-width: 1840px;
 }
 
 .compras-lineas-table-wrap th.whitespace-nowrap,
