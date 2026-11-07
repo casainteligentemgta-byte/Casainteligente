@@ -122,22 +122,31 @@ export default function ComprasLineasTable({
     col,
     label,
     align = 'left',
+    className,
+    minWidth,
   }: {
     col: ColumnaOrdenCompras;
     label: string;
     align?: 'left' | 'right';
+    className?: string;
+    minWidth?: number;
   }) {
     const active = sortColumn === col;
     const arrow = active ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '';
+    const style: CSSProperties = {
+      ...th,
+      textAlign: align,
+      ...(minWidth != null ? { minWidth } : {}),
+    };
     if (!onSort) {
       return (
-        <th style={{ ...th, textAlign: align }}>
+        <th className={className} style={style}>
           {label}
         </th>
       );
     }
     return (
-      <th style={{ ...th, textAlign: align }}>
+      <th className={className} style={style}>
         <button
           type="button"
           onClick={() => onSort(col)}
@@ -215,18 +224,24 @@ export default function ComprasLineasTable({
                 )}
               </th>
             ) : null}
-            <SortTh col="fecha" label="Fecha" />
+            <SortTh col="fecha" label="Fecha" className="whitespace-nowrap" minWidth={108} />
             <SortTh col="factura" label="Factura" />
             <SortTh col="proveedor" label="Proveedor" />
-            <SortTh col="rif" label="RIF" />
+            <SortTh col="rif" label="RIF" className="whitespace-nowrap" minWidth={120} />
             <th style={th}>Almacén</th>
             <SortTh col="articulo" label="Artículo" />
             <th style={th}>Código</th>
             <SortTh col="cantidad" label="Cant." align="right" />
-            <SortTh col="precioUnitario" label="P.U." align="right" />
-            <SortTh col="subtotalBs" label="Subtotal (Bs)" align="right" />
-            <SortTh col="usd" label="USD" align="right" />
-            <SortTh col="tasaBcv" label="Tasa BCV" align="right" />
+            <SortTh col="precioUnitario" label="P.U." align="right" className="whitespace-nowrap" minWidth={104} />
+            <SortTh
+              col="subtotalBs"
+              label="Subtotal (Bs)"
+              align="right"
+              className="whitespace-nowrap"
+              minWidth={120}
+            />
+            <SortTh col="usd" label="USD" align="right" className="whitespace-nowrap" minWidth={88} />
+            <SortTh col="tasaBcv" label="Tasa BCV" align="right" className="whitespace-nowrap" minWidth={112} />
             <th style={th}>Entidad</th>
             <th style={th}>Proyecto</th>
             <th style={th}>Ver imagen</th>
@@ -303,9 +318,9 @@ export default function ComprasLineasTable({
                     ) : null}
                   </td>
                 ) : null}
-                <td style={td}>
+                <td className="whitespace-nowrap" style={tdFecha}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
-                    <span>{row.fecha || '—'}</span>
+                    <span className="whitespace-nowrap">{row.fecha || '—'}</span>
                     {metaFecha.nivel === 'ok' ? null : metaFecha.requiereVerificacion ? (
                       <button
                         type="button"
@@ -328,7 +343,10 @@ export default function ComprasLineasTable({
                 </td>
                 <td style={{ ...td, fontFamily: 'monospace' }}>{row.factura || '—'}</td>
                 <td style={{ ...td, maxWidth: 140 }}>{row.proveedor}</td>
-                <td style={{ ...td, color: 'rgba(255,255,255,0.5)', fontFamily: 'monospace' }}>
+                <td
+                  className="whitespace-nowrap"
+                  style={{ ...tdRif, color: 'rgba(255,255,255,0.5)', fontFamily: 'monospace' }}
+                >
                   {etiquetaRifCompra(row.rif)}
                 </td>
                 <td style={{ ...td, maxWidth: 130 }}>
@@ -365,29 +383,35 @@ export default function ComprasLineasTable({
                 </td>
                 <td style={{ ...td, textAlign: 'right' }}>{row.esLinea ? row.cantidad : '—'}</td>
                 <td
+                  className="whitespace-nowrap"
                   style={{
-                    ...td,
-                    textAlign: 'right',
+                    ...tdMonto,
+                    minWidth: 104,
                     color: row.esLinea && esLineaCompraUsd(row) ? '#FF3B30' : '#FFD60A',
                     fontWeight: 700,
                   }}
                 >
                   {row.esLinea ? formatearPrecioUnitarioLineaCompra(row) ?? '—' : '—'}
                 </td>
-                <td style={{ ...td, textAlign: 'right', fontWeight: 800 }}>
+                <td
+                  className="whitespace-nowrap"
+                  style={{ ...tdMonto, minWidth: 120, fontWeight: 800 }}
+                >
                   {formatearBs(subtotalBs)}
                 </td>
-                <td style={{ ...td, textAlign: 'right', color: '#FF3B30', fontWeight: 700 }}>
+                <td
+                  className="whitespace-nowrap"
+                  style={{ ...tdMonto, minWidth: 88, color: '#FF3B30', fontWeight: 700 }}
+                >
                   {usd != null ? formatearUsd(usd) : '—'}
                 </td>
                 <td
+                  className="whitespace-nowrap"
                   style={{
-                    ...td,
-                    textAlign: 'right',
+                    ...tdMonto,
+                    minWidth: 112,
                     color: 'rgba(255,255,255,0.55)',
                     fontWeight: 700,
-                    fontVariantNumeric: 'tabular-nums',
-                    whiteSpace: 'nowrap',
                   }}
                 >
                   {row.tasaBcv != null && row.tasaBcv > 0
@@ -546,6 +570,28 @@ const td: CSSProperties = {
   padding: '10px 12px',
   color: 'white',
   verticalAlign: 'top',
+};
+
+/** Fecha ISO (2026-11-06): sin nowrap el guion parte la celda en 2-3 líneas. */
+const tdFecha: CSSProperties = {
+  ...td,
+  whiteSpace: 'nowrap',
+  minWidth: 108,
+};
+
+/** RIF venezolano (J-41298213-0): mismos guiones, misma rotura en tablet. */
+const tdRif: CSSProperties = {
+  ...td,
+  whiteSpace: 'nowrap',
+  minWidth: 120,
+};
+
+/** P.U. / subtotal / USD / tasa BCV: "Bs. 3.584,48" y "396,12 Bs/USD" en una línea. */
+const tdMonto: CSSProperties = {
+  ...td,
+  textAlign: 'right',
+  whiteSpace: 'nowrap',
+  fontVariantNumeric: 'tabular-nums',
 };
 
 const btnModificar: CSSProperties = {
