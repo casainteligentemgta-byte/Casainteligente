@@ -91,7 +91,11 @@ export function variantesRifBusqueda(raw: string | null | undefined): string[] {
   const origen = String(raw ?? '').trim();
   const canon = normalizarRifVenezolano(raw);
   const compact = normalizarRif(raw);
-  return [...new Set([origen, canon, compact].filter((s) => s.length >= 4))];
+  const out: string[] = [];
+  for (const s of [origen, canon, compact]) {
+    if (s.length >= 4 && out.indexOf(s) < 0) out.push(s);
+  }
+  return out;
 }
 
 /** Nombre de ítem comparable: minúsculas, sin acentos ni puntuación. */
@@ -177,7 +181,7 @@ export function agregarPerfilProveedor(
     }
   }
 
-  const items: ItemPerfilProveedor[] = [...porItem.entries()]
+  const items: ItemPerfilProveedor[] = Array.from(porItem.entries())
     .map(([nombre_norm, bucket]) => ({
       nombre_norm,
       nombre_habitual: moda(bucket.nombres) ?? bucket.nombres[0] ?? nombre_norm,
@@ -363,7 +367,7 @@ export function prefillingDesdePerfil(
   }
 
   next.sugerencias_destino = destino;
-  next.campos_sugeridos = [...sugeridos];
+  next.campos_sugeridos = Array.from(sugeridos);
   return { extracted: next, camposSugeridos: next.campos_sugeridos };
 }
 

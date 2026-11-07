@@ -355,13 +355,11 @@ export async function hintExtraccionParaPendiente(
       .in('estado', ['confirmado', 'extraido'])
       .order('created_at', { ascending: false })
       .limit(3);
-    const rifs = [
-      ...new Set(
-        ((data ?? []) as Array<{ extracted?: ExtractedCanalHeader | null }>)
-          .map((r) => claveRifPerfil(r.extracted?.supplier_rif))
-          .filter(Boolean),
-      ),
-    ];
+    const rifs: string[] = [];
+    for (const row of (data ?? []) as Array<{ extracted?: ExtractedCanalHeader | null }>) {
+      const r = claveRifPerfil(row.extracted?.supplier_rif);
+      if (r && rifs.indexOf(r) < 0) rifs.push(r);
+    }
     rif = rifs[0] ?? '';
     if (rifs.length > 1) {
       const hints: string[] = [];
