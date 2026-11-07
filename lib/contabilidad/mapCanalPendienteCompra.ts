@@ -5,7 +5,10 @@ import {
   claveFacturaProveedorParams,
   mismaFacturaProveedorCompra,
 } from '@/lib/contabilidad/buscarCompraContablePorFactura';
-import { normalizarMonedaExtracted } from '@/lib/contabilidad/extractedCanal';
+import {
+  normalizarMonedaExtracted,
+  payloadCondicionPagoCompra,
+} from '@/lib/contabilidad/extractedCanal';
 import type {
   EstadoLogisticaCompra,
   LogisticaConteos,
@@ -25,6 +28,8 @@ export type ExtractedCanalHeader = {
   date?: string;
   total_amount?: number | null;
   moneda?: string | null;
+  condicion_pago?: string | null;
+  dias_credito?: number | null;
   items?: ExtractedCanalItem[];
 };
 
@@ -99,6 +104,11 @@ export type CompraListaUnificada = {
   clasificacion_gasto_entidad?: 'operacional' | 'administrativo' | 'servicio' | null;
   alerta_fecha?: 'advertencia' | 'critico' | null;
   fecha_confirmada_manual?: boolean | null;
+  /** Número de control / notas fiscales (columna Control en vista por factura). */
+  notas?: string | null;
+  dias_credito?: number | null;
+  fecha_vencimiento?: string | null;
+  condicion_pago?: string | null;
 };
 
 export function lineasDesdeExtractedCanal(ex: ExtractedCanalHeader | null): CompraLineaUi[] {
@@ -123,6 +133,14 @@ export function mapCanalPendienteACompraLista(p: CanalPendienteParaLista): Compr
     ex?.total_amount != null && Number.isFinite(Number(ex.total_amount))
       ? Number(ex.total_amount)
       : lineas.reduce((s, l) => s + l.subtotal, 0);
+  const fecha = (ex?.date ?? p.created_at).slice(0, 10);
+  const pago = payloadCondicionPagoCompra(
+    {
+      condicion_pago: ex?.condicion_pago,
+      dias_credito: ex?.dias_credito,
+    },
+    fecha,
+  );
 
   return {
     id: `canal-${p.id}`,
@@ -133,7 +151,7 @@ export function mapCanalPendienteACompraLista(p: CanalPendienteParaLista): Compr
     invoice_number: String(ex?.invoice_number ?? '—').trim() || '—',
     supplier_rif: String(ex?.supplier_rif ?? '').trim(),
     supplier_name: String(ex?.supplier_name ?? 'Proveedor').trim() || 'Proveedor',
-    fecha: (ex?.date ?? p.created_at).slice(0, 10),
+    fecha,
     total_amount: total,
     total_amount_usd: null,
     tasa_bcv_ves_por_usd: null,
@@ -158,6 +176,9 @@ export function mapCanalPendienteACompraLista(p: CanalPendienteParaLista): Compr
     pendiente_canal_id: p.id,
     canal_estado: p.estado,
     mensaje_error_canal: p.mensaje_error ?? null,
+    dias_credito: pago.dias_credito,
+    fecha_vencimiento: pago.fecha_vencimiento,
+    condicion_pago: pago.condicion_pago,
   };
 }
 
