@@ -1,17 +1,28 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseAdminOnlyClient } from '@/lib/supabase/adminOnlyClient';
 import { createClient } from '@/lib/supabase/server';
-import { obtenerTasaBcvVesPorUsd } from '@/lib/finanzas/bcvTasaPorFecha';
+import { hoyIsoCaracas } from '@/lib/finanzas/bcvOficial';
+import { sincronizarTasaBcvDiaria } from '@/lib/finanzas/bcvSync';
+import { leerTasaBcvPorFecha, obtenerTasaBcvVesPorUsd } from '@/lib/finanzas/bcvTasaPorFecha';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
   try {
-    const fecha = new URL(req.url).searchParams.get('fecha') ?? new Date().toISOString().slice(0, 10);
+    const fecha = new URL(req.url).searchParams.get('fecha') ?? hoyIsoCaracas();
+    const iso = fecha.trim().slice(0, 10);
     // La tasa es un dato público, pero su respaldo está en la configuración de nómina,
     // que solo lee el servidor: así responde igual con o sin sesión.
     const supabase = createSupabaseAdminOnlyClient() ?? (await createClient());
+    if (supabase && iso === hoyIsoCaracas()) {
+      const ya = await leerTasaBcvPorFecha(supabase, iso).catch(() => null);
+      if (!ya) {
+        await sincronizarTasaBcvDiaria(supabase, { alertar: false }).catch((e) => {
+          console.warn('[GET /api/finanzas/bcv-tasa] sync', e instanceof Error ? e.message : e);
+        });
+      }
+    }
     const result = await obtenerTasaBcvVesPorUsd(fecha, { supabase });
     return NextResponse.json(result, {
       headers: { 'Cache-Control': 'private, max-age=300' },

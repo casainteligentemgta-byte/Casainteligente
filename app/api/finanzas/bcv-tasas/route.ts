@@ -28,6 +28,7 @@ export async function GET(req: Request) {
       fechas.map(async (fecha) => {
         try {
           const r = await obtenerTasaBcvVesPorUsd(fecha, { supabase });
+          if (r.estado === 'desactualizada') return [fecha, null] as const;
           return [fecha, r.tasa_bcv_ves_por_usd] as const;
         } catch {
           return [fecha, null] as const;

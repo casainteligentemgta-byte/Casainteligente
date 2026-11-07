@@ -16,7 +16,7 @@ export function TarjetaBalanceBimonetarioFlotante({
   saldoUsdFondo,
   tasaOriginalAbono,
 }: TarjetaBalanceBimonetarioFlotanteProps) {
-  const { tasa: tasaBcvHoy, loading: isLoadingTasa } = useTasaBcvHoy();
+  const { tasa: tasaBcvHoy, loading: isLoadingTasa, estado: estadoTasa } = useTasaBcvHoy();
 
   const audit = useMemo(
     () => calcularAuditoriaFluctuacionCambiaria(saldoVesFondo, tasaOriginalAbono, tasaBcvHoy),
@@ -62,10 +62,18 @@ export function TarjetaBalanceBimonetarioFlotante({
         </div>
 
         <div className="flex justify-between font-mono text-[11px]">
-          <span className="uppercase text-zinc-500">Tasa de referencia oficial hoy:</span>
+          <span className="uppercase text-zinc-500">
+            {estadoTasa === 'desactualizada'
+              ? 'Tasa de referencia (desactualizada):'
+              : 'Tasa de referencia oficial hoy:'}
+          </span>
           <span
             className={cn(
-              isLoadingTasa ? 'animate-pulse text-zinc-600' : 'text-orange-400',
+              isLoadingTasa
+                ? 'animate-pulse text-zinc-600'
+                : estadoTasa === 'desactualizada'
+                  ? 'text-amber-400'
+                  : 'text-orange-400',
             )}
           >
             Bs. {audit.tasaActualEfectiva.toFixed(4)}

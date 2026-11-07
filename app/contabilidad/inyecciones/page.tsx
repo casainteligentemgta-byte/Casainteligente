@@ -150,7 +150,13 @@ export default function InyeccionesAvanzadasPage() {
   const [soporteUrl, setSoporteUrl] = useState('');
   const [serialesIa, setSerialesIa] = useState<string[]>([]);
 
-  const { tasa: tasaBcv, loading: cargandoTasa, fuente: fuenteBcv } = useTasaBcvHoy(fechaIngreso);
+  const {
+    tasa: tasaBcv,
+    loading: cargandoTasa,
+    fuente: fuenteBcv,
+    estado: estadoBcv,
+    fechaValor: fechaValorBcv,
+  } = useTasaBcvHoy(fechaIngreso);
   const { isSubmitting, runLocked } = useSyncSubmitLock();
 
   const montoN = useMemo(() => {
@@ -307,6 +313,12 @@ export default function InyeccionesAvanzadasPage() {
         tipoTasa === 'PERSONALIZADA'
           ? 'Indique tasa personalizada válida.'
           : 'Espere la tasa BCV del día del ingreso.',
+      );
+      return;
+    }
+    if (tipoTasa === 'BCV' && estadoBcv === 'desactualizada') {
+      toast.error(
+        `No hay tasa BCV de ese día${fechaValorBcv ? ` (la última es ${fechaValorBcv})` : ''}. Use tasa personalizada o espere la oficial.`,
       );
       return;
     }
@@ -484,11 +496,20 @@ export default function InyeccionesAvanzadasPage() {
               {fuenteBcv && tipoTasa === 'BCV' ? (
                 <p
                   className={`text-[9px] text-center ${
-                    esFuenteTasaBcvConfiable(fuenteBcv) ? 'text-zinc-600' : 'text-amber-400'
+                    esFuenteTasaBcvConfiable(fuenteBcv) && estadoBcv !== 'desactualizada'
+                      ? 'text-zinc-600'
+                      : 'text-amber-400'
                   }`}
                 >
                   Fuente: {etiquetaFuenteTasaBcv(fuenteBcv)}
-                  {!esFuenteTasaBcvConfiable(fuenteBcv) ? (
+                  {estadoBcv === 'desactualizada' ? (
+                    <>
+                      {' '}
+                      — <b>desactualizada</b>
+                      {fechaValorBcv ? ` (fecha valor ${fechaValorBcv})` : ''}. No hay tasa oficial de
+                      este día.
+                    </>
+                  ) : !esFuenteTasaBcvConfiable(fuenteBcv) ? (
                     <>
                       {' '}
                       — use <b>tasa personalizada</b> o actualice{' '}
