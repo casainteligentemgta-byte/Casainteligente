@@ -119,7 +119,7 @@ export default function RegistroAbonoClienteModal({
               fecha_abono: fecha,
               observaciones: observaciones.trim() || null,
               tasa_bcv: tasa,
-              tasa_fuente: estadoTasa === 'desactualizada' ? 'desactualizada' : fuenteTasa,
+              tasa_fuente: fuenteTasa,
             }),
           },
         );

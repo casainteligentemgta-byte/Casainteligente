@@ -101,7 +101,7 @@ export async function upsertTasaBcv(
   );
   if (error) {
     if (tablaAusente(error)) {
-      throw new Error('Falta la tabla ci_tasas_bcv. Ejecuta la migración 401 en Supabase.');
+      throw new Error('Falta la tabla ci_tasas_bcv. Ejecuta la migración 402 en Supabase.');
     }
     throw new Error(error.message);
   }
