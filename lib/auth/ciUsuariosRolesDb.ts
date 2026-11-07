@@ -50,7 +50,7 @@ export async function listarAsignacionesRolesEmpresa(
 ): Promise<{ data: FilaRolUsuario[]; error: string | null }> {
   const legacy = await supabase
     .from('ci_usuarios_roles')
-    .select('id, rol, entidad_id, user_id, created_at, ci_entidades(nombre, customer_id, customers(nombre))')
+    .select('id, rol, entidad_id, user_id, created_at, ci_entidades(nombre, customer_id, customers!ci_entidades_customer_id_fkey(nombre))')
     .order('created_at', { ascending: false });
   if (!legacy.error) {
     return {
@@ -71,7 +71,7 @@ export async function listarAsignacionesRolesEmpresa(
 
   const modern = await supabase
     .from('ci_usuarios_roles')
-    .select('id, rol, entidad_id, usuario_id, created_at, updated_at, ci_entidades(nombre, customer_id, customers(nombre))')
+    .select('id, rol, entidad_id, usuario_id, created_at, updated_at, ci_entidades(nombre, customer_id, customers!ci_entidades_customer_id_fkey(nombre))')
     .order('created_at', { ascending: false });
   if (modern.error) {
     if (esErrorRecursionRls(modern.error.message)) {

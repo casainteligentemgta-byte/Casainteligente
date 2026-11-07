@@ -85,7 +85,7 @@ export async function cargarProcuraOrdenCompra(
   const { data, error } = await supabase
     .from('ci_procuras')
     .select(
-      'id,ticket,estado,material_txt,material_id,cantidad,unidad,solicitante_nombre,solicitante_telegram_chat_id,prioridad,monto_estimado_usd,observaciones,proyecto_id,entidad_id,viabilidad_presupuestaria,solo_compra,ci_proyectos(nombre),ci_entidades(nombre,customer_id,customers(nombre)),ci_compras_capitulos_maestro(codigo,nombre)',
+      'id,ticket,estado,material_txt,material_id,cantidad,unidad,solicitante_nombre,solicitante_telegram_chat_id,prioridad,monto_estimado_usd,observaciones,proyecto_id,entidad_id,viabilidad_presupuestaria,solo_compra,ci_proyectos(nombre),ci_entidades(nombre,customer_id,customers!ci_entidades_customer_id_fkey(nombre)),ci_compras_capitulos_maestro(codigo,nombre)',
     )
     .eq('id', procuraId.trim())
     .maybeSingle();

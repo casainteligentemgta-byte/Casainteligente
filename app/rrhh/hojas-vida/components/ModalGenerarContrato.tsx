@@ -202,12 +202,12 @@ async function cargarContextoContrato(client: SupabaseClient, obreroId: string, 
       }
       if (eid) {
         const selEntFull =
-          'id,nombre,customer_id,customers(nombre),nombre_legal,rif,domicilio_fiscal,direccion_fiscal,representante_legal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil';
+          'id,nombre,customer_id,customers!ci_entidades_customer_id_fkey(nombre),nombre_legal,rif,domicilio_fiscal,direccion_fiscal,representante_legal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil';
         let ent = await client.from('ci_entidades').select(selEntFull).eq('id', eid).maybeSingle();
         if (ent.error) {
           ent = await client
             .from('ci_entidades')
-            .select('id,nombre,customer_id,customers(nombre),rif,direccion_fiscal,representante_legal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil')
+            .select('id,nombre,customer_id,customers!ci_entidades_customer_id_fkey(nombre),rif,direccion_fiscal,representante_legal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil')
             .eq('id', eid)
             .maybeSingle();
         }

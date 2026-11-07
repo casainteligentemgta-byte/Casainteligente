@@ -27,7 +27,7 @@ export default function ProyectoEquipoAccesoPanel({ proyectoId }: Props) {
       try {
         const { data, error: qErr } = await supabase
           .from('ci_proyectos')
-          .select('entidad_id, ci_entidades(nombre, customer_id, customers(nombre))')
+          .select('entidad_id, ci_entidades(nombre, customer_id, customers!ci_entidades_customer_id_fkey(nombre))')
           .eq('id', proyectoId)
           .maybeSingle();
         if (cancelled) return;

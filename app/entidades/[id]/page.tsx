@@ -25,7 +25,7 @@ export default function EditarEntidadPage() {
     if (!id) return;
     setLoading(true);
     setError(null);
-    const { data, error: qErr } = await supabase.from('ci_entidades').select('*, customer_id, customers(nombre)').eq('id', id).maybeSingle();
+    const { data, error: qErr } = await supabase.from('ci_entidades').select('*, customer_id, customers!ci_entidades_customer_id_fkey(nombre)').eq('id', id).maybeSingle();
     setLoading(false);
     if (qErr || !data) {
       setError(qErr?.message ?? 'Entidad no encontrada.');

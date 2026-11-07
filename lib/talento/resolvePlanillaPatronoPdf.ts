@@ -31,7 +31,7 @@ export async function resolvePlanillaPatronoPdf(
   const { data: e, error: eErr } = await client
     .from('ci_entidades')
     .select(
-      'nombre,customer_id,customers(nombre),nombre_comercial,rif,direccion_fiscal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil',
+      'nombre,customer_id,customers!ci_entidades_customer_id_fkey(nombre),nombre_comercial,rif,direccion_fiscal,rep_legal_nombre,rep_legal_cedula,rep_legal_cargo,registro_mercantil',
     )
     .eq('id', eid)
     .maybeSingle();

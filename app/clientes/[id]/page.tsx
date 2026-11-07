@@ -223,7 +223,7 @@ export default function ClienteDetallePage() {
       const { data, error: err } = await supabase
         .from('ci_proyectos')
         .select(
-          'id,nombre,estado,tipo_proyecto,monto_aproximado,obra_precio_venta_usd,entidad_id,budget_id,budgets_adicionales,ci_entidades(nombre,rif,customer_id,customers(nombre))',
+          'id,nombre,estado,tipo_proyecto,monto_aproximado,obra_precio_venta_usd,entidad_id,budget_id,budgets_adicionales,ci_entidades(nombre,rif,customer_id,customers!ci_entidades_customer_id_fkey(nombre))',
         )
         .eq('customer_id', id)
         .order('created_at', { ascending: false });

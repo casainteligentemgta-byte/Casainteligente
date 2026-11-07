@@ -9,7 +9,7 @@ export default async function EntidadesPage() {
 
   try {
     const supabase = await createClient();
-    const { data, error: e } = await supabase.from('ci_entidades').select('*, customer_id, customers(nombre)');
+    const { data, error: e } = await supabase.from('ci_entidades').select('*, customer_id, customers!ci_entidades_customer_id_fkey(nombre)');
     if (e) error = e.message;
     else if (data) entidades = conNombreEntidad(data as EntidadConNombre[]) as CiEntidad[];
   } catch (err) {
