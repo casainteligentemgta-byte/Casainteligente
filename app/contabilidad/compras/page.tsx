@@ -33,6 +33,7 @@ import {
 } from '@/lib/contabilidad/filtrosFacturaCanal';
 import ComprasLineasTable from '@/components/contabilidad/ComprasLineasTable';
 import ComprasFacturasTable from '@/components/contabilidad/ComprasFacturasTable';
+import CompraFacturaImagenModal from '@/components/contabilidad/CompraFacturaImagenModal';
 import ComprasFiltrosPanel, {
     buildComprasFiltrosChips,
     ComprasFiltrosActivosBar,
@@ -91,7 +92,6 @@ import {
 import {
     actualizarPendienteCanal,
     eliminarPendienteCanal,
-    rutaDocumentoPendienteCanal,
 } from '@/lib/contabilidad/facturaCanalApi';
 import { reubicarCompra as reubicarCompraApi } from '@/lib/contabilidad/reubicarCompraApi';
 import {
@@ -1927,6 +1927,14 @@ export default function ComprasPage() {
         return tasaParaCompra(c);
     }
 
+    const cerrarImagenFactura = useCallback(() => {
+        setImagenFacturaAbierta(null);
+    }, []);
+
+    const abrirImagenFactura = useCallback((compraId: string) => {
+        setImagenFacturaAbierta(compraId);
+    }, []);
+
     const scrollToCompra = useCallback((compraId: string) => {
         setVistaListado('facturas');
         setImagenFacturaAbierta(compraId);
@@ -2946,7 +2954,7 @@ export default function ComprasPage() {
                         <ComprasLineasTable
                             filas={lineasOrdenadas}
                             umbralesFecha={umbralesFecha}
-                            onScrollToCompra={scrollToCompra}
+                            onVerImagen={abrirImagenFactura}
                             accionesPorCompra={accionesCompra}
                             onModificar={onModificarCompra}
                             onVerificarFecha={onVerificarFechaFila}
@@ -3069,6 +3077,17 @@ export default function ComprasPage() {
                 ubicacionIdInicial={reubicarCompra?.ubicacionId}
                 onClose={() => setReubicarCompra(null)}
                 onGuardado={() => void load()}
+            />
+
+            <CompraFacturaImagenModal
+                open={Boolean(imagenFacturaAbierta)}
+                compra={
+                    imagenFacturaAbierta
+                        ? compras.find((c) => c.id === imagenFacturaAbierta) ?? null
+                        : null
+                }
+                onClose={cerrarImagenFactura}
+                onAdjuntado={() => void load()}
             />
 
             <CargarFacturaCuadroModal

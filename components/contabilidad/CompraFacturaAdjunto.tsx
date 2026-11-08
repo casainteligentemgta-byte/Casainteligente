@@ -20,6 +20,8 @@ type Props = {
   esRecepcion?: boolean;
   documentApiPath?: string;
   expanded?: boolean;
+  /** Pasa el modo visor al visor de imagen/PDF. */
+  variant?: 'miniatura' | 'visor';
   onAdjuntado?: (compraId: string) => void;
 };
 
@@ -30,6 +32,7 @@ export default function CompraFacturaAdjunto({
   esRecepcion = false,
   documentApiPath,
   expanded = true,
+  variant = 'miniatura',
   onAdjuntado,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -105,6 +108,15 @@ export default function CompraFacturaAdjunto({
           esRecepcion={esRecepcion}
           documentApiPath={documentApiPath}
           expanded
+          variant={variant}
+        />
+      ) : esRecepcion && !puedeAdjuntar ? (
+        <CompraFacturaImagen
+          compraId={compraId}
+          tieneDocumento={false}
+          esRecepcion
+          expanded
+          variant={variant}
         />
       ) : puedeAdjuntar ? (
         <div

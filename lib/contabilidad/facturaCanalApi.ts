@@ -8,6 +8,23 @@ export function rutaDocumentoPendienteCanal(id: string): string {
   return `/api/facturas-canal/pendientes/${encodeURIComponent(id)}/document`;
 }
 
+/**
+ * Endpoint de documento para una fila del cuadro: pendientes de canal usan
+ * `/api/facturas-canal/.../document`; el resto, `/api/contabilidad/compras/[id]/document`.
+ */
+export function documentApiPathDesdeCompra(c: {
+  id: string;
+  pendiente_canal_id?: string | null;
+  purchase_invoice_id?: string | null;
+}): string | undefined {
+  const pendienteId = c.pendiente_canal_id?.trim();
+  if (!pendienteId) return undefined;
+  if (c.id.startsWith('canal-') || !c.purchase_invoice_id) {
+    return rutaDocumentoPendienteCanal(pendienteId);
+  }
+  return undefined;
+}
+
 /** Normaliza id de cola canal (`uuid` o `canal-uuid`). */
 export function resolveIdPendienteCanal(raw: string | undefined | null): string {
   let id = String(raw ?? '').trim();

@@ -30,4 +30,9 @@ describe('ComprasLineasTable — celdas FECHA / RIF / montos en una línea', () 
       /@media \(min-width: 768px\) and \(max-width: 1180px\) and \(orientation: landscape\) \{[\s\S]*\.compras-lineas-table-wrap table \{[\s\S]*min-width:\s*1280px/,
     );
   });
+
+  it('Ver imagen dispara onVerImagen hacia el modal (no scroll a fila expandida)', () => {
+    assert.match(tableSrc, /onVerImagen\?: \(compraId: string\) => void/);
+    assert.match(tableSrc, /onClick=\{\(\) => onVerImagen\(row\.pendienteId\)\}/);
+  });
 });
