@@ -29,7 +29,6 @@ import {
   compraMuestraBotonConfirmacionRecepcion,
   etiquetaEstadoLogistica,
 } from '@/lib/contabilidad/estadoLogisticaCompra';
-import { rutaDocumentoPendienteCanal } from '@/lib/contabilidad/facturaCanalApi';
 import {
   compraTieneDetallePuenteInventario,
   lineasDetallePuenteInventario,
@@ -54,7 +53,6 @@ import { etiquetaRifCompra } from '@/lib/contabilidad/rifVenezolano';
 import { tooltipClienteCrmCompra } from '@/lib/clientes/tooltipClienteCrmCompra';
 import type { MonedaOrigen } from '@/lib/finanzas/currency-converter';
 import { normalizarMonedaExtracted } from '@/lib/contabilidad/extractedCanal';
-import CompraFacturaAdjunto from '@/components/contabilidad/CompraFacturaAdjunto';
 import CompraProductosToggle from '@/components/contabilidad/CompraProductosToggle';
 import ImputacionCompraToggle from '@/components/contabilidad/ImputacionCompraToggle';
 import ClasificacionGastoEntidadSelect from '@/components/contabilidad/ClasificacionGastoEntidadSelect';
@@ -107,15 +105,6 @@ function compraPuedeVerImagen(c: CompraListaUnificada): boolean {
       c.origen === 'TELEGRAM' ||
       c.origen === 'HISTORICO_TABLA' ||
       c.pendiente_canal_id,
-  );
-}
-
-function compraPuedeAdjuntarFactura(c: CompraListaUnificada): boolean {
-  return (
-    c.origen === 'HISTORICO_TABLA' &&
-    !c.document_storage_path &&
-    !c.purchase_invoice_id &&
-    !c.pendiente_canal_id
   );
 }
 
@@ -522,6 +511,7 @@ function FilaFactura({
               onClick={() => onToggleImagen(c.id)}
               style={btnLink}
               aria-expanded={imagenAbierta}
+              aria-haspopup="dialog"
             >
               {imagenAbierta ? 'Ocultar imagen' : c.document_storage_path ? 'Ver imagen' : 'Factura / adjuntar'}
             </button>
@@ -673,25 +663,7 @@ function FilaFactura({
           </td>
         </tr>
       ) : null}
-      {imagenAbierta && puedeImagen ? (
-        <tr>
-          <td colSpan={COLSPAN} style={td}>
-            <CompraFacturaAdjunto
-              compraId={c.id}
-              documentApiPath={
-                c.pendiente_canal_id && (c.id.startsWith('canal-') || !c.purchase_invoice_id)
-                  ? rutaDocumentoPendienteCanal(c.pendiente_canal_id)
-                  : undefined
-              }
-              expanded
-              tieneDocumento={Boolean(c.document_storage_path || c.purchase_invoice_id || c.pendiente_canal_id)}
-              puedeAdjuntar={compraPuedeAdjuntarFactura(c)}
-              esRecepcion={c.origen === 'RECEPCION_MERCANCIA' || c.origen === 'TELEGRAM'}
-              onAdjuntado={onReload}
-            />
-          </td>
-        </tr>
-      ) : !puedeImagen && c.document_file_name ? (
+      {!puedeImagen && c.document_file_name ? (
         <tr>
           <td colSpan={COLSPAN} style={{ ...td, fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>
             Archivo «{c.document_file_name}» registrado sin imagen en Storage. Adjúntala en{' '}

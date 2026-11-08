@@ -37,7 +37,8 @@ export type AccionesCompraLinea = {
 type Props = {
   filas: FilaFacturaCanal[];
   umbralesFecha?: UmbralesFechaCompra;
-  onScrollToCompra?: (compraId: string) => void;
+  /** Abre el visor modal de la factura (no desplaza la tabla). */
+  onVerImagen?: (compraId: string) => void;
   accionesPorCompra?: (compraId: string) => AccionesCompraLinea | null;
   onModificar?: (compraId: string) => void;
   onModificarLinea?: (row: FilaFacturaCanal) => void;
@@ -75,7 +76,7 @@ function esFilaAcciones(filas: FilaFacturaCanal[], row: FilaFacturaCanal, index:
 export default function ComprasLineasTable({
   filas,
   umbralesFecha,
-  onScrollToCompra,
+  onVerImagen,
   accionesPorCompra,
   onModificar,
   onModificarLinea,
@@ -425,10 +426,11 @@ export default function ComprasLineasTable({
                   {row.proyecto || '—'}
                 </td>
                 <td style={td}>
-                  {onScrollToCompra ? (
+                  {onVerImagen ? (
                     <button
                       type="button"
-                      onClick={() => onScrollToCompra(row.pendienteId)}
+                      onClick={() => onVerImagen(row.pendienteId)}
+                      aria-haspopup="dialog"
                       style={{
                         background: 'none',
                         border: 'none',

@@ -1125,6 +1125,11 @@
   min-width: 1840px;
 }
 
+.compras-factura-imagen-modal {
+  overscroll-behavior: contain;
+  touch-action: manipulation;
+}
+
 .compras-lineas-table-wrap th.whitespace-nowrap,
 .compras-lineas-table-wrap td.whitespace-nowrap {
   white-space: nowrap;

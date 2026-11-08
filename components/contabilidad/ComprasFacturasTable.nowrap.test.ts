@@ -76,4 +76,9 @@ describe('ComprasFacturasTable — vista Por factura', () => {
     assert.match(pageSrc, /<ComprasFacturasTable/);
     assert.doesNotMatch(pageSrc, /compras-facturas-grid/);
   });
+
+  it('Ver imagen abre un modal y no una fila expandida dentro del scroll horizontal', () => {
+    assert.doesNotMatch(tableSrc, /CompraFacturaAdjunto/);
+    assert.match(pageSrc, /<CompraFacturaImagenModal/);
+  });
 });
