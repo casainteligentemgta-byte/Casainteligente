@@ -393,6 +393,11 @@ Profesional:
 └─ Documentación (NetVision BOM / diagrama)
 ```
 
+### Instalación en drywall (cámaras turbo y video balín)
+
+- **Broca de ¾ de pulgada** para el orificio de la caja o soporte de la cámara turbo o video balín en drywall.
+- Verificar que la caja o soporte entre en el orificio antes de cablear.
+
 ### Excavación
 
 ```
