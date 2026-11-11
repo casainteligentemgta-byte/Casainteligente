@@ -74,6 +74,8 @@ const COMANDO_A_CONTEXTO: Record<string, TelegramContexto> = {
   stock: 'consulta_stock',
   factura: 'factura',
   facturas: 'factura',
+  credito: 'credito_pago',
+  creditos: 'credito_pago',
   sinnota: 'entrada_obra',
   ingresomanual: 'entrada_obra',
   ingreso: 'entrada_obra',

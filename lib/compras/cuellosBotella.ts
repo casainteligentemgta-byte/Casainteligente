@@ -611,6 +611,13 @@ export async function enviarAvisosCuellosBotella(
 
   // A administración se le indica que puede destrabarlos desde el mismo Telegram.
   const admins = new Set((await listarAdministradoresSistemaTelegram(supabase).catch(() => [])).map((a) => String(a.chatId)));
+  let anexoCreditos = '';
+  try {
+    const { anexoCreditosVencidosDiario } = await import('@/lib/contabilidad/creditoRecordatorios');
+    anexoCreditos = await anexoCreditosVencidosDiario(supabase);
+  } catch (e) {
+    console.warn('[cuellosBotella] créditos vencidos', e);
+  }
 
   let enviados = 0;
   let errores = 0;
@@ -639,6 +646,7 @@ export async function enviarAvisosCuellosBotella(
       }
     }
     if (admins.has(chatId)) partes.push('', '🛠 Para resolverlos desde aquí: /detenidos');
+    if (anexoCreditos) partes.push('', anexoCreditos);
     partes.push('', `<a href="${base}/compras/torre-control">Abrir la Torre de Control</a>`);
 
     const filasCanal = filasTecladoFacturasCanal(b.porEtapa.get('canal') ?? [], base);

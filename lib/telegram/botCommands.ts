@@ -9,6 +9,7 @@ export const TELEGRAM_COMANDOS_COMPRAS_ABASTECIMIENTO: Array<{
 }> = [
   { command: 'procura', description: 'Solicitar material (procura de abastecimiento)' },
   { command: 'facturas', description: 'Foto o carga manual → Contabilidad + precarga almacén' },
+  { command: 'credito', description: 'Créditos abiertos: vencimiento y marcar pagado' },
 ];
 
 export const TELEGRAM_BOT_COMMANDS: Array<{ command: string; description: string }> = [
@@ -32,7 +33,9 @@ function lineasComprasMenuTelegram(): string {
     const hint =
       c.command === 'procura'
         ? 'solicitar material (ticket PR-…)'
-        : 'foto o manual → Contabilidad + precarga almacén';
+        : c.command === 'credito'
+          ? 'créditos abiertos y marcar pagado'
+          : 'foto o manual → Contabilidad + precarga almacén';
     return `• /${c.command} — ${hint}`;
   }).join('\n');
 }
@@ -73,7 +76,8 @@ export function mensajeMenuTelegram(opts?: { depositario?: boolean; comprador?: 
       '🏠 <b>Casa Inteligente</b>\n\n' +
       '<b>Facturas y notas</b>\n' +
       '• /facturas — foto de la factura\n' +
-      '• /nota — foto de la nota de entrega\n\n' +
+      '• /nota — foto de la nota de entrega\n' +
+      '• /credito — créditos abiertos y marcar pagado\n\n' +
       '<b>Campo</b>\n' +
       '• /agua — camión, PPM, litros\n\n' +
       '<b>Consultas</b>\n' +
@@ -120,6 +124,7 @@ export function mensajeAyudaTelegram(opts?: { depositario?: boolean; comprador?:
       '<b>Comandos Casa Inteligente</b>\n\n' +
       '<b>Facturas</b>: /facturas (foto)\n' +
       '<b>Notas de entrega</b>: /nota (foto)\n' +
+      '<b>Créditos</b>: /credito\n' +
       '<b>Campo</b>: /agua\n' +
       '<b>Agenda</b>: /agenda /limpiar_agenda\n' +
       '<b>Técnico IA</b>: /tecnico\n' +
@@ -130,7 +135,7 @@ export function mensajeAyudaTelegram(opts?: { depositario?: boolean; comprador?:
   if (opts?.depositario) {
     return mensajeMenuTelegram({ depositario: true });
   }
-  const compras = `<b>${TITULO_COMPRAS_ABASTECIMIENTO_TELEGRAM}</b>\n/procura /facturas\n\n`;
+  const compras = `<b>${TITULO_COMPRAS_ABASTECIMIENTO_TELEGRAM}</b>\n/procura /facturas /credito\n\n`;
   return (
     '<b>Comandos Casa Inteligente</b>\n\n' +
     compras +

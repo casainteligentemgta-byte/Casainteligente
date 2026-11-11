@@ -5,6 +5,7 @@
 export const TELEGRAM_COMANDOS_COMPRAS_ABASTECIMIENTO = [
   { command: 'procura', description: 'Solicitar material (procura de abastecimiento)' },
   { command: 'facturas', description: 'Foto/PDF factura → Contabilidad + precarga almacén' },
+  { command: 'credito', description: 'Créditos abiertos: vencimiento y marcar pagado' },
 ];
 
 export const TELEGRAM_BOT_COMMANDS = [

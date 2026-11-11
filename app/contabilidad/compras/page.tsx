@@ -62,6 +62,7 @@ import CargarFacturaCuadroModal from '@/components/contabilidad/CargarFacturaCua
 import ReubicarCompraModal from '@/components/contabilidad/ReubicarCompraModal';
 import { esGastoEntidadImputacion } from '@/lib/contabilidad/imputacionCompra';
 import VerificarFechaCompraModal from '@/components/contabilidad/VerificarFechaCompraModal';
+import MarcarPagadoCreditoModal from '@/components/contabilidad/MarcarPagadoCreditoModal';
 import ReporteClienteComprasModal from '@/components/contabilidad/ReporteClienteComprasModal';
 import { buildReporteClienteDesdeCompras } from '@/lib/contabilidad/reporteClienteCompras';
 import EditarFacturaCanalModal, {
@@ -105,6 +106,7 @@ import {
 import { enriquecerComprasConDestino } from '@/lib/contabilidad/enriquecerComprasDestino';
 import { enriquecerComprasPuenteInventario } from '@/lib/contabilidad/enriquecerComprasPuenteInventario';
 import { enriquecerComprasRecepcionCampo } from '@/lib/contabilidad/enriquecerComprasRecepcionCampo';
+import { enriquecerComprasConPagoCredito } from '@/lib/contabilidad/creditoPagosConsulta';
 import {
     enriquecerComprasEstadoLogistica,
     type EstadoLogisticaCompra,
@@ -312,6 +314,7 @@ export default function ComprasPage() {
         titulo?: string;
     } | null>(null);
     const [cargarFacturaOpen, setCargarFacturaOpen] = useState(false);
+    const [pagandoCredito, setPagandoCredito] = useState<CompraListaUnificada | null>(null);
     /** Incrementar tras importar CSV para forzar reload aunque los filtros no cambien. */
     const [comprasReloadToken, setComprasReloadToken] = useState(0);
     const [verificandoFecha, setVerificandoFecha] = useState<{
@@ -832,6 +835,7 @@ export default function ComprasPage() {
             filas = await enriquecerComprasRecepcionCampo(supabase, filas);
             filas = await enriquecerComprasConDestino(supabase, filas);
             filas = await enriquecerComprasEstadoLogistica(supabase, filas);
+            filas = await enriquecerComprasConPagoCredito(supabase, filas);
 
             // Si el embed de líneas vino vacío (PRODUCTOS se carga al expandir),
             // hidratar candidatos SIN-*/HISTORICO antes de filtrar bitácora CCO.
@@ -3000,6 +3004,7 @@ export default function ComprasPage() {
                         onEliminar={(c) => void handleDelete(c)}
                         onCambiarMoneda={(c, moneda) => void cambiarMonedaCompra(c, moneda)}
                         onReload={() => void load()}
+                        onMarcarPagado={setPagandoCredito}
                     />
                 ) : null}
                 </div>
@@ -3033,6 +3038,23 @@ export default function ComprasPage() {
                         : undefined
                 }
                 onClose={() => setReporteClienteAbierto(false)}
+            />
+
+            <MarcarPagadoCreditoModal
+                open={pagandoCredito != null}
+                compra={
+                    pagandoCredito?.purchase_invoice_id
+                        ? {
+                              purchaseInvoiceId: pagandoCredito.purchase_invoice_id,
+                              proveedor: pagandoCredito.supplier_name || 'Proveedor',
+                              numeroFactura: pagandoCredito.invoice_number || 's/n',
+                              saldoUsd: pagandoCredito.pago_credito_saldo_usd ?? 0,
+                              entidadNombre: pagandoCredito.entidad_nombre,
+                          }
+                        : null
+                }
+                onClose={() => setPagandoCredito(null)}
+                onPagado={() => void load()}
             />
 
             <VerificarFechaCompraModal
