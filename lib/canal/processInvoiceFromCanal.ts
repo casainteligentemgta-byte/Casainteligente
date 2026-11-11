@@ -278,7 +278,8 @@ async function processInvoiceFromCanalCore(
         unit_price: Number(it.unit_price) || 0,
       })),
     );
-    extracted = { ...extracted, items: fused };
+    const extraido = extracted ?? {};
+    extracted = { ...extraido, items: fused };
     const cuadre = totalesAlbumCuadran({
       items: fused,
       total: (extracted as { total_amount?: number | null }).total_amount,
