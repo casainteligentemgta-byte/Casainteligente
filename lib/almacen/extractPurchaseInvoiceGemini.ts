@@ -2,8 +2,15 @@ import {
   GEMINI_PROCUREMENT_DEFAULT_MODEL,
   procurementModelCandidates,
 } from '@/lib/almacen/geminiProcurementModels';
+import {
+  EXTRACTION_PROMPT,
+  PROMPT_ALBUM_PARTES,
+  promptExtraccionConHint,
+} from '@/lib/almacen/extractPurchaseInvoicePrompt';
 import { geminiGenerateWithDocument } from '@/lib/gemini/client';
 import { calcularConfidenceScoreOcr } from '@/lib/canal/calcularConfidenceScoreOcr';
+
+export { PROMPT_ALBUM_PARTES, promptExtraccionConHint };
 
 export type ExtractedInvoiceItem = {
   description: string;
@@ -38,36 +45,6 @@ const ALLOWED_MIME = new Set([
 ]);
 
 const MAX_BYTES = 12 * 1024 * 1024;
-
-const EXTRACTION_PROMPT = `Extrae datos de esta factura o nota de entrega venezolana.
-
-MONEDA: Los montos de la factura están en BOLÍVARES (VES). quantity, unit_price y total_amount son siempre en Bs, sin convertir a dólares.
-
-OBLIGATORIO — Tabla de detalle (cuerpo de la factura):
-- Lee TODAS las filas de la tabla: Descripción/Concepto/Artículo, Cantidad, Precio unitario.
-- Cada fila va en items[] con:
-  - description: nombre o descripción del artículo tal como en la factura (sin inventar).
-  - item_code: código o referencia del producto si hay columna Código/Ref ("" si no hay).
-  - unit: unidad de medida (UND, KG, M, PZA, etc.; "UND" si no aparece).
-  - quantity: cantidad numérica (usa 1 si no aparece).
-  - unit_price: precio unitario sin IVA. Si solo hay subtotal de línea, divide subtotal/cantidad.
-- NO omitas filas. NO incluyas subtotales, IVA, descuentos globales ni "Total" como ítem.
-- Si la tabla tiene muchas filas, inclúyelas todas.
-
-Encabezado:
-- invoice_number, supplier_name, supplier_rif (emisor, no el cliente), date (YYYY-MM-DD), total_amount (total en Bs, con IVA si así figura en el documento).
-- receptor_nombre y receptor_rif: el cliente o comprador a nombre de quien está la factura (bloque "Cliente", "Razón social del comprador", "Señores"). Si no figura, "".
-
-El proveedor es quien EMITE la factura, no el comprador.`;
-
-export function promptExtraccionConHint(hint?: string | null): string {
-  const h = String(hint ?? '').trim();
-  if (!h) return EXTRACTION_PROMPT;
-  return `${EXTRACTION_PROMPT}
-
-MEMORIA DE PROVEEDORES CONOCIDOS (úsalo SOLO si el emisor del documento coincide; no inventes datos que no estén en la foto):
-${h}`;
-}
 
 const ITEMS_ONLY_PROMPT = `Solo extrae la TABLA DE DETALLE / líneas de productos de esta factura venezolana.
 
@@ -555,6 +532,12 @@ export function parseExtractedPurchaseInvoice(text: string): ExtractedPurchaseIn
   };
 }
 
+export type ArchivoExtraccionFactura = {
+  buffer: Buffer;
+  mimeType: string;
+  fileName: string;
+};
+
 export async function extractPurchaseInvoiceFromFile(file: {
   buffer: Buffer;
   mimeType: string;
@@ -562,8 +545,25 @@ export async function extractPurchaseInvoiceFromFile(file: {
   /** Hint corto (perfil/correcciones de este proveedor) inyectado al prompt. */
   hintProveedor?: string | null;
 }): Promise<{ data: ExtractedPurchaseInvoice; fromGemini: boolean; modelUsed: string }> {
-  if (file.buffer.length > MAX_BYTES) {
-    throw new Error('El archivo supera el límite de 12 MB.');
+  return extractPurchaseInvoiceFromFiles({
+    files: [{ buffer: file.buffer, mimeType: file.mimeType, fileName: file.fileName }],
+    hintProveedor: file.hintProveedor,
+  });
+}
+
+/** Varias fotos/PDF de la misma factura (álbum Telegram), en orden. */
+export async function extractPurchaseInvoiceFromFiles(params: {
+  files: ArchivoExtraccionFactura[];
+  hintProveedor?: string | null;
+}): Promise<{ data: ExtractedPurchaseInvoice; fromGemini: boolean; modelUsed: string }> {
+  const files = params.files.filter((f) => f?.buffer?.length);
+  if (files.length === 0) {
+    throw new Error('No hay archivo para leer la factura.');
+  }
+  for (const file of files) {
+    if (file.buffer.length > MAX_BYTES) {
+      throw new Error('El archivo supera el límite de 12 MB.');
+    }
   }
 
   if (!process.env.GEMINI_API_KEY?.trim()) {
@@ -572,19 +572,23 @@ export async function extractPurchaseInvoiceFromFile(file: {
     );
   }
 
-  const base64 = file.buffer.toString('base64');
+  const documents = files.map((f) => ({
+    mimeType: f.mimeType,
+    base64: f.buffer.toString('base64'),
+  }));
+  const album = files.length > 1;
   const models = procurementModelCandidates();
   let text = '';
   let modelUsed = '';
   let lastError: Error | null = null;
 
-  const prompt = promptExtraccionConHint(file.hintProveedor);
+  const prompt = promptExtraccionConHint(params.hintProveedor, album);
 
   for (const model of models) {
     try {
-      text = await callGeminiExtract(model, file.mimeType, base64, prompt);
+      text = await callGeminiExtract(model, documents, prompt);
       modelUsed = model;
-      console.info('[extractPurchaseInvoiceGemini] OK con modelo', model);
+      console.info('[extractPurchaseInvoiceGemini] OK con modelo', model, 'partes', files.length);
       break;
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
@@ -607,11 +611,11 @@ export async function extractPurchaseInvoiceFromFile(file: {
   if (extracted.items.length === 0) {
     console.info('[extractPurchaseInvoiceGemini] Sin ítems en 1.er pase; reintento solo detalle…');
     try {
+      const itemsPrompt = album ? `${ITEMS_ONLY_PROMPT}\n${PROMPT_ALBUM_PARTES}` : ITEMS_ONLY_PROMPT;
       const itemsText = await callGeminiExtract(
         modelUsed || models[0],
-        file.mimeType,
-        base64,
-        ITEMS_ONLY_PROMPT,
+        documents,
+        itemsPrompt,
         ITEMS_ONLY_SCHEMA,
       );
       const itemsPass = parseExtractedPurchaseInvoice(itemsText);
@@ -706,17 +710,21 @@ export async function extractPurchaseInvoiceHeaderFromFile(file: {
 
 async function callGeminiExtract(
   model: string,
-  mimeType: string,
-  base64: string,
+  documents: Array<{ mimeType: string; base64: string }>,
   prompt: string = EXTRACTION_PROMPT,
   schema: object = RESPONSE_SCHEMA,
 ): Promise<string> {
+  const first = documents[0];
+  if (!first) {
+    throw new Error('No hay archivo para leer la factura.');
+  }
   try {
     return await geminiGenerateWithDocument({
       model,
       prompt,
-      mimeType,
-      base64,
+      mimeType: first.mimeType,
+      base64: first.base64,
+      documents,
       systemInstruction:
         'Eres un OCR experto en facturas fiscales venezolanas. Extraes cada fila de la tabla de detalle sin omitir productos.',
       temperature: 0,

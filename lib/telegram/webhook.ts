@@ -302,6 +302,7 @@ export type TelegramUpdate = {
       file_name?: string;
     };
     caption?: string;
+    media_group_id?: string;
     contact?: { phone_number: string; user_id?: number; first_name?: string };
   };
   callback_query?: {
@@ -1455,6 +1456,7 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
             chatLabel: label,
             fileId: fileIdFactura,
             telegramMessageId: String(msg.message_id),
+            mediaGroupId: msg.media_group_id ?? null,
           });
           return NextResponse.json({
             ok: true,
@@ -1928,6 +1930,9 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
           chatLabel: label,
           fileId: archivo.fileId,
           telegramMessageId: String(msg.message_id),
+          mediaGroupId: msg.media_group_id ?? null,
+          mimeTypeHint: msg.document?.mime_type ?? null,
+          fileNameHint: msg.document?.file_name ?? null,
         });
         return NextResponse.json({
           ok: true,

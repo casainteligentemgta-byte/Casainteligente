@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { processInvoiceFromCanal } from '@/lib/canal/processInvoiceFromCanal';
-import { PROCUREMENT_DOCUMENTS_BUCKET } from '@/lib/almacen/procurementDocumentStorage';
+import { descargarArchivosPendienteCanal } from '@/lib/canal/documentPartsPendiente';
+import { resetearAvisoErrorCargaFactura } from '@/lib/telegram/avisoErrorCargaFactura';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
 import { requireAlgunPermisoWeb } from '@/lib/auth/requirePermisoRoute';
@@ -28,6 +29,7 @@ type PendienteRow = {
   document_storage_path: string | null;
   document_mime_type: string | null;
   document_file_name: string | null;
+  document_parts?: unknown;
 };
 
 /** Reprocesa OCR de una sola factura pendiente existente (sin crear nuevo registro). */
@@ -45,13 +47,24 @@ export async function POST(_req: Request, ctx: RouteCtx) {
       return NextResponse.json({ error: 'ID de factura inválido' }, { status: 400 });
     }
 
-    const { data: rowRaw, error } = await supabase
+    let { data: rowRaw, error } = await supabase
       .from('ci_facturas_canal_pendientes')
       .select(
-        'id,estado,canal,chat_id,document_storage_path,document_mime_type,document_file_name',
+        'id,estado,canal,chat_id,document_storage_path,document_mime_type,document_file_name,document_parts',
       )
       .eq('id', id)
       .maybeSingle();
+    if (error && /document_parts|PGRST204|schema cache/i.test(error.message)) {
+      const retry = await supabase
+        .from('ci_facturas_canal_pendientes')
+        .select(
+          'id,estado,canal,chat_id,document_storage_path,document_mime_type,document_file_name',
+        )
+        .eq('id', id)
+        .maybeSingle();
+      rowRaw = retry.data as typeof rowRaw;
+      error = retry.error;
+    }
 
     const row = rowRaw as PendienteRow | null;
     if (error || !row) {
@@ -65,31 +78,43 @@ export async function POST(_req: Request, ctx: RouteCtx) {
       );
     }
 
-    if (!row.document_storage_path) {
+    if (!row.document_storage_path && !row.document_parts) {
       return NextResponse.json(
         { error: 'No hay archivo en storage para reprocesar.' },
         { status: 400 },
       );
     }
 
-    const { data: blob, error: dlErr } = await supabase.storage
-      .from(PROCUREMENT_DOCUMENTS_BUCKET)
-      .download(row.document_storage_path);
-    if (dlErr || !blob) {
+    let archivos;
+    try {
+      archivos = await descargarArchivosPendienteCanal(supabase, row);
+    } catch (dlErr) {
       return NextResponse.json(
-        { error: dlErr?.message ?? 'No se pudo descargar archivo para reproceso.' },
+        {
+          error:
+            dlErr instanceof Error ? dlErr.message : 'No se pudo descargar archivo para reproceso.',
+        },
+        { status: 400 },
+      );
+    }
+    if (archivos.length === 0) {
+      return NextResponse.json(
+        { error: 'No hay archivo en storage para reprocesar.' },
         { status: 400 },
       );
     }
 
-    const buffer = Buffer.from(await blob.arrayBuffer());
+    await resetearAvisoErrorCargaFactura(supabase, row.id);
+
+    const primario = archivos[0];
     await processInvoiceFromCanal({
       canal: (row.canal as 'telegram' | 'whatsapp') ?? 'telegram',
       pendingId: row.id,
       chatId: row.chat_id ?? 'reprocess',
-      buffer,
-      mimeType: row.document_mime_type ?? 'image/jpeg',
-      fileName: row.document_file_name ?? 'factura.jpg',
+      buffer: primario.buffer,
+      mimeType: primario.mimeType,
+      fileName: primario.fileName,
+      archivos,
       sendReply: async () => {},
     });
 

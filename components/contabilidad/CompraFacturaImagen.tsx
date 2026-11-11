@@ -30,6 +30,9 @@ export default function CompraFacturaImagen({
 }: Props) {
   const [url, setUrl] = useState<string | null>(null);
   const [mimeType, setMimeType] = useState<string | null>(null);
+  const [parts, setParts] = useState<Array<{ url: string; mimeType?: string | null; fileName?: string | null }>>(
+    [],
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,6 +44,7 @@ export default function CompraFacturaImagen({
     setLoading(true);
     setError(null);
     setUrl(null);
+    setParts([]);
     try {
       const res = await fetch(endpoint);
       const data = (await res.json()) as {
@@ -48,6 +52,7 @@ export default function CompraFacturaImagen({
         mimeType?: string | null;
         error?: string;
         code?: string;
+        parts?: Array<{ url?: string; mimeType?: string | null; fileName?: string | null }>;
       };
       if (!res.ok || !data.url) {
         throw new Error(
@@ -61,6 +66,10 @@ export default function CompraFacturaImagen({
       }
       setUrl(data.url);
       setMimeType(data.mimeType ?? null);
+      const extra = (data.parts ?? []).filter((p): p is { url: string; mimeType?: string | null; fileName?: string | null } =>
+        Boolean(p?.url),
+      );
+      setParts(extra.length ? extra : [{ url: data.url, mimeType: data.mimeType }]);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al cargar imagen');
     } finally {
@@ -226,8 +235,12 @@ export default function CompraFacturaImagen({
         ) : url && esImagen ? (
           visor ? (
             <div>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt="Factura de compra" style={imgVisor} />
+              {(parts.length > 1 ? parts : [{ url, mimeType }]).map((p, i) => (
+                <div key={p.url} style={{ marginTop: i === 0 ? 0 : 12 }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={p.url} alt={`Factura de compra ${i + 1}`} style={imgVisor} />
+                </div>
+              ))}
               <p style={{ margin: '10px 0 0', textAlign: 'center' }}>
                 <a href={url} target="_blank" rel="noopener noreferrer" style={linkDoc}>
                   <ExternalLink size={14} />
@@ -236,10 +249,36 @@ export default function CompraFacturaImagen({
               </p>
             </div>
           ) : (
-            <a href={url} target="_blank" rel="noopener noreferrer" title="Abrir factura en tamaño completo">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt="Factura de compra" style={imgMiniatura} />
-            </a>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {(parts.length > 1 ? parts : [{ url, mimeType }]).map((p, i) => (
+                <a
+                  key={p.url}
+                  href={p.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={`Abrir parte ${i + 1} en tamaño completo`}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={p.url}
+                    alt={`Factura de compra ${i + 1}`}
+                    style={imgMiniatura}
+                  />
+                  {parts.length > 1 ? (
+                    <span
+                      style={{
+                        display: 'block',
+                        fontSize: 10,
+                        color: 'rgba(255,255,255,0.45)',
+                        marginTop: 4,
+                      }}
+                    >
+                      Parte {i + 1} de {parts.length}
+                    </span>
+                  ) : null}
+                </a>
+              ))}
+            </div>
           )
         ) : url && esPdf && visor ? (
           <div>

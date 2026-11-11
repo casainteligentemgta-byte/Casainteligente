@@ -33,6 +33,16 @@ export async function POST(_req: Request, ctx: RouteCtx) {
 
     const ingreso = await ingresoAlmacenDesdePendienteCanal(admin.client, id);
     if (!ingreso.success) {
+      const { avisarErrorCargaFacturaCanal, esErrorValidacionSinAvisoCargador } = await import(
+        '@/lib/telegram/avisoErrorCargaFactura'
+      );
+      if (!esErrorValidacionSinAvisoCargador(ingreso.error)) {
+        void avisarErrorCargaFacturaCanal({
+          pendingId: id,
+          errorOriginal: ingreso.error,
+          tipo: 'general',
+        });
+      }
       return NextResponse.json({ error: ingreso.error ?? 'Error al registrar ingreso' }, { status: 400 });
     }
 
@@ -46,6 +56,23 @@ export async function POST(_req: Request, ctx: RouteCtx) {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Error al registrar ingreso';
+    try {
+      const id = idFromParams(await resolveParams(ctx.params));
+      if (id) {
+        const { avisarErrorCargaFacturaCanal, esErrorValidacionSinAvisoCargador } = await import(
+          '@/lib/telegram/avisoErrorCargaFactura'
+        );
+        if (!esErrorValidacionSinAvisoCargador(err)) {
+          void avisarErrorCargaFacturaCanal({
+            pendingId: id,
+            errorOriginal: err,
+            tipo: 'general',
+          });
+        }
+      }
+    } catch {
+      /* no tapar el error original */
+    }
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

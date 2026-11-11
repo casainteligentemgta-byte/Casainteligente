@@ -27,8 +27,10 @@ export async function POST(req: Request, ctx: RouteCtx) {
   const acceso = await requireAlgunPermisoWeb(['compra.registrar', 'compra.confirmar']);
   if (!acceso.ok) return acceso.response;
 
+  let pendingId: string | null = null;
   try {
     const id = idFromParams(await resolveParams(ctx.params));
+    pendingId = id;
     if (!id) {
       return NextResponse.json({ error: 'ID de factura inválido' }, { status: 400 });
     }
@@ -118,6 +120,15 @@ export async function POST(req: Request, ctx: RouteCtx) {
       }
     }
 
+    if (ingresoAlmacen && !ingresoAlmacen.success) {
+      const { esErrorValidacionSinAvisoCargador } = await import(
+        '@/lib/telegram/avisoErrorCargaFactura'
+      );
+      if (!esErrorValidacionSinAvisoCargador(ingresoAlmacen.error)) {
+        avisarErrorCargaFacturaCanalAsyncSafe(id, ingresoAlmacen.error);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       compraId: result.compraId,
@@ -128,6 +139,23 @@ export async function POST(req: Request, ctx: RouteCtx) {
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Error al registrar compra';
+    const { esErrorValidacionSinAvisoCargador } = await import(
+      '@/lib/telegram/avisoErrorCargaFactura'
+    );
+    if (!esErrorValidacionSinAvisoCargador(err)) {
+      avisarErrorCargaFacturaCanalAsyncSafe(pendingId, err);
+    }
     return NextResponse.json({ error: message }, { status: 400 });
   }
+}
+
+function avisarErrorCargaFacturaCanalAsyncSafe(id: string | null, err: unknown): void {
+  if (!id) return;
+  void import('@/lib/telegram/avisoErrorCargaFactura').then(({ avisarErrorCargaFacturaCanal }) => {
+    void avisarErrorCargaFacturaCanal({
+      pendingId: id,
+      errorOriginal: err,
+      tipo: 'general',
+    });
+  });
 }
