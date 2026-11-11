@@ -412,7 +412,7 @@ export async function avisarPagoCreditoAdmin(
   } catch (e) {
     console.warn('[credito] chat administración', e);
   }
-  for (const chat of destinos) {
+  for (const chat of Array.from(destinos)) {
     try {
       await sendTelegramMessage(chat, texto, {
         parse_mode: 'HTML',
