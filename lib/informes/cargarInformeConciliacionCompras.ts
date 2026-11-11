@@ -8,6 +8,10 @@ import type { SupabaseClient } from '@supabase/supabase-js';
  * - Ledger: inv_movimientos con documento_id (tránsito y disponible atribuidos a la factura).
  * - Stock: inventario_stock, comparado con la suma del ledger de cada ubicación y material.
  *
+ * Limitación: la liberación de tránsito a disponible (recepción física) se registra como
+ * 'ajuste' SIN documento_id. Por eso el disponible no se puede atribuir a la factura, y el
+ * tránsito se juzga por material y ubicación en todo el ledger (neto), no por factura.
+ *
  * Las alertas marcan lo que no cuadra; el informe no corrige nada.
  */
 
@@ -151,6 +155,19 @@ export function conciliarCompras(input: {
     porFactura.set(k, a);
   }
 
+  // Neto del ledger completo (con y sin documento) y cuarentena pendiente, por (ubicación, material).
+  const transitoNeto = new Map<string, number>();
+  for (const m of input.movimientos) {
+    const k = clave(m.ubicacion_id, m.material_id);
+    transitoNeto.set(k, (transitoNeto.get(k) ?? 0) + num(m.delta_transito_entrante));
+  }
+  const pendienteMaterial = new Map<string, number>();
+  for (const i of input.inspecciones) {
+    if (String(i.status ?? '').toUpperCase() !== 'PENDIENTE') continue;
+    const k = clave(i.ubicacion_id ?? '', i.material_id);
+    pendienteMaterial.set(k, (pendienteMaterial.get(k) ?? 0) + num(i.quantity));
+  }
+
   // 3) Unión de claves: ledger y cuarentenas, sin repetir.
   const filas: FilaConciliacion[] = [];
   const visto = new Set<string>();
@@ -164,23 +181,21 @@ export function conciliarCompras(input: {
     const factura = facturaPorId.get(documentoId);
     const facturaExiste = Boolean(factura);
     const movido = Math.abs(l.transito) > TOL || Math.abs(l.disponible) > TOL;
+    const netoTransito = transitoNeto.get(clave(ub, materialId)) ?? 0;
+    const pendienteEnMaterial = pendienteMaterial.get(clave(ub, materialId)) ?? 0;
     const alertas: string[] = [];
 
     if (!facturaExiste && movido) {
       alertas.push('Factura borrada: el ledger sigue mostrando movimientos de este documento.');
     }
-    if (facturaExiste && l.transito > TOL && f.pendiente <= TOL) {
+    // Se mira el neto del material: si el tránsito ya se liberó (sin documento), no es huérfano.
+    if (facturaExiste && l.transito > TOL && netoTransito > TOL && pendienteEnMaterial <= TOL) {
       alertas.push('Tránsito sin cuarentena pendiente: nadie espera esta mercancía.');
-    }
-    if (facturaExiste && Math.abs(f.aprobado - l.disponible) > TOL) {
-      alertas.push(
-        `Ledger ≠ aprobado: ledger disponible ${l.disponible} vs aprobado ${f.aprobado}.`,
-      );
     }
     let estado: EstadoConciliacion;
     if (!facturaExiste) estado = 'factura_borrada';
     else if (f.pendiente > TOL) estado = 'en_cuarentena';
-    else if (l.transito > TOL) estado = 'en_transito';
+    else if (netoTransito > TOL && l.transito > TOL) estado = 'en_transito';
     else estado = 'recibido';
 
     filas.push({
