@@ -98,13 +98,29 @@ describe('conciliarCompras', () => {
     assert.equal(r.cuadreStock[0].ledgerDisponible, 0)
   })
 
-  it('ledger distinto de lo aprobado se marca', () => {
+  it('tránsito liberado sin documento_id (ajuste) no genera alerta falsa', () => {
+    // Recepción: +5 en tránsito con la factura y la liberación -5 sin documento (como en producción).
     const r = conciliarCompras({
       facturas: [factura],
-      inspecciones: [{ invoice_id: F1, material_id: MAT, quantity: 10, status: 'APROBADO', ubicacion_id: UB }],
-      movimientos: [mov(F1, 7, 0)],
-      stock: [{ ubicacion_id: UB, material_id: MAT, cantidad_disponible: 7, cantidad_en_transito_entrante: 0 }],
+      inspecciones: [{ invoice_id: F1, material_id: MAT, quantity: 5, status: 'APROBADO', ubicacion_id: UB }],
+      movimientos: [mov(F1, 0, 5), mov(null, 5, -5)],
+      stock: [{ ubicacion_id: UB, material_id: MAT, cantidad_disponible: 5, cantidad_en_transito_entrante: 0 }],
     })
-    assert.ok(r.filas[0].alertas.some((a) => /Ledger ≠ aprobado/.test(a)))
+    assert.equal(r.filas[0].estado, 'recibido')
+    assert.deepEqual(r.filas[0].alertas, [])
+    assert.equal(r.cuadreStock.length, 0)
+  })
+
+  it('tránsito huérfano de factura aprobada se marca aunque otra factura del mismo material esté liberada', () => {
+    const otra = 'factura-otra'
+    const r = conciliarCompras({
+      facturas: [factura, { id: otra, ubicacion_id: UB, numero: 'FA-2', proveedor: 'Otro' }],
+      inspecciones: [{ invoice_id: F1, material_id: MAT, quantity: 5, status: 'APROBADO', ubicacion_id: UB }],
+      movimientos: [mov(F1, 0, 5), mov(otra, 0, 2), mov(null, 5, -5)],
+      stock: [{ ubicacion_id: UB, material_id: MAT, cantidad_disponible: 5, cantidad_en_transito_entrante: 2 }],
+    })
+    const filaOtra = r.filas.find((f) => f.documentoId === otra)!
+    assert.ok(filaOtra.alertas.some((a) => /Tránsito sin cuarentena/.test(a)))
+    assert.equal(filaOtra.estado, 'en_transito')
   })
 })
