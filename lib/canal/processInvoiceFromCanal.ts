@@ -265,8 +265,10 @@ async function processInvoiceFromCanalCore(
     return;
   }
 
-  const itemsRaw = Array.isArray((extracted as { items?: unknown }).items)
-    ? ((extracted as { items: Array<Record<string, unknown>> }).items ?? [])
+  // `extracted` se asigna dentro de extraer(); TS no lo estrecha tras el return de arriba.
+  const extraido: Record<string, unknown> = extracted as Record<string, unknown>;
+  const itemsRaw = Array.isArray((extraido as { items?: unknown }).items)
+    ? ((extraido as { items: Array<Record<string, unknown>> }).items ?? [])
     : [];
   if (esAlbum && itemsRaw.length > 0) {
     const fused = fusionarLineasAlbum(
@@ -278,11 +280,11 @@ async function processInvoiceFromCanalCore(
         unit_price: Number(it.unit_price) || 0,
       })),
     );
-    const extraido = extracted ?? {};
-    extracted = { ...extraido, items: fused };
+    extraido.items = fused;
+    extracted = extraido;
     const cuadre = totalesAlbumCuadran({
       items: fused,
-      total: (extracted as { total_amount?: number | null }).total_amount,
+      total: extraido.total_amount as number | null | undefined,
     });
     if (!cuadre.ok) {
       const mensajeAlbum =
