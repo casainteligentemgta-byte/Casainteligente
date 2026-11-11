@@ -64,7 +64,10 @@ export function crearNotificadorProgresoFacturaTelegram(
   }
 
   async function bad(detalleHtml: string): Promise<void> {
-    const text = `❌ <b>Bad</b> — No pude analizar la factura.\n\n${detalleHtml}`;
+    const detalle = String(detalleHtml ?? '').trim();
+    const text = detalle.startsWith('⚠️')
+      ? detalle
+      : `❌ <b>Bad</b> — No pude analizar la factura.\n\n${detalle}`;
     if (messageId != null) {
       await editTelegramMessage(chatId, messageId, text, { parse_mode: 'HTML' });
     } else {

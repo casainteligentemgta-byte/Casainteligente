@@ -1,7 +1,16 @@
-import { processInvoiceFromCanal, type ProgresoFacturaCanal } from '@/lib/canal/processInvoiceFromCanal';
+import {
+  processInvoiceFromCanal,
+  type ArchivoCanalFactura,
+  type ProgresoFacturaCanal,
+} from '@/lib/canal/processInvoiceFromCanal';
 import { reclamarProcesamientoFacturaCanal, liberarProcesamientoObsoletoFacturaCanal } from '@/lib/canal/reservarFacturaCanalTelegram';
 import { telegramSupabaseAdmin } from '@/lib/telegram/supabaseAdmin';
 import { downloadTelegramFile, mimeFromTelegramPath, sendTelegramMessage } from '@/lib/telegram/botApi';
+import {
+  avisarErrorCargaFacturaCanal,
+  clasificarErrorCargaFactura,
+  textoAvisoErrorCarga,
+} from '@/lib/telegram/avisoErrorCargaFactura';
 import {
   conProgresoSimulado,
   crearNotificadorProgresoFacturaTelegram,
@@ -21,17 +30,58 @@ function progresoTelegram(chatId: string): ProgresoFacturaCanal {
 export async function processTelegramInvoicePhoto(params: {
   pendingId: string;
   chatId: string;
-  fileId: string;
+  fileId?: string;
+  archivos?: ArchivoCanalFactura[];
+  /** El álbum ya pasó a 'procesando' tras el debounce. */
+  yaReclamado?: boolean;
 }): Promise<void> {
-  const { buffer, filePath } = await downloadTelegramFile(params.fileId);
-  const mimeType = mimeFromTelegramPath(filePath);
-  const ext = filePath.split('.').pop() ?? 'jpg';
-
   const progreso = progresoTelegram(params.chatId);
   await progreso.reportar(5, 'Descargando archivo de Telegram…');
 
+  let archivos = params.archivos && params.archivos.length > 0 ? params.archivos : null;
+  if (!archivos) {
+    if (!params.fileId) {
+      await avisarErrorCargaFacturaCanal({
+        pendingId: params.pendingId,
+        chatId: params.chatId,
+        tipo: 'general',
+      });
+      return;
+    }
+    try {
+      const { buffer, filePath } = await downloadTelegramFile(params.fileId);
+      const mimeType = mimeFromTelegramPath(filePath);
+      const ext = filePath.split('.').pop() ?? 'jpg';
+      archivos = [
+        {
+          buffer,
+          mimeType,
+          fileName: `telegram-${params.pendingId}.${ext}`,
+        },
+      ];
+    } catch (e) {
+      await avisarErrorCargaFacturaCanal({
+        pendingId: params.pendingId,
+        chatId: params.chatId,
+        errorOriginal: e,
+      });
+      const adminDl = telegramSupabaseAdmin();
+      if (adminDl.ok) {
+        await adminDl.client
+          .from('ci_facturas_canal_pendientes')
+          .update({
+            estado: 'error',
+            mensaje_error: (e instanceof Error ? e.message : 'fetch failed').slice(0, 500),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', params.pendingId);
+      }
+      return;
+    }
+  }
+
   const admin = telegramSupabaseAdmin();
-  if (admin.ok) {
+  if (admin.ok && !params.yaReclamado) {
     let claim = await reclamarProcesamientoFacturaCanal(admin.client, params.pendingId);
     if (claim === 'already_processing') {
       const liberada = await liberarProcesamientoObsoletoFacturaCanal(
@@ -73,29 +123,34 @@ export async function processTelegramInvoicePhoto(params: {
       return;
     }
     if (claim === 'not_found') {
-      await progreso.bad('Factura pendiente no encontrada en el sistema.');
+      await progreso.bad(textoAvisoErrorCarga('general'));
+      await avisarErrorCargaFacturaCanal({
+        pendingId: params.pendingId,
+        chatId: params.chatId,
+        tipo: 'general',
+        supabase: admin.client,
+        yaMostrado: true,
+      });
       return;
     }
   }
 
   try {
+    const primario = archivos[0];
     await processInvoiceFromCanal({
       canal: 'telegram',
       pendingId: params.pendingId,
       chatId: params.chatId,
-      buffer,
-      mimeType,
-      fileName: `telegram-${params.pendingId}.${ext}`,
+      buffer: primario.buffer,
+      mimeType: primario.mimeType,
+      fileName: primario.fileName,
+      archivos,
       sendReply: (text, html) =>
         sendTelegramMessage(params.chatId, text, html ? { parse_mode: 'HTML' } : undefined),
       progreso,
     });
   } catch (e) {
     const raw = e instanceof Error ? e.message : 'Error al procesar la factura';
-    const safe = raw
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
     if (admin.ok) {
       await admin.client
         .from('ci_facturas_canal_pendientes')
@@ -106,7 +161,20 @@ export async function processTelegramInvoicePhoto(params: {
         })
         .eq('id', params.pendingId);
     }
-    await progreso.bad(safe);
-    throw e;
+    const tipo = clasificarErrorCargaFactura(e);
+    let mostrado = false;
+    try {
+      await progreso.bad(textoAvisoErrorCarga(tipo));
+      mostrado = true;
+    } catch {
+      /* aviso por mensaje nuevo */
+    }
+    await avisarErrorCargaFacturaCanal({
+      pendingId: params.pendingId,
+      chatId: params.chatId,
+      tipo,
+      supabase: admin.ok ? admin.client : undefined,
+      yaMostrado: mostrado,
+    });
   }
 }

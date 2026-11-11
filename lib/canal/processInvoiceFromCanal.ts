@@ -1,6 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
 import { resolveSupabaseServiceRoleKey } from '@/lib/supabase/resolveServiceRoleKey';
-import { reclamarProcesamientoFacturaCanal } from '@/lib/canal/reservarFacturaCanalTelegram';
 import {
   buscarCompraContablePorFactura,
   buscarPendienteCanalDuplicado,
@@ -9,7 +8,14 @@ import {
   evaluarYProcesarFastTrack,
   type DatosOcrFastTrack,
 } from '@/lib/canal/evaluarYProcesarFastTrack';
-import { extractPurchaseInvoiceFromFile } from '@/lib/almacen/extractPurchaseInvoiceGemini';
+import { extractPurchaseInvoiceFromFiles } from '@/lib/almacen/extractPurchaseInvoiceGemini';
+import { fusionarLineasAlbum, totalesAlbumCuadran } from '@/lib/canal/fusionarLineasAlbumFactura';
+import type { ParteDocumentoCanal } from '@/lib/canal/documentPartsPendiente';
+import {
+  avisarErrorCargaFacturaCanal,
+  clasificarErrorCargaFactura,
+  textoAvisoErrorCarga,
+} from '@/lib/telegram/avisoErrorCargaFactura';
 import {
   mensajeAmigableErrorStorage,
   PROCUREMENT_DOCUMENTS_BUCKET,
@@ -55,6 +61,13 @@ export type ProgresoFacturaCanal = {
   ) => Promise<void>;
 };
 
+export type ArchivoCanalFactura = {
+  buffer: Buffer;
+  mimeType: string;
+  fileName: string;
+  storagePath?: string;
+};
+
 export async function processInvoiceFromCanal(params: {
   canal: CanalFactura;
   pendingId: string;
@@ -62,6 +75,8 @@ export async function processInvoiceFromCanal(params: {
   buffer: Buffer;
   mimeType: string;
   fileName: string;
+  /** Varias fotos del mismo álbum, en orden. Si viene, se ignora el buffer suelto. */
+  archivos?: ArchivoCanalFactura[];
   sendReply: (text: string, html?: boolean) => Promise<void>;
   progreso?: ProgresoFacturaCanal;
 }): Promise<void> {
@@ -75,6 +90,15 @@ export async function processInvoiceFromCanal(params: {
       .select('estado, chat_label')
       .eq('id', params.pendingId)
       .maybeSingle();
+
+    if (params.canal === 'telegram') {
+      await avisarErrorCargaFacturaCanal({
+        pendingId: params.pendingId,
+        chatId: params.chatId,
+        errorOriginal: e,
+        supabase,
+      });
+    }
 
     if (String(row?.estado ?? '') === 'procesando') {
       const { notificarFacturaCanalAtascadaAsync } = await import('@/lib/telegram/notifyErrorBot');
@@ -97,39 +121,76 @@ async function processInvoiceFromCanalCore(
     buffer: Buffer;
     mimeType: string;
     fileName: string;
+    archivos?: ArchivoCanalFactura[];
     sendReply: (text: string, html?: boolean) => Promise<void>;
     progreso?: ProgresoFacturaCanal;
   },
 ): Promise<void> {
   const prog = params.progreso;
-  const ext =
-    params.fileName.split('.').pop()?.toLowerCase() ||
-    (params.mimeType === 'application/pdf' ? 'pdf' : 'jpg');
-  const storagePath = `${params.canal}-pending/${params.pendingId}/${Date.now()}.${ext}`;
+  const archivos: ArchivoCanalFactura[] =
+    params.archivos && params.archivos.length > 0
+      ? params.archivos
+      : [
+          {
+            buffer: params.buffer,
+            mimeType: params.mimeType,
+            fileName: params.fileName,
+          },
+        ];
+  const esAlbum = archivos.length > 1;
 
-  await prog?.reportar(10, 'Preparando archivo…');
+  await prog?.reportar(10, esAlbum ? 'Preparando las fotos del álbum…' : 'Preparando archivo…');
 
-  const { error: upErr } = await supabase.storage
-    .from(PROCUREMENT_DOCUMENTS_BUCKET)
-    .upload(storagePath, params.buffer, {
-      contentType: params.mimeType,
-      upsert: true,
+  const parts: ParteDocumentoCanal[] = [];
+  for (let i = 0; i < archivos.length; i++) {
+    const archivo = archivos[i];
+    const ext =
+      archivo.fileName.split('.').pop()?.toLowerCase() ||
+      (archivo.mimeType === 'application/pdf' ? 'pdf' : 'jpg');
+    let storagePath = String(archivo.storagePath ?? '').trim();
+    if (!storagePath) {
+      storagePath = `${params.canal}-pending/${params.pendingId}/${i}-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from(PROCUREMENT_DOCUMENTS_BUCKET)
+        .upload(storagePath, archivo.buffer, {
+          contentType: archivo.mimeType,
+          upsert: true,
+        });
+      if (upErr) {
+        throw new Error(mensajeAmigableErrorStorage(upErr.message, 'subir'));
+      }
+    }
+    parts.push({
+      orden: i,
+      storage_path: storagePath,
+      mime_type: archivo.mimeType,
+      file_name: archivo.fileName,
     });
-  if (upErr) {
-    throw new Error(mensajeAmigableErrorStorage(upErr.message, 'subir'));
   }
 
-  await prog?.reportar(30, 'Subiendo documento al almacén…');
+  const primario = parts[0];
+  await prog?.reportar(30, esAlbum ? 'Fotos guardadas. Analizando…' : 'Subiendo documento al almacén…');
 
-  await supabase
-    .from('ci_facturas_canal_pendientes')
-    .update({
-      document_storage_path: storagePath,
-      document_file_name: params.fileName,
-      document_mime_type: params.mimeType,
+  {
+    const payloadDoc: Record<string, unknown> = {
+      document_storage_path: primario.storage_path,
+      document_file_name: primario.file_name,
+      document_mime_type: primario.mime_type,
+      document_parts: parts,
       updated_at: new Date().toISOString(),
-    })
-    .eq('id', params.pendingId);
+    };
+    const upDoc = await supabase
+      .from('ci_facturas_canal_pendientes')
+      .update(payloadDoc)
+      .eq('id', params.pendingId);
+    if (upDoc.error && /document_parts|PGRST204|schema cache/i.test(upDoc.error.message)) {
+      delete payloadDoc.document_parts;
+      await supabase
+        .from('ci_facturas_canal_pendientes')
+        .update(payloadDoc)
+        .eq('id', params.pendingId);
+    }
+  }
 
   await prog?.reportar(45, 'Iniciando análisis con IA…');
 
@@ -144,13 +205,15 @@ async function processInvoiceFromCanalCore(
       pendingId: params.pendingId,
       chatId: params.chatId,
     });
-    const { data, fromGemini, modelUsed } = await extractPurchaseInvoiceFromFile({
-      buffer: params.buffer,
-      mimeType: params.mimeType,
-      fileName: params.fileName,
+    const { data, fromGemini, modelUsed } = await extractPurchaseInvoiceFromFiles({
+      files: archivos.map((a) => ({
+        buffer: a.buffer,
+        mimeType: a.mimeType,
+        fileName: a.fileName,
+      })),
       hintProveedor,
     });
-    extracted = { ...data, fromGemini, modelUsed };
+    extracted = { ...data, fromGemini, modelUsed, album_partes: archivos.length };
   };
 
   try {
@@ -174,16 +237,103 @@ async function processInvoiceFromCanalCore(
       })
       .eq('id', params.pendingId);
 
-    const detalleBad = `${mensajeError ?? 'Error desconocido'}\n\n<a href="${link}">Ver en la app</a>`;
+    const tipo = clasificarErrorCargaFactura(mensajeError ?? 'Error desconocido');
+    const aviso = textoAvisoErrorCarga(tipo);
+    let mostrado = false;
     if (prog) {
-      await prog.bad(detalleBad);
-    } else {
+      try {
+        await prog.bad(aviso);
+        mostrado = true;
+      } catch {
+        /* el aviso por mensaje nuevo cubre este caso */
+      }
+    }
+    if (params.canal === 'telegram') {
+      await avisarErrorCargaFacturaCanal({
+        pendingId: params.pendingId,
+        chatId: params.chatId,
+        tipo,
+        supabase,
+        yaMostrado: mostrado,
+      });
+    } else if (!mostrado) {
       await params.sendReply(
         `❌ No pude leer la factura.\n${mensajeError ?? 'Error desconocido'}\n\n${link}`,
         false,
       );
     }
     return;
+  }
+
+  // `extracted` se asigna dentro de extraer(); TS no lo estrecha tras el return de arriba.
+  const extraido: Record<string, unknown> = extracted as Record<string, unknown>;
+  const itemsRaw = Array.isArray((extraido as { items?: unknown }).items)
+    ? ((extraido as { items: Array<Record<string, unknown>> }).items ?? [])
+    : [];
+  if (esAlbum && itemsRaw.length > 0) {
+    const fused = fusionarLineasAlbum(
+      itemsRaw.map((it) => ({
+        description: String(it.description ?? ''),
+        item_code: String(it.item_code ?? ''),
+        unit: String(it.unit ?? 'UND'),
+        quantity: Number(it.quantity) || 0,
+        unit_price: Number(it.unit_price) || 0,
+      })),
+    );
+    extraido.items = fused;
+    extracted = extraido;
+    const cuadre = totalesAlbumCuadran({
+      items: fused,
+      total: extraido.total_amount as number | null | undefined,
+    });
+    if (!cuadre.ok) {
+      const mensajeAlbum =
+        cuadre.motivo === 'sin_total'
+          ? 'Falta una parte de la factura (no se leyó el total).'
+          : 'Falta una parte de la factura (totales no cuadran).';
+      {
+        const payloadAlbum: Record<string, unknown> = {
+          estado: 'error',
+          extracted,
+          mensaje_error: mensajeAlbum,
+          requiere_revision: true,
+          updated_at: new Date().toISOString(),
+        };
+        const upAlbum = await supabase
+          .from('ci_facturas_canal_pendientes')
+          .update(payloadAlbum)
+          .eq('id', params.pendingId);
+        if (upAlbum.error && /requiere_revision|PGRST204|schema cache/i.test(upAlbum.error.message)) {
+          delete payloadAlbum.requiere_revision;
+          await supabase
+            .from('ci_facturas_canal_pendientes')
+            .update(payloadAlbum)
+            .eq('id', params.pendingId);
+        }
+      }
+      const aviso = textoAvisoErrorCarga('falta_parte');
+      let mostrado = false;
+      if (prog) {
+        try {
+          await prog.bad(aviso);
+          mostrado = true;
+        } catch {
+          /* aviso por mensaje nuevo */
+        }
+      }
+      if (params.canal === 'telegram') {
+        await avisarErrorCargaFacturaCanal({
+          pendingId: params.pendingId,
+          chatId: params.chatId,
+          tipo: 'falta_parte',
+          supabase,
+          yaMostrado: mostrado,
+        });
+      } else if (!mostrado) {
+        await params.sendReply(aviso, false);
+      }
+      return;
+    }
   }
 
   await prog?.reportar(95, 'Guardando en la aplicación…');
@@ -209,15 +359,25 @@ async function processInvoiceFromCanalCore(
   const datosConMemoria = memoria.extracted;
   const anomalias = memoria.anomalias;
 
-  const { error: errGuardarExtraccion } = await supabase
+  const payloadExtraido: Record<string, unknown> = {
+    estado: 'extraido',
+    extracted: datosConMemoria,
+    mensaje_error: null,
+    requiere_revision: false,
+    updated_at: new Date().toISOString(),
+  };
+  let { error: errGuardarExtraccion } = await supabase
     .from('ci_facturas_canal_pendientes')
-    .update({
-      estado: 'extraido',
-      extracted: datosConMemoria,
-      mensaje_error: null,
-      updated_at: new Date().toISOString(),
-    })
+    .update(payloadExtraido)
     .eq('id', params.pendingId);
+  if (errGuardarExtraccion && /requiere_revision|PGRST204|schema cache/i.test(errGuardarExtraccion.message)) {
+    delete payloadExtraido.requiere_revision;
+    const retryExtraido = await supabase
+      .from('ci_facturas_canal_pendientes')
+      .update(payloadExtraido)
+      .eq('id', params.pendingId);
+    errGuardarExtraccion = retryExtraido.error;
+  }
 
   // Otra carga ya tiene el mismo RIF y número (índice único, mig. 372): no se guarda esta.
   if (esErrorFacturaDuplicada(errGuardarExtraccion)) {

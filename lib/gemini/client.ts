@@ -113,11 +113,18 @@ export async function geminiGenerateText(req: GeminiTextRequest): Promise<string
   }
 }
 
+export type GeminiDocumentPart = {
+  mimeType: string;
+  base64: string;
+};
+
 export type GeminiDocumentRequest = {
   model: string;
   prompt: string;
   mimeType: string;
   base64: string;
+  /** Varias fotos/PDF de la misma factura (álbum). Si hay `documents`, se ignoran mimeType/base64 sueltos. */
+  documents?: GeminiDocumentPart[];
   systemInstruction?: string;
   temperature?: number;
   maxOutputTokens?: number;
@@ -126,6 +133,10 @@ export type GeminiDocumentRequest = {
 
 export async function geminiGenerateWithDocument(req: GeminiDocumentRequest): Promise<string> {
   const ai = getGeminiClient();
+  const files =
+    req.documents && req.documents.length > 0
+      ? req.documents
+      : [{ mimeType: req.mimeType, base64: req.base64 }];
 
   try {
     const response = await ai.models.generateContent({
@@ -135,7 +146,9 @@ export async function geminiGenerateWithDocument(req: GeminiDocumentRequest): Pr
           role: 'user',
           parts: [
             { text: req.prompt },
-            { inlineData: { mimeType: req.mimeType, data: req.base64 } },
+            ...files.map((f) => ({
+              inlineData: { mimeType: f.mimeType, data: f.base64 },
+            })),
           ],
         },
       ],

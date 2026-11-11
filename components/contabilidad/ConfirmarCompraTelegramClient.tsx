@@ -26,6 +26,7 @@ import {
   actualizarPendienteCanal,
   confirmarCompraCanal,
   ingresoAlmacenCanal,
+  reprocesarPendienteCanal,
   rutaDocumentoPendienteCanal,
   type PendienteCanal,
 } from '@/lib/contabilidad/facturaCanalApi';
@@ -82,6 +83,7 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
   const [frmPendienteBloquea, setFrmPendienteBloquea] = useState(false);
   const { isSubmitting: registrando, runLocked: runRegistro } = useSyncSubmitLock();
   const { isSubmitting: ingresandoAlmacen, runLocked: runIngreso } = useSyncSubmitLock();
+  const { isSubmitting: reprocesando, runLocked: runReproceso } = useSyncSubmitLock();
   const [compraRegistrada, setCompraRegistrada] = useState(false);
   const [ingresoAlmacenOk, setIngresoAlmacenOk] = useState(false);
 
@@ -629,16 +631,52 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
                 {pendiente.mensaje_error ? (
                   <p className="text-xs text-red-300/90 mt-1">{pendiente.mensaje_error}</p>
                 ) : null}
+                {pendiente.requiere_revision ? (
+                  <p className="text-xs text-amber-200/90 mt-2">
+                    Falta una parte o los totales no cuadran. Pida al comprador la foto del final, o
+                    reprocese si ya están todas las fotos.
+                  </p>
+                ) : null}
                 <p className="text-xs text-zinc-400 mt-2">
                   Puede corregir los datos manualmente y registrar igualmente.
                 </p>
+                <button
+                  type="button"
+                  disabled={reprocesando}
+                  onClick={() =>
+                    void runReproceso(async () => {
+                      try {
+                        toast.message('Reprocesando con IA…');
+                        const r = await reprocesarPendienteCanal(pendingId);
+                        await cargar();
+                        if (r.estado === 'error') {
+                          toast.error(r.mensaje_error || 'Sigue en error tras reprocesar.');
+                        } else {
+                          toast.success('Factura reprocesada.');
+                        }
+                      } catch (e) {
+                        toast.error(e instanceof Error ? e.message : 'No se pudo reprocesar');
+                      }
+                    })
+                  }
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-red-400/40 bg-red-950/40 px-3 py-1.5 text-xs font-semibold text-red-100 hover:bg-red-900/40 disabled:opacity-50"
+                >
+                  {reprocesando ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-3 w-3" />
+                  )}
+                  Reprocesar
+                </button>
               </div>
             )}
 
-            {pendiente.document_storage_path || pendiente.document_file_name ? (
+            {pendiente.document_storage_path || pendiente.document_file_name || (pendiente.document_parts?.length ?? 0) > 0 ? (
               <section className={panelClass}>
                 <p className="text-[11px] text-zinc-500 leading-relaxed mb-1">
-                  Foto de la factura — compare con los datos extraídos antes de confirmar.
+                  {(pendiente.document_parts?.length ?? 0) > 1
+                    ? `Fotos de la factura (${pendiente.document_parts?.length} partes) — compare con los datos extraídos antes de confirmar.`
+                    : 'Foto de la factura — compare con los datos extraídos antes de confirmar.'}
                 </p>
                 <CompraFacturaImagen
                   compraId={pendiente.id}

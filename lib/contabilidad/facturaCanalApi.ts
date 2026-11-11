@@ -50,8 +50,15 @@ export type PendienteCanal = {
   purchase_invoice_id?: string | null;
   document_file_name: string | null;
   document_storage_path?: string | null;
+  document_parts?: Array<{
+    orden?: number;
+    storage_path?: string;
+    mime_type?: string;
+    file_name?: string;
+  }> | null;
   extracted: ExtractedCanalHeader | null;
   mensaje_error: string | null;
+  requiere_revision?: boolean | null;
   created_at: string;
 };
 
@@ -198,6 +205,25 @@ export async function ingresoAlmacenCanal(
   return {
     compraFacturaId: data.compraFacturaId,
     yaExistia: Boolean(data.yaExistia),
+  };
+}
+
+export async function reprocesarPendienteCanal(
+  rawId: string,
+): Promise<{ estado: string; mensaje_error: string | null }> {
+  const id = resolveIdPendienteCanal(rawId);
+  const res = await fetch(
+    `/api/facturas-canal/pendientes/${encodeURIComponent(id)}/reprocess`,
+    { method: 'POST' },
+  );
+  const data = (await res.json()) as {
+    error?: string;
+    pending?: { estado?: string; mensaje_error?: string | null };
+  };
+  if (!res.ok) throw new Error(data.error || 'No se pudo reprocesar la factura');
+  return {
+    estado: data.pending?.estado ?? '',
+    mensaje_error: data.pending?.mensaje_error ?? null,
   };
 }
 
