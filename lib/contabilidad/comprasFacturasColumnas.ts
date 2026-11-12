@@ -22,6 +22,7 @@ export const COMPRAS_FACTURAS_HEADERS_EXTRA = [
   'Tasa BCV',
   'Días crédito',
   'Vencimiento',
+  'Pago',
   'Estado',
   'Origen',
   'Logística',

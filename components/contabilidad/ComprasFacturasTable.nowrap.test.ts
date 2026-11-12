@@ -32,6 +32,7 @@ describe('ComprasFacturasTable — vista Por factura', () => {
     assert.ok(COMPRAS_FACTURAS_HEADERS.includes('Tasa BCV'));
     assert.ok(COMPRAS_FACTURAS_HEADERS.includes('Días crédito'));
     assert.ok(COMPRAS_FACTURAS_HEADERS.includes('Vencimiento'));
+    assert.ok(COMPRAS_FACTURAS_HEADERS.includes('Pago'));
     assert.ok(COMPRAS_FACTURAS_HEADERS.includes('Estado'));
     assert.ok(!COMPRAS_FACTURAS_HEADERS.includes('P.U.'));
   });
@@ -45,7 +46,7 @@ describe('ComprasFacturasTable — vista Por factura', () => {
 
   it('mantiene overflow-x para scroll horizontal en tablet', () => {
     assert.match(tableSrc, /compras-facturas-table-wrap/);
-    assert.match(cssSrc, /\.compras-facturas-table-wrap > table \{[\s\S]*min-width:\s*1840px/);
+    assert.match(cssSrc, /\.compras-facturas-table-wrap > table \{[\s\S]*min-width:\s*1960px/);
     assert.match(cssSrc, /\.compras-lineas-table-wrap \{[\s\S]*overflow-x:\s*auto/);
   });
 

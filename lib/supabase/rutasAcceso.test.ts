@@ -128,6 +128,7 @@ describe('APIs que piden sesión', () => {
       '/api/procuras/procesar-lote',
       '/api/facturas-canal/pendientes/1/ingreso-almacen',
       '/api/contabilidad/compras/9/ingreso-almacen',
+      '/api/contabilidad/creditos/abc/pagar',
     ]) {
       assert.equal(apiRequiereSesion(ruta), true, ruta)
     }
@@ -141,6 +142,7 @@ describe('APIs que piden sesión', () => {
       '/api/webhook-logs',
       '/api/telegram/registrar-webhook',
       '/api/cron/weekly-report',
+      '/api/cron/creditos-vencimiento',
       '/api/cron/cco-snapshots-diarios',
       '/api/cron/bcv-tasa',
       '/api/health',
@@ -301,6 +303,7 @@ describe('toda ruta abierta del proyecto está revisada', () => {
       '/api/cron/cco-auditor-diario',
       '/api/cron/cco-snapshots-diarios',
       '/api/cron/cuellos-botella',
+      '/api/cron/creditos-vencimiento',
       '/api/cron/permisologia-vencimientos',
       '/api/cron/weekly-report',
       '/api/cron/notas-sin-factura',

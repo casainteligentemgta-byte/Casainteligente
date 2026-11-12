@@ -21,7 +21,8 @@ export type TelegramContexto =
   | 'procura_solicitud'
   | 'procura_departamento'
   | 'esperando_motivo_rechazo'
-  | 'agenda';
+  | 'agenda'
+  | 'credito_pago';
 
 export type TelegramEstado = {
   chat_id: string;
@@ -54,6 +55,7 @@ const CONTEXTOS: TelegramContexto[] = [
   'procura_departamento',
   'esperando_motivo_rechazo',
   'agenda',
+  'credito_pago',
 ];
 
 export function isTelegramContexto(v: string): v is TelegramContexto {
@@ -182,6 +184,8 @@ export function etiquetaContexto(ctx: TelegramContexto): string {
       return 'Motivo de rechazo de procura';
     case 'agenda':
       return 'Agenda personal (cumpleaños, citas, recordatorios)';
+    case 'credito_pago':
+      return 'Pago de crédito (comprobante)';
     default:
       return 'Menú principal';
   }

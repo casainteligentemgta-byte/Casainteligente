@@ -109,6 +109,10 @@ export type CompraListaUnificada = {
   dias_credito?: number | null;
   fecha_vencimiento?: string | null;
   condicion_pago?: string | null;
+  /** Estado de cuentas por pagar (independiente de `estado` de inventario). */
+  pago_credito_estado?: 'pagado' | 'por_pagar' | 'vencido' | null;
+  pago_credito_saldo_usd?: number | null;
+  pago_credito_pagado_usd?: number | null;
 };
 
 export function lineasDesdeExtractedCanal(ex: ExtractedCanalHeader | null): CompraLineaUi[] {

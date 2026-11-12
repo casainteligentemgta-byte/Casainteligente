@@ -133,6 +133,14 @@ import {
   manejarCallbackComprasPeriodoTelegram,
 } from '@/lib/telegram/comprasPeriodoTelegram';
 import {
+  esCallbackCredito,
+  esFlujoCreditoPago,
+  manejarCallbackCreditoTelegram,
+  manejarComandoCreditoTelegram,
+  manejarFotoCreditoTelegram,
+  manejarTextoCreditoTelegram,
+} from '@/lib/telegram/creditoTelegram';
+import {
   esCallbackLiberarCuarentena,
   manejarCallbackLiberarCuarentenaTelegram,
 } from '@/lib/telegram/liberarCuarentenaPicker';
@@ -354,6 +362,7 @@ async function aplicarComando(
     Boolean(cmd.comandoAgenda) ||
     Boolean(cmd.comandoLimpiarAgenda) ||
     Boolean(cmd.comandoTecnico) ||
+    Boolean(cmd.comandoCredito) ||
     cmd.contexto === 'esperando_audio_bitacora';
   if (pideFuncionSoloNoDepositario && (await esChatDepositarioNomina(supabase, chatId))) {
     await sendTelegramMessage(chatId, MENSAJE_NO_DISPONIBLE_DEPOSITARIO, { parse_mode: 'HTML' });
@@ -403,6 +412,11 @@ async function aplicarComando(
 
   if (cmd.comandoSalida) {
     await manejarComandoSalidaEgresoTelegram(supabase, chatId);
+    return;
+  }
+
+  if (cmd.comandoCredito) {
+    await manejarComandoCreditoTelegram(supabase, chatId);
     return;
   }
 
@@ -939,6 +953,18 @@ export async function handleTelegramCallbackQuery(
       }
     }
 
+    if (esCallbackCredito(cq.data)) {
+      const handledCredito = await manejarCallbackCreditoTelegram(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+        fromName: cq.from.first_name || cq.from.username,
+      });
+      if (handledCredito) {
+        return NextResponse.json({ ok: true, callback: 'credito' });
+      }
+    }
+
     if (esCallbackComprasPeriodo(cq.data)) {
       const handledComprasPeriodo = await manejarCallbackComprasPeriodoTelegram(admin.client, {
         chatId,
@@ -1244,6 +1270,13 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
         return NextResponse.json({ ok: true, factura_comprador_manual_texto: true });
       }
 
+      if (!texto.startsWith('/')) {
+        const textoCredito = await manejarTextoCreditoTelegram(supabase, chatId, texto);
+        if (textoCredito) {
+          return NextResponse.json({ ok: true, credito_texto: true });
+        }
+      }
+
       const textoDiasCredito = await manejarTextoDiasCreditoFacturaTelegram(
         supabase,
         chatId,
@@ -1445,6 +1478,17 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
 
     if (msg.photo?.length) {
       const estadoFoto = await getTelegramEstado(supabase, chatId);
+      if (esFlujoCreditoPago(estadoFoto)) {
+        const fileIdCredito = msg.photo[msg.photo.length - 1]?.file_id;
+        if (fileIdCredito) {
+          await manejarFotoCreditoTelegram({
+            supabase,
+            chatId,
+            fileId: fileIdCredito,
+          });
+          return NextResponse.json({ ok: true, credito_foto: true });
+        }
+      }
       // La carga manual del comprador comparte el contexto «factura» pero su foto es el
       // soporte de lo que ya escribió: no debe ir a la lectura automática.
       if (estadoFoto.contexto === 'factura' && !esFlujoFacturaCompradorManual(estadoFoto)) {
@@ -1859,7 +1903,18 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
 
     // PDF o archivo en el ingreso manual del depositario: se lee igual que una foto.
     if (msg.document) {
-      const estadoIngresoDoc = await getTelegramEstado(supabase, chatId);
+      const estadoCreditoDoc = await getTelegramEstado(supabase, chatId);
+      if (esFlujoCreditoPago(estadoCreditoDoc) && msg.document.file_id) {
+        await manejarFotoCreditoTelegram({
+          supabase,
+          chatId,
+          fileId: msg.document.file_id,
+          mimeType: msg.document.mime_type ?? undefined,
+          fileName: msg.document.file_name ?? undefined,
+        });
+        return NextResponse.json({ ok: true, credito_documento: true });
+      }
+      const estadoIngresoDoc = estadoCreditoDoc;
       const pasoIngresoDoc = (estadoIngresoDoc.metadata as { paso?: string })?.paso;
       if (
         esFlujoIngresoManual(estadoIngresoDoc) &&

@@ -29,6 +29,10 @@
       "schedule": "30 12 * * *"
     },
     {
+      "path": "/api/cron/creditos-vencimiento",
+      "schedule": "0 12 * * *"
+    },
+    {
       "path": "/api/cron/notas-sin-factura",
       "schedule": "0 12 * * 1"
     },

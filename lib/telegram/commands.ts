@@ -47,6 +47,8 @@ export type ComandoTelegramResult = {
   comandoTecnico?: boolean;
   /** Pregunta tras /tecnico (vacía → se envía la ayuda). */
   tecnicoPregunta?: string;
+  /** Cuentas por pagar: listar créditos y marcar pagado. */
+  comandoCredito?: boolean;
 };
 
 export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
@@ -97,6 +99,10 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
 
   if (cmd === '/procura' || cmd === '/procuras') {
     return { handled: true, comandoProcura: true };
+  }
+
+  if (cmd === '/credito' || cmd === '/creditos') {
+    return { handled: true, comandoCredito: true };
   }
 
   if (esComandoAgua(t)) {

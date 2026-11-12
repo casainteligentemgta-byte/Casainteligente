@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import Link from 'next/link';
 import {
+  Banknote,
   CalendarClock,
   Loader2,
   MapPin,
@@ -10,6 +11,7 @@ import {
   Pencil,
   Trash2,
 } from 'lucide-react';
+import { etiquetaEstadoPagoCredito } from '@/lib/contabilidad/creditoPagos';
 import { createClient } from '@/lib/supabase/client';
 import {
   claseBlinkFechaCompra,
@@ -84,6 +86,7 @@ type Props = {
   onEliminar: (c: CompraListaUnificada) => void;
   onCambiarMoneda: (c: CompraListaUnificada, moneda: MonedaOrigen) => void;
   onReload: () => void;
+  onMarcarPagado?: (c: CompraListaUnificada) => void;
 };
 
 function puedeReubicarCompra(c: CompraListaUnificada): boolean {
@@ -160,6 +163,7 @@ export default function ComprasFacturasTable({
   onEliminar,
   onCambiarMoneda,
   onReload,
+  onMarcarPagado,
 }: Props) {
   if (compras.length === 0) {
     return (
@@ -259,6 +263,7 @@ export default function ComprasFacturasTable({
                 onEliminar={onEliminar}
                 onCambiarMoneda={onCambiarMoneda}
                 onReload={onReload}
+                onMarcarPagado={onMarcarPagado}
               />
             );
           })}
@@ -285,6 +290,7 @@ function esNowrapHeader(label: string): boolean {
     label === 'Tasa BCV' ||
     label === 'Días crédito' ||
     label === 'Vencimiento' ||
+    label === 'Pago' ||
     label === 'Acciones'
   );
 }
@@ -301,6 +307,7 @@ function minWidthHeader(label: string): CSSProperties {
   if (label === 'Tasa BCV') return { minWidth: 112 };
   if (label === 'Días crédito') return { minWidth: 88 };
   if (label === 'Vencimiento') return { minWidth: 108 };
+  if (label === 'Pago') return { minWidth: 96 };
   if (label === 'Acciones') return { minWidth: 168 };
   return {};
 }
@@ -329,6 +336,7 @@ function FilaFactura({
   onEliminar,
   onCambiarMoneda,
   onReload,
+  onMarcarPagado,
 }: {
   c: CompraListaUnificada;
   seleccionada: boolean;
@@ -351,6 +359,7 @@ function FilaFactura({
   onEliminar: (c: CompraListaUnificada) => void;
   onCambiarMoneda: (c: CompraListaUnificada, moneda: MonedaOrigen) => void;
   onReload: () => void;
+  onMarcarPagado?: (c: CompraListaUnificada) => void;
 }) {
   const compraId = c.id;
   const lineasBase = lineasProductoVisibles(lineasDetalle(c));
@@ -531,6 +540,7 @@ function FilaFactura({
             onVerificarFecha={onVerificarFecha}
             onModificar={onModificar}
             onEliminar={onEliminar}
+            onMarcarPagado={onMarcarPagado}
           />
         </td>
         <td className="whitespace-nowrap" style={{ ...td, whiteSpace: 'nowrap', minWidth: 96, color: 'rgba(255,255,255,0.55)' }}>
@@ -549,6 +559,27 @@ function FilaFactura({
         </td>
         <td className="whitespace-nowrap" style={{ ...tdFecha, minWidth: 108 }}>
           {c.fecha_vencimiento || '—'}
+        </td>
+        <td className="whitespace-nowrap" style={{ ...td, minWidth: 96 }}>
+          {c.pago_credito_estado ? (
+            <span
+              style={{
+                fontSize: '10px',
+                fontWeight: 800,
+                padding: '2px 7px',
+                borderRadius: '6px',
+                ...(c.pago_credito_estado === 'pagado'
+                  ? { background: 'rgba(52,199,89,0.18)', color: '#86efac' }
+                  : c.pago_credito_estado === 'vencido'
+                    ? { background: 'rgba(255,59,48,0.18)', color: '#FF8A85' }
+                    : { background: 'rgba(251,191,36,0.16)', color: '#fcd34d' }),
+              }}
+            >
+              {etiquetaEstadoPagoCredito(c.pago_credito_estado)}
+            </span>
+          ) : (
+            '—'
+          )}
         </td>
         <td style={{ ...td, whiteSpace: 'nowrap', color: 'rgba(255,255,255,0.7)' }}>{c.estado || '—'}</td>
         <td style={{ ...td, whiteSpace: 'nowrap', color: '#a78bfa', fontWeight: 700 }}>
@@ -689,6 +720,7 @@ function AccionesFactura({
   onVerificarFecha,
   onModificar,
   onEliminar,
+  onMarcarPagado,
 }: {
   c: CompraListaUnificada;
   metaFecha: MetaFecha;
@@ -700,6 +732,7 @@ function AccionesFactura({
   onVerificarFecha: (c: CompraListaUnificada) => void;
   onModificar: (c: CompraListaUnificada) => void;
   onEliminar: (c: CompraListaUnificada) => void;
+  onMarcarPagado?: (c: CompraListaUnificada) => void;
 }) {
   return (
     <div
@@ -789,6 +822,18 @@ function AccionesFactura({
           }}
         >
           <CalendarClock className="h-3.5 w-3.5" />
+        </AccionIcono>
+      ) : null}
+      {onMarcarPagado &&
+      c.purchase_invoice_id &&
+      (c.pago_credito_estado === 'por_pagar' || c.pago_credito_estado === 'vencido') ? (
+        <AccionIcono
+          label="Marcar pagado"
+          disabled={bloqueado}
+          onClick={() => onMarcarPagado(c)}
+          style={{ border: '1px solid rgba(52,199,89,0.45)', background: 'rgba(52,199,89,0.14)', color: '#86efac' }}
+        >
+          <Banknote className="h-3.5 w-3.5" />
         </AccionIcono>
       ) : null}
       {c.pendiente_canal_id ? (

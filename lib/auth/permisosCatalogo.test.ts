@@ -21,6 +21,17 @@ describe('permisos de clientes', () => {
   });
 });
 
+describe('permiso de pago de crédito', () => {
+  it('está en el catálogo y solo admin, comprador y contador lo tienen', () => {
+    assert.ok((PERMISOS as readonly string[]).includes('compra.credito_pagar'));
+    assert.equal(permisosDeRolesEmpresa(['admin']).has('compra.credito_pagar'), true);
+    assert.equal(permisosDeRolesEmpresa(['comprador']).has('compra.credito_pagar'), true);
+    assert.equal(permisosDeRolesEmpresa(['contador']).has('compra.credito_pagar'), true);
+    assert.equal(permisosDeRolesEmpresa(['pm_obra']).has('compra.credito_pagar'), false);
+    assert.equal(permisosDeRolesEmpresa(['almacen_central']).has('compra.credito_pagar'), false);
+  });
+});
+
 describe('permisos de productos / costos', () => {
   it('están en el catálogo', () => {
     for (const p of ['productos.ver', 'productos.costos'] as const) {
