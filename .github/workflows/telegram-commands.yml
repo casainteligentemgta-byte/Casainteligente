@@ -1,0 +1,26 @@
+name: Menú de comandos Telegram
+
+# Tras un deploy de producción (y a mano) publica setMyCommands si el menú cambió.
+# El cron diario de vercel.json cubre el mismo endpoint por si este workflow no corre.
+on:
+  deployment_status:
+  workflow_dispatch:
+
+jobs:
+  publicar:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.deployment_status.state == 'success' &&
+       github.event.deployment_status.environment == 'Production')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publicar menú nativo (setMyCommands)
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "Falta el secreto CRON_SECRET en GitHub (Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
+          curl -fsS -H "Authorization: Bearer $CRON_SECRET" \
+            "https://casainteligente.company/api/cron/telegram-commands"

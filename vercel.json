@@ -50,7 +50,11 @@
     },
     {
       "path": "/api/cron/facturas-ocr-reintentos",
-      "schedule": "* * * * *"
+      "schedule": "0 11 * * *"
+    },
+    {
+      "path": "/api/cron/telegram-commands",
+      "schedule": "15 12 * * *"
     }
   ]
 }
