@@ -162,7 +162,27 @@ describe('extraerConReintentos', () => {
     }
   })
 
-  it('si se acaba el tiempo de la función, deja el 3.er intento para el cron', async () => {
+  it('a los 90 s sigue reintentando en la misma invocación (no espera al cron diario)', async () => {
+    let n = 0
+    const sleeps: number[] = []
+    const r = await extraerConReintentos({
+      extraer: async () => {
+        n += 1
+        if (n < 3) throw new Error('fetch failed')
+        return { ok: true }
+      },
+      startedAt: 0,
+      ahora: () => 90_000,
+      dormir: async (ms) => {
+        sleeps.push(ms)
+      },
+    })
+    assert.equal(r.ok, true)
+    assert.equal(n, 3)
+    assert.deepEqual(sleeps, [BACKOFF_MS_POR_REINTENTO[1], BACKOFF_MS_POR_REINTENTO[2]])
+  })
+
+  it('si un intento ya ocupó casi todo el maxDuration, diferir para encadenar (no el cron diario)', async () => {
     const ahora = () => 200_000
     const r = await extraerConReintentos({
       extraer: async () => {
@@ -170,9 +190,9 @@ describe('extraerConReintentos', () => {
       },
       startedAt: 0,
       ahora,
-      presupuestoMs: 90_000,
+      presupuestoMs: 150_000,
       dormir: async () => {
-        throw new Error('no debía esperar: hay que diferir')
+        throw new Error('no debía esperar: hay que encadenar')
       },
     })
     assert.equal(r.ok, false)
@@ -220,6 +240,22 @@ describe('esCandidatoReintentoOcr', () => {
           ocr_proximo_reintento_at: '2026-11-11T12:00:00.000Z',
         },
         Date.parse('2026-11-11T12:00:10.000Z'),
+      ),
+      true,
+    )
+  })
+
+  it('forzar ignora la hora para el encadenado en segundos', () => {
+    assert.equal(
+      esCandidatoReintentoOcr(
+        {
+          ...base,
+          estado: 'error_ocr',
+          ocr_intentos: 2,
+          ocr_proximo_reintento_at: '2026-11-11T12:01:00.000Z',
+        },
+        Date.parse('2026-11-11T12:00:00.000Z'),
+        { forzar: true },
       ),
       true,
     )

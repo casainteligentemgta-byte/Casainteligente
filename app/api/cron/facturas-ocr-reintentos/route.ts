@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
-import { reintentarOcrPendientesCanal } from '@/lib/canal/reintentarOcrPendientes';
+import {
+  reintentarOcrPendientePorId,
+  reintentarOcrPendientesCanal,
+} from '@/lib/canal/reintentarOcrPendientes';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -12,13 +15,29 @@ function isAuthorized(req: NextRequest): boolean {
   return req.headers.get('authorization') === `Bearer ${secret}`;
 }
 
+async function leerPendingId(req: NextRequest): Promise<string> {
+  const q = req.nextUrl.searchParams.get('id')?.trim() ?? '';
+  if (q) return q;
+  if (req.method !== 'POST') return '';
+  try {
+    const body = (await req.json()) as { pendingId?: unknown } | null;
+    return String(body?.pendingId ?? '').trim();
+  } catch {
+    return '';
+  }
+}
+
 /** Reintenta OCR transitorio con la foto ya guardada (álbum incluido). */
-export async function GET(req: NextRequest) {
+async function ejecutar(req: NextRequest) {
   if (!isAuthorized(req)) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
   }
   try {
-    const result = await reintentarOcrPendientesCanal(createSupabaseAdminClient());
+    const supabase = createSupabaseAdminClient();
+    const pendingId = await leerPendingId(req);
+    const result = pendingId
+      ? await reintentarOcrPendientePorId(supabase, pendingId, { forzar: true })
+      : await reintentarOcrPendientesCanal(supabase);
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
     console.error('[cron/facturas-ocr-reintentos]', err);
@@ -27,6 +46,10 @@ export async function GET(req: NextRequest) {
   }
 }
 
+export async function GET(req: NextRequest) {
+  return ejecutar(req);
+}
+
 export async function POST(req: NextRequest) {
-  return GET(req);
+  return ejecutar(req);
 }

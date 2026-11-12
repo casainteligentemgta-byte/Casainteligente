@@ -1,6 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { descargarArchivosPendienteCanal } from '@/lib/canal/documentPartsPendiente';
 import {
+  columnasOcrDesconocidas,
+  esCandidatoReintentoOcr,
   listarPendientesOcrReintento,
   reclamarReintentoOcr,
   type FilaReintentoOcr,
@@ -43,8 +45,67 @@ async function procesarFilaReintentoOcr(
   });
 }
 
+const SELECT_REINTENTO =
+  'id,estado,canal,chat_id,document_storage_path,document_mime_type,document_file_name,document_parts,ocr_intentos,ocr_proximo_reintento_at,updated_at,mensaje_error';
+
 /**
- * Cron/cola: reintenta OCR con las fotos ya guardadas (incluye álbum / document_parts).
+ * Encadenado (waitUntil) o cron: una factura concreta, con la foto ya guardada.
+ * `forzar` ignora `ocr_proximo_reintento_at` para no esperar al cron diario.
+ */
+export async function reintentarOcrPendientePorId(
+  supabase: SupabaseClient,
+  pendingId: string,
+  opts?: {
+    forzar?: boolean;
+    ahora?: Date;
+    procesar?: (row: FilaReintentoOcr) => Promise<void>;
+  },
+): Promise<ResultadoReintentosOcr> {
+  const out: ResultadoReintentosOcr = {
+    revisadas: 0,
+    reclamadas: 0,
+    ok: 0,
+    errores: 0,
+  };
+  const id = pendingId.trim();
+  if (!id) return out;
+
+  const sel = await supabase
+    .from('ci_facturas_canal_pendientes')
+    .select(SELECT_REINTENTO)
+    .eq('id', id)
+    .maybeSingle();
+  if (sel.error) {
+    if (columnasOcrDesconocidas(sel.error.message)) return out;
+    throw new Error(sel.error.message);
+  }
+  const row = (sel.data ?? null) as FilaReintentoOcr | null;
+  if (!row) return out;
+  out.revisadas = 1;
+  const ahoraMs = (opts?.ahora ?? new Date()).getTime();
+  if (!esCandidatoReintentoOcr(row, ahoraMs, { forzar: opts?.forzar !== false })) {
+    return out;
+  }
+  const claimed = await reclamarReintentoOcr(supabase, row.id);
+  if (!claimed) return out;
+  out.reclamadas = 1;
+  const procesar = opts?.procesar ?? ((r) => procesarFilaReintentoOcr(supabase, r));
+  try {
+    await procesar(row);
+    out.ok = 1;
+  } catch (e) {
+    out.errores = 1;
+    console.warn(
+      '[reintentarOcrPendientePorId]',
+      row.id,
+      e instanceof Error ? e.message : e,
+    );
+  }
+  return out;
+}
+
+/**
+ * Cron diario (red de seguridad) o lote: reintenta OCR con las fotos ya guardadas.
  * No avisa al cargador aquí: `processInvoiceFromCanal` solo avisa al agotar los 3 intentos.
  */
 export async function reintentarOcrPendientesCanal(

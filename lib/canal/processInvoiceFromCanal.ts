@@ -24,6 +24,7 @@ import {
   payloadProgresoOcr,
   persistirProgresoOcr,
 } from '@/lib/canal/reintentoExtraccionFactura';
+import { encadenarReintentoOcrPronto } from '@/lib/canal/encadenarReintentoOcrPronto';
 import {
   mensajeAmigableErrorStorage,
   PROCUREMENT_DOCUMENTS_BUCKET,
@@ -239,6 +240,8 @@ async function processInvoiceFromCanalCore(
             intentos: intento,
             mensajeError: msg,
             fase: diferir ? 'diferir' : 'reintento',
+            // Due now: the chained invocation claims this row in seconds.
+            backoffDiferidoMs: diferir ? 0 : undefined,
           }),
         );
         if (transitorio && !diferir && intento < MAX_INTENTOS_OCR) {
@@ -274,7 +277,8 @@ async function processInvoiceFromCanalCore(
   }
 
   if (!extracted && !mensajeError && intentosOcr > 0) {
-    // 3.er intento diferido al cron: no avisar al cargador todavía.
+    // Intentos restantes: misma petición o POST interno en segundos (no el cron diario).
+    encadenarReintentoOcrPronto({ pendingId: params.pendingId });
     await prog?.reportar(70, 'Reintentando lectura en unos segundos…');
     return;
   }

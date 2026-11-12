@@ -8,10 +8,12 @@ export const MAX_INTENTOS_OCR = 3;
 export const BACKOFF_MS_POR_REINTENTO = [0, 2_000, 8_000] as const;
 
 /**
- * Si el OCR ya llevó demasiado tiempo, el 3.er intento se deja al cron
- * (`error_ocr` + `ocr_proximo_reintento_at`) para no superar el maxDuration.
+ * Los 2 reintentos corren en la misma invocación (backoff 2 s / 8 s).
+ * Solo si un intento ya ocupó casi todo el maxDuration (180 s) se encadena
+ * una invocación nueva (`error_ocr` + POST interno). El cron diario es
+ * red de seguridad, no el camino de esos reintentos.
  */
-export const PRESUPUESTO_MS_IN_PROCESS = 90_000;
+export const PRESUPUESTO_MS_IN_PROCESS = 150_000;
 
 /** Misma ventana que el lock `procesando` abandonado. */
 export const OCR_PROCESANDO_STALE_MS = 2 * 60 * 1000;
@@ -302,6 +304,7 @@ export function pendienteTieneArchivoOcr(row: {
 export function esCandidatoReintentoOcr(
   row: FilaReintentoOcr,
   ahoraMs: number = Date.now(),
+  opts?: { forzar?: boolean },
 ): boolean {
   const intentos = Number(row.ocr_intentos ?? 0);
   if (!Number.isFinite(intentos) || intentos <= 0 || intentos >= MAX_INTENTOS_OCR) {
@@ -310,6 +313,7 @@ export function esCandidatoReintentoOcr(
   if (!pendienteTieneArchivoOcr(row)) return false;
   const estado = String(row.estado ?? '').toLowerCase();
   if (estado === 'error_ocr') {
+    if (opts?.forzar) return true;
     const proximo = Date.parse(String(row.ocr_proximo_reintento_at ?? ''));
     if (!Number.isFinite(proximo)) return true;
     return proximo <= ahoraMs;

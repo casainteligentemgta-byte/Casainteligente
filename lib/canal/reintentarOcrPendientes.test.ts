@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { reintentarOcrPendientesCanal } from './reintentarOcrPendientes'
+import { reintentarOcrPendientePorId, reintentarOcrPendientesCanal } from './reintentarOcrPendientes'
 
 function fakeSupabase(rows: Array<Record<string, unknown>>, claimedIds: string[]) {
   return {
@@ -99,5 +99,70 @@ describe('reintentarOcrPendientesCanal', () => {
     assert.equal(result.reclamadas, 1)
     assert.equal(result.ok, 0)
     assert.equal(result.errores, 1)
+  })
+
+  it('por id fuerza el reintento aunque el backoff aún no venza (encadenado, no cron diario)', async () => {
+    const procesadas: string[] = []
+    const row = {
+      id: 'encadenada',
+      estado: 'error_ocr',
+      ocr_intentos: 1,
+      ocr_proximo_reintento_at: '2026-11-11T12:10:00.000Z',
+      document_storage_path: 'neo.jpg',
+      updated_at: '2026-11-11T12:00:00.000Z',
+    }
+    const fake = {
+      from() {
+        return {
+          select() {
+            return {
+              eq() {
+                return {
+                  maybeSingle: async () => ({ data: row, error: null }),
+                }
+              },
+              in() {
+                return {
+                  order() {
+                    return {
+                      limit: async () => ({ data: [row], error: null }),
+                    }
+                  },
+                }
+              },
+            }
+          },
+          update() {
+            return {
+              eq() {
+                return {
+                  in() {
+                    return {
+                      select() {
+                        return {
+                          maybeSingle: async () => ({ data: { id: row.id }, error: null }),
+                        }
+                      },
+                    }
+                  },
+                }
+              },
+            }
+          },
+        }
+      },
+    } as unknown as SupabaseClient
+
+    const result = await reintentarOcrPendientePorId(fake, 'encadenada', {
+      forzar: true,
+      ahora: new Date('2026-11-11T12:00:01.000Z'),
+      procesar: async (r) => {
+        procesadas.push(r.id)
+      },
+    })
+    assert.equal(result.revisadas, 1)
+    assert.equal(result.reclamadas, 1)
+    assert.equal(result.ok, 1)
+    assert.deepEqual(procesadas, ['encadenada'])
   })
 })
