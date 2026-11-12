@@ -145,6 +145,8 @@ describe('APIs que piden sesión', () => {
       '/api/cron/creditos-vencimiento',
       '/api/cron/cco-snapshots-diarios',
       '/api/cron/bcv-tasa',
+      '/api/cron/facturas-ocr-reintentos',
+      '/api/cron/telegram-commands',
       '/api/health',
       '/api/health/supabase',
       '/api/auth/permisos',
@@ -309,6 +311,8 @@ describe('toda ruta abierta del proyecto está revisada', () => {
       '/api/cron/notas-sin-factura',
       '/api/cron/recordatorio-compradores',
       '/api/cron/bcv-tasa',
+      '/api/cron/facturas-ocr-reintentos',
+      '/api/cron/telegram-commands',
       // sesión y diagnóstico
       '/api/auth/cambiar-password',
       '/api/auth/invitar',
