@@ -45,7 +45,14 @@ type CompraRowDb = {
 };
 
 const MAX_COMPRAS = 500;
-const ESTADOS_CANAL_LISTA = ['extraido', 'pendiente', 'procesando', 'error', 'confirmado'] as const;
+const ESTADOS_CANAL_LISTA = [
+  'extraido',
+  'pendiente',
+  'procesando',
+  'error',
+  'error_ocr',
+  'confirmado',
+] as const;
 
 function etiquetaOrigen(origen: string | null | undefined): string {
   const o = String(origen ?? '').trim().toUpperCase();

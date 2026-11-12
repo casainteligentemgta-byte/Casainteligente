@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { processInvoiceFromCanal } from '@/lib/canal/processInvoiceFromCanal';
 import { descargarArchivosPendienteCanal } from '@/lib/canal/documentPartsPendiente';
+import { persistirProgresoOcr } from '@/lib/canal/reintentoExtraccionFactura';
 import { resetearAvisoErrorCargaFactura } from '@/lib/telegram/avisoErrorCargaFactura';
 import { supabaseAdminForRoute } from '@/lib/talento/supabase-admin';
 
@@ -71,7 +72,7 @@ export async function POST(_req: Request, ctx: RouteCtx) {
       return NextResponse.json({ error: error?.message ?? 'Factura no encontrada' }, { status: 404 });
     }
 
-    if (!['error', 'pendiente', 'procesando'].includes(row.estado)) {
+    if (!['error', 'error_ocr', 'pendiente', 'procesando'].includes(row.estado)) {
       return NextResponse.json(
         { error: `Estado ${row.estado} no permite reproceso.` },
         { status: 400 },
@@ -105,6 +106,11 @@ export async function POST(_req: Request, ctx: RouteCtx) {
     }
 
     await resetearAvisoErrorCargaFactura(supabase, row.id);
+    await persistirProgresoOcr(supabase, row.id, {
+      ocr_intentos: 0,
+      ocr_proximo_reintento_at: null,
+      updated_at: new Date().toISOString(),
+    });
 
     const primario = archivos[0];
     await processInvoiceFromCanal({

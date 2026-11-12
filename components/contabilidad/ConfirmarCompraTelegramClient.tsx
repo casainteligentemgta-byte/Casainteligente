@@ -520,7 +520,11 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
     if (!monedaConfirmada) return 'Indique si la factura está en bolívares o dólares.';
     if (!condicionPagoConfirmada) return 'Indique si la compra es a contado o a crédito.';
     if (!formaPagoCompleta) return 'Indique los días de crédito de la compra.';
-    if (pendiente.estado === 'pendiente' || pendiente.estado === 'procesando') {
+    if (
+      pendiente.estado === 'pendiente' ||
+      pendiente.estado === 'procesando' ||
+      pendiente.estado === 'error_ocr'
+    ) {
       return 'Espere el procesamiento IA o pulse Actualizar arriba.';
     }
     if (!puedeIngresarAlmacen) {
@@ -605,7 +609,9 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
           </div>
         ) : (
           <>
-            {(pendiente.estado === 'pendiente' || pendiente.estado === 'procesando') && (
+            {(pendiente.estado === 'pendiente' ||
+              pendiente.estado === 'procesando' ||
+              pendiente.estado === 'error_ocr') && (
               <div className="rounded-2xl border border-amber-500/30 bg-amber-950/20 p-4 text-sm text-amber-100/90 flex items-start gap-2 backdrop-blur-xl">
                 <Loader2 className="h-4 w-4 animate-spin shrink-0 mt-0.5" />
                 <div>
