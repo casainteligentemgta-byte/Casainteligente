@@ -319,7 +319,7 @@ export default function FacturasCanalClient() {
   };
 
   const puedeEditar = (p: Pendiente) =>
-    Boolean(p.extracted) && !['procesando', 'pendiente'].includes(p.estado);
+    Boolean(p.extracted) && !['procesando', 'pendiente', 'error_ocr'].includes(p.estado);
 
   return (
     <div className="min-h-screen bg-[#050508] text-white px-4 py-8 md:px-8 max-w-6xl mx-auto">
@@ -674,7 +674,9 @@ export default function FacturasCanalClient() {
                   {p.estado === 'error' && p.mensaje_error ? (
                     <p className="text-xs text-red-400/90 mt-1">{p.mensaje_error}</p>
                   ) : null}
-                  {p.estado === 'pendiente' || p.estado === 'procesando' ? (
+                  {p.estado === 'pendiente' ||
+                  p.estado === 'procesando' ||
+                  p.estado === 'error_ocr' ? (
                     <p className="text-xs text-amber-400/90 mt-1">Procesando con IA… actualiza en unos segundos.</p>
                   ) : null}
                 </div>

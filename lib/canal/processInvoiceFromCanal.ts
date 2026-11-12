@@ -17,6 +17,14 @@ import {
   textoAvisoErrorCarga,
 } from '@/lib/telegram/avisoErrorCargaFactura';
 import {
+  MAX_INTENTOS_OCR,
+  columnasOcrDesconocidas,
+  extraerConReintentos,
+  leerOcrIntentos,
+  payloadProgresoOcr,
+  persistirProgresoOcr,
+} from '@/lib/canal/reintentoExtraccionFactura';
+import {
   mensajeAmigableErrorStorage,
   PROCUREMENT_DOCUMENTS_BUCKET,
 } from '@/lib/almacen/procurementDocumentStorage';
@@ -198,8 +206,9 @@ async function processInvoiceFromCanalCore(
 
   let extracted: Record<string, unknown> | null = null;
   let mensajeError: string | null = null;
+  let intentosOcr = 0;
 
-  const extraer = async () => {
+  const extraerUna = async () => {
     const { hintExtraccionParaPendiente } = await import('@/lib/compras/proveedorMemoriaDb');
     const hintProveedor = await hintExtraccionParaPendiente(supabase, {
       pendingId: params.pendingId,
@@ -213,29 +222,73 @@ async function processInvoiceFromCanalCore(
       })),
       hintProveedor,
     });
-    extracted = { ...data, fromGemini, modelUsed, album_partes: archivos.length };
+    return { ...data, fromGemini, modelUsed, album_partes: archivos.length };
+  };
+
+  const extraerConPolitica = async () => {
+    const intentosPrevios = await leerOcrIntentos(supabase, params.pendingId);
+    const resultado = await extraerConReintentos({
+      extraer: extraerUna,
+      intentosPrevios,
+      onIntentoFallido: async ({ intento, error, transitorio, diferir }) => {
+        const msg = error instanceof Error ? error.message : String(error ?? 'Error OCR');
+        await persistirProgresoOcr(
+          supabase,
+          params.pendingId,
+          payloadProgresoOcr({
+            intentos: intento,
+            mensajeError: msg,
+            fase: diferir ? 'diferir' : 'reintento',
+          }),
+        );
+        if (transitorio && !diferir && intento < MAX_INTENTOS_OCR) {
+          await prog?.reportar(
+            60,
+            `Reintentando lectura (${intento + 1}/${MAX_INTENTOS_OCR})…`,
+          );
+        }
+      },
+    });
+    if (resultado.ok) {
+      extracted = { ...resultado.data, reintentos: resultado.intentos };
+      intentosOcr = resultado.intentos;
+      return;
+    }
+    intentosOcr = resultado.intentos;
+    if (resultado.diferido) {
+      await prog?.reportar(70, 'Reintentando lectura en unos segundos…');
+      return;
+    }
+    mensajeError = resultado.error;
   };
 
   try {
     if (prog?.conSimulacion) {
-      await prog.conSimulacion(50, 88, 'Extrayendo datos de la factura…', extraer);
+      await prog.conSimulacion(50, 88, 'Extrayendo datos de la factura…', extraerConPolitica);
     } else {
       await prog?.reportar(55, 'Extrayendo datos con Gemini…');
-      await extraer();
+      await extraerConPolitica();
     }
   } catch (e) {
     mensajeError = e instanceof Error ? e.message : 'Error OCR';
   }
 
+  if (!extracted && !mensajeError && intentosOcr > 0) {
+    // 3.er intento diferido al cron: no avisar al cargador todavía.
+    await prog?.reportar(70, 'Reintentando lectura en unos segundos…');
+    return;
+  }
+
   if (mensajeError || !extracted) {
-    await supabase
-      .from('ci_facturas_canal_pendientes')
-      .update({
-        estado: 'error',
-        mensaje_error: mensajeError,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', params.pendingId);
+    await persistirProgresoOcr(
+      supabase,
+      params.pendingId,
+      payloadProgresoOcr({
+        intentos: Math.max(intentosOcr, 1),
+        mensajeError: mensajeError ?? 'Error OCR',
+        fase: 'agotar',
+      }),
+    );
 
     const tipo = clasificarErrorCargaFactura(mensajeError ?? 'Error desconocido');
     const aviso = textoAvisoErrorCarga(tipo);
@@ -361,17 +414,25 @@ async function processInvoiceFromCanalCore(
 
   const payloadExtraido: Record<string, unknown> = {
     estado: 'extraido',
-    extracted: datosConMemoria,
+    extracted: { ...datosConMemoria, reintentos: intentosOcr },
     mensaje_error: null,
     requiere_revision: false,
+    ocr_intentos: intentosOcr,
+    ocr_proximo_reintento_at: null,
     updated_at: new Date().toISOString(),
   };
   let { error: errGuardarExtraccion } = await supabase
     .from('ci_facturas_canal_pendientes')
     .update(payloadExtraido)
     .eq('id', params.pendingId);
-  if (errGuardarExtraccion && /requiere_revision|PGRST204|schema cache/i.test(errGuardarExtraccion.message)) {
+  if (
+    errGuardarExtraccion &&
+    (columnasOcrDesconocidas(errGuardarExtraccion.message) ||
+      /requiere_revision|PGRST204|schema cache/i.test(errGuardarExtraccion.message))
+  ) {
     delete payloadExtraido.requiere_revision;
+    delete payloadExtraido.ocr_intentos;
+    delete payloadExtraido.ocr_proximo_reintento_at;
     const retryExtraido = await supabase
       .from('ci_facturas_canal_pendientes')
       .update(payloadExtraido)

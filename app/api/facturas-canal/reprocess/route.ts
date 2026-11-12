@@ -19,7 +19,7 @@ export async function POST() {
   const { data: rows, error } = await supabase
     .from('ci_facturas_canal_pendientes')
     .select('id, document_storage_path, document_mime_type, document_file_name, chat_id')
-    .in('estado', ['error', 'procesando', 'pendiente'])
+    .in('estado', ['error', 'error_ocr', 'procesando', 'pendiente'])
     .order('created_at', { ascending: false })
     .limit(10);
 

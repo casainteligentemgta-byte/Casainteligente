@@ -165,7 +165,7 @@ export function mapCanalPendienteACompraLista(p: CanalPendienteParaLista): Compr
     estado:
       p.estado === 'extraido'
         ? 'PENDIENTE_CONFIRMACION'
-        : p.estado === 'procesando'
+        : p.estado === 'procesando' || p.estado === 'error_ocr'
           ? 'PROCESANDO_OCR'
           : p.estado === 'confirmado'
           ? 'REGISTRADA'
@@ -197,7 +197,13 @@ export function compraCoincideFuente(c: CompraListaUnificada, fuente: FiltroFuen
   return esApp && c.origen !== 'TELEGRAM';
 }
 
-const ESTADOS_CANAL_EN_COLA = new Set(['extraido', 'error', 'procesando', 'pendiente']);
+const ESTADOS_CANAL_EN_COLA = new Set([
+  'extraido',
+  'error',
+  'error_ocr',
+  'procesando',
+  'pendiente',
+]);
 
 function clavePendienteCanal(p: CanalPendienteParaLista): string | null {
   return claveFacturaProveedorParams({

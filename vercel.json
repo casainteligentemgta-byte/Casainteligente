@@ -47,6 +47,10 @@
     {
       "path": "/api/cron/bcv-tasa",
       "schedule": "0 17 * * *"
+    },
+    {
+      "path": "/api/cron/facturas-ocr-reintentos",
+      "schedule": "* * * * *"
     }
   ]
 }

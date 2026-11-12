@@ -30,19 +30,33 @@ export function getGeminiAiClient(): GoogleGenAI {
   return getGeminiClient();
 }
 
+const GEMINI_RETRYABLE_STATUS = new Set([429, 502, 503, 504, 404]);
+
 export function mapGeminiError(err: unknown, model: string): GeminiGenerateError {
   if (err instanceof ApiError) {
     const message = geminiErrorMessage(err.status, err.message, model);
-    const retryable = err.status === 429 || err.status === 503 || err.status === 404;
+    const retryable = GEMINI_RETRYABLE_STATUS.has(err.status);
     return Object.assign(new Error(message), { retryable, status: err.status });
   }
 
+  if (err instanceof Error) {
+    const existing = err as GeminiGenerateError;
+    if (existing.retryable === true) return existing;
+  }
+
   const raw = err instanceof Error ? err.message : String(err);
+  const lower = raw.toLowerCase();
   const retryable =
     raw.includes('429') ||
+    raw.includes('502') ||
     raw.includes('503') ||
-    raw.toLowerCase().includes('quota') ||
-    raw.toLowerCase().includes('unavailable');
+    raw.includes('504') ||
+    lower.includes('quota') ||
+    lower.includes('unavailable') ||
+    lower.includes('fetch failed') ||
+    lower.includes('timeout') ||
+    lower.includes('timed out') ||
+    lower.includes('gateway timeout');
   return Object.assign(new Error(raw || 'Error al consultar Gemini.'), { retryable });
 }
 
@@ -54,6 +68,9 @@ function geminiErrorMessage(status: number, raw: string, model: string): string 
   }
   if (status === 503) {
     return `El modelo ${model} está saturado. Intente de nuevo en unos segundos.`;
+  }
+  if (status === 504 || status === 502) {
+    return `Gemini no respondió a tiempo (${status}). Se reintentará automáticamente.`;
   }
   if (status === 401 || status === 403) {
     return 'Clave GEMINI_API_KEY inválida o sin permisos. Revise .env.local.';
