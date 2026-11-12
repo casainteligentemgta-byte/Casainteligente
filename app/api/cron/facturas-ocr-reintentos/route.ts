@@ -38,7 +38,8 @@ async function ejecutar(req: NextRequest) {
     const result = pendingId
       ? await reintentarOcrPendientePorId(supabase, pendingId, { forzar: true })
       : await reintentarOcrPendientesCanal(supabase);
-    return NextResponse.json({ ok: true, ...result });
+    const { ok: exitosas, ...rest } = result;
+    return NextResponse.json({ ok: true, exitosas, ...rest });
   } catch (err) {
     console.error('[cron/facturas-ocr-reintentos]', err);
     const message = err instanceof Error ? err.message : 'Error en reintentos OCR';
