@@ -1,12 +1,12 @@
 name: Recordatorio a compradores
 
-# Cada hora de oficina (Caracas, L–V): 9, 10, 11, 13, 14 y 15 h = 13, 14, 15, 17, 18 y 19 UTC.
+# L–V a las 9:00 y 15:00 Caracas (UTC−4) = 13:00 y 19:00 UTC.
 # Lista a cada comprador SUS facturas pendientes de confirmar; si no tiene, no envía.
 # La ruta vuelve a verificar la hora de Caracas, así que un retraso de GitHub no envía fuera de horario.
 # No va en vercel.json: el plan Hobby solo admite crons diarios y esta ruta ya se dispara aquí.
 on:
   schedule:
-    - cron: '0 13,14,15,17,18,19 * * 1-5'
+    - cron: '0 13,19 * * 1-5'
   workflow_dispatch:
 
 jobs:

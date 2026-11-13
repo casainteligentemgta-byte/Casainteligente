@@ -5,8 +5,8 @@ import {
 } from '@/lib/contabilidad/extractedCanal';
 import { sendTelegramMessage } from '@/lib/telegram/botApi';
 
-/** Horas de oficina (America/Caracas) en las que corre el recordatorio. */
-export const HORAS_RECORDATORIO_CARACAS = [9, 10, 11, 13, 14, 15] as const;
+/** Horas Caracas (UTC−4) en las que corre el recordatorio: 9:00 y 15:00. */
+export const HORAS_RECORDATORIO_CARACAS = [9, 15] as const;
 
 /** Estados del canal que aún hay que confirmar (o rehacer la foto). */
 export const ESTADOS_PENDIENTES_CONFIRMAR = ['extraido', 'error', 'error_ocr'] as const;
@@ -70,7 +70,7 @@ export function ventanaCaracas(fecha: Date): { hora: number; diaSemana: number }
   return { hora, diaSemana: mapa[dia] ?? -1 };
 }
 
-/** Lunes a viernes, en horas de oficina. */
+/** Lunes a viernes, a las 9:00 y 15:00 hora Caracas. */
 export function esHoraDeRecordatorio(fecha: Date): boolean {
   const { hora, diaSemana } = ventanaCaracas(fecha);
   const laboral = diaSemana >= 1 && diaSemana <= 5;

@@ -39,13 +39,17 @@ function factura(
 
 describe('horario Caracas', () => {
   // 2026-10-21 (miércoles). Caracas = UTC-4.
-  test('dentro de horario de oficina en Caracas (9,10,11,13,14,15)', () => {
+  test('solo 9:00 y 15:00 Caracas (L–V)', () => {
     assert.equal(esHoraDeRecordatorio(new Date('2026-10-21T13:00:00Z')), true); // 9:00
     assert.equal(esHoraDeRecordatorio(new Date('2026-10-21T19:00:00Z')), true); // 15:00
   });
 
-  test('fuera de horario: 12:00, 16:00 y 8:00 Caracas', () => {
+  test('fuera de horario: resto de horas de oficina y 8:00 / 16:00 Caracas', () => {
+    assert.equal(esHoraDeRecordatorio(new Date('2026-10-21T14:00:00Z')), false); // 10:00
+    assert.equal(esHoraDeRecordatorio(new Date('2026-10-21T15:00:00Z')), false); // 11:00
     assert.equal(esHoraDeRecordatorio(new Date('2026-10-21T16:00:00Z')), false); // 12:00
+    assert.equal(esHoraDeRecordatorio(new Date('2026-10-21T17:00:00Z')), false); // 13:00
+    assert.equal(esHoraDeRecordatorio(new Date('2026-10-21T18:00:00Z')), false); // 14:00
     assert.equal(esHoraDeRecordatorio(new Date('2026-10-21T20:00:00Z')), false); // 16:00
     assert.equal(esHoraDeRecordatorio(new Date('2026-10-21T12:00:00Z')), false); // 8:00
   });
