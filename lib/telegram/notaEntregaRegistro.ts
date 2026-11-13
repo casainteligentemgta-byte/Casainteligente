@@ -15,7 +15,8 @@ import { enviarPickerProyectosTelegram, nombreProyectoTelegram } from '@/lib/tel
 import type { TelegramPhotoSize } from '@/lib/telegram/aguaRegistro';
 import { fileIdFotoTelegramMaxResolucion } from '@/lib/telegram/aguaRegistro';
 
-export const NOTA_ENTREGA_KIND = 'nota_entrega_telegram';
+import { NOTA_ENTREGA_KIND } from '@/lib/compras/notaEntregaCanal';
+export { NOTA_ENTREGA_KIND };
 
 export type PasoNotaEntrega = 'foto' | 'proveedor';
 

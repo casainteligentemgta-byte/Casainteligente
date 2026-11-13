@@ -3,6 +3,10 @@ import {
   monedaExtractedConfirmada,
   simboloMonedaExtracted,
 } from '@/lib/contabilidad/extractedCanal';
+import {
+  esNotaEntregaCanal,
+  notaEntregaDatosCompletos,
+} from '@/lib/compras/notaEntregaCanal';
 import { sendTelegramMessage } from '@/lib/telegram/botApi';
 
 /** Horas Caracas (UTC−4) en las que corre el recordatorio: 9:00 y 15:00. */
@@ -16,7 +20,8 @@ export const MAX_LINEAS_FACTURA_RECORDATORIO = 15;
 const ZONA = 'America/Caracas';
 const HINT_FOTO = 'tómale de nuevo la foto completa y reenvíala';
 const SELECT_PENDIENTES =
-  'id, chat_id, estado, purchase_invoice_id, extracted, created_at';
+  'id, chat_id, estado, purchase_invoice_id, extracted, entidad_id, proyecto_id, created_at';
+const HINT_NOTA_FALTAN = 'nota de entrega: faltan datos';
 
 function baseUrlApp(): string {
   return (
@@ -38,6 +43,8 @@ export type FacturaRecordatorioComprador = {
   monto: number | null;
   moneda: string | null;
   preciosEnCero: boolean;
+  esNotaEntrega: boolean;
+  datosCompletos: boolean;
 };
 
 export type ResultadoRecordatorioCompradores = {
@@ -53,6 +60,8 @@ type FilaPendienteCanal = {
   estado?: string | null;
   purchase_invoice_id?: string | null;
   extracted?: Record<string, unknown> | null;
+  entidad_id?: string | null;
+  proyecto_id?: string | null;
   created_at?: string | null;
 };
 
@@ -91,13 +100,16 @@ export function esFacturaPendienteDeConfirmar(row: {
   return (ESTADOS_PENDIENTES_CONFIRMAR as readonly string[]).includes(estado);
 }
 
-/** Faltan proveedor y moneda, o todos los precios están en 0. */
+/** Factura ilegible: faltan proveedor y moneda. Las notas de entrega no piden foto. */
 export function facturaNecesitaNuevaFoto(
-  f: Pick<FacturaRecordatorioComprador, 'proveedor' | 'moneda' | 'preciosEnCero'>,
+  f: Pick<FacturaRecordatorioComprador, 'proveedor' | 'moneda' | 'preciosEnCero'> & {
+    esNotaEntrega?: boolean;
+  },
 ): boolean {
+  if (f.esNotaEntrega) return false;
   const sinProveedor = !String(f.proveedor ?? '').trim();
   const sinMoneda = !monedaExtractedConfirmada(f.moneda);
-  return (sinProveedor && sinMoneda) || f.preciosEnCero;
+  return sinProveedor && sinMoneda;
 }
 
 export function facturaDesdePendienteCanal(
@@ -121,6 +133,8 @@ export function facturaDesdePendienteCanal(
 
   const fechaExtracted = textoONull(ex.date);
   const createdAt = String(row.created_at ?? '').trim();
+  const preciosEnCero = precios.length === 0 || precios.every((p) => p === 0);
+  const esNota = esNotaEntregaCanal(ex);
 
   return {
     id,
@@ -129,9 +143,14 @@ export function facturaDesdePendienteCanal(
     numero: textoONull(ex.invoice_number ?? ex.numero),
     proveedor: textoONull(ex.supplier_name ?? ex.proveedor),
     fecha: fechaExtracted ?? (createdAt.slice(0, 10) || null),
-    monto,
+    monto: esNota ? null : monto,
     moneda: textoONull(ex.moneda),
-    preciosEnCero: precios.length === 0 || precios.every((p) => p === 0),
+    preciosEnCero,
+    esNotaEntrega: esNota,
+    datosCompletos: notaEntregaDatosCompletos(ex, {
+      entidad_id: row.entidad_id,
+      proyecto_id: row.proyecto_id,
+    }),
   };
 }
 
@@ -160,7 +179,7 @@ export function construirMensajeRecordatorioComprador(
 
 export function formatearLineaFacturaRecordatorio(
   f: FacturaRecordatorioComprador,
-  baseUrl: string,
+  _baseUrl?: string,
 ): string {
   const partes = [
     f.numero?.trim() ? escHtml(f.numero.trim()) : 'sin número',
@@ -168,15 +187,17 @@ export function formatearLineaFacturaRecordatorio(
   ];
   const fecha = f.fecha?.trim() ? formatearFechaCorta(f.fecha.trim()) : '';
   if (fecha) partes.push(escHtml(fecha));
-  if (f.monto != null) {
+  if (!f.esNotaEntrega && f.monto != null) {
     const sufijo = monedaExtractedConfirmada(f.moneda)
       ? ` ${simboloMonedaExtracted(f.moneda)}`
       : '';
     partes.push(`${formatearMontoEs(f.monto)}${sufijo}`);
   }
-  if (facturaNecesitaNuevaFoto(f)) partes.push(HINT_FOTO);
-  const href = escHtml(urlConfirmarFacturaCanal(f.id, baseUrl));
-  partes.push(`<a href="${href}">confirmar</a>`);
+  if (f.esNotaEntrega) {
+    partes.push(f.datosCompletos ? 'nota de entrega' : HINT_NOTA_FALTAN);
+  } else if (facturaNecesitaNuevaFoto(f)) {
+    partes.push(HINT_FOTO);
+  }
   return `• ${partes.join(' · ')}`;
 }
 
@@ -241,6 +262,7 @@ export async function enviarRecordatorioCompradores(
   opts?: {
     baseUrl?: string;
     enviar?: (chatId: string, html: string) => Promise<void>;
+    reanudarNotaEntrega?: (chatId: string, pendingId: string) => Promise<void>;
   },
 ): Promise<ResultadoRecordatorioCompradores> {
   const chats = await listarChatIdsCompradores(supabase);
@@ -250,6 +272,14 @@ export async function enviarRecordatorioCompradores(
     opts?.enviar ??
     (async (chatId: string, texto: string) => {
       await sendTelegramMessage(chatId, texto, { parse_mode: 'HTML' });
+    });
+  const reanudarNota =
+    opts?.reanudarNotaEntrega ??
+    (async (chatId: string, pendingId: string) => {
+      const { avanzarFlujoNotaEntregaCompradorTelegram } = await import(
+        '@/lib/telegram/notaEntregaCompradorTelegram'
+      );
+      await avanzarFlujoNotaEntregaCompradorTelegram(supabase, chatId, pendingId);
     });
 
   let enviados = 0;
@@ -270,6 +300,14 @@ export async function enviarRecordatorioCompradores(
     try {
       await enviar(chatId, html);
       enviados += 1;
+      const incompleta = pendientes.find((f) => f.esNotaEntrega && !f.datosCompletos);
+      if (incompleta) {
+        try {
+          await reanudarNota(chatId, incompleta.id);
+        } catch (err) {
+          console.warn('[recordatorio compradores] nota entrega', chatId, err);
+        }
+      }
     } catch (err) {
       console.warn('[recordatorio compradores]', chatId, err);
     }

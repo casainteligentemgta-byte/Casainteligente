@@ -33,6 +33,8 @@ function factura(
     monto: 1500,
     moneda: 'VES',
     preciosEnCero: false,
+    esNotaEntrega: false,
+    datosCompletos: false,
     ...partial,
   };
 }
@@ -85,15 +87,13 @@ describe('formateo del mensaje de recordatorio', () => {
     assert.equal(formatearMontoEs(0), '0,00');
   });
 
-  test('línea completa: número, proveedor, fecha, monto con moneda y enlace', () => {
+  test('línea completa: número, proveedor, fecha, monto con moneda; sin enlace web', () => {
     const linea = formatearLineaFacturaRecordatorio(
       factura({ id: ID_NEO }),
       BASE,
     );
-    assert.equal(
-      linea,
-      `• F-100 · Ferretería X · 01/11/2026 · 1.500,00 Bs · <a href="${BASE}/contabilidad/compras/telegram/${ID_NEO}">confirmar</a>`,
-    );
+    assert.equal(linea, '• F-100 · Ferretería X · 01/11/2026 · 1.500,00 Bs');
+    assert.doesNotMatch(linea, /confirmar|\/contabilidad\/compras\/telegram/);
   });
 
   test('sin número ni proveedor, y sin fecha/monto, usa placeholders', () => {
@@ -109,8 +109,8 @@ describe('formateo del mensaje de recordatorio', () => {
       }),
       BASE,
     );
-    assert.match(linea, /^• sin número · Acme · <a href=/);
-    assert.doesNotMatch(linea, /tómale de nuevo/);
+    assert.equal(linea, '• sin número · Acme');
+    assert.doesNotMatch(linea, /tómale de nuevo|confirmar|<a href=/);
   });
 
   test('si faltan proveedor y moneda, pide retomar la foto', () => {
@@ -133,16 +133,49 @@ describe('formateo del mensaje de recordatorio', () => {
     assert.match(linea, /sin número · sin proveedor · 02\/11\/2026 · 80,00 · tómale de nuevo la foto completa y reenvíala/);
   });
 
-  test('si todos los precios están en 0, pide retomar la foto aunque haya proveedor', () => {
+  test('nota de entrega con datos completos no pide foto ni enlace', () => {
     assert.equal(
-      facturaNecesitaNuevaFoto({ proveedor: 'Acme', moneda: 'USD', preciosEnCero: true }),
-      true,
+      facturaNecesitaNuevaFoto({
+        proveedor: 'Acme',
+        moneda: null,
+        preciosEnCero: true,
+        esNotaEntrega: true,
+      }),
+      false,
     );
     const linea = formatearLineaFacturaRecordatorio(
-      factura({ id: 'id-0', proveedor: 'Acme', moneda: 'USD', monto: 0, preciosEnCero: true }),
+      factura({
+        id: 'id-0',
+        proveedor: 'Acme',
+        moneda: null,
+        monto: null,
+        preciosEnCero: true,
+        esNotaEntrega: true,
+        datosCompletos: true,
+      }),
       BASE,
     );
-    assert.match(linea, /tómale de nuevo la foto completa y reenvíala/);
+    assert.match(linea, /nota de entrega/);
+    assert.doesNotMatch(linea, /tómale de nuevo|faltan datos|confirmar|\/contabilidad/);
+  });
+
+  test('nota de entrega incompleta: faltan datos, sin pedir foto', () => {
+    const linea = formatearLineaFacturaRecordatorio(
+      factura({
+        id: 'id-ne',
+        numero: null,
+        proveedor: null,
+        fecha: '2026-11-02',
+        monto: null,
+        moneda: null,
+        preciosEnCero: true,
+        esNotaEntrega: true,
+        datosCompletos: false,
+      }),
+      BASE,
+    );
+    assert.match(linea, /nota de entrega: faltan datos/);
+    assert.doesNotMatch(linea, /tómale de nuevo|confirmar/);
   });
 
   test('con proveedor o moneda no pide foto (salvo precios en 0)', () => {
@@ -156,7 +189,7 @@ describe('formateo del mensaje de recordatorio', () => {
     );
   });
 
-  test('encabezado, una línea por factura y enlace de confirmación', () => {
+  test('encabezado y una línea por factura, sin enlace de confirmación', () => {
     const msg = construirMensajeRecordatorioComprador(
       [
         factura({ id: 'f1', numero: 'A-1', createdAt: '2026-11-02T10:00:00Z' }),
@@ -177,7 +210,7 @@ describe('formateo del mensaje de recordatorio', () => {
     assert.equal(lineas[0], 'Tienes 2 facturas pendientes de confirmar:');
     assert.match(lineas[1], /B-2 · Cemento Zulia · 28\/10\/2026 · 40,00 USD/);
     assert.match(lineas[2], /A-1 · Ferretería X/);
-    assert.match(msg!, /\/contabilidad\/compras\/telegram\/f2/);
+    assert.doesNotMatch(msg!, /\/contabilidad\/compras\/telegram|<a href=/);
     assert.doesNotMatch(msg!, /Recordatorio de compras/);
   });
 
@@ -247,7 +280,8 @@ describe('mapeo desde ci_facturas_canal_pendientes', () => {
     assert.equal(f!.proveedor, null);
     assert.equal(f!.fecha, '2026-11-10');
     assert.equal(f!.preciosEnCero, true);
-    assert.equal(facturaNecesitaNuevaFoto(f!), true);
+    assert.equal(f!.esNotaEntrega, true);
+    assert.equal(facturaNecesitaNuevaFoto(f!), false);
   });
 
   test('ignora filas confirmadas o de otro estado', () => {
@@ -322,7 +356,7 @@ describe('envío por comprador', () => {
     assert.equal(enviados[0]!.chatId, NEO);
     assert.match(enviados[0]!.html, /^Tienes 1 factura pendiente de confirmar:/);
     assert.match(enviados[0]!.html, /F-88 · Suministros Andes · 01\/11\/2026 · 250,00 USD/);
-    assert.match(enviados[0]!.html, /\/contabilidad\/compras\/telegram\/pend-neo/);
+    assert.doesNotMatch(enviados[0]!.html, /\/contabilidad\/compras\/telegram|<a href=/);
     assert.doesNotMatch(enviados[0]!.html, /AJENA|NO\b|Recordatorio de compras/);
     assert.doesNotMatch(enviados[0]!.html, /TELEGRAM_BOT_TOKEN|bot[0-9]+:/i);
   });
@@ -353,5 +387,47 @@ describe('envío por comprador', () => {
     assert.equal(r.enviados, 0);
     assert.equal(r.omitidos, 1);
     assert.equal(llamados, 0);
+  });
+
+  test('nota de entrega incompleta reenvía botones; completa no pide foto', async () => {
+    const supabase = crearFakeSupabase({
+      ci_usuarios_sistema_telegram: [
+        { telegram_id: Number(NEO), rol: 'Comprador', activo: true, nombre: 'Neo' },
+      ],
+      ci_proyecto_nomina: [],
+      ci_facturas_canal_pendientes: [
+        {
+          id: 'nota-incompleta',
+          chat_id: NEO,
+          estado: 'extraido',
+          purchase_invoice_id: null,
+          entidad_id: null,
+          proyecto_id: null,
+          created_at: '2026-11-01T10:00:00Z',
+          extracted: {
+            document_kind: 'nota_entrega_telegram',
+            invoice_number: 'NE-1',
+            supplier_name: '',
+            total_amount: 0,
+            items: [{ unit_price: 0 }],
+          },
+        },
+      ],
+    }) as unknown as SupabaseClient;
+
+    const reanudados: string[] = [];
+    const enviados: string[] = [];
+    const r = await enviarRecordatorioCompradores(supabase, {
+      enviar: async (_chatId, html) => {
+        enviados.push(html);
+      },
+      reanudarNotaEntrega: async (_chatId, pendingId) => {
+        reanudados.push(pendingId);
+      },
+    });
+    assert.equal(r.enviados, 1);
+    assert.match(enviados[0]!, /nota de entrega: faltan datos/);
+    assert.doesNotMatch(enviados[0]!, /tómale de nuevo|\/contabilidad|<a href=/);
+    assert.deepEqual(reanudados, ['nota-incompleta']);
   });
 });

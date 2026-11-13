@@ -31,6 +31,7 @@ import {
   SELECT_NOMBRE_ENTIDAD,
   nombreEntidad,
 } from '@/lib/entidades/nombreEntidad';
+import { esNotaEntregaCanal } from '@/lib/compras/notaEntregaCanal';
 
 export type PasoFlujoFacturaComprador =
   | 'dato_faltante'
@@ -293,6 +294,14 @@ export async function avanzarFlujoFacturaCompradorTelegram(
   }
 
   const extracted = row.extracted as ExtractedCanalHeader;
+  if (esNotaEntregaCanal(extracted as Record<string, unknown>)) {
+    const { avanzarFlujoNotaEntregaCompradorTelegram } = await import(
+      '@/lib/telegram/notaEntregaCompradorTelegram'
+    );
+    await avanzarFlujoNotaEntregaCompradorTelegram(supabase, chatId, pendingId);
+    return 'completo';
+  }
+
   const paso = siguientePasoFlujoFacturaComprador(extracted, row);
 
   try {

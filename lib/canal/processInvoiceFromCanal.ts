@@ -30,6 +30,7 @@ import {
   PROCUREMENT_DOCUMENTS_BUCKET,
 } from '@/lib/almacen/procurementDocumentStorage';
 import { formatTotalExtracted, type ExtractedCanalHeader } from '@/lib/contabilidad/extractedCanal';
+import { prepararExtractedNotaEntrega } from '@/lib/compras/notaEntregaCanal';
 import { textoAnomaliasParaNotificacion, textoAnomaliasTelegramHtml } from '@/lib/compras/proveedorMemoria';
 import { linkConfirmarCompraTelegram } from '@/lib/contabilidad/confirmarCompraDesdeCanal';
 import {
@@ -415,12 +416,13 @@ async function processInvoiceFromCanalCore(
   );
   const datosConMemoria = memoria.extracted;
   const anomalias = memoria.anomalias;
+  const notaEntrega = prepararExtractedNotaEntrega(datosConMemoria as Record<string, unknown>);
 
   const payloadExtraido: Record<string, unknown> = {
     estado: 'extraido',
-    extracted: { ...datosConMemoria, reintentos: intentosOcr },
-    mensaje_error: null,
-    requiere_revision: false,
+    extracted: { ...notaEntrega.extracted, reintentos: intentosOcr },
+    mensaje_error: notaEntrega.mensaje_error,
+    requiere_revision: notaEntrega.requiere_revision,
     ocr_intentos: intentosOcr,
     ocr_proximo_reintento_at: null,
     updated_at: new Date().toISOString(),
@@ -463,7 +465,8 @@ async function processInvoiceFromCanalCore(
     .eq('id', params.pendingId)
     .maybeSingle();
 
-  const facturaNumLog = String(datosConMemoria.invoice_number ?? datosOcr.invoice_number ?? 'S/N').trim();
+  const extractedGuardado = notaEntrega.extracted as ExtractedCanalHeader;
+  const facturaNumLog = String(extractedGuardado.invoice_number ?? datosOcr.invoice_number ?? 'S/N').trim();
   const avisoAnomalias = textoAnomaliasParaNotificacion(anomalias);
   const { notificarEventoSistemaLogAsync } = await import('@/lib/telegram/logBotAuditoria');
   notificarEventoSistemaLogAsync({
@@ -479,8 +482,8 @@ async function processInvoiceFromCanalCore(
   const facturaNum = facturaNumLog;
   const dupParams = {
     invoice_number: facturaNum,
-    supplier_rif: datosConMemoria.supplier_rif ?? datosOcr.supplier_rif,
-    supplier_name: datosConMemoria.supplier_name ?? datosOcr.supplier_name,
+    supplier_rif: extractedGuardado.supplier_rif ?? datosOcr.supplier_rif,
+    supplier_name: extractedGuardado.supplier_name ?? datosOcr.supplier_name,
   };
 
   const dupCompra = await buscarCompraContablePorFactura(supabase, {
@@ -538,7 +541,8 @@ async function processInvoiceFromCanalCore(
   }
 
   // Estación de servicio (Telegram): a compras de una vez, sin pulsar Confirmar.
-  if (params.canal === 'telegram') {
+  // Notas de entrega no se auto-confirman: el comprador carga proveedor/RIF/entidad/obra.
+  if (params.canal === 'telegram' && !notaEntrega.esNota) {
     const { autoConfirmarCompraEstacionServicio } = await import(
       '@/lib/canal/autoConfirmarCompraEstacionServicio'
     );
@@ -593,7 +597,23 @@ async function processInvoiceFromCanalCore(
 
   await prog?.reportar(100, 'Completado');
 
-  const inv = datosConMemoria;
+  if (notaEntrega.esNota && params.canal === 'telegram') {
+    if (prog) {
+      await prog.ok('Nota de entrega. Use los botones.');
+    }
+    try {
+      const { avanzarFlujoNotaEntregaCompradorTelegram } = await import(
+        '@/lib/telegram/notaEntregaCompradorTelegram'
+      );
+      await avanzarFlujoNotaEntregaCompradorTelegram(supabase, params.chatId, params.pendingId);
+    } catch (e) {
+      console.error('[processInvoiceFromCanal] flujo nota de entrega:', e);
+      await params.sendReply('📄 Nota de entrega. Responda proveedor, RIF, entidad y obra.', true);
+    }
+    return;
+  }
+
+  const inv = extractedGuardado;
   const nItems = Array.isArray(inv.items) ? inv.items.length : 0;
   const alertaHtml = textoAnomaliasTelegramHtml(anomalias);
   const plain =
