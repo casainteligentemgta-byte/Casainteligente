@@ -14,4 +14,10 @@ describe('promptExtraccionConHint', () => {
     const p = promptExtraccionConHint(null, false)
     assert.equal(p.includes('PARTES SOLAPADAS'), false)
   })
+
+  it('pide a la IA marcar nota de entrega', () => {
+    const p = promptExtraccionConHint(null, false)
+    assert.match(p, /document_kind/)
+    assert.match(p, /nota_entrega/)
+  })
 })

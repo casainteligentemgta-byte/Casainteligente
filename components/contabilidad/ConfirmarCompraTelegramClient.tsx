@@ -631,6 +631,12 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
               </div>
             )}
 
+            {pendiente.estado !== 'error' && pendiente.mensaje_error ? (
+              <div className="rounded-2xl border border-amber-500/30 bg-amber-950/20 p-4 text-sm text-amber-100/90 backdrop-blur-xl">
+                <p className="text-xs">{pendiente.mensaje_error}</p>
+              </div>
+            ) : null}
+
             {pendiente.estado === 'error' && (
               <div className="rounded-2xl border border-red-500/30 bg-red-950/20 p-4 text-sm backdrop-blur-xl">
                 <p className="font-semibold text-red-200">Error al leer la factura</p>

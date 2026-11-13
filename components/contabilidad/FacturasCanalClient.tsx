@@ -645,6 +645,7 @@ export default function FacturasCanalClient() {
                     · {p.canal}
                   </p>
                   {(p.estado === 'extraido' || p.estado === 'error') &&
+                  !esNotaEntregaExtracted(p.extracted as Record<string, unknown> | null) &&
                   !monedaExtractedConfirmada(p.extracted?.moneda) ? (
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <span className="text-[10px] font-bold uppercase text-amber-300/90">
@@ -671,8 +672,8 @@ export default function FacturasCanalClient() {
                       <AlertasAnomaliasFactura anomalias={p.extracted.anomalias} />
                     </div>
                   ) : null}
-                  {p.estado === 'error' && p.mensaje_error ? (
-                    <p className="text-xs text-red-400/90 mt-1">{p.mensaje_error}</p>
+                  {p.mensaje_error ? (
+                    <p className="text-xs text-amber-200/90 mt-1">{p.mensaje_error}</p>
                   ) : null}
                   {p.estado === 'pendiente' ||
                   p.estado === 'procesando' ||

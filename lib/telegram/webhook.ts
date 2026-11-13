@@ -200,6 +200,11 @@ import {
 import { manejarStartVinculoTelegram } from '@/lib/telegram/telegramVinculo';
 import { manejarCallbackObraSugeridaCompra } from '@/lib/telegram/flujoFacturaCompradorTelegram';
 import {
+  esCallbackNotaEntregaComprador,
+  manejarCallbackNotaEntregaComprador,
+  manejarTextoNotaEntregaComprador,
+} from '@/lib/telegram/notaEntregaCompradorTelegram';
+import {
   esCallbackUbicacion,
   esCallbackPropietario,
   manejarCallbackPropietarioTelegram,
@@ -908,6 +913,16 @@ export async function handleTelegramCallbackQuery(
         return NextResponse.json({ ok: true, callback: 'obra_sugerida_compra' });
       }
     }
+    if (esCallbackNotaEntregaComprador(cq.data)) {
+      const handledNe = await manejarCallbackNotaEntregaComprador(admin.client, {
+        chatId,
+        callbackId: cq.id,
+        data: cq.data,
+      });
+      if (handledNe) {
+        return NextResponse.json({ ok: true, callback: 'nota_entrega_comprador' });
+      }
+    }
     if (esCallbackUbicacion(cq.data)) {
       const handledUb = await manejarCallbackUbicacionTelegram(admin.client, {
         chatId,
@@ -1289,6 +1304,11 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
       const { manejarTextoCorreccionFactura } = await import('@/lib/telegram/correccionFacturaTelegram');
       if (await manejarTextoCorreccionFactura(supabase, chatId, texto)) {
         return NextResponse.json({ ok: true, factura_correccion_texto: true });
+      }
+
+      const textoNotaEntrega = await manejarTextoNotaEntregaComprador(supabase, chatId, texto);
+      if (textoNotaEntrega) {
+        return NextResponse.json({ ok: true, nota_entrega_comprador_texto: true });
       }
 
       const { manejarTextoDatoFaltanteFactura } = await import('@/lib/telegram/faltantesFacturaTelegram');

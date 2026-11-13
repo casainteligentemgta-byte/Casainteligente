@@ -109,7 +109,7 @@ export type ExtractedCanalHeader = {
   items?: ExtractedCanalItem[];
   modelUsed?: string;
   fromGemini?: boolean;
-  /** nota_entrega_telegram cuando el depositario registró solo la nota de entrega. */
+  /** nota_entrega_telegram: depositario o IA detectó nota de entrega (sin precios). */
   document_kind?: string;
   /** La factura fiscal aún no fue cargada por contabilidad. */
   factura_pendiente?: boolean;

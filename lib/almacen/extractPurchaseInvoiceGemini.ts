@@ -32,6 +32,8 @@ export type ExtractedPurchaseInvoice = {
   items: ExtractedInvoiceItem[];
   /** Confianza OCR 0–100 (Gemini + heurística estructural). */
   confidence_score?: number;
+  /** "nota_entrega" si la IA detectó nota de entrega; "factura" si es fiscal. */
+  document_kind?: string;
 };
 
 const ALLOWED_MIME = new Set([
@@ -109,6 +111,11 @@ const RESPONSE_SCHEMA = {
         },
         required: ['description', 'item_code', 'unit', 'quantity', 'unit_price'],
       },
+    },
+    document_kind: {
+      type: 'string',
+      description:
+        'nota_entrega si el documento es una nota de entrega (título o sin precios); factura si es factura fiscal con precios',
     },
   },
   required: ['invoice_number', 'supplier_rif', 'supplier_name', 'date', 'items'],
@@ -509,12 +516,20 @@ export function parseExtractedPurchaseInvoice(text: string): ExtractedPurchaseIn
   const receptor_nombre = pickString(flat, ['receptor_nombre', 'cliente_nombre', 'comprador_nombre']);
   const receptor_rif = pickString(flat, ['receptor_rif', 'cliente_rif', 'comprador_rif']);
 
+  const kindRaw = pickString(flat, ['document_kind', 'tipo_documento', 'tipo']).toLowerCase();
+  const flagNota =
+    flat.es_nota_entrega === true ||
+    flat.es_nota_entrega === 'true' ||
+    /\bnota/.test(kindRaw);
+  const document_kind = flagNota ? 'nota_entrega' : kindRaw === 'factura' ? 'factura' : undefined;
+
   const base = {
     invoice_number,
     supplier_rif,
     supplier_name,
     ...(receptor_nombre ? { receptor_nombre } : {}),
     ...(receptor_rif ? { receptor_rif } : {}),
+    ...(document_kind ? { document_kind } : {}),
     date: normalizeDate(dateRaw),
     total_amount:
       totalRaw != null && totalRaw !== '' ? toNumber(totalRaw, 0) : null,

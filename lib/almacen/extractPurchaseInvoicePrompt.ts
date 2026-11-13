@@ -16,6 +16,7 @@ OBLIGATORIO — Tabla de detalle (cuerpo de la factura):
 Encabezado:
 - invoice_number, supplier_name, supplier_rif (emisor, no el cliente), date (YYYY-MM-DD), total_amount (total en Bs, con IVA si así figura en el documento).
 - receptor_nombre y receptor_rif: el cliente o comprador a nombre de quien está la factura (bloque "Cliente", "Razón social del comprador", "Señores"). Si no figura, "".
+- document_kind: "nota_entrega" si el documento dice "nota de entrega" (o equivalente) O no trae precios / todos los precios están en 0. "factura" si es factura fiscal con precios.
 
 El proveedor es quien EMITE la factura, no el comprador.`;
 
