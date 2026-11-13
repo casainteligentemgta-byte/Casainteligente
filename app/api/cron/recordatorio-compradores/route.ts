@@ -14,7 +14,7 @@ function isAuthorized(req: NextRequest): boolean {
   return req.headers.get('authorization') === `Bearer ${secret}`;
 }
 
-/** Cada hora de oficina (Caracas, L–V): recuerda a los compradores cargar facturas y notas. */
+/** L–V a las 9:00 y 15:00 Caracas: lista a cada comprador SUS facturas pendientes de confirmar. */
 export async function GET(req: NextRequest) {
   if (!isAuthorized(req)) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
