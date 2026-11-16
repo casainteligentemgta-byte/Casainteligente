@@ -161,6 +161,7 @@ import {
 } from '@/lib/telegram/resolverLineasPrecargaTelegram';
 import {
   esChatDepositarioNomina,
+  publicarMenuNativoTrasVinculo,
   rechazarProcuraDepositario,
   textoMenuParaChat,
 } from '@/lib/telegram/menuDepositarioTelegram';
@@ -467,6 +468,8 @@ async function aplicarComando(
   }
 
   if (cmd.mensaje) {
+    // /start, /menu e /inicio publican MENSAJE_MENU_TELEGRAM; aquí se sustituye
+    // el texto y el menú nativo si el chat es depositario o comprador.
     const esMenu = cmd.mensaje === MENSAJE_MENU_TELEGRAM;
     const esAyuda = cmd.mensaje === MENSAJE_AYUDA_TELEGRAM;
     const texto =
@@ -1131,6 +1134,13 @@ async function manejarContactoVinculoNomina(
     parse_mode: 'HTML',
     reply_markup: { remove_keyboard: true },
   });
+  if (r.estado === 'vinculado' || r.estado === 'ya_vinculado') {
+    try {
+      await publicarMenuNativoTrasVinculo(admin.client, chatId, r);
+    } catch (e) {
+      console.warn('[telegram] menú nativo tras vínculo', e);
+    }
+  }
   if (r.estado === 'vinculado') {
     // Aviso a administración: alguien se vinculó solo.
     try {

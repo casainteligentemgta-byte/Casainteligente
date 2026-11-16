@@ -8,6 +8,7 @@ import {
   mensajeAyudaTelegram,
   mensajeMenuTelegram,
 } from '@/lib/telegram/botCommands';
+import { procesarComandoTelegram } from '@/lib/telegram/commands';
 
 describe('menú del depositario (sin procuras)', () => {
   it('el menú nativo del depositario solo incluye factura, ingreso, salida, agua, stock y cancelar', () => {
@@ -41,5 +42,13 @@ describe('menú del depositario (sin procuras)', () => {
   it('los textos por defecto siguen siendo los del personal de compras', () => {
     assert.equal(MENSAJE_MENU_TELEGRAM, mensajeMenuTelegram());
     assert.equal(MENSAJE_AYUDA_TELEGRAM, mensajeAyudaTelegram());
+  });
+
+  it('/start se trata como /menu (el webhook aplica textoMenuParaChat por rol)', () => {
+    const start = procesarComandoTelegram('/start');
+    const menu = procesarComandoTelegram('/menu');
+    assert.equal(start.mensaje, MENSAJE_MENU_TELEGRAM);
+    assert.equal(start.mensaje, menu.mensaje);
+    assert.equal(start.handled, true);
   });
 });
