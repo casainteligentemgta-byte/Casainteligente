@@ -35,6 +35,12 @@ import {
   enviarPickerProyectosTelegram,
   nombreProyectoTelegram,
 } from '@/lib/telegram/proyectoPicker';
+import { assertUbicacionPerteneceAProyecto } from '@/lib/almacen/validarUbicacionProyecto';
+import {
+  alcanceObrasDepositarioParaChat,
+  exigirObraPermitidaDepositario,
+  filtrarUbicacionesPorAlcanceDepositario,
+} from '@/lib/telegram/obrasDepositarioTelegram';
 
 /** Despacho desde /salida → «Despacho a obra u otro almacén» (paridad /almacen/despacho). */
 export const FLUJO_SALIDA_ALMACEN = 'salida_almacen';
@@ -208,8 +214,10 @@ async function enviarPickerAlmacenOrigen(
     proyectoId,
     soloAlmacenes: true,
   });
-  const almacenes = ubicaciones.filter(
-    (u) => u.tipo === 'almacen_central' || u.tipo === 'almacen_movil',
+  const alcance = await alcanceObrasDepositarioParaChat(supabase, chatId);
+  const almacenes = filtrarUbicacionesPorAlcanceDepositario(
+    ubicaciones.filter((u) => u.tipo === 'almacen_central' || u.tipo === 'almacen_movil'),
+    alcance,
   );
 
   if (!almacenes.length) {
@@ -218,6 +226,21 @@ async function enviarPickerAlmacenOrigen(
       '⚠️ No hay almacenes en esta obra. Configúrelos en la app web.',
       { parse_mode: 'HTML' },
     );
+    return;
+  }
+
+  if (almacenes.length === 1 && alcance !== null && alcance !== 'todas') {
+    const unico = almacenes[0]!;
+    await sendTelegramMessage(chatId, `✅ Almacén: <b>${unico.nombre}</b>`, {
+      parse_mode: 'HTML',
+    });
+    const estado = await getTelegramEstado(supabase, chatId);
+    await patchMeta(supabase, chatId, estado, {
+      paso: 'obrero',
+      origen_ubicacion_id: unico.id,
+      origen_nombre: unico.nombre,
+    });
+    await enviarPickerObrero(supabase, chatId, proyectoId);
     return;
   }
 
@@ -726,6 +749,14 @@ export async function manejarCallbackSalidaObraTelegram(
 
   if (data.startsWith('ub:')) {
     const ubicacionId = data.slice(3);
+    if (!(await exigirObraPermitidaDepositario(supabase, params.chatId, proyectoOrigenId, params.callbackId))) {
+      return true;
+    }
+    const ubiOk = await assertUbicacionPerteneceAProyecto(supabase, ubicacionId, proyectoOrigenId);
+    if (!ubiOk.ok) {
+      await answerCallbackQuery(params.callbackId, 'Almacén no encontrado', true);
+      return true;
+    }
     const { data: ubi } = await supabase
       .from('inv_ubicaciones')
       .select('id, nombre')

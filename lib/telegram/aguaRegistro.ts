@@ -29,6 +29,12 @@ import {
   mensajeObraSeleccionadaAgua,
   mensajeRegistroAguaCompleto,
 } from '@/lib/telegram/mensajesAgua';
+import {
+  MENSAJE_SIN_OBRA_DEPOSITARIO,
+  alcanceObrasDepositarioParaChat,
+  exigirObraPermitidaDepositario,
+  filtrarProyectosPorAlcanceDepositario,
+} from '@/lib/telegram/obrasDepositarioTelegram';
 
 const BUCKET_AGUA = 'ci-proyectos-media';
 const PAGE_SIZE = 8;
@@ -175,10 +181,28 @@ function buildKeyboardAgua(
   return { inline_keyboard: rows };
 }
 
+async function aplicarSeleccionObraAgua(
+  supabase: SupabaseClient,
+  params: { chatId: string; userId?: string; proyectoId: string; nombre: string },
+): Promise<void> {
+  const userId = params.userId?.trim() || params.chatId;
+  await upsertBotEstadoAgua(supabase, {
+    user_id: userId,
+    chat_id: params.chatId,
+    proyecto_id: params.proyectoId,
+    estado: 'ESPERANDO_FOTO_TANQUE',
+    metadata: {},
+  });
+  await sendTelegramMessage(params.chatId, mensajeObraSeleccionadaAgua(params.nombre), {
+    parse_mode: 'HTML',
+  });
+}
+
 export async function enviarPickerObrasAguaTelegram(
   supabase: SupabaseClient,
   chatId: string,
   page = 0,
+  userId?: string,
 ): Promise<void> {
   const { proyectos, error } = await loadObrasActivasAgua(supabase);
   if (error) {
@@ -187,16 +211,34 @@ export async function enviarPickerObrasAguaTelegram(
     });
     return;
   }
-  if (proyectos.length === 0) {
+  const alcance = await alcanceObrasDepositarioParaChat(supabase, chatId);
+  const permitidos = filtrarProyectosPorAlcanceDepositario(proyectos, alcance);
+  if (permitidos.length === 0) {
     await sendTelegramMessage(
       chatId,
-      '⚠️ No hay obras activas en el sistema. Crea o activa un proyecto en la app.',
+      alcance !== null && alcance !== 'todas'
+        ? MENSAJE_SIN_OBRA_DEPOSITARIO
+        : '⚠️ No hay obras activas en el sistema. Crea o activa un proyecto en la app.',
       { parse_mode: 'HTML' },
     );
     return;
   }
 
-  const keyboard = buildKeyboardAgua(proyectos, page);
+  if (permitidos.length === 1 && alcance !== null && alcance !== 'todas') {
+    const unico = permitidos[0]!;
+    await sendTelegramMessage(chatId, `✅ Obra: <b>${unico.nombre}</b>`, {
+      parse_mode: 'HTML',
+    });
+    await aplicarSeleccionObraAgua(supabase, {
+      chatId,
+      userId,
+      proyectoId: unico.id,
+      nombre: unico.nombre,
+    });
+    return;
+  }
+
+  const keyboard = buildKeyboardAgua(permitidos, page);
   await sendTelegramMessage(chatId, MSJ_AGUA_PICKER_OBRA, {
     parse_mode: 'HTML',
     reply_markup: keyboard,
@@ -298,8 +340,9 @@ function buildExtraccionIaJson(extraccion: ExtraccionRegistroAgua | null): Recor
 export async function manejarComandoAguaTelegram(
   supabase: SupabaseClient,
   chatId: string,
+  userId?: string,
 ): Promise<void> {
-  await enviarPickerObrasAguaTelegram(supabase, chatId, 0);
+  await enviarPickerObrasAguaTelegram(supabase, chatId, 0, userId);
 }
 
 /** Callback inline: selección de obra o paginación. */
@@ -317,12 +360,18 @@ export async function manejarCallbackAguaTelegram(
 
   if (parsed.type === 'page') {
     await answerCallbackQuery(params.callbackId);
-    await enviarPickerObrasAguaTelegram(supabase, params.chatId, parsed.page);
+    await enviarPickerObrasAguaTelegram(supabase, params.chatId, parsed.page, params.userId);
+    return true;
+  }
+
+  if (!(await exigirObraPermitidaDepositario(supabase, params.chatId, parsed.proyectoId, params.callbackId))) {
     return true;
   }
 
   const { proyectos } = await loadObrasActivasAgua(supabase);
-  const hit = proyectos.find((p) => p.id === parsed.proyectoId);
+  const alcance = await alcanceObrasDepositarioParaChat(supabase, params.chatId);
+  const permitidos = filtrarProyectosPorAlcanceDepositario(proyectos, alcance);
+  const hit = permitidos.find((p) => p.id === parsed.proyectoId);
   if (!hit) {
     await answerCallbackQuery(params.callbackId, 'Obra no encontrada', true);
     return true;
@@ -478,6 +527,11 @@ export async function manejarTextoLitrosAguaTelegram(params: {
       { parse_mode: 'HTML' },
     );
     return { handled: true, motivo: 'fotos_faltantes' };
+  }
+
+  if (!(await exigirObraPermitidaDepositario(params.supabase, params.chatId, estado.proyecto_id))) {
+    await eliminarBotEstadoAgua(params.supabase, params.userId);
+    return { handled: true, motivo: 'obra_no_asignada' };
   }
 
   const registradoEn = new Date().toISOString();

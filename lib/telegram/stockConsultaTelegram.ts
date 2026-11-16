@@ -4,7 +4,10 @@ import {
   etiquetaUbicacionSelector,
   listarUbicacionesParaSelector,
 } from '@/lib/almacen/ubicacionesInventario';
-import { loadProyectosModuloIntegralPorEntidad } from '@/lib/proyectos/proyectosUnificados';
+import {
+  loadCatalogoProyectosApp,
+  loadProyectosModuloIntegralPorEntidad,
+} from '@/lib/proyectos/proyectosUnificados';
 import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi';
 import type { TelegramEstado } from '@/lib/telegram/estados';
 import { getTelegramEstado, setTelegramContexto } from '@/lib/telegram/estados';
@@ -13,6 +16,15 @@ import {
   SELECT_NOMBRE_ENTIDAD,
   nombreEntidad,
 } from '@/lib/entidades/nombreEntidad';
+import {
+  MENSAJE_OBRA_NO_ASIGNADA_DEPOSITARIO,
+  MENSAJE_SIN_OBRA_DEPOSITARIO,
+  alcanceObrasDepositarioParaChat,
+  exigirObraPermitidaDepositario,
+  filtrarProyectosPorAlcanceDepositario,
+  filtrarUbicacionesPorAlcanceDepositario,
+  proyectoIdDeUbicacionId,
+} from '@/lib/telegram/obrasDepositarioTelegram';
 
 export const FLUJO_STOCK_CONSULTA = 'stock_consulta_almacen';
 
@@ -105,12 +117,34 @@ async function listarEntidadesActivas(
   }));
 }
 
+async function datosEntidadDeProyecto(
+  supabase: SupabaseClient,
+  entidadId: string | null | undefined,
+): Promise<{ id?: string; nombre?: string }> {
+  const id = String(entidadId ?? '').trim();
+  if (!id) return {};
+  const { data } = await supabase
+    .from('ci_entidades')
+    .select(SELECT_NOMBRE_ENTIDAD)
+    .eq('id', id)
+    .maybeSingle();
+  if (!data) return { id };
+  return { id, nombre: nombreEntidad(data as EntidadConNombre, 'Sin nombre') };
+}
+
 async function enviarPickerEntidades(
   supabase: SupabaseClient,
   chatId: string,
   page = 0,
 ): Promise<void> {
-  const entidades = await listarEntidadesActivas(supabase);
+  let entidades = await listarEntidadesActivas(supabase);
+  const alcance = await alcanceObrasDepositarioParaChat(supabase, chatId);
+  if (alcance !== null && alcance !== 'todas') {
+    const { proyectos } = await loadCatalogoProyectosApp(supabase);
+    const mios = filtrarProyectosPorAlcanceDepositario(proyectos, alcance);
+    const ids = new Set(mios.map((p) => String(p.entidad_id ?? '').trim()).filter(Boolean));
+    entidades = entidades.filter((e) => ids.has(e.id));
+  }
   if (!entidades.length) {
     await sendTelegramMessage(
       chatId,
@@ -157,7 +191,9 @@ async function enviarPickerObrasEntidad(
     });
     return;
   }
-  if (!proyectos.length) {
+  const alcance = await alcanceObrasDepositarioParaChat(supabase, chatId);
+  const permitidos = filtrarProyectosPorAlcanceDepositario(proyectos, alcance);
+  if (!permitidos.length) {
     await sendTelegramMessage(
       chatId,
       `⚠️ La entidad <b>${escHtml(entidadNombre)}</b> no tiene obras/módulos.`,
@@ -166,9 +202,9 @@ async function enviarPickerObrasEntidad(
     return;
   }
 
-  const totalPages = Math.max(1, Math.ceil(proyectos.length / PICKER_SIZE));
+  const totalPages = Math.max(1, Math.ceil(permitidos.length / PICKER_SIZE));
   const safePage = Math.min(Math.max(0, page), totalPages - 1);
-  const slice = proyectos.slice(safePage * PICKER_SIZE, safePage * PICKER_SIZE + PICKER_SIZE);
+  const slice = permitidos.slice(safePage * PICKER_SIZE, safePage * PICKER_SIZE + PICKER_SIZE);
 
   const buttons: Array<Array<{ text: string; callback_data: string }>> = slice.map((p) => [
     { text: truncar(p.nombre), callback_data: `${PREFIX}p:${p.id}` },
@@ -189,6 +225,56 @@ async function enviarPickerObrasEntidad(
   );
 }
 
+async function enviarPickerObrasDepositario(
+  supabase: SupabaseClient,
+  chatId: string,
+  obras: Array<{ id: string; nombre: string }>,
+  page = 0,
+): Promise<void> {
+  const totalPages = Math.max(1, Math.ceil(obras.length / PICKER_SIZE));
+  const safePage = Math.min(Math.max(0, page), totalPages - 1);
+  const slice = obras.slice(safePage * PICKER_SIZE, safePage * PICKER_SIZE + PICKER_SIZE);
+  const buttons: Array<Array<{ text: string; callback_data: string }>> = slice.map((p) => [
+    { text: truncar(p.nombre), callback_data: `${PREFIX}p:${p.id}` },
+  ]);
+  if (totalPages > 1) {
+    const nav: Array<{ text: string; callback_data: string }> = [];
+    if (safePage > 0) nav.push({ text: '◀', callback_data: `${PREFIX}dp:${safePage - 1}` });
+    nav.push({ text: `${safePage + 1}/${totalPages}`, callback_data: `${PREFIX}dp:${safePage}` });
+    if (safePage < totalPages - 1) nav.push({ text: '▶', callback_data: `${PREFIX}dp:${safePage + 1}` });
+    buttons.push(nav);
+  }
+  await sendTelegramMessage(
+    chatId,
+    '📦 <b>Consulta de stock</b>\n\nElige la <b>obra</b>:',
+    { parse_mode: 'HTML', reply_markup: { inline_keyboard: buttons } },
+  );
+}
+
+async function continuarStockTrasObra(
+  supabase: SupabaseClient,
+  chatId: string,
+  estado: TelegramEstado,
+  proyecto: { id: string; nombre: string; entidad_id?: string | null },
+): Promise<void> {
+  const entidad = await datosEntidadDeProyecto(supabase, proyecto.entidad_id ?? meta(estado).entidad_id);
+  await setTelegramContexto(supabase, chatId, {
+    proyecto_id: proyecto.id,
+    metadata: {
+      ...meta(estado),
+      flujo: FLUJO_STOCK_CONSULTA,
+      paso: 'almacen',
+      entidad_id: entidad.id ?? meta(estado).entidad_id,
+      entidad_nombre: entidad.nombre ?? meta(estado).entidad_nombre,
+      proyecto_id: proyecto.id,
+      proyecto_nombre: proyecto.nombre,
+      ubicacion_id: undefined,
+      ubicacion_nombre: undefined,
+    },
+  });
+  await enviarPickerAlmacenesObra(supabase, chatId, proyecto.id, proyecto.nombre);
+}
+
 async function enviarPickerAlmacenesObra(
   supabase: SupabaseClient,
   chatId: string,
@@ -200,8 +286,10 @@ async function enviarPickerAlmacenesObra(
     proyectoId,
     soloAlmacenes: true,
   });
-  const almacenes = ubicaciones.filter(
-    (u) => u.tipo === 'almacen_central' || u.tipo === 'almacen_movil',
+  const alcance = await alcanceObrasDepositarioParaChat(supabase, chatId);
+  const almacenes = filtrarUbicacionesPorAlcanceDepositario(
+    ubicaciones.filter((u) => u.tipo === 'almacen_central' || u.tipo === 'almacen_movil'),
+    alcance,
   );
 
   if (!almacenes.length) {
@@ -210,6 +298,24 @@ async function enviarPickerAlmacenesObra(
       `⚠️ La obra <b>${escHtml(proyectoNombre)}</b> no tiene almacenes configurados.`,
       { parse_mode: 'HTML' },
     );
+    return;
+  }
+
+  if (almacenes.length === 1 && alcance !== null && alcance !== 'todas') {
+    const unico = almacenes[0]!;
+    await sendTelegramMessage(
+      chatId,
+      `✅ Almacén: <b>${escHtml(unico.nombre)}</b>`,
+      { parse_mode: 'HTML' },
+    );
+    const estado = await getTelegramEstado(supabase, chatId);
+    await patchMeta(supabase, chatId, estado, {
+      paso: 'listado',
+      ubicacion_id: unico.id,
+      ubicacion_nombre: unico.nombre,
+      stock_page: 0,
+    });
+    await enviarListadoStock(supabase, chatId, await getTelegramEstado(supabase, chatId), 0);
     return;
   }
 
@@ -337,6 +443,29 @@ export async function manejarComandoStockConsultaTelegram(
       '<i>Búsqueda rápida:</i> <code>/stock rancho flamboyant</code> (elige almacén / obra / total) · <code>/stock cemento</code>',
     { parse_mode: 'HTML' },
   );
+
+  const alcance = await alcanceObrasDepositarioParaChat(supabase, chatId);
+  if (alcance !== null && alcance !== 'todas') {
+    const { proyectos } = await loadCatalogoProyectosApp(supabase);
+    const mios = filtrarProyectosPorAlcanceDepositario(proyectos, alcance);
+    if (!mios.length) {
+      await sendTelegramMessage(chatId, MENSAJE_SIN_OBRA_DEPOSITARIO, { parse_mode: 'HTML' });
+      return;
+    }
+    const estado = await getTelegramEstado(supabase, chatId);
+    if (mios.length === 1) {
+      const unico = mios[0]!;
+      await sendTelegramMessage(chatId, `✅ Obra: <b>${escHtml(unico.nombre)}</b>`, {
+        parse_mode: 'HTML',
+      });
+      await continuarStockTrasObra(supabase, chatId, estado, unico);
+      return;
+    }
+    await patchMeta(supabase, chatId, estado, { paso: 'obra' });
+    await enviarPickerObrasDepositario(supabase, chatId, mios);
+    return;
+  }
+
   await enviarPickerEntidades(supabase, chatId);
 }
 
@@ -377,6 +506,16 @@ export async function manejarCallbackStockConsultaTelegram(
       await answerCallbackQuery(params.callbackId, 'Entidad no encontrada', true);
       return true;
     }
+    const alcance = await alcanceObrasDepositarioParaChat(supabase, params.chatId);
+    if (alcance !== null && alcance !== 'todas') {
+      const { proyectos } = await loadCatalogoProyectosApp(supabase);
+      const mios = filtrarProyectosPorAlcanceDepositario(proyectos, alcance);
+      const permitida = mios.some((p) => String(p.entidad_id ?? '') === hit.id);
+      if (!permitida) {
+        await answerCallbackQuery(params.callbackId, MENSAJE_OBRA_NO_ASIGNADA_DEPOSITARIO, true);
+        return true;
+      }
+    }
     await answerCallbackQuery(params.callbackId, truncar(hit.nombre, 40));
     await patchMeta(supabase, params.chatId, estado, {
       paso: 'obra',
@@ -388,6 +527,15 @@ export async function manejarCallbackStockConsultaTelegram(
       ubicacion_nombre: undefined,
     });
     await enviarPickerObrasEntidad(supabase, params.chatId, hit.id, hit.nombre);
+    return true;
+  }
+
+  if (data.startsWith('dp:')) {
+    await answerCallbackQuery(params.callbackId);
+    const alcance = await alcanceObrasDepositarioParaChat(supabase, params.chatId);
+    const { proyectos } = await loadCatalogoProyectosApp(supabase);
+    const mios = filtrarProyectosPorAlcanceDepositario(proyectos, alcance);
+    await enviarPickerObrasDepositario(supabase, params.chatId, mios, Number(data.slice(3)));
     return true;
   }
 
@@ -406,26 +554,30 @@ export async function manejarCallbackStockConsultaTelegram(
 
   if (data.startsWith('p:')) {
     const proyectoId = data.slice(2);
-    if (!m.entidad_id) return true;
-    const { proyectos } = await loadProyectosModuloIntegralPorEntidad(supabase, m.entidad_id);
-    const hit = proyectos.find((p) => p.id === proyectoId);
+    if (!(await exigirObraPermitidaDepositario(supabase, params.chatId, proyectoId, params.callbackId))) {
+      return true;
+    }
+    let hit: { id: string; nombre: string; entidad_id?: string | null } | undefined;
+    if (m.entidad_id) {
+      const { proyectos } = await loadProyectosModuloIntegralPorEntidad(supabase, m.entidad_id);
+      hit = filtrarProyectosPorAlcanceDepositario(
+        proyectos,
+        await alcanceObrasDepositarioParaChat(supabase, params.chatId),
+      ).find((p) => p.id === proyectoId);
+    }
+    if (!hit) {
+      const { proyectos } = await loadCatalogoProyectosApp(supabase);
+      hit = filtrarProyectosPorAlcanceDepositario(
+        proyectos,
+        await alcanceObrasDepositarioParaChat(supabase, params.chatId),
+      ).find((p) => p.id === proyectoId);
+    }
     if (!hit) {
       await answerCallbackQuery(params.callbackId, 'Obra no encontrada', true);
       return true;
     }
     await answerCallbackQuery(params.callbackId, truncar(hit.nombre, 40));
-    await setTelegramContexto(supabase, params.chatId, {
-      proyecto_id: proyectoId,
-      metadata: {
-        ...meta(estado),
-        paso: 'almacen',
-        proyecto_id: proyectoId,
-        proyecto_nombre: hit.nombre,
-        ubicacion_id: undefined,
-        ubicacion_nombre: undefined,
-      },
-    });
-    await enviarPickerAlmacenesObra(supabase, params.chatId, proyectoId, hit.nombre);
+    await continuarStockTrasObra(supabase, params.chatId, estado, hit);
     return true;
   }
 
@@ -445,6 +597,17 @@ export async function manejarCallbackStockConsultaTelegram(
   if (data.startsWith('u:')) {
     const ubicacionId = data.slice(2);
     if (!estado.proyecto_id) return true;
+    if (!(await exigirObraPermitidaDepositario(supabase, params.chatId, estado.proyecto_id, params.callbackId))) {
+      return true;
+    }
+    const pidUbi = await proyectoIdDeUbicacionId(supabase, ubicacionId);
+    if (pidUbi && pidUbi !== estado.proyecto_id) {
+      await answerCallbackQuery(params.callbackId, MENSAJE_OBRA_NO_ASIGNADA_DEPOSITARIO, true);
+      return true;
+    }
+    if (!(await exigirObraPermitidaDepositario(supabase, params.chatId, pidUbi ?? estado.proyecto_id, params.callbackId))) {
+      return true;
+    }
     const { data: ubi } = await supabase
       .from('inv_ubicaciones')
       .select('id, nombre')

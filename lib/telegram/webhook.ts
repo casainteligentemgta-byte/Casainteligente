@@ -381,7 +381,7 @@ async function aplicarComando(
   }
 
   if (cmd.comandoAgua) {
-    await manejarComandoAguaTelegram(supabase, chatId);
+    await manejarComandoAguaTelegram(supabase, chatId, userId);
     return;
   }
 
@@ -1250,7 +1250,7 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
 
     if (texto && esComandoAgua(texto)) {
       try {
-        await manejarComandoAguaTelegram(supabase, chatId);
+        await manejarComandoAguaTelegram(supabase, chatId, userId);
       } catch (err) {
         console.error('[telegram /agua]', err);
         await avisoErrorTelegram(chatId, err);

@@ -43,7 +43,9 @@ function conKardex(db: FakeSupabase): FakeSupabase {
 function dbDepositario(): FakeSupabase {
   return conKardex(
     crearFakeSupabase({
-      ci_proyecto_nomina: [{ telegram_chat_id: CHAT, rol: 'depositario', activo: true }],
+      ci_proyecto_nomina: [
+        { telegram_chat_id: CHAT, rol: 'depositario', activo: true, proyecto_id: OBRA },
+      ],
       ci_usuarios_sistema_telegram: [],
       ci_telegram_estados: [],
       ci_proyectos: [{ id: OBRA, nombre: 'Obra Norte' }],
@@ -97,15 +99,7 @@ describe('Telegram deterioro / merma', () => {
     const db = dbDepositario()
     const sb = db as unknown as SupabaseClient
     await manejarComandoMermaTelegram(sb, CHAT)
-    assert.match(String(telegram.enviados.at(-1)?.text), /almacén/i)
-    assert.ok(botonesDe(telegram.enviados.at(-1)).some((t) => /Almacén Norte/i.test(t)))
-
-    await manejarCallbackMermaTelegram(sb, {
-      chatId: CHAT,
-      callbackId: 'cb',
-      data: `mr:ub:${UB_ALMACEN}`,
-    })
-    assert.match(String(telegram.enviados.at(-1)?.text), /producto/i)
+    assert.match(String(telegram.enviados.at(-1)?.text), /producto|Cemento/i)
 
     await manejarCallbackMermaTelegram(sb, {
       chatId: CHAT,
