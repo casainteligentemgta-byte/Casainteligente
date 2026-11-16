@@ -11,6 +11,7 @@ import {
 } from '@/lib/almacen/listarFacturasPendientesIngreso';
 import { obtenerUsuarioSistemaTelegram } from '@/lib/compras/usuariosSistemaTelegram';
 import { simulacionBotActiva } from '@/lib/telegram/simulacion/contexto';
+import { obrasDondeEsDepositarioNomina } from '@/lib/telegram/obrasDepositarioTelegram';
 
 function chatNumerico(chatId: string | number): number | null {
   const n = Number(chatId);
@@ -36,6 +37,10 @@ export async function obrasVisiblesParaChat(
   } catch {
     /* tabla de usuarios no disponible: se decide por la nómina */
   }
+
+  // Depositario de nómina: solo las obras donde tiene ese rol (no otras filas de nómina).
+  const obrasDepositario = await obrasDondeEsDepositarioNomina(supabase, chatId);
+  if (obrasDepositario.size > 0) return obrasDepositario;
 
   const { data: nomina } = await supabase
     .from('ci_proyecto_nomina')

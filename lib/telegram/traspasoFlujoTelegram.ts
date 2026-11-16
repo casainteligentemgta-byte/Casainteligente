@@ -18,6 +18,11 @@ import {
 } from '@/lib/telegram/fotoObligatoria';
 import { MENSAJE_INICIO_SALIDA_TRASPASO } from '@/lib/telegram/mensajesSalidaTelegram';
 import {
+  alcanceObrasDepositarioParaChat,
+  exigirObraPermitidaDepositario,
+  filtrarUbicacionesPorAlcanceDepositario,
+} from '@/lib/telegram/obrasDepositarioTelegram';
+import {
   TEXTO_BOTON_SIN_NOTA,
   MENSAJE_FOTO_GUARDADA_ANTES,
   mensajeFotoFueraDePaso,
@@ -104,12 +109,19 @@ async function patchMeta(
 
 async function listarUbicacionesTraspaso(
   supabase: SupabaseClient,
+  chatId?: string,
+  fase: 'origen' | 'destino' = 'origen',
 ): Promise<UbicacionInventario[]> {
   const todas = await listarUbicacionesInventario(supabase, { soloActivas: true });
   propagarObraIdFlat(todas);
-  return todas
+  let list = todas
     .filter((u) => u.tipo !== 'cuarentena' && u.tipo !== 'garantias')
     .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  if (fase === 'origen' && chatId) {
+    const alcance = await alcanceObrasDepositarioParaChat(supabase, chatId);
+    list = filtrarUbicacionesPorAlcanceDepositario(list, alcance);
+  }
+  return list;
 }
 
 function indentNivel(u: UbicacionInventario, flat: UbicacionInventario[]): number {
@@ -164,7 +176,7 @@ async function enviarPickerUbicaciones(
   page = 0,
   excluirId?: string,
 ): Promise<void> {
-  const ubicaciones = await listarUbicacionesTraspaso(supabase);
+  const ubicaciones = await listarUbicacionesTraspaso(supabase, chatId, fase);
   if (!ubicaciones.length) {
     await sendTelegramMessage(
       chatId,
@@ -288,7 +300,10 @@ export async function manejarCallbackTraspasoTelegram(
 
   if (params.data.startsWith(PREFIX_ORIGEN)) {
     const ubicacionId = params.data.slice(PREFIX_ORIGEN.length);
-    const { nombre } = await nombreUbicacion(supabase, ubicacionId);
+    const { nombre, proyectoId } = await nombreUbicacion(supabase, ubicacionId);
+    if (!(await exigirObraPermitidaDepositario(supabase, params.chatId, proyectoId, params.callbackId))) {
+      return true;
+    }
     await answerCallbackQuery(params.callbackId, `Origen: ${nombre}`);
     await patchMeta(supabase, params.chatId, estado, {
       paso: 'destino',

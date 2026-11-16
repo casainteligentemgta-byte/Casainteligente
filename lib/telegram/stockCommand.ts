@@ -16,6 +16,12 @@ import {
   type ProyectoCatalogo,
 } from '@/lib/proyectos/proyectosUnificados';
 import { isValidProyectoUuid } from '@/lib/proyectos/validarProyectoUuid';
+import {
+  alcanceObrasDepositarioParaChat,
+  exigirObraPermitidaDepositario,
+  filtrarProyectosPorAlcanceDepositario,
+  obraPermitidaSegunAlcanceDepositario,
+} from '@/lib/telegram/obrasDepositarioTelegram';
 
 const DEPOSITO_GENERAL = 'Depósito Principal / General';
 const PREFIX_STOCK = 'sk:';
@@ -441,6 +447,9 @@ async function buscarStockPorObra(
     return false;
   }
 
+  const alcance = await alcanceObrasDepositarioParaChat(supabase, chatId);
+  coincidencias = filtrarProyectosPorAlcanceDepositario(coincidencias, alcance);
+
   if (!coincidencias.length) return false;
 
   await enviarMensajeTelegram(
@@ -531,7 +540,12 @@ async function buscarStockPorMaterial(
   }
 
   const nombresMaterial = new Map(matches.map((m) => [String(m.id), m.name]));
-  const consolidado = consolidarPorObra((stockRows ?? []) as StockRow[], nombresMaterial);
+  const alcance = await alcanceObrasDepositarioParaChat(supabase, chatId);
+  const filasAlcance = ((stockRows ?? []) as StockRow[]).filter((row) => {
+    const ub = Array.isArray(row.ubicacion) ? row.ubicacion[0] : row.ubicacion;
+    return obraPermitidaSegunAlcanceDepositario(ub?.ci_proyecto_id, alcance);
+  });
+  const consolidado = consolidarPorObra(filasAlcance, nombresMaterial);
   const mensaje = construirMensajeConsolidadoMaterial(argumento, consolidado);
   await enviarMensajeTelegram(chatId, mensaje, { parse_mode: 'HTML' });
 }
@@ -577,6 +591,10 @@ export async function manejarCallbackStockObraTelegram(
 ): Promise<boolean> {
   const parsed = parseCallbackStock(params.data);
   if (!parsed) return false;
+
+  if (!(await exigirObraPermitidaDepositario(supabase, params.chatId, parsed.proyectoId, params.callbackId))) {
+    return true;
+  }
 
   const { data, error } = await supabase
     .from('ci_proyectos')

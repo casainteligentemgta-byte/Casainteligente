@@ -19,6 +19,14 @@ import {
   modoTelegramUsaObraComprador,
 } from '@/lib/telegram/proyectosTelegramUsuario';
 import { obrasVisiblesParaChat } from '@/lib/telegram/facturasPendientesDeMisObras';
+import {
+  MENSAJE_OBRA_NO_ASIGNADA_DEPOSITARIO,
+  MENSAJE_SIN_OBRA_DEPOSITARIO,
+  alcanceObrasDepositarioParaChat,
+  filtrarProyectosPorAlcanceDepositario,
+  modoPickerAplicaRestriccionDepositario,
+  obraPermitidaSegunAlcanceDepositario,
+} from '@/lib/telegram/obrasDepositarioTelegram';
 
 /** Contextos en los que el usuario puede elegir proyecto desde Telegram. */
 export type ProyectoPickerModo =
@@ -396,8 +404,12 @@ export async function enviarPickerProyectosTelegram(
   }
 
   let permitidos = await filtrarProyectosCatalogoParaChatTelegram(supabase, chatId, proyectos);
-  if (modo === 'salida_obra') {
-    // Salida a obrero: el depositario solo ve sus obras (administradores ven todas).
+  const alcance = await alcanceObrasDepositarioParaChat(supabase, chatId);
+  if (modoPickerAplicaRestriccionDepositario(modo)) {
+    permitidos = filtrarProyectosPorAlcanceDepositario(permitidos, alcance);
+  }
+  if (modo === 'salida_obra' && (alcance === null || alcance === 'todas')) {
+    // Otros roles (no depositario): siguen viendo solo sus obras de nómina.
     const visibles = await obrasVisiblesParaChat(supabase, chatId);
     if (visibles !== 'todas') {
       permitidos = permitidos.filter((p) => visibles.has(p.id));
@@ -406,13 +418,18 @@ export async function enviarPickerProyectosTelegram(
   if (permitidos.length === 0) {
     await sendTelegramMessage(
       chatId,
-      '⚠️ Tu obra asignada no está disponible. Contacta al administrador.',
+      alcance !== null && alcance !== 'todas'
+        ? MENSAJE_SIN_OBRA_DEPOSITARIO
+        : '⚠️ Tu obra asignada no está disponible. Contacta al administrador.',
       { parse_mode: 'HTML' },
     );
     return;
   }
 
-  if (permitidos.length === 1 && (modoTelegramUsaObraComprador(modo) || modo === 'salida_obra')) {
+  const autoSeleccionarUnica =
+    modoTelegramUsaObraComprador(modo) ||
+    modoPickerAplicaRestriccionDepositario(modo);
+  if (permitidos.length === 1 && autoSeleccionarUnica) {
     const unico = permitidos[0]!;
     await sendTelegramMessage(
       chatId,
@@ -456,16 +473,35 @@ export async function manejarCallbackProyectoTelegram(
   }
 
   const { proyectos } = await loadCatalogoProyectosApp(supabase);
-  const permitidos = await filtrarProyectosCatalogoParaChatTelegram(
+  let permitidos = await filtrarProyectosCatalogoParaChatTelegram(
     supabase,
     params.chatId,
     proyectos,
   );
+  const alcance = await alcanceObrasDepositarioParaChat(supabase, params.chatId);
+  if (modoPickerAplicaRestriccionDepositario(parsed.modo)) {
+    permitidos = filtrarProyectosPorAlcanceDepositario(permitidos, alcance);
+  }
+  if (parsed.modo === 'salida_obra' && (alcance === null || alcance === 'todas')) {
+    const visibles = await obrasVisiblesParaChat(supabase, params.chatId);
+    if (visibles !== 'todas') {
+      permitidos = permitidos.filter((p) => visibles.has(p.id));
+    }
+  }
   const hit = permitidos.find((p) => p.id === parsed.proyectoId);
   if (!hit) {
     const ajeno = proyectos.find((p) => p.id === parsed.proyectoId);
-    if (ajeno && permitidos.length < proyectos.length) {
-      await answerCallbackQuery(params.callbackId, 'Solo puedes usar tu obra asignada', true);
+    const restringidoDepositario =
+      modoPickerAplicaRestriccionDepositario(parsed.modo) &&
+      !obraPermitidaSegunAlcanceDepositario(parsed.proyectoId, alcance);
+    if (ajeno && (restringidoDepositario || permitidos.length < proyectos.length)) {
+      await answerCallbackQuery(
+        params.callbackId,
+        restringidoDepositario
+          ? MENSAJE_OBRA_NO_ASIGNADA_DEPOSITARIO
+          : 'Solo puedes usar tu obra asignada',
+        true,
+      );
     } else {
       await answerCallbackQuery(params.callbackId, 'Proyecto no encontrado', true);
     }

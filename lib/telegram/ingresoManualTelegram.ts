@@ -72,6 +72,7 @@ import {
   tecladoSinObservaciones,
 } from '@/lib/telegram/observacionRapida';
 import { enviarPickerProyectosTelegram, nombreProyectoTelegram } from '@/lib/telegram/proyectoPicker';
+import { exigirObraPermitidaDepositario } from '@/lib/telegram/obrasDepositarioTelegram';
 import { EntidadConNombre, SELECT_NOMBRE_ENTIDAD, conNombreEntidad, conNombreFila, nombreEntidad } from '@/lib/entidades/nombreEntidad';
 
 export const FLUJO_INGRESO_MANUAL = 'ingreso_manual';
@@ -2051,6 +2052,14 @@ export async function manejarCallbackIngresoManual(
 
   if (data.startsWith('ub:')) {
     const ubicacionId = data.slice(3);
+    if (!(await exigirObraPermitidaDepositario(supabase, params.chatId, proyectoId, params.callbackId))) {
+      return true;
+    }
+    const ubiOk = await assertUbicacionPerteneceAProyecto(supabase, ubicacionId, proyectoId);
+    if (!ubiOk.ok) {
+      await answerCallbackQuery(params.callbackId, 'Almacén no encontrado', true);
+      return true;
+    }
     const { data: ubi } = await supabase
       .from('inv_ubicaciones')
       .select('id, nombre')

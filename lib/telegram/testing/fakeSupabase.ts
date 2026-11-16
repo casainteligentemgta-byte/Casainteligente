@@ -110,6 +110,14 @@ class Consulta implements PromiseLike<Resultado> {
     this.filtros.push((f) => (f[col] ?? null) === v);
     return this;
   }
+  or(_expr: string): this {
+    return this;
+  }
+  ilike(col: string, v: string): this {
+    const needle = String(v).replace(/%/g, '').toLowerCase();
+    this.filtros.push((f) => String(f[col] ?? '').toLowerCase().includes(needle));
+    return this;
+  }
   not(col: string, op: string, v: unknown): this {
     if (op === 'in' && typeof v === 'string') {
       const fuera = new Set(v.replace(/^\(|\)$/g, '').split(',').map((x) => x.trim()));

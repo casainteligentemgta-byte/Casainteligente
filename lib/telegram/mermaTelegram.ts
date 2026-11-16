@@ -20,6 +20,12 @@ import {
   MENSAJE_MERMA_SOLO_DEPOSITARIO,
   puedeRegistrarMermaTelegram,
 } from '@/lib/telegram/permisosAlmacenTelegram';
+import {
+  alcanceObrasDepositarioParaChat,
+  exigirObraPermitidaDepositario,
+  filtrarUbicacionesPorAlcanceDepositario,
+  proyectoIdDeUbicacionId,
+} from '@/lib/telegram/obrasDepositarioTelegram';
 import { MENSAJE_INICIO_SALIDA_MERMA } from '@/lib/telegram/mensajesSalidaTelegram';
 
 export const FLUJO_MERMA_ALMACEN = 'merma_almacen';
@@ -112,9 +118,25 @@ async function enviarPickerAlmacen(
   chatId: string,
   page: number,
 ): Promise<void> {
-  const almacenes = await listarUbicacionesParaSelector(supabase, { soloAlmacenes: true });
+  const alcance = await alcanceObrasDepositarioParaChat(supabase, chatId);
+  const almacenes = filtrarUbicacionesPorAlcanceDepositario(
+    await listarUbicacionesParaSelector(supabase, { soloAlmacenes: true }),
+    alcance,
+  );
   if (!almacenes.length) {
     await sendTelegramMessage(chatId, '⚠️ No hay almacenes. Avise al administrador.');
+    return;
+  }
+  if (almacenes.length === 1 && alcance !== null && alcance !== 'todas') {
+    const unico = almacenes[0]!;
+    await sendTelegramMessage(chatId, `✅ Almacén: <b>${unico.nombre}</b>`, { parse_mode: 'HTML' });
+    const estado = await getTelegramEstado(supabase, chatId);
+    await patchMeta(supabase, chatId, estado, {
+      paso: 'producto',
+      origen_id: unico.id,
+      origen_nombre: unico.nombre,
+    });
+    await enviarPickerProducto(supabase, chatId, unico.id);
     return;
   }
   const totalPages = Math.max(1, Math.ceil(almacenes.length / PAGE_SIZE));
@@ -362,6 +384,10 @@ export async function manejarCallbackMermaTelegram(
 
   if (raw.startsWith('ub:')) {
     const id = raw.slice(3);
+    const pidUbi = await proyectoIdDeUbicacionId(supabase, id);
+    if (!(await exigirObraPermitidaDepositario(supabase, params.chatId, pidUbi, params.callbackId))) {
+      return true;
+    }
     const { data: ubi } = await supabase
       .from('inv_ubicaciones')
       .select('id, nombre')
