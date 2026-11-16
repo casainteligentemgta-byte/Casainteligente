@@ -102,13 +102,24 @@ function escHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+function sugerenciaPostVinculo(asignaciones: { rol: string }[]): string {
+  const roles = asignaciones.map((a) => a.rol.trim().toLowerCase());
+  if (roles.includes('depositario')) {
+    return 'Escriba /start para ver el menú, o /factura e /ingreso para registrar mercancía.';
+  }
+  if (roles.includes('comprador')) {
+    return 'Escriba /start para ver el menú, o /facturas para cargar una factura.';
+  }
+  return 'Escriba /start para ver el menú.';
+}
+
 export function mensajeResultadoVinculo(r: ResultadoVinculo): string {
   const lista = (a: { obra: string; rol: string }[]) => a.map((x) => `• ${escHtml(x.rol)} · ${escHtml(x.obra)}`).join('\n');
   switch (r.estado) {
     case 'vinculado':
-      return `✅ <b>Listo, ${escHtml(r.nombre)}.</b> Su Telegram quedó registrado:\n${lista(r.asignaciones)}\n\nEscriba /start para ver el menú.`;
+      return `✅ <b>Listo, ${escHtml(r.nombre)}.</b> Su Telegram quedó registrado:\n${lista(r.asignaciones)}\n\n${sugerenciaPostVinculo(r.asignaciones)}`;
     case 'ya_vinculado':
-      return `ℹ️ Este Telegram ya estaba registrado:\n${lista(r.asignaciones)}\n\nEscriba /start para ver el menú.`;
+      return `ℹ️ Este Telegram ya estaba registrado:\n${lista(r.asignaciones)}\n\n${sugerenciaPostVinculo(r.asignaciones)}`;
     case 'otro_chat':
       return '⚠️ Ese número ya está vinculado a otro Telegram. Pida al administrador que lo libere en la nómina de la obra y vuelva a intentarlo.';
     case 'no_es_propio':

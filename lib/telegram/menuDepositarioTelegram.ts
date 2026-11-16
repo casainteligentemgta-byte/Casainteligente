@@ -8,6 +8,21 @@ import {
   mensajeAyudaTelegram,
   mensajeMenuTelegram,
 } from '@/lib/telegram/botCommands';
+import type { ResultadoVinculo } from '@/lib/telegram/vincularTelefonoNomina';
+
+/** Llamada a la API de Telegram (inyectable en pruebas). */
+export type TelegramBotCall = (
+  method: string,
+  body: Record<string, unknown>,
+) => Promise<unknown>;
+
+export function esRolDepositarioAsignacion(rol: string): boolean {
+  return rol.trim().toLowerCase() === 'depositario';
+}
+
+export function esRolCompradorAsignacion(rol: string): boolean {
+  return rol.trim().toLowerCase() === 'comprador';
+}
 
 /**
  * Un chat es de depositario cuando su teléfono/chat está en la nómina de una obra
@@ -34,9 +49,12 @@ export async function esChatDepositarioNomina(
 }
 
 /** Menú nativo (botón «/» de Telegram) limitado al chat del depositario. */
-export async function publicarMenuDepositario(chatId: string | number): Promise<void> {
+export async function publicarMenuDepositario(
+  chatId: string | number,
+  call: TelegramBotCall = telegramApi,
+): Promise<void> {
   try {
-    await telegramApi('setMyCommands', {
+    await call('setMyCommands', {
       commands: TELEGRAM_BOT_COMMANDS_DEPOSITARIO,
       scope: { type: 'chat', chat_id: Number(chatId) },
     });
@@ -66,14 +84,45 @@ export async function textoMenuParaChat(
 }
 
 /** Menú nativo (botón «/») del comprador: sin procura, bitácora, ingreso ni salida. */
-export async function publicarMenuComprador(chatId: string | number): Promise<void> {
+export async function publicarMenuComprador(
+  chatId: string | number,
+  call: TelegramBotCall = telegramApi,
+): Promise<void> {
   try {
-    await telegramApi('setMyCommands', {
+    await call('setMyCommands', {
       commands: TELEGRAM_BOT_COMMANDS_COMPRADOR,
       scope: { type: 'chat', chat_id: Number(chatId) },
     });
   } catch (err) {
     console.error('[telegram menu comprador]', err);
+  }
+}
+
+/**
+ * Justo después de autovinculación por teléfono: el menú nativo del chat
+ * (botón «/») pasa al del depositario o del comprador, sin esperar a /menu.
+ */
+export async function publicarMenuNativoTrasVinculo(
+  supabase: SupabaseClient,
+  chatId: string | number,
+  resultado: ResultadoVinculo,
+  call: TelegramBotCall = telegramApi,
+): Promise<void> {
+  if (resultado.estado !== 'vinculado' && resultado.estado !== 'ya_vinculado') return;
+
+  const depositarioPorAsignacion = resultado.asignaciones.some((a) =>
+    esRolDepositarioAsignacion(a.rol),
+  );
+  if (depositarioPorAsignacion || (await esChatDepositarioNomina(supabase, chatId))) {
+    await publicarMenuDepositario(chatId, call);
+    return;
+  }
+
+  const compradorPorAsignacion = resultado.asignaciones.some((a) =>
+    esRolCompradorAsignacion(a.rol),
+  );
+  if (compradorPorAsignacion || (await esChatComprador(supabase, chatId))) {
+    await publicarMenuComprador(chatId, call);
   }
 }
 
