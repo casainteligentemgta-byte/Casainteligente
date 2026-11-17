@@ -33,6 +33,10 @@ import { sincronizarContabilidadDesdeRecepcionCampo } from '@/lib/contabilidad/s
 import { actualizarProcuraDesdeRecepcionCampo } from '@/lib/procuras/actualizarProcuraDesdeRecepcion';
 import { resolverEntidadIdDesdeProyecto } from '@/lib/contabilidad/resolverEntidadProyecto';
 import { extractPurchaseInvoiceFromFile } from '@/lib/almacen/extractPurchaseInvoiceGemini';
+import {
+  filtrarLineasOcrConCantidad,
+  type LineaOcrConCantidad,
+} from '@/lib/almacen/filtrarLineasOcrIngreso';
 import { PROCUREMENT_DOCUMENTS_BUCKET } from '@/lib/almacen/procurementDocumentStorage';
 import {
   baseUrlApp,
@@ -102,6 +106,7 @@ export type PasoIngresoManual =
   | 'web'
   | 'foto_inicial'
   | 'ocr_factura'
+  | 'ocr_resumen'
   | 'proveedor'
   | 'num_doc'
   | 'material'
@@ -175,17 +180,32 @@ export type MetadataIngresoManual = {
   sin_ia?: boolean;
   /** Nota de entrega con IA: foto primero (depositario). */
   con_ia?: boolean;
-  /** Líneas detectadas por OCR pendientes de categoría/cantidad en bot. */
+  /** Líneas detectadas por OCR pendientes de revisión (resumen / confirmar). */
   ocr_lineas_pendientes?: OcrLineaPendienteIngreso[];
   ocr_aviso_sin_resolver?: string;
+  ocr_resumen_mostrado?: boolean;
+  ocr_reemplazando?: boolean;
+  ocr_texto_leido?: string;
+};
+
+type OcrCantidadOpcion = {
+  cantidad: number;
+  unidad: string;
+  etiqueta: string;
 };
 
 type OcrLineaPendienteIngreso = {
+  texto_leido: string;
   material_id: string;
   material_nombre: string;
   unidad: string;
   cantidad: number;
+  cantidades?: OcrCantidadOpcion[];
 };
+
+export const MENSAJE_INGRESO_USAR_BOTONES =
+  'Hay un ingreso en curso. Use los botones o /cancelar.';
+export const MENSAJE_INGRESO_PASO_VENCIDO = 'Este paso venció, usa /ingreso de nuevo';
 
 const PREFIX = 'im:';
 const PAGE_SIZE = 6;
@@ -250,7 +270,15 @@ async function aplicarMetadataFlujoRecepcionCampo(
 
 export function esFlujoIngresoManual(estado: TelegramEstado): boolean {
   const flujo = meta(estado).flujo;
-  return estado.contexto === 'entrada_obra' && Boolean(flujo && FLUJOS_RECEPCION_CAMPO.has(flujo));
+  return Boolean(flujo && FLUJOS_RECEPCION_CAMPO.has(flujo));
+}
+
+/** Categoría solo para material nuevo; el catálogo existente puede no tener category_id. */
+export function debePedirCategoriaMaterialIngreso(
+  flujo: string | undefined,
+  esMaterialNuevo: boolean,
+): boolean {
+  return Boolean(esMaterialNuevo && flujoTelegramCompletoEnBot(flujo));
 }
 
 function flujoActivo(estado: TelegramEstado): FlujoRecepcionCampoTelegram | undefined {
@@ -311,10 +339,6 @@ function flujoUsaHandoffWebTrasAlmacen(flujo: string | undefined): boolean {
   return normalizarFlujoRecepcionCampo(flujo) === FLUJO_INGRESO_MANUAL;
 }
 
-function ingresoFacturaPideCategoriaPorLinea(flujo: string | undefined): boolean {
-  return flujoTelegramCompletoEnBot(flujo);
-}
-
 async function resolverEntidadMetadataProyecto(
   supabase: SupabaseClient,
   proyectoId: string,
@@ -358,6 +382,94 @@ async function patchMeta(
 
 function escHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function cantidadesOcrDeLinea(item: LineaOcrConCantidad): OcrCantidadOpcion[] {
+  if (item.cantidades?.length) {
+    return item.cantidades.map((c) => ({
+      cantidad: c.cantidad,
+      unidad: c.unidad || item.unidad || 'UND',
+      etiqueta: c.etiqueta || `${c.cantidad} ${c.unidad || item.unidad || 'UND'}`,
+    }));
+  }
+  return [
+    {
+      cantidad: item.cantidad,
+      unidad: item.unidad || 'UND',
+      etiqueta: `${item.cantidad} ${item.unidad || 'UND'}`,
+    },
+  ];
+}
+
+async function mapearItemsOcrAPendientes(
+  supabase: SupabaseClient,
+  items: Parameters<typeof filtrarLineasOcrConCantidad>[0],
+  proyectoId: string,
+): Promise<{ lineas: OcrLineaPendienteIngreso[]; sinResolver: number }> {
+  const filtradas = filtrarLineasOcrConCantidad(items);
+  const lineas: OcrLineaPendienteIngreso[] = [];
+  let sinResolver = 0;
+  for (const item of filtradas) {
+    const cantidades = cantidadesOcrDeLinea(item);
+    const principal = cantidades[0];
+    const resuelto = await resolverMaterialParaLineaCompra(supabase, {
+      description: item.description,
+      item_code: item.item_code || undefined,
+      proyectoId,
+    });
+    if (!resuelto?.id) sinResolver += 1;
+    lineas.push({
+      texto_leido: item.description,
+      material_id: resuelto?.id ?? '',
+      material_nombre: resuelto?.name || item.description,
+      unidad: principal?.unidad || item.unidad || 'UND',
+      cantidad: principal?.cantidad ?? item.cantidad,
+      cantidades,
+    });
+  }
+  return { lineas, sinResolver };
+}
+
+function textoResumenLineasOcr(lineas: OcrLineaPendienteIngreso[]): string {
+  const filas = lineas.map((l, i) => {
+    const qty =
+      (l.cantidades?.length ? l.cantidades : [{ cantidad: l.cantidad, unidad: l.unidad, etiqueta: `${l.cantidad} ${l.unidad}` }])
+        .map((c) => c.etiqueta)
+        .join(' · ') || `${l.cantidad} ${l.unidad}`;
+    const catalogo = l.material_id
+      ? escHtml(l.material_nombre)
+      : '<i>sin catálogo</i>';
+    return `${i + 1}. «${escHtml(l.texto_leido || l.material_nombre)}» → ${catalogo}\n   ${escHtml(qty)}`;
+  });
+  return (
+    `📋 <b>Lo leído</b> (${lineas.length} línea(s) con cantidad):\n\n` +
+    filas.join('\n\n') +
+    '\n\nConfirme, corrija o descarte cada línea.'
+  );
+}
+
+function tecladoRevisionLineaOcr(linea: OcrLineaPendienteIngreso): {
+  inline_keyboard: Array<Array<{ text: string; callback_data: string }>>;
+} {
+  const rows: Array<Array<{ text: string; callback_data: string }>> = [];
+  const alts = linea.cantidades ?? [];
+  if (alts.length > 1) {
+    rows.push(
+      alts.slice(0, 3).map((c, i) => ({
+        text: truncar(c.etiqueta, 28),
+        callback_data: `${PREFIX}ocr:q:${i}`,
+      })),
+    );
+  }
+  if (linea.material_id) {
+    rows.push([{ text: '✅ Confirmar', callback_data: `${PREFIX}ocr:ok` }]);
+  }
+  rows.push([
+    { text: '✏️ Corregir línea', callback_data: `${PREFIX}ocr:fix` },
+    { text: '🗑 Descartar línea', callback_data: `${PREFIX}ocr:drop` },
+  ]);
+  rows.push([{ text: '❓ No es este material', callback_data: `${PREFIX}ocr:mat` }]);
+  return { inline_keyboard: rows };
 }
 
 function urlRecepcionDesdeMetadata(m: MetadataIngresoManual): string | null {
@@ -745,31 +857,11 @@ async function leerFotoInicialIngreso(
     proveedorOcr = String(extracted.supplier_name ?? '').trim();
     const numLeido = String(extracted.invoice_number ?? '').trim();
     numDoc = numLeido && numLeido.toUpperCase() !== 'S/N' ? numLeido : undefined;
-    let sinResolver = 0;
-    for (const item of extracted.items ?? []) {
-      const descripcion = String(item.description ?? '').trim();
-      if (!descripcion) continue;
-      const cantidad = Number(item.quantity) > 0 ? Number(item.quantity) : 1;
-      const unidad = normalizarCodigoUnidad(String(item.unit ?? 'UND'));
-      const resuelto = await resolverMaterialParaLineaCompra(supabase, {
-        description: descripcion,
-        item_code: String(item.item_code ?? '').trim() || undefined,
-        proyectoId,
-      });
-      if (!resuelto?.id) {
-        sinResolver += 1;
-        continue;
-      }
-      lineasOcr.push({
-        material_id: resuelto.id,
-        material_nombre: resuelto.name || descripcion,
-        unidad,
-        cantidad,
-      });
-    }
+    const mapeo = await mapearItemsOcrAPendientes(supabase, extracted.items ?? [], proyectoId);
+    lineasOcr.push(...mapeo.lineas);
     avisoSinResolver =
-      sinResolver > 0
-        ? `${sinResolver} artículo(s) no se vincularon al catálogo; podrá agregarlos manualmente.`
+      mapeo.sinResolver > 0
+        ? `${mapeo.sinResolver} artículo(s) no se vincularon al catálogo; podrá buscarlos o agregarlos.`
         : undefined;
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Error OCR';
@@ -1147,22 +1239,6 @@ async function avanzarTrasProveedor(
   );
 }
 
-async function cargarCategoriaMaterialInventario(
-  supabase: SupabaseClient,
-  materialId: string,
-): Promise<{ id: string; nombre: string } | null> {
-  const { data: row } = await supabase
-    .from('global_inventory')
-    .select('category_id')
-    .eq('id', materialId)
-    .maybeSingle();
-  const catId = String(row?.category_id ?? '').trim();
-  if (!catId) return null;
-  const categorias = await asegurarCategoriasCompraSugeridas(supabase);
-  const hit = buscarCategoriaPorId(categorias, catId);
-  return hit ? { id: hit.id, nombre: hit.name } : null;
-}
-
 async function iniciarSiguienteLineaOcrPendiente(
   supabase: SupabaseClient,
   chatId: string,
@@ -1196,37 +1272,41 @@ async function iniciarSiguienteLineaOcrPendiente(
     return;
   }
 
-  const [head, ...rest] = pendientes;
   const totalOcr = (m.lineas?.length ?? 0) + pendientes.length;
   const idx = (m.lineas?.length ?? 0) + 1;
+  const head = pendientes[0];
+
+  if (!m.ocr_resumen_mostrado) {
+    await sendTelegramMessage(chatId, textoResumenLineasOcr(pendientes), { parse_mode: 'HTML' });
+  }
 
   await patchMeta(supabase, chatId, estado, {
-    ocr_lineas_pendientes: rest,
-    draft_material_id: head.material_id,
+    ocr_resumen_mostrado: true,
+    paso: 'ocr_resumen',
+    draft_material_id: head.material_id || undefined,
     draft_material_nombre: head.material_nombre,
     draft_unidad: head.unidad,
     draft_cantidad: head.cantidad,
-    paso: 'categoria',
+    ocr_texto_leido: head.texto_leido,
+    ocr_reemplazando: undefined,
   });
+
+  const qtyHint =
+    (head.cantidades?.length ? head.cantidades : [{ etiqueta: `${head.cantidad} ${head.unidad}` }])
+      .map((c) => c.etiqueta)
+      .join(' · ');
+  const catalogo = head.material_id
+    ? escHtml(head.material_nombre)
+    : '<i>sin match en catálogo</i>';
 
   await sendTelegramMessage(
     chatId,
-    `🤖 Artículo ${idx} de ${totalOcr} (IA): <b>${escHtml(head.material_nombre)}</b>`,
-    { parse_mode: 'HTML' },
+    `Línea ${idx} de ${totalOcr}:\n` +
+      `Leído: «${escHtml(head.texto_leido || head.material_nombre)}»\n` +
+      `Catálogo: ${catalogo}\n` +
+      `Cantidad: <b>${escHtml(qtyHint)}</b>`,
+    { parse_mode: 'HTML', reply_markup: tecladoRevisionLineaOcr(head) },
   );
-
-  const cat = await cargarCategoriaMaterialInventario(supabase, head.material_id);
-  if (cat) {
-    await aplicarCategoriaMaterialDraft(
-      supabase,
-      chatId,
-      await getTelegramEstado(supabase, chatId),
-      cat.id,
-      cat.nombre,
-    );
-  } else {
-    await enviarPickerCategoriaMaterialIngreso(supabase, chatId, head.material_nombre);
-  }
 }
 
 async function continuarTrasNumDocIngreso(
@@ -1341,10 +1421,11 @@ async function enviarPickerCategoriaMaterialIngreso(
       callback_data: `${PREFIX}cat:${c.id}`,
     },
   ]);
+  buttons.push([{ text: '⏭ Omitir categoría', callback_data: `${PREFIX}cat:skip` }]);
 
   await sendTelegramMessage(
     chatId,
-    `5️⃣ 📂 <b>Categoría del material</b>\n«${escHtml(truncar(materialNombre, 40))}»\n\nElige la categoría:`,
+    `5️⃣ 📂 <b>Categoría del material nuevo</b>\n«${escHtml(truncar(materialNombre, 40))}»\n\nElige la categoría u omite:`,
     { parse_mode: 'HTML', reply_markup: { inline_keyboard: buttons } },
   );
 }
@@ -1395,7 +1476,7 @@ async function usarMaterialEnDraft(
     draft_category_nombre: undefined,
   });
 
-  if (ingresoFacturaPideCategoriaPorLinea(meta(estado).flujo)) {
+  if (debePedirCategoriaMaterialIngreso(meta(estado).flujo, params.creado === true)) {
     await enviarPickerCategoriaMaterialIngreso(supabase, chatId, params.nombre);
     return;
   }
@@ -2011,6 +2092,41 @@ async function continuarTrasAlmacenIngreso(
   return;
 }
 
+async function confirmarLineaOcrActual(
+  supabase: SupabaseClient,
+  chatId: string,
+  estado: TelegramEstado,
+  elegido?: { cantidad: number; unidad: string },
+): Promise<void> {
+  const m = meta(estado);
+  const [head, ...rest] = m.ocr_lineas_pendientes ?? [];
+  if (!head) {
+    await iniciarSiguienteLineaOcrPendiente(supabase, chatId, estado);
+    return;
+  }
+  const cantidad = elegido?.cantidad ?? head.cantidad;
+  const unidad = elegido?.unidad || head.unidad || 'UND';
+  if (!head.material_id?.trim()) {
+    await sendTelegramMessage(
+      chatId,
+      'Esta línea no tiene material de catálogo. Use «No es este material» o descarte.',
+      { parse_mode: 'HTML' },
+    );
+    return;
+  }
+  await patchMeta(supabase, chatId, estado, {
+    ocr_lineas_pendientes: rest,
+    draft_material_id: head.material_id,
+    draft_material_nombre: head.material_nombre,
+    draft_unidad: unidad,
+    draft_cantidad: cantidad,
+    draft_forma_ingreso: formaIngresoDefaultDesdeFlujoTelegram(m.flujo),
+    ocr_texto_leido: undefined,
+    ocr_reemplazando: undefined,
+  });
+  await finalizarLineaDraft(supabase, chatId, await getTelegramEstado(supabase, chatId));
+}
+
 export async function manejarCallbackIngresoManual(
   supabase: SupabaseClient,
   params: { chatId: string; callbackId: string; data: string },
@@ -2018,7 +2134,10 @@ export async function manejarCallbackIngresoManual(
   if (!params.data.startsWith(PREFIX)) return false;
 
   const estado = await getTelegramEstado(supabase, params.chatId);
-  if (!esFlujoIngresoManual(estado)) return false;
+  if (!esFlujoIngresoManual(estado)) {
+    await answerCallbackQuery(params.callbackId, MENSAJE_INGRESO_PASO_VENCIDO, true);
+    return true;
+  }
 
   const proyectoId = estado.proyecto_id;
   if (!proyectoId) {
@@ -2157,6 +2276,14 @@ export async function manejarCallbackIngresoManual(
     return true;
   }
 
+  if (data === 'cat:skip') {
+    await answerCallbackQuery(params.callbackId, 'Sin categoría');
+    const nombre = m.draft_material_nombre ?? m.draft_nombre_nuevo ?? 'Material';
+    const unidad = m.draft_unidad ?? 'UND';
+    await promptCantidadMaterialDraft(supabase, params.chatId, { nombre, unidad });
+    return true;
+  }
+
   if (data.startsWith('cat:')) {
     const categoryId = data.slice(4);
     const categorias = await asegurarCategoriasCompraSugeridas(supabase);
@@ -2167,6 +2294,102 @@ export async function manejarCallbackIngresoManual(
     }
     await answerCallbackQuery(params.callbackId, truncar(hitCat.name, 40));
     await aplicarCategoriaMaterialDraft(supabase, params.chatId, estado, hitCat.id, hitCat.name);
+    return true;
+  }
+
+  if (data === 'ocr:ok' || data.startsWith('ocr:q:') || data === 'ocr:fix' || data === 'ocr:drop' || data === 'ocr:mat') {
+    if (m.paso !== 'ocr_resumen') {
+      await answerCallbackQuery(params.callbackId, MENSAJE_INGRESO_PASO_VENCIDO, true);
+      return true;
+    }
+    const [head, ...rest] = m.ocr_lineas_pendientes ?? [];
+    if (!head) {
+      await answerCallbackQuery(params.callbackId, MENSAJE_INGRESO_PASO_VENCIDO, true);
+      await iniciarSiguienteLineaOcrPendiente(supabase, params.chatId, estado);
+      return true;
+    }
+
+    if (data === 'ocr:ok') {
+      await answerCallbackQuery(params.callbackId, 'Confirmada');
+      await confirmarLineaOcrActual(supabase, params.chatId, estado);
+      return true;
+    }
+
+    if (data.startsWith('ocr:q:')) {
+      const idx = Number(data.slice('ocr:q:'.length));
+      const alt = head.cantidades?.[idx];
+      if (!alt) {
+        await answerCallbackQuery(params.callbackId, 'Cantidad no válida', true);
+        return true;
+      }
+      await answerCallbackQuery(params.callbackId, truncar(alt.etiqueta, 40));
+      await confirmarLineaOcrActual(supabase, params.chatId, estado, {
+        cantidad: alt.cantidad,
+        unidad: alt.unidad || head.unidad,
+      });
+      return true;
+    }
+
+    if (data === 'ocr:drop') {
+      await answerCallbackQuery(params.callbackId, 'Línea descartada');
+      await patchMeta(supabase, params.chatId, estado, { ocr_lineas_pendientes: rest });
+      await iniciarSiguienteLineaOcrPendiente(
+        supabase,
+        params.chatId,
+        await getTelegramEstado(supabase, params.chatId),
+      );
+      return true;
+    }
+
+    if (data === 'ocr:fix') {
+      await answerCallbackQuery(params.callbackId);
+      await patchMeta(supabase, params.chatId, estado, {
+        ocr_lineas_pendientes: rest,
+        draft_material_id: head.material_id || undefined,
+        draft_material_nombre: head.material_nombre,
+        draft_unidad: head.unidad,
+        draft_cantidad: head.cantidad,
+        ocr_texto_leido: head.texto_leido,
+      });
+      if (!head.material_id) {
+        await patchMeta(
+          supabase,
+          params.chatId,
+          await getTelegramEstado(supabase, params.chatId),
+          { paso: 'material', ocr_reemplazando: true },
+        );
+        await sendTelegramMessage(
+          params.chatId,
+          `❓ Elija el material de catálogo para «${escHtml(head.texto_leido || head.material_nombre)}»:`,
+          { parse_mode: 'HTML' },
+        );
+        await enviarPickerMaterialIngresoManual(supabase, params.chatId, proyectoId);
+        return true;
+      }
+      await promptCantidadMaterialDraft(supabase, params.chatId, {
+        nombre: head.material_nombre,
+        unidad: head.unidad,
+      });
+      return true;
+    }
+
+    await answerCallbackQuery(params.callbackId);
+    await patchMeta(supabase, params.chatId, estado, {
+      ocr_lineas_pendientes: rest,
+      draft_cantidad: head.cantidad,
+      draft_unidad: head.unidad,
+      draft_material_id: undefined,
+      draft_material_nombre: undefined,
+      ocr_texto_leido: head.texto_leido,
+      ocr_reemplazando: true,
+      paso: 'material',
+    });
+    await sendTelegramMessage(
+      params.chatId,
+      `❓ No es «${escHtml(head.material_nombre)}».\nElija el material correcto para «${escHtml(head.texto_leido || head.material_nombre)}»:`,
+      { parse_mode: 'HTML' },
+    );
+    await enviarPickerMaterialIngresoManual(supabase, params.chatId, proyectoId);
     return true;
   }
 
@@ -2190,7 +2413,7 @@ export async function manejarCallbackIngresoManual(
     }
 
     await answerCallbackQuery(params.callbackId, codigoUnidad);
-    if (ingresoFacturaPideCategoriaPorLinea(m.flujo)) {
+    if (debePedirCategoriaMaterialIngreso(m.flujo, true)) {
       await patchMeta(supabase, params.chatId, estado, { draft_unidad: codigoUnidad });
       await enviarPickerCategoriaMaterialIngreso(supabase, params.chatId, nombreNuevo);
       return true;
@@ -2476,7 +2699,8 @@ export async function manejarCallbackIngresoManual(
     return true;
   }
 
-  return false;
+  await answerCallbackQuery(params.callbackId, MENSAJE_INGRESO_PASO_VENCIDO, true);
+  return true;
 }
 
 export async function manejarTextoIngresoManual(
@@ -2565,7 +2789,7 @@ export async function manejarTextoIngresoManual(
       });
       return true;
     }
-    if (ingresoFacturaPideCategoriaPorLinea(meta(estado).flujo)) {
+    if (debePedirCategoriaMaterialIngreso(meta(estado).flujo, true)) {
       await patchMeta(supabase, chatId, estado, { draft_unidad: unidad });
       await enviarPickerCategoriaMaterialIngreso(supabase, chatId, nombreNuevo);
       return true;
@@ -2597,7 +2821,16 @@ export async function manejarTextoIngresoManual(
   if (paso === 'categoria') {
     await sendTelegramMessage(
       chatId,
-      'Elige la <b>categoría del material</b> con los botones del mensaje anterior.',
+      'Elige la <b>categoría del material</b> con los botones del mensaje anterior, u omita.',
+      { parse_mode: 'HTML' },
+    );
+    return true;
+  }
+
+  if (paso === 'ocr_resumen') {
+    await sendTelegramMessage(
+      chatId,
+      'Use los botones para confirmar, corregir o descartar la línea, o /cancelar.',
       { parse_mode: 'HTML' },
     );
     return true;
@@ -2670,7 +2903,8 @@ export async function manejarTextoIngresoManual(
     return true;
   }
 
-  return false;
+  await sendTelegramMessage(chatId, MENSAJE_INGRESO_USAR_BOTONES, { parse_mode: 'HTML' });
+  return true;
 }
 
 export async function manejarFotoIngresoManual(params: {
@@ -2707,44 +2941,26 @@ export async function manejarFotoIngresoManual(params: {
 
       const proveedorOcr = String(extracted.supplier_name ?? '').trim();
       const numDoc = String(extracted.invoice_number ?? 'S/N').trim() || 'S/N';
-      const lineasOcr: OcrLineaPendienteIngreso[] = [];
-      let sinResolver = 0;
-
-      for (const item of extracted.items ?? []) {
-        const descripcion = String(item.description ?? '').trim();
-        if (!descripcion) continue;
-        const cantidad = Number(item.quantity) > 0 ? Number(item.quantity) : 1;
-        const unidad = normalizarCodigoUnidad(String(item.unit ?? 'UND'));
-        const resuelto = await resolverMaterialParaLineaCompra(params.supabase, {
-          description: descripcion,
-          item_code: String(item.item_code ?? '').trim() || undefined,
-          proyectoId: estado.proyecto_id,
-        });
-        if (!resuelto?.id) {
-          sinResolver += 1;
-          continue;
-        }
-        lineasOcr.push({
-          material_id: resuelto.id,
-          material_nombre: resuelto.name || descripcion,
-          unidad,
-          cantidad,
-        });
-      }
+      const mapeo = await mapearItemsOcrAPendientes(
+        params.supabase,
+        extracted.items ?? [],
+        estado.proyecto_id,
+      );
+      const lineasOcr = mapeo.lineas;
 
       if (!lineasOcr.length) {
         await sendTelegramMessage(
           params.chatId,
-          '❌ No pude vincular materiales del OCR al catálogo de la obra.\n\n' +
-            'Escriba el número de factura para cargar artículos manualmente, o use ingreso manual de factura.',
+          '❌ No leí cantidades en el documento.\n\n' +
+            'Si es un formulario preimpreso, escriba el número y cargue solo lo que recibió.',
           { parse_mode: 'HTML' },
         );
         return true;
       }
 
       const avisoSinResolver =
-        sinResolver > 0
-          ? `${sinResolver} artículo(s) de la factura no se vincularon al catálogo; podrá agregarlos manualmente después.`
+        mapeo.sinResolver > 0
+          ? `${mapeo.sinResolver} artículo(s) no se vincularon al catálogo; podrá buscarlos o agregarlos.`
           : undefined;
       const fotosPrevias = m0.fotos_storage_paths ?? [];
 
@@ -2771,7 +2987,7 @@ export async function manejarFotoIngresoManual(params: {
         `✅ <b>Factura leída por IA</b>\n\n` +
           `📄 Nº <code>${escHtml(numDoc)}</code>\n` +
           `📦 ${lineasOcr.length} artículo(s) detectado(s).\n\n` +
-          '5️⃣–6️⃣ Revise <b>categoría</b> y <b>cantidad</b> de cada línea antes de continuar.',
+          'Revise el resumen y confirme cada línea.',
         { parse_mode: 'HTML' },
       );
 
@@ -2835,8 +3051,14 @@ export async function manejarFotoIngresoManual(params: {
     return true;
   }
 
-  if (paso !== 'foto' && paso !== 'observacion') return false;
-  if (!estado.proyecto_id) return false;
+  if (paso !== 'foto' && paso !== 'observacion') {
+    await sendTelegramMessage(params.chatId, MENSAJE_INGRESO_USAR_BOTONES, { parse_mode: 'HTML' });
+    return true;
+  }
+  if (!estado.proyecto_id) {
+    await sendTelegramMessage(params.chatId, MENSAJE_INGRESO_USAR_BOTONES, { parse_mode: 'HTML' });
+    return true;
+  }
 
   const storagePath = `recepciones-campo/telegram-${params.chatId}/${Date.now()}.${params.ext}`;
   const { error } = await params.supabase.storage

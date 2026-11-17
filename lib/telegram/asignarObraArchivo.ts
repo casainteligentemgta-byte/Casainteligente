@@ -7,7 +7,12 @@ import {
   mimeFromTelegramPath,
   sendTelegramMessage,
 } from '@/lib/telegram/botApi';
-import { setTelegramContexto } from '@/lib/telegram/estados';
+import { getTelegramEstado, setTelegramContexto } from '@/lib/telegram/estados';
+import {
+  esFlujoIngresoManual,
+  MENSAJE_INGRESO_USAR_BOTONES,
+  MENSAJE_INGRESO_PASO_VENCIDO,
+} from '@/lib/telegram/ingresoManualTelegram';
 import { isValidProyectoUuid } from '@/lib/proyectos/validarProyectoUuid';
 
 const PROYECTO_MEDIA_BUCKET = 'ci-proyectos-media';
@@ -124,6 +129,11 @@ export async function enviarPickerAsignarObraTelegram(params: {
   caption?: string;
   destino?: 'obra' | 'gasto_obra';
 }): Promise<void> {
+  const estadoIngreso = await getTelegramEstado(params.supabase, params.chatId);
+  if (esFlujoIngresoManual(estadoIngreso)) {
+    await sendTelegramMessage(params.chatId, MENSAJE_INGRESO_USAR_BOTONES, { parse_mode: 'HTML' });
+    return;
+  }
   const { obras, error } = await loadUltimasObrasActivas(params.supabase);
   if (error) {
     await sendTelegramMessage(
@@ -230,6 +240,13 @@ export async function manejarCallbackAsignarObraTelegram(
 ): Promise<boolean> {
   const parsed = parseCallbackAsignarObra(params.data);
   if (!parsed) return false;
+
+  const estadoIngreso = await getTelegramEstado(supabase, params.chatId);
+  if (esFlujoIngresoManual(estadoIngreso)) {
+    await answerCallbackQuery(params.callbackId, MENSAJE_INGRESO_PASO_VENCIDO, true);
+    await sendTelegramMessage(params.chatId, MENSAJE_INGRESO_USAR_BOTONES, { parse_mode: 'HTML' });
+    return true;
+  }
 
   const estado = await supabase
     .from('ci_telegram_estados')
