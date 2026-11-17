@@ -20,4 +20,14 @@ describe('promptExtraccionConHint', () => {
     assert.match(p, /document_kind/)
     assert.match(p, /nota_entrega/)
   })
+
+  it('ignora renglones preimpresos sin cantidad, no copia unidades del encabezado y lee cantidades compuestas', () => {
+    const p = promptExtraccionConHint(null, false)
+    assert.match(p, /IGNORA renglones preimpresos/)
+    assert.match(p, /NO copies la unidad del ENCABEZADO/)
+    assert.match(p, /Cantidades COMPUESTAS/)
+    assert.match(p, /rotada/)
+    assert.match(p, /quantity_parts/)
+    assert.doesNotMatch(p, /usa 1 si no aparece/)
+  })
 })

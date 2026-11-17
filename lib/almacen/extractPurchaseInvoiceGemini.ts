@@ -12,12 +12,21 @@ import { calcularConfidenceScoreOcr } from '@/lib/canal/calcularConfidenceScoreO
 
 export { PROMPT_ALBUM_PARTES, promptExtraccionConHint };
 
+export type ExtractedInvoiceQuantityPart = {
+  quantity: number;
+  unit: string;
+  label: string;
+};
+
 export type ExtractedInvoiceItem = {
   description: string;
   item_code: string;
   unit: string;
   quantity: number;
   unit_price: number;
+  quantity_present?: boolean;
+  quantity_raw?: string;
+  quantity_parts?: ExtractedInvoiceQuantityPart[];
 };
 
 export type ExtractedPurchaseInvoice = {
@@ -48,10 +57,12 @@ const ALLOWED_MIME = new Set([
 
 const MAX_BYTES = 12 * 1024 * 1024;
 
-const ITEMS_ONLY_PROMPT = `Solo extrae la TABLA DE DETALLE / líneas de productos de esta factura venezolana.
+const ITEMS_ONLY_PROMPT = `Solo extrae la TABLA DE DETALLE / líneas de productos de esta factura o nota venezolana (la foto puede estar rotada: oriéntala mentalmente).
 
-Devuelve items[] con TODAS las filas:
-- description, item_code (si hay), unit, quantity, unit_price.
+Devuelve items[] SOLO con filas que tengan cantidad visible:
+- description, item_code (si hay), unit (de la celda, no del encabezado), quantity, quantity_present, quantity_raw, quantity_parts, unit_price.
+- IGNORA renglones preimpresos sin cantidad manuscrita. NO inventes quantity=1.
+- Si hay cantidades compuestas (p. ej. «4 pallet» y «1/2 saco»), llena quantity_parts y quantity_raw.
 
 No incluyas totales ni IVA como ítems.`;
 
@@ -105,8 +116,36 @@ const RESPONSE_SCHEMA = {
             type: 'string',
             description: 'Código o referencia del artículo en la factura',
           },
-          unit: { type: 'string', description: 'Unidad de medida: UND, KG, M, etc.' },
-          quantity: { type: 'number', description: 'Cantidad' },
+          unit: {
+            type: 'string',
+            description:
+              'Unidad de medida de esa fila (UND, KG, PALLET, SACO, etc.). Vacío si la celda está vacía; no copies el encabezado de columna.',
+          },
+          quantity: {
+            type: 'number',
+            description:
+              'Cantidad numérica leída en esa fila. 0 si no hay cantidad visible. Nunca inventes 1.',
+          },
+          quantity_present: {
+            type: 'boolean',
+            description: 'true solo si hay una cantidad visible (manuscrita o impresa) en esa fila',
+          },
+          quantity_raw: {
+            type: 'string',
+            description: 'Texto de la(s) cantidad(es) tal cual, p. ej. «4 pallet y 1/2 saco»',
+          },
+          quantity_parts: {
+            type: 'array',
+            description: 'Cada cantidad compuesta de la fila (4 pallet + 1/2 saco → dos elementos)',
+            items: {
+              type: 'object',
+              properties: {
+                quantity: { type: 'number' },
+                unit: { type: 'string' },
+                label: { type: 'string' },
+              },
+            },
+          },
           unit_price: { type: 'number', description: 'Precio unitario' },
         },
         required: ['description', 'item_code', 'unit', 'quantity', 'unit_price'],
@@ -390,17 +429,54 @@ function parseRowToItem(row: unknown): ExtractedInvoiceItem | null {
   if (!description && item_code) description = item_code;
   if (!description) return null;
 
-  const unit =
-    pickString(r, ['unit', 'unidad', 'um', 'uom', 'medida']) || 'UND';
+  const unitRaw = pickString(r, ['unit', 'unidad', 'um', 'uom', 'medida']);
+  const unitLooksHeader =
+    !unitRaw ||
+    /^(cantidad|cant\.?|und\.?|unidad(es)?|u\.?m\.?|descripci[oó]n|art[ií]culo|material|concepto|detalle|item)$/i.test(
+      unitRaw,
+    );
+  const unit = unitLooksHeader ? '' : unitRaw;
 
+  const quantityRawText = pickString(r, [
+    'quantity_raw',
+    'cantidad_raw',
+    'cantidad_texto',
+    'qty_raw',
+    'cantidad_leida',
+  ]);
+
+  const quantityPartsRaw = r.quantity_parts ?? r.cantidades ?? r.quantities;
+  const quantity_parts: ExtractedInvoiceQuantityPart[] = Array.isArray(quantityPartsRaw)
+    ? quantityPartsRaw
+        .map((p) => {
+          const rec = asRecord(p);
+          if (!rec) return null;
+          const q = toNumber(rec.quantity ?? rec.cantidad ?? rec.qty, NaN);
+          if (!Number.isFinite(q) || q <= 0) return null;
+          const u = pickString(rec, ['unit', 'unidad', 'um']);
+          const label = pickString(rec, ['label', 'etiqueta', 'texto']) || `${q}${u ? ` ${u}` : ''}`;
+          return { quantity: q, unit: u.toUpperCase().slice(0, 32), label };
+        })
+        .filter((p): p is ExtractedInvoiceQuantityPart => p != null)
+    : [];
+
+  const quantityParsed = toNumber(
+    r.quantity ?? r.cantidad ?? r.cant ?? r.qty ?? r.uds,
+    NaN,
+  );
+  const quantityFromParts = quantity_parts[0]?.quantity;
   const quantity =
-    Math.max(
-      0,
-      toNumber(
-        r.quantity ?? r.cantidad ?? r.cant ?? r.qty ?? r.unidades ?? r.unidad ?? r.uds,
-        1
-      )
-    ) || 1;
+    Number.isFinite(quantityParsed) && quantityParsed > 0
+      ? quantityParsed
+      : quantityFromParts && quantityFromParts > 0
+        ? quantityFromParts
+        : 0;
+
+  const quantityPresentRaw = r.quantity_present ?? r.tiene_cantidad ?? r.cantidad_presente;
+  const quantity_present =
+    typeof quantityPresentRaw === 'boolean'
+      ? quantityPresentRaw
+      : quantity > 0 || quantity_parts.length > 0;
 
   let unitPrice = toNumber(
     r.unit_price ??
@@ -425,9 +501,12 @@ function parseRowToItem(row: unknown): ExtractedInvoiceItem | null {
   return {
     description,
     item_code,
-    unit: unit.toUpperCase().slice(0, 12) || 'UND',
+    unit: unit.toUpperCase().slice(0, 12),
     quantity,
     unit_price: Math.max(0, unitPrice),
+    quantity_present,
+    ...(quantityRawText ? { quantity_raw: quantityRawText } : {}),
+    ...(quantity_parts.length ? { quantity_parts } : {}),
   };
 }
 

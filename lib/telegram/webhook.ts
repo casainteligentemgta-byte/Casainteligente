@@ -114,6 +114,7 @@ import {
   manejarComandoEmergenciaTelegram,
   manejarFotoIngresoManual,
   manejarTextoIngresoManual,
+  MENSAJE_INGRESO_USAR_BOTONES,
 } from '@/lib/telegram/ingresoManualTelegram';
 import {
   esCallbackIngresoFactura,
@@ -1706,8 +1707,6 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
         if (!photos?.length) return false;
         const estadoIngreso = await getTelegramEstado(supabase, chatId);
         if (!esFlujoIngresoManual(estadoIngreso)) return false;
-        const paso = (estadoIngreso.metadata as { paso?: string })?.paso;
-        if (paso !== 'foto' && paso !== 'observacion' && paso !== 'foto_inicial') return false;
         const fileId = photos[photos.length - 1]?.file_id;
         if (!fileId) return false;
         try {
@@ -1945,11 +1944,7 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
         return NextResponse.json({ ok: true, credito_documento: true });
       }
       const estadoIngresoDoc = estadoCreditoDoc;
-      const pasoIngresoDoc = (estadoIngresoDoc.metadata as { paso?: string })?.paso;
-      if (
-        esFlujoIngresoManual(estadoIngresoDoc) &&
-        (pasoIngresoDoc === 'foto' || pasoIngresoDoc === 'observacion' || pasoIngresoDoc === 'foto_inicial')
-      ) {
+      if (esFlujoIngresoManual(estadoIngresoDoc)) {
         try {
           const { downloadTelegramFile, mimeFromTelegramPath } = await import('@/lib/telegram/botApi');
           const { buffer, filePath } = await downloadTelegramFile(archivo.fileId);
@@ -2027,6 +2022,10 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
         });
       }
       case 'obra':
+        if (esFlujoIngresoManual(estado)) {
+          await sendTelegramMessage(chatId, MENSAJE_INGRESO_USAR_BOTONES, { parse_mode: 'HTML' });
+          break;
+        }
         if (await esChatComprador(supabase, chatId)) {
           await sendTelegramMessage(chatId, MENSAJE_EVIDENCIA_OBRA_NO_COMPRADOR, { parse_mode: 'HTML' });
           break;
@@ -2095,6 +2094,10 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
         );
         break;
       default:
+        if (esFlujoIngresoManual(estado)) {
+          await sendTelegramMessage(chatId, MENSAJE_INGRESO_USAR_BOTONES, { parse_mode: 'HTML' });
+          break;
+        }
         await enviarPickerAsignarObraTelegram({
           supabase,
           chatId,
