@@ -8,6 +8,7 @@ import {
   registrarEgresoCampo,
   type LineaEgresoCampoInput,
 } from '@/lib/almacen/registrarEgresoCampo';
+import { assertUbicacionPerteneceAProyecto } from '@/lib/almacen/validarUbicacionProyecto';
 import { answerCallbackQuery, sendTelegramMessage } from '@/lib/telegram/botApi';
 import { tecladoVerMovimientosDepositario } from '@/lib/telegram/movimientosDepositarioBoton';
 import type { TelegramEstado } from '@/lib/telegram/estados';
@@ -128,8 +129,11 @@ export async function iniciarSalidaEgresoTrasObra(
   proyectoId: string,
 ): Promise<void> {
   const nombre = (await nombreProyectoTelegram(supabase, proyectoId)) ?? 'Obra';
-  const origen = await almacenOrigenObra(supabase, proyectoId);
-  if (!origen) {
+  const origen = await almacenOrigenObra(supabase, proyectoId, chatId);
+  const ubiOk = origen
+    ? await assertUbicacionPerteneceAProyecto(supabase, origen.id, proyectoId)
+    : { ok: false as const };
+  if (!origen || !ubiOk.ok) {
     await sendTelegramMessage(
       chatId,
       `⚠️ La obra <b>${nombre}</b> no tiene almacén configurado. Avise al administrador.`,

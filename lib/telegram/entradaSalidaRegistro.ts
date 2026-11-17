@@ -232,7 +232,7 @@ async function continuarTrasObservacionSalida(
     return;
   }
 
-  const hayAlmacenes = await hayAlmacenesOrigenSalida(supabase, proyectoId);
+  const hayAlmacenes = await hayAlmacenesOrigenSalida(supabase, proyectoId, chatId);
   if (!hayAlmacenes) {
     await sendTelegramMessage(
       chatId,
