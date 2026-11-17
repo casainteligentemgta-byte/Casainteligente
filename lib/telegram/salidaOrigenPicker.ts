@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { assertUbicacionPerteneceAProyecto } from '@/lib/almacen/validarUbicacionProyecto';
 import {
   answerCallbackQuery,
   sendTelegramMessage,
@@ -8,6 +9,11 @@ import {
   listarUbicacionesParaSelector,
 } from '@/lib/almacen/ubicacionesInventario';
 import { getTelegramEstado, setTelegramContexto } from '@/lib/telegram/estados';
+import {
+  alcanceObrasDepositarioParaChat,
+  filtrarUbicacionesPorAlcanceDepositario,
+  proyectoIdDeUbicacion,
+} from '@/lib/telegram/obrasDepositarioTelegram';
 import type { UbicacionInventario } from '@/types/inventario-obra';
 
 const PREFIX_SEL = 'so:';
@@ -76,33 +82,61 @@ function buildKeyboard(
   return { inline_keyboard: rows };
 }
 
-async function listarAlmacenesOrigen(
-  supabase: SupabaseClient,
-  proyectoId: string,
-): Promise<UbicacionInventario[]> {
-  const ubicaciones = await listarUbicacionesParaSelector(supabase, { proyectoId });
-  return ubicaciones.filter(
-    (u) => u.tipo === 'almacen_central' || u.tipo === 'almacen_movil',
-  );
+function esAlmacenOrigen(u: UbicacionInventario): boolean {
+  return u.tipo === 'almacen_central' || u.tipo === 'almacen_movil';
+}
+
+function proyectoIdDeAlmacen(u: UbicacionInventario): string | null {
+  return proyectoIdDeUbicacion(u) ?? (String(u.proyecto?.id ?? '').trim() || null);
 }
 
 /**
- * Almacén de origen de la obra sin preguntar al depositario: el único que tenga la obra,
+ * Almacenes de la obra (central/móvil). Nunca los de otra obra.
+ * Si la obra tiene almacén propio, se prefieren esos sobre depósitos sin obra asignada.
+ */
+async function listarAlmacenesOrigen(
+  supabase: SupabaseClient,
+  proyectoId: string,
+  chatId?: string | number,
+): Promise<UbicacionInventario[]> {
+  const pid = proyectoId.trim();
+  const ubicaciones = await listarUbicacionesParaSelector(supabase, {
+    proyectoId: pid,
+    soloAlmacenes: true,
+  });
+  let almacenes = ubicaciones.filter(esAlmacenOrigen).filter((u) => {
+    const deObra = proyectoIdDeAlmacen(u);
+    return !deObra || deObra === pid;
+  });
+  const deLaObra = almacenes.filter((u) => proyectoIdDeAlmacen(u) === pid);
+  if (deLaObra.length) almacenes = deLaObra;
+
+  if (chatId != null && String(chatId).trim()) {
+    const alcance = await alcanceObrasDepositarioParaChat(supabase, chatId);
+    almacenes = filtrarUbicacionesPorAlcanceDepositario(almacenes, alcance);
+  }
+  return almacenes;
+}
+
+/**
+ * Almacén de origen de la obra sin preguntar al depositario: el de esa obra,
  * o el primero de la lista si hay varios.
  */
 export async function almacenOrigenObra(
   supabase: SupabaseClient,
   proyectoId: string,
+  chatId?: string | number,
 ): Promise<UbicacionInventario | null> {
-  const list = await listarAlmacenesOrigen(supabase, proyectoId);
+  const list = await listarAlmacenesOrigen(supabase, proyectoId, chatId);
   return list[0] ?? null;
 }
 
 export async function hayAlmacenesOrigenSalida(
   supabase: SupabaseClient,
   proyectoId: string,
+  chatId?: string | number,
 ): Promise<boolean> {
-  const list = await listarAlmacenesOrigen(supabase, proyectoId);
+  const list = await listarAlmacenesOrigen(supabase, proyectoId, chatId);
   return list.length > 0;
 }
 
@@ -112,7 +146,7 @@ export async function enviarPickerOrigenSalidaTelegram(
   chatId: string,
   params: { proyectoId: string; nombreObra: string; nMateriales: number; page?: number },
 ): Promise<void> {
-  const ubicaciones = await listarAlmacenesOrigen(supabase, params.proyectoId);
+  const ubicaciones = await listarAlmacenesOrigen(supabase, params.proyectoId, chatId);
 
   await setTelegramContexto(supabase, chatId, {
     contexto: 'salida_obra',
@@ -189,6 +223,12 @@ export async function manejarCallbackSalidaOrigenTelegram(
 
   if (ubi.tipo !== 'almacen_central' && ubi.tipo !== 'almacen_movil') {
     await answerCallbackQuery(params.callbackId, 'Elige un almacén central o móvil', true);
+    return true;
+  }
+
+  const ubiOk = await assertUbicacionPerteneceAProyecto(supabase, String(ubi.id), proyectoId);
+  if (!ubiOk.ok) {
+    await answerCallbackQuery(params.callbackId, 'Almacén no encontrado', true);
     return true;
   }
 
