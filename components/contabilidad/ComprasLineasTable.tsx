@@ -1,5 +1,6 @@
 'use client';
 
+import BotonVerDocumentoCompra from '@/components/almacen/BotonVerDocumentoCompra';
 import { useMemo } from 'react';
 import type { CSSProperties } from 'react';
 import { CalendarClock, Loader2, Pencil, Trash2 } from 'lucide-react';
@@ -245,7 +246,7 @@ export default function ComprasLineasTable({
             <SortTh col="tasaBcv" label="Tasa BCV" align="right" className="whitespace-nowrap" minWidth={112} />
             <th style={th}>Entidad</th>
             <th style={th}>Proyecto</th>
-            <th style={th}>Ver imagen</th>
+            <th style={th}>Factura</th>
             {muestraAcciones ? <th style={th}>Acciones</th> : null}
           </tr>
         </thead>
@@ -426,22 +427,16 @@ export default function ComprasLineasTable({
                   {row.proyecto || '—'}
                 </td>
                 <td style={td}>
-                  {onVerImagen ? (
-                    <button
-                      type="button"
-                      onClick={() => onVerImagen(row.pendienteId)}
-                      aria-haspopup="dialog"
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        color: '#5856D6',
-                        fontSize: '11px',
-                        fontWeight: 800,
-                        cursor: 'pointer',
+                  {row.tieneDocumento ? (
+                    <BotonVerDocumentoCompra
+                      documento={{
+                        compra_id: row.pendienteId,
+                        invoice_number: row.factura || null,
+                        supplier_name: row.proveedor || null,
+                        fecha: row.fecha || null,
                       }}
-                    >
-                      Ver imagen
-                    </button>
+                      onError={(m) => window.alert(m)}
+                    />
                   ) : null}
                 </td>
                 {muestraAcciones ? (
