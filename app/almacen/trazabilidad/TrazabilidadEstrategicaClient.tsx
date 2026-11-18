@@ -16,6 +16,7 @@ import {
   Search,
 } from 'lucide-react';
 import type { FilaTrazabilidadEstrategica } from '@/lib/almacen/listarTrazabilidadEstrategica';
+import BotonVerDocumentoCompra from '@/components/almacen/BotonVerDocumentoCompra';
 import {
   buildTrazabilidadCuadroSearchParams,
   guardarTrazabilidadCuadroFiltros,
@@ -541,12 +542,13 @@ export default function TrazabilidadEstrategicaClient() {
                     <th className="px-4 py-3 font-bold text-right">Cantidad</th>
                     <th className="px-4 py-3 font-bold text-right">Stock final</th>
                     <th className="px-4 py-3 font-bold text-right">Costo prom.</th>
+                    <th className="px-4 py-3 font-bold">Documento</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td colSpan={7} className="px-4 py-16 text-center text-zinc-500">
+                      <td colSpan={8} className="px-4 py-16 text-center text-zinc-500">
                         <span className="inline-flex items-center gap-2">
                           <Loader2 className="animate-spin text-sky-400" size={18} />
                           Cargando kardex…
@@ -555,7 +557,7 @@ export default function TrazabilidadEstrategicaClient() {
                     </tr>
                   ) : filas.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-4 py-16 text-center text-zinc-500">
+                      <td colSpan={8} className="px-4 py-16 text-center text-zinc-500">
                         No hay movimientos con los filtros actuales.
                       </td>
                     </tr>
@@ -609,6 +611,16 @@ export default function TrazabilidadEstrategicaClient() {
                           {f.costoPromedioUsd > 0
                             ? formatearMonedaUsd(f.costoPromedioUsd)
                             : '—'}
+                        </td>
+                        <td className="px-4 py-3 align-top">
+                          {f.documentoCompra ? (
+                            <BotonVerDocumentoCompra
+                              documento={f.documentoCompra}
+                              onError={(m) => setError(m)}
+                            />
+                          ) : (
+                            <span className="text-xs text-zinc-600">—</span>
+                          )}
                         </td>
                       </tr>
                     ))
@@ -674,6 +686,14 @@ export default function TrazabilidadEstrategicaClient() {
                         ) : (
                           f.origenDocumento
                         )}
+                        {f.documentoCompra ? (
+                          <div className="mt-1.5">
+                            <BotonVerDocumentoCompra
+                              documento={f.documentoCompra}
+                              onError={(m) => setError(m)}
+                            />
+                          </div>
+                        ) : null}
                       </td>
                       <td className="px-4 py-3">
                         <span

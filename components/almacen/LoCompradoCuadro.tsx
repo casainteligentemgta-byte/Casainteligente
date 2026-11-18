@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { FileText, Loader2, Package, RefreshCw, Search } from 'lucide-react';
+import { Loader2, Package, RefreshCw, Search } from 'lucide-react';
+import BotonVerDocumentoCompra from '@/components/almacen/BotonVerDocumentoCompra';
 import type { FilaLoComprado, ResumenLoComprado } from '@/lib/almacen/cargarLoComprado';
 import {
   CATEGORIAS_FILTRO_CUADRO,
@@ -31,11 +32,6 @@ function fmtCantidad(n: number): string {
 
 const MAX_BOTONES_DOCUMENTO = 3;
 
-function etiquetaDocumento(d: { invoice_number: string | null; supplier_name: string | null }): string {
-  const num = d.invoice_number ? `#${d.invoice_number}` : 'Ver';
-  return d.supplier_name ? `${num} · ${d.supplier_name}` : num;
-}
-
 function hrefComprasArticulo(fila: FilaLoComprado): string {
   const qs = new URLSearchParams();
   if (fila.proyecto_id) qs.set('proyecto', fila.proyecto_id);
@@ -58,33 +54,7 @@ export default function LoCompradoCuadro() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [resumen, setResumen] = useState<ResumenLoComprado | null>(null);
-  const [abriendoDoc, setAbriendoDoc] = useState<string | null>(null);
   const [errorDoc, setErrorDoc] = useState<string | null>(null);
-
-  /** Abre la factura o nota de entrega de una compra en una pestaña nueva. */
-  const abrirDocumento = useCallback(async (compraId: string) => {
-    setErrorDoc(null);
-    setAbriendoDoc(compraId);
-    // Se abre la pestaña antes del await para que el navegador no la bloquee.
-    const ventana = window.open('', '_blank');
-    try {
-      const res = await fetch(
-        `/api/almacen/lo-comprado/documento?compra_id=${encodeURIComponent(compraId)}`,
-        { cache: 'no-store' },
-      );
-      const json = (await res.json().catch(() => ({}))) as { ok?: boolean; url?: string; error?: string };
-      if (!res.ok || !json.ok || !json.url) {
-        throw new Error(json.error ?? 'No se pudo abrir el documento.');
-      }
-      if (ventana) ventana.location.href = json.url;
-      else window.open(json.url, '_blank');
-    } catch (e) {
-      ventana?.close();
-      setErrorDoc(e instanceof Error ? e.message : 'No se pudo abrir el documento.');
-    } finally {
-      setAbriendoDoc(null);
-    }
-  }, []);
 
   useEffect(() => {
     const t = setTimeout(() => setQDebounced(q.trim()), 300);
@@ -422,21 +392,11 @@ export default function LoCompradoCuadro() {
                     ) : (
                       <div className="flex flex-wrap gap-1.5">
                         {fila.documentos.slice(0, MAX_BOTONES_DOCUMENTO).map((d) => (
-                          <button
+                          <BotonVerDocumentoCompra
                             key={d.compra_id}
-                            type="button"
-                            onClick={() => void abrirDocumento(d.compra_id)}
-                            disabled={abriendoDoc === d.compra_id}
-                            title={`Ver factura o nota de entrega${d.fecha ? ` del ${d.fecha}` : ''}`}
-                            className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] font-bold text-zinc-200 hover:border-emerald-400/40 hover:text-emerald-300 disabled:opacity-50"
-                          >
-                            {abriendoDoc === d.compra_id ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : (
-                              <FileText className="h-3 w-3" />
-                            )}
-                            {etiquetaDocumento(d)}
-                          </button>
+                            documento={d}
+                            onError={setErrorDoc}
+                          />
                         ))}
                         {fila.documentos.length > MAX_BOTONES_DOCUMENTO ? (
                           <span className="self-center text-[11px] text-zinc-500">
