@@ -120,9 +120,13 @@ async function stockLineasEnUbicacion(
   return lineas.every((l) => (porMaterial.get(l.material_id) ?? 0) > 0);
 }
 
+/**
+ * El documento_id del ledger debe ser la factura de recepción (purchase_invoices.id),
+ * no el id de compras_facturas: la conciliación cruza por purchase_invoices.
+ */
 async function reaplicarStockCompraFactura(
   supabase: SupabaseClient,
-  compraFacturaId: string,
+  purchaseInvoiceId: string,
   ubicacionId: string,
   lineas: LineaStock[],
 ): Promise<void> {
@@ -131,7 +135,7 @@ async function reaplicarStockCompraFactura(
       ubicacionDestinoId: ubicacionId,
       materialId: l.material_id,
       cantidad: l.cantidad,
-      purchaseInvoiceId: compraFacturaId,
+      purchaseInvoiceId,
       referenciaTipo: 'compras_facturas',
     });
   }
@@ -255,7 +259,7 @@ async function intentarCompletarCompraFacturaExistente(
   if (lineas.length > 0) {
     const yaHayStock = await stockLineasEnUbicacion(supabase, ubicacionId, lineas);
     if (!yaHayStock) {
-      await reaplicarStockCompraFactura(supabase, compraFacturaId, ubicacionId, lineas);
+      await reaplicarStockCompraFactura(supabase, purchaseInvoiceId, ubicacionId, lineas);
     }
   }
 
