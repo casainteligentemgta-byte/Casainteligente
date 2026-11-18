@@ -12,6 +12,7 @@ También desde Contabilidad → **Reportes**.
 | Cadena procura → compra | `/informes/cadena-procura` | `ci_procuras` (pedida vs compra vs factura) |
 | Stock valorizado | `/informes/stock` | Stock × `average_weighted_cost` |
 | Rentabilidad de obra | `/informes/rentabilidad` | Ventas del cliente de la obra vs compras |
+| Movimientos de almacén | `/informes/movimientos-almacen` | `inv_movimientos` del periodo (entradas/salidas) + `inventario_stock` (existencia y tránsito). Existencia inicial = actual − neto del periodo |
 
 Cada informe exporta CSV.
 
