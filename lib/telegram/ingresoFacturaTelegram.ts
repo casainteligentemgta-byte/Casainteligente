@@ -1,6 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { FacturaPendienteIngreso } from '@/lib/almacen/listarFacturasPendientesIngreso';
-import { listarFacturasPendientesDeMisObras } from '@/lib/telegram/facturasPendientesDeMisObras';
+import {
+  diagnosticoListadoFacturasComprador,
+  listarFacturasPendientesDeMisObras,
+} from '@/lib/telegram/facturasPendientesDeMisObras';
 import { PROCUREMENT_DOCUMENTS_BUCKET } from '@/lib/almacen/procurementDocumentStorage';
 import { linkConfirmarCompraTelegram } from '@/lib/contabilidad/confirmarCompraDesdeCanal';
 import type { ExtractedCanalHeader } from '@/lib/contabilidad/extractedCanal';
@@ -451,6 +454,8 @@ async function enviarListaProveedores(
       '✅ No hay facturas precargadas pendientes de ingreso (ni ingreso ni confirmación de compra).',
       { parse_mode: 'HTML' },
     );
+    // DIAGNÓSTICO TEMPORAL: quitar al terminar la revisión.
+    await sendTelegramMessage(chatId, await diagnosticoListadoFacturasComprador(supabase, chatId), {});
     return;
   }
 

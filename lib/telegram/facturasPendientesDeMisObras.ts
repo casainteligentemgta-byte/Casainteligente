@@ -91,3 +91,30 @@ export async function listarFacturasPendientesDeMisObras(
   ]);
   return filtrarFacturasPorObras(todas, visibles, chatId);
 }
+
+/**
+ * DIAGNÓSTICO TEMPORAL (quitar después de revisar el listado vacío).
+ * Cuenta cuántas facturas descarta cada filtro para este chat.
+ */
+export async function diagnosticoListadoFacturasComprador(
+  supabase: SupabaseClient,
+  chatId: string | number,
+): Promise<string> {
+  try {
+    const todas = await listarFacturasPendientesIngreso(supabase);
+    const visibles = await obrasVisiblesParaChat(supabase, chatId);
+    const tras = filtrarFacturasPorObras(todas, visibles, chatId);
+    const visTxt = visibles === 'todas' ? 'todas' : `${visibles.size} obra(s)`;
+    const conObra = todas.filter((f) => f.proyecto_id?.trim()).length;
+    return [
+      '🔎 Diagnóstico (temporal):',
+      `• Pendientes en total: ${todas.length}`,
+      `• Con obra asignada: ${conObra}`,
+      `• Obras visibles para tu chat: ${visTxt}`,
+      `• Tras el filtro por obra: ${tras.length}`,
+      `• Chat: ${String(chatId)}`,
+    ].join('\n');
+  } catch (e) {
+    return `🔎 Diagnóstico (temporal): error ${e instanceof Error ? e.message : String(e)}`;
+  }
+}
