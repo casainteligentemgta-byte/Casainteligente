@@ -40,6 +40,16 @@ export type FilaLoComprado = {
   entidad_nombre: string | null;
   descripciones_variantes: string[];
   categoria_nombre: string | null;
+  /** Facturas o notas de entrega con archivo que aportan a esta fila. */
+  documentos: DocumentoCompraLoComprado[];
+};
+
+/** Compra con archivo adjunto (factura o nota de entrega). El archivo se abre por API, no por ruta. */
+export type DocumentoCompraLoComprado = {
+  compra_id: string;
+  invoice_number: string | null;
+  supplier_name: string | null;
+  fecha: string | null;
 };
 
 export type ResumenLoComprado = {
@@ -70,6 +80,7 @@ type CompraRow = {
   supplier_rif?: string | null;
   origen?: string | null;
   notas?: string | null;
+  document_storage_path?: string | null;
   proyecto_id?: string | null;
   entidad_id?: string | null;
   monto_usd?: number | null;
@@ -86,6 +97,7 @@ type Accumulador = {
   cantidad_comprada: number;
   lineas_count: number;
   compraIds: Set<string>;
+  documentos: Map<string, DocumentoCompraLoComprado>;
   proyecto_id: string | null;
   proyecto_nombre: string | null;
   entidad_id: string | null;
@@ -131,7 +143,7 @@ export async function cargarLoComprado(
   const categoriaFiltro = parseCategoriaFiltroCuadro(filtros.categoria);
 
   const selectBase =
-    'id,fecha,created_at,invoice_number,supplier_name,supplier_rif,origen,notas,proyecto_id,entidad_id,monto_usd,total_amount,ci_proyectos(nombre),contabilidad_compra_lineas(id,descripcion,item_code,unidad,cantidad,material_id)';
+    'id,fecha,created_at,invoice_number,supplier_name,supplier_rif,origen,notas,document_storage_path,proyecto_id,entidad_id,monto_usd,total_amount,ci_proyectos(nombre),contabilidad_compra_lineas(id,descripcion,item_code,unidad,cantidad,material_id)';
 
   const filasBrutas: CompraRow[] = [];
   let offset = 0;
@@ -242,6 +254,7 @@ export async function cargarLoComprado(
           cantidad_comprada: 0,
           lineas_count: 0,
           compraIds: new Set(),
+          documentos: new Map(),
           proyecto_id: proyId,
           proyecto_nombre: obraNombre,
           entidad_id: entId,
@@ -254,6 +267,14 @@ export async function cargarLoComprado(
       row.cantidad_comprada += cantidad;
       row.lineas_count += 1;
       row.compraIds.add(compra.id);
+      if (String(compra.document_storage_path ?? '').trim() && !row.documentos.has(compra.id)) {
+        row.documentos.set(compra.id, {
+          compra_id: compra.id,
+          invoice_number: compra.invoice_number?.trim() || null,
+          supplier_name: compra.supplier_name?.trim() || null,
+          fecha: compra.fecha ?? null,
+        });
+      }
       if (!row.material_id && mid) {
         row.material_id = mid;
       }
@@ -311,6 +332,9 @@ export async function cargarLoComprado(
         entidad_nombre: r.entidad_id ? entidadesMap.get(r.entidad_id) ?? null : null,
         descripciones_variantes: variantes,
         categoria_nombre: r.categoria_nombre,
+        documentos: Array.from(r.documentos.values()).sort((x, y) =>
+          String(y.fecha ?? '').localeCompare(String(x.fecha ?? '')),
+        ),
       };
     })
     .sort((a, b) => {
