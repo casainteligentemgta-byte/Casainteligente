@@ -21,8 +21,18 @@ export type FiltrosTrazabilidadEstrategica = {
   exportar?: boolean;
 };
 
+/** Factura o nota de entrega con archivo asociada al movimiento (para el botón «Ver»). */
+export type DocumentoCompraTrazabilidad = {
+  compra_id: string;
+  invoice_number: string | null;
+  supplier_name: string | null;
+  fecha: string | null;
+};
+
 export type FilaTrazabilidadEstrategica = {
   id: string;
+  /** Compra con archivo adjunto que originó el movimiento; null si no hay archivo. */
+  documentoCompra: DocumentoCompraTrazabilidad | null;
   fechaHora: string;
   materialId: string;
   materialNombre: string;
@@ -425,6 +435,71 @@ async function calcularStockResultanteBatch(
   return out;
 }
 
+/** Factura de compra (purchase_invoice) que sustenta un movimiento, si la hay. */
+export function purchaseInvoiceDeMovimiento(
+  row: MovRowDb,
+  ctx: ContextoEnriquecimientoTrazabilidad,
+): string | null {
+  const doc = String(row.documento_id ?? '').trim();
+  if (doc) return doc;
+  const refTipo = String(row.referencia_tipo ?? '').trim().toLowerCase();
+  const refId = String(row.referencia_id ?? '').trim();
+  if (!refId) return null;
+  if (refTipo === 'purchase_invoice') return refId;
+  if (refTipo.includes('compras_factura') || refTipo.includes('compra')) {
+    return ctx.comprasFactura.get(refId)?.purchase_invoice_id ?? null;
+  }
+  return null;
+}
+
+/** Marca cada fila con la compra que tiene archivo adjunto (una consulta en lote). */
+async function adjuntarDocumentosCompra(
+  supabase: SupabaseClient,
+  rows: MovRowDb[],
+  ctx: ContextoEnriquecimientoTrazabilidad,
+  filas: FilaTrazabilidadEstrategica[],
+): Promise<FilaTrazabilidadEstrategica[]> {
+  const piPorFila = new Map<string, string>();
+  const piIds = new Set<string>();
+  for (const row of rows) {
+    const pi = purchaseInvoiceDeMovimiento(row, ctx);
+    if (pi) {
+      piPorFila.set(String(row.id), pi);
+      piIds.add(pi);
+    }
+  }
+  if (!piIds.size) return filas;
+
+  const docPorPi = new Map<string, DocumentoCompraTrazabilidad>();
+  const { data } = await supabase
+    .from('contabilidad_compras')
+    .select('id,purchase_invoice_id,invoice_number,supplier_name,fecha')
+    .in('purchase_invoice_id', Array.from(piIds).slice(0, 500))
+    .not('document_storage_path', 'is', null);
+  for (const r of (data ?? []) as Array<{
+    id: string;
+    purchase_invoice_id: string | null;
+    invoice_number: string | null;
+    supplier_name: string | null;
+    fecha: string | null;
+  }>) {
+    const pid = r.purchase_invoice_id ? String(r.purchase_invoice_id) : '';
+    if (!pid || docPorPi.has(pid)) continue;
+    docPorPi.set(pid, {
+      compra_id: String(r.id),
+      invoice_number: r.invoice_number?.trim() || null,
+      supplier_name: r.supplier_name?.trim() || null,
+      fecha: r.fecha ?? null,
+    });
+  }
+
+  return filas.map((f) => {
+    const pi = piPorFila.get(f.id);
+    const doc = pi ? docPorPi.get(pi) : undefined;
+    return { ...f, documentoCompra: doc ?? null };
+  });
+}
+
 function mapearFila(
   row: MovRowDb,
   ctx: ContextoEnriquecimientoTrazabilidad,
@@ -438,6 +513,7 @@ function mapearFila(
 
   return {
     id: row.id,
+    documentoCompra: null,
     fechaHora: row.created_at,
     materialId: row.material_id,
     materialNombre: mat.name,
@@ -524,9 +600,13 @@ export async function listarTrazabilidadEstrategica(
 
     const ctx = await cargarContextoEnriquecimiento(supabase, candidatas);
     const stockMap = await calcularStockResultanteBatch(supabase, candidatas);
-    const filtradas = candidatas
-      .map((row) => mapearFila(row, ctx, stockMap))
-      .filter((f) => f.tipoMovimiento === tipoFiltro);
+    const filtradasBase = await adjuntarDocumentosCompra(
+      supabase,
+      candidatas,
+      ctx,
+      candidatas.map((row) => mapearFila(row, ctx, stockMap)),
+    );
+    const filtradas = filtradasBase.filter((f) => f.tipoMovimiento === tipoFiltro);
 
     if (filtros.exportar) {
       return {
@@ -556,7 +636,12 @@ export async function listarTrazabilidadEstrategica(
   const { rows, total } = await consultarMovimientosBase(supabase, filtros, { offset, limit });
   const ctx = await cargarContextoEnriquecimiento(supabase, rows);
   const stockMap = await calcularStockResultanteBatch(supabase, rows);
-  const filas = rows.map((row) => mapearFila(row, ctx, stockMap));
+  const filas = await adjuntarDocumentosCompra(
+    supabase,
+    rows,
+    ctx,
+    rows.map((row) => mapearFila(row, ctx, stockMap)),
+  );
 
   return {
     filas,

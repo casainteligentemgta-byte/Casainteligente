@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Loader2, Package, RefreshCw, Search } from 'lucide-react';
+import BotonVerDocumentoCompra from '@/components/almacen/BotonVerDocumentoCompra';
 import type { FilaLoComprado, ResumenLoComprado } from '@/lib/almacen/cargarLoComprado';
 import {
   CATEGORIAS_FILTRO_CUADRO,
@@ -29,6 +30,8 @@ function fmtCantidad(n: number): string {
   return n.toLocaleString('es-VE', { maximumFractionDigits: 2 });
 }
 
+const MAX_BOTONES_DOCUMENTO = 3;
+
 function hrefComprasArticulo(fila: FilaLoComprado): string {
   const qs = new URLSearchParams();
   if (fila.proyecto_id) qs.set('proyecto', fila.proyecto_id);
@@ -51,6 +54,7 @@ export default function LoCompradoCuadro() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [resumen, setResumen] = useState<ResumenLoComprado | null>(null);
+  const [errorDoc, setErrorDoc] = useState<string | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setQDebounced(q.trim()), 300);
@@ -300,6 +304,12 @@ export default function LoCompradoCuadro() {
         </div>
       ) : null}
 
+      {errorDoc ? (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          {errorDoc}
+        </div>
+      ) : null}
+
       {loading ? (
         <div className="flex items-center justify-center gap-2 py-16 text-zinc-500">
           <Loader2 className="animate-spin text-emerald-400" size={22} />
@@ -332,6 +342,7 @@ export default function LoCompradoCuadro() {
                 <th className="px-3 py-3">Und</th>
                 <th className="px-3 py-3 text-right">Facturas</th>
                 <th className="px-3 py-3 text-right">Líneas</th>
+                <th className="px-3 py-3">Documentos</th>
               </tr>
             </thead>
             <tbody>
@@ -374,6 +385,26 @@ export default function LoCompradoCuadro() {
                   </td>
                   <td className="px-3 py-3 align-top text-right text-zinc-300 tabular-nums">
                     {fila.lineas_count}
+                  </td>
+                  <td className="px-3 py-3 align-top">
+                    {fila.documentos.length === 0 ? (
+                      <span className="text-[11px] text-zinc-600">Sin archivo</span>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        {fila.documentos.slice(0, MAX_BOTONES_DOCUMENTO).map((d) => (
+                          <BotonVerDocumentoCompra
+                            key={d.compra_id}
+                            documento={d}
+                            onError={setErrorDoc}
+                          />
+                        ))}
+                        {fila.documentos.length > MAX_BOTONES_DOCUMENTO ? (
+                          <span className="self-center text-[11px] text-zinc-500">
+                            +{fila.documentos.length - MAX_BOTONES_DOCUMENTO} más
+                          </span>
+                        ) : null}
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))}

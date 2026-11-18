@@ -34,6 +34,8 @@ export type ExtractedInvoiceHeader = {
 
 export type FilaFacturaCanal = {
   pendienteId: string;
+  /** true si la compra tiene factura o nota de entrega adjunta (Storage). */
+  tieneDocumento?: boolean;
   canal: string;
   estado: string;
   chat_label: string | null;
@@ -372,6 +374,7 @@ export function aplanarComprasConfirmadas(compras: CompraConfirmadaParaLineas[])
     const moneda = monedaOriginalCompra(c);
     const base = {
       pendienteId: c.id,
+      tieneDocumento: Boolean(String((c as { document_storage_path?: string | null }).document_storage_path ?? '').trim()),
       canal: c.origen || 'compra',
       estado: c.estado || 'REGISTRADA',
       chat_label: null,
