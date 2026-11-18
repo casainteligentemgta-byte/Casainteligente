@@ -99,7 +99,7 @@ begin
       o.notas,
       o.created_at,
       o.updated_at,
-      o.entidad_id,
+      null::uuid,
       '[]'::jsonb,
       'talento'::public.tipo_proyecto_ci,
       o.id,
