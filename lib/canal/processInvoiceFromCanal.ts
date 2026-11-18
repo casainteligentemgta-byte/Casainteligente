@@ -484,6 +484,8 @@ async function processInvoiceFromCanalCore(
     invoice_number: facturaNum,
     supplier_rif: extractedGuardado.supplier_rif ?? datosOcr.supplier_rif,
     supplier_name: extractedGuardado.supplier_name ?? datosOcr.supplier_name,
+    fecha: extractedGuardado.date ?? datosOcr.date ?? null,
+    total: extractedGuardado.total_amount ?? datosOcr.total_amount ?? null,
   };
 
   const dupCompra = await buscarCompraContablePorFactura(supabase, {
@@ -499,6 +501,34 @@ async function processInvoiceFromCanalCore(
     dupCompra?.purchase_invoice_id?.trim() ||
     dupPendiente?.purchase_invoice_id?.trim() ||
     null;
+
+  // Sin número de factura y ya hay una pendiente igual (proveedor, fecha y total): esta es
+  // un reenvío. Se rechaza y no se crea otra fila.
+  const sinNumero = !String(facturaNum ?? '').trim() || String(facturaNum).trim().toUpperCase() === 'S/N';
+  if (!purchaseInvoiceIdExistente && sinNumero && dupPendiente) {
+    await supabase
+      .from('ci_facturas_canal_pendientes')
+      .update({
+        estado: 'rechazado',
+        mensaje_error: `Duplicada de ${dupPendiente.id}: mismo proveedor, fecha y total, sin número de factura.`,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', params.pendingId);
+
+    await prog?.reportar(100, 'Completado');
+    const msgSinNumero =
+      `⚠️ <b>Documento duplicado</b>\n\n` +
+      `Proveedor: ${datosOcr.supplier_name ?? '—'}\n` +
+      `Total: ${datosOcr.total_amount ?? '—'}\n\n` +
+      `Ya hay uno igual pendiente de ingreso. No se creó otro registro.`;
+    if (prog) {
+      await prog.ok('');
+      await params.sendReply(msgSinNumero, true);
+    } else {
+      await params.sendReply(msgSinNumero, false);
+    }
+    return;
+  }
 
   if (purchaseInvoiceIdExistente) {
     // Solo se confirma si la compra ya existe en contabilidad (con su obra y almacén).
