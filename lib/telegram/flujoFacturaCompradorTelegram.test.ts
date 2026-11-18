@@ -7,6 +7,7 @@ describe('siguientePasoFlujoFacturaComprador', () => {
     const paso = siguientePasoFlujoFacturaComprador({
         invoice_number: 'F-1',
         total_amount: 10,
+        date: '2026-11-18',
         moneda: 'USD',
         campos_sugeridos: ['moneda'],
     })
@@ -18,6 +19,7 @@ describe('siguientePasoFlujoFacturaComprador', () => {
       {
         invoice_number: 'F-1',
         total_amount: 10,
+        date: '2026-11-18',
         moneda: 'USD',
         condicion_pago: 'contado',
         campos_sugeridos: ['proyecto_id'],
@@ -25,5 +27,15 @@ describe('siguientePasoFlujoFacturaComprador', () => {
       { proyecto_id: null, ubicacion_destino_id: null },
     )
     assert.equal(paso, 'destino')
+  })
+
+  it('sin fecha extraída pide el dato faltante antes de moneda', () => {
+    const paso = siguientePasoFlujoFacturaComprador({
+      invoice_number: 'F-1',
+      total_amount: 10,
+      date: null,
+      moneda: 'USD',
+    })
+    assert.equal(paso, 'dato_faltante')
   })
 })
