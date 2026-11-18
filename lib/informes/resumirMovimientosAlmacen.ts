@@ -89,7 +89,7 @@ export function resumirMovimientosAlmacen(input: {
   }
 
   const filas: FilaMovimientoAlmacen[] = [];
-  for (const [k, a] of acum) {
+  for (const [k, a] of Array.from(acum.entries())) {
     const [ubicacionId, materialId] = k.split('|');
     const movio = Math.abs(a.entradas) > TOL || Math.abs(a.salidas) > TOL;
     if (!movio && Math.abs(a.disp) < TOL && Math.abs(a.tr) < TOL) continue;
