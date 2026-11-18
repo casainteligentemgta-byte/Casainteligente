@@ -393,7 +393,15 @@ async function confirmarCompraDesdeCanalInterno(
     }
   }
 
-  const fecha = (extracted.date ?? '').slice(0, 10) || new Date().toISOString().slice(0, 10);
+  // Sin fecha extraída por la IA no se registra con la fecha de hoy: la tasa BCV
+  // y el periodo quedarían con un día que no es el de la factura.
+  const fechaExtraida = (extracted.date ?? '').slice(0, 10);
+  if (!fechaExtraida) {
+    throw new Error(
+      'La IA no extrajo la fecha de la factura. Edite la factura y registre la fecha antes de confirmar (para que la tasa BCV sea la del día de la factura).',
+    );
+  }
+  const fecha = fechaExtraida;
   const auditFecha = auditoriaFechaCompra(fecha);
   const fechaConfirmada =
     Boolean(params.confirmarFechaAnomala) ||
