@@ -31,8 +31,10 @@ describe('ComprasLineasTable — celdas FECHA / RIF / montos en una línea', () 
     );
   });
 
-  it('Ver imagen dispara onVerImagen hacia el modal (no scroll a fila expandida)', () => {
-    assert.match(tableSrc, /onVerImagen\?: \(compraId: string\) => void/);
-    assert.match(tableSrc, /onClick=\{\(\) => onVerImagen\(row\.pendienteId\)\}/);
+  it('Factura: botón de documento solo si la compra tiene archivo (no «Ver imagen»)', () => {
+    assert.match(tableSrc, /import BotonVerDocumentoCompra from '@\/components\/almacen\/BotonVerDocumentoCompra'/);
+    assert.match(tableSrc, /\{row\.tieneDocumento \? \(/);
+    assert.match(tableSrc, /<BotonVerDocumentoCompra[\s\S]*compra_id: row\.pendienteId/);
+    assert.match(tableSrc, /<th style=\{th\}>Factura<\/th>/);
   });
 });
