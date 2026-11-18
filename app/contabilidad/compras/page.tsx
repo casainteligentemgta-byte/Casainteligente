@@ -85,6 +85,7 @@ import {
 import { useTasasBcvPorFechas } from '@/lib/contabilidad/useTasasBcvPorFechas';
 import { tasaBcvPorFechaCompra } from '@/lib/contabilidad/tasaBcvPorFechaCompra';
 import { cargarCanalParaCompras } from '@/lib/contabilidad/cargarCanalParaCompras';
+import { filtrarPendientesCanalParaCompras } from '@/lib/contabilidad/filtrarCanalParaCompras';
 import {
     extractedDesdeCompraLista,
     normalizarMonedaExtracted,
@@ -826,9 +827,17 @@ export default function ComprasPage() {
                 montoMaxUsd,
             };
 
+            // Las facturas del canal se filtran con los mismos criterios que la consulta
+            // (entidad, obra, periodo, proveedor); antes se añadían todas sin filtrar.
             filas = unificarComprasConCanal(
                 filas.map((c) => ({ ...c, fuente_lista: c.fuente_lista ?? 'app' })),
-                canalPendientes,
+                filtrarPendientesCanalParaCompras(canalPendientes, {
+                    entidadId: entidadFiltro,
+                    proyectoId: proyectoFiltro,
+                    desde: rangoActivo?.desde ?? null,
+                    hasta: rangoActivo?.hasta ?? null,
+                    proveedor: proveedorFiltro || null,
+                }),
             );
 
             filas = await enriquecerComprasPuenteInventario(supabase, filas);
