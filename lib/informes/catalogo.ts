@@ -1,6 +1,6 @@
 /** Catálogo del Centro de Informes (pack 1). */
 
-export type InformeId = 'compras' | 'cadena-procura' | 'stock' | 'rentabilidad';
+export type InformeId = 'compras' | 'cadena-procura' | 'stock' | 'rentabilidad' | 'movimientos-almacen';
 
 export type InformeDef = {
   id: InformeId;
@@ -39,5 +39,12 @@ export const INFORMES_PACK1: InformeDef[] = [
     titulo: 'Rentabilidad de obra',
     descripcion: 'Ventas aceptadas, cobrado y compras vs margen bruto simple.',
     fuentes: ['budgets', 'contabilidad_compras'],
+  },
+  {
+    id: 'movimientos-almacen',
+    href: '/informes/movimientos-almacen',
+    titulo: 'Movimientos de almacén',
+    descripcion: 'Entradas, salidas, existencia y tránsito por almacén en la última semana, 2 semanas o mes.',
+    fuentes: ['inv_movimientos', 'inventario_stock', 'inv_ubicaciones'],
   },
 ];
