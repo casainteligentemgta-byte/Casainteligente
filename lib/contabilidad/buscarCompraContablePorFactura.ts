@@ -90,6 +90,40 @@ export function mismaFacturaProveedorCompra(
   );
 }
 
+/**
+ * Sin número de factura (p. ej. notas de entrega): duplicada si coincide proveedor, fecha
+ * y total. Si alguna de las dos tiene número, no aplica: eso lo decide la comparación normal.
+ */
+export function extractedCoincideSinNumero(
+  extracted: Record<string, unknown> | null | undefined,
+  params: {
+    invoice_number?: string | null;
+    supplier_rif?: string | null;
+    supplier_name?: string | null;
+    fecha?: string | null;
+    total?: number | string | null;
+  },
+): boolean {
+  const ex = extracted ?? {};
+  if (normalizeInvoiceNumber(String(ex.invoice_number ?? ''))) return false;
+  if (normalizeInvoiceNumber(params.invoice_number ?? '')) return false;
+
+  const fechaA = String(ex.date ?? '').slice(0, 10);
+  const fechaB = String(params.fecha ?? '').slice(0, 10);
+  if (!fechaA || !fechaB || fechaA !== fechaB) return false;
+
+  const totA = Number(ex.total_amount);
+  const totB = Number(params.total);
+  if (!Number.isFinite(totA) || !Number.isFinite(totB) || totA <= 0) return false;
+  if (Math.abs(totA - totB) > 0.01) return false;
+
+  return proveedorCoincide(
+    { supplier_rif: String(ex.supplier_rif ?? ''), supplier_name: String(ex.supplier_name ?? '') },
+    params.supplier_rif,
+    params.supplier_name,
+  );
+}
+
 export function extractedCoincideFacturaProveedor(
   extracted: Record<string, unknown> | null | undefined,
   params: {
@@ -177,11 +211,12 @@ export async function buscarPendienteCanalDuplicado(
     invoice_number: string;
     supplier_rif?: string | null;
     supplier_name?: string | null;
+    fecha?: string | null;
+    total?: number | string | null;
     excluirId?: string;
   },
 ): Promise<PendienteCanalDuplicado | null> {
   const variants = invoiceNumberVariants(params.invoice_number);
-  if (!variants.length) return null;
 
   const { data, error } = await supabase
     .from('ci_facturas_canal_pendientes')
@@ -197,10 +232,10 @@ export async function buscarPendienteCanalDuplicado(
 
   const hit = (data ?? []).find((row) => {
     if (params.excluirId && row.id === params.excluirId) return false;
-    return extractedCoincideFacturaProveedor(
-      row.extracted as Record<string, unknown> | null,
-      params,
-    );
+    const ex = row.extracted as Record<string, unknown> | null;
+    return variants.length
+      ? extractedCoincideFacturaProveedor(ex, params)
+      : extractedCoincideSinNumero(ex, params);
   });
 
   if (!hit?.id) return null;
