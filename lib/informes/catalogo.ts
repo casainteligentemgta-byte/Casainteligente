@@ -1,6 +1,6 @@
 /** Catálogo del Centro de Informes (pack 1). */
 
-export type InformeId = 'compras' | 'cadena-procura' | 'stock' | 'rentabilidad' | 'movimientos-almacen';
+export type InformeId = 'compras' | 'cadena-procura' | 'stock' | 'rentabilidad' | 'movimientos-almacen' | 'conciliacion';
 
 export type InformeDef = {
   id: InformeId;
@@ -46,5 +46,12 @@ export const INFORMES_PACK1: InformeDef[] = [
     titulo: 'Movimientos de almacén',
     descripcion: 'Entradas, salidas, existencia y tránsito por almacén en la última semana, 2 semanas o mes.',
     fuentes: ['inv_movimientos', 'inventario_stock', 'inv_ubicaciones'],
+  },
+  {
+    id: 'conciliacion',
+    href: '/informes/conciliacion',
+    titulo: 'Conciliación factura · recepción · stock',
+    descripcion: 'Qué facturó cada compra, qué llegó, qué está en tránsito y dónde no cuadra el ledger.',
+    fuentes: ['purchase_invoices', 'quality_inspections', 'inv_movimientos', 'inventario_stock'],
   },
 ];
