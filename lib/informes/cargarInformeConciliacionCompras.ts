@@ -216,11 +216,11 @@ export function conciliarCompras(input: {
     });
   };
 
-  for (const [k, l] of porLedger) {
+  for (const [k, l] of Array.from(porLedger.entries())) {
     const [docId, ub, mat] = k.split('|');
     procesar(docId, mat, ub, l, porFactura.get(clave(docId, mat)) ?? acumuladorVacio());
   }
-  for (const [k, f] of porFactura) {
+  for (const [k, f] of Array.from(porFactura.entries())) {
     const [docId, mat] = k.split('|');
     const ub = f.ubicacionId ?? facturaPorId.get(docId)?.ubicacion_id ?? '';
     const l = porLedger.get(clave(docId, ub, mat)) ?? acumuladorVacio();
@@ -256,7 +256,7 @@ export function conciliarCompras(input: {
     }
   }
   // Movimientos de ubicación/material sin fila de stock: también descuadran.
-  for (const [k, l] of sumaLedger) {
+  for (const [k, l] of Array.from(sumaLedger.entries())) {
     if (claveStock.has(k)) continue;
     if (Math.abs(l.disp) > TOL || Math.abs(l.tr) > TOL) {
       const [ub, mat] = k.split('|');
