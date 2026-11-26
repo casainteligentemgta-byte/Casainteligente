@@ -19,6 +19,7 @@ export const COMANDOS_SOLO_NO_COMPRADOR = [
   'comandoMenuSalida',
   'comandoSalida',
   'comandoEmergencia',
+  'comandoFormato',
 ] as const;
 
 /**

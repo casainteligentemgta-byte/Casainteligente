@@ -45,6 +45,7 @@ export const TELEGRAM_BOT_COMMANDS_DEPOSITARIO: Array<{ command: string; descrip
   { command: 'factura', description: 'Facturas precargadas por el comprador' },
   { command: 'ingreso', description: 'Ingreso: facturas del comprador, nota o sin nota' },
   { command: 'salida', description: 'Salida: obrero, despacho, traspaso o merma' },
+  { command: 'formato', description: 'Plantilla de un mensaje (sin internet)' },
   { command: 'agua', description: 'Registro agua: camión, PPM y litros' },
   { command: 'stock', description: 'Stock guiado o por obra/material' },
   { command: 'cancelar', description: 'Cancelar flujo y volver al menú' },
@@ -56,7 +57,7 @@ export const COMANDOS_DEPOSITARIO_PERMITIDOS = new Set(
 );
 
 export const MENSAJE_NO_DISPONIBLE_DEPOSITARIO =
-  '⛔ Esa función no está disponible para el depositario. Use /factura, /ingreso, /salida, /agua o /stock.';
+  '⛔ Esa función no está disponible para el depositario. Use /factura, /ingreso, /salida, /formato, /agua o /stock.';
 
 /**
  * Texto HTML de /menu (una sola fuente para no divergir del menú nativo).
@@ -141,6 +142,7 @@ export function mensajeAyudaTelegram(opts?: { depositario?: boolean; comprador?:
     compras +
     '<b>Ingresos</b>: /ingreso\n' +
     '<b>Salidas</b>: /salida\n' +
+    '<b>Formato fijo</b> (obra sin señal): /formato\n' +
     '<b>Campo</b>: /bitacora /agua\n' +
     '<b>Agenda</b>: /agenda /limpiar_agenda\n' +
     '<b>Técnico IA</b>: /tecnico ¿cuántos W consume la H9c?\n' +

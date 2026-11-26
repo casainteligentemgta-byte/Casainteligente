@@ -19,6 +19,8 @@ export type SincronizarContabilidadRecepcionParams = {
   tipoRecepcion: TipoRecepcionCampoContabilidad;
   lineas: LineaIngresoManualFacturaContabilidad[];
   soporteStoragePath?: string | null;
+  /** Fecha de negocio (p. ej. message.date de Telegram), YYYY-MM-DD. */
+  fechaEmision?: string | null;
 };
 
 /** Puente almacén → contabilidad tras ci_registrar_ingreso_manual_campo (sin duplicar stock). */
@@ -36,6 +38,7 @@ export async function sincronizarContabilidadDesdeRecepcionCampo(
     tipoRecepcion: params.tipoRecepcion,
     lineas: params.lineas,
     soporteStoragePath: params.soporteStoragePath,
+    fechaEmision: params.fechaEmision,
   });
 
   if (result.ok) {
