@@ -1,7 +1,11 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { reintentarOcrPendientePorId, reintentarOcrPendientesCanal } from './reintentarOcrPendientes'
+import {
+  reintentarOcrPendientePorId,
+  reintentarOcrPendientesCanal,
+  rescatarLecturasAtascadas,
+} from './reintentarOcrPendientes'
 
 function fakeSupabase(rows: Array<Record<string, unknown>>, claimedIds: string[]) {
   return {
@@ -164,5 +168,94 @@ describe('reintentarOcrPendientesCanal', () => {
     assert.equal(result.reclamadas, 1)
     assert.equal(result.ok, 1)
     assert.deepEqual(procesadas, ['encadenada'])
+  })
+})
+
+function fakeRescate(rows: Array<Record<string, unknown>>, reclamoOk = true) {
+  const updates: Array<Record<string, unknown>> = []
+  const client = {
+    from() {
+      let modoUpdate = false
+      const b: Record<string, unknown> = {}
+      for (const m of ['select', 'eq', 'is', 'lte', 'gte', 'order']) {
+        b[m] = () => b
+      }
+      b.update = (payload: Record<string, unknown>) => {
+        modoUpdate = true
+        updates.push(payload)
+        return b
+      }
+      b.limit = async () => ({ data: rows, error: null })
+      b.maybeSingle = async () => ({ data: reclamoOk && modoUpdate ? { id: 'x' } : null, error: null })
+      b.then = (res: (v: unknown) => unknown) => res({ error: null })
+      return b
+    },
+  } as unknown as SupabaseClient
+  return { client, updates }
+}
+
+describe('rescatarLecturasAtascadas', () => {
+  const ahora = new Date('2026-11-26T20:00:00.000Z')
+  const colgada = {
+    id: '39d13d33',
+    estado: 'procesando',
+    canal: 'telegram',
+    chat_id: '111',
+    ocr_intentos: 0,
+    document_storage_path: 'telegram-pending/a.jpg',
+    updated_at: '2026-11-26T15:01:00.000Z',
+  }
+
+  it('reintenta la foto colgada sin intentos y la cuenta como primer intento', async () => {
+    const { client, updates } = fakeRescate([colgada])
+    const procesadas: Array<[string, number | null | undefined]> = []
+    const out = await rescatarLecturasAtascadas(client, {
+      ahora,
+      procesar: async (row) => {
+        procesadas.push([row.id, row.ocr_intentos])
+      },
+    })
+    assert.equal(out.reintentadas, 1)
+    assert.equal(out.ok, 1)
+    assert.deepEqual(procesadas, [['39d13d33', 1]])
+    assert.equal(updates[0].ocr_intentos, 1)
+  })
+
+  it('si otro barrido ya la reclamó no la procesa dos veces', async () => {
+    const { client } = fakeRescate([colgada], false)
+    let llamadas = 0
+    const out = await rescatarLecturasAtascadas(client, {
+      ahora,
+      procesar: async () => {
+        llamadas += 1
+      },
+    })
+    assert.equal(llamadas, 0)
+    assert.equal(out.reintentadas, 0)
+  })
+
+  it('cuenta el error si el reintento falla (el cierre con ❌ lo hace el procesar real)', async () => {
+    const { client } = fakeRescate([colgada])
+    const out = await rescatarLecturasAtascadas(client, {
+      ahora,
+      procesar: async () => {
+        throw new Error('fetch failed')
+      },
+    })
+    assert.equal(out.reintentadas, 1)
+    assert.equal(out.errores, 1)
+    assert.equal(out.ok, 0)
+  })
+
+  it('ignora lo que decide el reintento normal (1–2 intentos)', async () => {
+    const { client } = fakeRescate([{ ...colgada, ocr_intentos: 1 }])
+    const out = await rescatarLecturasAtascadas(client, {
+      ahora,
+      procesar: async () => {
+        throw new Error('no debía llamarse')
+      },
+    })
+    assert.equal(out.revisadas, 0)
+    assert.equal(out.errores, 0)
   })
 })

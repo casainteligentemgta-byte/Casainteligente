@@ -169,6 +169,22 @@ export async function editTelegramMessage(
   }
 }
 
+/**
+ * «escribiendo… / enviando foto…» bajo el nombre del bot (dura ~5 s). Nunca lanza y no
+ * hace nada en ensayos simulados: es solo un detalle visual.
+ */
+export async function sendTelegramChatAction(
+  chatId: string | number,
+  action: 'typing' | 'upload_photo' = 'upload_photo',
+): Promise<void> {
+  if (simulacionBotActiva()) return;
+  try {
+    await telegramApi('sendChatAction', { chat_id: chatId, action });
+  } catch {
+    /* detalle visual: un fallo no debe tumbar la lectura */
+  }
+}
+
 export async function answerCallbackQuery(
   callbackQueryId: string,
   text?: string,

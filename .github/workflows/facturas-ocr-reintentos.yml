@@ -1,0 +1,30 @@
+name: Rescate de facturas atascadas (Telegram)
+
+# Cada 10 min, a toda hora: retoma las facturas que quedaron «leyendo» sin avance
+# (la función de Vercel cayó) o las cierra con error y le avisa UNA vez al comprador.
+# No va en vercel.json: el plan Hobby solo admite crons diarios (allí queda el diario como respaldo).
+# GitHub puede retrasar un cron unos minutos; la ruta es idempotente y reclama cada fila de forma atómica.
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: facturas-ocr-reintentos
+  cancel-in-progress: false
+
+jobs:
+  rescate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Llamar a la ruta de reintentos
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "Falta el secreto CRON_SECRET en GitHub (Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
+          curl -fsS --max-time 200 -H "Authorization: Bearer $CRON_SECRET" \
+            "https://casainteligente.company/api/cron/facturas-ocr-reintentos"

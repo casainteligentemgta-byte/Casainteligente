@@ -18,6 +18,15 @@ export const PRESUPUESTO_MS_IN_PROCESS = 150_000;
 /** Misma ventana que el lock `procesando` abandonado. */
 export const OCR_PROCESANDO_STALE_MS = 2 * 60 * 1000;
 
+/**
+ * Una factura en `procesando` sin avance por más de esto está caída: la función serverless
+ * vive 180 s como máximo, así que 195 s sin movimiento ya no es una lectura en vuelo.
+ */
+export const OCR_PROCESANDO_ATASCADO_MS = 195 * 1000;
+
+/** Más viejas que esto no se reintentan ni se avisan (ya no es el momento de molestar al comprador). */
+export const OCR_ATASCADO_EDAD_MAX_MS = 24 * 60 * 60 * 1000;
+
 export const COLUMNA_OCR_INTENTOS = 'ocr_intentos';
 export const COLUMNA_OCR_PROXIMO = 'ocr_proximo_reintento_at';
 
@@ -369,4 +378,30 @@ export async function reclamarReintentoOcr(
     return false;
   }
   return Boolean(data?.id);
+}
+
+export type DecisionAtascada = 'ignorar' | 'reintentar' | 'agotar';
+
+/**
+ * Lecturas `procesando` sin avance que el reintento normal (que exige ocr_intentos > 0)
+ * nunca recogía: la función cayó antes del primer intento y la fila quedaba colgada.
+ *  - sin intentos y con archivo  → reintentar (cuenta como 1.er intento);
+ *  - sin intentos y sin archivo, o intentos agotados → agotar (error + aviso al comprador);
+ *  - 1–2 intentos → los toma el reintento normal.
+ */
+export function decidirProcesandoAtascado(
+  row: FilaReintentoOcr & { extracted?: unknown },
+  ahoraMs: number = Date.now(),
+): DecisionAtascada {
+  if (String(row.estado ?? '').toLowerCase() !== 'procesando') return 'ignorar';
+  if (row.extracted != null) return 'ignorar';
+  const updated = Date.parse(String(row.updated_at ?? ''));
+  if (!Number.isFinite(updated)) return 'ignorar';
+  const edad = ahoraMs - updated;
+  if (edad < OCR_PROCESANDO_ATASCADO_MS || edad > OCR_ATASCADO_EDAD_MAX_MS) return 'ignorar';
+  const intentos = Number(row.ocr_intentos ?? 0);
+  const n = Number.isFinite(intentos) && intentos > 0 ? intentos : 0;
+  if (n >= MAX_INTENTOS_OCR) return 'agotar';
+  if (n > 0) return 'ignorar';
+  return pendienteTieneArchivoOcr(row) ? 'reintentar' : 'agotar';
 }

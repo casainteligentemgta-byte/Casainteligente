@@ -5,6 +5,7 @@ import { geminiGenerateText, getGeminiApiKey } from '@/lib/gemini/client';
 import { GEMINI_PROCUREMENT_DEFAULT_MODEL } from '@/lib/almacen/geminiProcurementModels';
 import { reservarFacturaCanalTelegram, liberarProcesamientoObsoletoFacturaCanal } from '@/lib/canal/reservarFacturaCanalTelegram';
 import { processTelegramInvoicePhoto } from '@/lib/telegram/processInvoiceFromTelegram';
+import { avisarSiHayLecturaEnCurso } from '@/lib/telegram/estadoLecturaFactura';
 import type { TelegramEstado } from '@/lib/telegram/estados';
 import { setTelegramContexto } from '@/lib/telegram/estados';
 import {
@@ -137,6 +138,9 @@ export async function manejarFacturaTelegram(params: {
     return { duplicate: true, pendingId: reserva.pendingId };
   }
 
+  // Otra factura de este chat sigue leyéndose: se avisa que espere; esta no se descarta.
+  await avisarSiHayLecturaEnCurso(params.supabase, params.chatId, reserva.pendingId);
+
   await processTelegramInvoicePhoto({
     pendingId: reserva.pendingId,
     chatId: params.chatId,
@@ -231,6 +235,11 @@ async function manejarFacturaAlbumTelegram(params: {
     proyecto_id: estadoPrev.data?.proyecto_id ?? null,
     metadata: metaPrev,
   });
+
+  // Solo con la primera foto del álbum (las demás partes no deben repetir el aviso).
+  if (reserva.nueva) {
+    await avisarSiHayLecturaEnCurso(params.supabase, params.chatId, reserva.pendingId);
+  }
 
   const reclamo = await esperarYReclamarAlbumFactura({
     supabase: params.supabase,

@@ -3,6 +3,7 @@ import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import {
   reintentarOcrPendientePorId,
   reintentarOcrPendientesCanal,
+  rescatarLecturasAtascadas,
 } from '@/lib/canal/reintentarOcrPendientes';
 
 export const runtime = 'nodejs';
@@ -27,7 +28,7 @@ async function leerPendingId(req: NextRequest): Promise<string> {
   }
 }
 
-/** Reintenta OCR transitorio con la foto ya guardada (álbum incluido). */
+/** Reintenta OCR transitorio con la foto ya guardada (álbum incluido) y rescata lecturas atascadas. */
 async function ejecutar(req: NextRequest) {
   if (!isAuthorized(req)) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
@@ -35,11 +36,16 @@ async function ejecutar(req: NextRequest) {
   try {
     const supabase = createSupabaseAdminClient();
     const pendingId = await leerPendingId(req);
-    const result = pendingId
-      ? await reintentarOcrPendientePorId(supabase, pendingId, { forzar: true })
-      : await reintentarOcrPendientesCanal(supabase);
-    const { ok: exitosas, ...rest } = result;
-    return NextResponse.json({ ok: true, exitosas, ...rest });
+    if (pendingId) {
+      const { ok: exitosas, ...rest } = await reintentarOcrPendientePorId(supabase, pendingId, {
+        forzar: true,
+      });
+      return NextResponse.json({ ok: true, exitosas, ...rest });
+    }
+    // Primero las lecturas colgadas sin ningún intento (el comprador no sabe nada), luego el lote normal.
+    const atascadas = await rescatarLecturasAtascadas(supabase);
+    const { ok: exitosas, ...rest } = await reintentarOcrPendientesCanal(supabase);
+    return NextResponse.json({ ok: true, exitosas, ...rest, atascadas });
   } catch (err) {
     console.error('[cron/facturas-ocr-reintentos]', err);
     const message = err instanceof Error ? err.message : 'Error en reintentos OCR';

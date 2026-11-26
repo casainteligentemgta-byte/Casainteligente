@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 export type TipoAvisoErrorCarga = 'general' | 'ilegible' | 'falta_parte';
 
-export const AVISO_FACTURA_NO_CARGADA = '⚠️ Factura no cargada. Reenvía la foto.';
+export const AVISO_FACTURA_NO_CARGADA = '❌ No pude leer la foto, mándala de nuevo';
 
 export const AVISO_FOTO_ILEGIBLE =
   '⚠️ Foto ilegible. Tómala de nuevo completa y reenvíala.\n' +
