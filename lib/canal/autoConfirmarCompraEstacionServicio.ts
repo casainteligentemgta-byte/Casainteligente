@@ -14,6 +14,7 @@ import {
 } from '@/lib/contabilidad/extractedCanal';
 import type { ClasificacionGastoEntidad } from '@/lib/contabilidad/clasificacionGastoEntidad';
 import { textoAvisoPropietario } from '@/lib/telegram/propietarioAvisoTelegram';
+import { validarLecturaFactura } from '@/lib/compras/validarLecturaFactura';
 
 /**
  * Piso de confianza OCR para auto-confirmar EDS.
@@ -143,6 +144,10 @@ export function motivoCamposInsuficientesEstacionServicio(
   const score = confianzaOcrEstacionServicio(extracted);
   if (score < UMBRAL_CONFIANZA_AUTO_CONFIRM_EDS) {
     return `Confianza OCR ${score}% < ${UMBRAL_CONFIANZA_AUTO_CONFIRM_EDS}%`;
+  }
+  const alertasLectura = validarLecturaFactura(extracted);
+  if (alertasLectura.length) {
+    return `Alertas de lectura: ${alertasLectura[0]?.mensaje ?? 'revisar factura'}`;
   }
   const fecha = String(extracted.date ?? '').slice(0, 10);
   if (fecha && exigeConfirmacionFechaAnomala(auditoriaFechaCompra(fecha))) {

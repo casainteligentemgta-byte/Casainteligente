@@ -151,6 +151,7 @@ async function processInvoiceFromCanalCore(
   },
 ): Promise<void> {
   const prog = params.progreso;
+  const startedAtOcr = Date.now();
   const archivos: ArchivoCanalFactura[] =
     params.archivos && params.archivos.length > 0
       ? params.archivos
@@ -230,15 +231,23 @@ async function processInvoiceFromCanalCore(
       pendingId: params.pendingId,
       chatId: params.chatId,
     });
-    const { data, fromGemini, modelUsed } = await extractPurchaseInvoiceFromFiles({
+    const { data, fromGemini, modelUsed, relectura_ocr } = await extractPurchaseInvoiceFromFiles({
       files: archivos.map((a) => ({
         buffer: a.buffer,
         mimeType: a.mimeType,
         fileName: a.fileName,
       })),
       hintProveedor,
+      startedAt: startedAtOcr,
     });
-    return { ...data, fromGemini, modelUsed, album_partes: archivos.length };
+    return {
+      ...data,
+      fromGemini,
+      modelUsed,
+      model_inicial: relectura_ocr?.modelo_inicial ?? modelUsed,
+      relectura_ocr,
+      album_partes: archivos.length,
+    };
   };
 
   const extraerConPolitica = async () => {
@@ -431,12 +440,17 @@ async function processInvoiceFromCanalCore(
   const datosConMemoria = memoria.extracted;
   const anomalias = memoria.anomalias;
   const notaEntrega = prepararExtractedNotaEntrega(datosConMemoria as Record<string, unknown>);
+  const { aplicarAlertasAExtracted } = await import('@/lib/compras/validarLecturaFactura');
+  const conAlertas = aplicarAlertasAExtracted(
+    notaEntrega.extracted as ExtractedCanalHeader,
+    anomalias,
+  );
 
   const payloadExtraido: Record<string, unknown> = {
     estado: 'extraido',
-    extracted: { ...notaEntrega.extracted, reintentos: intentosOcr },
+    extracted: { ...conAlertas.extracted, reintentos: intentosOcr },
     mensaje_error: notaEntrega.mensaje_error,
-    requiere_revision: notaEntrega.requiere_revision,
+    requiere_revision: Boolean(notaEntrega.requiere_revision || conAlertas.requiere_revision),
     ocr_intentos: intentosOcr,
     ocr_proximo_reintento_at: null,
     updated_at: new Date().toISOString(),
@@ -479,7 +493,7 @@ async function processInvoiceFromCanalCore(
     .eq('id', params.pendingId)
     .maybeSingle();
 
-  const extractedGuardado = notaEntrega.extracted as ExtractedCanalHeader;
+  const extractedGuardado = conAlertas.extracted;
   const facturaNumLog = String(extractedGuardado.invoice_number ?? datosOcr.invoice_number ?? 'S/N').trim();
   const avisoAnomalias = textoAnomaliasParaNotificacion(anomalias);
   const { notificarEventoSistemaLogAsync } = await import('@/lib/telegram/logBotAuditoria');
@@ -586,7 +600,8 @@ async function processInvoiceFromCanalCore(
 
   // Estación de servicio (Telegram): a compras de una vez, sin pulsar Confirmar.
   // Notas de entrega no se auto-confirman: el comprador carga proveedor/RIF/entidad/obra.
-  if (params.canal === 'telegram' && !notaEntrega.esNota) {
+  // Con alertas de lectura tampoco: nunca auto-confirmar una factura dudosa.
+  if (params.canal === 'telegram' && !notaEntrega.esNota && anomalias.length === 0) {
     const { autoConfirmarCompraEstacionServicio } = await import(
       '@/lib/canal/autoConfirmarCompraEstacionServicio'
     );
@@ -628,8 +643,9 @@ async function processInvoiceFromCanalCore(
 
   // Fast-Track con ingreso a stock: solo app/WhatsApp. En Telegram el comprador registra
   // contabilidad; el depositario ingresa físicamente con /ingresofactura.
+  // Nunca auto-confirma si hay alertas de lectura.
   let fastTrackMsg = '';
-  if (params.canal !== 'telegram') {
+  if (params.canal !== 'telegram' && anomalias.length === 0) {
     const ft = await evaluarYProcesarFastTrack(supabase, params.pendingId, datosOcr);
     if (ft.estado === 'aprobado_sistema') {
       fastTrackMsg =

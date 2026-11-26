@@ -17,3 +17,12 @@ export function procurementModelCandidates(): string[] {
     : [...GEMINI_PROCUREMENT_FALLBACK_MODELS];
   return Array.from(new Set(list));
 }
+
+/** true si el modelo usado es la variante lite (calidad inferior; conviene re-leer). */
+export function esModeloLiteOcr(model: string | null | undefined): boolean {
+  const m = String(model ?? '').trim().toLowerCase();
+  if (!m) return false;
+  if (m.includes('flash-lite')) return true;
+  if (/(^|[-_.])lite($|[-_.])/.test(m)) return true;
+  return false;
+}

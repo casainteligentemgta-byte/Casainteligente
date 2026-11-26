@@ -66,6 +66,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       purchase_invoice_id?: string;
       extracted?: Record<string, unknown>;
       mensaje_error?: string | null;
+      /** Override autorizado: permite confirmar aunque queden alertas. */
+      marcar_revisado?: boolean;
       /** Versión (updated_at) que tenía quien edita; si cambió, el guardado se rechaza. */
       expected_updated_at?: string | null;
     };
@@ -86,7 +88,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     // Historial: qué campos cambian respecto a la versión guardada.
     let cambiosExtracted: CambioFactura[] = [];
     let extractedPrevio: Record<string, unknown> = {};
-    if (body.extracted !== undefined) {
+    if (body.extracted !== undefined || body.marcar_revisado === true) {
       const { data: actualRaw } = await supabase
         .from('ci_facturas_canal_pendientes')
         .select('extracted')
@@ -95,20 +97,75 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       // El cliente de Supabase sin tipos generados infiere `never`; se tipa a mano.
       const actual = actualRaw as { extracted?: unknown } | null;
       extractedPrevio = (actual?.extracted ?? {}) as Record<string, unknown>;
-      cambiosExtracted = cambiosEntreFacturas(extractedPrevio, body.extracted);
-      update.extracted = body.extracted;
+      let extractedNext = {
+        ...extractedPrevio,
+        ...(body.extracted ?? {}),
+      } as import('@/lib/contabilidad/extractedCanal').ExtractedCanalHeader;
+
+      if (body.marcar_revisado === true) {
+        const { aplicarRevisionManual } = await import('@/lib/compras/validarLecturaFactura');
+        extractedNext = aplicarRevisionManual(extractedNext, {
+          userId: acceso.userId,
+          email: acceso.actor.email ?? null,
+          nombre: acceso.actor.nombre ?? null,
+        });
+        cambiosExtracted.push({
+          campo: 'revision_manual',
+          anterior: extractedPrevio.revision_manual
+            ? String((extractedPrevio.revision_manual as { at?: string }).at ?? '')
+            : null,
+          nuevo: extractedNext.revision_manual?.at ?? null,
+        });
+        const { notificarEventoSistemaLogAsync } = await import('@/lib/telegram/logBotAuditoria');
+        notificarEventoSistemaLogAsync({
+          chatId: null,
+          chatLabel: acceso.actor.email ?? acceso.userId,
+          modulo: 'Compras · OCR',
+          evento: 'Factura marcada como revisada',
+          detalle: `Pendiente ${id} · ${acceso.actor.email ?? acceso.userId}`,
+        });
+      }
+
+      if (body.extracted !== undefined) {
+        cambiosExtracted = [
+          ...cambiosExtracted,
+          ...cambiosEntreFacturas(extractedPrevio, extractedNext as Record<string, unknown>),
+        ];
+      }
+
+      const { detectarAnomaliasFactura } = await import('@/lib/compras/proveedorMemoria');
+      const { cargarPerfilProveedor } = await import('@/lib/compras/proveedorMemoriaDb');
+      const { aplicarAlertasAExtracted } = await import('@/lib/compras/validarLecturaFactura');
+      const perfil = await cargarPerfilProveedor(supabase, extractedNext.supplier_rif);
+      const anomalias = detectarAnomaliasFactura({ extracted: extractedNext, perfil });
+      const conAlertas = aplicarAlertasAExtracted(extractedNext, anomalias);
+      update.extracted = conAlertas.extracted;
+      update.requiere_revision = conAlertas.requiere_revision;
     }
     if (body.mensaje_error !== undefined) update.mensaje_error = body.mensaje_error;
 
-    const { data, error } = await supabase
+    const selectCols =
+      'id, canal, chat_id, chat_label, estado, proyecto_id, ubicacion_destino_id, purchase_invoice_id, document_file_name, document_storage_path, extracted, mensaje_error, requiere_revision, created_at';
+    let { data, error } = await supabase
       .from('ci_facturas_canal_pendientes')
       // Tabla sin tipos generados en Supabase client
       .update(update as never)
       .eq('id', id)
-      .select(
-        'id, canal, chat_id, chat_label, estado, proyecto_id, ubicacion_destino_id, purchase_invoice_id, document_file_name, document_storage_path, extracted, mensaje_error, created_at',
-      )
+      .select(selectCols)
       .single();
+    if (error && /requiere_revision|PGRST204|schema cache/i.test(error.message)) {
+      delete update.requiere_revision;
+      const retry = await supabase
+        .from('ci_facturas_canal_pendientes')
+        .update(update as never)
+        .eq('id', id)
+        .select(
+          'id, canal, chat_id, chat_label, estado, proyecto_id, ubicacion_destino_id, purchase_invoice_id, document_file_name, document_storage_path, extracted, mensaje_error, created_at',
+        )
+        .single();
+      data = retry.data;
+      error = retry.error;
+    }
     if (esErrorFacturaDuplicada(error)) {
       return NextResponse.json(
         { error: MENSAJE_FACTURA_DUPLICADA, codigo: 'factura_duplicada' },

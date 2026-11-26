@@ -44,13 +44,21 @@ export async function POST(req: Request) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const { data, fromGemini, modelUsed } = await extractPurchaseInvoiceFromFile({
+    const startedAt = Date.now();
+    const { data, fromGemini, modelUsed, relectura_ocr } = await extractPurchaseInvoiceFromFile({
       buffer,
       mimeType,
       fileName: file.name,
+      startedAt,
     });
 
-    return NextResponse.json({ ...data, fromGemini, modelUsed });
+    return NextResponse.json({
+      ...data,
+      fromGemini,
+      modelUsed,
+      model_inicial: relectura_ocr?.modelo_inicial ?? modelUsed,
+      relectura_ocr,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Error al extraer la factura.';
     console.error('[POST /api/almacen/procurement/extract-invoice]', error);

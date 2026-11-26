@@ -12,11 +12,36 @@ export type ExtractedCanalItem = {
   material_nombre?: string;
 };
 
+export type TipoAnomaliaFacturaCanal =
+  | 'precio_desviado'
+  | 'moneda_distinta'
+  | 'precio_cero'
+  | 'cantidad_cero'
+  | 'suma_lineas_distinta'
+  | 'confianza_baja'
+  | 'moneda_inconsistente';
+
 export type AnomaliaFacturaCanal = {
-  tipo: 'precio_desviado' | 'moneda_distinta' | 'precio_cero' | 'suma_lineas_distinta';
+  tipo: TipoAnomaliaFacturaCanal;
   mensaje: string;
   detalle?: string;
   severidad: 'aviso' | 'alerta';
+};
+
+export type RevisionManualFactura = {
+  por_user_id: string;
+  por_email?: string | null;
+  por_nombre?: string | null;
+  at: string;
+};
+
+export type RelecturaOcrMeta = {
+  intentada: boolean;
+  omitida_por_tiempo?: boolean;
+  modelo?: string;
+  modelo_inicial?: string;
+  ganador?: string;
+  motivo?: string;
 };
 
 export type SugerenciasDestinoProveedor = {
@@ -108,7 +133,15 @@ export type ExtractedCanalHeader = {
   dias_credito?: number | null;
   items?: ExtractedCanalItem[];
   modelUsed?: string;
+  /** Modelo del primer pase (si hubo re-lectura de calidad). */
+  model_inicial?: string;
   fromGemini?: boolean;
+  /** Confianza OCR 0–100 (Gemini + heurística). */
+  confidence_score?: number;
+  /** Segundo pase lite → flash y qué modelo ganó. */
+  relectura_ocr?: RelecturaOcrMeta;
+  /** Override autorizado: el usuario revisó y permite confirmar con alertas. */
+  revision_manual?: RevisionManualFactura | null;
   /** nota_entrega_telegram: depositario o IA detectó nota de entrega (sin precios). */
   document_kind?: string;
   /** La factura fiscal aún no fue cargada por contabilidad. */
