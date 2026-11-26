@@ -9,7 +9,10 @@ import {
 import { listarMaterialesObraRecepcion } from '@/lib/almacen/listarMaterialesObraRecepcion';
 import { listarProveedoresSugeridosIngreso } from '@/lib/almacen/listarProveedoresSugeridosIngreso';
 import { normalizarCodigoUnidad, UNIDADES_MEDIDA_DEFAULT } from '@/lib/almacen/unidadesMedidaDefault';
-import { claveIdempotenciaRecepcionCampo } from '@/lib/almacen/documentoRecepcionCampo';
+import {
+  claveIdempotenciaRecepcionCampo,
+  sanitizarNumeroDocumentoMovimiento,
+} from '@/lib/almacen/documentoRecepcionCampo';
 import {
   listarNotasPrecargadasPendientes,
   marcarNotaPrecargadaIngresada,
@@ -2755,13 +2758,13 @@ export async function manejarTextoIngresoManual(
   }
 
   if (paso === 'num_doc') {
-    const numDoc = trimmed || 'S/N';
+    const numDoc = sanitizarNumeroDocumentoMovimiento(trimmed) ?? 'S/N';
     await continuarTrasNumDocIngreso(supabase, chatId, estado, numDoc);
     return true;
   }
 
   if (paso === 'ocr_factura') {
-    const numDoc = trimmed || 'S/N';
+    const numDoc = sanitizarNumeroDocumentoMovimiento(trimmed) ?? 'S/N';
     await continuarTrasNumDocIngreso(supabase, chatId, estado, numDoc);
     return true;
   }

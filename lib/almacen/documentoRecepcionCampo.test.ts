@@ -6,6 +6,7 @@ import {
   esUuid,
   numeroDocumentoContabilidad,
   puedeReutilizarCompraContable,
+  sanitizarNumeroDocumentoMovimiento,
 } from './documentoRecepcionCampo';
 
 describe('documento de recepción / nota de entrega', () => {
@@ -15,6 +16,10 @@ describe('documento de recepción / nota de entrega', () => {
     }
     assert.equal(esNumeroDocumentoPlaceholder('NE-00421'), false);
     assert.equal(esNumeroDocumentoPlaceholder('F-8891'), false);
+    for (const n of ['Si', 'Sí', 'No', 'EMG-Si', 'NE-Si']) {
+      assert.equal(esNumeroDocumentoPlaceholder(n), true, n);
+      assert.equal(sanitizarNumeroDocumentoMovimiento(n), null, n);
+    }
   });
 
   it('antepone NE- salvo que ya venga', () => {

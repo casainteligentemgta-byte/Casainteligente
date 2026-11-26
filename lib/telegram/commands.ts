@@ -49,6 +49,8 @@ export type ComandoTelegramResult = {
   tecnicoPregunta?: string;
   /** Cuentas por pagar: listar créditos y marcar pagado. */
   comandoCredito?: boolean;
+  /** Plantilla de un mensaje (formato fijo, sin internet). */
+  comandoFormato?: boolean;
 };
 
 export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
@@ -77,6 +79,10 @@ export function procesarComandoTelegram(texto: string): ComandoTelegramResult {
       handled: true,
       mensaje: MENSAJE_AYUDA_TELEGRAM,
     };
+  }
+
+  if (cmd === '/formato' || cmd === '/formatofijo') {
+    return { handled: true, comandoFormato: true };
   }
 
   if (cmd === '/cancelar') {

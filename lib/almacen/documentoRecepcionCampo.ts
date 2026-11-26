@@ -18,31 +18,92 @@ const PLACEHOLDERS = new Set([
   'EMG-S/N',
   'EMG-SN',
   'EMG-S-N',
+  'SI',
+  'NO',
+  'OK',
+  'YES',
+  'EMG-SI',
+  'EMG-NO',
+  'NE-SI',
+  'NE-NO',
+  'ING-SI',
+  'ING-NO',
 ]);
 
+/** «Sí», «no hay», etc. que el bot tomaba como Nº de documento (EMG-Si / NE-Si). */
+const RESPUESTAS_SI_NO = new Set([
+  'SI',
+  'NO',
+  'OK',
+  'YES',
+  'SINO',
+  'NOPE',
+  'NOP',
+  'NOHAY',
+  'NOTIENE',
+  'NINGUNO',
+  'NINGUNA',
+  'SINNUMERO',
+  'SINNRO',
+  'SINN',
+  'NA',
+]);
+
+function sinAcentosUpper(texto: string): string {
+  return texto
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase();
+}
+
 export function normalizarNumeroDocumentoRecepcion(numDoc: string | null | undefined): string {
-  return String(numDoc ?? '')
+  return sinAcentosUpper(String(numDoc ?? ''))
     .trim()
     .replace(/^#+/, '')
-    .toUpperCase()
     .replace(/\s+/g, '');
 }
 
-/** S/N, NE-S/N, NOTA-ENTREGA, vacío y equivalentes. */
+/**
+ * «Si», «Sí», «No» y similares no son un número de factura.
+ * Evita EMG-Si / NE-Si / duplicados al reutilizar compras provisionales.
+ */
+export function esRespuestaSiNoComoDocumento(numDoc: string | null | undefined): boolean {
+  const compacto = normalizarNumeroDocumentoRecepcion(numDoc).replace(/[^A-Z0-9]/g, '');
+  if (!compacto) return false;
+  if (RESPUESTAS_SI_NO.has(compacto)) return true;
+  if (/^(NE|EMG|ING)(SI|NO)$/.test(compacto)) return true;
+  return false;
+}
+
+/** S/N, NE-S/N, NOTA-ENTREGA, Si/No, vacío y equivalentes. */
 export function esNumeroDocumentoPlaceholder(numDoc: string | null | undefined): boolean {
   const n = normalizarNumeroDocumentoRecepcion(numDoc);
   if (!n) return true;
   if (PLACEHOLDERS.has(n)) return true;
-  if (/^(NE|EMG)[-_]?S\/?N$/.test(n)) return true;
+  if (/^(NE|EMG|ING)[-_]?S\/?N$/.test(n)) return true;
   if (/^(NE[-_]?)?NOTA[-_]?ENTREGA$/.test(n)) return true;
+  if (esRespuestaSiNoComoDocumento(numDoc)) return true;
   return false;
+}
+
+/**
+ * Devuelve el número usable o null si es placeholder / «Si» / «No».
+ * El caller decide el fallback (S/N en el wizard; ING-YYYYMMDD-id en formato fijo).
+ */
+export function sanitizarNumeroDocumentoMovimiento(
+  numDoc: string | null | undefined,
+): string | null {
+  const raw = String(numDoc ?? '').trim();
+  if (!raw) return null;
+  if (esNumeroDocumentoPlaceholder(raw)) return null;
+  return raw;
 }
 
 export function numeroDocumentoContabilidad(
   tipo: 'factura_canal' | 'nota_entrega' | 'emergencia',
   numDoc: string,
 ): string {
-  const doc = numDoc.trim() || 'S/N';
+  const doc = sanitizarNumeroDocumentoMovimiento(numDoc) ?? 'S/N';
   if (tipo === 'nota_entrega') return doc.toUpperCase().startsWith('NE-') ? doc : `NE-${doc}`;
   if (tipo === 'emergencia') return doc.toUpperCase().startsWith('EMG-') ? doc : `EMG-${doc}`;
   return doc;

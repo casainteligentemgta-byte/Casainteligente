@@ -11,9 +11,9 @@ import {
 import { procesarComandoTelegram } from '@/lib/telegram/commands';
 
 describe('menú del depositario (sin procuras)', () => {
-  it('el menú nativo del depositario solo incluye factura, ingreso, salida, agua, stock y cancelar', () => {
+  it('el menú nativo del depositario solo incluye factura, ingreso, salida, formato, agua, stock y cancelar', () => {
     const nombres = TELEGRAM_BOT_COMMANDS_DEPOSITARIO.map((c) => c.command);
-    assert.deepEqual(nombres, ['factura', 'ingreso', 'salida', 'agua', 'stock', 'cancelar']);
+    assert.deepEqual(nombres, ['factura', 'ingreso', 'salida', 'formato', 'agua', 'stock', 'cancelar']);
     for (const c of ['procura', 'facturas', 'nota', 'menu', 'ayuda', 'agenda', 'tecnico', 'bitacora', 'limpiar_agenda']) {
       assert.ok(!nombres.includes(c), c);
     }
@@ -25,6 +25,7 @@ describe('menú del depositario (sin procuras)', () => {
     assert.match(dep, /\/factura\b/);
     assert.match(dep, /\/ingreso/);
     assert.match(dep, /\/salida/);
+    assert.match(dep, /\/formato/);
     assert.match(dep, /\/agua/);
     assert.match(dep, /\/stock/);
     assert.ok(!/bitacora|agenda|tecnico|\/nota|\/facturas/i.test(dep));

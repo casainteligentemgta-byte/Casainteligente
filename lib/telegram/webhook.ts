@@ -297,6 +297,10 @@ const CMD_PERMITIDO_CHOFER = /^\/(facturas?|nota|start|ayuda)(@\S+)?(\s|$)/i;
 export type TelegramUpdate = {
   message?: {
     message_id: number;
+    date?: number;
+    edit_date?: number;
+    forward_date?: number;
+    forward_origin?: { date?: number };
     text?: string;
     from?: { id: number; username?: string; first_name?: string };
     chat: { id: number; type: string; username?: string; first_name?: string };
@@ -436,6 +440,12 @@ async function aplicarComando(
     if (!dept) {
       await manejarComandoProcuraTelegram(supabase, chatId);
     }
+    return;
+  }
+
+  if (cmd.comandoFormato) {
+    const { manejarComandoFormatoTelegram } = await import('@/lib/telegram/formatoFijoHandler');
+    await manejarComandoFormatoTelegram(chatId);
     return;
   }
 
@@ -1270,6 +1280,28 @@ export async function handleTelegramWebhookPost(reqOrUpdate: Request | TelegramU
     }
 
     if (texto && !texto.startsWith('/')) {
+      const { esMensajeFormatoFijo } = await import('@/lib/telegram/formatoFijoMovimiento');
+      if (esMensajeFormatoFijo(texto)) {
+        const { manejarTextoFormatoFijo } = await import('@/lib/telegram/formatoFijoHandler');
+        const formato = await manejarTextoFormatoFijo(supabase, {
+          chatId,
+          texto,
+          messageId: msg.message_id,
+          message: msg,
+          userId,
+          username: msg.from?.username ?? null,
+        });
+        if (formato.handled) {
+          return NextResponse.json({
+            ok: true,
+            formato_fijo: true,
+            duplicate: formato.duplicate,
+            pendiente: formato.pendiente,
+            registrado: formato.registrado,
+          });
+        }
+      }
+
       // Va primero: comparte el contexto «salida_obra» con flujos antiguos que leen cualquier texto.
       const textoRequerimiento = await manejarTextoRequerimientoSalida(supabase, chatId, texto);
       if (textoRequerimiento) {
