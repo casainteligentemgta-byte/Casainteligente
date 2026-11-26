@@ -60,7 +60,10 @@ function supabaseAdmin() {
 
 export type ProgresoFacturaCanal = {
   reportar: (pct: number, etapa: string) => Promise<void>;
-  ok: (detalleHtml: string) => Promise<void>;
+  ok: (
+    detalleHtml: string,
+    datos?: { invoice_number?: unknown; supplier_name?: unknown } | null,
+  ) => Promise<void>;
   bad: (detalle: string) => Promise<void>;
   /** Avance simulado durante OCR/Gemini (opcional). */
   conSimulacion?: (
@@ -102,11 +105,22 @@ export async function processInvoiceFromCanal(params: {
       .maybeSingle();
 
     if (params.canal === 'telegram') {
+      // Si hay mensaje de estado («Leyendo factura…») se edita a ❌ en vez de mandar otro aviso.
+      let mostrado = false;
+      if (params.progreso) {
+        try {
+          await params.progreso.bad(textoAvisoErrorCarga(clasificarErrorCargaFactura(e)));
+          mostrado = true;
+        } catch {
+          /* el aviso por mensaje nuevo cubre este caso */
+        }
+      }
       await avisarErrorCargaFacturaCanal({
         pendingId: params.pendingId,
         chatId: params.chatId,
         errorOriginal: e,
         supabase,
+        yaMostrado: mostrado,
       });
     }
 
@@ -662,6 +676,7 @@ async function processInvoiceFromCanalCore(
       anomalias.length
         ? 'Análisis listo, con alertas. Use los botones que aparecen a continuación.'
         : 'Análisis listo. Use los botones que aparecen a continuación.',
+      { invoice_number: inv.invoice_number, supplier_name: inv.supplier_name },
     );
     if (alertaHtml) {
       await params.sendReply(alertaHtml.trim(), true);

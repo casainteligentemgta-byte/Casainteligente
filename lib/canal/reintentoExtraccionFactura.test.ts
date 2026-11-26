@@ -5,6 +5,7 @@ import {
   BACKOFF_MS_POR_REINTENTO,
   MAX_INTENTOS_OCR,
   columnasOcrDesconocidas,
+  decidirProcesandoAtascado,
   esCandidatoReintentoOcr,
   esErrorExtraccionNoTransitorio,
   esErrorExtraccionTransitorio,
@@ -398,5 +399,63 @@ describe('columnasOcrDesconocidas', () => {
     assert.equal(columnasOcrDesconocidas('Could not find the ocr_intentos column'), true)
     assert.equal(columnasOcrDesconocidas('PGRST204'), true)
     assert.equal(columnasOcrDesconocidas('permission denied'), false)
+  })
+})
+
+describe('decidirProcesandoAtascado', () => {
+  const ahora = Date.parse('2026-11-26T20:00:00.000Z')
+  const base = {
+    id: 'p1',
+    estado: 'procesando',
+    document_storage_path: 'telegram-pending/p1.jpg',
+    updated_at: '2026-11-26T15:01:00.000Z',
+  }
+
+  it('reintenta la lectura colgada sin ningún intento (caso 39d13d33: 5 h, ocr_intentos 0)', () => {
+    assert.equal(decidirProcesandoAtascado({ ...base, ocr_intentos: 0 }, ahora), 'reintentar')
+  })
+
+  it('espera a que pase la vida máxima de la función (195 s) antes de tocarla', () => {
+    assert.equal(
+      decidirProcesandoAtascado(
+        { ...base, ocr_intentos: 0, updated_at: '2026-11-26T19:57:30.000Z' },
+        ahora,
+      ),
+      'ignorar',
+    )
+    assert.equal(
+      decidirProcesandoAtascado(
+        { ...base, ocr_intentos: 0, updated_at: '2026-11-26T19:56:30.000Z' },
+        ahora,
+      ),
+      'reintentar',
+    )
+  })
+
+  it('sin archivo o con intentos agotados se cierra con error (agotar)', () => {
+    assert.equal(
+      decidirProcesandoAtascado({ ...base, document_storage_path: null, ocr_intentos: 0 }, ahora),
+      'agotar',
+    )
+    assert.equal(decidirProcesandoAtascado({ ...base, ocr_intentos: 3 }, ahora), 'agotar')
+  })
+
+  it('con 1–2 intentos lo toma el reintento normal; lo ya leído o muy viejo no se toca', () => {
+    assert.equal(decidirProcesandoAtascado({ ...base, ocr_intentos: 1 }, ahora), 'ignorar')
+    assert.equal(
+      decidirProcesandoAtascado({ ...base, ocr_intentos: 0, extracted: { a: 1 } }, ahora),
+      'ignorar',
+    )
+    assert.equal(
+      decidirProcesandoAtascado(
+        { ...base, ocr_intentos: 0, updated_at: '2026-11-20T10:00:00.000Z' },
+        ahora,
+      ),
+      'ignorar',
+    )
+    assert.equal(
+      decidirProcesandoAtascado({ ...base, estado: 'extraido', ocr_intentos: 0 }, ahora),
+      'ignorar',
+    )
   })
 })
