@@ -87,6 +87,8 @@ export async function actualizarPendienteCanal(
     mensaje_error?: string | null;
     proyecto_id?: string;
     ubicacion_destino_id?: string;
+    /** Override autorizado: permite confirmar aunque queden alertas de lectura. */
+    marcar_revisado?: boolean;
     /** Versión que tenía quien edita; si cambió, el servidor responde conflicto. */
     expected_updated_at?: string | null;
   },
@@ -101,6 +103,10 @@ export async function actualizarPendienteCanal(
   if (!res.ok) throw new Error(data.error || 'No se pudo guardar');
   if (!data.pendiente) throw new Error('Respuesta incompleta del servidor');
   return data.pendiente;
+}
+
+export async function marcarPendienteCanalRevisado(rawId: string): Promise<PendienteCanal> {
+  return actualizarPendienteCanal(rawId, { marcar_revisado: true });
 }
 
 export type EliminarPendienteCanalResult = {

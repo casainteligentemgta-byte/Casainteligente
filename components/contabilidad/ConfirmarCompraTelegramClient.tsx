@@ -26,10 +26,16 @@ import {
   actualizarPendienteCanal,
   confirmarCompraCanal,
   ingresoAlmacenCanal,
+  marcarPendienteCanalRevisado,
   reprocesarPendienteCanal,
   rutaDocumentoPendienteCanal,
   type PendienteCanal,
 } from '@/lib/contabilidad/facturaCanalApi';
+import {
+  mensajeBloqueoConfirmacion,
+  tieneRevisionManual,
+  validarLecturaFactura,
+} from '@/lib/compras/validarLecturaFactura';
 import { createClient } from '@/lib/supabase/client';
 import { useSyncSubmitLock } from '@/hooks/useSyncSubmitLock';
 import { TarjetaSugerenciaConciliacionField } from '@/components/contabilidad/TarjetaSugerenciaConciliacionField';
@@ -84,6 +90,7 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
   const { isSubmitting: registrando, runLocked: runRegistro } = useSyncSubmitLock();
   const { isSubmitting: ingresandoAlmacen, runLocked: runIngreso } = useSyncSubmitLock();
   const { isSubmitting: reprocesando, runLocked: runReproceso } = useSyncSubmitLock();
+  const { isSubmitting: marcandoRevisado, runLocked: runMarcarRevisado } = useSyncSubmitLock();
   const [compraRegistrada, setCompraRegistrada] = useState(false);
   const [ingresoAlmacenOk, setIngresoAlmacenOk] = useState(false);
 
@@ -185,6 +192,12 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
   }, [factura?.ubicacion_destino_id]);
 
   const extracted = pendiente?.extracted ?? null;
+  const alertasLectura = useMemo(
+    () => (extracted ? validarLecturaFactura(extracted) : []),
+    [extracted],
+  );
+  const bloqueaConfirmacion = Boolean(mensajeBloqueoConfirmacion(extracted));
+  const revisadaManualmente = tieneRevisionManual(extracted);
 
   const yaEnContabilidad = useMemo(
     () =>
@@ -266,7 +279,15 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
 
   const guardarExtracted = async (next: ExtractedCanalHeader) => {
     const actualizado = await actualizarPendienteCanal(pendingId, { extracted: next });
-    setPendiente((prev) => (prev ? { ...prev, extracted: actualizado.extracted } : prev));
+    setPendiente((prev) =>
+      prev
+        ? {
+            ...prev,
+            extracted: actualizado.extracted,
+            requiere_revision: actualizado.requiere_revision,
+          }
+        : prev,
+    );
     toast.success('Datos actualizados');
   };
 
@@ -348,6 +369,11 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
     }
     if (!extracted) {
       toast.error('No hay datos de la factura');
+      return;
+    }
+    const bloqueo = mensajeBloqueoConfirmacion(extracted);
+    if (bloqueo) {
+      toast.error(bloqueo);
       return;
     }
     await runRegistro(async () => {
@@ -490,6 +516,7 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
       proyectoEfectivo &&
       ubicacionEfectiva &&
       !frmPendienteBloquea &&
+      !bloqueaConfirmacion &&
       !registrando &&
       !ingresandoAlmacen,
   );
@@ -501,6 +528,7 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
       formaPagoCompleta &&
       entidadEfectiva &&
       !frmPendienteBloquea &&
+      !bloqueaConfirmacion &&
       !registrando,
   );
 
@@ -520,6 +548,9 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
     if (!monedaConfirmada) return 'Indique si la factura está en bolívares o dólares.';
     if (!condicionPagoConfirmada) return 'Indique si la compra es a contado o a crédito.';
     if (!formaPagoCompleta) return 'Indique los días de crédito de la compra.';
+    if (bloqueaConfirmacion) {
+      return 'Hay alertas de lectura. Corrija la factura o márquela como revisada.';
+    }
     if (
       pendiente.estado === 'pendiente' ||
       pendiente.estado === 'procesando' ||
@@ -547,6 +578,7 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
     monedaConfirmada,
     condicionPagoConfirmada,
     formaPagoCompleta,
+    bloqueaConfirmacion,
   ]);
 
   if (!montado) {
@@ -700,7 +732,57 @@ export default function ConfirmarCompraTelegramClient({ pendingId }: Props) {
               </section>
             ) : null}
 
-            <AlertasAnomaliasFactura anomalias={extracted?.anomalias} />
+            <AlertasAnomaliasFactura
+              anomalias={extracted?.anomalias?.length ? extracted.anomalias : alertasLectura}
+              bloqueaConfirmacion={bloqueaConfirmacion}
+              revisionManual={extracted?.revision_manual}
+            />
+            {extracted?.modelUsed ? (
+              <p className="text-[11px] text-zinc-500">
+                Lectura IA: <span className="font-mono text-zinc-300">{extracted.modelUsed}</span>
+                {extracted.model_inicial && extracted.model_inicial !== extracted.modelUsed
+                  ? ` (re-leída; primero ${extracted.model_inicial})`
+                  : null}
+                {extracted.relectura_ocr?.omitida_por_tiempo
+                  ? ' · no hubo tiempo para re-leer con el modelo de calidad'
+                  : null}
+              </p>
+            ) : null}
+            {bloqueaConfirmacion && !revisadaManualmente ? (
+              <button
+                type="button"
+                disabled={marcandoRevisado}
+                onClick={() =>
+                  void runMarcarRevisado(async () => {
+                    try {
+                      const actualizado = await marcarPendienteCanalRevisado(pendingId);
+                      setPendiente((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              extracted: actualizado.extracted,
+                              requiere_revision: actualizado.requiere_revision,
+                            }
+                          : prev,
+                      );
+                      toast.success('Factura marcada como revisada. Ya puede confirmar.');
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : 'No se pudo marcar como revisada');
+                    }
+                  })
+                }
+                className="inline-flex items-center justify-center rounded-lg border border-amber-400/40 bg-amber-950/40 px-3 py-2 text-xs font-semibold text-amber-100 hover:bg-amber-900/40 disabled:opacity-50"
+              >
+                {marcandoRevisado ? (
+                  <>
+                    <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
+                    Marcando…
+                  </>
+                ) : (
+                  'Marcar como revisado'
+                )}
+              </button>
+            ) : null}
 
             {yaEnContabilidad && !gastoEntidad ? (
               <div className="rounded-2xl border border-emerald-500/25 bg-emerald-950/15 px-4 py-3 text-xs text-emerald-200/90">

@@ -9,6 +9,12 @@ import {
 } from '@/lib/almacen/extractPurchaseInvoicePrompt';
 import { geminiGenerateWithDocument } from '@/lib/gemini/client';
 import { calcularConfidenceScoreOcr } from '@/lib/canal/calcularConfidenceScoreOcr';
+import {
+  LIMITE_MS_FUNCION_VERCEL,
+  MODELO_RELECTURA_OCR,
+  aplicarPoliticaRelecturaOcr,
+  type RelecturaOcrMeta,
+} from '@/lib/compras/validarLecturaFactura';
 
 export { PROMPT_ALBUM_PARTES, promptExtraccionConHint };
 
@@ -632,16 +638,27 @@ export type ArchivoExtraccionFactura = {
   fileName: string;
 };
 
+export type ResultadoExtraccionFactura = {
+  data: ExtractedPurchaseInvoice;
+  fromGemini: boolean;
+  modelUsed: string;
+  relectura_ocr?: RelecturaOcrMeta;
+};
+
 export async function extractPurchaseInvoiceFromFile(file: {
   buffer: Buffer;
   mimeType: string;
   fileName: string;
   /** Hint corto (perfil/correcciones de este proveedor) inyectado al prompt. */
   hintProveedor?: string | null;
-}): Promise<{ data: ExtractedPurchaseInvoice; fromGemini: boolean; modelUsed: string }> {
+  startedAt?: number;
+  deadlineAt?: number;
+}): Promise<ResultadoExtraccionFactura> {
   return extractPurchaseInvoiceFromFiles({
     files: [{ buffer: file.buffer, mimeType: file.mimeType, fileName: file.fileName }],
     hintProveedor: file.hintProveedor,
+    startedAt: file.startedAt,
+    deadlineAt: file.deadlineAt,
   });
 }
 
@@ -649,7 +666,9 @@ export async function extractPurchaseInvoiceFromFile(file: {
 export async function extractPurchaseInvoiceFromFiles(params: {
   files: ArchivoExtraccionFactura[];
   hintProveedor?: string | null;
-}): Promise<{ data: ExtractedPurchaseInvoice; fromGemini: boolean; modelUsed: string }> {
+  startedAt?: number;
+  deadlineAt?: number;
+}): Promise<ResultadoExtraccionFactura> {
   const files = params.files.filter((f) => f?.buffer?.length);
   if (files.length === 0) {
     throw new Error('No hay archivo para leer la factura.');
@@ -732,7 +751,53 @@ export async function extractPurchaseInvoiceFromFiles(params: {
     );
   }
 
-  return { data: extracted, fromGemini: true, modelUsed };
+  const startedAt = params.startedAt ?? Date.now();
+  const deadlineAt = params.deadlineAt ?? startedAt + LIMITE_MS_FUNCION_VERCEL;
+  const remainingMs = deadlineAt - Date.now();
+  const modeloInicial = modelUsed;
+
+  const conRelectura = await aplicarPoliticaRelecturaOcr({
+    primera: { data: extracted, modelUsed },
+    remainingMs,
+    releer: async () => {
+      console.info(
+        '[extractPurchaseInvoiceGemini] Re-lectura de calidad con',
+        MODELO_RELECTURA_OCR,
+        'tras',
+        modeloInicial,
+      );
+      const text2 = await callGeminiExtract(MODELO_RELECTURA_OCR, documents, prompt);
+      let segunda = parseExtractedPurchaseInvoice(text2);
+      if (segunda.items.length === 0 && extracted.items.length === 0) {
+        try {
+          const itemsPrompt = album ? `${ITEMS_ONLY_PROMPT}\n${PROMPT_ALBUM_PARTES}` : ITEMS_ONLY_PROMPT;
+          const itemsText = await callGeminiExtract(
+            MODELO_RELECTURA_OCR,
+            documents,
+            itemsPrompt,
+            ITEMS_ONLY_SCHEMA,
+          );
+          const itemsPass = parseExtractedPurchaseInvoice(itemsText);
+          if (itemsPass.items.length > 0) {
+            segunda = { ...segunda, items: itemsPass.items };
+          }
+        } catch (itemsErr) {
+          console.warn('[extractPurchaseInvoiceGemini] re-lectura ítems falló:', itemsErr);
+        }
+      }
+      return { data: segunda, modelUsed: MODELO_RELECTURA_OCR };
+    },
+  });
+
+  return {
+    data: conRelectura.data,
+    fromGemini: true,
+    modelUsed: conRelectura.modelUsed,
+    relectura_ocr: {
+      ...conRelectura.relectura,
+      modelo_inicial: modeloInicial,
+    },
+  };
 }
 
 /**

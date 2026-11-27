@@ -15,6 +15,7 @@ import {
   type ExtractedCanalItem,
   type SugerenciasDestinoProveedor,
 } from '@/lib/contabilidad/extractedCanal';
+import { validarLecturaFactura } from '@/lib/compras/validarLecturaFactura';
 
 export type { AnomaliaFacturaCanal };
 
@@ -381,24 +382,19 @@ function itemPerfilPara(perfil: ProveedorPerfil | null, description: string): It
 export function detectarAnomaliasFactura(params: {
   extracted: ExtractedCanalHeader;
   perfil?: ProveedorPerfil | null;
+  tasaBcv?: number | null;
 }): AnomaliaFacturaCanal[] {
   const { extracted, perfil } = params;
-  const out: AnomaliaFacturaCanal[] = [];
+  const out: AnomaliaFacturaCanal[] = validarLecturaFactura(extracted, {
+    tasaBcv: params.tasaBcv,
+  });
   const items = extracted.items ?? [];
 
   for (const it of items) {
     const desc = String(it.description ?? '').trim();
     if (!desc) continue;
     const precio = Number(it.unit_price);
-    if (!Number.isFinite(precio) || precio === 0) {
-      out.push({
-        tipo: 'precio_cero',
-        severidad: 'alerta',
-        mensaje: `La línea «${desc}» tiene precio 0.`,
-        detalle: desc,
-      });
-      continue;
-    }
+    if (!Number.isFinite(precio) || precio === 0) continue;
     const hist = itemPerfilPara(perfil ?? null, desc);
     if (hist && hist.precio_mediana > 0 && hist.n >= 2) {
       const desvio = Math.abs(precio - hist.precio_mediana) / hist.precio_mediana;
@@ -417,7 +413,7 @@ export function detectarAnomaliasFactura(params: {
   if (monedaExtractedConfirmada(extracted.moneda) && perfil?.moneda_habitual) {
     const actual = normalizarMonedaExtracted(extracted.moneda);
     const habitual = normalizarMonedaExtracted(perfil.moneda_habitual);
-    if (actual !== habitual) {
+    if (actual !== habitual && !out.some((a) => a.tipo === 'moneda_inconsistente')) {
       out.push({
         tipo: 'moneda_distinta',
         severidad: 'aviso',
@@ -426,32 +422,7 @@ export function detectarAnomaliasFactura(params: {
     }
   }
 
-  const total = extracted.total_amount != null ? Number(extracted.total_amount) : null;
-  if (total != null && Number.isFinite(total) && items.length > 0) {
-    const suma = items.reduce((s, it) => {
-      const q = Number(it.quantity);
-      const p = Number(it.unit_price);
-      const qty = Number.isFinite(q) && q > 0 ? q : 0;
-      const pu = Number.isFinite(p) ? p : 0;
-      return s + qty * pu;
-    }, 0);
-    const denom = Math.max(Math.abs(total), 1);
-    const rel = Math.abs(suma - total) / denom;
-    const abs = Math.abs(suma - total);
-    if (rel > UMBRAL_SUMA_LINEAS && abs > 0.05) {
-      out.push({
-        tipo: 'suma_lineas_distinta',
-        severidad: 'alerta',
-        mensaje: `La suma de líneas (${redondear2(suma)}) no coincide con el total (${redondear2(total)}).`,
-      });
-    }
-  }
-
   return out;
-}
-
-function redondear2(n: number): string {
-  return n.toLocaleString('es-VE', { maximumFractionDigits: 2 });
 }
 
 export function snapshotOcrOriginal(extracted: ExtractedCanalHeader): ExtractedCanalHeader {

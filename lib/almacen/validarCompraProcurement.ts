@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { validarLecturaFactura } from '@/lib/compras/validarLecturaFactura';
 
 export type ValidacionCompraProcurement = {
   ok: boolean;
@@ -23,6 +24,8 @@ export async function validarCompraProcurement(
     total_amount: number;
     tasa_bcv: number | null;
     lineas: LineaCompraValidacion[];
+    moneda?: string | null;
+    confidence_score?: number | null;
   },
 ): Promise<ValidacionCompraProcurement> {
   const errores: string[] = [];
@@ -46,23 +49,22 @@ export async function validarCompraProcurement(
     }
   }
 
-  const sumaLineas = lineasValidas.reduce(
-    (acc, l) => acc + Number(l.quantity) * Number(l.unit_price),
-    0,
+  const alertasLectura = validarLecturaFactura(
+    {
+      invoice_number: input.invoice_number,
+      supplier_rif: input.supplier_rif,
+      supplier_name: input.supplier_name,
+      total_amount: input.total_amount,
+      moneda: input.moneda ?? 'VES',
+      confidence_score: input.confidence_score,
+      items: lineasValidas,
+    },
+    { tasaBcv: input.tasa_bcv },
   );
-  const total = input.total_amount;
-  if (sumaLineas > 0 && total > 0) {
-    const diff = Math.abs(total - sumaLineas);
-    const pct = diff / Math.max(total, sumaLineas);
-    if (pct > 0.05) {
-      advertencias.push(
-        `El total (${total.toFixed(2)} Bs) difiere más del 5% de la suma de líneas (${sumaLineas.toFixed(2)} Bs).`,
-      );
-    } else if (diff > 0.02) {
-      advertencias.push(
-        `Pequeña diferencia entre total factura y suma de líneas (${diff.toFixed(2)} Bs).`,
-      );
-    }
+  for (const a of alertasLectura) {
+    if (a.tipo === 'cantidad_cero') continue;
+    if (a.severidad === 'alerta') errores.push(a.mensaje);
+    else advertencias.push(a.mensaje);
   }
 
   if (numero) {

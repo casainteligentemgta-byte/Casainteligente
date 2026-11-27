@@ -52,6 +52,7 @@ import {
   mensajeLineasSinMaterialSku,
 } from '@/lib/almacen/resolverMaterialIdPorSku';
 import { encaminarMercanciaFactura } from '@/lib/compras/encaminarMercanciaFactura';
+import { mensajeBloqueoConfirmacion } from '@/lib/compras/validarLecturaFactura';
 
 export function linkConfirmarCompraTelegram(pendingId: string, baseUrl?: string): string {
   const base = (
@@ -324,6 +325,10 @@ async function confirmarCompraDesdeCanalInterno(
   const extracted = params.extractedOverride ?? row.extracted;
   if (!extracted?.supplier_name?.trim() && !extracted?.invoice_number?.trim()) {
     throw new Error('Sin datos extraídos. Edite la factura o reenvíe la imagen.');
+  }
+  const bloqueoLectura = mensajeBloqueoConfirmacion(extracted);
+  if (bloqueoLectura) {
+    throw new Error(bloqueoLectura);
   }
   if (!monedaExtractedConfirmada(extracted.moneda)) {
     throw new Error('Indique si la factura está en bolívares (Bs) o dólares (USD).');

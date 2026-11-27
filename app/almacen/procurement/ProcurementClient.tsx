@@ -520,6 +520,8 @@ export default function ProcurementClient() {
                         total_amount: totalVes(),
                         tasa_bcv: tasaBcv,
                         lineas: items,
+                        moneda: 'VES',
+                        confidence_score: ocrConfidence,
                     });
                     if (!cancelled) setValidationWarnings(v.advertencias);
                 } catch {
@@ -531,7 +533,7 @@ export default function ProcurementClient() {
             cancelled = true;
             clearTimeout(timer);
         };
-    }, [items, invoice, tasaBcv, totalManual]);
+    }, [items, invoice, tasaBcv, totalManual, ocrConfidence]);
 
     const handleSubmit = async () => {
         setSubmitError(null);
@@ -594,6 +596,8 @@ export default function ProcurementClient() {
                 total_amount: totalVes(),
                 tasa_bcv: tasaBcv,
                 lineas: validLines,
+                moneda: 'VES',
+                confidence_score: ocrConfidence,
             });
 
             if (!validacion.ok) {

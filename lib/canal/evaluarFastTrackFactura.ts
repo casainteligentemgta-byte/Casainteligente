@@ -6,6 +6,7 @@ import { resolverLimiteFastTrackUsd } from '@/lib/canal/limiteFastTrackUsd';
 import { resolverMontosCompraBimonetario } from '@/lib/contabilidad/comprasBimonetario';
 import { normSkuCodigo } from '@/lib/almacen/resolverMaterialIdPorSku';
 import { tieneRecepcionesCampoSinConciliar } from '@/lib/almacen/tieneRecepcionesCampoSinConciliar';
+import { validarLecturaFactura } from '@/lib/compras/validarLecturaFactura';
 
 export type ResultadoEvalFastTrack = {
   elegible: boolean;
@@ -28,6 +29,18 @@ export async function evaluarFastTrackFactura(
     extracted,
     extracted.confidence_score,
   );
+
+  const alertasLectura = validarLecturaFactura(extracted);
+  if (alertasLectura.length) {
+    return {
+      elegible: false,
+      confidenceScore,
+      totalUsd: 0,
+      skuCoinciden: false,
+      motivo: `Alertas de lectura OCR: ${alertasLectura[0]?.mensaje ?? 'revisar factura'}`,
+      materialIds: [],
+    };
+  }
 
   const items = extracted.items ?? [];
   const codigos = items
